@@ -2188,6 +2188,10 @@ cmd_intent_recent() {
     local evaluated=$(echo "$metrics" | jq -r '.rolling.evaluated // 0')
     local hits=$(echo "$metrics" | jq -r '.rolling.hits // 0')
 
+    # Get intent stats (includes first_seen for date display)
+    local intent_stats=$(curl -s "${INDEX_URL}/intent/stats?project_id=${project_id}")
+    local first_seen=$(echo "$intent_stats" | jq -r '.first_seen // 0')
+
     # Get recent intent records
     local result=$(curl -s "${INDEX_URL}/intent/recent?limit=${limit}&project_id=${project_id}")
     local total=$(echo "$result" | jq -r '.stats.total_records // 0')
@@ -2318,20 +2322,38 @@ PYEOF
         fi
     fi
 
+    # Format first_seen as date (e.g., "Jan 11")
+    local since_date=""
+    if [ "$first_seen" -gt 0 ] 2>/dev/null; then
+        since_date=$(date -d "@${first_seen}" "+%b %d" 2>/dev/null || date -r "${first_seen}" "+%b %d" 2>/dev/null)
+    fi
+
     # Header
     echo -e "${CYAN}${BOLD}aOa Activity${NC}                                                 Session"
     echo ""
     # Only show savings if we have REAL data (not fabricated)
     if [ "$tokens_saved" -gt 0 ] 2>/dev/null; then
+        local savings_suffix=""
+        if [ -n "$since_date" ]; then
+            savings_suffix=" ${DIM}(since ${since_date})${NC}"
+        fi
         if [ -n "$time_display" ]; then
-            echo -e "${BOLD}SAVINGS${NC}         ${GREEN}↓${tokens_k}k tokens${NC} ${CYAN}${time_display}${NC} ${DIM}(rolling avg)${NC}"
+            echo -e "${BOLD}SAVINGS${NC}         ${GREEN}↓${tokens_k}k tokens${NC} ${CYAN}${time_display}${NC}${savings_suffix}"
         else
-            echo -e "${BOLD}SAVINGS${NC}         ${GREEN}↓${tokens_k}k tokens${NC}"
+            echo -e "${BOLD}SAVINGS${NC}         ${GREEN}↓${tokens_k}k tokens${NC}${savings_suffix}"
         fi
     else
         echo -e "${BOLD}SAVINGS${NC}         ${DIM}(no measured savings yet)${NC}"
     fi
-    echo -e "${BOLD}PREDICTIONS${NC}     ${hit_pct_int}% accuracy (${hits} of ${evaluated} hits)"
+    # Show prediction capability level (matches status line logic)
+    local min_intents=30
+    if [ "$total" -lt "$min_intents" ] 2>/dev/null; then
+        echo -e "${BOLD}PREDICTIONS${NC}     ${YELLOW}Learning${NC} (${total}/${min_intents} intents toward full prediction)"
+    elif [ "$hit_pct_int" -ge 80 ] 2>/dev/null; then
+        echo -e "${BOLD}PREDICTIONS${NC}     ${GREEN}${hit_pct_int}% accuracy${NC} (${evaluated} predictions evaluated)"
+    else
+        echo -e "${BOLD}PREDICTIONS${NC}     ${YELLOW}${hit_pct_int}% accuracy${NC} (${evaluated} predictions, improving)"
+    fi
     echo -e "${BOLD}HOW IT WORKS${NC}    ${CYAN}aOa finds exact locations${NC}, so Claude reads only what it needs"
     echo -e "                ${DIM}Time: rolling avg (5/15/30min) of input token processing${NC}"
     echo ""
@@ -2740,14 +2762,29 @@ cmd_intent_stats() {
     local total=$(echo "$stats" | jq -r '.total_records // 0')
     local unique_tags=$(echo "$stats" | jq -r '.unique_tags // 0')
     local unique_files=$(echo "$stats" | jq -r '.unique_files // 0')
+    local first_seen=$(echo "$stats" | jq -r '.first_seen // 0')
 
     local hit_pct_int=$(printf "%.0f" "$hit_pct")
+    local min_intents=30
+
+    # Format first_seen as date
+    local since_date=""
+    if [ "$first_seen" -gt 0 ] 2>/dev/null; then
+        since_date=$(date -d "@${first_seen}" "+%b %d" 2>/dev/null || date -r "${first_seen}" "+%b %d" 2>/dev/null)
+    fi
 
     # Header
     echo -e "${CYAN}${BOLD}aOa Session Statistics${NC}                                      ${total} operations"
     echo ""
     echo -e "${BOLD}WHAT WE TRACK (REAL DATA)${NC}"
-    echo -e "  Predictions:      ${GREEN}${hit_pct_int}% accuracy${NC} (${hits} of ${evaluated} hits)"
+    # Show prediction capability level (matches status line logic)
+    if [ "$total" -lt "$min_intents" ] 2>/dev/null; then
+        echo -e "  Predictions:      ${YELLOW}Learning${NC} (${total}/${min_intents} toward full prediction)"
+    elif [ "$hit_pct_int" -ge 80 ] 2>/dev/null; then
+        echo -e "  Predictions:      ${GREEN}${hit_pct_int}% accuracy${NC} (${evaluated} evaluated)"
+    else
+        echo -e "  Predictions:      ${YELLOW}${hit_pct_int}% accuracy${NC} (${evaluated} evaluated, improving)"
+    fi
     echo -e "  Operations:       ${total}"
     echo -e "  Unique files:     ${unique_files}"
     echo -e "  Unique tags:      ${unique_tags}"
@@ -2755,7 +2792,11 @@ cmd_intent_stats() {
     echo -e "${BOLD}TOKEN SAVINGS${NC}"
     if [ "$tokens_saved" -gt 0 ] 2>/dev/null; then
         local tokens_k=$(awk "BEGIN {printf \"%.1f\", $tokens_saved/1000}")
-        echo -e "  Measured:         ${GREEN}↓${tokens_k}k tokens${NC}"
+        if [ -n "$since_date" ]; then
+            echo -e "  Measured:         ${GREEN}↓${tokens_k}k tokens${NC} ${DIM}(since ${since_date})${NC}"
+        else
+            echo -e "  Measured:         ${GREEN}↓${tokens_k}k tokens${NC}"
+        fi
     else
         echo -e "  ${DIM}Not yet measured - requires capturing actual output tokens${NC}"
         echo -e "  ${DIM}Baseline (file sizes) is captured; actual output capture coming soon${NC}"
