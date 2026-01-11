@@ -1372,18 +1372,24 @@ class IntentIndex:
     Stores (per project):
     - tag -> files: Which files are associated with each intent tag
     - file -> tags: Which intent tags are associated with each file
-    - timeline: Chronological list of all intent records
+    - timeline: Chronological list of all intent records (in-memory, session-scoped)
+
+    Persists to Redis (survives restarts):
+    - Cumulative metrics (total_intents, total_tokens_saved)
+    - Tag-file associations
+    - First seen timestamp
     """
 
     DEFAULT_PROJECT = "_global"  # Fallback for requests without project_id
 
-    def __init__(self):
+    def __init__(self, redis_client=None):
         # All data structures are nested by project_id
         self.tag_to_files: Dict[str, Dict[str, Set[str]]] = defaultdict(lambda: defaultdict(set))
         self.file_to_tags: Dict[str, Dict[str, Set[str]]] = defaultdict(lambda: defaultdict(set))
         self.timeline: Dict[str, List[IntentRecord]] = defaultdict(list)
         self.session_intents: Dict[str, Dict[str, List[IntentRecord]]] = defaultdict(lambda: defaultdict(list))
         self.lock = threading.RLock()
+        self.redis = redis_client  # Optional Redis for persistence
 
     def _project_key(self, project_id: str = None) -> str:
         """Get project key, using default for empty/None."""
@@ -1406,6 +1412,16 @@ class IntentIndex:
             output_size=output_size
         )
 
+        # Calculate token savings for this record
+        tokens_saved = 0
+        if output_size and output_size > 0 and file_sizes:
+            for f, size in file_sizes.items():
+                if size > 0:
+                    baseline_tokens = size // 4  # bytes to ~tokens
+                    actual_tokens = output_size // 4
+                    tokens_saved = max(0, baseline_tokens - actual_tokens)
+                    break  # Only count first file
+
         with self.lock:
             # Add to project-specific timeline
             self.timeline[proj].append(record)
@@ -1416,6 +1432,29 @@ class IntentIndex:
                 for f in files:
                     self.tag_to_files[proj][tag].add(f)
                     self.file_to_tags[proj][f].add(tag)
+
+        # Persist to Redis (cumulative, survives restarts)
+        # Note: self.redis is RedisClient wrapper, use .client for raw redis-py operations
+        if self.redis:
+            try:
+                r = self.redis.client  # Get raw redis-py client
+                redis_key = f"aoa:{proj}:metrics"
+                # Increment cumulative counters
+                r.hincrby(redis_key, 'total_intents', 1)
+                if tokens_saved > 0:
+                    r.hincrby(redis_key, 'total_tokens_saved', tokens_saved)
+                # Set first_seen if not exists
+                r.hsetnx(redis_key, 'first_seen', int(time.time()))
+                # Update last_active
+                r.hset(redis_key, 'last_active', int(time.time()))
+
+                # Persist tag-file associations
+                for tag in tags:
+                    for f in files:
+                        r.sadd(f"aoa:{proj}:tags:{tag}", f)
+                        r.sadd(f"aoa:{proj}:file_tags:{f}", tag)
+            except Exception as e:
+                print(f"[IntentIndex] Redis persistence error: {e}", flush=True)
 
     def files_for_tag(self, tag: str, project_id: str = None) -> List[str]:
         """Get files associated with a tag."""
@@ -1464,44 +1503,81 @@ class IntentIndex:
             )
 
     def get_stats(self, project_id: str = None) -> dict:
-        """Get intent index statistics including token savings."""
+        """Get intent index statistics including token savings.
+
+        Combines:
+        - Cumulative metrics from Redis (persisted across restarts)
+        - Session metrics from memory (current session only)
+        """
         proj = self._project_key(project_id)
+
+        # Get cumulative metrics from Redis (persisted)
+        cumulative_intents = 0
+        cumulative_tokens_saved = 0
+        first_seen = None
+        redis_tags_count = 0
+
+        if self.redis:
+            try:
+                r = self.redis.client  # Get raw redis-py client
+                redis_key = f"aoa:{proj}:metrics"
+                metrics = r.hgetall(redis_key)
+                if metrics:
+                    cumulative_intents = int(metrics.get('total_intents', 0))
+                    cumulative_tokens_saved = int(metrics.get('total_tokens_saved', 0))
+                    first_seen = int(metrics.get('first_seen', 0)) if metrics.get('first_seen') else None
+
+                # Count persisted tags
+                tag_keys = self.redis.keys(f"aoa:{proj}:tags:*")
+                redis_tags_count = len(tag_keys) if tag_keys else 0
+            except Exception:
+                pass
+
+        # Get session metrics from memory
         with self.lock:
-            # Calculate token savings from records with both baseline and actual
-            total_baseline = 0
-            total_actual = 0
+            session_records = len(self.timeline[proj])
+            session_tags = len(self.tag_to_files[proj])
+            session_files = len(self.file_to_tags[proj])
+            session_count = len(self.session_intents[proj])
+
+            # Calculate session token savings
+            session_baseline = 0
+            session_actual = 0
             measured_count = 0
 
             for record in self.timeline[proj]:
                 if record.output_size and record.output_size > 0 and record.file_sizes:
-                    # Get baseline from file_sizes (first file)
                     for f, size in record.file_sizes.items():
                         if size > 0:
-                            total_baseline += size // 4  # Convert bytes to ~tokens
-                            total_actual += record.output_size // 4
+                            session_baseline += size // 4
+                            session_actual += record.output_size // 4
                             measured_count += 1
-                            break  # Only count first file per record
+                            break
 
-            tokens_saved = max(0, total_baseline - total_actual)
+            session_tokens_saved = max(0, session_baseline - session_actual)
 
-            # Estimate time savings using conservative 7.5ms/token (middle of 5-10ms range)
-            # Based on documented LLM processing rates: 100-500 tokens/sec input, 20-100 output
-            time_sec = tokens_saved * 0.0075  # 7.5ms per token
+        # Combine: cumulative (Redis) includes session (memory) via hincrby
+        # So we use Redis values directly for totals
+        total_tokens_saved = cumulative_tokens_saved if cumulative_tokens_saved > 0 else session_tokens_saved
 
-            return {
-                'total_records': len(self.timeline[proj]),
-                'unique_tags': len(self.tag_to_files[proj]),
-                'unique_files': len(self.file_to_tags[proj]),
-                'sessions': len(self.session_intents[proj]),
-                'project_id': project_id,
-                'savings': {
-                    'tokens': tokens_saved,
-                    'time_sec': round(time_sec, 1),  # Estimated seconds saved
-                    'baseline': total_baseline,
-                    'actual': total_actual,
-                    'measured_records': measured_count
-                }
+        # Estimate time savings
+        time_sec = total_tokens_saved * 0.0075
+
+        return {
+            'total_records': cumulative_intents if cumulative_intents > 0 else session_records,
+            'unique_tags': max(redis_tags_count, session_tags),
+            'unique_files': session_files,  # File count from memory is accurate for session
+            'sessions': session_count,
+            'project_id': project_id,
+            'first_seen': first_seen,
+            'savings': {
+                'tokens': total_tokens_saved,
+                'time_sec': round(time_sec, 1),
+                'baseline': session_baseline,  # Session baseline for debugging
+                'actual': session_actual,
+                'measured_records': measured_count
             }
+        }
 
 
 # ============================================================================
@@ -4361,15 +4437,13 @@ def main():
         print("Mode: LEGACY (single project)")
     print("=" * 60)
 
-    # Initialize intent index
-    intent_index = IntentIndex()
-    print("Intent index initialized")
-
-    # Initialize ranking scorer and weight tuner
+    # Initialize ranking scorer and weight tuner FIRST (need Redis for intent index)
+    redis_client = None
     if RANKING_AVAILABLE:
         scorer = Scorer()
         if scorer.redis.ping():
             print("Ranking scorer initialized (Redis connected)")
+            redis_client = scorer.redis
             # Phase 4: Initialize weight tuner
             tuner = WeightTuner(scorer.redis)
             print("Weight tuner initialized (8 arms)")
@@ -4379,6 +4453,13 @@ def main():
             tuner = None
     else:
         print("Ranking module not available")
+
+    # Initialize intent index with Redis for persistence
+    intent_index = IntentIndex(redis_client=redis_client)
+    if redis_client:
+        print("Intent index initialized (Redis-backed, persists across restarts)")
+    else:
+        print("Intent index initialized (in-memory only)")
 
     if global_mode:
         print(f"Config directory: {config_dir}")
