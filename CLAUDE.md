@@ -49,36 +49,30 @@ When the user addresses an agent by name using "Hey [AgentName]", spawn that age
 
 When user says **"Hey aOa"**, **"Tag my code"**, or **"aOa quickstart"**:
 
-**DO NOT read any files. Just run these commands and respond:**
-
-1. Run `aoa outline --pending --json` to check pending files
-2. Respond immediately with this flow:
+**DO NOT read any files or run background tasks. Just respond:**
 
 ```
 ⚡ aOa activated
 
-Your codebase is already indexed—fast symbol search works right now.
-Try it: `aoa grep [anything]`
+Fast symbol search works right now: `aoa grep [anything]`
 
-I found [X] files that need semantic compression.
-Let me tag these in the background. This is FREE—doesn't use your tokens.
+To enable semantic search (find code by meaning), run this in your terminal:
 
-Takes about 2-3 minutes. To watch progress, open another terminal:
-  aoa intent
+  aoa quickstart
 
-Keep coding. I'm not blocking you.
-Once done, I'll find code by meaning, not just keywords.
+This is FREE—runs locally, no AI tokens used. Takes ~1-2 minutes.
+You'll see progress as it tags your files. Once done, I can find code
+by what it does, not just keywords.
 ```
 
-3. Launch background tagging:
-   `Task(subagent_type="aoa-outline", prompt="Tag all pending files", run_in_background=true)`
-
 **What to communicate:**
-- ✅ Indexing already done (search works NOW)
-- ✅ Semantic compression starting (background, FREE)
-- ✅ Not blocking (keep coding)
-- ✅ Visibility: `aoa intent` in another terminal
-- ✅ Benefit: find code by meaning when done
+- ✅ Search works NOW (indexing already done)
+- ✅ User runs `aoa quickstart` themselves (transparent, trustworthy)
+- ✅ It's FREE - no Claude tokens, runs locally
+- ✅ They see progress directly
+- ✅ Benefit: semantic search when done
+
+**DO NOT launch background tasks.** Let the user control it.
 
 ### ⚠️ Subagents Don't Get Hooks
 
