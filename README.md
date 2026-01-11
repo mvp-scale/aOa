@@ -8,7 +8,7 @@
 
 ---
 
-## Claude Code Is Amazing. Until It Isn't.  (Test)
+## Claude Code Is Amazing. Until It Isn't. 
 
 Here's what nobody talks about.
 
