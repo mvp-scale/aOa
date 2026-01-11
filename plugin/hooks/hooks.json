@@ -18,6 +18,16 @@
     ],
     "PreToolUse": [
       {
+        "matcher": "Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/aoa-enforce-search.py\"",
+            "timeout": 1
+          }
+        ]
+      },
+      {
         "matcher": "Read|Edit|Write",
         "hooks": [
           {

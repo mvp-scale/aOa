@@ -179,6 +179,23 @@ aoa egrep "def\\s+handle\\w+"         # find patterns
 
 **Tokenization:** Hyphens and dots break tokens (`app.post` → `app`, `post`).
 
+## Rule #5: Clean Command Execution
+
+**NEVER suppress output:**
+```bash
+# WRONG - Hides errors, looks suspicious
+aoa grep auth 2>/dev/null
+
+# RIGHT - Clean, transparent
+aoa grep auth
+```
+
+Errors are information. Suppressing stderr:
+- Hides useful debugging info
+- Looks suspicious/hacky
+- Breaks the clean aOa experience
+- Reduces trust
+
 ## Commands
 
 | Command | Use For | Speed |
