@@ -36,6 +36,7 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 RED='\033[0;31m'
+BRIGHT_RED='\033[1;91m'  # Neon orange/red for search term highlighting
 NC='\033[0m'
 
 # =============================================================================
@@ -904,9 +905,12 @@ display_ranked_grep_results() {
             sym_info="${sym_name}[${sym_start}-${sym_end}]"
             # Extract tags from symbol (enriched from Redis)
             sym_tags=$(echo "$first_sym" | jq -r '.tags // [] | join(" ")' 2>/dev/null)
+        else
+            # No enclosing symbol - this is module-level code
+            sym_info="<module>"
         fi
 
-        # Get line content
+        # Get line content (no highlighting - keep it fast)
         local line_text=""
         if [ -n "$full_file_path" ] && [ -f "$full_file_path" ] && [ -n "$first_line" ]; then
             line_text=$(sed -n "${first_line}p" "$full_file_path" 2>/dev/null | sed 's/^[[:space:]]*//' | head -c 60)
@@ -924,52 +928,48 @@ display_ranked_grep_results() {
             fi
         fi
 
-        # Compact output: file :line symbol[range] #tags  content...
-        printf "${BOLD}%-35s${NC}" "$file"
-        printf "${DIM}:%-4s${NC}" "$first_line"
+        # Grep-like output: file:line: symbol content #tags (tags at end)
+        printf "${BOLD}%s${NC}${DIM}:%s:${NC}" "$file" "$first_line"
         [ -n "$sym_info" ] && printf " ${YELLOW}%s${NC}" "$sym_info"
-        [ -n "$tags_display" ] && printf " %b" "$tags_display"
         [ -n "$line_text" ] && printf " ${DIM}%s${NC}" "$line_text"
+        [ -n "$tags_display" ] && printf "  %b" "$tags_display"
         printf "\n"
 
-        # Show additional hits in this file (indented, up to 3 more)
-        local hit_count=0
-        echo "$hit_lines" | tail -n +2 | head -3 | while read -r line_num; do
+        # Additional hits - same format, file repeats (grep-style, show ALL)
+        echo "$hit_lines" | tail -n +2 | while read -r line_num; do
             [ -z "$line_num" ] && continue
-            hit_count=$((hit_count + 1))
 
             local extra_text=""
             if [ -n "$full_file_path" ] && [ -f "$full_file_path" ]; then
                 extra_text=$(sed -n "${line_num}p" "$full_file_path" 2>/dev/null | sed 's/^[[:space:]]*//' | head -c 60)
             fi
 
-            # Find symbol for this line
+            # Find most specific symbol for this line
             local extra_sym=$(echo "$outline" | jq -c --arg ln "$line_num" '
                 [.symbols[] | . as $sym |
-                    select(($ln | tonumber) >= $sym.start_line and ($ln | tonumber) <= $sym.end_line)
-                ] | .[0] // null
+                    select(($ln | tonumber) >= $sym.start_line and ($ln | tonumber) <= $sym.end_line) |
+                    . + {range_size: (.end_line - .start_line)}
+                ] | sort_by(.range_size) | .[0] // null
             ' 2>/dev/null)
 
             local extra_sym_info=""
+            local extra_sym_tags=""
             if [ "$extra_sym" != "null" ] && [ -n "$extra_sym" ]; then
                 local esym_name=$(echo "$extra_sym" | jq -r '.name')
                 local esym_start=$(echo "$extra_sym" | jq -r '.start_line')
                 local esym_end=$(echo "$extra_sym" | jq -r '.end_line')
                 extra_sym_info="${esym_name}[${esym_start}-${esym_end}]"
+                extra_sym_tags=$(echo "$extra_sym" | jq -r '.tags // [] | join(" ")' 2>/dev/null)
+            else
+                extra_sym_info="<module>"
             fi
 
-            printf "%-35s   ${DIM}:%s${NC}" "" "$line_num"
-            [ -n "$extra_sym_info" ] && printf " ${DIM}%s${NC}" "$extra_sym_info"
-            [ -n "$extra_text" ] && printf " %s" "$extra_text"
+            printf "${BOLD}%s${NC}${DIM}:%s:${NC}" "$file" "$line_num"
+            printf " ${YELLOW}%s${NC}" "$extra_sym_info"
+            [ -n "$extra_text" ] && printf " ${DIM}%s${NC}" "$extra_text"
+            [ -n "$extra_sym_tags" ] && printf "  ${CYAN}%s${NC}" "$extra_sym_tags"
             printf "\n"
         done
-
-        # Show count of remaining hits if more than 4 total
-        local total_hits=$(echo "$hit_lines" | wc -l)
-        if [ "$total_hits" -gt 4 ]; then
-            local remaining=$((total_hits - 4))
-            printf "%-35s   ${DIM}... +%d more hits${NC}\n" "" "$remaining"
-        fi
 
     done <<< "$unique_files"
 }
