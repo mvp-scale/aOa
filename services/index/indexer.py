@@ -1988,6 +1988,274 @@ def get_pending_enrichment():
 
 
 # ============================================================================
+# Domain Pattern Candidates (Learned from quickstart)
+# ============================================================================
+
+@app.route('/patterns/candidates', methods=['GET', 'POST'])
+def domain_candidates():
+    """Store or retrieve project-specific domain keyword candidates.
+
+    POST: Store word frequencies discovered during quickstart
+    GET: Retrieve stored candidates for a project
+
+    These are high-frequency words NOT in universal patterns -
+    candidates for project-specific tags.
+    """
+    # Handle project param differently for GET vs POST
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        project = request.args.get('project') or data.get('project', '')
+    else:
+        project = request.args.get('project', '')
+
+    try:
+        import redis
+        r = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+    except Exception:
+        return jsonify({'error': 'Redis not available'}), 503
+
+    redis_key = f"aoa:{project or 'default'}:domain_candidates"
+
+    if request.method == 'POST':
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        candidates = data.get('candidates', {})  # {word: count}
+        suggested_domain = data.get('suggested_domain', '')
+        total_symbols = data.get('total_symbols', 0)
+
+        # Store in Redis as hash
+        r.delete(redis_key)  # Clear old data
+        if candidates:
+            r.hset(redis_key, mapping=candidates)
+        r.hset(redis_key, '_meta_domain', suggested_domain)
+        r.hset(redis_key, '_meta_symbols', str(total_symbols))
+        r.hset(redis_key, '_meta_timestamp', str(int(time.time())))
+
+        return jsonify({
+            'success': True,
+            'stored': len(candidates),
+            'suggested_domain': suggested_domain
+        })
+
+    else:  # GET
+        data = r.hgetall(redis_key)
+        if not data:
+            return jsonify({
+                'candidates': {},
+                'suggested_domain': '',
+                'total_symbols': 0
+            })
+
+        # Parse stored data
+        candidates = {}
+        suggested_domain = ''
+        total_symbols = 0
+        timestamp = 0
+
+        for k, v in data.items():
+            key = k.decode() if isinstance(k, bytes) else k
+            val = v.decode() if isinstance(v, bytes) else v
+
+            if key == '_meta_domain':
+                suggested_domain = val
+            elif key == '_meta_symbols':
+                total_symbols = int(val)
+            elif key == '_meta_timestamp':
+                timestamp = int(val)
+            else:
+                candidates[key] = int(val)
+
+        # Sort by count descending
+        sorted_candidates = dict(sorted(candidates.items(), key=lambda x: x[1], reverse=True))
+
+        return jsonify({
+            'candidates': sorted_candidates,
+            'suggested_domain': suggested_domain,
+            'total_symbols': total_symbols,
+            'timestamp': timestamp
+        })
+
+
+@app.route('/patterns/learned', methods=['GET', 'POST'])
+def learned_patterns():
+    """Store or retrieve project-specific learned patterns.
+
+    POST: Store keyword->tag mappings (from Claude analysis or user input)
+    GET: Retrieve learned patterns for merging with universal patterns
+    """
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        project = request.args.get('project') or data.get('project', '')
+    else:
+        data = {}
+        project = request.args.get('project', '')
+
+    try:
+        import redis
+        r = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+    except Exception:
+        return jsonify({'error': 'Redis not available'}), 503
+
+    redis_key = f"aoa:{project or 'default'}:learned_patterns"
+
+    if request.method == 'POST':
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        patterns = data.get('patterns', {})  # {keyword: tag}
+
+        # Store in Redis as hash
+        if patterns:
+            r.hset(redis_key, mapping=patterns)
+            r.hset(redis_key, '_meta_timestamp', str(int(time.time())))
+
+        return jsonify({
+            'success': True,
+            'stored': len(patterns)
+        })
+
+    else:  # GET
+        data = r.hgetall(redis_key)
+        if not data:
+            return jsonify({'patterns': {}})
+
+        patterns = {}
+        for k, v in data.items():
+            key = k.decode() if isinstance(k, bytes) else k
+            val = v.decode() if isinstance(v, bytes) else v
+            if not key.startswith('_meta_'):
+                patterns[key] = val
+
+        return jsonify({'patterns': patterns})
+
+
+@app.route('/patterns/infer', methods=['POST'])
+def infer_patterns():
+    """Infer tags from symbol names using the pattern library.
+
+    POST body: {"symbols": [{"name": "getUserById", "kind": "function"}, ...]}
+    Returns: {"tags": [["#read", "#user"], ...]}
+
+    Uses the same pattern library as the Python hooks (semantic-patterns.json + domain-patterns.json).
+    """
+    import re
+    from pathlib import Path
+
+    data = request.get_json(silent=True) or {}
+    symbols = data.get('symbols', [])
+
+    if not symbols:
+        return jsonify({'tags': []})
+
+    # Load pattern configs (cached after first call)
+    config_paths = [
+        Path('/app/config'),  # Docker mount
+        Path(__file__).parent.parent / 'config',  # Local dev
+        Path('/codebase/config'),  # Alternative
+    ]
+
+    semantic_patterns = {}
+    domain_keywords = {}
+    class_suffixes = {}
+
+    for config_dir in config_paths:
+        semantic_file = config_dir / 'semantic-patterns.json'
+        domain_file = config_dir / 'domain-patterns.json'
+
+        if semantic_file.exists():
+            try:
+                import json
+                sdata = json.loads(semantic_file.read_text())
+                for cat_name, cat_data in sdata.get('categories', {}).items():
+                    patterns = set(p.lower() for p in cat_data.get('patterns', []))
+                    semantic_patterns[cat_name] = {
+                        'patterns': patterns,
+                        'tag': cat_data.get('tag', f'#{cat_name}'),
+                        'priority': cat_data.get('priority', 3)
+                    }
+                kind_patterns = sdata.get('kind_patterns', {}).get('patterns', {})
+                class_suffixes.update(kind_patterns.get('class', {}).get('suffix_patterns', {}))
+            except:
+                pass
+
+        if domain_file.exists():
+            try:
+                import json
+                ddata = json.loads(domain_file.read_text())
+                for domain_name, domain_data in ddata.get('domains', {}).items():
+                    tag = domain_data.get('tag', f'#{domain_name}')
+                    for keyword in domain_data.get('keywords', []):
+                        domain_keywords[keyword.lower()] = tag
+                for suffix, tag in ddata.get('technical_suffixes', {}).items():
+                    if suffix != 'description':
+                        class_suffixes[suffix] = tag
+            except:
+                pass
+
+        if semantic_patterns or domain_keywords:
+            break
+
+    def tokenize(text):
+        tokens = set()
+        parts = re.split(r'[/_\-.\s]+', text)
+        for part in parts:
+            if not part:
+                continue
+            tokens.add(part.lower())
+            camel_parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+', part)
+            for cp in camel_parts:
+                tokens.add(cp.lower())
+        return tokens
+
+    def match_semantic(tokens):
+        tags = set()
+        for cat_data in semantic_patterns.values():
+            for token in tokens:
+                for pattern in cat_data['patterns']:
+                    if token.startswith(pattern) or token == pattern:
+                        tags.add(cat_data['tag'])
+                        break
+        return tags
+
+    def match_domain(tokens, full_text):
+        tags = set()
+        full_lower = full_text.lower()
+        for keyword, tag in domain_keywords.items():
+            if keyword in tokens or keyword in full_lower:
+                tags.add(tag)
+        return tags
+
+    def match_suffix(name):
+        tags = set()
+        basename = name.split('.')[-1] if '.' in name else name
+        for suffix, tag in class_suffixes.items():
+            if basename.lower().endswith(suffix.lower()):
+                tags.add(tag)
+                break
+        return tags
+
+    # Process each symbol
+    result_tags = []
+    for sym in symbols:
+        name = sym.get('name', '')
+        kind = sym.get('kind', '')
+
+        tags = set()
+        tokens = tokenize(name)
+
+        # Match patterns
+        tags.update(match_semantic(tokens))
+        tags.update(match_domain(tokens, name))
+        tags.update(match_suffix(name))
+
+        # Limit to 5 tags
+        result_tags.append(list(tags)[:5])
+
+    return jsonify({'tags': result_tags})
+
+
+# ============================================================================
 # Project Management Endpoints (Global Mode)
 # ============================================================================
 

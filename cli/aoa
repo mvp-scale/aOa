@@ -816,8 +816,8 @@ cmd_grep() {
     fi
 }
 
-# GL-040: Display grep results with semantic outlines
-# Shows ranked results with full symbol structure and tags
+# GL-041: Display grep results with MATCHING symbols only
+# Shows ranked results with intent tags and only the symbols that matched
 display_ranked_grep_results() {
     local result="$1"
     local query="$2"
@@ -830,85 +830,147 @@ display_ranked_grep_results() {
         return 0
     fi
 
-    # Get unique files from results
+    # Get unique files from results with their hit lines
+    local files_with_lines=$(echo "$result" | jq -r '.results[] | "\(.file):\(.line)"')
     local unique_files=$(echo "$result" | jq -r '[.results[].file] | unique | .[]')
     local file_count=$(echo "$unique_files" | grep -c . || echo 0)
 
     # Get prediction data for ranking
     local predictions=$(curl -s "${INDEX_URL}/predict?limit=50" 2>/dev/null)
+    local project_id=$(get_project_id)
 
-    # Build a ranked list: file -> score (based on prediction confidence)
+    # Build a ranked list: file -> score (based on prediction confidence + hit count)
     local ranked_files=""
     while IFS= read -r file; do
         [ -z "$file" ] && continue
+        # Count hits in this file
+        local hit_count=$(echo "$files_with_lines" | grep -c "^${file}:" || echo 0)
         local confidence=$(echo "$predictions" | jq -r --arg f "$file" '.files[] | select(.path == $f or (.path | endswith($f))) | .confidence // 0' 2>/dev/null | head -1)
         [ -z "$confidence" ] && confidence="0"
-        local score=$(echo "$confidence" | awk '{printf "%.0f", $1 * 1000}')
+        # Combine: hit count * 100 + confidence * 1000
+        local score=$(echo "$hit_count $confidence" | awk '{printf "%.0f", $1 * 100 + $2 * 1000}')
         ranked_files+="${score}:${file}\n"
     done <<< "$unique_files"
 
     # Sort by score descending
     local sorted_files=$(echo -e "$ranked_files" | sort -t: -k1 -rn | cut -d: -f2-)
 
-    # aOa branded header
-    printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} ${GREEN}%.2fms${NC}\n" "$count" "$ms"
-    echo ""
-    printf "${DIM}─── Semantic Results ───${NC}\n"
+    # Check semantic compression status
+    local pending_info=$(curl -s --max-time 0.2 "${INDEX_URL}/outline/pending" 2>/dev/null)
+    local tagged_total=$(echo "$pending_info" | jq -r '.up_to_date_count // 0' 2>/dev/null)
+
+    # Header: hits | files | timing | semantic indicator
+    if [ "$tagged_total" -gt 0 ]; then
+        printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC} ${DIM}│${NC} ${CYAN}semantic${NC}\n" "$count" "$file_count" "$ms"
+    else
+        printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}\n" "$count" "$file_count" "$ms"
+    fi
     echo ""
 
-    # Display top 5 files with FULL outlines and tags
+    # Display top 5 files with MATCHING symbols only
     local shown=0
     local top_files=""
+    local max_files=5
+
+    # If many files, show fewer with more detail
+    [ "$file_count" -gt 20 ] && max_files=3
 
     while IFS= read -r file; do
         [ -z "$file" ] && continue
-        [ $shown -ge 5 ] && break
+        [ $shown -ge $max_files ] && break
 
         shown=$((shown + 1))
         top_files+="$file\n"
 
-        # File header
-        printf "${BOLD}%d.${NC} %s\n" "$shown" "$file"
+        # Get hit lines for this file
+        local hit_lines=$(echo "$files_with_lines" | grep "^${file}:" | cut -d: -f2 | sort -n | uniq)
+
+        # Fetch intent tags for this file (from usage patterns)
+        local intent_tags=""
+        if [ -n "$project_id" ]; then
+            intent_tags=$(curl -s "${INDEX_URL}/intent/file?path=${file}&project_id=${project_id}" 2>/dev/null | jq -r '.tags // [] | .[0:3] | map("#" + .) | join(" ")' 2>/dev/null)
+        fi
+
+        # File header with intent tags
+        if [ -n "$intent_tags" ] && [ "$intent_tags" != "" ]; then
+            printf "${BOLD}%s${NC}  ${DIM}%s${NC}\n" "$file" "$intent_tags"
+        else
+            printf "${BOLD}%s${NC}\n" "$file"
+        fi
 
         # Fetch outline for this file
         local outline=$(curl -s "${INDEX_URL}/outline?file=${file}" 2>/dev/null)
         local sym_count=$(echo "$outline" | jq -r '.count // 0' 2>/dev/null)
 
         if [ "$sym_count" -gt 0 ]; then
-            # Fetch tags for this file
-            local tags_json=$(curl -s "${INDEX_URL}/outline/tags?file=${file}" 2>/dev/null)
+            # Fetch semantic tags for symbols (include project for per-project tags)
+            local tags_param=""
+            [ -n "$project_id" ] && tags_param="&project=${project_id}"
+            local tags_json=$(curl -s "${INDEX_URL}/outline/tags?file=${file}${tags_param}" 2>/dev/null)
 
-            # Show ALL symbols with tags
-            echo "$outline" | jq -r --argjson tags "$tags_json" '
-                .symbols | to_entries[] |
+            # Show only symbols that contain hit lines
+            local hit_lines_json=$(echo "$hit_lines" | jq -R . | jq -s .)
+
+            echo "$outline" | jq -r --argjson hits "$hit_lines_json" --argjson tags "$tags_json" '
+                # Filter to symbols containing at least one hit line
+                [.symbols[] | select(
+                    . as $sym |
+                    ($hits | map(tonumber) | any(. >= $sym.start_line and . <= $sym.end_line))
+                )] |
+                # Limit to 5 matching symbols per file
+                .[0:5] |
+                length as $total |
+                to_entries[] |
                 .key as $idx |
                 .value |
                 .kind as $kind |
                 .name as $name |
                 .start_line as $start |
                 .end_line as $end |
-                (($tags.tags[$name] // []) | join(" ")) as $sym_tags |
-                "   ├─ \($kind) \($name) [\($start)-\($end)]" + (if ($sym_tags | length) > 0 then "  \($sym_tags)" else "" end)
-            ' 2>/dev/null || echo "$outline" | jq -r '
-                .symbols[] |
-                "   ├─ \(.kind) \(.name) [\(.start_line)-\(.end_line)]"
+                (($tags.tags[$name] // []) | .[0:2] | join(" ")) as $sym_tags |
+                "  \(if $idx == ($total - 1) then "└─" else "├─" end) \($kind) \($name) [\($start)-\($end)]" + (if ($sym_tags | length) > 0 then "  \($sym_tags)" else "" end)
             ' 2>/dev/null
+
+            # If no symbols matched (hit was in file-level code), show file-level hit
+            local matched=$(echo "$outline" | jq -r --argjson hits "$hit_lines_json" '
+                [.symbols[] | select(
+                    . as $sym |
+                    ($hits | map(tonumber) | any(. >= $sym.start_line and . <= $sym.end_line))
+                )] | length
+            ' 2>/dev/null)
+
+            if [ "$matched" = "0" ] || [ -z "$matched" ]; then
+                # Show the hit lines directly
+                local first_hit=$(echo "$hit_lines" | head -1)
+                printf "  └─ ${DIM}line %s${NC}\n" "$first_hit"
+            fi
+        else
+            # No outline available, show hit lines
+            local first_hit=$(echo "$hit_lines" | head -1)
+            printf "  └─ ${DIM}line %s${NC}\n" "$first_hit"
         fi
         echo ""
 
     done <<< "$sorted_files"
 
-    # Show remaining files (simple list)
+    # Show remaining files (simple list with hit counts)
     local remaining_count=$((file_count - shown))
     if [ $remaining_count -gt 0 ]; then
         printf "${DIM}─── %d more files ───${NC}\n" "$remaining_count"
-        local idx=$((shown + 1))
+        local idx=0
+        local max_remaining=10
         while IFS= read -r file; do
             [ -z "$file" ] && continue
             echo -e "$top_files" | grep -qx "$file" && continue
-            printf "  %d. %s\n" "$idx" "$file"
+            [ $idx -ge $max_remaining ] && break
+
+            local file_hits=$(echo "$files_with_lines" | grep -c "^${file}:" || echo 1)
+            printf "  %s ${DIM}(%d hits)${NC}\n" "$file" "$file_hits"
             idx=$((idx + 1))
         done <<< "$sorted_files"
+
+        local hidden=$((remaining_count - idx))
+        [ $hidden -gt 0 ] && printf "  ${DIM}... and %d more${NC}\n" "$hidden"
     fi
 }
 
@@ -1301,7 +1363,7 @@ cmd_enrich() {
             echo "TAG_REQUEST:"
             echo "$outline" | jq -c '{file: .file, language: .language, symbols: [.symbols[] | {name: .name, kind: .kind, line: .start_line, end_line: .end_line, signature: .signature}]}'
         else
-            printf "${YELLOW}No symbols found in file.${NC}\n"
+            printf "${YELLOW}No targets found in file.${NC}\n"
         fi
     else
         echo "Usage: aoa enrich --hot       # Check hot files for AI tags"
@@ -1484,7 +1546,7 @@ cmd_outline() {
             if [ "$success" = "true" ]; then
                 local tags_count=$(echo "$result" | jq -r '.tags_indexed // 0')
                 local symbols_count=$(echo "$result" | jq -r '.symbols_processed // 0')
-                echo -e "${GREEN}✓${NC} Stored ${tags_count} tags across ${symbols_count} symbols"
+                echo -e "${GREEN}✓${NC} Stored ${tags_count} tags across ${symbols_count} targets"
 
                 # Record to intent system for activity tracking
                 local file_path=$(echo "$json_input" | jq -r '.file // ""')
@@ -1692,11 +1754,11 @@ cmd_outline() {
 
     # Header
     if $enrich; then
-        printf "${CYAN}${BOLD}⚡ %s symbols${NC} ${DIM}│${NC} ${GREEN}%.2fms${NC} ${DIM}│${NC} ${YELLOW}%s${NC} ${DIM}│${NC} ${BLUE}enrichment requested${NC}\n" "$count" "$ms" "$lang"
+        printf "${CYAN}${BOLD}⚡ %s targets${NC} ${DIM}│${NC} ${GREEN}%.2fms${NC} ${DIM}│${NC} ${YELLOW}%s${NC} ${DIM}│${NC} ${BLUE}enrichment requested${NC}\n" "$count" "$ms" "$lang"
     elif $show_tags; then
-        printf "${CYAN}${BOLD}⚡ %s symbols${NC} ${DIM}│${NC} ${GREEN}%.2fms${NC} ${DIM}│${NC} ${YELLOW}%s${NC} ${DIM}│${NC} ${CYAN}with tags${NC}\n" "$count" "$ms" "$lang"
+        printf "${CYAN}${BOLD}⚡ %s targets${NC} ${DIM}│${NC} ${GREEN}%.2fms${NC} ${DIM}│${NC} ${YELLOW}%s${NC} ${DIM}│${NC} ${CYAN}with tags${NC}\n" "$count" "$ms" "$lang"
     else
-        printf "${CYAN}${BOLD}⚡ %s symbols${NC} ${DIM}│${NC} ${GREEN}%.2fms${NC} ${DIM}│${NC} ${YELLOW}%s${NC}\n" "$count" "$ms" "$lang"
+        printf "${CYAN}${BOLD}⚡ %s targets${NC} ${DIM}│${NC} ${GREEN}%.2fms${NC} ${DIM}│${NC} ${YELLOW}%s${NC}\n" "$count" "$ms" "$lang"
     fi
     echo ""
 
@@ -1728,9 +1790,9 @@ cmd_outline() {
         echo ""
         echo -e "${BLUE}─── Semantic Tagging ───${NC}"
         echo ""
-        echo -e "${DIM}To tag these symbols, Claude should:${NC}"
-        echo -e "${DIM}1. Analyze the symbols above${NC}"
-        echo -e "${DIM}2. Generate 2-5 semantic tags per symbol via Haiku${NC}"
+        echo -e "${DIM}To tag these targets, Claude should:${NC}"
+        echo -e "${DIM}1. Analyze the targets above${NC}"
+        echo -e "${DIM}2. Generate 2-5 semantic tags per target via Haiku${NC}"
         echo -e "${DIM}3. Store via: POST /outline/enriched with symbols array${NC}"
         echo ""
         # Output JSON for Claude to use
@@ -2560,8 +2622,8 @@ PYEOF
             local tag_count=$(echo "$tags" | wc -w)
             impact="${CYAN}${tag_count} tags${NC} generated"
         elif [ "$action" = "Outline" ]; then
-            # Symbol-level enrichment
-            attribution="${CYAN}symbols${NC}"
+            # Target-level enrichment
+            attribution="${CYAN}targets${NC}"
             impact="${CYAN}enriched${NC}"
         elif [ "$action" = "Search" ] || [ "$action" = "Find" ] || [ "$action" = "Locate" ] || [ "$action" = "Tree" ]; then
             # aOa search/discovery operations - show command type as attribution
@@ -3097,7 +3159,7 @@ EOF
     if [ -n "$health_result" ]; then
         local symbols=$(echo "$health_result" | jq -r '.local.symbols' 2>/dev/null)
         local idx_files=$(echo "$health_result" | jq -r '.local.files' 2>/dev/null)
-        echo -e "  Index:  ${idx_files} files, ${symbols} symbols"
+        echo -e "  Index:  ${idx_files} files, ${symbols} targets"
     fi
 }
 
@@ -3166,7 +3228,7 @@ cmd_health() {
         else
             local local_files=$(echo "$idx_health" | jq -r '.local.files // 0')
             local local_symbols=$(echo "$idx_health" | jq -r '.local.symbols // 0')
-            echo -e "${GREEN}✓${NC} ${local_files} files, ${local_symbols} symbols"
+            echo -e "${GREEN}✓${NC} ${local_files} files, ${local_symbols} targets"
         fi
     else
         echo -e "${RED}✗${NC} Not responding"
@@ -3345,7 +3407,24 @@ infer_tags_from_name() {
 }
 
 cmd_quickstart() {
+    # aoa quickstart           - Initial tagging (only pending files)
+    # aoa quickstart --force   - Re-tag ALL files (refresh patterns)
+    # aoa quickstart --reset   - Clear enrichment data and re-tag
+
+    local force=false
+    local reset=false
+
+    # Parse flags
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force|-f) force=true; shift ;;
+            --reset|-r) reset=true; force=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
     echo -e "${CYAN}${BOLD}⚡ aOa Quickstart${NC}"
+    $force && echo -e "${YELLOW}(force mode - re-tagging all files)${NC}"
     echo ""
 
     # Check services first
@@ -3362,21 +3441,53 @@ cmd_quickstart() {
         project_param="?project=${project_id}"
     fi
 
+    # Handle --reset: Clear all enrichment data for this project
+    if $reset; then
+        echo -e "${YELLOW}Clearing enrichment data...${NC}"
+        # Get Redis container name dynamically
+        local redis_container=$(docker ps --format "{{.Names}}" | grep -E "redis" | head -1)
+        if [ -n "$redis_container" ]; then
+            local pattern="enriched:${project_id:-default}:*"
+            local keys=$(docker exec "$redis_container" redis-cli KEYS "$pattern" 2>/dev/null)
+            if [ -n "$keys" ]; then
+                echo "$keys" | while read key; do
+                    docker exec "$redis_container" redis-cli DEL "$key" > /dev/null 2>&1
+                done
+                local count=$(echo "$keys" | wc -l)
+                echo -e "${GREEN}✓${NC} Cleared $count enrichment records"
+            else
+                echo -e "${DIM}No enrichment data found${NC}"
+            fi
+        fi
+        echo ""
+    fi
+
     # Get index health
     local health=$(curl -s "${INDEX_URL}/health")
     local files=$(echo "$health" | jq -r '.local.files // 0')
     local symbols=$(echo "$health" | jq -r '.local.symbols // 0')
 
     echo -e "${GREEN}✓${NC} Your codebase is indexed"
-    echo -e "  ${BOLD}${files}${NC} files  │  ${BOLD}${symbols}${NC} symbols"
+    echo -e "  ${BOLD}${files}${NC} files  │  ${BOLD}${symbols}${NC} targets"
     echo ""
     echo -e "${DIM}Fast search works right now:${NC}"
-    echo -e "  ${CYAN}aoa grep <term>${NC}     Symbol lookup (<5ms)"
-    echo -e "  ${CYAN}aoa egrep <regex>${NC}   Pattern search"
+    echo -e "  ${CYAN}aoa grep <term>${NC}     Instant (<5ms)"
+    echo -e "  ${CYAN}aoa egrep <regex>${NC}   Regex patterns"
     echo ""
 
     # Get pending files for semantic compression
-    local pending_result=$(curl -s "${INDEX_URL}/outline/pending${project_param}")
+    local pending_result
+    if $force; then
+        # Force mode: get ALL files (treat them all as pending)
+        pending_result=$(curl -s "${INDEX_URL}/files${project_param}")
+        local all_files=$(echo "$pending_result" | jq -r '.files // []')
+        local file_count=$(echo "$all_files" | jq 'length')
+        # Reformat to match pending structure
+        pending_result=$(echo "$all_files" | jq '{pending: [.[] | {file: .}], pending_count: length, up_to_date_count: 0}')
+    else
+        pending_result=$(curl -s "${INDEX_URL}/outline/pending${project_param}")
+    fi
+
     local pending_count=$(echo "$pending_result" | jq -r '.pending_count // 0')
     local up_to_date=$(echo "$pending_result" | jq -r '.up_to_date_count // 0')
 
@@ -3389,11 +3500,17 @@ cmd_quickstart() {
         echo ""
         echo -e "${DIM}View any file: aoa outline <file>${NC}"
         echo -e "${DIM}Search by meaning: aoa grep '#authentication'${NC}"
+        echo ""
+        echo -e "${DIM}To refresh with new patterns: aoa quickstart --force${NC}"
         return 0
     fi
 
-    echo -e "  Tagged:   ${GREEN}${up_to_date}${NC} files"
-    echo -e "  Pending:  ${YELLOW}${pending_count}${NC} files"
+    if $force; then
+        echo -e "  Re-tagging: ${YELLOW}${pending_count}${NC} files"
+    else
+        echo -e "  Tagged:   ${GREEN}${up_to_date}${NC} files"
+        echo -e "  Pending:  ${YELLOW}${pending_count}${NC} files"
+    fi
     echo ""
     echo -e "${DIM}Semantic compression creates a structured outline of your code${NC}"
     echo -e "${DIM}(functions, classes, methods). This is FREE - runs locally.${NC}"
@@ -3410,7 +3527,7 @@ cmd_quickstart() {
         local outline=$(curl -s "${INDEX_URL}/outline?file=${example_file}${outline_param}")
         local sym_count=$(echo "$outline" | jq -r '.count // 0')
         local ms=$(echo "$outline" | jq -r '.ms // 0')
-        printf "  ${CYAN}⚡ ${sym_count} symbols${NC} in ${GREEN}%.1fms${NC}\n" "$ms"
+        printf "  ${CYAN}⚡ ${sym_count} targets${NC} in ${GREEN}%.1fms${NC}\n" "$ms"
         echo "$outline" | jq -r '.symbols[:5][] | "    \(.kind) \(.name) [\(.start_line)-\(.end_line)]"' 2>/dev/null
         local total_syms=$(echo "$outline" | jq -r '.symbols | length')
         if [ "$total_syms" -gt 5 ]; then
@@ -3445,6 +3562,10 @@ cmd_quickstart() {
     [ -n "$project_id" ] && loop_param="&project=${project_id}"
 
     local total_tags=0
+    local total_symbols=0
+
+    # Collect word frequencies for domain analysis
+    declare -A word_counts
 
     while IFS= read -r file; do
         [ -z "$file" ] && continue
@@ -3457,9 +3578,32 @@ cmd_quickstart() {
             errors=$((errors + 1))
             [ -n "$VERBOSE" ] && echo -e "\n${YELLOW}Failed to get outline:${NC} $file ($err)" >&2
         else
-            # Build symbols array with pattern-inferred tags
+            # Extract symbols from outline
+            local symbols_json=$(echo "$result" | jq -c '[.symbols[] | {name: .name, kind: .kind, start_line: .start_line, end_line: .end_line}]')
+            local sym_count=$(echo "$symbols_json" | jq 'length')
+            total_symbols=$((total_symbols + sym_count))
+
+            # Collect word frequencies for domain analysis
+            echo "$result" | jq -r '.symbols[].name' | while read -r sym_name; do
+                local words=$(echo "$sym_name" | sed 's/\([a-z]\)\([A-Z]\)/\1 \2/g' | sed 's/_/ /g' | tr '[:upper:]' '[:lower:]')
+                for word in $words; do
+                    [ ${#word} -lt 3 ] && continue
+                    [[ "$word" =~ ^(the|and|for|with|this|that|from|have|been|will|are|was|get|set|has|can|did|does|its|not|but|all|any|new|one|two|out|use|add|run|try|end|let|var|def|int|str|err|ctx|req|res|nil|key|val|idx|len|num|tmp|ptr|src|dst|max|min|sum|avg|etc)$ ]] && continue
+                    word_counts["$word"]=$((${word_counts["$word"]:-0} + 1))
+                done
+            done
+
+            # Call /patterns/infer API for batch tag inference
+            local infer_payload=$(echo "$symbols_json" | jq '{symbols: [.[] | {name: .name, kind: .kind}]}')
+            local infer_result=$(curl -s -X POST "${INDEX_URL}/patterns/infer" \
+                -H "Content-Type: application/json" \
+                -d "$infer_payload")
+            local inferred_tags=$(echo "$infer_result" | jq -c '.tags // []')
+
+            # Build symbols array with inferred tags
             local symbols_with_tags="["
             local first=true
+            local idx=0
 
             while IFS= read -r sym_json; do
                 [ -z "$sym_json" ] && continue
@@ -3469,10 +3613,11 @@ cmd_quickstart() {
                 local sym_line=$(echo "$sym_json" | jq -r '.start_line')
                 local sym_end=$(echo "$sym_json" | jq -r '.end_line')
 
-                # Infer tags from symbol name (free pattern-based)
-                local tags=$(infer_tags_from_name "$sym_name" "$sym_kind")
+                # Get tags from inferred results (fallback to empty if index out of bounds)
+                local tags=$(echo "$inferred_tags" | jq -c ".[$idx] // []")
                 local tag_count=$(echo "$tags" | jq 'length')
                 total_tags=$((total_tags + tag_count))
+                idx=$((idx + 1))
 
                 # Build symbol object with proper JSON escaping
                 local sym_obj=$(jq -n \
@@ -3525,14 +3670,270 @@ cmd_quickstart() {
         echo -e "${YELLOW}!${NC} ${errors} files had errors (run with VERBOSE=1 for details)"
     fi
 
-    echo -e "${GREEN}Done!${NC} Semantic compression complete."
     echo ""
-    echo -e "  ${BOLD}${total_tags}${NC} tags generated from pattern matching (free)"
+    echo -e "${GREEN}✓${NC} Tagged ${BOLD}${processed}${NC} files (${BOLD}${total_tags}${NC} targets)"
+    echo -e "  Your searches now understand code structure, not just text."
     echo ""
-    echo -e "${DIM}View any file: aoa outline <file> --tags${NC}"
-    echo -e "${DIM}Search by tag: aoa grep '#auth'${NC}"
+
+    # =========================================================================
+    # Domain Analysis: Find project-specific words not in universal patterns
+    # =========================================================================
+
+    if [ ${#word_counts[@]} -gt 0 ]; then
+        echo -e "────────────────────────────────────────"
+        echo -e "${BOLD}Domain Analysis${NC}"
+        echo ""
+
+        # Known universal pattern words (from semantic-patterns.json + domain-patterns.json)
+        # This is a subset - words we expect to see in any codebase
+        local universal_words="get fetch load read set save write store update put delete remove clear create add insert new make build handle process validate check verify parse extract convert transform init setup configure start test auth user login logout session token jwt oauth api endpoint route database sql query cache redis file path dir config setting error exception fail log debug http request response json xml search find filter render display email send queue job task metric index symbol outline service manager helper util client server handler controller model schema"
+
+        # Filter to words NOT in universal patterns, count >= 3
+        # Build candidates as proper JSON using jq
+        local candidates_json="{}"
+        local candidate_count=0
+        local top_words=""
+
+        for word in "${!word_counts[@]}"; do
+            local count=${word_counts[$word]}
+            # Skip if count < 3 or word is in universal patterns
+            [ "$count" -lt 3 ] && continue
+            [[ " $universal_words " =~ " $word " ]] && continue
+
+            # Build JSON properly with jq (handles special chars)
+            candidates_json=$(echo "$candidates_json" | jq --arg w "$word" --argjson c "$count" '. + {($w): $c}')
+            candidate_count=$((candidate_count + 1))
+
+            # Track top 10 for display
+            if [ -z "$top_words" ]; then
+                top_words="${word} (${count})"
+            elif [ $candidate_count -le 10 ]; then
+                top_words="${top_words}, ${word} (${count})"
+            fi
+        done
+
+        if [ "$candidate_count" -gt 0 ]; then
+
+            # Try to suggest a domain based on top words
+            local suggested_domain=""
+            # Simple heuristics - could be enhanced
+            [[ "$top_words" =~ claim|policy|premium|underwriter ]] && suggested_domain="Insurance"
+            [[ "$top_words" =~ order|cart|checkout|product|sku ]] && suggested_domain="E-commerce"
+            [[ "$top_words" =~ patient|diagnosis|prescription|medical ]] && suggested_domain="Healthcare"
+            [[ "$top_words" =~ trade|stock|portfolio|ticker ]] && suggested_domain="Finance"
+            [[ "$top_words" =~ vehicle|driver|trip|ride ]] && suggested_domain="Transportation"
+            [[ "$top_words" =~ recipe|ingredient|menu|restaurant ]] && suggested_domain="Food & Dining"
+            [[ "$top_words" =~ lesson|course|student|grade ]] && suggested_domain="Education"
+            [[ "$top_words" =~ game|player|score|level ]] && suggested_domain="Gaming"
+            [[ "$top_words" =~ song|playlist|artist|album ]] && suggested_domain="Music"
+            [[ "$top_words" =~ video|stream|channel|watch ]] && suggested_domain="Video/Media"
+
+            echo -e "  ${CYAN}Analyzed ${total_symbols} symbols${NC}"
+            echo -e "  Found ${BOLD}${candidate_count}${NC} project-specific terms"
+            echo ""
+            echo -e "  ${DIM}Top terms:${NC} ${top_words}"
+
+            if [ -n "$suggested_domain" ]; then
+                echo -e "  ${DIM}Suggested domain:${NC} ${YELLOW}${suggested_domain}${NC}"
+            fi
+            echo ""
+
+            # Store candidates in Redis
+            local store_payload=$(jq -n \
+                --arg project "$project_id" \
+                --argjson candidates "$candidates_json" \
+                --arg domain "$suggested_domain" \
+                --argjson symbols "$total_symbols" \
+                '{project: $project, candidates: $candidates, suggested_domain: $domain, total_symbols: $symbols}')
+
+            local store_result=$(curl -s -X POST "${INDEX_URL}/patterns/candidates" \
+                -H "Content-Type: application/json" \
+                -d "$store_payload")
+
+            local stored=$(echo "$store_result" | jq -r '.stored // 0')
+            if [ "$stored" -gt 0 ]; then
+                echo -e "  ${GREEN}✓${NC} Stored ${stored} candidates for future enrichment"
+                echo -e "  ${DIM}Run 'aoa learn' to generate domain-specific tags${NC}"
+            fi
+        else
+            echo -e "  ${DIM}No unique project-specific terms found.${NC}"
+            echo -e "  ${DIM}Your codebase uses standard naming conventions.${NC}"
+        fi
+        echo ""
+    fi
+
+    echo -e "${DIM}Run 'aoa stats' for full index details${NC}"
+}
+
+cmd_learn() {
+    # aoa learn          - Show domain candidates and prompt for tag generation
+    # aoa learn --store  - Store learned patterns (from stdin JSON)
+    # aoa learn --show   - Show stored learned patterns
+
+    local project_id=$(get_project_id)
+    local project_param=""
+    [ -n "$project_id" ] && project_param="?project=${project_id}"
+
+    # Check for flags
+    case "$1" in
+        --store)
+            # Read JSON from stdin and store as learned patterns
+            local input=$(cat)
+            if [ -z "$input" ]; then
+                echo "Error: No input provided. Expected JSON: {\"patterns\": {\"keyword\": \"#tag\", ...}}"
+                return 1
+            fi
+
+            local result=$(echo "$input" | curl -s -X POST "${INDEX_URL}/patterns/learned${project_param}" \
+                -H "Content-Type: application/json" \
+                -d @-)
+
+            local stored=$(echo "$result" | jq -r '.stored // 0')
+            if [ "$stored" -gt 0 ]; then
+                echo -e "${GREEN}✓${NC} Stored ${stored} learned patterns"
+            else
+                echo -e "${YELLOW}!${NC} No patterns stored"
+            fi
+            return 0
+            ;;
+
+        --show)
+            # Show stored learned patterns
+            local result=$(curl -s "${INDEX_URL}/patterns/learned${project_param}")
+            local count=$(echo "$result" | jq -r '.patterns | length')
+
+            echo -e "${CYAN}${BOLD}⚡ Learned Patterns${NC}"
+            echo ""
+
+            if [ "$count" -eq 0 ]; then
+                echo -e "${DIM}No learned patterns stored yet.${NC}"
+                echo -e "${DIM}Run 'aoa quickstart' then 'aoa learn' to generate.${NC}"
+            else
+                echo -e "${BOLD}${count}${NC} patterns:"
+                echo ""
+                echo "$result" | jq -r '.patterns | to_entries[] | "  \(.key) → \(.value)"'
+            fi
+            return 0
+            ;;
+    esac
+
+    # Default: Show candidates and prompt for tag generation
+    echo -e "${CYAN}${BOLD}⚡ aOa Learn${NC}"
     echo ""
-    echo -e "${DIM}Want richer tags? Say \"tag the codebase\" in Claude for AI-powered tagging${NC}"
+
+    # Get stored candidates
+    local result=$(curl -s "${INDEX_URL}/patterns/candidates${project_param}")
+    local candidates=$(echo "$result" | jq -r '.candidates')
+    local count=$(echo "$candidates" | jq 'length')
+    local suggested=$(echo "$result" | jq -r '.suggested_domain // ""')
+    local total_symbols=$(echo "$result" | jq -r '.total_symbols // 0')
+
+    if [ "$count" -eq 0 ] || [ "$candidates" = "{}" ]; then
+        echo -e "${DIM}No domain candidates found.${NC}"
+        echo ""
+        echo -e "Run ${CYAN}aoa quickstart${NC} first to scan your codebase."
+        return 0
+    fi
+
+    echo -e "Found ${BOLD}${count}${NC} project-specific terms from ${total_symbols} symbols"
+    if [ -n "$suggested" ] && [ "$suggested" != "" ]; then
+        echo -e "Suggested domain: ${YELLOW}${suggested}${NC}"
+    fi
+    echo ""
+
+    echo -e "${BOLD}Top candidates (word → frequency):${NC}"
+    echo ""
+    echo "$candidates" | jq -r 'to_entries | sort_by(-.value) | .[:20][] | "  \(.key): \(.value)"'
+    echo ""
+
+    echo -e "────────────────────────────────────────"
+    echo -e "${BOLD}Generate Domain Tags${NC}"
+    echo ""
+    echo -e "To create project-specific tags, say to Claude:"
+    echo ""
+    echo -e "  ${CYAN}\"Generate domain tags for my codebase\"${NC}"
+    echo ""
+    echo -e "Claude will analyze these candidates and create"
+    echo -e "keyword→tag mappings stored in Redis."
+    echo ""
+    echo -e "${DIM}Or manually: aoa learn --store < patterns.json${NC}"
+}
+
+cmd_stats() {
+    echo -e "${CYAN}${BOLD}⚡ aOa Stats${NC}"
+    echo ""
+
+    # Check services
+    if ! curl -s --connect-timeout 2 "${INDEX_URL}/health" > /dev/null 2>&1; then
+        echo -e "${RED}✗ aOa services not running${NC}"
+        return 1
+    fi
+
+    # Get project info
+    local project_id=$(get_project_id)
+    local project_param=""
+    if [ -n "$project_id" ]; then
+        project_param="?project=${project_id}"
+    fi
+
+    # Get index health
+    local health=$(curl -s "${INDEX_URL}/health")
+    local files=$(echo "$health" | jq -r '.local.files // 0')
+    local symbols=$(echo "$health" | jq -r '.local.symbols // 0')
+
+    # Get outline stats
+    local pending_result=$(curl -s "${INDEX_URL}/outline/pending${project_param}")
+    local pending_count=$(echo "$pending_result" | jq -r '.pending_count // 0')
+    local tagged_count=$(echo "$pending_result" | jq -r '.up_to_date_count // 0')
+
+    # Calculate coverage
+    local total_files=$((tagged_count + pending_count))
+    local coverage=0
+    if [ "$total_files" -gt 0 ]; then
+        coverage=$((tagged_count * 100 / total_files))
+    fi
+
+    # Get intent stats
+    local intent_param=""
+    [ -n "$project_id" ] && intent_param="?project_id=${project_id}"
+    local intent_stats=$(curl -s "${INDEX_URL}/intent/stats${intent_param}")
+    local intents=$(echo "$intent_stats" | jq -r '.total_records // 0')
+    local unique_tags=$(echo "$intent_stats" | jq -r '.unique_tags // 0')
+
+    # Get prediction stats
+    local predict_stats=$(curl -s "${INDEX_URL}/predict/stats${intent_param}")
+    local hit_rate=$(echo "$predict_stats" | jq -r '.rolling.hit_at_5_pct // 0')
+    local evaluated=$(echo "$predict_stats" | jq -r '.rolling.evaluated // 0')
+
+    # Get savings
+    local metrics=$(curl -s "${INDEX_URL}/metrics${project_param}")
+    local tokens_saved=$(echo "$metrics" | jq -r '.savings.tokens // 0')
+
+    # Display
+    echo -e "${BOLD}Index${NC}"
+    echo -e "  Files:     ${BOLD}${files}${NC}"
+    echo -e "  Targets:   ${BOLD}${symbols}${NC}"
+    echo -e "  Tagged:    ${GREEN}${tagged_count}${NC} (${coverage}%)"
+    [ "$pending_count" -gt 0 ] && echo -e "  Pending:   ${YELLOW}${pending_count}${NC}"
+    echo ""
+
+    echo -e "${BOLD}Intents${NC}"
+    echo -e "  Captured:  ${BOLD}${intents}${NC}"
+    echo -e "  Tags:      ${BOLD}${unique_tags}${NC} unique"
+    echo ""
+
+    echo -e "${BOLD}Predictions${NC}"
+    printf "  Hit rate:  ${GREEN}%.0f%%${NC} (last %d)\n" "$hit_rate" "$evaluated"
+    echo ""
+
+    if [ "$tokens_saved" -gt 0 ]; then
+        local tokens_fmt=$(format_tokens $tokens_saved)
+        echo -e "${BOLD}Savings${NC}"
+        echo -e "  Tokens:    ${GREEN}↓${tokens_fmt}${NC}"
+        echo ""
+    fi
+
+    echo -e "${DIM}Run 'aoa quickstart' to tag pending files${NC}"
 }
 
 cmd_baseline() {
@@ -3880,7 +4281,9 @@ main() {
         repo|r)     cmd_repo "$@" ;;
 
         # System
-        quickstart|qs) cmd_quickstart ;;
+        quickstart|qs) cmd_quickstart "$@" ;;
+        learn)      cmd_learn "$@" ;;
+        stats)      cmd_stats ;;
         health)     cmd_health ;;
         metrics)    cmd_metrics ;;
         rate)       cmd_rate ;;

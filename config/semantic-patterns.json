@@ -1,0 +1,500 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Developer action patterns for semantic code tagging",
+    "usage": "Pattern matching for auto-generating meaningful semantic tags from function/method names",
+    "categories_count": 24,
+    "patterns_count": 180
+  },
+
+  "categories": {
+
+    "crud_create": {
+      "description": "Creating new resources or data",
+      "patterns": ["create", "add", "insert", "new", "make", "build", "generate", "spawn", "instantiate", "initialize", "construct", "compose", "produce", "establish", "allocate", "register", "provision"],
+      "tag": "#create",
+      "priority": 1
+    },
+
+    "crud_read": {
+      "description": "Reading/retrieving existing data",
+      "patterns": ["get", "fetch", "load", "read", "retrieve", "find", "lookup", "query", "select", "obtain", "acquire", "access", "pull", "extract", "peek", "view", "show", "display", "list", "enumerate"],
+      "tag": "#read",
+      "priority": 1
+    },
+
+    "crud_update": {
+      "description": "Updating/modifying existing data",
+      "patterns": ["update", "set", "modify", "change", "edit", "patch", "alter", "adjust", "revise", "amend", "replace", "swap", "mutate", "transform", "upsert", "merge", "sync", "refresh", "renew"],
+      "tag": "#write",
+      "priority": 1
+    },
+
+    "crud_delete": {
+      "description": "Deleting/removing data",
+      "patterns": ["delete", "remove", "destroy", "drop", "clear", "purge", "erase", "wipe", "clean", "dispose", "discard", "evict", "unregister", "decommission", "revoke", "invalidate", "expire"],
+      "tag": "#delete",
+      "priority": 1
+    },
+
+    "persistence": {
+      "description": "Data storage and retrieval operations",
+      "patterns": ["save", "store", "persist", "write", "commit", "flush", "checkpoint", "snapshot", "backup", "archive", "export", "import", "dump", "restore", "recover", "serialize", "deserialize"],
+      "tag": "#persistence",
+      "priority": 2
+    },
+
+    "authentication": {
+      "description": "Identity verification and login",
+      "patterns": ["auth", "authenticate", "login", "logout", "signin", "signout", "sso", "oauth", "saml", "verify_identity", "check_credentials", "password", "mfa", "totp", "biometric"],
+      "tag": "#auth",
+      "priority": 2
+    },
+
+    "authorization": {
+      "description": "Permission and access control",
+      "patterns": ["authorize", "permission", "role", "acl", "rbac", "abac", "grant", "deny", "allow", "forbid", "restrict", "policy", "scope", "claim", "entitlement", "capability", "privilege"],
+      "tag": "#authz",
+      "priority": 2
+    },
+
+    "token_security": {
+      "description": "Token-based security operations",
+      "patterns": ["token", "jwt", "bearer", "refresh_token", "access_token", "api_key", "secret", "credential", "session", "cookie", "csrf", "nonce"],
+      "tag": "#token",
+      "priority": 2
+    },
+
+    "validation": {
+      "description": "Input validation and verification",
+      "patterns": ["validate", "verify", "check", "assert", "ensure", "confirm", "sanitize", "escape", "normalize", "constrain", "enforce", "require", "expect", "must", "should"],
+      "tag": "#validation",
+      "priority": 2
+    },
+
+    "boolean_check": {
+      "description": "Boolean state checking",
+      "patterns": ["is", "has", "can", "should", "will", "was", "does", "did", "are", "were", "exists", "contains", "includes", "matches", "equals"],
+      "tag": "#check",
+      "priority": 3
+    },
+
+    "transformation": {
+      "description": "Data transformation and conversion",
+      "patterns": ["transform", "convert", "map", "reduce", "filter", "parse", "format", "serialize", "deserialize", "marshal", "unmarshal", "encode", "decode", "compress", "decompress", "encrypt", "decrypt", "hash", "normalize", "denormalize", "flatten", "unflatten", "project", "reshape"],
+      "tag": "#transform",
+      "priority": 2
+    },
+
+    "serialization": {
+      "description": "Serialization formats",
+      "patterns": ["json", "xml", "yaml", "toml", "csv", "protobuf", "avro", "msgpack", "pickle", "binary", "base64", "stringify", "to_string", "to_dict", "to_json", "from_json"],
+      "tag": "#serialization",
+      "priority": 3
+    },
+
+    "handler": {
+      "description": "Event and request handlers",
+      "patterns": ["handle", "handler", "process", "dispatch", "route", "controller", "action", "endpoint", "middleware", "interceptor", "filter", "pipe", "on_", "when_", "respond", "serve"],
+      "tag": "#handler",
+      "priority": 2
+    },
+
+    "event": {
+      "description": "Event-driven patterns",
+      "patterns": ["emit", "publish", "broadcast", "notify", "trigger", "fire", "raise", "signal", "dispatch", "subscribe", "unsubscribe", "listen", "observe", "watch", "on", "off", "once", "event", "listener", "callback"],
+      "tag": "#event",
+      "priority": 2
+    },
+
+    "messaging": {
+      "description": "Message queue and async communication",
+      "patterns": ["send", "receive", "consume", "produce", "enqueue", "dequeue", "push", "pop", "queue", "topic", "channel", "broker", "message", "payload", "ack", "nack", "retry", "dlq"],
+      "tag": "#messaging",
+      "priority": 2
+    },
+
+    "caching": {
+      "description": "Caching and memoization",
+      "patterns": ["cache", "memoize", "invalidate", "expire", "ttl", "warm", "prefetch", "preload", "evict", "flush_cache", "clear_cache", "redis", "memcached", "lru", "lfu", "hit", "miss"],
+      "tag": "#cache",
+      "priority": 2
+    },
+
+    "logging": {
+      "description": "Logging and debugging",
+      "patterns": ["log", "debug", "info", "warn", "error", "fatal", "trace", "print", "dump", "inspect", "console", "stdout", "stderr", "verbose", "quiet", "silent"],
+      "tag": "#logging",
+      "priority": 3
+    },
+
+    "monitoring": {
+      "description": "Monitoring and observability",
+      "patterns": ["metric", "measure", "gauge", "counter", "histogram", "timer", "span", "trace", "telemetry", "observe", "instrument", "profile", "benchmark", "sample", "collect", "aggregate", "report"],
+      "tag": "#metrics",
+      "priority": 2
+    },
+
+    "alerting": {
+      "description": "Alerting and notifications",
+      "patterns": ["alert", "alarm", "notify", "page", "escalate", "incident", "oncall", "threshold", "breach", "anomaly", "health", "heartbeat", "ping", "status"],
+      "tag": "#alerting",
+      "priority": 3
+    },
+
+    "error_handling": {
+      "description": "Error handling and recovery",
+      "patterns": ["error", "exception", "fail", "failure", "catch", "throw", "raise", "panic", "recover", "retry", "fallback", "circuit_breaker", "timeout", "abort", "cancel", "rollback", "compensate"],
+      "tag": "#error",
+      "priority": 2
+    },
+
+    "http_network": {
+      "description": "HTTP and network operations",
+      "patterns": ["http", "https", "request", "response", "client", "server", "socket", "websocket", "grpc", "rest", "graphql", "api", "endpoint", "route", "url", "uri", "header", "body", "status_code", "redirect"],
+      "tag": "#http",
+      "priority": 2
+    },
+
+    "database": {
+      "description": "Database operations",
+      "patterns": ["db", "database", "sql", "nosql", "query", "execute", "transaction", "commit", "rollback", "migration", "schema", "table", "index", "join", "aggregate", "cursor", "connection", "pool", "orm"],
+      "tag": "#database",
+      "priority": 2
+    },
+
+    "repository": {
+      "description": "Repository pattern operations",
+      "patterns": ["repository", "repo", "dao", "find_by", "find_all", "find_one", "save_all", "delete_all", "count", "exists_by", "bulk", "batch", "upsert", "insert_many", "update_many"],
+      "tag": "#repository",
+      "priority": 3
+    },
+
+    "filesystem": {
+      "description": "File system operations",
+      "patterns": ["file", "directory", "folder", "path", "read_file", "write_file", "open", "close", "seek", "truncate", "rename", "copy", "move", "upload", "download", "stream", "buffer", "chunk"],
+      "tag": "#filesystem",
+      "priority": 2
+    },
+
+    "configuration": {
+      "description": "Configuration and settings",
+      "patterns": ["config", "configure", "setting", "option", "preference", "parameter", "env", "environment", "feature_flag", "toggle", "property", "attribute", "default", "override", "fallback"],
+      "tag": "#config",
+      "priority": 3
+    },
+
+    "initialization": {
+      "description": "Initialization and setup",
+      "patterns": ["init", "initialize", "setup", "configure", "bootstrap", "start", "boot", "launch", "activate", "enable", "mount", "register", "bind", "wire", "inject", "resolve"],
+      "tag": "#init",
+      "priority": 2
+    },
+
+    "lifecycle": {
+      "description": "Lifecycle management",
+      "patterns": ["startup", "shutdown", "teardown", "cleanup", "dispose", "close", "terminate", "stop", "pause", "resume", "restart", "reload", "reset", "destroy", "finalize"],
+      "tag": "#lifecycle",
+      "priority": 2
+    },
+
+    "scheduling": {
+      "description": "Job scheduling and background tasks",
+      "patterns": ["schedule", "cron", "job", "task", "worker", "queue", "background", "async", "defer", "delay", "throttle", "debounce", "rate_limit", "batch", "periodic", "interval", "timer"],
+      "tag": "#scheduling",
+      "priority": 2
+    },
+
+    "concurrency": {
+      "description": "Concurrency and parallelism",
+      "patterns": ["concurrent", "parallel", "async", "await", "promise", "future", "thread", "process", "goroutine", "coroutine", "lock", "mutex", "semaphore", "atomic", "sync", "barrier", "channel", "pool"],
+      "tag": "#async",
+      "priority": 2
+    },
+
+    "security": {
+      "description": "Security operations",
+      "patterns": ["encrypt", "decrypt", "hash", "sign", "verify_signature", "certificate", "ssl", "tls", "key", "secret", "vault", "kms", "cipher", "salt", "pepper", "hmac", "rsa", "aes"],
+      "tag": "#security",
+      "priority": 2
+    },
+
+    "search": {
+      "description": "Search and filtering",
+      "patterns": ["search", "find", "filter", "sort", "order", "rank", "score", "match", "fuzzy", "full_text", "index", "reindex", "facet", "suggest", "autocomplete", "typeahead", "paginate"],
+      "tag": "#search",
+      "priority": 2
+    },
+
+    "rendering": {
+      "description": "UI rendering and display",
+      "patterns": ["render", "display", "show", "hide", "view", "template", "component", "widget", "layout", "style", "theme", "draw", "paint", "animate", "transition", "responsive"],
+      "tag": "#render",
+      "priority": 3
+    },
+
+    "state_management": {
+      "description": "State management patterns",
+      "patterns": ["state", "store", "reducer", "action", "dispatch", "selector", "subscribe", "mutation", "commit", "getter", "setter", "observable", "reactive", "immutable", "snapshot"],
+      "tag": "#state",
+      "priority": 3
+    },
+
+    "testing": {
+      "description": "Testing and mocking",
+      "patterns": ["test", "spec", "describe", "it", "expect", "assert", "mock", "stub", "spy", "fake", "fixture", "setup", "teardown", "before", "after", "given", "when", "then", "arrange", "act"],
+      "tag": "#test",
+      "priority": 2
+    },
+
+    "notification": {
+      "description": "User notifications",
+      "patterns": ["email", "mail", "sms", "push", "notification", "alert", "toast", "snackbar", "modal", "popup", "banner", "announce", "broadcast", "newsletter"],
+      "tag": "#notification",
+      "priority": 3
+    },
+
+    "user_management": {
+      "description": "User-related operations",
+      "patterns": ["user", "account", "profile", "member", "customer", "subscriber", "admin", "guest", "visitor", "owner", "team", "organization", "tenant", "workspace"],
+      "tag": "#user",
+      "priority": 3
+    },
+
+    "payment": {
+      "description": "Payment and billing",
+      "patterns": ["payment", "pay", "charge", "invoice", "billing", "subscription", "refund", "credit", "debit", "transaction", "checkout", "cart", "order", "pricing", "discount", "coupon", "stripe", "paypal"],
+      "tag": "#payment",
+      "priority": 3
+    },
+
+    "media": {
+      "description": "Media handling",
+      "patterns": ["image", "video", "audio", "media", "upload", "download", "resize", "crop", "thumbnail", "transcode", "stream", "cdn", "blob", "asset", "attachment"],
+      "tag": "#media",
+      "priority": 3
+    },
+
+    "integration": {
+      "description": "External integrations",
+      "patterns": ["webhook", "callback", "integration", "connector", "adapter", "bridge", "gateway", "proxy", "facade", "wrapper", "client", "sdk", "api_client", "third_party", "external"],
+      "tag": "#integration",
+      "priority": 3
+    },
+
+    "analytics": {
+      "description": "Analytics and tracking",
+      "patterns": ["analytics", "track", "event", "pageview", "conversion", "funnel", "cohort", "segment", "attribution", "experiment", "ab_test", "variant", "feature_flag"],
+      "tag": "#analytics",
+      "priority": 3
+    },
+
+    "ai_ml": {
+      "description": "AI and Machine Learning",
+      "patterns": ["predict", "inference", "train", "model", "embed", "embedding", "vector", "similarity", "classify", "cluster", "recommend", "rank", "score", "llm", "prompt", "completion", "generate"],
+      "tag": "#ai",
+      "priority": 3
+    },
+
+    "cqrs": {
+      "description": "CQRS pattern operations",
+      "patterns": ["command", "query", "read_model", "write_model", "projection", "aggregate", "domain_event", "saga", "orchestrator", "choreography", "event_store", "snapshot"],
+      "tag": "#cqrs",
+      "priority": 3
+    },
+
+    "domain_driven": {
+      "description": "Domain-driven design patterns",
+      "patterns": ["entity", "value_object", "aggregate_root", "domain_service", "repository", "factory", "specification", "policy", "bounded_context", "anti_corruption", "ubiquitous"],
+      "tag": "#ddd",
+      "priority": 3
+    }
+  },
+
+  "kind_patterns": {
+    "description": "Patterns based on symbol kind (class, function, etc.)",
+    "patterns": {
+      "class": {
+        "suffix_patterns": {
+          "Service": "#service",
+          "Controller": "#controller",
+          "Handler": "#handler",
+          "Repository": "#repository",
+          "Factory": "#factory",
+          "Builder": "#builder",
+          "Manager": "#manager",
+          "Provider": "#provider",
+          "Adapter": "#adapter",
+          "Facade": "#facade",
+          "Proxy": "#proxy",
+          "Observer": "#observer",
+          "Strategy": "#strategy",
+          "Command": "#command",
+          "Query": "#query",
+          "Event": "#event",
+          "Listener": "#listener",
+          "Middleware": "#middleware",
+          "Filter": "#filter",
+          "Validator": "#validator",
+          "Transformer": "#transformer",
+          "Serializer": "#serializer",
+          "Client": "#client",
+          "Gateway": "#gateway",
+          "Router": "#router",
+          "Model": "#model",
+          "Entity": "#entity",
+          "DTO": "#dto",
+          "VO": "#value_object",
+          "Spec": "#test",
+          "Test": "#test",
+          "Mock": "#mock",
+          "Stub": "#stub",
+          "Helper": "#utility",
+          "Util": "#utility",
+          "Utils": "#utility",
+          "Config": "#config",
+          "Settings": "#config",
+          "Exception": "#error",
+          "Error": "#error"
+        },
+        "default_tag": "#class"
+      },
+      "interface": {
+        "default_tag": "#interface"
+      },
+      "function": {
+        "default_tag": null
+      },
+      "method": {
+        "default_tag": null
+      },
+      "route": {
+        "default_tag": "#api"
+      },
+      "test_suite": {
+        "default_tag": "#test"
+      },
+      "test": {
+        "default_tag": "#test"
+      }
+    }
+  },
+
+  "compound_patterns": {
+    "description": "Multi-word patterns that indicate specific concerns",
+    "patterns": {
+      "health_check": "#health",
+      "rate_limit": "#rate_limit",
+      "feature_flag": "#feature_flag",
+      "circuit_breaker": "#resilience",
+      "dead_letter": "#dlq",
+      "retry_policy": "#retry",
+      "bulk_insert": "#bulk",
+      "batch_process": "#batch",
+      "full_text_search": "#search",
+      "access_control": "#authz",
+      "audit_log": "#audit",
+      "event_source": "#event_sourcing",
+      "read_replica": "#database",
+      "write_through": "#cache",
+      "lazy_load": "#lazy",
+      "eager_load": "#eager",
+      "soft_delete": "#delete",
+      "hard_delete": "#delete",
+      "optimistic_lock": "#concurrency",
+      "pessimistic_lock": "#concurrency"
+    }
+  },
+
+  "negation_patterns": {
+    "description": "Patterns that negate or reverse operations",
+    "patterns": ["un", "de", "dis", "non", "anti", "re"],
+    "examples": {
+      "unmarshal": "#transform",
+      "deserialize": "#transform",
+      "disconnect": "#lifecycle",
+      "deactivate": "#lifecycle",
+      "revalidate": "#cache",
+      "recompute": "#transform"
+    }
+  },
+
+  "framework_conventions": {
+    "description": "Framework-specific naming conventions",
+    "rails": {
+      "patterns": {
+        "before_action": "#middleware",
+        "after_action": "#middleware",
+        "around_action": "#middleware",
+        "has_many": "#association",
+        "belongs_to": "#association",
+        "has_one": "#association",
+        "scope": "#query",
+        "validates": "#validation"
+      }
+    },
+    "django": {
+      "patterns": {
+        "get_queryset": "#query",
+        "get_context_data": "#render",
+        "form_valid": "#validation",
+        "clean_": "#validation",
+        "save_model": "#persistence"
+      }
+    },
+    "spring": {
+      "patterns": {
+        "@GetMapping": "#read",
+        "@PostMapping": "#create",
+        "@PutMapping": "#write",
+        "@DeleteMapping": "#delete",
+        "@Transactional": "#transaction",
+        "@Cacheable": "#cache",
+        "@Async": "#async"
+      }
+    },
+    "express": {
+      "patterns": {
+        "app.get": "#read",
+        "app.post": "#create",
+        "app.put": "#write",
+        "app.delete": "#delete",
+        "app.use": "#middleware",
+        "router.": "#router"
+      }
+    },
+    "fastapi": {
+      "patterns": {
+        "@app.get": "#read",
+        "@app.post": "#create",
+        "@app.put": "#write",
+        "@app.delete": "#delete",
+        "@app.middleware": "#middleware",
+        "Depends": "#dependency"
+      }
+    },
+    "react": {
+      "patterns": {
+        "useState": "#state",
+        "useEffect": "#effect",
+        "useContext": "#context",
+        "useReducer": "#state",
+        "useMemo": "#cache",
+        "useCallback": "#cache",
+        "useRef": "#ref",
+        "render": "#render"
+      }
+    }
+  },
+
+  "http_method_mapping": {
+    "description": "HTTP methods to semantic tags",
+    "GET": "#read",
+    "POST": "#create",
+    "PUT": "#write",
+    "PATCH": "#write",
+    "DELETE": "#delete",
+    "HEAD": "#read",
+    "OPTIONS": "#metadata"
+  }
+}

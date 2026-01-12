@@ -65,6 +65,162 @@ TOOL_TAGS = {
 }
 
 
+# ============================================================================
+# Pattern Library Loading (RAM-cached at import time for ultra-speed)
+# ============================================================================
+
+def _load_pattern_configs():
+    """Load semantic and domain pattern configs from JSON.
+
+    Called once at import time. Returns optimized lookup structures.
+    """
+    semantic_patterns = {}  # category -> {patterns: set, tag: str, priority: int}
+    domain_keywords = {}    # keyword -> tag
+    class_suffixes = {}     # suffix -> tag
+
+    # Find config directory (relative to this file or from AOA_HOME)
+    config_paths = [
+        HOOK_DIR.parent.parent / "config",  # project/config/
+        Path("/home") / os.environ.get("USER", "user") / ".aoa" / "config",  # ~/.aoa/config/
+        Path(__file__).parent.parent.parent / "config",  # aOa/config/
+    ]
+
+    semantic_file = None
+    domain_file = None
+
+    for config_dir in config_paths:
+        if (config_dir / "semantic-patterns.json").exists():
+            semantic_file = config_dir / "semantic-patterns.json"
+        if (config_dir / "domain-patterns.json").exists():
+            domain_file = config_dir / "domain-patterns.json"
+        if semantic_file and domain_file:
+            break
+
+    # Load semantic patterns
+    if semantic_file:
+        try:
+            data = json.loads(semantic_file.read_text())
+            categories = data.get("categories", {})
+            for cat_name, cat_data in categories.items():
+                patterns = set(p.lower() for p in cat_data.get("patterns", []))
+                semantic_patterns[cat_name] = {
+                    "patterns": patterns,
+                    "tag": cat_data.get("tag", f"#{cat_name}"),
+                    "priority": cat_data.get("priority", 3)
+                }
+
+            # Load class suffix patterns
+            kind_patterns = data.get("kind_patterns", {}).get("patterns", {})
+            class_suffixes.update(kind_patterns.get("class", {}).get("suffix_patterns", {}))
+
+            # Load compound patterns (multi-word)
+            compound = data.get("compound_patterns", {}).get("patterns", {})
+            for pattern, tag in compound.items():
+                # Convert to matchable form: health_check -> healthcheck, health-check, etc.
+                normalized = pattern.replace("_", "")
+                domain_keywords[normalized] = tag
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    # Load domain patterns
+    if domain_file:
+        try:
+            data = json.loads(domain_file.read_text())
+            domains = data.get("domains", {})
+            for domain_name, domain_data in domains.items():
+                tag = domain_data.get("tag", f"#{domain_name}")
+                for keyword in domain_data.get("keywords", []):
+                    domain_keywords[keyword.lower()] = tag
+
+            # Load technical suffixes
+            suffixes = data.get("technical_suffixes", {})
+            for suffix, tag in suffixes.items():
+                if suffix != "description":  # Skip metadata
+                    class_suffixes[suffix] = tag
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    return semantic_patterns, domain_keywords, class_suffixes
+
+
+# Load patterns at import time (RAM-cached, runs once)
+SEMANTIC_PATTERNS, DOMAIN_KEYWORDS, CLASS_SUFFIXES = _load_pattern_configs()
+
+
+def _tokenize(text: str) -> set:
+    """Tokenize a string into matchable parts.
+
+    Handles: camelCase, snake_case, kebab-case, path segments.
+    Returns lowercase tokens.
+    """
+    tokens = set()
+
+    # Split on common delimiters: /, _, -, .
+    parts = re.split(r'[/_\-.\s]+', text)
+
+    for part in parts:
+        if not part:
+            continue
+        part_lower = part.lower()
+        tokens.add(part_lower)
+
+        # Split camelCase: getUserById -> get, User, By, Id
+        camel_parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+', part)
+        for cp in camel_parts:
+            tokens.add(cp.lower())
+
+    return tokens
+
+
+def _match_semantic_tags(tokens: set) -> set:
+    """Match tokens against semantic patterns (action verbs, etc.)."""
+    tags = set()
+
+    # Priority 1 (CRUD) first, then 2 (auth, cache, etc.), then 3
+    for priority in [1, 2, 3]:
+        for cat_name, cat_data in SEMANTIC_PATTERNS.items():
+            if cat_data["priority"] != priority:
+                continue
+            # Check if any token starts with any pattern
+            patterns = cat_data["patterns"]
+            for token in tokens:
+                for pattern in patterns:
+                    if token.startswith(pattern) or token == pattern:
+                        tags.add(cat_data["tag"])
+                        break
+
+    return tags
+
+
+def _match_domain_tags(tokens: set, full_text: str) -> set:
+    """Match tokens against domain keywords."""
+    tags = set()
+    full_lower = full_text.lower()
+
+    for keyword, tag in DOMAIN_KEYWORDS.items():
+        # Check token match or substring in full text
+        if keyword in tokens or keyword in full_lower:
+            tags.add(tag)
+
+    return tags
+
+
+def _match_class_suffix(filename: str) -> set:
+    """Match class/file suffixes (Service, Controller, etc.)."""
+    tags = set()
+
+    # Get basename without extension
+    basename = Path(filename).stem if '/' in filename else filename.split('.')[0]
+
+    for suffix, tag in CLASS_SUFFIXES.items():
+        # Case-insensitive suffix matching
+        if basename.lower().endswith(suffix.lower()):
+            tags.add(tag)
+            break  # Only one suffix match
+
+    return tags
+
+
 def extract_files(data: dict) -> tuple:
     """Extract file paths and search tags from tool input/output.
 
@@ -183,60 +339,47 @@ def extract_files(data: dict) -> tuple:
 
 
 def infer_tags(files: list, tool: str) -> list:
-    """Infer intent tags from file paths and tool."""
+    """Infer semantic intent tags from file paths and tool.
+
+    Uses pattern library (JSON configs) for intelligent tagging:
+    - Semantic patterns: action verbs (create, fetch, handle, validate, etc.)
+    - Domain keywords: auth, redis, stripe, kubernetes, etc.
+    - Class suffixes: Service, Controller, Repository, etc.
+    """
     tags = set()
 
     # Add tool action tag
     if tool in TOOL_TAGS:
         tags.add(TOOL_TAGS[tool])
 
-    # Match files against patterns
-    combined = ' '.join(files).lower()
-    for pattern, pattern_tags in INTENT_PATTERNS:
-        if re.search(pattern, combined, re.IGNORECASE):
-            tags.update(pattern_tags)
+    # Collect all tokens from all files
+    all_tokens = set()
+    combined_text = ""
 
-    # Language tags based on extension
     for f in files:
-        if f.endswith('.py'):
-            tags.add('#python')
-        elif f.endswith(('.js', '.ts', '.tsx', '.jsx')):
-            tags.add('#javascript')
-        elif f.endswith('.go'):
-            tags.add('#go')
-        elif f.endswith('.rs'):
-            tags.add('#rust')
-        elif f.endswith(('.c', '.cpp', '.h')):
-            tags.add('#cpp')
-        elif f.endswith('.java'):
-            tags.add('#java')
-        elif f.endswith('.sh'):
-            tags.add('#shell')
-        elif f.endswith('.sql'):
-            tags.add('#sql')
-        elif f.endswith('.md'):
-            tags.add('#markdown')
+        # Skip special entries
+        if f.startswith('pattern:') or f.startswith('cmd:'):
+            continue
 
-        # Path-based tags for common directories
-        f_lower = f.lower()
-        if '/cli/' in f_lower or f_lower.endswith('/cli') or '/bin/' in f_lower:
-            tags.add('#cli')
-        if '/hooks/' in f_lower:
-            tags.add('#hooks')
-        if '/services/' in f_lower or '/service/' in f_lower:
-            tags.add('#services')
-        if '/api/' in f_lower or '/endpoint' in f_lower:
-            tags.add('#api')
-        if '/index' in f_lower or 'indexer' in f_lower:
-            tags.add('#indexing')
-        if '.context/' in f_lower or '/context/' in f_lower:
-            tags.add('#context')
-        if '/agents/' in f_lower or '/agent/' in f_lower:
-            tags.add('#agents')
-        if '/skills/' in f_lower or '/skill/' in f_lower:
-            tags.add('#skills')
-        if '/plugin/' in f_lower or '/plugins/' in f_lower:
-            tags.add('#plugins')
+        combined_text += " " + f
+        tokens = _tokenize(f)
+        all_tokens.update(tokens)
+
+        # Match class/file suffixes (AuthService -> #service)
+        tags.update(_match_class_suffix(f))
+
+    # Match semantic patterns (action verbs like get, create, handle)
+    tags.update(_match_semantic_tags(all_tokens))
+
+    # Match domain keywords (auth, redis, stripe, etc.)
+    tags.update(_match_domain_tags(all_tokens, combined_text))
+
+    # Fallback: If no semantic tags found, use legacy patterns
+    if len(tags) <= 1:  # Only has tool tag
+        for pattern, pattern_tags in INTENT_PATTERNS:
+            if re.search(pattern, combined_text, re.IGNORECASE):
+                tags.update(pattern_tags)
+                break  # Only first match for fallback
 
     return list(tags)
 

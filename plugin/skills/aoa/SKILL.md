@@ -1,6 +1,6 @@
 ---
 name: aoa
-description: Fast codebase search using aOa. Use instead of Grep/Glob for finding code, symbols, functions, or files. 10-50x faster than built-in search tools.
+description: Fast codebase search using aOa. Use instead of Grep/Glob for finding code, functions, classes, or files. 10-50x faster than built-in search tools.
 allowed-tools: Bash
 ---
 
@@ -13,7 +13,7 @@ allowed-tools: Bash
 
 | Command | Use For | Speed |
 |---------|---------|-------|
-| `aoa grep <term>` | Symbol search (O(1) indexed) | <1ms |
+| `aoa grep <term>` | Instant search (O(1) indexed) | <1ms |
 | `aoa grep "a b c"` | Multi-term OR search, ranked | <5ms |
 | `aoa grep -a t1,t2` | Multi-term AND (all required) | <5ms |
 | `aoa egrep "regex"` | Regex pattern (working set) | ~20ms |
@@ -26,9 +26,9 @@ allowed-tools: Bash
 
 ## Commands
 
-### 1. Symbol Search: `aoa grep <term>`
+### 1. Instant Search: `aoa grep <term>`
 
-Find any symbol, function, class, or term in the codebase.
+Find any function, class, method, or term in the codebase.
 
 ```bash
 aoa grep handleAuth           # Single term

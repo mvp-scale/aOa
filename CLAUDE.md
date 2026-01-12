@@ -54,7 +54,7 @@ When user says **"Hey aOa"**, **"Tag my code"**, or **"aOa quickstart"**:
 ```
 ⚡ aOa activated
 
-Fast symbol search works right now: `aoa grep [anything]`
+Fast search works right now: `aoa grep [anything]`
 
 To enable semantic search (find code by meaning), run this in your terminal:
 
@@ -147,9 +147,9 @@ aoa grep "auth login session"  # ONE call, ranked results
 
 ## Rule #4: Three Search Modes
 
-**Symbol Lookup (O(1) - instant, full index):**
+**Instant Search (O(1) - full index):**
 ```bash
-aoa grep tree_sitter                  # exact symbol
+aoa grep tree_sitter                  # exact match
 aoa grep "auth session token"         # multi-term OR search, ranked
 ```
 **Note:** Space-separated terms are OR search, not phrase search.
@@ -167,7 +167,7 @@ aoa egrep "def\\s+handle\\w+"         # find patterns
 **Warning:** Pattern search only scans local/recent files, not full codebase.
 
 **When to use which:**
-- `aoa grep` → Know the symbol, need speed, OR logic
+- `aoa grep` → Know the target, need speed, OR logic
 - `aoa grep -a` → Need files matching ALL terms (AND logic)
 - `aoa egrep` → Need regex matching (working set only)
 
@@ -210,7 +210,7 @@ Errors are information. Suppressing stderr:
 For programmatic access via curl:
 
 ```bash
-curl "localhost:8080/symbol?q=handleAuth"           # Symbol search
+curl "localhost:8080/symbol?q=handleAuth"           # Instant search
 curl "localhost:8080/multi?q=auth+login+handler"    # Multi-term ranked
 curl "localhost:8080/files"                          # List indexed files
 curl "localhost:8080/intent/recent"                  # Recent intents

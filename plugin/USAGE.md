@@ -9,7 +9,7 @@
 
 | I want to... | Command | Scope | Speed |
 |--------------|---------|-------|-------|
-| Find a symbol | `aoa grep handleAuth` | Full index | <1ms |
+| Find code | `aoa grep handleAuth` | Full index | <1ms |
 | Find files with ANY term | `aoa grep "auth token"` | Full index | <5ms |
 | Find files with ALL terms | `aoa grep -a auth,token` | Full index | ~3ms |
 | Search with regex | `aoa egrep "TODO\|FIXME"` | Working set | ~20ms |
@@ -50,7 +50,7 @@ aoa grep auth --today            # Modified today
 
 **Use:** Spawn `aoa-explore` agent
 
-**Result:** Thorough analysis using indexed symbols, understands relationships
+**Result:** Thorough analysis using indexed targets, understands relationships
 
 ---
 
@@ -75,7 +75,7 @@ aoa outline src/auth/handler.py --tags   # With AI-generated tags
 
 **Use:** Spawn `aoa-outline` agent (runs in background)
 
-**Result:** AI-tagged symbols searchable by purpose and domain
+**Result:** AI-tagged targets searchable by purpose and domain
 
 ---
 
@@ -93,16 +93,16 @@ aoa outline src/auth/handler.py --tags   # With AI-generated tags
 
 **Three search modes:**
 
-### 1. Symbol Lookup (O(1) - instant, full index)
+### 1. Instant Search (O(1) - full index)
 
-**Single term** - exact symbol match:
+**Single term** - exact match:
 ```bash
-aoa grep handleAuth              # finds "handleAuth" symbol
+aoa grep handleAuth              # finds "handleAuth" instantly
 ```
 
 **Multi-term (space-separated)** - OR search, ranked by relevance:
 ```bash
-aoa grep "auth session token"    # finds symbols matching ANY term, ranked
+aoa grep "auth session token"    # finds targets matching ANY term, ranked
 ```
 **Note:** This is NOT phrase search. `"auth session"` won't find the exact phrase - it finds files containing "auth" OR "session", ranked by match quality.
 
@@ -126,7 +126,7 @@ aoa egrep "async\\s+function"     # function patterns
 
 **Scope limitation:** For full-codebase pattern search, use:
 ```bash
-aoa grep TODO                    # symbol lookup (full index, O(1))
+aoa grep TODO                    # instant search (full index, O(1))
 ```
 
 ---
@@ -185,7 +185,7 @@ aoa grep -a voice,app             # finds "voice-app", "voice_app", etc.
 aoa grep "error handling"        # expects exact phrase
 
 # What actually happens:
-# Finds symbols matching "error" OR "handling", ranked by relevance
+# Finds targets matching "error" OR "handling", ranked by relevance
 
 # What to use instead:
 aoa grep -a error,handling       # files containing BOTH terms
@@ -201,7 +201,7 @@ aoa egrep "module\\.exports"     # expects all 700+ files
 # Only scans ~30-50 local/recent files
 
 # What to use instead:
-aoa grep exports                 # symbol lookup (full index)
+aoa grep exports                 # instant search (full index)
 aoa grep -a module,exports       # intersection search
 ```
 
@@ -233,7 +233,7 @@ aoa grep post                    # then filter results manually
 |-------------|----------|
 | Grep scans entire codebase | Indexed O(1) lookup |
 | Read whole files (3,700 tokens) | Read exact lines (200 tokens) |
-| Slow pattern matching | <5ms symbol search |
+| Slow pattern matching | <5ms instant search |
 | Text matches only | Semantic tags (#auth, #routing) |
 
 ---
@@ -251,7 +251,7 @@ aoa grep post                    # then filter results manually
 ### Pattern search returns fewer results than expected
 
 Pattern search only scans working set (~30-50 files). For full codebase:
-- Use `aoa grep` for symbol lookup
+- Use `aoa grep` for instant search
 - Use traditional `grep -r` for exhaustive pattern matching
 
 ### Predictions showing low confidence (30-40%)

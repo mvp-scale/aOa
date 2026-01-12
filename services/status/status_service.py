@@ -112,6 +112,151 @@ TOOL_TAGS = {
 }
 
 
+# ============================================================================
+# Pattern Library Loading (RAM-cached at import time for ultra-speed)
+# ============================================================================
+
+def _load_pattern_configs():
+    """Load semantic and domain pattern configs from JSON.
+
+    Called once at import time. Returns optimized lookup structures.
+    """
+    semantic_patterns = {}  # category -> {patterns: set, tag: str, priority: int}
+    domain_keywords = {}    # keyword -> tag
+    class_suffixes = {}     # suffix -> tag
+
+    # Find config directory
+    config_paths = [
+        Path(__file__).parent.parent.parent / "config",  # services/status/ -> services/ -> aOa/config/
+        Path("/app/config"),  # Docker mount
+        Path("/home") / os.environ.get("USER", "user") / ".aoa" / "config",  # ~/.aoa/config/
+    ]
+
+    semantic_file = None
+    domain_file = None
+
+    for config_dir in config_paths:
+        if config_dir.exists():
+            if (config_dir / "semantic-patterns.json").exists():
+                semantic_file = config_dir / "semantic-patterns.json"
+            if (config_dir / "domain-patterns.json").exists():
+                domain_file = config_dir / "domain-patterns.json"
+            if semantic_file and domain_file:
+                break
+
+    # Load semantic patterns
+    if semantic_file:
+        try:
+            data = json.loads(semantic_file.read_text())
+            categories = data.get("categories", {})
+            for cat_name, cat_data in categories.items():
+                patterns = set(p.lower() for p in cat_data.get("patterns", []))
+                semantic_patterns[cat_name] = {
+                    "patterns": patterns,
+                    "tag": cat_data.get("tag", f"#{cat_name}"),
+                    "priority": cat_data.get("priority", 3)
+                }
+
+            # Load class suffix patterns
+            kind_patterns = data.get("kind_patterns", {}).get("patterns", {})
+            class_suffixes.update(kind_patterns.get("class", {}).get("suffix_patterns", {}))
+
+            # Load compound patterns
+            compound = data.get("compound_patterns", {}).get("patterns", {})
+            for pattern, tag in compound.items():
+                normalized = pattern.replace("_", "")
+                domain_keywords[normalized] = tag
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    # Load domain patterns
+    if domain_file:
+        try:
+            data = json.loads(domain_file.read_text())
+            domains = data.get("domains", {})
+            for domain_name, domain_data in domains.items():
+                tag = domain_data.get("tag", f"#{domain_name}")
+                for keyword in domain_data.get("keywords", []):
+                    domain_keywords[keyword.lower()] = tag
+
+            # Load technical suffixes
+            suffixes = data.get("technical_suffixes", {})
+            for suffix, tag in suffixes.items():
+                if suffix != "description":
+                    class_suffixes[suffix] = tag
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    return semantic_patterns, domain_keywords, class_suffixes
+
+
+# Load patterns at import time (RAM-cached, runs once)
+SEMANTIC_PATTERNS, DOMAIN_KEYWORDS, CLASS_SUFFIXES = _load_pattern_configs()
+
+
+def _tokenize(text: str) -> set:
+    """Tokenize a string into matchable parts."""
+    tokens = set()
+    parts = re.split(r'[/_\-.\s]+', text)
+
+    for part in parts:
+        if not part:
+            continue
+        part_lower = part.lower()
+        tokens.add(part_lower)
+
+        # Split camelCase
+        camel_parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+', part)
+        for cp in camel_parts:
+            tokens.add(cp.lower())
+
+    return tokens
+
+
+def _match_semantic_tags(tokens: set) -> set:
+    """Match tokens against semantic patterns."""
+    tags = set()
+
+    for priority in [1, 2, 3]:
+        for cat_name, cat_data in SEMANTIC_PATTERNS.items():
+            if cat_data["priority"] != priority:
+                continue
+            patterns = cat_data["patterns"]
+            for token in tokens:
+                for pattern in patterns:
+                    if token.startswith(pattern) or token == pattern:
+                        tags.add(cat_data["tag"])
+                        break
+
+    return tags
+
+
+def _match_domain_tags(tokens: set, full_text: str) -> set:
+    """Match tokens against domain keywords."""
+    tags = set()
+    full_lower = full_text.lower()
+
+    for keyword, tag in DOMAIN_KEYWORDS.items():
+        if keyword in tokens or keyword in full_lower:
+            tags.add(tag)
+
+    return tags
+
+
+def _match_class_suffix(filename: str) -> set:
+    """Match class/file suffixes."""
+    tags = set()
+    basename = Path(filename).stem if '/' in filename else filename.split('.')[0]
+
+    for suffix, tag in CLASS_SUFFIXES.items():
+        # Case-insensitive suffix matching
+        if basename.lower().endswith(suffix.lower()):
+            tags.add(tag)
+            break
+
+    return tags
+
+
 class SubagentSyncer:
     """
     Syncs subagent activity from Claude session logs to aOa intent tracking.
@@ -140,36 +285,38 @@ class SubagentSyncer:
         self.redis.hset(Keys.AGENT_SYNC, file_path, position)
 
     def infer_tags(self, file_path: str, tool_name: str) -> List[str]:
-        """Infer intent tags from file path and tool name."""
+        """Infer semantic intent tags from file path and tool name.
+
+        Uses pattern library (JSON configs) for intelligent tagging.
+        """
         tags = set()
 
         # Add tool-based tags
         if tool_name in TOOL_TAGS:
             tags.update(TOOL_TAGS[tool_name])
 
-        # Apply pattern matching to file path
-        for pattern, pattern_tags in INTENT_PATTERNS:
-            if re.search(pattern, file_path, re.IGNORECASE):
-                tags.update(pattern_tags)
+        # Tokenize file path
+        tokens = _tokenize(file_path)
 
-        # Infer from file extension
-        ext = Path(file_path).suffix.lower()
-        ext_tags = {
-            '.py': ['python'],
-            '.js': ['javascript'],
-            '.ts': ['typescript'],
-            '.tsx': ['typescript', 'frontend'],
-            '.jsx': ['javascript', 'frontend'],
-            '.rs': ['rust'],
-            '.go': ['golang'],
-            '.md': ['markdown', 'documentation'],
-            '.sh': ['shell'],
-            '.yml': ['configuration'],
-            '.yaml': ['configuration'],
-            '.json': ['configuration'],
-        }
-        if ext in ext_tags:
-            tags.update(ext_tags[ext])
+        # Match semantic patterns (action verbs)
+        semantic_tags = _match_semantic_tags(tokens)
+        # Strip # prefix for consistency with legacy format
+        tags.update(t.lstrip('#') for t in semantic_tags)
+
+        # Match domain keywords
+        domain_tags = _match_domain_tags(tokens, file_path)
+        tags.update(t.lstrip('#') for t in domain_tags)
+
+        # Match class/file suffixes
+        suffix_tags = _match_class_suffix(file_path)
+        tags.update(t.lstrip('#') for t in suffix_tags)
+
+        # Fallback: If no semantic tags, use legacy patterns
+        if len(tags) <= len(TOOL_TAGS.get(tool_name, [])):
+            for pattern, pattern_tags in INTENT_PATTERNS:
+                if re.search(pattern, file_path, re.IGNORECASE):
+                    tags.update(pattern_tags)
+                    break
 
         return list(tags)
 
