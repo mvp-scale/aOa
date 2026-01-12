@@ -237,6 +237,7 @@ class Location:
     symbol: Optional[str] = None      # Symbol/function name (e.g., "handleAuth")
     symbol_kind: Optional[str] = None # Kind (e.g., "function", "class")
     end_line: Optional[int] = None    # Where the symbol ends
+    content: Optional[str] = None     # GL-046: Line content for O(1) display
 
 @dataclass
 class FileMeta:
@@ -981,13 +982,20 @@ class CodebaseIndex:
                     content_hash=content_hash
                 )
 
-                for token, line, col in self.tokenize(content):
+                # GL-046: Split content into lines for O(1) content retrieval
+                lines = content.split('\n')
+
+                for token, line_num, col in self.tokenize(content):
+                    # Get line content (capped at 200 chars for memory efficiency)
+                    line_content = lines[line_num - 1][:200] if line_num <= len(lines) else ''
+
                     loc = Location(
                         file=rel_path,
-                        line=line,
+                        line=line_num,
                         col=col,
                         symbol_type='token',
-                        mtime=mtime
+                        mtime=mtime,
+                        content=line_content.strip()  # GL-046: Store content for O(1) display
                     )
                     self.inverted_index[token].append(loc)
                     lower = token.lower()
