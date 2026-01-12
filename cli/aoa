@@ -819,7 +819,7 @@ cmd_grep() {
     fi
 }
 
-# GL-045: Compact grep display (Option C)
+# GL-046.4: O(1) grep display - uses enriched API response, no curl loops
 # Shows all results ranked by intent, in grep-like compact format
 display_ranked_grep_results() {
     local result="$1"
@@ -833,15 +833,11 @@ display_ranked_grep_results() {
         return 0
     fi
 
-    # Get unique files from results with their hit lines
-    local files_with_lines=$(echo "$result" | jq -r '.results[] | "\(.file):\(.line)"')
-    local unique_files=$(echo "$result" | jq -r '[.results[].file] | unique | .[]')
-    local file_count=$(echo "$unique_files" | grep -c . || echo 0)
-
-    local project_id=$(get_project_id)
+    # Count unique files
+    local file_count=$(echo "$result" | jq -r '[.results[].file] | unique | length')
 
     # Get rolling intent from API response (GL-045)
-    local rolling_intent=$(echo "$result" | jq -r '.rolling_intent // [] | join(" ")' 2>/dev/null)
+    local rolling_intent=$(echo "$result" | jq -r '.rolling_intent // [] | map("#" + .) | join(" ")' 2>/dev/null)
 
     # Header: hits | files | timing | intent tags
     printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}" "$count" "$file_count" "$ms"
@@ -850,128 +846,45 @@ display_ranked_grep_results() {
     fi
     printf "\n\n"
 
-    # Process ALL files (no limit - like grep)
-    while IFS= read -r file; do
+    # GL-046.4: Direct iteration through results - O(1) from API
+    # API response now includes: file, line, content, symbol, end_line (when enriched)
+    # Use pipe delimiter with _NULL_ placeholder for empty fields
+    echo "$result" | jq -r '
+        .results[] |
+        [
+            .file,
+            .line,
+            (.symbol // "<module>"),
+            (.end_line // "_NULL_" | tostring),
+            (.content // "_NULL_"),
+            (.tags // [] | if length > 0 then map("#" + .) | join(" ") else "_NULL_" end)
+        ] |
+        join("|")
+    ' | while IFS='|' read -r file line sym end_line content tags; do
         [ -z "$file" ] && continue
 
-        # Get hit lines for this file
-        local hit_lines=$(echo "$files_with_lines" | grep "^${file}:" | cut -d: -f2 | sort -n | uniq)
-        local first_line=$(echo "$hit_lines" | head -1)
+        # Convert _NULL_ placeholders back to empty
+        [ "$end_line" = "_NULL_" ] && end_line=""
+        [ "$content" = "_NULL_" ] && content=""
+        [ "$tags" = "_NULL_" ] && tags=""
 
-        # Get file basename for compact display
-        local basename=$(basename "$file")
-
-        # Fetch intent tags for this file
-        local shown_tags=""
-        local extra_count=0
-        if [ -n "$project_id" ]; then
-            local all_file_tags=$(curl -s "${INDEX_URL}/intent/file?path=${file}&project_id=${project_id}" 2>/dev/null | jq -r '.tags // []')
-            local tag_count=$(echo "$all_file_tags" | jq 'length' 2>/dev/null)
-            shown_tags=$(echo "$all_file_tags" | jq -r '.[0:2] | map("#" + .) | join(" ")' 2>/dev/null)
-            [ "$tag_count" -gt 2 ] && extra_count=$((tag_count - 2))
-        fi
-
-        # Resolve file path for sed
-        local full_file_path=""
-        if [[ "$file" == /* ]]; then
-            full_file_path="$file"
-        elif [ -f "$file" ]; then
-            full_file_path="$file"
-        elif [ -f "$(pwd)/$file" ]; then
-            full_file_path="$(pwd)/$file"
-        fi
-
-        # Fetch outline for symbol info (include project_id for tag lookup)
-        local outline_url="${INDEX_URL}/outline?file=${file}"
-        [ -n "$project_id" ] && outline_url="${outline_url}&project=${project_id}"
-        local outline=$(curl -s "$outline_url" 2>/dev/null)
-        local hit_lines_json=$(echo "$hit_lines" | jq -R . | jq -s .)
-
-        # Get most specific matching symbol (smallest range containing hit line)
-        local first_sym=$(echo "$outline" | jq -c --argjson hits "$hit_lines_json" '
-            [.symbols[] | . as $sym |
-                ($hits | map(tonumber) | map(select(. >= $sym.start_line and . <= $sym.end_line))) as $sym_hits |
-                select($sym_hits | length > 0) |
-                . + {range_size: (.end_line - .start_line)}
-            ] | sort_by(.range_size) | .[0] // null
-        ' 2>/dev/null)
-
+        # Build symbol info: symbol[start-end] for real symbols, <module> for top-level
         local sym_info=""
-        local sym_tags=""
-        if [ "$first_sym" != "null" ] && [ -n "$first_sym" ]; then
-            local sym_name=$(echo "$first_sym" | jq -r '.name')
-            local sym_start=$(echo "$first_sym" | jq -r '.start_line')
-            local sym_end=$(echo "$first_sym" | jq -r '.end_line')
-            sym_info="${sym_name}[${sym_start}-${sym_end}]"
-            # Extract tags from symbol (enriched from Redis)
-            sym_tags=$(echo "$first_sym" | jq -r '.tags // [] | join(" ")' 2>/dev/null)
-        else
-            # No enclosing symbol - this is module-level code
+        if [ "$sym" = "<module>" ] || [ -z "$sym" ]; then
             sym_info="<module>"
+        elif [ -n "$end_line" ]; then
+            sym_info="${sym}[${line}-${end_line}]"
+        else
+            sym_info="${sym}[${line}]"
         fi
 
-        # Get line content (no highlighting - keep it fast)
-        local line_text=""
-        if [ -n "$full_file_path" ] && [ -f "$full_file_path" ] && [ -n "$first_line" ]; then
-            line_text=$(sed -n "${first_line}p" "$full_file_path" 2>/dev/null | sed 's/^[[:space:]]*//' | head -c 60)
-        fi
-
-        # Format tags: prefer symbol tags from outline (now enriched with Redis tags)
-        local tags_display=""
-        if [ -n "$sym_tags" ] && [ "$sym_tags" != "" ]; then
-            tags_display="${CYAN}${sym_tags}${NC}"
-        elif [ -n "$shown_tags" ] && [ "$shown_tags" != "" ]; then
-            if [ "$extra_count" -gt 0 ]; then
-                tags_display="${CYAN}${shown_tags}${NC}${DIM}(+${extra_count})${NC}"
-            else
-                tags_display="${CYAN}${shown_tags}${NC}"
-            fi
-        fi
-
-        # Grep-like output: file:line: symbol content #tags (tags at end)
-        printf "${BOLD}%s${NC}${DIM}:%s:${NC}" "$file" "$first_line"
-        [ -n "$sym_info" ] && printf " ${YELLOW}%s${NC}" "$sym_info"
-        [ -n "$line_text" ] && printf " ${DIM}%s${NC}" "$line_text"
-        [ -n "$tags_display" ] && printf "  %b" "$tags_display"
+        # Display: file:line: symbol content  #tags
+        printf "${BOLD}%s${NC}${DIM}:%s:${NC}" "$file" "$line"
+        printf " ${YELLOW}%s${NC}" "$sym_info"
+        [ -n "$content" ] && printf " ${DIM}%s${NC}" "$content"
+        [ -n "$tags" ] && printf "  ${CYAN}%s${NC}" "$tags"
         printf "\n"
-
-        # Additional hits - same format, file repeats (grep-style, show ALL)
-        echo "$hit_lines" | tail -n +2 | while read -r line_num; do
-            [ -z "$line_num" ] && continue
-
-            local extra_text=""
-            if [ -n "$full_file_path" ] && [ -f "$full_file_path" ]; then
-                extra_text=$(sed -n "${line_num}p" "$full_file_path" 2>/dev/null | sed 's/^[[:space:]]*//' | head -c 60)
-            fi
-
-            # Find most specific symbol for this line
-            local extra_sym=$(echo "$outline" | jq -c --arg ln "$line_num" '
-                [.symbols[] | . as $sym |
-                    select(($ln | tonumber) >= $sym.start_line and ($ln | tonumber) <= $sym.end_line) |
-                    . + {range_size: (.end_line - .start_line)}
-                ] | sort_by(.range_size) | .[0] // null
-            ' 2>/dev/null)
-
-            local extra_sym_info=""
-            local extra_sym_tags=""
-            if [ "$extra_sym" != "null" ] && [ -n "$extra_sym" ]; then
-                local esym_name=$(echo "$extra_sym" | jq -r '.name')
-                local esym_start=$(echo "$extra_sym" | jq -r '.start_line')
-                local esym_end=$(echo "$extra_sym" | jq -r '.end_line')
-                extra_sym_info="${esym_name}[${esym_start}-${esym_end}]"
-                extra_sym_tags=$(echo "$extra_sym" | jq -r '.tags // [] | join(" ")' 2>/dev/null)
-            else
-                extra_sym_info="<module>"
-            fi
-
-            printf "${BOLD}%s${NC}${DIM}:%s:${NC}" "$file" "$line_num"
-            printf " ${YELLOW}%s${NC}" "$extra_sym_info"
-            [ -n "$extra_text" ] && printf " ${DIM}%s${NC}" "$extra_text"
-            [ -n "$extra_sym_tags" ] && printf "  ${CYAN}%s${NC}" "$extra_sym_tags"
-            printf "\n"
-        done
-
-    done <<< "$unique_files"
+    done
 }
 
 # Keep old function name for backwards compatibility

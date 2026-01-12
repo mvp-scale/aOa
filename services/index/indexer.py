@@ -21,7 +21,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Set, Optional, Tuple
 from dataclasses import dataclass, asdict
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 from flask import Flask, request, jsonify
 from watchdog.observers import Observer
@@ -267,6 +267,119 @@ class IntentRecord:
     project_id: Optional[str] = None  # UUID for per-project isolation
     file_sizes: Optional[Dict[str, int]] = None  # File path -> size in bytes (for baseline calc)
     output_size: Optional[int] = None  # Actual output size in bytes (for real savings calc)
+
+
+# ============================================================================
+# GL-046.1: LRU Content Cache - O(1) file content access
+# ============================================================================
+
+class LRUContentCache:
+    """Bounded LRU cache for file contents across all projects.
+
+    Provides O(1) content access for search results without reading from disk.
+    Shared across all projects with configurable memory cap.
+
+    Memory math (500MB default):
+    - Average line: ~50 bytes
+    - Average file: ~500 lines = 25KB
+    - 500MB / 25KB = ~20,000 files cached
+    - Most codebases: 1-5K files = entire working set fits in cache
+    """
+
+    def __init__(self, max_size_mb: int = 500):
+        self.max_size = max_size_mb * 1024 * 1024  # Convert to bytes
+        self.current_size = 0
+        # Key: (project_id, file_path) -> Value: list of lines
+        self.cache: OrderedDict[Tuple[str, str], List[str]] = OrderedDict()
+        self.lock = threading.RLock()
+        # Stats
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, project_id: str, file_path: str, file_root: Path) -> Optional[List[str]]:
+        """Get file content as lines. Returns None if file doesn't exist."""
+        key = (project_id, file_path)
+
+        with self.lock:
+            if key in self.cache:
+                self.cache.move_to_end(key)  # Mark as recently used
+                self.hits += 1
+                return self.cache[key]
+
+        # Cache miss - read from disk
+        self.misses += 1
+        try:
+            full_path = file_root / file_path
+            content = full_path.read_text(encoding='utf-8', errors='ignore')
+            lines = content.split('\n')
+            self._add(key, lines)
+            return lines
+        except Exception:
+            return None
+
+    def get_line(self, project_id: str, file_path: str, line_num: int, file_root: Path) -> Optional[str]:
+        """Get a specific line from a file (1-indexed)."""
+        lines = self.get(project_id, file_path, file_root)
+        if lines and 0 < line_num <= len(lines):
+            return lines[line_num - 1]
+        return None
+
+    def get_lines(self, project_id: str, file_path: str, line_nums: List[int], file_root: Path) -> Dict[int, str]:
+        """Get multiple lines from a file. Returns {line_num: content}."""
+        result = {}
+        lines = self.get(project_id, file_path, file_root)
+        if lines:
+            for ln in line_nums:
+                if 0 < ln <= len(lines):
+                    result[ln] = lines[ln - 1]
+        return result
+
+    def _add(self, key: Tuple[str, str], lines: List[str]):
+        """Add content to cache, evicting LRU entries if needed."""
+        size = sum(len(line) for line in lines)
+
+        with self.lock:
+            # Evict until we have room
+            while self.current_size + size > self.max_size and self.cache:
+                evicted_key, evicted_lines = self.cache.popitem(last=False)
+                self.current_size -= sum(len(l) for l in evicted_lines)
+
+            self.cache[key] = lines
+            self.current_size += size
+
+    def invalidate(self, project_id: str, file_path: str):
+        """Remove a file from cache (call on file change)."""
+        key = (project_id, file_path)
+        with self.lock:
+            if key in self.cache:
+                lines = self.cache.pop(key)
+                self.current_size -= sum(len(l) for l in lines)
+
+    def invalidate_project(self, project_id: str):
+        """Remove all files for a project from cache."""
+        with self.lock:
+            keys_to_remove = [k for k in self.cache if k[0] == project_id]
+            for key in keys_to_remove:
+                lines = self.cache.pop(key)
+                self.current_size -= sum(len(l) for l in lines)
+
+    def stats(self) -> dict:
+        """Return cache statistics."""
+        with self.lock:
+            total = self.hits + self.misses
+            return {
+                'size_mb': round(self.current_size / (1024 * 1024), 2),
+                'max_size_mb': self.max_size // (1024 * 1024),
+                'files_cached': len(self.cache),
+                'hits': self.hits,
+                'misses': self.misses,
+                'hit_rate': round(self.hits / total * 100, 1) if total > 0 else 0
+            }
+
+
+# Global content cache instance (shared across all indexes)
+CONTENT_CACHE_MB = int(os.environ.get('AOA_CONTENT_CACHE_MB', '500'))
+content_cache = LRUContentCache(max_size_mb=CONTENT_CACHE_MB)
 
 
 @dataclass
@@ -957,6 +1070,25 @@ class CodebaseIndex:
                     tokens.append((token, line_num, match.start()))
         return tokens
 
+    def _find_enclosing_symbol(self, line_num: int, symbols: List) -> Optional[dict]:
+        """GL-046.2: Find the most specific (smallest) symbol containing a line.
+
+        Returns dict with {name, kind, end_line} or None if not in any symbol.
+        """
+        candidates = []
+        for sym in symbols:
+            if sym.start_line <= line_num <= sym.end_line:
+                candidates.append(sym)
+        if not candidates:
+            return None
+        # Return smallest range (most specific symbol)
+        best = min(candidates, key=lambda s: s.end_line - s.start_line)
+        return {
+            'name': best.name,
+            'kind': best.kind,
+            'end_line': best.end_line
+        }
+
     def index_file(self, path: Path) -> bool:
         """Index a single file."""
         try:
@@ -967,6 +1099,14 @@ class CodebaseIndex:
             rel_path = str(path.relative_to(self.root))
             language = self.get_language(path)
             content_hash = hashlib.md5(content.encode()).hexdigest()[:16]
+
+            # GL-046.2: Parse outline to get symbol info for each token location
+            symbols = []
+            if TREE_SITTER_AVAILABLE and language in outline_parser.LANG_MAP:
+                try:
+                    symbols = outline_parser.parse_file(str(path), language)
+                except Exception:
+                    pass  # Fall back to no symbol info
 
             with self.lock:
                 if rel_path in self.files:
@@ -989,13 +1129,19 @@ class CodebaseIndex:
                     # Get line content (capped at 200 chars for memory efficiency)
                     line_content = lines[line_num - 1][:200] if line_num <= len(lines) else ''
 
+                    # GL-046.2: Find enclosing symbol for this token
+                    enclosing = self._find_enclosing_symbol(line_num, symbols)
+
                     loc = Location(
                         file=rel_path,
                         line=line_num,
                         col=col,
                         symbol_type='token',
                         mtime=mtime,
-                        content=line_content.strip()  # GL-046: Store content for O(1) display
+                        content=line_content.strip(),  # GL-046: Store content for O(1) display
+                        symbol=enclosing['name'] if enclosing else None,  # GL-046.2
+                        symbol_kind=enclosing['kind'] if enclosing else None,  # GL-046.2
+                        end_line=enclosing['end_line'] if enclosing else None  # GL-046.2
                     )
                     self.inverted_index[token].append(loc)
                     lower = token.lower()
@@ -1469,6 +1615,12 @@ class IndexerHandler(FileSystemEventHandler):
         if self.index.should_index(path):
             if self.index.index_file(path):
                 self.index.record_change(path, 'modified')
+                # GL-046.1: Invalidate content cache on file change
+                try:
+                    rel_path = str(path.relative_to(self.index.root))
+                    content_cache.invalidate(self.index.name, rel_path)
+                except Exception:
+                    pass
 
     def on_created(self, event):
         if event.is_directory:
@@ -1484,6 +1636,8 @@ class IndexerHandler(FileSystemEventHandler):
         path = Path(event.src_path)
         try:
             rel_path = str(path.relative_to(self.index.root))
+            # GL-046.1: Invalidate content cache on file delete
+            content_cache.invalidate(self.index.name, rel_path)
             with self.index.lock:
                 if rel_path in self.index.files:
                     self.index._remove_file_from_index(rel_path)
@@ -1787,7 +1941,8 @@ def health():
     response = {
         'status': 'ok',
         'mode': 'global' if manager.global_mode else 'legacy',
-        'repos': [r.get_stats() for r in manager.repos.values()]
+        'repos': [r.get_stats() for r in manager.repos.values()],
+        'content_cache': content_cache.stats()  # GL-046.1: LRU cache stats
     }
 
     if local:
@@ -1892,11 +2047,32 @@ def symbol_search():
         # Trim to requested limit
         results = results[:limit]
 
+        # GL-046.1: Enrich results with content from LRU cache (O(1) when warm)
+        # GL-046.3: Batch add tags to results (no per-file curl needed in CLI)
+        for r in results:
+            file_path = r.get('file', '')
+            line_num = r.get('line', 0)
+            if file_path and line_num > 0:
+                line_content = content_cache.get_line(
+                    project or 'local',
+                    file_path,
+                    line_num,
+                    idx.root
+                )
+                if line_content is not None:
+                    # Strip leading whitespace, truncate for display
+                    r['content'] = line_content.strip()[:100]
+
+            # GL-046.3: Add file tags to each result
+            if intent_index and file_path:
+                r['tags'] = list(intent_index.tags_for_file(file_path, project))
+
         response = {
             'results': results,
             'index': idx.name,
             'project': project,
-            'ms': (time.time() - start) * 1000
+            'ms': (time.time() - start) * 1000,
+            'cache': content_cache.stats()  # Include cache stats for monitoring
         }
 
         # Include rolling intent tags if ranking was applied

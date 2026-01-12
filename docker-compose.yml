@@ -67,6 +67,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CLAUDE_SESSIONS=/userhome/.claude  # Derived from PROJECTS_ROOT
       - USER_HOME=${PROJECTS_ROOT}         # For path translation (from .env)
+      - AOA_CONTENT_CACHE_MB=${AOA_CONTENT_CACHE_MB:-500}  # GL-046.1: LRU content cache size
     networks:
       - aoa-internal
     depends_on:
