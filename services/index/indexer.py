@@ -96,6 +96,130 @@ except ImportError:
     Scorer = None
     WeightTuner = None
 
+# ============================================================================
+# Pattern Library for Intent Inference (RAM-cached at startup)
+# ============================================================================
+
+def _load_pattern_library():
+    """Load semantic and domain pattern configs from JSON.
+
+    Used for:
+    1. Inferring intent tags from search terms
+    2. Ranking search results by intent alignment
+    """
+    semantic_patterns = {}  # category -> {patterns: set, tag: str, priority: int}
+    domain_keywords = {}    # keyword -> tag
+
+    # Find config directory
+    config_paths = [
+        Path('/app/config'),  # Docker
+        Path(__file__).parent.parent.parent / 'config',  # Local dev
+        Path.home() / '.aoa' / 'config',  # User config
+    ]
+
+    semantic_file = None
+    domain_file = None
+
+    for config_dir in config_paths:
+        if (config_dir / 'semantic-patterns.json').exists():
+            semantic_file = config_dir / 'semantic-patterns.json'
+        if (config_dir / 'domain-patterns.json').exists():
+            domain_file = config_dir / 'domain-patterns.json'
+        if semantic_file and domain_file:
+            break
+
+    # Load semantic patterns
+    if semantic_file:
+        try:
+            data = json.loads(semantic_file.read_text())
+            for cat_name, cat_data in data.get('categories', {}).items():
+                patterns = set(p.lower() for p in cat_data.get('patterns', []))
+                semantic_patterns[cat_name] = {
+                    'patterns': patterns,
+                    'tag': cat_data.get('tag', f'#{cat_name}'),
+                    'priority': cat_data.get('priority', 3)
+                }
+        except Exception:
+            pass
+
+    # Load domain patterns
+    if domain_file:
+        try:
+            data = json.loads(domain_file.read_text())
+            for domain_name, domain_data in data.get('domains', {}).items():
+                tag = domain_data.get('tag', f'#{domain_name}')
+                for keyword in domain_data.get('keywords', []):
+                    domain_keywords[keyword.lower()] = tag
+        except Exception:
+            pass
+
+    return semantic_patterns, domain_keywords
+
+# Load patterns at startup (RAM-cached)
+SEMANTIC_PATTERNS, DOMAIN_KEYWORDS = _load_pattern_library()
+
+
+def _tokenize_search(text: str) -> set:
+    """Tokenize search term into matchable parts."""
+    tokens = set()
+    parts = re.split(r'[/_\-.\s]+', text.lower())
+    for part in parts:
+        if part:
+            tokens.add(part)
+            # Split camelCase
+            camel_parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+', part)
+            tokens.update(p.lower() for p in camel_parts)
+    return tokens
+
+
+def infer_search_intent(search_term: str) -> list:
+    """Infer intent tags from a search term using pattern library.
+
+    Example: "authenticate" -> ["#auth"]
+    Example: "getUserById" -> ["#read", "#user"]
+    """
+    tags = set()
+    tokens = _tokenize_search(search_term)
+
+    # Match semantic patterns (action verbs)
+    for cat_data in SEMANTIC_PATTERNS.values():
+        for token in tokens:
+            for pattern in cat_data['patterns']:
+                if token.startswith(pattern) or token == pattern:
+                    tags.add(cat_data['tag'])
+                    break
+
+    # Match domain keywords
+    for keyword, tag in DOMAIN_KEYWORDS.items():
+        if keyword in tokens or keyword in search_term.lower():
+            tags.add(tag)
+
+    return list(tags)
+
+
+def calculate_intent_score(result_tags: list, search_intent: list) -> float:
+    """Calculate similarity between result tags and search intent.
+
+    Uses Jaccard-like scoring: intersection / union, weighted.
+    Returns 0.0 to 1.0 (higher = better alignment).
+    """
+    if not search_intent:
+        return 0.5  # No search intent, neutral score
+    if not result_tags:
+        return 0.0  # No tags, can't score
+
+    search_set = set(search_intent)
+    result_set = set(result_tags)
+
+    intersection = len(search_set & result_set)
+    union = len(search_set | result_set)
+
+    # Boost for matching search intent (weighted towards search terms)
+    match_ratio = intersection / len(search_set) if search_set else 0
+
+    return match_ratio
+
+
 app = Flask(__name__)
 
 # ============================================================================
@@ -1579,6 +1703,62 @@ class IntentIndex:
             }
         }
 
+    def get_rolling_intent(self, project_id: str = None, window: int = 50) -> Dict[str, float]:
+        """Get weighted tag scores from recent N intents.
+
+        GL-045: Rolling intent window for smart result ranking.
+        Count-based (not time-based) - robust to lunch breaks, sleep, etc.
+
+        Args:
+            project_id: Project to query
+            window: Number of recent intents to consider (default 50, configurable)
+
+        Returns:
+            Dict[tag, score] where score is position-weighted (recent = higher)
+        """
+        proj = self._project_key(project_id)
+        tag_scores: Dict[str, float] = {}
+
+        with self.lock:
+            recent = self.timeline[proj][-window:] if self.timeline[proj] else []
+
+            if not recent:
+                return {}
+
+            for i, record in enumerate(recent):
+                # Position-weighted: oldest = 0.3, newest = 1.0
+                if len(recent) > 1:
+                    weight = 0.3 + (0.7 * (i / (len(recent) - 1)))
+                else:
+                    weight = 1.0
+
+                for tag in record.tags:
+                    tag_scores[tag] = tag_scores.get(tag, 0) + weight
+
+        return tag_scores
+
+    def get_file_affinity(self, project_id: str = None, window: int = 50) -> Dict[str, float]:
+        """Get pre-computed affinity scores for files based on rolling intent.
+
+        GL-045: Files that match recent intent tags get higher scores.
+
+        Returns:
+            Dict[file, affinity_score] - higher = more aligned with recent work
+        """
+        rolling = self.get_rolling_intent(project_id, window)
+        if not rolling:
+            return {}
+
+        proj = self._project_key(project_id)
+        file_scores: Dict[str, float] = {}
+
+        with self.lock:
+            for tag, weight in rolling.items():
+                for file in self.tag_to_files[proj].get(tag, set()):
+                    file_scores[file] = file_scores.get(file, 0) + weight
+
+        return file_scores
+
 
 # ============================================================================
 # Global Index Manager
@@ -1628,6 +1808,7 @@ def symbol_search():
         project = request.args.get('project')  # Optional project ID
         since = request.args.get('since')  # Unix timestamp or seconds ago
         before = request.args.get('before')  # Unix timestamp or seconds ago
+        rank_by_intent = request.args.get('rank', 'true').lower() != 'false'  # GL-045: opt-out
 
         # Convert time params to absolute timestamps
         now = int(time.time())
@@ -1649,14 +1830,74 @@ def symbol_search():
                 'ms': 0
             }), 404
 
-        results = idx.search(q, mode, limit, since=since_ts, before=before_ts)
+        # Get more results than needed so we can rank and still return `limit`
+        fetch_limit = limit * 3 if rank_by_intent else limit
+        results = idx.search(q, mode, fetch_limit, since=since_ts, before=before_ts)
 
-        return jsonify({
+        # GL-045: Rank by rolling intent affinity
+        rolling_tags = None
+        if rank_by_intent and intent_index and results:
+            # Get file affinity from rolling intent window (default 50)
+            file_affinity = intent_index.get_file_affinity(project, window=50)
+
+            # Infer query intent from search term
+            query_intent = set(infer_search_intent(q)) if q else set()
+
+            # Score each result
+            now = int(time.time())
+            for r in results:
+                file_path = r.get('file', '')
+                score = 0.0
+
+                # Rolling affinity (main signal)
+                score += file_affinity.get(file_path, 0) * 2
+
+                # Query intent match (boost files with matching tags)
+                file_tags = set(intent_index.tags_for_file(file_path, project))
+                query_overlap = len(query_intent & file_tags)
+                score += query_overlap * 5
+
+                # Recency boost (GL-045: recently modified files rank higher)
+                mtime = r.get('mtime', 0)
+                if mtime > 0:
+                    age_hours = (now - mtime) / 3600
+                    if age_hours < 1:
+                        score += 3  # Modified in last hour
+                    elif age_hours < 24:
+                        score += 2  # Modified today
+                    elif age_hours < 168:
+                        score += 1  # Modified this week
+
+                # Penalty for test/mock files (unless searching for tests)
+                file_lower = file_path.lower()
+                if 'test' not in q.lower() and any(p in file_lower for p in ['test', 'spec', 'mock', '__pycache__']):
+                    score -= 3
+
+                r['intent_score'] = round(score, 2)
+
+            # Sort by intent score (highest first), then by original order
+            results.sort(key=lambda r: r.get('intent_score', 0), reverse=True)
+
+            # Get rolling tags for response (for UI display)
+            rolling_tags = intent_index.get_rolling_intent(project, window=50)
+
+        # Trim to requested limit
+        results = results[:limit]
+
+        response = {
             'results': results,
             'index': idx.name,
             'project': project,
             'ms': (time.time() - start) * 1000
-        })
+        }
+
+        # Include rolling intent tags if ranking was applied
+        if rolling_tags:
+            # Top 5 tags by score for display
+            top_tags = sorted(rolling_tags.items(), key=lambda x: x[1], reverse=True)[:5]
+            response['rolling_intent'] = [tag for tag, _ in top_tags]
+
+        return jsonify(response)
     except Exception as e:
         return jsonify({
             'error': 'Search failed',
@@ -1664,6 +1905,168 @@ def symbol_search():
             'results': [],
             'ms': (time.time() - start) * 1000
         }), 500
+
+
+# ============================================================================
+# API Endpoint - Semantic Grep (GL-045: Content search with structural context)
+# ============================================================================
+
+@app.route('/grep')
+def semantic_grep():
+    """Content search with structural context and intent ranking.
+
+    Searches file contents like Unix grep, but:
+    1. Shows which function/class contains each match
+    2. Displays intent tags for file and symbol
+    3. Ranks results by intent alignment with search term
+
+    Query params:
+        q: Search term (required)
+        project: Project ID (optional)
+        limit: Max results (default 50)
+        regex: Enable regex mode (default false, like grep vs egrep)
+    """
+    start = time.time()
+
+    q = request.args.get('q', '')
+    project = request.args.get('project')
+    limit = int(request.args.get('limit', 50))
+    use_regex = request.args.get('regex', 'false').lower() == 'true'
+
+    if not q:
+        return jsonify({'error': 'Missing search term', 'results': [], 'ms': 0}), 400
+
+    idx = manager.get_local(project)
+    if not idx:
+        return jsonify({'error': 'No index available', 'results': [], 'ms': 0}), 404
+
+    # 1. Infer intent from search term
+    search_intent = infer_search_intent(q)
+
+    # 2. Compile pattern
+    try:
+        if use_regex:
+            pattern = re.compile(q, re.MULTILINE | re.IGNORECASE)
+        else:
+            # Literal search (escape regex special chars)
+            pattern = re.compile(re.escape(q), re.MULTILINE | re.IGNORECASE)
+    except re.error as e:
+        return jsonify({'error': f'Invalid pattern: {e}', 'results': [], 'ms': 0}), 400
+
+    # 3. Search file contents and collect matches
+    matches = []
+    files_searched = 0
+    files_with_hits = set()
+
+    with idx.lock:
+        for rel_path, meta in idx.files.items():
+            files_searched += 1
+            full_path = idx.root / rel_path
+
+            try:
+                content = full_path.read_text(encoding='utf-8', errors='ignore')
+            except Exception:
+                continue
+
+            lines = content.split('\n')
+            file_matches = []
+
+            for match in pattern.finditer(content):
+                line_num = content.count('\n', 0, match.start()) + 1
+                line_text = lines[line_num - 1].strip()[:100] if line_num <= len(lines) else ''
+
+                file_matches.append({
+                    'line': line_num,
+                    'text': line_text,
+                    'match': match.group()[:50]
+                })
+
+                if len(file_matches) >= 10:  # Max 10 matches per file
+                    break
+
+            if file_matches:
+                files_with_hits.add(rel_path)
+                matches.append({
+                    'file': rel_path,
+                    'language': meta.language,
+                    'matches': file_matches
+                })
+
+                if len(matches) >= limit:
+                    break
+
+    # 4. For each file with matches, get outline and associate symbols
+    results = []
+    for file_match in matches:
+        rel_path = file_match['file']
+        full_path = idx.root / rel_path
+        language = file_match['language']
+
+        # Get file outline (symbols with line ranges)
+        symbols = []
+        if TREE_SITTER_AVAILABLE and language != 'unknown':
+            try:
+                symbols = outline_parser.parse_file(str(full_path), language)
+            except Exception:
+                pass
+
+        # Get file-level tags from intent index
+        file_tags = []
+        if hasattr(idx, 'intent_index') and idx.intent_index:
+            file_tags = idx.intent_index.tags_for_file(rel_path, project)
+
+        # Associate each match with its containing symbol
+        enriched_matches = []
+        for m in file_match['matches']:
+            line_num = m['line']
+
+            # Find containing symbol
+            containing_symbol = None
+            symbol_tags = []
+            for sym in symbols:
+                if sym.start_line <= line_num <= sym.end_line:
+                    containing_symbol = {
+                        'name': sym.name,
+                        'kind': sym.kind,
+                        'start_line': sym.start_line,
+                        'end_line': sym.end_line
+                    }
+                    symbol_tags = sym.tags or []
+                    break
+
+            enriched_matches.append({
+                'line': line_num,
+                'text': m['text'],
+                'symbol': containing_symbol,
+                'symbol_tags': symbol_tags
+            })
+
+        # Calculate intent alignment score
+        all_tags = file_tags + [t for m in enriched_matches for t in m.get('symbol_tags', [])]
+        score = calculate_intent_score(all_tags, search_intent)
+
+        results.append({
+            'file': rel_path,
+            'file_tags': file_tags,
+            'matches': enriched_matches,
+            'match_count': len(enriched_matches),
+            'score': score
+        })
+
+    # 5. Sort by intent alignment score (highest first)
+    results.sort(key=lambda r: r['score'], reverse=True)
+
+    elapsed = (time.time() - start) * 1000
+
+    return jsonify({
+        'results': results,
+        'search_intent': search_intent,
+        'total_matches': sum(r['match_count'] for r in results),
+        'files_matched': len(results),
+        'files_searched': files_searched,
+        'ms': elapsed
+    })
+
 
 @app.route('/multi', methods=['GET', 'POST'])
 def multi_search():
@@ -1753,10 +2156,30 @@ def get_outline():
     # Parse and get outline
     symbols = outline_parser.parse_file(str(full_path), language)
 
+    # Enrich symbols with tags from Redis
+    enriched_symbols = []
+    try:
+        import redis
+        r = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+        # Use request param or fallback to "local"
+        project_key = project or "local"
+
+        for sym in symbols:
+            sym_dict = asdict(sym)
+            # Look up tags for this symbol: tag_meta:{project}:{file}:{symbol}:{tag}
+            pattern = f"tag_meta:{project_key}:{file_path}:{sym.name}:*"
+            tag_keys = r.keys(pattern)
+            sym_dict['tags'] = [k.decode().split(':')[-1] for k in tag_keys] if tag_keys else []
+            enriched_symbols.append(sym_dict)
+    except Exception as e:
+        # Fallback: return symbols without tags
+        print(f"Tag enrichment failed: {e}", flush=True)
+        enriched_symbols = [asdict(s) for s in symbols]
+
     return jsonify({
         'file': str(file_path),
         'language': language,
-        'symbols': [asdict(s) for s in symbols],
+        'symbols': enriched_symbols,
         'count': len(symbols),
         'ms': (time.time() - start) * 1000
     })
@@ -2976,6 +3399,28 @@ def intent_stats():
     """Get intent index statistics."""
     project_id = request.args.get('project_id')
     return jsonify(intent_index.get_stats(project_id))
+
+
+@app.route('/intent/rolling')
+def intent_rolling():
+    """GL-045: Get rolling intent window with tag scores.
+
+    Query params:
+        project_id: Project to query
+        window: Number of recent intents (default 50)
+    """
+    project_id = request.args.get('project_id')
+    window = int(request.args.get('window', 50))
+
+    rolling = intent_index.get_rolling_intent(project_id, window)
+    affinity = intent_index.get_file_affinity(project_id, window)
+
+    return jsonify({
+        'rolling_tags': rolling,
+        'file_affinity': affinity,
+        'window': window,
+        'project_id': project_id
+    })
 
 
 @app.route('/metrics/token-rate')

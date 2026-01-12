@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir flask watchdog redis tree-sitter tree-sitter-lang
 # Copy from src context (set in docker-compose)
 COPY index/indexer.py .
 COPY ranking /app/ranking
+# Config is mounted via docker-compose: ./config:/app/config
 
 ENV CODEBASE_ROOT=/codebase
 ENV PORT=9999

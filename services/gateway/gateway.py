@@ -45,7 +45,7 @@ ROUTES = {
     # Index service routes
     "/health": ("index", "/health"),
     "/symbol": ("index", "/symbol"),
-    "/grep": ("index", "/symbol"),    # Unix parity alias
+    "/grep": ("index", "/symbol"),    # Alias to fast symbol search
     "/search": ("index", "/symbol"),  # deprecated alias
     "/multi": ("index", "/multi"),
     "/egrep": ("index", "/pattern"),  # Unix parity alias
@@ -65,6 +65,7 @@ ROUTES = {
     "/intent/recent": ("index", "/intent/recent"),
     "/intent/session": ("index", "/intent/session"),
     "/intent/stats": ("index", "/intent/stats"),
+    "/intent/rolling": ("index", "/intent/rolling"),  # GL-045: Rolling intent window
     "/repos": ("index", "/repos"),
 
     # Ranking service routes (Phase 1)

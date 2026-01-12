@@ -260,7 +260,8 @@ Once done, I'll find code by meaning, not just keywords.
 ## Rules
 
 - ✅ ALWAYS use `aoa grep` instead of Grep/Glob
-- ✅ Read specific line ranges from aOa results (not whole files)
+- ✅ Results show `function[start-end]` - use these line ranges for targeted reads
+- ✅ Tags like `#api #search` indicate what the code does semantically
 - ❌ DO NOT use subagents for codebase exploration (hooks don't work in subagents)
 
 ## Hook Integration
@@ -325,7 +326,8 @@ Once done, I'll find code by meaning, not just keywords.
 ## Rules
 
 - ✅ ALWAYS use `aoa grep` instead of Grep/Glob
-- ✅ Read specific line ranges from aOa results (not whole files)
+- ✅ Results show `function[start-end]` - use these line ranges for targeted reads
+- ✅ Tags like `#api #search` indicate what the code does semantically
 - ❌ DO NOT use subagents for codebase exploration (hooks don't work in subagents)
 
 ## Hook Integration
@@ -788,7 +790,7 @@ cmd_grep() {
             display_ranked_grep_results "$result" "$query" "$ms" "$count"
         fi
     else
-        # Default: symbol search with /symbol endpoint
+        # Fast symbol search with /symbol endpoint (O(1) indexed)
         local encoded_query=$(printf '%s' "$query" | jq -sRr @uri)
 
         # Build query params
@@ -816,8 +818,8 @@ cmd_grep() {
     fi
 }
 
-# GL-041: Display grep results with MATCHING symbols only
-# Shows ranked results with intent tags and only the symbols that matched
+# GL-045: Compact grep display (Option C)
+# Shows all results ranked by intent, in grep-like compact format
 display_ranked_grep_results() {
     local result="$1"
     local query="$2"
@@ -835,126 +837,152 @@ display_ranked_grep_results() {
     local unique_files=$(echo "$result" | jq -r '[.results[].file] | unique | .[]')
     local file_count=$(echo "$unique_files" | grep -c . || echo 0)
 
-    # Get prediction data for ranking
-    local predictions=$(curl -s "${INDEX_URL}/predict?limit=50" 2>/dev/null)
     local project_id=$(get_project_id)
 
-    # Build a ranked list: file -> score (based on prediction confidence + hit count)
-    local ranked_files=""
-    while IFS= read -r file; do
-        [ -z "$file" ] && continue
-        # Count hits in this file
-        local hit_count=$(echo "$files_with_lines" | grep -c "^${file}:" || echo 0)
-        local confidence=$(echo "$predictions" | jq -r --arg f "$file" '.files[] | select(.path == $f or (.path | endswith($f))) | .confidence // 0' 2>/dev/null | head -1)
-        [ -z "$confidence" ] && confidence="0"
-        # Combine: hit count * 100 + confidence * 1000
-        local score=$(echo "$hit_count $confidence" | awk '{printf "%.0f", $1 * 100 + $2 * 1000}')
-        ranked_files+="${score}:${file}\n"
-    done <<< "$unique_files"
+    # Get rolling intent from API response (GL-045)
+    local rolling_intent=$(echo "$result" | jq -r '.rolling_intent // [] | join(" ")' 2>/dev/null)
 
-    # Sort by score descending
-    local sorted_files=$(echo -e "$ranked_files" | sort -t: -k1 -rn | cut -d: -f2-)
-
-    # Check semantic compression status
-    local pending_info=$(curl -s --max-time 0.2 "${INDEX_URL}/outline/pending" 2>/dev/null)
-    local tagged_total=$(echo "$pending_info" | jq -r '.up_to_date_count // 0' 2>/dev/null)
-
-    # Header: hits | files | timing | semantic indicator
-    if [ "$tagged_total" -gt 0 ]; then
-        printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC} ${DIM}│${NC} ${CYAN}semantic${NC}\n" "$count" "$file_count" "$ms"
-    else
-        printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}\n" "$count" "$file_count" "$ms"
+    # Header: hits | files | timing | intent tags
+    printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}" "$count" "$file_count" "$ms"
+    if [ -n "$rolling_intent" ] && [ "$rolling_intent" != "" ]; then
+        printf " ${DIM}│${NC} ${CYAN}%s${NC}" "$rolling_intent"
     fi
-    echo ""
+    printf "\n\n"
 
-    # Display top 5 files with MATCHING symbols only
-    local shown=0
-    local top_files=""
-    local max_files=5
-
-    # If many files, show fewer with more detail
-    [ "$file_count" -gt 20 ] && max_files=3
-
+    # Process ALL files (no limit - like grep)
     while IFS= read -r file; do
         [ -z "$file" ] && continue
-        [ $shown -ge $max_files ] && break
-
-        shown=$((shown + 1))
-        top_files+="$file\n"
 
         # Get hit lines for this file
         local hit_lines=$(echo "$files_with_lines" | grep "^${file}:" | cut -d: -f2 | sort -n | uniq)
+        local first_line=$(echo "$hit_lines" | head -1)
 
-        # Fetch intent tags for this file (from usage patterns)
-        local intent_tags=""
+        # Get file basename for compact display
+        local basename=$(basename "$file")
+
+        # Fetch intent tags for this file
+        local shown_tags=""
+        local extra_count=0
         if [ -n "$project_id" ]; then
-            intent_tags=$(curl -s "${INDEX_URL}/intent/file?path=${file}&project_id=${project_id}" 2>/dev/null | jq -r '.tags // [] | .[0:3] | map("#" + .) | join(" ")' 2>/dev/null)
+            local all_file_tags=$(curl -s "${INDEX_URL}/intent/file?path=${file}&project_id=${project_id}" 2>/dev/null | jq -r '.tags // []')
+            local tag_count=$(echo "$all_file_tags" | jq 'length' 2>/dev/null)
+            shown_tags=$(echo "$all_file_tags" | jq -r '.[0:2] | map("#" + .) | join(" ")' 2>/dev/null)
+            [ "$tag_count" -gt 2 ] && extra_count=$((tag_count - 2))
         fi
 
-        # File header with intent tags
-        if [ -n "$intent_tags" ] && [ "$intent_tags" != "" ]; then
-            printf "${BOLD}%s${NC}  ${DIM}%s${NC}\n" "$file" "$intent_tags"
-        else
-            printf "${BOLD}%s${NC}\n" "$file"
+        # Resolve file path for sed
+        local full_file_path=""
+        if [[ "$file" == /* ]]; then
+            full_file_path="$file"
+        elif [ -f "$file" ]; then
+            full_file_path="$file"
+        elif [ -f "$(pwd)/$file" ]; then
+            full_file_path="$(pwd)/$file"
         fi
 
-        # Fetch outline for this file
-        local outline=$(curl -s "${INDEX_URL}/outline?file=${file}" 2>/dev/null)
-        local sym_count=$(echo "$outline" | jq -r '.count // 0' 2>/dev/null)
+        # Fetch outline for symbol info (include project_id for tag lookup)
+        local outline_url="${INDEX_URL}/outline?file=${file}"
+        [ -n "$project_id" ] && outline_url="${outline_url}&project=${project_id}"
+        local outline=$(curl -s "$outline_url" 2>/dev/null)
+        local hit_lines_json=$(echo "$hit_lines" | jq -R . | jq -s .)
 
-        if [ "$sym_count" -gt 0 ]; then
-            # Fetch semantic tags for symbols (include project for per-project tags)
-            local tags_param=""
-            [ -n "$project_id" ] && tags_param="&project=${project_id}"
-            local tags_json=$(curl -s "${INDEX_URL}/outline/tags?file=${file}${tags_param}" 2>/dev/null)
+        # Get most specific matching symbol (smallest range containing hit line)
+        local first_sym=$(echo "$outline" | jq -c --argjson hits "$hit_lines_json" '
+            [.symbols[] | . as $sym |
+                ($hits | map(tonumber) | map(select(. >= $sym.start_line and . <= $sym.end_line))) as $sym_hits |
+                select($sym_hits | length > 0) |
+                . + {range_size: (.end_line - .start_line)}
+            ] | sort_by(.range_size) | .[0] // null
+        ' 2>/dev/null)
 
-            # Show only symbols that contain hit lines
-            local hit_lines_json=$(echo "$hit_lines" | jq -R . | jq -s .)
+        local sym_info=""
+        local sym_tags=""
+        if [ "$first_sym" != "null" ] && [ -n "$first_sym" ]; then
+            local sym_name=$(echo "$first_sym" | jq -r '.name')
+            local sym_start=$(echo "$first_sym" | jq -r '.start_line')
+            local sym_end=$(echo "$first_sym" | jq -r '.end_line')
+            sym_info="${sym_name}[${sym_start}-${sym_end}]"
+            # Extract tags from symbol (enriched from Redis)
+            sym_tags=$(echo "$first_sym" | jq -r '.tags // [] | join(" ")' 2>/dev/null)
+        fi
 
-            echo "$outline" | jq -r --argjson hits "$hit_lines_json" --argjson tags "$tags_json" '
-                # Filter to symbols containing at least one hit line
-                [.symbols[] | select(
-                    . as $sym |
-                    ($hits | map(tonumber) | any(. >= $sym.start_line and . <= $sym.end_line))
-                )] |
-                # Limit to 5 matching symbols per file
-                .[0:5] |
-                length as $total |
-                to_entries[] |
-                .key as $idx |
-                .value |
-                .kind as $kind |
-                .name as $name |
-                .start_line as $start |
-                .end_line as $end |
-                (($tags.tags[$name] // []) | .[0:2] | join(" ")) as $sym_tags |
-                "  \(if $idx == ($total - 1) then "└─" else "├─" end) \($kind) \($name) [\($start)-\($end)]" + (if ($sym_tags | length) > 0 then "  \($sym_tags)" else "" end)
-            ' 2>/dev/null
+        # Get line content
+        local line_text=""
+        if [ -n "$full_file_path" ] && [ -f "$full_file_path" ] && [ -n "$first_line" ]; then
+            line_text=$(sed -n "${first_line}p" "$full_file_path" 2>/dev/null | sed 's/^[[:space:]]*//' | head -c 60)
+        fi
 
-            # If no symbols matched (hit was in file-level code), show file-level hit
-            local matched=$(echo "$outline" | jq -r --argjson hits "$hit_lines_json" '
-                [.symbols[] | select(
-                    . as $sym |
-                    ($hits | map(tonumber) | any(. >= $sym.start_line and . <= $sym.end_line))
-                )] | length
+        # Format tags: prefer symbol tags from outline (now enriched with Redis tags)
+        local tags_display=""
+        if [ -n "$sym_tags" ] && [ "$sym_tags" != "" ]; then
+            tags_display="${CYAN}${sym_tags}${NC}"
+        elif [ -n "$shown_tags" ] && [ "$shown_tags" != "" ]; then
+            if [ "$extra_count" -gt 0 ]; then
+                tags_display="${CYAN}${shown_tags}${NC}${DIM}(+${extra_count})${NC}"
+            else
+                tags_display="${CYAN}${shown_tags}${NC}"
+            fi
+        fi
+
+        # Compact output: file :line symbol[range] #tags  content...
+        printf "${BOLD}%-35s${NC}" "$file"
+        printf "${DIM}:%-4s${NC}" "$first_line"
+        [ -n "$sym_info" ] && printf " ${YELLOW}%s${NC}" "$sym_info"
+        [ -n "$tags_display" ] && printf " %b" "$tags_display"
+        [ -n "$line_text" ] && printf " ${DIM}%s${NC}" "$line_text"
+        printf "\n"
+
+        # Show additional hits in this file (indented, up to 3 more)
+        local hit_count=0
+        echo "$hit_lines" | tail -n +2 | head -3 | while read -r line_num; do
+            [ -z "$line_num" ] && continue
+            hit_count=$((hit_count + 1))
+
+            local extra_text=""
+            if [ -n "$full_file_path" ] && [ -f "$full_file_path" ]; then
+                extra_text=$(sed -n "${line_num}p" "$full_file_path" 2>/dev/null | sed 's/^[[:space:]]*//' | head -c 60)
+            fi
+
+            # Find symbol for this line
+            local extra_sym=$(echo "$outline" | jq -c --arg ln "$line_num" '
+                [.symbols[] | . as $sym |
+                    select(($ln | tonumber) >= $sym.start_line and ($ln | tonumber) <= $sym.end_line)
+                ] | .[0] // null
             ' 2>/dev/null)
 
-            if [ "$matched" = "0" ] || [ -z "$matched" ]; then
-                # Show the hit lines directly
-                local first_hit=$(echo "$hit_lines" | head -1)
-                printf "  └─ ${DIM}line %s${NC}\n" "$first_hit"
+            local extra_sym_info=""
+            if [ "$extra_sym" != "null" ] && [ -n "$extra_sym" ]; then
+                local esym_name=$(echo "$extra_sym" | jq -r '.name')
+                local esym_start=$(echo "$extra_sym" | jq -r '.start_line')
+                local esym_end=$(echo "$extra_sym" | jq -r '.end_line')
+                extra_sym_info="${esym_name}[${esym_start}-${esym_end}]"
             fi
-        else
-            # No outline available, show hit lines
-            local first_hit=$(echo "$hit_lines" | head -1)
-            printf "  └─ ${DIM}line %s${NC}\n" "$first_hit"
+
+            printf "%-35s   ${DIM}:%s${NC}" "" "$line_num"
+            [ -n "$extra_sym_info" ] && printf " ${DIM}%s${NC}" "$extra_sym_info"
+            [ -n "$extra_text" ] && printf " %s" "$extra_text"
+            printf "\n"
+        done
+
+        # Show count of remaining hits if more than 4 total
+        local total_hits=$(echo "$hit_lines" | wc -l)
+        if [ "$total_hits" -gt 4 ]; then
+            local remaining=$((total_hits - 4))
+            printf "%-35s   ${DIM}... +%d more hits${NC}\n" "" "$remaining"
         fi
-        echo ""
 
-    done <<< "$sorted_files"
+    done <<< "$unique_files"
+}
 
-    # Show remaining files (simple list with hit counts)
-    local remaining_count=$((file_count - shown))
+# Keep old function name for backwards compatibility
+display_ranked_grep_results_verbose() {
+    # Old verbose implementation preserved if needed
+    display_ranked_grep_results "$@"
+}
+
+# Placeholder for remaining files logic (removed - show all like grep)
+_deprecated_remaining_files() {
+    local remaining_count=0
     if [ $remaining_count -gt 0 ]; then
         printf "${DIM}─── %d more files ───${NC}\n" "$remaining_count"
         local idx=0
@@ -970,6 +998,104 @@ display_ranked_grep_results() {
         done <<< "$sorted_files"
 
         local hidden=$((remaining_count - idx))
+        [ $hidden -gt 0 ] && printf "  ${DIM}... and %d more${NC}\n" "$hidden"
+    fi
+}
+
+# GL-045: Display semantic grep results (content search with structural context)
+display_semantic_grep_results() {
+    local result="$1"
+    local query="$2"
+    local ms="$3"
+    local files_matched="$4"
+
+    # Get search intent and total matches
+    local search_intent=$(echo "$result" | jq -r '.search_intent | join(" ")' 2>/dev/null)
+    local total_matches=$(echo "$result" | jq -r '.total_matches // 0' 2>/dev/null)
+
+    # Header: hits | files | timing | intent tags
+    if [ -n "$search_intent" ] && [ "$search_intent" != "" ]; then
+        printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC} ${DIM}│${NC} ${CYAN}%s${NC}\n" "$total_matches" "$files_matched" "$ms" "$search_intent"
+    else
+        printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}\n" "$total_matches" "$files_matched" "$ms"
+    fi
+
+    # If no results, done
+    if [ "$files_matched" -lt 1 ]; then
+        return 0
+    fi
+
+    echo ""
+
+    # Display results - already sorted by intent score from API
+    local shown=0
+    local max_files=5
+    [ "$files_matched" -gt 20 ] && max_files=3
+
+    # Process each result file
+    echo "$result" | jq -c '.results[]' 2>/dev/null | while read -r file_result; do
+        [ $shown -ge $max_files ] && break
+
+        local file=$(echo "$file_result" | jq -r '.file')
+        local file_tags=$(echo "$file_result" | jq -r '.file_tags | .[0:3] | map("#" + .) | join(" ")' 2>/dev/null)
+        local score=$(echo "$file_result" | jq -r '.score // 0' 2>/dev/null)
+
+        # File header with tags
+        if [ -n "$file_tags" ] && [ "$file_tags" != "" ]; then
+            printf "${BOLD}%s${NC}  ${DIM}%s${NC}\n" "$file" "$file_tags"
+        else
+            printf "${BOLD}%s${NC}\n" "$file"
+        fi
+
+        # Display matches with their containing symbols
+        local match_count=$(echo "$file_result" | jq '.matches | length')
+        local idx=0
+
+        echo "$file_result" | jq -c '.matches[]' 2>/dev/null | while read -r match; do
+            local line=$(echo "$match" | jq -r '.line')
+            local text=$(echo "$match" | jq -r '.text')
+            local symbol=$(echo "$match" | jq -c '.symbol // null')
+            local symbol_tags=$(echo "$match" | jq -r '.symbol_tags | .[0:2] | join(" ")' 2>/dev/null)
+
+            idx=$((idx + 1))
+            local prefix="├─"
+            [ $idx -eq $match_count ] && prefix="└─"
+
+            if [ "$symbol" != "null" ]; then
+                local sym_name=$(echo "$symbol" | jq -r '.name')
+                local sym_kind=$(echo "$symbol" | jq -r '.kind')
+                local sym_start=$(echo "$symbol" | jq -r '.start_line')
+                local sym_end=$(echo "$symbol" | jq -r '.end_line')
+
+                if [ -n "$symbol_tags" ] && [ "$symbol_tags" != "" ]; then
+                    printf "  %s ${CYAN}%s${NC} %s [%s-%s]  ${DIM}%s${NC}\n" "$prefix" "$sym_kind" "$sym_name" "$sym_start" "$sym_end" "$symbol_tags"
+                else
+                    printf "  %s ${CYAN}%s${NC} %s [%s-%s]\n" "$prefix" "$sym_kind" "$sym_name" "$sym_start" "$sym_end"
+                fi
+                printf "  │     ${DIM}L%s: %s${NC}\n" "$line" "$text"
+            else
+                # No containing symbol, show line directly
+                printf "  %s ${DIM}L%s: %s${NC}\n" "$prefix" "$line" "$text"
+            fi
+        done
+
+        echo ""
+        shown=$((shown + 1))
+    done
+
+    # Show remaining files
+    local remaining=$((files_matched - shown))
+    if [ $remaining -gt 0 ]; then
+        printf "${DIM}─── %d more files ───${NC}\n" "$remaining"
+
+        local idx=0
+        local max_remaining=10
+        echo "$result" | jq -r '.results['"$max_files"':] | .[0:'"$max_remaining"'] | .[] | "\(.file) (\(.match_count) hits)"' 2>/dev/null | while read -r line; do
+            printf "  %s\n" "$line"
+            idx=$((idx + 1))
+        done
+
+        local hidden=$((remaining - max_remaining))
         [ $hidden -gt 0 ] && printf "  ${DIM}... and %d more${NC}\n" "$hidden"
     fi
 }

@@ -58,6 +58,7 @@ services:
       - ${CODEBASE_PATH:-.}:/codebase:ro
       - ./data/repos:/repos:ro
       - ./data:/config:rw
+      - ./config:/app/config:ro           # Pattern library for intent inference
       - ${PROJECTS_ROOT}:/userhome:ro     # User projects (from .env)
     environment:
       - CODEBASE_ROOT=/codebase
