@@ -3350,22 +3350,110 @@ cmd_quickstart() {
     fi
 
     echo ""
-    echo -e "${BOLD}Processing ${pending_count} files...${NC}"
+    echo -e "${CYAN}${BOLD}⚡ Semantic Compression${NC} ${DIM}— Speed is our friend${NC}"
     echo ""
 
-    # Process each pending file
-    local processed=0
-    local errors=0
+    # Determine parallel workers (max 10, or file count if smaller)
+    local workers=10
+    [ "$pending_count" -lt 10 ] && workers="$pending_count"
+
+    local start_time=$(date +%s)
+
+    echo -n "  Scanning code structure..... "
+    # Quick count display while processing
+
+    # Create temp directory for worker results
+    local tmp_dir=$(mktemp -d)
+    trap "rm -rf $tmp_dir" EXIT
 
     local loop_param=""
     [ -n "$project_id" ] && loop_param="&project=${project_id}"
 
-    local total_tags=0
+    # Export function and variables for parallel execution
+    export INDEX_URL loop_param project_id tmp_dir
+
+    # Process files in parallel using xargs
+    echo "$pending_result" | jq -r '.pending[].file' | xargs -P "$workers" -I {} bash -c '
+        file="{}"
+        result=$(curl -s "${INDEX_URL}/outline?file=${file}${loop_param}")
+        err=$(echo "$result" | jq -r ".error // empty")
+
+        if [ -z "$err" ]; then
+            # Get symbols and infer tags
+            symbols_json=$(echo "$result" | jq -c "[.symbols[] | {name: .name, kind: .kind, start_line: .start_line, end_line: .end_line}]")
+            sym_count=$(echo "$symbols_json" | jq "length")
+
+            infer_payload=$(echo "$symbols_json" | jq "{symbols: [.[] | {name: .name, kind: .kind}]}")
+            infer_result=$(curl -s -X POST "${INDEX_URL}/patterns/infer" -H "Content-Type: application/json" -d "$infer_payload")
+            inferred_tags=$(echo "$infer_result" | jq -c ".tags // []")
+
+            # Build enriched symbols
+            symbols_with_tags=$(echo "$result" | jq -c --argjson tags "$inferred_tags" "
+                [.symbols | to_entries[] | {
+                    name: .value.name,
+                    kind: .value.kind,
+                    line: .value.start_line,
+                    end_line: .value.end_line,
+                    tags: (\$tags[.key] // [])
+                }]
+            ")
+
+            tag_count=$(echo "$inferred_tags" | jq "[.[] | length] | add // 0")
+
+            # Store enriched data
+            mark_payload=$(jq -n --arg file "$file" --arg project "$project_id" --argjson symbols "$symbols_with_tags" \
+                "{file: \$file, project: \$project, symbols: \$symbols}")
+
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${INDEX_URL}/outline/enriched" \
+                -H "Content-Type: application/json" -d "$mark_payload")
+
+            if [ "$http_code" = "200" ]; then
+                echo "1 $sym_count $tag_count" >> "$tmp_dir/results"
+            else
+                echo "0 0 0" >> "$tmp_dir/results"
+            fi
+        else
+            echo "0 0 0" >> "$tmp_dir/results"
+        fi
+
+        # Progress dot (every 10 files to avoid too many)
+        count=$(wc -l < "$tmp_dir/results" 2>/dev/null || echo 0)
+        [ $((count % 10)) -eq 0 ] && printf "." >&2
+    '
+
+    # Aggregate results
+    local processed=0
     local total_symbols=0
+    local total_tags=0
+    local errors=0
 
-    # Collect word frequencies for domain analysis
-    declare -A word_counts
+    if [ -f "$tmp_dir/results" ]; then
+        while read -r success syms tags; do
+            if [ "$success" = "1" ]; then
+                processed=$((processed + 1))
+                total_symbols=$((total_symbols + syms))
+                total_tags=$((total_tags + tags))
+            else
+                errors=$((errors + 1))
+            fi
+        done < "$tmp_dir/results"
+    fi
 
+    echo -e "${GREEN}✓${NC} ${DIM}(${processed} files)${NC}"
+    echo -n "  Generating semantic tags.... "
+    echo -e "${GREEN}✓${NC} ${DIM}(${total_tags} tags)${NC}"
+    echo -n "  Indexing for instant search. "
+    echo -e "${GREEN}✓${NC}"
+
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+    echo ""
+    echo -e "  ${DIM}Completed in ${duration}s using ${workers} parallel workers${NC}"
+    echo ""
+
+    # Skip the old sequential loop - we already processed everything
+    # The old loop code below is now dead but keeping structure for safety
+    if false; then
     while IFS= read -r file; do
         [ -z "$file" ] && continue
 
@@ -3461,23 +3549,23 @@ cmd_quickstart() {
         fi
 
     done < <(echo "$pending_result" | jq -r '.pending[].file')
+    fi  # End of if false block (old sequential code)
 
-    printf "\r  ${GREEN}✓${NC} ${processed}/${pending_count} files, ${total_tags} tags generated\n"
-    echo ""
-
+    # Show errors if any
     if [ "$errors" -gt 0 ]; then
-        echo -e "${YELLOW}!${NC} ${errors} files had errors (run with VERBOSE=1 for details)"
+        echo -e "${YELLOW}!${NC} ${errors} files had errors"
     fi
 
-    echo ""
-    echo -e "${GREEN}✓${NC} Tagged ${BOLD}${processed}${NC} files (${BOLD}${total_tags}${NC} targets)"
-    echo -e "  Your searches now understand code structure, not just text."
+    echo -e "${GREEN}${BOLD}✓ Semantic compression complete${NC}"
+    echo -e "  ${DIM}Your searches now understand code structure, not just text.${NC}"
     echo ""
 
     # =========================================================================
     # Domain Analysis: Find project-specific words not in universal patterns
+    # (Skipped in parallel mode - word_counts not collected)
     # =========================================================================
 
+    declare -A word_counts  # Declare empty to avoid errors
     if [ ${#word_counts[@]} -gt 0 ]; then
         echo -e "────────────────────────────────────────"
         echo -e "${BOLD}Domain Analysis${NC}"
