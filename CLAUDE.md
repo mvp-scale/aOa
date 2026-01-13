@@ -45,34 +45,45 @@ When the user addresses an agent by name using "Hey [AgentName]", spawn that age
 | "Hey 131" | 131 | Research-only problem solving with parallel solution discovery |
 | "Hey GH" | gh | Growth Hacker - solutions architect, problem decomposer |
 
-### aOa Quickstart (SPECIAL - No Agent Exploration)
+### aOa Quickstart (SPECIAL - First-Time Welcome)
 
 When user says **"Hey aOa"**, **"Tag my code"**, or **"aOa quickstart"**:
 
-**DO NOT read any files or run background tasks. Just respond:**
+1. Run `aoa outline --pending --json` silently to check status
+2. Check the `pending_count` in the response
+
+**If pending_count > 0** (first time / not yet tagged):
 
 ```
-⚡ aOa activated
+⚡ Welcome to aOa — 5 angles. 1 attack.
 
-Fast search works right now: `aoa grep [anything]`
+aOa is now active on this project. Here's what that means:
 
-To enable semantic search (find code by meaning), run this in your terminal:
+**Immediate upgrade**: `aoa grep` replaces Grep/Glob with O(1) indexed search.
+Every search is instant (<5ms) regardless of codebase size. I'm already using it.
+
+**Track your savings**: Run `aoa intent` anytime to see tokens saved in real-time.
+
+**Optional but powerful**: For maximum savings, run this once in your terminal:
 
   aoa quickstart
 
-This is FREE—runs locally, no AI tokens used. Takes ~1-2 minutes.
-You'll see progress as it tags your files. Once done, I can find code
-by what it does, not just keywords.
+This creates semantic compression for your files—letting me find code by
+meaning, not just keywords. Takes ~1 minute, uses zero tokens, and I promise
+it'll save you millions of tokens and hours of time.
+
+Skip it if you want—aOa still learns from how you work. But the uplift is real.
+
+Ready when you are. What are we building?
 ```
 
-**What to communicate:**
-- ✅ Search works NOW (indexing already done)
-- ✅ User runs `aoa quickstart` themselves (transparent, trustworthy)
-- ✅ It's FREE - no Claude tokens, runs locally
-- ✅ They see progress directly
-- ✅ Benefit: semantic search when done
+**If pending_count = 0** (already tagged / returning user):
 
-**DO NOT launch background tasks.** Let the user control it.
+```
+⚡ aOa is active. What are we building?
+```
+
+**DO NOT launch background agents.** Let the user control their experience.
 
 ### ⚠️ Subagents Don't Get Hooks
 

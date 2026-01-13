@@ -4089,62 +4089,59 @@ EOFREADME
 
 # aOa Integration
 
-**CRITICAL: Use `aoa grep` instead of Grep/Glob. It's 10-100x faster.**
+**Use `aoa grep` and `aoa egrep` instead of Grep/Glob. Same Unix syntax, 100x faster.**
 
-## Quickstart Triggers
+## Search Commands
+
+Use these just like Unix grep—same flags, instant results:
+
+```bash
+aoa grep handleAuth           # Find code
+aoa grep "auth token"         # Multi-term OR search
+aoa grep -a auth,token        # Multi-term AND search
+aoa egrep "TODO|FIXME"        # Regex patterns
+```
+
+## Other Commands
+
+```bash
+aoa find "*.py"               # Find files by pattern
+aoa outline <file>            # See file structure
+aoa intent                    # Track tokens saved
+aoa help                      # Full command list
+```
+
+For help on any command: `aoa grep --help`, `aoa egrep --help`, etc.
+
+## Hey aOa (First-Time Welcome)
 
 When user says **"Hey aOa"**, **"Tag my code"**, or **"aOa quickstart"**:
 
-1. Run `aoa outline --pending --json` to check pending files
-2. Respond with this (DO NOT read any files first):
+1. Run `aoa outline --pending --json` silently
+2. If `pending_count > 0` (first time), give the welcome message
+3. If `pending_count = 0` (returning), just say: `⚡ aOa is active. What are we building?`
 
+**First-time welcome:**
 ```
-⚡ aOa activated
+⚡ Welcome to aOa — 5 angles. 1 attack.
 
-Your codebase is already indexed—fast symbol search works right now.
-Try it: `aoa grep [anything]`
+aOa is active. `aoa grep` now replaces Grep/Glob with O(1) search.
+Every search is instant (<5ms). I'm already using it.
 
-I found [X] files that need semantic compression.
-Let me tag these in the background. This is FREE—doesn't use your tokens.
+Track savings anytime: `aoa intent`
 
-Takes about 2-3 minutes. To watch progress, open another terminal:
-  aoa intent
+For semantic search (find code by meaning), run once in your terminal:
 
-Keep coding. I'm not blocking you.
-Once done, I'll find code by meaning, not just keywords.
+  aoa quickstart
+
+Takes ~1 minute, zero tokens. Skip if you want—aOa still learns as you work.
+
+What are we building?
 ```
 
-3. Launch: `Task(subagent_type="aoa-outline", prompt="Tag all pending files", run_in_background=true)`
+**DO NOT launch background agents.** User controls their experience.
 
-## Commands
-
-| Command | Use For |
-|---------|---------|
-| `aoa grep <term>` | Find code fast (ALWAYS use instead of Grep) |
-| `aoa grep "a b c"` | Multi-term OR search |
-| `aoa grep -a a,b,c` | Multi-term AND search |
-| `aoa outline <file>` | See file structure without reading it all |
-| `aoa intent` | Track what's being worked on |
-
-## Rules
-
-- ✅ ALWAYS use `aoa grep` instead of Grep/Glob
-- ✅ Results show `function[start-end]` - use these line ranges for targeted reads
-- ✅ Tags like `#api #search` indicate what the code does semantically
-- ❌ DO NOT use subagents for codebase exploration (hooks don't work in subagents)
-
-## Hook Integration
-
-aOa hooks run on every prompt and tool use. When you see these in additionalContext:
-
-**aOa Auto-Tag Request**: Generate 3-5 semantic hashtags directly (YOU are the model), then store:
-\`\`\`bash
-curl -s -X POST localhost:8080/intent -H "Content-Type: application/json" -d '{"tool": "Intent", "tags": ["#your-tags"], ...}'
-\`\`\`
-
-**aOa Predicted Files**: Files predicted based on your prompt keywords. Consider these when exploring.
-
-See \`.aoa/USAGE.md\` for full guide.
+See \`.aoa/USAGE.md\` for details.
 EOFCLAUDE
             echo -e "${GREEN}✓${NC} ${DIM}(appended)${NC}"
         else
@@ -4155,62 +4152,59 @@ EOFCLAUDE
         cat > "$claude_md" << 'EOFCLAUDE'
 # aOa Integration
 
-**CRITICAL: Use `aoa grep` instead of Grep/Glob. It's 10-100x faster.**
+**Use `aoa grep` and `aoa egrep` instead of Grep/Glob. Same Unix syntax, 100x faster.**
 
-## Quickstart Triggers
+## Search Commands
+
+Use these just like Unix grep—same flags, instant results:
+
+```bash
+aoa grep handleAuth           # Find code
+aoa grep "auth token"         # Multi-term OR search
+aoa grep -a auth,token        # Multi-term AND search
+aoa egrep "TODO|FIXME"        # Regex patterns
+```
+
+## Other Commands
+
+```bash
+aoa find "*.py"               # Find files by pattern
+aoa outline <file>            # See file structure
+aoa intent                    # Track tokens saved
+aoa help                      # Full command list
+```
+
+For help on any command: `aoa grep --help`, `aoa egrep --help`, etc.
+
+## Hey aOa (First-Time Welcome)
 
 When user says **"Hey aOa"**, **"Tag my code"**, or **"aOa quickstart"**:
 
-1. Run `aoa outline --pending --json` to check pending files
-2. Respond with this (DO NOT read any files first):
+1. Run `aoa outline --pending --json` silently
+2. If `pending_count > 0` (first time), give the welcome message
+3. If `pending_count = 0` (returning), just say: `⚡ aOa is active. What are we building?`
 
+**First-time welcome:**
 ```
-⚡ aOa activated
+⚡ Welcome to aOa — 5 angles. 1 attack.
 
-Your codebase is already indexed—fast symbol search works right now.
-Try it: `aoa grep [anything]`
+aOa is active. `aoa grep` now replaces Grep/Glob with O(1) search.
+Every search is instant (<5ms). I'm already using it.
 
-I found [X] files that need semantic compression.
-Let me tag these in the background. This is FREE—doesn't use your tokens.
+Track savings anytime: `aoa intent`
 
-Takes about 2-3 minutes. To watch progress, open another terminal:
-  aoa intent
+For semantic search (find code by meaning), run once in your terminal:
 
-Keep coding. I'm not blocking you.
-Once done, I'll find code by meaning, not just keywords.
+  aoa quickstart
+
+Takes ~1 minute, zero tokens. Skip if you want—aOa still learns as you work.
+
+What are we building?
 ```
 
-3. Launch: `Task(subagent_type="aoa-outline", prompt="Tag all pending files", run_in_background=true)`
+**DO NOT launch background agents.** User controls their experience.
 
-## Commands
-
-| Command | Use For |
-|---------|---------|
-| `aoa grep <term>` | Find code fast (ALWAYS use instead of Grep) |
-| `aoa grep "a b c"` | Multi-term OR search |
-| `aoa grep -a a,b,c` | Multi-term AND search |
-| `aoa outline <file>` | See file structure without reading it all |
-| `aoa intent` | Track what's being worked on |
-
-## Rules
-
-- ✅ ALWAYS use `aoa grep` instead of Grep/Glob
-- ✅ Results show `function[start-end]` - use these line ranges for targeted reads
-- ✅ Tags like `#api #search` indicate what the code does semantically
-- ❌ DO NOT use subagents for codebase exploration (hooks don't work in subagents)
-
-## Hook Integration
-
-aOa hooks run on every prompt and tool use. When you see these in additionalContext:
-
-**aOa Auto-Tag Request**: Generate 3-5 semantic hashtags directly (YOU are the model), then store:
-\`\`\`bash
-curl -s -X POST localhost:8080/intent -H "Content-Type: application/json" -d '{"tool": "Intent", "tags": ["#your-tags"], ...}'
-\`\`\`
-
-**aOa Predicted Files**: Files predicted based on your prompt keywords. Consider these when exploring.
-
-See \`.aoa/USAGE.md\` for full guide.
+See \`.aoa/USAGE.md\` for details.
 EOFCLAUDE
         echo -e "${GREEN}✓${NC} ${DIM}(created)${NC}"
     fi
