@@ -1838,8 +1838,12 @@ class CodebaseIndex:
             ))
 
     def search(self, query: str, mode: str = 'recent', limit: int = 20,
-               since: int = None, before: int = None) -> list[dict]:
-        """Search for a term with filename boosting and optional time filtering."""
+               since: int = None, before: int = None, file_filter: str = None) -> list[dict]:
+        """Search for a term with filename boosting and optional time/file filtering.
+
+        Args:
+            file_filter: Glob pattern to filter files (e.g., "*.py", "cli/", "indexer.py")
+        """
         results = []
 
         with self.lock:
@@ -1848,6 +1852,21 @@ class CodebaseIndex:
             lower = query.lower()
             if lower != query and lower in self.inverted_index:
                 results.extend(self.inverted_index[lower])
+
+        # GL-051: File pattern filtering (Unix grep parity)
+        # Filter BEFORE scoring to ensure correct limit behavior
+        if file_filter:
+            if '*' in file_filter:
+                # Glob pattern: *.py, **/*.ts, etc.
+                filter_regex = file_filter.replace('.', r'\.').replace('**', '.*').replace('*', '[^/]*')
+                filtered = [loc for loc in results if re.search(filter_regex, loc.file)]
+            elif file_filter.endswith('/'):
+                # Directory filter: cli/, services/
+                filtered = [loc for loc in results if loc.file.startswith(file_filter)]
+            else:
+                # Filename contains: indexer.py, routes
+                filtered = [loc for loc in results if file_filter in loc.file]
+            results = filtered
 
         # Time filtering
         if since is not None or before is not None:
@@ -1898,11 +1917,11 @@ class CodebaseIndex:
         return [asdict(loc) for loc in unique[:limit]]
 
     def search_multi(self, terms: list[str], mode: str = 'recent', limit: int = 20,
-                     since: int = None, before: int = None) -> list[dict]:
+                     since: int = None, before: int = None, file_filter: str = None) -> list[dict]:
         """Search for multiple terms, rank by density."""
         all_results = []
         for term in terms:
-            all_results.extend(self.search(term, mode, limit * 2, since=since, before=before))
+            all_results.extend(self.search(term, mode, limit * 2, since=since, before=before, file_filter=file_filter))
 
         file_scores: dict[str, tuple[int, int]] = {}
         for loc in all_results:
@@ -2661,6 +2680,7 @@ def symbol_search():
         project = request.args.get('project')  # Optional project ID
         since = request.args.get('since')  # Unix timestamp or seconds ago
         before = request.args.get('before')  # Unix timestamp or seconds ago
+        file_filter = request.args.get('filter')  # GL-051: File pattern filter (Unix grep parity)
         rank_by_intent = request.args.get('rank', 'true').lower() != 'false'  # GL-045: opt-out
 
         # Convert time params to absolute timestamps
@@ -2685,7 +2705,7 @@ def symbol_search():
 
         # Get more results than needed so we can rank and still return `limit`
         fetch_limit = limit * 3 if rank_by_intent else limit
-        results = idx.search(q, mode, fetch_limit, since=since_ts, before=before_ts)
+        results = idx.search(q, mode, fetch_limit, since=since_ts, before=before_ts, file_filter=file_filter)
 
         # GL-045: Rank by rolling intent affinity
         rolling_tags = None
@@ -2810,6 +2830,15 @@ def semantic_grep():
     # GL-050: Unix parity - case-sensitive by default, -i flag for insensitive
     case_insensitive = request.args.get('ci', '0') == '1'
     use_regex = request.args.get('regex', 'false').lower() == 'true'
+    file_filter = request.args.get('filter')  # GL-051: File pattern filter (Unix grep parity)
+
+    # GL-051: Compile file filter regex if provided
+    file_filter_regex = None
+    if file_filter:
+        if '*' in file_filter:
+            filter_pattern = file_filter.replace('.', r'\.').replace('**', '.*').replace('*', '[^/]*')
+            file_filter_regex = re.compile(filter_pattern)
+        # else: will use string matching in the loop
 
     if not q:
         return jsonify({'error': 'Missing search term', 'results': [], 'ms': 0}), 400
@@ -2843,6 +2872,18 @@ def semantic_grep():
 
     with idx.lock:
         for rel_path, meta in idx.files.items():
+            # GL-051: File pattern filtering - skip non-matching files BEFORE reading content
+            if file_filter:
+                if file_filter_regex:
+                    if not file_filter_regex.search(rel_path):
+                        continue
+                elif file_filter.endswith('/'):
+                    if not rel_path.startswith(file_filter):
+                        continue
+                else:
+                    if file_filter not in rel_path:
+                        continue
+
             files_searched += 1
 
             # Use LRU cache instead of disk read
@@ -2915,6 +2956,7 @@ def multi_search():
         project = request.args.get('project')
         since = request.args.get('since')
         before = request.args.get('before')
+        file_filter = request.args.get('filter')  # GL-051
     else:
         data = request.json
         terms = data.get('terms', [])
@@ -2923,6 +2965,7 @@ def multi_search():
         project = data.get('project')
         since = data.get('since')
         before = data.get('before')
+        file_filter = data.get('filter')  # GL-051
 
     # Convert time params to absolute timestamps
     now = int(time.time())
@@ -2939,7 +2982,7 @@ def multi_search():
     if not idx:
         return jsonify({'error': 'No index available', 'results': [], 'ms': 0}), 404
 
-    results = idx.search_multi(terms, mode, limit, since=since_ts, before=before_ts)
+    results = idx.search_multi(terms, mode, limit, since=since_ts, before=before_ts, file_filter=file_filter)
 
     return jsonify({
         'results': results,
@@ -3955,6 +3998,14 @@ def pattern_search():
     since = data.get('since')  # seconds ago
     # GL-050: Unix parity - case-sensitive by default, ci=true for insensitive
     case_insensitive = data.get('ci', False)
+    file_filter = data.get('filter')  # GL-051: File pattern filter (Unix grep parity)
+
+    # GL-051: Compile file filter regex if provided
+    file_filter_regex = None
+    if file_filter:
+        if '*' in file_filter:
+            filter_pattern = file_filter.replace('.', r'\.').replace('**', '.*').replace('*', '[^/]*')
+            file_filter_regex = re.compile(filter_pattern)
 
     if not patterns:
         return jsonify({'error': 'patterns required'}), 400
@@ -3991,6 +4042,18 @@ def pattern_search():
             # Time filter
             if since_ts and meta.mtime < since_ts:
                 continue
+
+            # GL-051: File pattern filtering - skip non-matching files BEFORE reading content
+            if file_filter:
+                if file_filter_regex:
+                    if not file_filter_regex.search(rel_path):
+                        continue
+                elif file_filter.endswith('/'):
+                    if not rel_path.startswith(file_filter):
+                        continue
+                else:
+                    if file_filter not in rel_path:
+                        continue
 
             files_searched += 1
 

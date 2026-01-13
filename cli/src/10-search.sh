@@ -36,6 +36,7 @@ cmd_grep() {
     # aoa grep --json           - Output as JSON
     # aoa grep -c               - Count only
     # aoa grep -q               - Quiet (exit code only)
+    # aoa grep <term> *.py      - Filter to file pattern (GL-051 Unix parity)
     local and_mode=false
     local case_insensitive=false
     local word_boundary=false
@@ -43,6 +44,7 @@ cmd_grep() {
     local count_only=false
     local quiet=false
     local query=""
+    local file_filter=""
     local mode="recent"
     local limit="20"
     local since=""
@@ -131,8 +133,11 @@ cmd_grep() {
                 return 1
                 ;;
             *)
+                # GL-051: First positional arg is query, rest are file patterns
                 if [ -z "$query" ]; then
                     query="$1"
+                elif [ -z "$file_filter" ]; then
+                    file_filter="$1"
                 fi
                 shift
                 ;;
@@ -238,6 +243,7 @@ cmd_grep() {
         [ -n "$project_id" ] && body="${body}, \"project\": \"${project_id}\""
         [ -n "$since_seconds" ] && body="${body}, \"since\": ${since_seconds}"
         [ -n "$before_seconds" ] && body="${body}, \"before\": ${before_seconds}"
+        [ -n "$file_filter" ] && body="${body}, \"filter\": \"${file_filter}\""
         body="${body}}"
 
         result=$(curl -s -X POST "${INDEX_URL}/multi" \
@@ -270,6 +276,7 @@ cmd_grep() {
             [ -n "$project_id" ] && body="${body}, \"project\": \"${project_id}\""
             [ -n "$since_seconds" ] && body="${body}, \"since\": ${since_seconds}"
             [ -n "$before_seconds" ] && body="${body}, \"before\": ${before_seconds}"
+            [ -n "$file_filter" ] && body="${body}, \"filter\": \"${file_filter}\""
             body="${body}}"
 
             result=$(curl -s -X POST "${INDEX_URL}/multi" \
@@ -286,6 +293,7 @@ cmd_grep() {
             [ "$word_boundary" = true ] && params="${params}&word=1"
             [ -n "$since_seconds" ] && params="${params}&since=${since_seconds}"
             [ -n "$before_seconds" ] && params="${params}&before=${before_seconds}"
+            [ -n "$file_filter" ] && params="${params}&filter=$(printf '%s' "$file_filter" | jq -sRr @uri)"
 
             result=$(curl -s "${INDEX_URL}/grep?${params}")
         fi
@@ -503,10 +511,12 @@ cmd_egrep() {
     # aoa egrep "regex" --repo flask       - Search in knowledge repo
     # aoa egrep "regex" --since 7d         - Filter by time
     # aoa egrep -i "regex"                 - Case insensitive
+    # aoa egrep "regex" *.py               - Filter to file pattern (GL-051 Unix parity)
     local pattern=""
     local repo=""
     local since=""
     local case_insensitive=false
+    local file_filter=""
 
     # Unix parity: handle flags before pattern
     while [[ $# -gt 0 ]]; do
@@ -534,9 +544,11 @@ cmd_egrep() {
                 shift
                 ;;
             *)
-                # First non-flag argument is the pattern
+                # GL-051: First positional arg is pattern, rest are file filters
                 if [ -z "$pattern" ]; then
                     pattern="$1"
+                elif [ -z "$file_filter" ]; then
+                    file_filter="$1"
                 fi
                 shift
                 ;;
@@ -593,6 +605,7 @@ cmd_egrep() {
     [ -n "$since_seconds" ] && body="${body}, \"since\": ${since_seconds}"
     [ -n "$project_id" ] && body="${body}, \"project\": \"${project_id}\""
     [ "$case_insensitive" = true ] && body="${body}, \"ci\": true"
+    [ -n "$file_filter" ] && body="${body}, \"filter\": \"${file_filter}\""
     body="${body}}"
 
     local url="${INDEX_URL}/pattern"
