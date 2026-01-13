@@ -4130,11 +4130,11 @@ Every search is instant (<5ms). I'm already using it.
 
 Track savings anytime: `aoa intent`
 
-For semantic search (find code by meaning), run once in your terminal:
+**Optional:** For semantic search, open a terminal and run:
 
-  aoa quickstart
+  $ aoa quickstart
 
-Takes ~1 minute, zero tokens. Skip if you want—aOa still learns as you work.
+Takes ~1 minute, uses zero tokens. Skip if you want—aOa still learns as you work.
 
 What are we building?
 ```
@@ -4193,11 +4193,11 @@ Every search is instant (<5ms). I'm already using it.
 
 Track savings anytime: `aoa intent`
 
-For semantic search (find code by meaning), run once in your terminal:
+**Optional:** For semantic search, open a terminal and run:
 
-  aoa quickstart
+  $ aoa quickstart
 
-Takes ~1 minute, zero tokens. Skip if you want—aOa still learns as you work.
+Takes ~1 minute, uses zero tokens. Skip if you want—aOa still learns as you work.
 
 What are we building?
 ```
