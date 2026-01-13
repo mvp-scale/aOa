@@ -3216,10 +3216,20 @@ cmd_quickstart() {
     $force && echo -e "${YELLOW}(force mode - re-tagging all files)${NC}"
     echo ""
 
-    # Check services first
-    if ! curl -s --connect-timeout 2 "${INDEX_URL}/health" > /dev/null 2>&1; then
+    # Check services first (retry once with longer timeout)
+    local health_ok=false
+    for attempt in 1 2; do
+        if curl -s --connect-timeout 5 --max-time 10 "${INDEX_URL}/health" > /dev/null 2>&1; then
+            health_ok=true
+            break
+        fi
+        [ "$attempt" -eq 1 ] && sleep 1
+    done
+
+    if ! $health_ok; then
         echo -e "${RED}✗ aOa services not running${NC}"
         echo -e "${DIM}Start with: docker start aoa${NC}"
+        echo -e "${DIM}Or check: docker ps | grep aoa${NC}"
         return 1
     fi
 
