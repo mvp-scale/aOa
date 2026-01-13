@@ -1749,29 +1749,43 @@ class IntentIndex:
             return list(self.tag_to_files[proj].get(tag, set()))
 
     def tags_for_file(self, file: str, project_id: str = None) -> List[str]:
-        """Get tags for a file - prioritize semantic tags from Redis."""
+        """Get tags for a file - aggregate semantic tags from all symbols."""
         proj = self._project_key(project_id)
 
-        # Check Redis for semantic tags first (from quickstart/outliner)
+        # GL-047: Scan Redis for semantic tags using correct key pattern
+        # Tags are stored as: tag_count:{project}:{file}:{symbol}:{tag}
         if self.redis:
             try:
-                redis_key = f"aoa:{proj}:file_tags:{file}"
-                redis_tags = self.redis.smembers(redis_key)
-                if redis_tags:
-                    # Decode
-                    decoded = [t.decode('utf-8') if isinstance(t, bytes) else t for t in redis_tags]
-                    # Filter out generic action tags - keep domain/semantic ones
+                pattern = f"tag_count:{proj}:{file}:*"
+                all_tags = {}  # tag -> count
+                cursor = 0
+                while True:
+                    cursor, keys = self.redis.scan(cursor, match=pattern, count=100)
+                    for key in keys:
+                        # Parse key: tag_count:{project}:{file}:{symbol}:{tag}
+                        parts = key.decode() if isinstance(key, bytes) else key
+                        parts = parts.split(':')
+                        if len(parts) >= 5:
+                            tag = '#' + ':'.join(parts[4:]) if not parts[4].startswith('#') else ':'.join(parts[4:])
+                            count = int(self.redis.get(key) or 1)
+                            all_tags[tag] = all_tags.get(tag, 0) + count
+                    if cursor == 0:
+                        break
+
+                if all_tags:
+                    # Filter out generic activity tags only - keep semantic domain tags
+                    # Activity tags describe WHAT Claude is doing, not what the code does
                     generic = {'#executing', '#reading', '#editing', '#creating', '#searching',
-                              '#delegating', '#markdown', '#shell', '#python', '#indexing',
-                              '#search', '#hooks', '#test', '#grep', '#curl', '#api'}
-                    semantic = [t for t in decoded if t not in generic]
-                    # Sort by length (longer = more specific)
-                    semantic.sort(key=lambda t: (-len(t), t))
-                    # Return top 3 semantic tags if available
+                              '#delegating', '#shell', '#python', '#markdown', '#indexing',
+                              '#hooks', '#test', '#grep', '#curl'}
+                    semantic = [(t, c) for t, c in all_tags.items() if t not in generic]
+                    # Sort by count (most common first), then alphabetically
+                    semantic.sort(key=lambda x: (-x[1], x[0]))
                     if semantic:
-                        return semantic[:3]
-                    # If no semantic tags, return any tags we have
-                    return decoded[:3]
+                        return [t for t, _ in semantic[:3]]
+                    # If no semantic tags after filtering, return top by count
+                    sorted_tags = sorted(all_tags.items(), key=lambda x: (-x[1], x[0]))
+                    return [t for t, _ in sorted_tags[:3]]
             except Exception:
                 pass  # Fall through
 
@@ -3374,6 +3388,16 @@ def pattern_search():
             file_matched = False
             lines = content.split('\n')
 
+            # GL-047: Parse outline once per file for symbol enrichment
+            symbols = []
+            if TREE_SITTER_AVAILABLE:
+                language = idx.get_language(full_path)
+                if language in outline_parser.LANG_MAP:
+                    try:
+                        symbols = outline_parser.parse_file(str(full_path), language)
+                    except Exception:
+                        pass
+
             for label, regex in compiled.items():
                 if len(results[label]) >= limit:
                     continue
@@ -3383,12 +3407,22 @@ def pattern_search():
                     line_start = content.count('\n', 0, match.start()) + 1
                     line_text = lines[line_start - 1].strip()[:80]
 
-                    results[label].append({
+                    result_entry = {
                         'file': rel_path,
                         'line': line_start,
                         'match': match.group()[:100],
                         'context': line_text
-                    })
+                    }
+
+                    # GL-047: Add symbol context (parity with /symbol endpoint)
+                    if symbols:
+                        enclosing = idx._find_enclosing_symbol(line_start, symbols)
+                        if enclosing:
+                            result_entry['symbol'] = enclosing['name']
+                            result_entry['symbol_kind'] = enclosing['kind']
+                            result_entry['end_line'] = enclosing['end_line']
+
+                    results[label].append(result_entry)
                     file_matched = True
 
                     if len(results[label]) >= limit:
