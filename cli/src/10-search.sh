@@ -276,18 +276,18 @@ cmd_grep() {
                 -H "Content-Type: application/json" \
                 -d "$body")
         else
-            # Fast symbol search with /symbol endpoint (O(1) indexed)
-            export AOA_SEARCH_TYPE="indexed"
+            # GL-050: Content search with /grep endpoint (searches file contents like Unix grep)
+            export AOA_SEARCH_TYPE="content"
             local encoded_query=$(printf '%s' "$query" | jq -sRr @uri)
 
             # Build query params
-            local params="q=${encoded_query}&mode=${mode}&limit=${limit}${project_param}"
+            local params="q=${encoded_query}&limit=${limit}${project_param}"
             [ "$case_insensitive" = true ] && params="${params}&ci=1"
             [ "$word_boundary" = true ] && params="${params}&word=1"
             [ -n "$since_seconds" ] && params="${params}&since=${since_seconds}"
             [ -n "$before_seconds" ] && params="${params}&before=${before_seconds}"
 
-            result=$(curl -s "${INDEX_URL}/symbol?${params}")
+            result=$(curl -s "${INDEX_URL}/grep?${params}")
         fi
         ms=$(echo "$result" | jq -r '.ms // 0')
         count=$(echo "$result" | jq -r '.results | length')
@@ -352,7 +352,8 @@ display_ranked_grep_results() {
             else "()"
             end;
 
-        .results[] |
+        # GL-050: Deduplicate by file:line (same as egrep)
+        .results | unique_by("\(.file):\(.line)") | .[] |
         # Extract params from signature
         (.signature | extract_params) as $params |
         # Build hierarchical scope: Parent().method(params)[range] or symbol(params)[range] or <module>
@@ -501,17 +502,19 @@ cmd_egrep() {
     # aoa egrep '{"name": "regex"}'        - Named pattern (legacy JSON format)
     # aoa egrep "regex" --repo flask       - Search in knowledge repo
     # aoa egrep "regex" --since 7d         - Filter by time
+    # aoa egrep -i "regex"                 - Case insensitive
     local pattern=""
     local repo=""
     local since=""
+    local case_insensitive=false
 
     # Unix parity: handle flags before pattern
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --repo) repo="$2"; shift 2 ;;
             --since) since="$2"; shift 2 ;;
-            # Unix parity: accept common flags as no-ops
-            -i|--ignore-case) shift ;;  # regex is case-sensitive by default, no-op for now
+            # GL-050: Unix parity - case insensitive flag
+            -i|--ignore-case) case_insensitive=true; shift ;;
             -r|-R|--recursive) shift ;; # always recursive
             -n|--line-number) shift ;;  # always shows line numbers
             -H|--with-filename) shift ;; # always shows filenames
@@ -589,6 +592,7 @@ cmd_egrep() {
     [ -n "$repo" ] && body="${body}, \"repo\": \"${repo}\""
     [ -n "$since_seconds" ] && body="${body}, \"since\": ${since_seconds}"
     [ -n "$project_id" ] && body="${body}, \"project\": \"${project_id}\""
+    [ "$case_insensitive" = true ] && body="${body}, \"ci\": true"
     body="${body}}"
 
     local url="${INDEX_URL}/pattern"
@@ -604,45 +608,10 @@ cmd_egrep() {
         return 1
     fi
 
-    local ms=$(echo "$result" | jq -r '.stats.ms')
-    local files_searched=$(echo "$result" | jq -r '.stats.files_searched')
-    local files_matched=$(echo "$result" | jq -r '.stats.files_matched')
-
-    # Count total hits and unique files (same as grep)
-    local hits=$(echo "$result" | jq '[.results | to_entries[].value | length] | add // 0')
-    local file_count=$(echo "$result" | jq -r '[.results | to_entries[].value[].file] | unique | length')
-
-    # Get rolling intent from API response (GL-046 unified - same as grep)
-    # Note: API returns tags with # prefix already, don't double it
-    local rolling_intent=$(echo "$result" | jq -r '.rolling_intent // [] | join(" ")' 2>/dev/null)
-
-    # Header: IDENTICAL to grep - hits | files | timing | intent tags
-    printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}" "$hits" "$file_count" "$ms"
-    if [ -n "$rolling_intent" ] && [ "$rolling_intent" != "" ]; then
-        printf " ${DIM}│${NC} ${CYAN}%s${NC}" "$rolling_intent"
-    fi
-    printf "\n\n"
-
-    # GL-046 Unified Output: Same format as grep
-    # Deduplicate by file:line to match grep behavior
-    echo "$result" | jq -r '
-        [.results | to_entries[].value[]] |
-        unique_by("\(.file):\(.line)") |
-        .[] |
-        # Build symbol info (same as grep)
-        (if .symbol then
-            if .end_line then "\(.symbol)[\(.line)-\(.end_line)]"
-            else "\(.symbol)[\(.line)]"
-            end
-        else "<module>"
-        end) as $sym |
-        # Build tags (max 3, same as grep) - tags already have # prefix from API
-        ((.tags // []) | .[0:3] | join(" ")) as $tags |
-        # Format: file:line: symbol content  #tags (IDENTICAL to grep)
-        "\u001b[1m\(.file)\u001b[0m\u001b[2m:\(.line):\u001b[0m \u001b[33m\($sym)\u001b[0m" +
-        (if .context then " \u001b[2m\(.context)\u001b[0m" else "" end) +
-        (if ($tags | length) > 0 then "  \u001b[36m\($tags)\u001b[0m" else "" end)
-    '
+    # GL-050: Universal Output - use SAME display function as grep
+    local ms=$(echo "$result" | jq -r '.ms')
+    local count=$(echo "$result" | jq '.total_matches // (.results | length)')
+    display_ranked_grep_results "$result" "$pattern" "$ms" "$count"
 }
 
 # Deprecated: use cmd_egrep instead

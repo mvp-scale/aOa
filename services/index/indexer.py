@@ -53,8 +53,8 @@ try:
             'cpp': 'cpp',
             'ruby': 'ruby',
             'php': 'php',
-            'c_sharp': 'c_sharp',
-            'csharp': 'c_sharp',
+            'c_sharp': 'csharp',
+            'csharp': 'csharp',
             'swift': 'swift',
             'kotlin': 'kotlin',
             'scala': 'scala',
@@ -393,6 +393,160 @@ def calculate_intent_score(result_tags: list, search_intent: list) -> float:
     return match_ratio
 
 
+# ============================================================================
+# GL-050: Universal Output - Single source of truth for all search results
+# ============================================================================
+
+def enrich_result(
+    file_path: str,
+    line_num: int,
+    content: str,
+    idx: 'CodebaseIndex',
+    intent_index: 'IntentIndex | None' = None,
+    project: str | None = None
+) -> dict:
+    """
+    Universal result enrichment - THE SINGLE SOURCE OF TRUTH.
+
+    Both grep and egrep call this to get identical output format.
+
+    Args:
+        file_path: Relative path to file
+        line_num: Line number of match
+        content: The matched line content
+        idx: CodebaseIndex with file_outlines
+        intent_index: Optional IntentIndex for tags
+        project: Project ID for tag lookup
+
+    Returns:
+        Standardized result dict with consistent keys
+    """
+    # Get symbol context from pre-indexed outlines (O(1) lookup)
+    symbols = idx.file_outlines.get(file_path, [])
+
+    # Find INNERMOST enclosing symbol (smallest range that contains the line)
+    # This ensures we get the method, not the class, when line is inside a method
+    # Also track the PARENT (next smallest enclosing symbol) for hierarchy display
+    enclosing = []  # All symbols that contain this line
+    for sym in symbols:
+        if sym.start_line <= line_num <= sym.end_line:
+            sym_range = sym.end_line - sym.start_line
+            enclosing.append((sym_range, sym))
+
+    # Sort by range (smallest first = most specific)
+    enclosing.sort(key=lambda x: x[0])
+
+    # Extract symbol info
+    symbol_name = None
+    symbol_signature = None
+    symbol_kind = None
+    start_line = None
+    end_line = None
+    parent_name = None
+    symbol_tags = []
+
+    if enclosing:
+        # Best match is the innermost (smallest range)
+        _, best_match = enclosing[0]
+        symbol_name = best_match.name
+        symbol_signature = best_match.signature
+        symbol_kind = best_match.kind
+        start_line = best_match.start_line
+        end_line = best_match.end_line
+        symbol_tags = best_match.tags or []
+
+        # Check for stored parent_name first
+        parent_name = getattr(best_match, 'parent_name', None)
+
+        # If no stored parent, look for the next enclosing symbol (parent)
+        if not parent_name and len(enclosing) > 1:
+            _, parent_sym = enclosing[1]  # Second smallest = parent
+            parent_name = parent_sym.name
+
+    # Get file-level tags from intent index
+    file_tags = []
+    if intent_index and project:
+        file_tags = list(intent_index.tags_for_file(file_path, project))
+
+    # Build universal result format
+    result = {
+        'file': file_path,
+        'line': line_num,
+        'content': content.strip()[:200],  # Normalized content key
+        'tags': file_tags + symbol_tags
+    }
+
+    # Add symbol info if found (all or nothing - consistent shape)
+    if symbol_name:
+        result['symbol'] = symbol_name
+        result['signature'] = symbol_signature
+        result['kind'] = symbol_kind
+        result['start_line'] = start_line
+        result['end_line'] = end_line
+        if parent_name:
+            result['parent_name'] = parent_name  # CLI expects parent_name
+
+    return result
+
+
+def format_search_response(
+    results: list[dict],
+    ms: float,
+    files_searched: int,
+    search_intent: list | None = None,
+    intent_index: 'IntentIndex | None' = None,
+    project: str | None = None
+) -> dict:
+    """
+    Universal response format - THE SINGLE SOURCE OF TRUTH.
+
+    Both grep and egrep call this to get identical response structure.
+    GL-050: No limit at API layer - inverted index is O(1), return all matches.
+    Display layer (CLI) handles how many to show.
+
+    Args:
+        results: List of enriched result dicts
+        ms: Elapsed time in milliseconds
+        files_searched: Number of files examined
+        search_intent: Inferred search intent tags
+        intent_index: Optional IntentIndex for rolling intent
+        project: Project ID for rolling intent
+
+    Returns:
+        Standardized response dict ready for jsonify()
+    """
+    # Score and sort by intent alignment
+    # TODO: VALIDATE - If Redis already pre-sorts by intent/recency/frequency,
+    # this sort is redundant and should be removed. No reason to sort twice.
+    # See: services/ranking/ for pre-sorting logic
+    if search_intent:
+        for r in results:
+            r['score'] = calculate_intent_score(r.get('tags', []), search_intent)
+        results.sort(key=lambda r: r['score'], reverse=True)
+
+    # Build response - return ALL results, display layer limits
+    response = {
+        'results': results,
+        'ms': ms,
+        'total_matches': len(results),
+        'files_searched': files_searched,
+        'files_matched': len(set(r['file'] for r in results))
+    }
+
+    # Add search intent if provided
+    if search_intent:
+        response['search_intent'] = search_intent
+
+    # Add rolling intent if available
+    if intent_index and project:
+        rolling_tags = intent_index.get_rolling_intent(project, window=50)
+        if rolling_tags:
+            top_tags = sorted(rolling_tags.items(), key=lambda x: x[1], reverse=True)[:5]
+            response['rolling_intent'] = [f"#{tag}" for tag, _ in top_tags]
+
+    return response
+
+
 app = Flask(__name__)
 
 # ============================================================================
@@ -578,7 +732,7 @@ class OutlineSymbol:
 class OutlineParser:
     """Extract code structure using tree-sitter."""
 
-    # Map file extensions to tree-sitter language names (165+ supported)
+    # Map file extensions to tree-sitter language names (97 supported)
     LANG_MAP = {
         # Tier 1: Core languages with full symbol extraction
         'python': 'python',
@@ -594,7 +748,8 @@ class OutlineParser:
         'swift': 'swift',
         'kotlin': 'kotlin',
         'scala': 'scala',
-        'csharp': 'c_sharp',
+        'csharp': 'csharp',
+        'c_sharp': 'csharp',
         # Tier 2: Additional languages with outline support
         'bash': 'bash',
         'shell': 'bash',
@@ -610,7 +765,29 @@ class OutlineParser:
         'perl': 'perl',
         'clojure': 'clojure',
         'erlang': 'erlang',
-        # Tier 3: Markup/config (basic outline)
+        # Tier 3: Extended languages
+        'd': 'd',
+        'cuda': 'cuda',
+        'glsl': 'glsl',
+        'hlsl': 'hlsl',
+        'objc': 'objc',
+        'ada': 'ada',
+        'fortran': 'fortran',
+        'gleam': 'gleam',
+        'elm': 'elm',
+        'purescript': 'purescript',
+        'odin': 'odin',
+        'v': 'v',
+        'verilog': 'verilog',
+        'vhdl': 'vhdl',
+        'graphql': 'graphql',
+        'terraform': 'terraform',
+        'nix': 'nix',
+        'fennel': 'fennel',
+        'cmake': 'cmake',
+        'make': 'make',
+        'groovy': 'groovy',
+        # Tier 4: Markup/config (basic outline)
         'html': 'html',
         'css': 'css',
         'json': 'json',
@@ -644,7 +821,7 @@ class OutlineParser:
         'go': {
             'function_declaration': 'function',
             'method_declaration': 'method',
-            'type_declaration': 'type',
+            'type_spec': 'type',  # type_spec contains the name directly
         },
         'rust': {
             'function_item': 'function',
@@ -721,11 +898,124 @@ class OutlineParser:
             'fn_decl': 'function',
             'struct_decl': 'struct',
         },
-        'c_sharp': {
+        'csharp': {
             'method_declaration': 'method',
             'class_declaration': 'class',
             'interface_declaration': 'interface',
             'struct_declaration': 'struct',
+        },
+        'groovy': {
+            'method_declaration': 'method',
+            'class_declaration': 'class',
+        },
+        # Extended language support (97 languages available)
+        'nim': {
+            'proc_declaration': 'function',
+            'func_declaration': 'function',
+            'type_declaration': 'type',
+        },
+        'ocaml': {
+            'value_definition': 'function',
+            'type_definition': 'type',
+        },
+        'julia': {
+            'function_definition': 'function',
+            'struct_definition': 'struct',
+            'module_definition': 'module',
+        },
+        'erlang': {
+            'function_clause': 'function',
+        },
+        'r': {
+            'function_definition': 'function',
+        },
+        'perl': {
+            'subroutine_declaration_statement': 'function',
+            'package_statement': 'package',
+        },
+        'objc': {
+            'class_interface': 'class',
+            'class_implementation': 'class',
+            'function_definition': 'function',
+            'method_definition': 'method',
+        },
+        'ada': {
+            'subprogram_body': 'function',
+            'package_declaration': 'package',
+        },
+        'fortran': {
+            'subroutine': 'function',
+            'function': 'function',
+            'module': 'module',
+        },
+        'gleam': {
+            'function': 'function',
+            'type_definition': 'type',
+        },
+        'elm': {
+            'value_declaration': 'function',
+            'type_declaration': 'type',
+        },
+        'purescript': {
+            'function': 'function',
+            'type': 'type',
+        },
+        'd': {
+            'function_declaration': 'function',
+            'class_declaration': 'class',
+            'struct_declaration': 'struct',
+        },
+        'cuda': {
+            'function_definition': 'function',
+        },
+        'glsl': {
+            'function_definition': 'function',
+        },
+        'hlsl': {
+            'function_definition': 'function',
+        },
+        'odin': {
+            'procedure_declaration': 'function',
+        },
+        'v': {
+            'function_declaration': 'function',
+            'struct_declaration': 'struct',
+        },
+        'verilog': {
+            'module_declaration': 'module',
+        },
+        'vhdl': {
+            'entity_declaration': 'entity',
+        },
+        'sql': {
+            'create_function_statement': 'function',
+        },
+        'graphql': {
+            'type_definition': 'type',
+            'field_definition': 'field',
+        },
+        'protobuf': {
+            'message': 'message',
+            'service': 'service',
+        },
+        'terraform': {
+            'block': 'block',
+        },
+        'nix': {
+            'function': 'function',
+        },
+        'fennel': {
+            'fn': 'function',
+        },
+        'clojure': {
+            'list_lit': 'expression',  # defn, defrecord are list expressions
+        },
+        'cmake': {
+            'function_def': 'function',
+            'macro_def': 'macro',
+        },
+        'make': {
+            'rule': 'target',
         },
     }
 
@@ -1000,33 +1290,71 @@ class OutlineParser:
         """Extract the name of a symbol node."""
         # Different languages have different name child node types
         name_types = {
+            # Core languages
             'python': ['identifier', 'name'],
             'typescript': ['identifier', 'property_identifier', 'type_identifier'],
             'javascript': ['identifier', 'property_identifier', 'type_identifier'],
-            'go': ['identifier', 'field_identifier'],
+            'go': ['identifier', 'field_identifier', 'type_identifier'],
             'rust': ['identifier', 'type_identifier'],
             'java': ['identifier'],
-            'c': ['identifier'],
-            'cpp': ['identifier'],
+            'c': ['identifier', 'type_identifier'],
+            'cpp': ['identifier', 'type_identifier'],
             'ruby': ['identifier', 'constant'],
             'php': ['name'],
-            'swift': ['identifier', 'simple_identifier'],
-            'kotlin': ['simple_identifier', 'identifier'],
+            'swift': ['identifier', 'simple_identifier', 'type_identifier'],
+            'kotlin': ['simple_identifier', 'identifier', 'type_identifier'],
             'scala': ['identifier'],
-            'c_sharp': ['identifier'],
+            'csharp': ['identifier'],
+            'groovy': ['identifier'],
             'bash': ['word'],
             'lua': ['identifier', 'name'],
-            'elixir': ['identifier'],
-            'haskell': ['identifier', 'variable'],
-            'dart': ['identifier'],
+            'elixir': ['identifier', 'atom'],
+            'haskell': ['identifier', 'variable', 'constructor'],
+            'dart': ['identifier', 'type_identifier'],
             'zig': ['identifier'],
+            # Extended languages
+            'nim': ['identifier', 'symbol'],
+            'ocaml': ['identifier', 'value_name', 'type_constructor'],
+            'julia': ['identifier'],
+            'erlang': ['atom', 'variable'],
+            'r': ['identifier'],
+            'perl': ['identifier', 'scalar'],
+            'objc': ['identifier', 'type_identifier'],
+            'ada': ['identifier'],
+            'fortran': ['identifier', 'name'],
+            'gleam': ['identifier', 'type_identifier'],
+            'elm': ['identifier', 'lower_case_identifier', 'type_identifier'],
+            'purescript': ['identifier', 'type_identifier'],
+            'd': ['identifier', 'type_identifier'],
+            'cuda': ['identifier', 'type_identifier'],
+            'glsl': ['identifier', 'type_identifier'],
+            'hlsl': ['identifier', 'type_identifier'],
+            'odin': ['identifier'],
+            'v': ['identifier', 'type_identifier'],
+            'verilog': ['identifier', 'module_identifier'],
+            'vhdl': ['identifier'],
+            'sql': ['identifier'],
+            'graphql': ['name'],
+            'terraform': ['identifier'],
+            'nix': ['identifier'],
+            'fennel': ['symbol'],
+            'clojure': ['sym_lit'],
+            'cmake': ['identifier'],
+            'make': ['word'],
         }
 
         types_to_check = name_types.get(language, ['identifier', 'name'])
 
+        # First, check direct children
         for child in node.children:
             if child.type in types_to_check:
                 return source_bytes[child.start_byte:child.end_byte].decode('utf-8', errors='replace')
+
+        # If not found, search one level deeper (handles C/C++/CUDA function_declarator pattern)
+        for child in node.children:
+            for grandchild in child.children:
+                if grandchild.type in types_to_check:
+                    return source_bytes[grandchild.start_byte:grandchild.end_byte].decode('utf-8', errors='replace')
 
         return None
 
@@ -1263,6 +1591,9 @@ class CodebaseIndex:
         self.files: dict[str, FileMeta] = {}
         self.changes: list[ChangeRecord] = []
 
+        # GL-050: Pre-computed symbol outlines per file (stored at index time)
+        self.file_outlines: dict[str, list] = {}  # rel_path -> [OutlineSymbol, ...]
+
         # Dependency graph
         self.deps_outgoing: dict[str, list[str]] = defaultdict(list)
         self.deps_incoming: dict[str, list[str]] = defaultdict(list)
@@ -1360,6 +1691,9 @@ class CodebaseIndex:
                     symbols = outline_parser.parse_file(str(path), language)
                 except Exception:
                     pass  # Fall back to no symbol info
+
+            # GL-050: Store outline for O(1) lookup during egrep
+            self.file_outlines[rel_path] = symbols
 
             # GL-047: Pre-compute AC dense tags for each symbol body
             lines = content.split('\n')
@@ -2473,7 +2807,8 @@ def semantic_grep():
 
     q = request.args.get('q', '')
     project = request.args.get('project')
-    limit = int(request.args.get('limit', 50))
+    # GL-050: Unix parity - case-sensitive by default, -i flag for insensitive
+    case_insensitive = request.args.get('ci', '0') == '1'
     use_regex = request.args.get('regex', 'false').lower() == 'true'
 
     if not q:
@@ -2487,12 +2822,14 @@ def semantic_grep():
     search_intent = infer_search_intent(q)
 
     # 2. Compile pattern
+    # GL-050: Unix parity - case-sensitive by default (like grep -i)
+    flags = re.MULTILINE | (re.IGNORECASE if case_insensitive else 0)
     try:
         if use_regex:
-            pattern = re.compile(q, re.MULTILINE | re.IGNORECASE)
+            pattern = re.compile(q, flags)
         else:
             # Literal search (escape regex special chars)
-            pattern = re.compile(re.escape(q), re.MULTILINE | re.IGNORECASE)
+            pattern = re.compile(re.escape(q), flags)
     except re.error as e:
         return jsonify({'error': f'Invalid pattern: {e}', 'results': [], 'ms': 0}), 400
 
@@ -2501,17 +2838,19 @@ def semantic_grep():
     files_searched = 0
     files_with_hits = set()
 
+    # GL-050: Use LRU cache for content (same as egrep)
+    project_id = project or 'local'
+
     with idx.lock:
         for rel_path, meta in idx.files.items():
             files_searched += 1
-            full_path = idx.root / rel_path
 
-            try:
-                content = full_path.read_text(encoding='utf-8', errors='ignore')
-            except Exception:
+            # Use LRU cache instead of disk read
+            lines = content_cache.get(project_id, rel_path, idx.root)
+            if not lines:
                 continue
 
-            lines = content.split('\n')
+            content = '\n'.join(lines)
             file_matches = []
 
             for match in pattern.finditer(content):
@@ -2523,9 +2862,7 @@ def semantic_grep():
                     'text': line_text,
                     'match': match.group()[:50]
                 })
-
-                if len(file_matches) >= 10:  # Max 10 matches per file
-                    break
+                # GL-050: No per-file limit - Unix grep doesn't limit, neither do we
 
             if file_matches:
                 files_with_hits.add(rel_path)
@@ -2534,80 +2871,35 @@ def semantic_grep():
                     'language': meta.language,
                     'matches': file_matches
                 })
+                # GL-050: No early break - inverted index is O(1), search all files
 
-                if len(matches) >= limit:
-                    break
-
-    # 4. For each file with matches, get outline and associate symbols
+    # 4. GL-050: Universal Output - enrich each match through single function
     results = []
     for file_match in matches:
         rel_path = file_match['file']
-        full_path = idx.root / rel_path
-        language = file_match['language']
-
-        # Get file outline (symbols with line ranges)
-        symbols = []
-        if TREE_SITTER_AVAILABLE and language != 'unknown':
-            with contextlib.suppress(Exception):
-                symbols = outline_parser.parse_file(str(full_path), language)
-
-        # Get file-level tags from intent index
-        file_tags = []
-        if hasattr(idx, 'intent_index') and idx.intent_index:
-            file_tags = idx.intent_index.tags_for_file(rel_path, project)
-
-        # Associate each match with its containing symbol
-        enriched_matches = []
         for m in file_match['matches']:
-            line_num = m['line']
+            result = enrich_result(
+                file_path=rel_path,
+                line_num=m['line'],
+                content=m['text'],
+                idx=idx,
+                intent_index=intent_index,
+                project=project
+            )
+            results.append(result)
 
-            # Find containing symbol
-            containing_symbol = None
-            symbol_tags = []
-            for sym in symbols:
-                if sym.start_line <= line_num <= sym.end_line:
-                    containing_symbol = {
-                        'name': sym.name,
-                        'kind': sym.kind,
-                        'start_line': sym.start_line,
-                        'end_line': sym.end_line,
-                        'signature': sym.signature  # Definition header
-                    }
-                    symbol_tags = sym.tags or []
-                    break
-
-            enriched_matches.append({
-                'line': line_num,
-                'text': m['text'],
-                'symbol': containing_symbol,
-                'symbol_tags': symbol_tags
-            })
-
-        # Calculate intent alignment score
-        all_tags = file_tags + [t for m in enriched_matches for t in m.get('symbol_tags', [])]
-        score = calculate_intent_score(all_tags, search_intent)
-
-        results.append({
-            'file': rel_path,
-            'file_tags': file_tags,
-            'matches': enriched_matches,
-            'match_count': len(enriched_matches),
-            'score': score
-        })
-
-    # 5. Sort by intent alignment score (highest first)
-    results.sort(key=lambda r: r['score'], reverse=True)
-
+    # 5. GL-050: Universal Response - format through single function
     elapsed = (time.time() - start) * 1000
+    response = format_search_response(
+        results=results,
+        ms=elapsed,
+        files_searched=files_searched,
+        search_intent=search_intent,
+        intent_index=intent_index,
+        project=project
+    )
 
-    return jsonify({
-        'results': results,
-        'search_intent': search_intent,
-        'total_matches': sum(r['match_count'] for r in results),
-        'files_matched': len(results),
-        'files_searched': files_searched,
-        'ms': elapsed
-    })
+    return jsonify(response)
 
 
 @app.route('/multi', methods=['GET', 'POST'])
@@ -3661,7 +3953,8 @@ def pattern_search():
     repo_name = data.get('repo')  # None = local
     project = data.get('project')  # Optional project ID for intent tracking
     since = data.get('since')  # seconds ago
-    limit = data.get('limit', 50)
+    # GL-050: Unix parity - case-sensitive by default, ci=true for insensitive
+    case_insensitive = data.get('ci', False)
 
     if not patterns:
         return jsonify({'error': 'patterns required'}), 400
@@ -3675,10 +3968,11 @@ def pattern_search():
         idx = manager.get_local(project)
 
     # Compile patterns
+    flags = re.MULTILINE | (re.IGNORECASE if case_insensitive else 0)
     compiled = {}
     for label, pattern in patterns.items():
         try:
-            compiled[label] = re.compile(pattern, re.MULTILINE)
+            compiled[label] = re.compile(pattern, flags)
         except re.error as e:
             return jsonify({'error': f"Invalid pattern '{label}': {e}"}), 400
 
@@ -3710,73 +4004,61 @@ def pattern_search():
             content = '\n'.join(lines)  # Reconstruct for regex matching
 
             for label, regex in compiled.items():
-                if len(results[label]) >= limit:
-                    continue
-
                 for match in regex.finditer(content):
                     # Find line number
                     line_start = content.count('\n', 0, match.start()) + 1
-                    line_text = lines[line_start - 1].strip()[:80]
+                    line_text = lines[line_start - 1].strip()[:80] if line_start <= len(lines) else ''
 
-                    result_entry = {
-                        'file': rel_path,
-                        'line': line_start,
-                        'match': match.group()[:100],
-                        'context': line_text
-                    }
-
-                    # Use pre-indexed symbol data (no re-parsing needed)
-                    # Look up any token from this line to get symbol context
-                    first_token = re.search(r'[a-zA-Z_][a-zA-Z0-9_]*', line_text)
-                    if first_token:
-                        token = first_token.group()
-                        if token in idx.inverted_index:
-                            for loc in idx.inverted_index[token]:
-                                if loc.file == rel_path and loc.line == line_start:
-                                    if loc.symbol:
-                                        result_entry['symbol'] = loc.symbol
-                                        result_entry['symbol_kind'] = loc.symbol_kind
-                                        result_entry['end_line'] = loc.end_line
-                                    break
-
-                    results[label].append(result_entry)
+                    # GL-050: Universal Output - use enrich_result()
+                    result = enrich_result(
+                        file_path=rel_path,
+                        line_num=line_start,
+                        content=line_text,
+                        idx=idx,
+                        intent_index=intent_index,
+                        project=project
+                    )
+                    results[label].append(result)
                     file_matched = True
-
-                    if len(results[label]) >= limit:
-                        break
+                    # GL-050: No limit - return all matches
 
             if file_matched:
                 files_matched += 1
 
     elapsed = (time.time() - start) * 1000
 
-    # GL-047: Enrich results with tags (parity with /symbol endpoint)
-    rolling_tags = None
-    if intent_index and project:
-        # Add tags to each result
-        for label in results:
-            for r in results[label]:
-                file_path = r.get('file', '')
-                if file_path:
-                    r['tags'] = list(intent_index.tags_for_file(file_path, project))
+    # GL-050: Universal Response format (consistent with /grep)
+    # Flatten results for single-pattern case, keep labels for multi-pattern
+    if len(patterns) == 1:
+        # Single pattern - flatten to match /grep response exactly
+        label = list(patterns.keys())[0]
+        flat_results = results[label]
+        response = format_search_response(
+            results=flat_results,
+            ms=elapsed,
+            files_searched=files_searched,
+            search_intent=None,  # No intent inference for regex patterns
+            intent_index=intent_index,
+            project=project
+        )
+    else:
+        # Multi-pattern - keep label grouping but use consistent format
+        rolling_tags = None
+        if intent_index and project:
+            rolling_tags = intent_index.get_rolling_intent(project, window=50)
 
-        # Get rolling intent for response header
-        rolling_tags = intent_index.get_rolling_intent(project, window=50)
-
-    response = {
-        'results': results,
-        'stats': {
+        response = {
+            'results': results,
+            'ms': elapsed,
             'files_searched': files_searched,
             'files_matched': files_matched,
-            'ms': elapsed
-        },
-        'index': repo_name or 'local'
-    }
+            'total_matches': sum(len(r) for r in results.values()),
+            'index': repo_name or 'local'
+        }
 
-    # Include rolling intent tags if available
-    if rolling_tags:
-        top_tags = sorted(rolling_tags.items(), key=lambda x: x[1], reverse=True)[:5]
-        response['rolling_intent'] = [tag for tag, _ in top_tags]
+        if rolling_tags:
+            top_tags = sorted(rolling_tags.items(), key=lambda x: x[1], reverse=True)[:5]
+            response['rolling_intent'] = [f"#{tag}" for tag, _ in top_tags]
 
     return jsonify(response)
 

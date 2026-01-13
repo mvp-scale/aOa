@@ -43,7 +43,7 @@ ROUTES = {
     # Index service routes
     "/health": ("index", "/health"),
     "/symbol": ("index", "/symbol"),
-    "/grep": ("index", "/symbol"),    # Alias to fast symbol search
+    "/grep": ("index", "/grep"),      # GL-050: Content search (like Unix grep)
     "/search": ("index", "/symbol"),  # deprecated alias
     "/multi": ("index", "/multi"),
     "/egrep": ("index", "/pattern"),  # Unix parity alias
