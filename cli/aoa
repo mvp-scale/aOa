@@ -744,7 +744,7 @@ cmd_grep() {
             "$query" == *'?'* || "$query" == *'^'* || "$query" == *'$'* || \
             "$query" == *'['* || "$query" == *'\'* || "$query" == *'('* ]] && \
          [[ ! "$query" =~ ^[a-zA-Z0-9_\ ]+$ ]]; then
-        echo -e "${DIM}(regex detected → pattern search)${NC}"
+        # GL-046 Unified: Silent routing - no notice needed, output is identical
         cmd_egrep "$query"
         return $?
     fi
@@ -837,7 +837,8 @@ display_ranked_grep_results() {
     local file_count=$(echo "$result" | jq -r '[.results[].file] | unique | length')
 
     # Get rolling intent from API response (GL-045)
-    local rolling_intent=$(echo "$result" | jq -r '.rolling_intent // [] | map("#" + .) | join(" ")' 2>/dev/null)
+    # Note: API returns tags with # prefix already, don't double it
+    local rolling_intent=$(echo "$result" | jq -r '.rolling_intent // [] | join(" ")' 2>/dev/null)
 
     # Header: hits | files | timing | intent tags
     printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}" "$count" "$file_count" "$ms"
@@ -847,44 +848,23 @@ display_ranked_grep_results() {
     printf "\n\n"
 
     # GL-046.4: Direct iteration through results - O(1) from API
-    # API response now includes: file, line, content, symbol, end_line (when enriched)
-    # Use pipe delimiter with _NULL_ placeholder for empty fields
+    # All formatting done in jq to avoid delimiter issues with content
     echo "$result" | jq -r '
         .results[] |
-        [
-            .file,
-            .line,
-            (.symbol // "<module>"),
-            (.end_line // "_NULL_" | tostring),
-            (.content // "_NULL_"),
-            (.tags // [] | if length > 0 then map("#" + .) | join(" ") else "_NULL_" end)
-        ] |
-        join("|")
-    ' | while IFS='|' read -r file line sym end_line content tags; do
-        [ -z "$file" ] && continue
-
-        # Convert _NULL_ placeholders back to empty
-        [ "$end_line" = "_NULL_" ] && end_line=""
-        [ "$content" = "_NULL_" ] && content=""
-        [ "$tags" = "_NULL_" ] && tags=""
-
-        # Build symbol info: symbol[start-end] for real symbols, <module> for top-level
-        local sym_info=""
-        if [ "$sym" = "<module>" ] || [ -z "$sym" ]; then
-            sym_info="<module>"
-        elif [ -n "$end_line" ]; then
-            sym_info="${sym}[${line}-${end_line}]"
-        else
-            sym_info="${sym}[${line}]"
-        fi
-
-        # Display: file:line: symbol content  #tags
-        printf "${BOLD}%s${NC}${DIM}:%s:${NC}" "$file" "$line"
-        printf " ${YELLOW}%s${NC}" "$sym_info"
-        [ -n "$content" ] && printf " ${DIM}%s${NC}" "$content"
-        [ -n "$tags" ] && printf "  ${CYAN}%s${NC}" "$tags"
-        printf "\n"
-    done
+        # Build symbol info
+        (if .symbol then
+            if .end_line then "\(.symbol)[\(.line)-\(.end_line)]"
+            else "\(.symbol)[\(.line)]"
+            end
+        else "<module>"
+        end) as $sym |
+        # Build tags (max 3) - tags already have # prefix from API
+        ((.tags // []) | .[0:3] | join(" ")) as $tags |
+        # Format: file:line: symbol content  #tags
+        "\u001b[1m\(.file)\u001b[0m\u001b[2m:\(.line):\u001b[0m \u001b[33m\($sym)\u001b[0m" +
+        (if .content then " \u001b[2m\(.content)\u001b[0m" else "" end) +
+        (if ($tags | length) > 0 then "  \u001b[36m\($tags)\u001b[0m" else "" end)
+    '
 }
 
 # Keep old function name for backwards compatibility
@@ -2196,9 +2176,11 @@ cmd_egrep() {
     fi
 
     # Build request body
+    local project_id=$(get_project_id)
     local body="{\"patterns\": ${patterns}"
     [ -n "$repo" ] && body="${body}, \"repo\": \"${repo}\""
     [ -n "$since_seconds" ] && body="${body}, \"since\": ${since_seconds}"
+    [ -n "$project_id" ] && body="${body}, \"project\": \"${project_id}\""
     body="${body}}"
 
     local url="${INDEX_URL}/pattern"
@@ -2215,20 +2197,44 @@ cmd_egrep() {
     fi
 
     local ms=$(echo "$result" | jq -r '.stats.ms')
-    local files=$(echo "$result" | jq -r '.stats.files_searched')
-    local matched=$(echo "$result" | jq -r '.stats.files_matched')
+    local files_searched=$(echo "$result" | jq -r '.stats.files_searched')
+    local files_matched=$(echo "$result" | jq -r '.stats.files_matched')
 
-    # Count total hits (sum of all matches across files)
+    # Count total hits and unique files (same as grep)
     local hits=$(echo "$result" | jq '[.results | to_entries[].value | length] | add // 0')
+    local file_count=$(echo "$result" | jq -r '[.results | to_entries[].value[].file] | unique | length')
 
-    # Format ms to 2 decimal places
-    local ms_fmt=$(printf "%.2f" "$ms")
+    # Get rolling intent from API response (GL-046 unified - same as grep)
+    # Note: API returns tags with # prefix already, don't double it
+    local rolling_intent=$(echo "$result" | jq -r '.rolling_intent // [] | join(" ")' 2>/dev/null)
 
-    # Consistent branding with grep output
-    printf "${CYAN}${BOLD}⚡ %s hits${NC} ${DIM}│${NC} ${GREEN}%sms${NC} ${DIM}│${NC} %s files\n" "$hits" "$ms_fmt" "$files"
+    # Header: IDENTICAL to grep - hits | files | timing | intent tags
+    printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}" "$hits" "$file_count" "$ms"
+    if [ -n "$rolling_intent" ] && [ "$rolling_intent" != "" ]; then
+        printf " ${DIM}│${NC} ${CYAN}%s${NC}" "$rolling_intent"
+    fi
+    printf "\n\n"
 
-    # Output results (simplified - just file:line with context)
-    echo "$result" | jq -r '.results | to_entries[].value[] | "  \(.file):\(.line) \u001b[2m\(.context)\u001b[0m"'
+    # GL-046 Unified Output: Same format as grep
+    # Deduplicate by file:line to match grep behavior
+    echo "$result" | jq -r '
+        [.results | to_entries[].value[]] |
+        unique_by("\(.file):\(.line)") |
+        .[] |
+        # Build symbol info (same as grep)
+        (if .symbol then
+            if .end_line then "\(.symbol)[\(.line)-\(.end_line)]"
+            else "\(.symbol)[\(.line)]"
+            end
+        else "<module>"
+        end) as $sym |
+        # Build tags (max 3, same as grep) - tags already have # prefix from API
+        ((.tags // []) | .[0:3] | join(" ")) as $tags |
+        # Format: file:line: symbol content  #tags (IDENTICAL to grep)
+        "\u001b[1m\(.file)\u001b[0m\u001b[2m:\(.line):\u001b[0m \u001b[33m\($sym)\u001b[0m" +
+        (if .context then " \u001b[2m\(.context)\u001b[0m" else "" end) +
+        (if ($tags | length) > 0 then "  \u001b[36m\($tags)\u001b[0m" else "" end)
+    '
 }
 
 # Deprecated: use cmd_egrep instead

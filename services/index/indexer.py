@@ -1749,17 +1749,40 @@ class IntentIndex:
             return list(self.tag_to_files[proj].get(tag, set()))
 
     def tags_for_file(self, file: str, project_id: str = None) -> List[str]:
-        """Get tags associated with a file."""
+        """Get tags for a file - prioritize semantic tags from Redis."""
         proj = self._project_key(project_id)
+
+        # Check Redis for semantic tags first (from quickstart/outliner)
+        if self.redis:
+            try:
+                redis_key = f"aoa:{proj}:file_tags:{file}"
+                redis_tags = self.redis.smembers(redis_key)
+                if redis_tags:
+                    # Decode
+                    decoded = [t.decode('utf-8') if isinstance(t, bytes) else t for t in redis_tags]
+                    # Filter out generic action tags - keep domain/semantic ones
+                    generic = {'#executing', '#reading', '#editing', '#creating', '#searching',
+                              '#delegating', '#markdown', '#shell', '#python', '#indexing',
+                              '#search', '#hooks', '#test', '#grep', '#curl', '#api'}
+                    semantic = [t for t in decoded if t not in generic]
+                    # Sort by length (longer = more specific)
+                    semantic.sort(key=lambda t: (-len(t), t))
+                    # Return top 3 semantic tags if available
+                    if semantic:
+                        return semantic[:3]
+                    # If no semantic tags, return any tags we have
+                    return decoded[:3]
+            except Exception:
+                pass  # Fall through
+
+        # Fallback to in-memory intent tags
         with self.lock:
             proj_file_to_tags = self.file_to_tags[proj]
-            # Try exact match first, then partial
             if file in proj_file_to_tags:
-                return list(proj_file_to_tags[file])
-            # Partial match (filename only)
+                return list(proj_file_to_tags[file])[:3]
             for f, tags in proj_file_to_tags.items():
                 if f.endswith(file) or file in f:
-                    return list(tags)
+                    return list(tags)[:3]
             return []
 
     def recent(self, since: int = None, limit: int = 50, project_id: str = None) -> List[dict]:
@@ -3301,6 +3324,7 @@ def pattern_search():
 
     patterns = data.get('patterns', {})
     repo_name = data.get('repo')  # None = local
+    project = data.get('project')  # Optional project ID for intent tracking
     since = data.get('since')  # seconds ago
     limit = data.get('limit', 50)
 
@@ -3313,7 +3337,7 @@ def pattern_search():
         if not idx:
             return jsonify({'error': f"Repo '{repo_name}' not found"}), 404
     else:
-        idx = manager.get_local()
+        idx = manager.get_local(project)
 
     # Compile patterns
     compiled = {}
@@ -3375,7 +3399,20 @@ def pattern_search():
 
     elapsed = (time.time() - start) * 1000
 
-    return jsonify({
+    # GL-047: Enrich results with tags (parity with /symbol endpoint)
+    rolling_tags = None
+    if intent_index and project:
+        # Add tags to each result
+        for label in results:
+            for r in results[label]:
+                file_path = r.get('file', '')
+                if file_path:
+                    r['tags'] = list(intent_index.tags_for_file(file_path, project))
+
+        # Get rolling intent for response header
+        rolling_tags = intent_index.get_rolling_intent(project, window=50)
+
+    response = {
         'results': results,
         'stats': {
             'files_searched': files_searched,
@@ -3383,7 +3420,14 @@ def pattern_search():
             'ms': elapsed
         },
         'index': repo_name or 'local'
-    })
+    }
+
+    # Include rolling intent tags if available
+    if rolling_tags:
+        top_tags = sorted(rolling_tags.items(), key=lambda x: x[1], reverse=True)[:5]
+        response['rolling_intent'] = [tag for tag, _ in top_tags]
+
+    return jsonify(response)
 
 
 @app.route('/repo/<name>/pattern', methods=['POST'])
