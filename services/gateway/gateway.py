@@ -65,6 +65,7 @@ ROUTES = {
     "/intent/stats": ("index", "/intent/stats"),
     "/intent/rolling": ("index", "/intent/rolling"),  # GL-045: Rolling intent window
     "/repos": ("index", "/repos"),
+    "/ac/test": ("index", "/ac/test"),  # GL-047: Aho-Corasick pattern matcher test
 
     # Ranking service routes (Phase 1)
     "/rank": ("index", "/rank"),
