@@ -411,6 +411,7 @@ class Location:
     symbol_kind: str | None = None # Kind (e.g., "function", "class")
     end_line: int | None = None    # Where the symbol ends
     content: str | None = None     # GL-046: Line content for O(1) display
+    tags: list | None = None       # GL-047: AC-computed dense tags at index time
 
 @dataclass
 class FileMeta:
@@ -1035,14 +1036,17 @@ class OutlineParser:
 
     def parse_file(self, file_path: str, language: str) -> list[OutlineSymbol]:
         """Parse a file and return its outline."""
-        parser = self.get_parser(language)
-        if not parser:
-            return []
-
         try:
             with open(file_path, 'rb') as f:
                 source = f.read()
         except OSError:
+            return []
+        return self.parse_content(source, language)
+
+    def parse_content(self, source: bytes, language: str) -> list[OutlineSymbol]:
+        """Parse content bytes and return outline. Use this with LRU cache."""
+        parser = self.get_parser(language)
+        if not parser:
             return []
 
         try:
@@ -1246,7 +1250,7 @@ class CodebaseIndex:
     def _find_enclosing_symbol(self, line_num: int, symbols: list) -> dict | None:
         """GL-046.2: Find the most specific (smallest) symbol containing a line.
 
-        Returns dict with {name, kind, end_line} or None if not in any symbol.
+        Returns dict with {name, kind, start_line, end_line} or None if not in any symbol.
         """
         candidates = []
         for sym in symbols:
@@ -1259,6 +1263,7 @@ class CodebaseIndex:
         return {
             'name': best.name,
             'kind': best.kind,
+            'start_line': best.start_line,  # GL-047: For AC tag lookup
             'end_line': best.end_line
         }
 
@@ -1281,6 +1286,23 @@ class CodebaseIndex:
                 except Exception:
                     pass  # Fall back to no symbol info
 
+            # GL-047: Pre-compute AC dense tags for each symbol body
+            lines = content.split('\n')
+            symbol_tags = {}  # (start_line, end_line) -> dense_tags
+            if AC_MATCHER.is_available and symbols:
+                for sym in symbols:
+                    # Extract symbol body text
+                    start = max(0, sym.start_line - 1)
+                    end = min(len(lines), sym.end_line)
+                    body = '\n'.join(lines[start:end])
+                    # Compute dense tags (threshold=2 for meaningful density)
+                    dense = AC_MATCHER.get_dense_tags(body, threshold=2)
+                    if dense:
+                        symbol_tags[(sym.start_line, sym.end_line)] = dense[:3]  # Top 3 tags
+                # Debug: log how many symbols got tags
+                if symbol_tags and 'indexer' in rel_path:
+                    print(f"[GL-047] {rel_path}: {len(symbol_tags)} symbols with AC tags")
+
             with self.lock:
                 if rel_path in self.files:
                     if self.files[rel_path].content_hash == content_hash:
@@ -1295,15 +1317,23 @@ class CodebaseIndex:
                     content_hash=content_hash
                 )
 
-                # GL-046: Split content into lines for O(1) content retrieval
-                lines = content.split('\n')
-
                 for token, line_num, col in self.tokenize(content):
                     # Get line content (capped at 200 chars for memory efficiency)
                     line_content = lines[line_num - 1][:200] if line_num <= len(lines) else ''
 
                     # GL-046.2: Find enclosing symbol for this token
                     enclosing = self._find_enclosing_symbol(line_num, symbols)
+
+                    # GL-047: Look up pre-computed AC tags for this symbol
+                    ac_tags = None
+                    if enclosing and symbol_tags:
+                        key = (enclosing['start_line'], enclosing['end_line'])
+                        ac_tags = symbol_tags.get(key)
+                        # Debug: first match
+                        if ac_tags and 'indexer' in rel_path and not hasattr(self, '_ac_debug_done'):
+                            print(f"[GL-047 Debug] Found tags for {enclosing['name']} {key}: {ac_tags}")
+                            print(f"[GL-047 Debug] ac_tags type: {type(ac_tags)}, value: {ac_tags}")
+                            self._ac_debug_done = True
 
                     loc = Location(
                         file=rel_path,
@@ -1314,7 +1344,8 @@ class CodebaseIndex:
                         content=line_content.strip(),  # GL-046: Store content for O(1) display
                         symbol=enclosing['name'] if enclosing else None,  # GL-046.2
                         symbol_kind=enclosing['kind'] if enclosing else None,  # GL-046.2
-                        end_line=enclosing['end_line'] if enclosing else None  # GL-046.2
+                        end_line=enclosing['end_line'] if enclosing else None,  # GL-046.2
+                        tags=ac_tags  # GL-047: Pre-computed AC dense tags
                     )
                     self.inverted_index[token].append(loc)
                     lower = token.lower()
@@ -2306,9 +2337,12 @@ def symbol_search():
                     # Strip leading whitespace, truncate for display
                     r['content'] = line_content.strip()[:100]
 
-            # GL-046.3: Add file tags to each result
+            # GL-046.3: Add file tags to each result (from intent tracking)
             if intent_index and file_path:
-                r['tags'] = list(intent_index.tags_for_file(file_path, project))
+                r['intent_tags'] = list(intent_index.tags_for_file(file_path, project))
+
+            # GL-047: AC tags are already in r['tags'] from Location.tags (computed at index time)
+            # Keep both - intent_tags (activity-based) and tags (content-based density)
 
         response = {
             'results': results,
@@ -3582,23 +3616,15 @@ def pattern_search():
                 continue
 
             files_searched += 1
-            full_path = idx.root / rel_path
 
-            try:
-                content = full_path.read_text(encoding='utf-8', errors='ignore')
-            except Exception:
-                continue
+            # GL-046.1: Use LRU cache instead of disk read
+            project_id = project or 'local'
+            lines = content_cache.get(project_id, rel_path, idx.root)
+            if not lines:
+                continue  # File not accessible
 
             file_matched = False
-            lines = content.split('\n')
-
-            # GL-047: Parse outline once per file for symbol enrichment
-            symbols = []
-            if TREE_SITTER_AVAILABLE:
-                language = idx.get_language(full_path)
-                if language in outline_parser.LANG_MAP:
-                    with contextlib.suppress(Exception):
-                        symbols = outline_parser.parse_file(str(full_path), language)
+            content = '\n'.join(lines)  # Reconstruct for regex matching
 
             for label, regex in compiled.items():
                 if len(results[label]) >= limit:
@@ -3616,13 +3642,19 @@ def pattern_search():
                         'context': line_text
                     }
 
-                    # GL-047: Add symbol context (parity with /symbol endpoint)
-                    if symbols:
-                        enclosing = idx._find_enclosing_symbol(line_start, symbols)
-                        if enclosing:
-                            result_entry['symbol'] = enclosing['name']
-                            result_entry['symbol_kind'] = enclosing['kind']
-                            result_entry['end_line'] = enclosing['end_line']
+                    # Use pre-indexed symbol data (no re-parsing needed)
+                    # Look up any token from this line to get symbol context
+                    first_token = re.search(r'[a-zA-Z_][a-zA-Z0-9_]*', line_text)
+                    if first_token:
+                        token = first_token.group()
+                        if token in idx.inverted_index:
+                            for loc in idx.inverted_index[token]:
+                                if loc.file == rel_path and loc.line == line_start:
+                                    if loc.symbol:
+                                        result_entry['symbol'] = loc.symbol
+                                        result_entry['symbol_kind'] = loc.symbol_kind
+                                        result_entry['end_line'] = loc.end_line
+                                    break
 
                     results[label].append(result_entry)
                     file_matched = True
