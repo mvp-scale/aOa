@@ -2005,9 +2005,14 @@ cmd_intent_recent() {
     local result=$(curl -s "${INDEX_URL}/intent/recent?limit=${limit}&project_id=${project_id}")
     local total=$(echo "$result" | jq -r '.stats.total_records // 0')
 
+    # Ensure numeric defaults for metrics
+    tokens_saved="${tokens_saved:-0}"
+    hit_pct="${hit_pct:-0}"
+    evaluated="${evaluated:-0}"
+
     # Format tokens with k suffix
-    local tokens_k=$(awk "BEGIN {printf \"%.0f\", $tokens_saved/1000}")
-    local hit_pct_int=$(printf "%.0f" "$hit_pct")
+    local tokens_k=$(awk "BEGIN {printf \"%.0f\", ${tokens_saved:-0}/1000}")
+    local hit_pct_int=$(printf "%.0f" "${hit_pct:-0}")
 
     # Calculate dynamic rate from rolling windows (5, 15, 30 min)
     local rate_data=$(python3 << 'PYEOF'
@@ -2100,13 +2105,18 @@ else:
 PYEOF
 )
 
-    local rate_low=$(echo "$rate_data" | jq -r '.rate_low')
-    local rate_high=$(echo "$rate_data" | jq -r '.rate_high')
-    local rate_samples=$(echo "$rate_data" | jq -r '.samples')
+    local rate_low=$(echo "$rate_data" | jq -r '.rate_low // 1.5')
+    local rate_high=$(echo "$rate_data" | jq -r '.rate_high // 3.0')
+    local rate_samples=$(echo "$rate_data" | jq -r '.samples // 0')
+
+    # Ensure numeric values with defaults
+    tokens_saved="${tokens_saved:-0}"
+    rate_low="${rate_low:-1.5}"
+    rate_high="${rate_high:-3.0}"
 
     # Calculate time range from dynamic rates
-    local time_low=$(awk "BEGIN {printf \"%.0f\", $tokens_saved * $rate_low / 1000}")
-    local time_high=$(awk "BEGIN {printf \"%.0f\", $tokens_saved * $rate_high / 1000}")
+    local time_low=$(awk "BEGIN {printf \"%.0f\", ${tokens_saved:-0} * ${rate_low:-1.5} / 1000}")
+    local time_high=$(awk "BEGIN {printf \"%.0f\", ${tokens_saved:-0} * ${rate_high:-3.0} / 1000}")
 
     # Format time range compactly
     format_time_compact() {
