@@ -109,6 +109,25 @@ def extract_files(data: dict) -> list:
             aoa_cmd = match[0]  # grep, egrep, find, etc.
             aoa_flag = match[1] if match[1] else ""  # -a, -i, etc.
             aoa_term = (match[2] or "").strip().strip('"\'')[:40]  # Limit term length
+
+            # Determine specific search type for better attribution
+            # Parse from command flags and terms
+            if aoa_cmd == "grep":
+                if aoa_flag == "-a":
+                    search_type = "multi-and"
+                elif aoa_flag == "-E":
+                    search_type = "regex"
+                elif ' ' in aoa_term or '|' in aoa_term:
+                    search_type = "multi-or"
+                else:
+                    search_type = "indexed"
+            elif aoa_cmd == "egrep":
+                search_type = "regex"
+            elif aoa_cmd == "multi":
+                search_type = "multi-and"  # cmd_multi is alias for grep -a
+            else:
+                search_type = aoa_cmd
+
             # Build full command display: "aoa grep -a term"
             full_cmd = f"aoa {aoa_cmd}"
             if aoa_flag:
@@ -141,7 +160,7 @@ def extract_files(data: dict) -> list:
                         hits = pattern_match.group(1)
                         time_ms = pattern_match.group(2)
 
-            files.add(f"cmd:aoa:{aoa_cmd}:{full_cmd_safe}:{hits}:{time_ms}")
+            files.add(f"cmd:aoa:{search_type}:{full_cmd_safe}:{hits}:{time_ms}")
 
             # Extract result files from aOa output and associate with search intent
             # This creates meaningful file clusters for prediction

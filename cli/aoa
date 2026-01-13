@@ -1,22 +1,61 @@
 #!/usr/bin/env bash
-# aoa - 5 angles. 1 attack.
+# =============================================================================
+# SECTION 00: Header & Security Notice
+# =============================================================================
 #
-# Global Installation:
-#   ./install.sh            Install aOa globally to ~/.aoa/
+# aOa - 5 Angles. 1 Attack.
+# O(1) indexed code search for AI agents and developers.
 #
-# Per-Project:
-#   aoa init                Enable aOa for current project
-#   aoa remove              Disable aOa for current project
-#   aoa projects            List all enabled projects
+# SECURITY NOTICE
+#   This file is entirely self-contained. No external scripts are sourced.
+#   No `source`, `eval`, or dynamic code execution is used.
+#   Audit this single file to understand everything aOa does.
 #
-# Search (after init):
-#   aoa search <term>       Search current project
-#   aoa multi <t1,t2,...>   Multi-term search
-#   aoa health              Check services
+# PERFORMANCE
+#   Pre-indexed, in-memory search returns results in <10ms regardless of
+#   codebase size. No file loading at query time - everything is pre-computed.
+#
+# SECTIONS (grep "^# SECTION" to navigate)
+#   SECTION 00: Header & Security Notice
+#   SECTION 01: Constants & Configuration
+#   SECTION 02: Utility Functions
+#   SECTION 10: Core Search Commands - HOT PATH
+#   SECTION 20: File Discovery Commands
+#   SECTION 30: Analytics & Behavioral Commands
+#   SECTION 40: Knowledge Repository Commands
+#   SECTION 50: Intent Tracking System
+#   SECTION 60: System & Diagnostics
+#   SECTION 70: Setup & Configuration
+#   SECTION 80: Help & Documentation
+#   SECTION 90: Main Entry Point
+#
+# BUILD
+#   This file is generated from cli/src/*.sh
+#   Edit source files, then run: ./cli/build.sh
+#
+# =============================================================================
 
 set -e
+# =============================================================================
+# SECTION 01: Constants & Configuration
+# =============================================================================
+#
+# PURPOSE
+#   Global constants used throughout the CLI. ANSI color codes, service URLs,
+#   and path configuration. These are set once at startup.
+#
+# DEPENDENCIES
+#   - 00-header.sh: set -e must be active
+#
+# PROVIDES
+#   GATEWAY_HOST, GATEWAY_PORT   Service connection settings
+#   INDEX_URL, STATUS_URL        API endpoint URLs
+#   AOA_HOME, AOA_DATA           Installation paths
+#   BOLD, DIM, GREEN, etc.       ANSI color codes for output formatting
+#
+# =============================================================================
 
-# Configuration
+# Gateway configuration (connects to aOa index service)
 GATEWAY_HOST="${AOA_GATEWAY_HOST:-localhost}"
 GATEWAY_PORT="${AOA_GATEWAY_PORT:-8080}"
 
@@ -25,10 +64,11 @@ CLI_PATH="$(readlink -f "$0")"
 AOA_HOME="$(dirname "$(dirname "$CLI_PATH")")"
 AOA_DATA="${AOA_DATA:-$AOA_HOME/data}"
 
+# Service URLs
 INDEX_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
 STATUS_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
 
-# Colors
+# ANSI Colors
 BOLD='\033[1m'
 DIM='\033[2m'
 GREEN='\033[0;32m'
@@ -36,11 +76,25 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 RED='\033[0;31m'
-BRIGHT_RED='\033[1;91m'  # Neon orange/red for search term highlighting
-NC='\033[0m'
-
+BRIGHT_RED='\033[1;91m'  # Search term highlighting
+NC='\033[0m'             # No color (reset)
 # =============================================================================
-# Project Management Commands
+# SECTION 02: Utility Functions
+# =============================================================================
+#
+# PURPOSE
+#   Common helper functions used across multiple commands. Project identification,
+#   path resolution, and other shared utilities.
+#
+# DEPENDENCIES
+#   - 01-constants.sh: None directly, but callers need colors
+#
+# PROVIDES
+#   get_project_id()       Get UUID from .aoa/home.json
+#   generate_project_id()  Create new UUID for project
+#   get_project_root()     Find git repository root
+#   get_project_name()     Extract project name from path
+#
 # =============================================================================
 
 # Get project ID from .aoa/home.json (UUID generated at init)
@@ -67,527 +121,44 @@ generate_project_id() {
     fi
 }
 
-# Get project root
+# Get project root (git repository root)
 get_project_root() {
     git rev-parse --show-toplevel 2>/dev/null
 }
 
-# Get project name
+# Get project name from root directory
 get_project_name() {
     local root=$(get_project_root)
     if [ -n "$root" ]; then
         basename "$root"
     fi
 }
-
-cmd_init() {
-    echo -e "${CYAN}${BOLD}⚡ aOa - Initializing Project${NC}"
-    echo
-
-    # Check if aOa is installed globally
-    if [ ! -d "$AOA_HOME" ]; then
-        echo -e "${RED}aOa not installed globally.${NC}"
-        echo -e "${DIM}Run ./install.sh from the aOa repository first.${NC}"
-        return 1
-    fi
-
-    # Check if we're in a git repo
-    local project_root=$(get_project_root)
-    if [ -z "$project_root" ]; then
-        echo -e "${RED}Not in a git repository.${NC}"
-        echo -e "${DIM}aOa requires a git repo to detect project boundaries.${NC}"
-        return 1
-    fi
-
-    local project_name=$(get_project_name)
-
-    # Check if already has a project_id, otherwise generate new one
-    local existing_id=$(get_project_id)
-    local project_id="${existing_id:-$(generate_project_id)}"
-
-    echo -e "  Project: ${BOLD}${project_name}${NC}"
-    echo -e "  Path:    ${DIM}${project_root}${NC}"
-    echo -e "  ID:      ${DIM}${project_id}${NC}"
-    echo
-
-    # Check if already initialized
-    if [ -f "$project_root/.claude/hooks/aoa-status-line.sh" ]; then
-        echo -e "${YELLOW}Project already initialized.${NC}"
-        echo -e "${DIM}Run 'aoa remove' first to reinitialize.${NC}"
-        return 0
-    fi
-
-    # Create .claude directories
-    mkdir -p "$project_root/.claude/hooks"
-    mkdir -p "$project_root/.claude/skills"
-
-    # Copy hooks from templates
-    echo -n "  Installing hooks.............. "
-    cp "$AOA_HOME/plugin/hooks/"*.py "$project_root/.claude/hooks/" 2>/dev/null || true
-    cp "$AOA_HOME/plugin/hooks/"*.sh "$project_root/.claude/hooks/" 2>/dev/null || true
-    chmod +x "$project_root/.claude/hooks/"*.py "$project_root/.claude/hooks/"*.sh 2>/dev/null || true
-    echo -e "${GREEN}✓${NC}"
-
-    # Copy skills (directory-based structure for Claude Code)
-    echo -n "  Installing skills............. "
-    for skill_dir in "$AOA_HOME/plugin/skills/"*/; do
-        if [ -d "$skill_dir" ]; then
-            cp -r "$skill_dir" "$project_root/.claude/skills/" 2>/dev/null || true
-        fi
-    done
-    echo -e "${GREEN}✓${NC}"
-
-    # Copy agents
-    echo -n "  Installing agents............. "
-    mkdir -p "$project_root/.claude/agents"
-    cp "$AOA_HOME/plugin/agents/"*.md "$project_root/.claude/agents/" 2>/dev/null || true
-    echo -e "${GREEN}✓${NC}"
-
-    # Create .aoa/ folder with home pointer
-    echo -n "  Creating .aoa/ config......... "
-    mkdir -p "$project_root/.aoa"
-
-    # home.json - project config with UUID identifier
-    cat > "$project_root/.aoa/home.json" << EOFHOME
-{
-  "aoa_home": "$AOA_HOME",
-  "data_dir": "$AOA_DATA",
-  "project_id": "$project_id",
-  "project_root": "$project_root"
-}
-EOFHOME
-
-    # whitelist.txt - optional repos/URLs for this project
-    if [ ! -f "$project_root/.aoa/whitelist.txt" ]; then
-        cat > "$project_root/.aoa/whitelist.txt" << 'EOFWHITELIST'
-# aOa Whitelist - URLs allowed for this project
-# Add one domain per line (HTTPS only)
-#
-# Examples:
-# github.com/your-org/repo
-# docs.your-company.com
-# internal-git.example.com
-EOFWHITELIST
-    fi
-
-    # README.md - explains the folder (only if not present)
-    if [ ! -f "$project_root/.aoa/README.md" ]; then
-        cat > "$project_root/.aoa/README.md" << 'EOFREADME'
-# .aoa - aOa Project Link
-
-This folder links this project to your global aOa installation.
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `home.json` | Points to global aOa install location |
-| `whitelist.txt` | Optional: extra URLs/repos for this project |
-
-## What is aOa?
-
-aOa (Angle of Attack) provides fast O(1) code search for Claude Code.
-It replaces slow Grep/Glob operations with indexed symbol lookup.
-
-## Commands
-
-```bash
-aoa search <term>    # Search this project
-aoa health           # Check services
-aoa remove           # Remove aOa from this project
-```
-
-## Global Settings
-
-To change aOa settings (port, confidence threshold, etc.),
-edit the config.json in your global aOa installation.
-EOFREADME
-    fi
-
-    # Copy USAGE.md - goal-oriented guide for Claude
-    cp "$AOA_HOME/plugin/USAGE.md" "$project_root/.aoa/USAGE.md" 2>/dev/null || true
-    echo -e "${GREEN}✓${NC}"
-
-    # Add aOa reference to CLAUDE.md
-    echo -n "  Updating CLAUDE.md............ "
-    local claude_md="$project_root/CLAUDE.md"
-    local aoa_marker="# aOa Integration"
-
-    if [ -f "$claude_md" ]; then
-        # Check if already has aOa section
-        if ! grep -q "$aoa_marker" "$claude_md" 2>/dev/null; then
-            # Append aOa reference
-            cat >> "$claude_md" << 'EOFCLAUDE'
-
-# aOa Integration
-
-**CRITICAL: Use `aoa grep` instead of Grep/Glob. It's 10-100x faster.**
-
-## Quickstart Triggers
-
-When user says **"Hey aOa"**, **"Tag my code"**, or **"aOa quickstart"**:
-
-1. Run `aoa outline --pending --json` to check pending files
-2. Respond with this (DO NOT read any files first):
-
-```
-⚡ aOa activated
-
-Your codebase is already indexed—fast symbol search works right now.
-Try it: `aoa grep [anything]`
-
-I found [X] files that need semantic compression.
-Let me tag these in the background. This is FREE—doesn't use your tokens.
-
-Takes about 2-3 minutes. To watch progress, open another terminal:
-  aoa intent
-
-Keep coding. I'm not blocking you.
-Once done, I'll find code by meaning, not just keywords.
-```
-
-3. Launch: `Task(subagent_type="aoa-outline", prompt="Tag all pending files", run_in_background=true)`
-
-## Commands
-
-| Command | Use For |
-|---------|---------|
-| `aoa grep <term>` | Find code fast (ALWAYS use instead of Grep) |
-| `aoa grep "a b c"` | Multi-term OR search |
-| `aoa grep -a a,b,c` | Multi-term AND search |
-| `aoa outline <file>` | See file structure without reading it all |
-| `aoa intent` | Track what's being worked on |
-
-## Rules
-
-- ✅ ALWAYS use `aoa grep` instead of Grep/Glob
-- ✅ Results show `function[start-end]` - use these line ranges for targeted reads
-- ✅ Tags like `#api #search` indicate what the code does semantically
-- ❌ DO NOT use subagents for codebase exploration (hooks don't work in subagents)
-
-## Hook Integration
-
-aOa hooks run on every prompt and tool use. When you see these in additionalContext:
-
-**aOa Auto-Tag Request**: Generate 3-5 semantic hashtags directly (YOU are the model), then store:
-\`\`\`bash
-curl -s -X POST localhost:8080/intent -H "Content-Type: application/json" -d '{"tool": "Intent", "tags": ["#your-tags"], ...}'
-\`\`\`
-
-**aOa Predicted Files**: Files predicted based on your prompt keywords. Consider these when exploring.
-
-See \`.aoa/USAGE.md\` for full guide.
-EOFCLAUDE
-            echo -e "${GREEN}✓${NC} ${DIM}(appended)${NC}"
-        else
-            echo -e "${YELLOW}✓${NC} ${DIM}(already present)${NC}"
-        fi
-    else
-        # Create CLAUDE.md with full aOa section
-        cat > "$claude_md" << 'EOFCLAUDE'
-# aOa Integration
-
-**CRITICAL: Use `aoa grep` instead of Grep/Glob. It's 10-100x faster.**
-
-## Quickstart Triggers
-
-When user says **"Hey aOa"**, **"Tag my code"**, or **"aOa quickstart"**:
-
-1. Run `aoa outline --pending --json` to check pending files
-2. Respond with this (DO NOT read any files first):
-
-```
-⚡ aOa activated
-
-Your codebase is already indexed—fast symbol search works right now.
-Try it: `aoa grep [anything]`
-
-I found [X] files that need semantic compression.
-Let me tag these in the background. This is FREE—doesn't use your tokens.
-
-Takes about 2-3 minutes. To watch progress, open another terminal:
-  aoa intent
-
-Keep coding. I'm not blocking you.
-Once done, I'll find code by meaning, not just keywords.
-```
-
-3. Launch: `Task(subagent_type="aoa-outline", prompt="Tag all pending files", run_in_background=true)`
-
-## Commands
-
-| Command | Use For |
-|---------|---------|
-| `aoa grep <term>` | Find code fast (ALWAYS use instead of Grep) |
-| `aoa grep "a b c"` | Multi-term OR search |
-| `aoa grep -a a,b,c` | Multi-term AND search |
-| `aoa outline <file>` | See file structure without reading it all |
-| `aoa intent` | Track what's being worked on |
-
-## Rules
-
-- ✅ ALWAYS use `aoa grep` instead of Grep/Glob
-- ✅ Results show `function[start-end]` - use these line ranges for targeted reads
-- ✅ Tags like `#api #search` indicate what the code does semantically
-- ❌ DO NOT use subagents for codebase exploration (hooks don't work in subagents)
-
-## Hook Integration
-
-aOa hooks run on every prompt and tool use. When you see these in additionalContext:
-
-**aOa Auto-Tag Request**: Generate 3-5 semantic hashtags directly (YOU are the model), then store:
-\`\`\`bash
-curl -s -X POST localhost:8080/intent -H "Content-Type: application/json" -d '{"tool": "Intent", "tags": ["#your-tags"], ...}'
-\`\`\`
-
-**aOa Predicted Files**: Files predicted based on your prompt keywords. Consider these when exploring.
-
-See \`.aoa/USAGE.md\` for full guide.
-EOFCLAUDE
-        echo -e "${GREEN}✓${NC} ${DIM}(created)${NC}"
-    fi
-
-    # Copy or merge settings template
-    echo -n "  Merging settings.............. "
-    if [ ! -f "$project_root/.claude/settings.local.json" ]; then
-        # No existing settings - copy template
-        cp "$AOA_DATA/settings.template.json" "$project_root/.claude/settings.local.json"
-        echo -e "${GREEN}✓${NC}"
-    else
-        # Backup existing settings
-        cp "$project_root/.claude/settings.local.json" \
-           "$project_root/.claude/settings.local.json.pre-aoa-$(date +%Y%m%d-%H%M%S)"
-
-        # Deep merge: preserve their settings, add our hooks/statusLine/permissions
-        jq -s '
-            # Start with their settings (index 1)
-            .[1] as $existing |
-            # Our template (index 0)
-            .[0] as $template |
-
-            # Merge strategy:
-            # - permissions.allow: union (combine both)
-            # - hooks: merge by type (combine hook arrays)
-            # - statusLine: use ours if missing
-            # - everything else: preserve theirs
-
-            $existing |
-            # Add our statusLine if missing
-            (if .statusLine == null then .statusLine = $template.statusLine else . end) |
-            # Merge permissions.allow
-            (if .permissions.allow then
-                .permissions.allow += $template.permissions.allow | .permissions.allow |= unique
-             else
-                .permissions = $template.permissions
-             end) |
-            # Merge hooks (deep merge by hook type)
-            (if .hooks then
-                .hooks = ($template.hooks * .hooks)
-             else
-                .hooks = $template.hooks
-             end)
-        ' "$AOA_DATA/settings.template.json" "$project_root/.claude/settings.local.json" \
-          > "$project_root/.claude/settings.local.json.new"
-
-        mv "$project_root/.claude/settings.local.json.new" "$project_root/.claude/settings.local.json"
-        echo -e "${GREEN}✓${NC} ${DIM}(merged, backup created)${NC}"
-    fi
-
-    # Register project in projects.json
-    echo -n "  Registering project........... "
-    local projects_file="$AOA_DATA/projects.json"
-    local now=$(date -Iseconds)
-
-    # Create entry
-    local entry=$(jq -n \
-        --arg id "$project_id" \
-        --arg name "$project_name" \
-        --arg path "$project_root" \
-        --arg added "$now" \
-        '{id: $id, name: $name, path: $path, added: $added}')
-
-    # Add to projects.json (remove existing entry with same id first)
-    local updated=$(jq --arg id "$project_id" 'map(select(.id != $id))' "$projects_file")
-    echo "$updated" | jq --argjson entry "$entry" '. + [$entry]' > "$projects_file.tmp"
-    mv "$projects_file.tmp" "$projects_file"
-    echo -e "${GREEN}✓${NC}"
-
-    # Trigger initial index
-    echo -n "  Indexing project.............. "
-    local index_result=$(curl -s -X POST "${INDEX_URL}/project/register" \
-        -H "Content-Type: application/json" \
-        -d "{\"id\": \"${project_id}\", \"name\": \"${project_name}\", \"path\": \"${project_root}\"}" 2>/dev/null)
-
-    if echo "$index_result" | jq -e '.success' > /dev/null 2>&1; then
-        local file_count=$(echo "$index_result" | jq -r '.files // 0')
-        echo -e "${GREEN}✓${NC} ${DIM}(${file_count} files)${NC}"
-    else
-        echo -e "${YELLOW}pending${NC} ${DIM}(will index on first search)${NC}"
-    fi
-
-    echo
-    echo -e "${GREEN}${BOLD}✓ aOa enabled for ${project_name}${NC}"
-    echo
-    echo -e "${DIM}Restart Claude Code to activate hooks.${NC}"
-    echo -e "${DIM}Then try: aoa search <term>${NC}"
-    echo
-}
-
-cmd_remove() {
-    echo -e "${CYAN}${BOLD}⚡ aOa - Removing from Project${NC}"
-    echo
-
-    local project_root=$(get_project_root)
-    if [ -z "$project_root" ]; then
-        echo -e "${RED}Not in a git repository.${NC}"
-        return 1
-    fi
-
-    local project_id=$(get_project_id)
-    local project_name=$(get_project_name)
-
-    echo -e "  Project: ${BOLD}${project_name}${NC}"
-    echo
-
-    # Check if initialized
-    if [ ! -f "$project_root/.claude/hooks/aoa-status-line.sh" ]; then
-        echo -e "${DIM}aOa not initialized in this project.${NC}"
-        return 0
-    fi
-
-    # Remove hooks
-    echo -n "  Removing hooks................ "
-    rm -f "$project_root/.claude/hooks/aoa-"* 2>/dev/null || true
-    echo -e "${GREEN}✓${NC}"
-
-    # Remove skills (all aoa* folders and files)
-    echo -n "  Removing skills............... "
-    rm -rf "$project_root/.claude/skills/aoa"* 2>/dev/null || true
-    echo -e "${GREEN}✓${NC}"
-
-    # Remove agents
-    echo -n "  Removing agents............... "
-    rm -f "$project_root/.claude/agents/aoa-"* 2>/dev/null || true
-    echo -e "${GREEN}✓${NC}"
-
-    # Remove entire .aoa/ folder (full cleanup)
-    echo -n "  Removing .aoa/ folder......... "
-    rm -rf "$project_root/.aoa" 2>/dev/null || true
-    echo -e "${GREEN}✓${NC}"
-
-    # Remove from projects.json
-    echo -n "  Unregistering project......... "
-    local projects_file="$AOA_DATA/projects.json"
-    if [ -f "$projects_file" ]; then
-        jq --arg id "$project_id" 'map(select(.id != $id))' "$projects_file" > "$projects_file.tmp"
-        mv "$projects_file.tmp" "$projects_file"
-    fi
-    echo -e "${GREEN}✓${NC}"
-
-    # Notify service to remove index
-    echo -n "  Removing index................ "
-    curl -s -X DELETE "${INDEX_URL}/project/${project_id}" > /dev/null 2>&1 || true
-    echo -e "${GREEN}✓${NC}"
-
-    # Clean up CLAUDE.md - remove aOa Integration section
-    echo -n "  Cleaning CLAUDE.md............ "
-    local claude_md="$project_root/CLAUDE.md"
-    if [ -f "$claude_md" ] && grep -q "# aOa Integration" "$claude_md"; then
-        # Remove the aOa Integration section (from marker to next # heading or EOF)
-        sed -i '/^# aOa Integration$/,/^# [^a]/{/^# [^a]/!d}' "$claude_md" 2>/dev/null
-        # Clean up any trailing empty lines
-        sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$claude_md" 2>/dev/null
-        echo -e "${GREEN}✓${NC}"
-    else
-        echo -e "${DIM}not present${NC}"
-    fi
-
-    # Restore settings from backup if available
-    echo -n "  Restoring settings............ "
-    # Find the most recent backup
-    local backup=$(ls -t "$project_root/.claude/settings.local.json.pre-aoa-"* 2>/dev/null | head -1)
-
-    if [ -f "$project_root/.claude/settings.local.json" ]; then
-        if [ -n "$backup" ]; then
-            # Backup exists - restore original settings
-            mv "$backup" "$project_root/.claude/settings.local.json"
-            # Clean up any other backups
-            rm -f "$project_root/.claude/settings.local.json.pre-aoa-"* 2>/dev/null
-            echo -e "${GREEN}restored from backup${NC}"
-        else
-            # No backup - check if it's just our template
-            local template_hash=$(md5sum "$AOA_DATA/settings.template.json" 2>/dev/null | cut -d' ' -f1)
-            local settings_hash=$(md5sum "$project_root/.claude/settings.local.json" 2>/dev/null | cut -d' ' -f1)
-
-            if [ "$template_hash" = "$settings_hash" ]; then
-                rm -f "$project_root/.claude/settings.local.json"
-                echo -e "${GREEN}removed${NC}"
-            else
-                echo -e "${YELLOW}preserved (has customizations)${NC}"
-            fi
-        fi
-    else
-        echo -e "${DIM}not found${NC}"
-    fi
-
-    # Clean up empty directories
-    echo -n "  Cleaning directories.......... "
-    rmdir "$project_root/.claude/hooks" 2>/dev/null || true
-    rmdir "$project_root/.claude/skills" 2>/dev/null || true
-    rmdir "$project_root/.claude/agents" 2>/dev/null || true
-    rmdir "$project_root/.claude" 2>/dev/null || true
-    echo -e "${GREEN}✓${NC}"
-
-    echo
-    echo -e "${GREEN}${BOLD}✓ aOa removed from ${project_name}${NC}"
-    echo
-    echo -e "${DIM}Restart Claude Code to deactivate hooks.${NC}"
-    echo
-}
-
-cmd_projects() {
-    echo -e "${BOLD}aOa Projects${NC}"
-    echo
-
-    local projects_file="$AOA_DATA/projects.json"
-
-    if [ ! -f "$projects_file" ]; then
-        echo -e "${DIM}No projects registered.${NC}"
-        echo -e "${DIM}Run 'aoa init' in a project to enable aOa.${NC}"
-        return 0
-    fi
-
-    local count=$(jq 'length' "$projects_file" 2>/dev/null)
-
-    if [ "$count" = "0" ] || [ -z "$count" ]; then
-        echo -e "${DIM}No projects registered.${NC}"
-        echo -e "${DIM}Run 'aoa init' in a project to enable aOa.${NC}"
-        return 0
-    fi
-
-    # Get current project for highlighting
-    local current_id=$(get_project_id)
-
-    # List projects
-    jq -r '.[] | "\(.id)|\(.name)|\(.path)"' "$projects_file" | while IFS='|' read -r id name path; do
-        if [ "$id" = "$current_id" ]; then
-            echo -e "  ${GREEN}▸${NC} ${BOLD}${name}${NC} ${DIM}${path}${NC} ${GREEN}(current)${NC}"
-        else
-            # Check if path still exists
-            if [ -d "$path" ]; then
-                echo -e "  ${DIM}•${NC} ${name} ${DIM}${path}${NC}"
-            else
-                echo -e "  ${RED}✗${NC} ${name} ${DIM}${path}${NC} ${RED}(missing)${NC}"
-            fi
-        fi
-    done
-
-    echo
-    echo -e "${DIM}${count} project(s) registered${NC}"
-}
-
 # =============================================================================
-# Local Index Commands (default)
+# SECTION 10: Core Search Commands - HOT PATH
+# =============================================================================
+#
+# PURPOSE
+#   Primary search interface. These commands run constantly and are optimized
+#   for O(1) response time via pre-built inverted index.
+#
+# PERFORMANCE
+#   grep:  <5ms  - Hash lookup in inverted index, pre-cached content
+#   egrep: <20ms - Regex scan on working set (~30-50 recent files)
+#
+# DEPENDENCIES
+#   - 01-constants.sh: INDEX_URL, colors
+#   - 02-utils.sh: get_project_id()
+#
+# COMMANDS PROVIDED
+#   cmd_grep       O(1) indexed symbol search (primary)
+#   cmd_egrep      Regex search on working set
+#   cmd_search     Alias for cmd_grep
+#   cmd_multi      Alias for cmd_grep -a
+#
+# UNIX PARITY
+#   Supports: -i, -w, -c, -q, -e, -E, -r, -n, -H, -F
+#   See CLAUDE.md for full parity table
+#
 # =============================================================================
 
 cmd_grep() {
@@ -658,6 +229,37 @@ cmd_grep() {
             --today)
                 since="24h"
                 shift
+                ;;
+            -E|--extended-regexp)
+                # Unix parity: grep -E routes to egrep
+                shift
+                cmd_egrep "$@"
+                return $?
+                ;;
+            -r|-R|--recursive)
+                # No-op: aOa is always recursive (searches entire index)
+                shift
+                ;;
+            -n|--line-number)
+                # No-op: aOa always shows line numbers
+                shift
+                ;;
+            -H|--with-filename)
+                # No-op: aOa always shows filenames
+                shift
+                ;;
+            -F|--fixed-strings)
+                # No-op: aOa grep is already literal/symbol-based
+                shift
+                ;;
+            -e|--regexp)
+                # Unix parity: grep -e foo -e bar → OR search
+                if [ -z "$query" ]; then
+                    query="$2"
+                else
+                    query="$query $2"
+                fi
+                shift 2
                 ;;
             -*)
                 echo "Unknown flag: $1"
@@ -764,6 +366,7 @@ cmd_grep() {
 
     if [ "$and_mode" = true ]; then
         # AND mode: use /multi endpoint
+        export AOA_SEARCH_TYPE="multi-and"
         local json_terms=$(echo "$query" | tr ',' '\n' | jq -R . | jq -s .)
 
         local body="{\"terms\": ${json_terms}, \"mode\": \"${mode}\", \"limit\": ${limit}"
@@ -791,17 +394,36 @@ cmd_grep() {
             display_ranked_grep_results "$result" "$query" "$ms" "$count"
         fi
     else
-        # Fast symbol search with /symbol endpoint (O(1) indexed)
-        local encoded_query=$(printf '%s' "$query" | jq -sRr @uri)
+        # GL-048: Space-separated terms → OR search via /multi endpoint
+        # Unix parity: "foo bar" means search for foo OR bar
+        if [[ "$query" == *" "* ]]; then
+            # Split on spaces and use /multi for OR search
+            export AOA_SEARCH_TYPE="multi-or"
+            local json_terms=$(echo "$query" | tr ' ' '\n' | grep -v '^$' | jq -R . | jq -s .)
 
-        # Build query params
-        local params="q=${encoded_query}&mode=${mode}&limit=${limit}${project_param}"
-        [ "$case_insensitive" = true ] && params="${params}&ci=1"
-        [ "$word_boundary" = true ] && params="${params}&word=1"
-        [ -n "$since_seconds" ] && params="${params}&since=${since_seconds}"
-        [ -n "$before_seconds" ] && params="${params}&before=${before_seconds}"
+            local body="{\"terms\": ${json_terms}, \"mode\": \"${mode}\", \"limit\": ${limit}, \"operator\": \"or\""
+            [ -n "$project_id" ] && body="${body}, \"project\": \"${project_id}\""
+            [ -n "$since_seconds" ] && body="${body}, \"since\": ${since_seconds}"
+            [ -n "$before_seconds" ] && body="${body}, \"before\": ${before_seconds}"
+            body="${body}}"
 
-        result=$(curl -s "${INDEX_URL}/symbol?${params}")
+            result=$(curl -s -X POST "${INDEX_URL}/multi" \
+                -H "Content-Type: application/json" \
+                -d "$body")
+        else
+            # Fast symbol search with /symbol endpoint (O(1) indexed)
+            export AOA_SEARCH_TYPE="indexed"
+            local encoded_query=$(printf '%s' "$query" | jq -sRr @uri)
+
+            # Build query params
+            local params="q=${encoded_query}&mode=${mode}&limit=${limit}${project_param}"
+            [ "$case_insensitive" = true ] && params="${params}&ci=1"
+            [ "$word_boundary" = true ] && params="${params}&word=1"
+            [ -n "$since_seconds" ] && params="${params}&since=${since_seconds}"
+            [ -n "$before_seconds" ] && params="${params}&before=${before_seconds}"
+
+            result=$(curl -s "${INDEX_URL}/symbol?${params}")
+        fi
         ms=$(echo "$result" | jq -r '.ms // 0')
         count=$(echo "$result" | jq -r '.results | length')
 
@@ -869,30 +491,7 @@ display_ranked_grep_results() {
 
 # Keep old function name for backwards compatibility
 display_ranked_grep_results_verbose() {
-    # Old verbose implementation preserved if needed
     display_ranked_grep_results "$@"
-}
-
-# Placeholder for remaining files logic (removed - show all like grep)
-_deprecated_remaining_files() {
-    local remaining_count=0
-    if [ $remaining_count -gt 0 ]; then
-        printf "${DIM}─── %d more files ───${NC}\n" "$remaining_count"
-        local idx=0
-        local max_remaining=10
-        while IFS= read -r file; do
-            [ -z "$file" ] && continue
-            echo -e "$top_files" | grep -qx "$file" && continue
-            [ $idx -ge $max_remaining ] && break
-
-            local file_hits=$(echo "$files_with_lines" | grep -c "^${file}:" || echo 1)
-            printf "  %s ${DIM}(%d hits)${NC}\n" "$file" "$file_hits"
-            idx=$((idx + 1))
-        done <<< "$sorted_files"
-
-        local hidden=$((remaining_count - idx))
-        [ $hidden -gt 0 ] && printf "  ${DIM}... and %d more${NC}\n" "$hidden"
-    fi
 }
 
 # GL-045: Display semantic grep results (content search with structural context)
@@ -1003,56 +602,187 @@ cmd_multi() {
     cmd_grep -a "$@"
 }
 
-cmd_changes() {
-    local since="${1:-300}"
-    local project_id=$(get_project_id)
-    local project_param=""
-    if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
-    fi
-
-    # Parse time strings
-    if [[ "$since" =~ ^([0-9]+)([smh])$ ]]; then
-        local num="${BASH_REMATCH[1]}"
-        local unit="${BASH_REMATCH[2]}"
-        case "$unit" in
-            s) since=$num ;;
-            m) since=$((num * 60)) ;;
-            h) since=$((num * 3600)) ;;
-        esac
-    fi
-
-    local result=$(curl -s "${INDEX_URL}/changes?since=${since}${project_param}")
-
-    echo -e "${GREEN}Added:${NC}"
-    echo "$result" | jq -r '.added[]' 2>/dev/null || echo "  (none)"
-
-    echo -e "${YELLOW}Modified:${NC}"
-    echo "$result" | jq -r '.modified[].file' 2>/dev/null || echo "  (none)"
-
-    echo -e "${RED}Deleted:${NC}"
-    echo "$result" | jq -r '.deleted[]' 2>/dev/null || echo "  (none)"
-}
-
-cmd_files() {
-    local pattern="$1"
-    local mode="${2:-recent}"
-    local limit="${3:-30}"
-
-    local project_id=$(get_project_id)
-    local project_param=""
-    if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
-    fi
-
-    local url="${INDEX_URL}/files?mode=${mode}&limit=${limit}${project_param}"
-    [ -n "$pattern" ] && url="${url}&match=${pattern}"
-
-    curl -s "$url" | jq -r '.results[] | "\(.path) (\(.language))"'
-}
-
 # =============================================================================
-# File Discovery Commands (Unix parity)
+# Extended Regex Search (egrep)
+# =============================================================================
+# Regex search on working set (~30-50 recent files).
+# Use grep for full indexed search.
+
+cmd_egrep() {
+    # aoa egrep "regex"                    - Simple regex search
+    # aoa egrep '{"name": "regex"}'        - Named pattern (legacy JSON format)
+    # aoa egrep "regex" --repo flask       - Search in knowledge repo
+    # aoa egrep "regex" --since 7d         - Filter by time
+    local pattern=""
+    local repo=""
+    local since=""
+
+    # Unix parity: handle flags before pattern
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --repo) repo="$2"; shift 2 ;;
+            --since) since="$2"; shift 2 ;;
+            # Unix parity: accept common flags as no-ops
+            -i|--ignore-case) shift ;;  # regex is case-sensitive by default, no-op for now
+            -r|-R|--recursive) shift ;; # always recursive
+            -n|--line-number) shift ;;  # always shows line numbers
+            -H|--with-filename) shift ;; # always shows filenames
+            -c|--count) shift ;;        # not implemented, no-op
+            -q|--quiet) shift ;;        # not implemented, no-op
+            -e|--regexp)
+                # -e pattern syntax
+                if [ -z "$pattern" ]; then
+                    pattern="$2"
+                else
+                    pattern="$pattern|$2"  # Combine with OR for egrep
+                fi
+                shift 2
+                ;;
+            -*)
+                # Unknown flag - skip silently for compatibility
+                shift
+                ;;
+            *)
+                # First non-flag argument is the pattern
+                if [ -z "$pattern" ]; then
+                    pattern="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [ -z "$pattern" ]; then
+        echo "Usage: aoa egrep <regex> [--repo name] [--since time]"
+        echo ""
+        echo "Examples:"
+        echo '  aoa egrep "TODO|FIXME"                # Simple regex'
+        echo '  aoa egrep "def\\s+handle\\w+"         # Function pattern'
+        echo '  aoa egrep "class\\s+\\w+" --since 7d  # With time filter'
+        echo '  aoa egrep "Blueprint" --repo flask    # In knowledge repo'
+        echo ""
+        echo "Note: Searches working set (~30-50 recent files), not full index."
+        echo "      Use 'aoa grep' for full indexed search."
+        return 1
+    fi
+
+    # Parse since time string
+    local since_seconds=""
+    if [ -n "$since" ]; then
+        if [[ "$since" =~ ^([0-9]+)([smhd])$ ]]; then
+            local num="${BASH_REMATCH[1]}"
+            local unit="${BASH_REMATCH[2]}"
+            case "$unit" in
+                s) since_seconds=$num ;;
+                m) since_seconds=$((num * 60)) ;;
+                h) since_seconds=$((num * 3600)) ;;
+                d) since_seconds=$((num * 86400)) ;;
+            esac
+        else
+            since_seconds="$since"
+        fi
+    fi
+
+    # Handle both simple string and JSON pattern formats
+    local patterns
+    if [[ "$pattern" == "{"* ]]; then
+        # Already JSON format
+        patterns="$pattern"
+    else
+        # Simple string - wrap in JSON with "match" key
+        local escaped=$(printf '%s' "$pattern" | jq -Rs .)
+        patterns="{\"match\": ${escaped}}"
+    fi
+
+    # Build request body
+    export AOA_SEARCH_TYPE="regex"
+    local project_id=$(get_project_id)
+    local body="{\"patterns\": ${patterns}"
+    [ -n "$repo" ] && body="${body}, \"repo\": \"${repo}\""
+    [ -n "$since_seconds" ] && body="${body}, \"since\": ${since_seconds}"
+    [ -n "$project_id" ] && body="${body}, \"project\": \"${project_id}\""
+    body="${body}}"
+
+    local url="${INDEX_URL}/pattern"
+    [ -n "$repo" ] && url="${INDEX_URL}/repo/${repo}/pattern"
+
+    local result=$(curl -s -X POST "$url" \
+        -H "Content-Type: application/json" \
+        -d "$body")
+
+    local err=$(echo "$result" | jq -r '.error // empty')
+    if [ -n "$err" ]; then
+        echo -e "${RED}${err}${NC}"
+        return 1
+    fi
+
+    local ms=$(echo "$result" | jq -r '.stats.ms')
+    local files_searched=$(echo "$result" | jq -r '.stats.files_searched')
+    local files_matched=$(echo "$result" | jq -r '.stats.files_matched')
+
+    # Count total hits and unique files (same as grep)
+    local hits=$(echo "$result" | jq '[.results | to_entries[].value | length] | add // 0')
+    local file_count=$(echo "$result" | jq -r '[.results | to_entries[].value[].file] | unique | length')
+
+    # Get rolling intent from API response (GL-046 unified - same as grep)
+    # Note: API returns tags with # prefix already, don't double it
+    local rolling_intent=$(echo "$result" | jq -r '.rolling_intent // [] | join(" ")' 2>/dev/null)
+
+    # Header: IDENTICAL to grep - hits | files | timing | intent tags
+    printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}" "$hits" "$file_count" "$ms"
+    if [ -n "$rolling_intent" ] && [ "$rolling_intent" != "" ]; then
+        printf " ${DIM}│${NC} ${CYAN}%s${NC}" "$rolling_intent"
+    fi
+    printf "\n\n"
+
+    # GL-046 Unified Output: Same format as grep
+    # Deduplicate by file:line to match grep behavior
+    echo "$result" | jq -r '
+        [.results | to_entries[].value[]] |
+        unique_by("\(.file):\(.line)") |
+        .[] |
+        # Build symbol info (same as grep)
+        (if .symbol then
+            if .end_line then "\(.symbol)[\(.line)-\(.end_line)]"
+            else "\(.symbol)[\(.line)]"
+            end
+        else "<module>"
+        end) as $sym |
+        # Build tags (max 3, same as grep) - tags already have # prefix from API
+        ((.tags // []) | .[0:3] | join(" ")) as $tags |
+        # Format: file:line: symbol content  #tags (IDENTICAL to grep)
+        "\u001b[1m\(.file)\u001b[0m\u001b[2m:\(.line):\u001b[0m \u001b[33m\($sym)\u001b[0m" +
+        (if .context then " \u001b[2m\(.context)\u001b[0m" else "" end) +
+        (if ($tags | length) > 0 then "  \u001b[36m\($tags)\u001b[0m" else "" end)
+    '
+}
+
+# Deprecated: use cmd_egrep instead
+cmd_pattern() {
+    cmd_egrep "$@"
+}
+# =============================================================================
+# SECTION 20: File Discovery Commands
+# =============================================================================
+#
+# PURPOSE
+#   File operations with familiar Unix syntax. Find files by pattern, view
+#   directory structure, and access file contents.
+#
+# DEPENDENCIES
+#   - 01-constants.sh: INDEX_URL, colors
+#   - 02-utils.sh: get_project_id()
+#
+# COMMANDS PROVIDED
+#   cmd_find      Find files by glob pattern
+#   cmd_tree      Show directory structure
+#   cmd_locate    Fast filename search
+#   cmd_head      Show first N lines
+#   cmd_tail      Show last N lines
+#   cmd_lines     Show specific line range
+#   cmd_changes   Recently changed files
+#   cmd_files     List indexed files
+#
 # =============================================================================
 
 cmd_find() {
@@ -1284,8 +1014,55 @@ cmd_lines() {
     echo "$result" | jq -r '.content // .lines[]'
 }
 
+cmd_changes() {
+    local since="${1:-300}"
+    local project_id=$(get_project_id)
+    local project_param=""
+    if [ -n "$project_id" ]; then
+        project_param="&project=${project_id}"
+    fi
+
+    local result=$(curl -s "${INDEX_URL}/changes?since=${since}${project_param}")
+    local count=$(echo "$result" | jq -r '.results | length')
+
+    printf "${CYAN}${BOLD}📝 %s changed files${NC} ${DIM}(last %ss)${NC}\n" "$count" "$since"
+    echo "$result" | jq -r '.results[] | "  \(.file) (\(.changes) changes)"'
+}
+
+cmd_files() {
+    local limit="${1:-20}"
+    local project_id=$(get_project_id)
+    local project_param=""
+    if [ -n "$project_id" ]; then
+        project_param="&project=${project_id}"
+    fi
+
+    local result=$(curl -s "${INDEX_URL}/files?limit=${limit}${project_param}")
+    local count=$(echo "$result" | jq -r '.results | length')
+
+    printf "${CYAN}${BOLD}📁 %s files${NC}\n" "$count"
+    echo "$result" | jq -r '.results[] | "  \(.path)"'
+}
 # =============================================================================
-# Behavioral Commands (aOa unique - no Unix equivalent)
+# SECTION 30: Analytics & Behavioral Commands
+# =============================================================================
+#
+# PURPOSE
+#   Behavioral analysis unique to aOa. These commands learn from usage
+#   patterns to predict which files you'll need next. No Unix equivalent.
+#
+# DEPENDENCIES
+#   - 01-constants.sh: INDEX_URL, colors
+#   - 02-utils.sh: get_project_id()
+#
+# COMMANDS PROVIDED
+#   cmd_hot        Show frequently accessed files
+#   cmd_enrich     Add/update tags for a file
+#   cmd_touched    Recently touched files
+#   cmd_focus      Files related to current focus
+#   cmd_predict    Predict next files based on intent
+#   cmd_outline    Show file structure (functions, classes)
+#
 # =============================================================================
 
 cmd_hot() {
@@ -1861,6 +1638,31 @@ cmd_outline_status() {
 }
 
 # =============================================================================
+# SECTION 40: Knowledge Repository Commands
+# =============================================================================
+#
+# PURPOSE
+#   Manage external knowledge repositories (cloned from GitHub). These provide
+#   searchable reference documentation for frameworks and libraries.
+#
+# DEPENDENCIES
+#   - 01-constants.sh: INDEX_URL, colors
+#   - 02-utils.sh: get_project_id()
+#
+# COMMANDS PROVIDED
+#   cmd_repo        Main repo command dispatcher
+#   cmd_repo_list   List available repos
+#   cmd_repo_add    Clone and index a repo
+#   cmd_repo_remove Remove a repo
+#   cmd_repo_search Search within a repo
+#   cmd_repo_multi  Multi-term repo search
+#   cmd_repo_files  List repo files
+#   cmd_repo_file   Get file content from repo
+#   cmd_repo_deps   Show file dependencies
+#
+# =============================================================================
+
+# =============================================================================
 # Knowledge Repo Commands
 # =============================================================================
 
@@ -2111,136 +1913,28 @@ cmd_repo_deps() {
 }
 
 # =============================================================================
-# Extended Regex Search (egrep)
+# SECTION 50: Intent Tracking System
 # =============================================================================
-
-cmd_egrep() {
-    # aoa egrep "regex"                    - Simple regex search
-    # aoa egrep '{"name": "regex"}'        - Named pattern (legacy JSON format)
-    # aoa egrep "regex" --repo flask       - Search in knowledge repo
-    # aoa egrep "regex" --since 7d         - Filter by time
-    local pattern="$1"
-    shift || true
-
-    local repo=""
-    local since=""
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --repo|-r) repo="$2"; shift 2 ;;
-            --since|-s) since="$2"; shift 2 ;;
-            *) shift ;;
-        esac
-    done
-
-    if [ -z "$pattern" ]; then
-        echo "Usage: aoa egrep <regex> [--repo name] [--since time]"
-        echo ""
-        echo "Examples:"
-        echo '  aoa egrep "TODO|FIXME"                # Simple regex'
-        echo '  aoa egrep "def\\s+handle\\w+"         # Function pattern'
-        echo '  aoa egrep "class\\s+\\w+" --since 7d  # With time filter'
-        echo '  aoa egrep "Blueprint" --repo flask    # In knowledge repo'
-        echo ""
-        echo "Note: Searches working set (~30-50 recent files), not full index."
-        echo "      Use 'aoa grep' for full indexed search."
-        return 1
-    fi
-
-    # Parse since time string
-    local since_seconds=""
-    if [ -n "$since" ]; then
-        if [[ "$since" =~ ^([0-9]+)([smhd])$ ]]; then
-            local num="${BASH_REMATCH[1]}"
-            local unit="${BASH_REMATCH[2]}"
-            case "$unit" in
-                s) since_seconds=$num ;;
-                m) since_seconds=$((num * 60)) ;;
-                h) since_seconds=$((num * 3600)) ;;
-                d) since_seconds=$((num * 86400)) ;;
-            esac
-        else
-            since_seconds="$since"
-        fi
-    fi
-
-    # Handle both simple string and JSON pattern formats
-    local patterns
-    if [[ "$pattern" == "{"* ]]; then
-        # Already JSON format
-        patterns="$pattern"
-    else
-        # Simple string - wrap in JSON with "match" key
-        local escaped=$(printf '%s' "$pattern" | jq -Rs .)
-        patterns="{\"match\": ${escaped}}"
-    fi
-
-    # Build request body
-    local project_id=$(get_project_id)
-    local body="{\"patterns\": ${patterns}"
-    [ -n "$repo" ] && body="${body}, \"repo\": \"${repo}\""
-    [ -n "$since_seconds" ] && body="${body}, \"since\": ${since_seconds}"
-    [ -n "$project_id" ] && body="${body}, \"project\": \"${project_id}\""
-    body="${body}}"
-
-    local url="${INDEX_URL}/pattern"
-    [ -n "$repo" ] && url="${INDEX_URL}/repo/${repo}/pattern"
-
-    local result=$(curl -s -X POST "$url" \
-        -H "Content-Type: application/json" \
-        -d "$body")
-
-    local err=$(echo "$result" | jq -r '.error // empty')
-    if [ -n "$err" ]; then
-        echo -e "${RED}${err}${NC}"
-        return 1
-    fi
-
-    local ms=$(echo "$result" | jq -r '.stats.ms')
-    local files_searched=$(echo "$result" | jq -r '.stats.files_searched')
-    local files_matched=$(echo "$result" | jq -r '.stats.files_matched')
-
-    # Count total hits and unique files (same as grep)
-    local hits=$(echo "$result" | jq '[.results | to_entries[].value | length] | add // 0')
-    local file_count=$(echo "$result" | jq -r '[.results | to_entries[].value[].file] | unique | length')
-
-    # Get rolling intent from API response (GL-046 unified - same as grep)
-    # Note: API returns tags with # prefix already, don't double it
-    local rolling_intent=$(echo "$result" | jq -r '.rolling_intent // [] | join(" ")' 2>/dev/null)
-
-    # Header: IDENTICAL to grep - hits | files | timing | intent tags
-    printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}" "$hits" "$file_count" "$ms"
-    if [ -n "$rolling_intent" ] && [ "$rolling_intent" != "" ]; then
-        printf " ${DIM}│${NC} ${CYAN}%s${NC}" "$rolling_intent"
-    fi
-    printf "\n\n"
-
-    # GL-046 Unified Output: Same format as grep
-    # Deduplicate by file:line to match grep behavior
-    echo "$result" | jq -r '
-        [.results | to_entries[].value[]] |
-        unique_by("\(.file):\(.line)") |
-        .[] |
-        # Build symbol info (same as grep)
-        (if .symbol then
-            if .end_line then "\(.symbol)[\(.line)-\(.end_line)]"
-            else "\(.symbol)[\(.line)]"
-            end
-        else "<module>"
-        end) as $sym |
-        # Build tags (max 3, same as grep) - tags already have # prefix from API
-        ((.tags // []) | .[0:3] | join(" ")) as $tags |
-        # Format: file:line: symbol content  #tags (IDENTICAL to grep)
-        "\u001b[1m\(.file)\u001b[0m\u001b[2m:\(.line):\u001b[0m \u001b[33m\($sym)\u001b[0m" +
-        (if .context then " \u001b[2m\(.context)\u001b[0m" else "" end) +
-        (if ($tags | length) > 0 then "  \u001b[36m\($tags)\u001b[0m" else "" end)
-    '
-}
-
-# Deprecated: use cmd_egrep instead
-cmd_pattern() {
-    cmd_egrep "$@"
-}
+#
+# PURPOSE
+#   Tracks user intent through tool calls and queries. Used to predict
+#   relevant files and understand workflow patterns over time.
+#
+# DEPENDENCIES
+#   - 01-constants.sh: INDEX_URL, colors
+#   - 02-utils.sh: get_project_id()
+#
+# COMMANDS PROVIDED
+#   cmd_intent        Main intent command dispatcher
+#   cmd_intent_recent Show recent intents
+#   cmd_intent_tags   Show intent-derived tags
+#   cmd_intent_files  Files touched by recent intent
+#   cmd_intent_file   Intent history for a specific file
+#   cmd_intent_stats  Intent statistics
+#   cmd_intent_store  Store a new intent
+#   cmd_rate          Rate a prediction (feedback loop)
+#
+# =============================================================================
 
 # =============================================================================
 # Intent Commands
@@ -2679,9 +2373,13 @@ PYEOF
                 [ "$time_int" -gt 5 ] && search_type="egrep"
             fi
             case "$search_type" in
-                grep|search)  attribution="${CYAN}symbol${NC}" ;;
-                egrep|pattern) attribution="${CYAN}pattern${NC}" ;;
-                multi)        attribution="${CYAN}multi${NC}" ;;
+                indexed)      attribution="${CYAN}indexed${NC}" ;;
+                multi-or)     attribution="${CYAN}multi-or${NC}" ;;
+                multi-and)    attribution="${CYAN}multi-and${NC}" ;;
+                regex)        attribution="${CYAN}regex${NC}" ;;
+                grep|search)  attribution="${CYAN}indexed${NC}" ;;
+                egrep|pattern) attribution="${CYAN}regex${NC}" ;;
+                multi)        attribution="${CYAN}multi-and${NC}" ;;
                 find)         attribution="${CYAN}files${NC}" ;;
                 tree)         attribution="${CYAN}structure${NC}" ;;
                 locate)       attribution="${CYAN}filename${NC}" ;;
@@ -2690,7 +2388,7 @@ PYEOF
                 touched)      attribution="${CYAN}session${NC}" ;;
                 focus)        attribution="${CYAN}context${NC}" ;;
                 predict)      attribution="${CYAN}predicted${NC}" ;;
-                *)            attribution="${CYAN}symbol${NC}" ;;
+                *)            attribution="${CYAN}indexed${NC}" ;;
             esac
             # Truncate time to 2 decimal places
             local time_display=$(printf "%.2f" "$AOA_SEARCH_TIME" 2>/dev/null || echo "$AOA_SEARCH_TIME")
@@ -3019,6 +2717,34 @@ cmd_rate() {
     echo ""
     echo -e "${DIM}Note: Estimates based on typical Claude API processing speeds${NC}"
 }
+
+# =============================================================================
+# SECTION 60: System & Diagnostics
+# =============================================================================
+#
+# PURPOSE
+#   System management, health checks, and diagnostic tools. Used for
+#   troubleshooting, monitoring, and understanding aOa state.
+#
+# DEPENDENCIES
+#   - 01-constants.sh: INDEX_URL, STATUS_URL, colors
+#   - 02-utils.sh: get_project_id(), get_project_root()
+#
+# COMMANDS PROVIDED
+#   cmd_health      Check service health
+#   cmd_info        Show project/index info
+#   cmd_services    Show running services
+#   cmd_memory      Memory usage stats
+#   cmd_stats       Index statistics
+#   cmd_baseline    Token baseline calculations
+#   cmd_metrics     Performance metrics
+#   cmd_history     Command history
+#   cmd_reset       Reset index state
+#   cmd_whitelist   Manage file whitelist
+#   cmd_quickstart  Interactive setup wizard
+#   cmd_learn       Discover new patterns
+#
+# =============================================================================
 
 # =============================================================================
 # Utility Commands
@@ -4172,6 +3898,551 @@ cmd_whitelist() {
 }
 
 cmd_help() {
+# =============================================================================
+# SECTION 70: Setup & Configuration
+# =============================================================================
+#
+# PURPOSE
+#   Project setup commands. Run once per project to enable aOa. Creates
+#   .aoa/ directory, registers with index service, installs hooks.
+#
+# DEPENDENCIES
+#   - 01-constants.sh: INDEX_URL, AOA_HOME, colors
+#   - 02-utils.sh: get_project_id(), generate_project_id(), get_project_root()
+#
+# COMMANDS PROVIDED
+#   cmd_init       Initialize aOa for current project
+#   cmd_remove     Remove aOa from current project
+#   cmd_projects   List all aOa-enabled projects
+#
+# NOTE
+#   These commands modify the filesystem and should be run interactively.
+#   They create/delete .aoa/ directories and update global state.
+#
+# =============================================================================
+
+cmd_init() {
+    echo -e "${CYAN}${BOLD}⚡ aOa - Initializing Project${NC}"
+    echo
+
+    # Check if aOa is installed globally
+    if [ ! -d "$AOA_HOME" ]; then
+        echo -e "${RED}aOa not installed globally.${NC}"
+        echo -e "${DIM}Run ./install.sh from the aOa repository first.${NC}"
+        return 1
+    fi
+
+    # Check if we're in a git repo
+    local project_root=$(get_project_root)
+    if [ -z "$project_root" ]; then
+        echo -e "${RED}Not in a git repository.${NC}"
+        echo -e "${DIM}aOa requires a git repo to detect project boundaries.${NC}"
+        return 1
+    fi
+
+    local project_name=$(get_project_name)
+
+    # Check if already has a project_id, otherwise generate new one
+    local existing_id=$(get_project_id)
+    local project_id="${existing_id:-$(generate_project_id)}"
+
+    echo -e "  Project: ${BOLD}${project_name}${NC}"
+    echo -e "  Path:    ${DIM}${project_root}${NC}"
+    echo -e "  ID:      ${DIM}${project_id}${NC}"
+    echo
+
+    # Check if already initialized
+    if [ -f "$project_root/.claude/hooks/aoa-status-line.sh" ]; then
+        echo -e "${YELLOW}Project already initialized.${NC}"
+        echo -e "${DIM}Run 'aoa remove' first to reinitialize.${NC}"
+        return 0
+    fi
+
+    # Create .claude directories
+    mkdir -p "$project_root/.claude/hooks"
+    mkdir -p "$project_root/.claude/skills"
+
+    # Copy hooks from templates
+    echo -n "  Installing hooks.............. "
+    cp "$AOA_HOME/plugin/hooks/"*.py "$project_root/.claude/hooks/" 2>/dev/null || true
+    cp "$AOA_HOME/plugin/hooks/"*.sh "$project_root/.claude/hooks/" 2>/dev/null || true
+    chmod +x "$project_root/.claude/hooks/"*.py "$project_root/.claude/hooks/"*.sh 2>/dev/null || true
+    echo -e "${GREEN}✓${NC}"
+
+    # Copy skills (directory-based structure for Claude Code)
+    echo -n "  Installing skills............. "
+    for skill_dir in "$AOA_HOME/plugin/skills/"*/; do
+        if [ -d "$skill_dir" ]; then
+            cp -r "$skill_dir" "$project_root/.claude/skills/" 2>/dev/null || true
+        fi
+    done
+    echo -e "${GREEN}✓${NC}"
+
+    # Copy agents
+    echo -n "  Installing agents............. "
+    mkdir -p "$project_root/.claude/agents"
+    cp "$AOA_HOME/plugin/agents/"*.md "$project_root/.claude/agents/" 2>/dev/null || true
+    echo -e "${GREEN}✓${NC}"
+
+    # Create .aoa/ folder with home pointer
+    echo -n "  Creating .aoa/ config......... "
+    mkdir -p "$project_root/.aoa"
+
+    # home.json - project config with UUID identifier
+    cat > "$project_root/.aoa/home.json" << EOFHOME
+{
+  "aoa_home": "$AOA_HOME",
+  "data_dir": "$AOA_DATA",
+  "project_id": "$project_id",
+  "project_root": "$project_root"
+}
+EOFHOME
+
+    # whitelist.txt - optional repos/URLs for this project
+    if [ ! -f "$project_root/.aoa/whitelist.txt" ]; then
+        cat > "$project_root/.aoa/whitelist.txt" << 'EOFWHITELIST'
+# aOa Whitelist - URLs allowed for this project
+# Add one domain per line (HTTPS only)
+#
+# Examples:
+# github.com/your-org/repo
+# docs.your-company.com
+# internal-git.example.com
+EOFWHITELIST
+    fi
+
+    # README.md - explains the folder (only if not present)
+    if [ ! -f "$project_root/.aoa/README.md" ]; then
+        cat > "$project_root/.aoa/README.md" << 'EOFREADME'
+# .aoa - aOa Project Link
+
+This folder links this project to your global aOa installation.
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `home.json` | Points to global aOa install location |
+| `whitelist.txt` | Optional: extra URLs/repos for this project |
+
+## What is aOa?
+
+aOa (Angle of Attack) provides fast O(1) code search for Claude Code.
+It replaces slow Grep/Glob operations with indexed symbol lookup.
+
+## Commands
+
+```bash
+aoa search <term>    # Search this project
+aoa health           # Check services
+aoa remove           # Remove aOa from this project
+```
+
+## Global Settings
+
+To change aOa settings (port, confidence threshold, etc.),
+edit the config.json in your global aOa installation.
+EOFREADME
+    fi
+
+    # Copy USAGE.md - goal-oriented guide for Claude
+    cp "$AOA_HOME/plugin/USAGE.md" "$project_root/.aoa/USAGE.md" 2>/dev/null || true
+    echo -e "${GREEN}✓${NC}"
+
+    # Add aOa reference to CLAUDE.md
+    echo -n "  Updating CLAUDE.md............ "
+    local claude_md="$project_root/CLAUDE.md"
+    local aoa_marker="# aOa Integration"
+
+    if [ -f "$claude_md" ]; then
+        # Check if already has aOa section
+        if ! grep -q "$aoa_marker" "$claude_md" 2>/dev/null; then
+            # Append aOa reference
+            cat >> "$claude_md" << 'EOFCLAUDE'
+
+# aOa Integration
+
+**CRITICAL: Use `aoa grep` instead of Grep/Glob. It's 10-100x faster.**
+
+## Quickstart Triggers
+
+When user says **"Hey aOa"**, **"Tag my code"**, or **"aOa quickstart"**:
+
+1. Run `aoa outline --pending --json` to check pending files
+2. Respond with this (DO NOT read any files first):
+
+```
+⚡ aOa activated
+
+Your codebase is already indexed—fast symbol search works right now.
+Try it: `aoa grep [anything]`
+
+I found [X] files that need semantic compression.
+Let me tag these in the background. This is FREE—doesn't use your tokens.
+
+Takes about 2-3 minutes. To watch progress, open another terminal:
+  aoa intent
+
+Keep coding. I'm not blocking you.
+Once done, I'll find code by meaning, not just keywords.
+```
+
+3. Launch: `Task(subagent_type="aoa-outline", prompt="Tag all pending files", run_in_background=true)`
+
+## Commands
+
+| Command | Use For |
+|---------|---------|
+| `aoa grep <term>` | Find code fast (ALWAYS use instead of Grep) |
+| `aoa grep "a b c"` | Multi-term OR search |
+| `aoa grep -a a,b,c` | Multi-term AND search |
+| `aoa outline <file>` | See file structure without reading it all |
+| `aoa intent` | Track what's being worked on |
+
+## Rules
+
+- ✅ ALWAYS use `aoa grep` instead of Grep/Glob
+- ✅ Results show `function[start-end]` - use these line ranges for targeted reads
+- ✅ Tags like `#api #search` indicate what the code does semantically
+- ❌ DO NOT use subagents for codebase exploration (hooks don't work in subagents)
+
+## Hook Integration
+
+aOa hooks run on every prompt and tool use. When you see these in additionalContext:
+
+**aOa Auto-Tag Request**: Generate 3-5 semantic hashtags directly (YOU are the model), then store:
+\`\`\`bash
+curl -s -X POST localhost:8080/intent -H "Content-Type: application/json" -d '{"tool": "Intent", "tags": ["#your-tags"], ...}'
+\`\`\`
+
+**aOa Predicted Files**: Files predicted based on your prompt keywords. Consider these when exploring.
+
+See \`.aoa/USAGE.md\` for full guide.
+EOFCLAUDE
+            echo -e "${GREEN}✓${NC} ${DIM}(appended)${NC}"
+        else
+            echo -e "${YELLOW}✓${NC} ${DIM}(already present)${NC}"
+        fi
+    else
+        # Create CLAUDE.md with full aOa section
+        cat > "$claude_md" << 'EOFCLAUDE'
+# aOa Integration
+
+**CRITICAL: Use `aoa grep` instead of Grep/Glob. It's 10-100x faster.**
+
+## Quickstart Triggers
+
+When user says **"Hey aOa"**, **"Tag my code"**, or **"aOa quickstart"**:
+
+1. Run `aoa outline --pending --json` to check pending files
+2. Respond with this (DO NOT read any files first):
+
+```
+⚡ aOa activated
+
+Your codebase is already indexed—fast symbol search works right now.
+Try it: `aoa grep [anything]`
+
+I found [X] files that need semantic compression.
+Let me tag these in the background. This is FREE—doesn't use your tokens.
+
+Takes about 2-3 minutes. To watch progress, open another terminal:
+  aoa intent
+
+Keep coding. I'm not blocking you.
+Once done, I'll find code by meaning, not just keywords.
+```
+
+3. Launch: `Task(subagent_type="aoa-outline", prompt="Tag all pending files", run_in_background=true)`
+
+## Commands
+
+| Command | Use For |
+|---------|---------|
+| `aoa grep <term>` | Find code fast (ALWAYS use instead of Grep) |
+| `aoa grep "a b c"` | Multi-term OR search |
+| `aoa grep -a a,b,c` | Multi-term AND search |
+| `aoa outline <file>` | See file structure without reading it all |
+| `aoa intent` | Track what's being worked on |
+
+## Rules
+
+- ✅ ALWAYS use `aoa grep` instead of Grep/Glob
+- ✅ Results show `function[start-end]` - use these line ranges for targeted reads
+- ✅ Tags like `#api #search` indicate what the code does semantically
+- ❌ DO NOT use subagents for codebase exploration (hooks don't work in subagents)
+
+## Hook Integration
+
+aOa hooks run on every prompt and tool use. When you see these in additionalContext:
+
+**aOa Auto-Tag Request**: Generate 3-5 semantic hashtags directly (YOU are the model), then store:
+\`\`\`bash
+curl -s -X POST localhost:8080/intent -H "Content-Type: application/json" -d '{"tool": "Intent", "tags": ["#your-tags"], ...}'
+\`\`\`
+
+**aOa Predicted Files**: Files predicted based on your prompt keywords. Consider these when exploring.
+
+See \`.aoa/USAGE.md\` for full guide.
+EOFCLAUDE
+        echo -e "${GREEN}✓${NC} ${DIM}(created)${NC}"
+    fi
+
+    # Copy or merge settings template
+    echo -n "  Merging settings.............. "
+    if [ ! -f "$project_root/.claude/settings.local.json" ]; then
+        # No existing settings - copy template
+        cp "$AOA_DATA/settings.template.json" "$project_root/.claude/settings.local.json"
+        echo -e "${GREEN}✓${NC}"
+    else
+        # Backup existing settings
+        cp "$project_root/.claude/settings.local.json" \
+           "$project_root/.claude/settings.local.json.pre-aoa-$(date +%Y%m%d-%H%M%S)"
+
+        # Deep merge: preserve their settings, add our hooks/statusLine/permissions
+        jq -s '
+            # Start with their settings (index 1)
+            .[1] as $existing |
+            # Our template (index 0)
+            .[0] as $template |
+
+            # Merge strategy:
+            # - permissions.allow: union (combine both)
+            # - hooks: merge by type (combine hook arrays)
+            # - statusLine: use ours if missing
+            # - everything else: preserve theirs
+
+            $existing |
+            # Add our statusLine if missing
+            (if .statusLine == null then .statusLine = $template.statusLine else . end) |
+            # Merge permissions.allow
+            (if .permissions.allow then
+                .permissions.allow += $template.permissions.allow | .permissions.allow |= unique
+             else
+                .permissions = $template.permissions
+             end) |
+            # Merge hooks (deep merge by hook type)
+            (if .hooks then
+                .hooks = ($template.hooks * .hooks)
+             else
+                .hooks = $template.hooks
+             end)
+        ' "$AOA_DATA/settings.template.json" "$project_root/.claude/settings.local.json" \
+          > "$project_root/.claude/settings.local.json.new"
+
+        mv "$project_root/.claude/settings.local.json.new" "$project_root/.claude/settings.local.json"
+        echo -e "${GREEN}✓${NC} ${DIM}(merged, backup created)${NC}"
+    fi
+
+    # Register project in projects.json
+    echo -n "  Registering project........... "
+    local projects_file="$AOA_DATA/projects.json"
+    local now=$(date -Iseconds)
+
+    # Create entry
+    local entry=$(jq -n \
+        --arg id "$project_id" \
+        --arg name "$project_name" \
+        --arg path "$project_root" \
+        --arg added "$now" \
+        '{id: $id, name: $name, path: $path, added: $added}')
+
+    # Add to projects.json (remove existing entry with same id first)
+    local updated=$(jq --arg id "$project_id" 'map(select(.id != $id))' "$projects_file")
+    echo "$updated" | jq --argjson entry "$entry" '. + [$entry]' > "$projects_file.tmp"
+    mv "$projects_file.tmp" "$projects_file"
+    echo -e "${GREEN}✓${NC}"
+
+    # Trigger initial index
+    echo -n "  Indexing project.............. "
+    local index_result=$(curl -s -X POST "${INDEX_URL}/project/register" \
+        -H "Content-Type: application/json" \
+        -d "{\"id\": \"${project_id}\", \"name\": \"${project_name}\", \"path\": \"${project_root}\"}" 2>/dev/null)
+
+    if echo "$index_result" | jq -e '.success' > /dev/null 2>&1; then
+        local file_count=$(echo "$index_result" | jq -r '.files // 0')
+        echo -e "${GREEN}✓${NC} ${DIM}(${file_count} files)${NC}"
+    else
+        echo -e "${YELLOW}pending${NC} ${DIM}(will index on first search)${NC}"
+    fi
+
+    echo
+    echo -e "${GREEN}${BOLD}✓ aOa enabled for ${project_name}${NC}"
+    echo
+    echo -e "${DIM}Restart Claude Code to activate hooks.${NC}"
+    echo -e "${DIM}Then try: aoa search <term>${NC}"
+    echo
+}
+
+cmd_remove() {
+    echo -e "${CYAN}${BOLD}⚡ aOa - Removing from Project${NC}"
+    echo
+
+    local project_root=$(get_project_root)
+    if [ -z "$project_root" ]; then
+        echo -e "${RED}Not in a git repository.${NC}"
+        return 1
+    fi
+
+    local project_id=$(get_project_id)
+    local project_name=$(get_project_name)
+
+    echo -e "  Project: ${BOLD}${project_name}${NC}"
+    echo
+
+    # Check if initialized
+    if [ ! -f "$project_root/.claude/hooks/aoa-status-line.sh" ]; then
+        echo -e "${DIM}aOa not initialized in this project.${NC}"
+        return 0
+    fi
+
+    # Remove hooks
+    echo -n "  Removing hooks................ "
+    rm -f "$project_root/.claude/hooks/aoa-"* 2>/dev/null || true
+    echo -e "${GREEN}✓${NC}"
+
+    # Remove skills (all aoa* folders and files)
+    echo -n "  Removing skills............... "
+    rm -rf "$project_root/.claude/skills/aoa"* 2>/dev/null || true
+    echo -e "${GREEN}✓${NC}"
+
+    # Remove agents
+    echo -n "  Removing agents............... "
+    rm -f "$project_root/.claude/agents/aoa-"* 2>/dev/null || true
+    echo -e "${GREEN}✓${NC}"
+
+    # Remove entire .aoa/ folder (full cleanup)
+    echo -n "  Removing .aoa/ folder......... "
+    rm -rf "$project_root/.aoa" 2>/dev/null || true
+    echo -e "${GREEN}✓${NC}"
+
+    # Remove from projects.json
+    echo -n "  Unregistering project......... "
+    local projects_file="$AOA_DATA/projects.json"
+    if [ -f "$projects_file" ]; then
+        jq --arg id "$project_id" 'map(select(.id != $id))' "$projects_file" > "$projects_file.tmp"
+        mv "$projects_file.tmp" "$projects_file"
+    fi
+    echo -e "${GREEN}✓${NC}"
+
+    # Notify service to remove index
+    echo -n "  Removing index................ "
+    curl -s -X DELETE "${INDEX_URL}/project/${project_id}" > /dev/null 2>&1 || true
+    echo -e "${GREEN}✓${NC}"
+
+    # Clean up CLAUDE.md - remove aOa Integration section
+    echo -n "  Cleaning CLAUDE.md............ "
+    local claude_md="$project_root/CLAUDE.md"
+    if [ -f "$claude_md" ] && grep -q "# aOa Integration" "$claude_md"; then
+        # Remove the aOa Integration section (from marker to next # heading or EOF)
+        sed -i '/^# aOa Integration$/,/^# [^a]/{/^# [^a]/!d}' "$claude_md" 2>/dev/null
+        # Clean up any trailing empty lines
+        sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$claude_md" 2>/dev/null
+        echo -e "${GREEN}✓${NC}"
+    else
+        echo -e "${DIM}not present${NC}"
+    fi
+
+    # Restore settings from backup if available
+    echo -n "  Restoring settings............ "
+    # Find the most recent backup
+    local backup=$(ls -t "$project_root/.claude/settings.local.json.pre-aoa-"* 2>/dev/null | head -1)
+
+    if [ -f "$project_root/.claude/settings.local.json" ]; then
+        if [ -n "$backup" ]; then
+            # Backup exists - restore original settings
+            mv "$backup" "$project_root/.claude/settings.local.json"
+            # Clean up any other backups
+            rm -f "$project_root/.claude/settings.local.json.pre-aoa-"* 2>/dev/null
+            echo -e "${GREEN}restored from backup${NC}"
+        else
+            # No backup - check if it's just our template
+            local template_hash=$(md5sum "$AOA_DATA/settings.template.json" 2>/dev/null | cut -d' ' -f1)
+            local settings_hash=$(md5sum "$project_root/.claude/settings.local.json" 2>/dev/null | cut -d' ' -f1)
+
+            if [ "$template_hash" = "$settings_hash" ]; then
+                rm -f "$project_root/.claude/settings.local.json"
+                echo -e "${GREEN}removed${NC}"
+            else
+                echo -e "${YELLOW}preserved (has customizations)${NC}"
+            fi
+        fi
+    else
+        echo -e "${DIM}not found${NC}"
+    fi
+
+    # Clean up empty directories
+    echo -n "  Cleaning directories.......... "
+    rmdir "$project_root/.claude/hooks" 2>/dev/null || true
+    rmdir "$project_root/.claude/skills" 2>/dev/null || true
+    rmdir "$project_root/.claude/agents" 2>/dev/null || true
+    rmdir "$project_root/.claude" 2>/dev/null || true
+    echo -e "${GREEN}✓${NC}"
+
+    echo
+    echo -e "${GREEN}${BOLD}✓ aOa removed from ${project_name}${NC}"
+    echo
+    echo -e "${DIM}Restart Claude Code to deactivate hooks.${NC}"
+    echo
+}
+
+cmd_projects() {
+    echo -e "${BOLD}aOa Projects${NC}"
+    echo
+
+    local projects_file="$AOA_DATA/projects.json"
+
+    if [ ! -f "$projects_file" ]; then
+        echo -e "${DIM}No projects registered.${NC}"
+        echo -e "${DIM}Run 'aoa init' in a project to enable aOa.${NC}"
+        return 0
+    fi
+
+    local count=$(jq 'length' "$projects_file" 2>/dev/null)
+
+    if [ "$count" = "0" ] || [ -z "$count" ]; then
+        echo -e "${DIM}No projects registered.${NC}"
+        echo -e "${DIM}Run 'aoa init' in a project to enable aOa.${NC}"
+        return 0
+    fi
+
+    # Get current project for highlighting
+    local current_id=$(get_project_id)
+
+    # List projects
+    jq -r '.[] | "\(.id)|\(.name)|\(.path)"' "$projects_file" | while IFS='|' read -r id name path; do
+        if [ "$id" = "$current_id" ]; then
+            echo -e "  ${GREEN}▸${NC} ${BOLD}${name}${NC} ${DIM}${path}${NC} ${GREEN}(current)${NC}"
+        else
+            # Check if path still exists
+            if [ -d "$path" ]; then
+                echo -e "  ${DIM}•${NC} ${name} ${DIM}${path}${NC}"
+            else
+                echo -e "  ${RED}✗${NC} ${name} ${DIM}${path}${NC} ${RED}(missing)${NC}"
+            fi
+        fi
+    done
+
+    echo
+    echo -e "${DIM}${count} project(s) registered${NC}"
+}
+
+# =============================================================================
+# SECTION 80: Help & Documentation
+# =============================================================================
+#
+# PURPOSE
+#   Help text and usage documentation. Self-documenting commands that explain
+#   available options and provide examples.
+#
+# DEPENDENCIES
+#   - 01-constants.sh: colors (for formatted output)
+#
+# COMMANDS PROVIDED
+#   cmd_help      Main help command
+#
+# =============================================================================
+
     cat << 'EOF'
                               AOA
                        5 angles. 1 attack.
@@ -4268,6 +4539,23 @@ ALIASES
 
 EOF
 }
+
+# =============================================================================
+# SECTION 90: Main Entry Point
+# =============================================================================
+#
+# PURPOSE
+#   Command-line argument parsing and routing. This is where execution starts.
+#   Maps user commands to the appropriate cmd_* functions.
+#
+# DEPENDENCIES
+#   - All previous sections must be loaded
+#
+# ROUTING
+#   Arguments are matched against command names and dispatched to handlers.
+#   Unknown commands show help text.
+#
+# =============================================================================
 
 # =============================================================================
 # Main

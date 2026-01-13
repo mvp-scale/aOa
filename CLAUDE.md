@@ -190,6 +190,33 @@ Errors are information. Suppressing stderr:
 - Breaks the clean aOa experience
 - Reduces trust
 
+## Unix grep/egrep Parity
+
+aOa commands mirror Unix grep/egrep so they feel intuitive:
+
+| Unix Command | aOa Equivalent | Behavior |
+|--------------|----------------|----------|
+| `grep "foo"` | `aoa grep foo` | Single term search |
+| `grep -E "foo\|bar"` | `aoa grep -E "foo\|bar"` | Routes to egrep (regex) |
+| `grep "foo\|bar"` | `aoa grep "foo\|bar"` | OR search (pipe converted) |
+| `grep "foo bar"` | `aoa grep "foo bar"` | OR search (space-separated) |
+| `grep -e foo -e bar` | `aoa grep -e foo -e bar` | OR search (multiple patterns) |
+| `egrep "foo\|bar"` | `aoa egrep "foo\|bar"` | Regex OR search |
+| `egrep "foo.*bar"` | `aoa egrep "foo.*bar"` | Regex pattern |
+| `egrep -e foo -e bar` | `aoa egrep -e foo -e bar` | Multiple patterns (combined with `\|`) |
+| `egrep -r/-n/-H` | `aoa egrep` | No-ops (always recursive, shows lines/files) |
+| `grep -r` | `aoa grep` | Always recursive (no-op) |
+| `grep -n` | `aoa grep` | Always shows line numbers (no-op) |
+| `grep -H` | `aoa grep` | Always shows filenames (no-op) |
+| `grep -F` | `aoa grep` | Already literal search (no-op) |
+| `grep -c` | `aoa grep -c` | Count only |
+| `grep -i` | `aoa grep -i` | Case insensitive |
+| `grep -w` | `aoa grep -w` | Word boundary |
+| `grep -q` | `aoa grep -q` | Quiet mode (exit code only) |
+| `grep -l` | `aoa grep` (default) | List files with matches |
+
+**Key difference:** aOa `grep` searches indexed symbols (O(1)), while `egrep` uses regex on the working set.
+
 ## Commands
 
 | Command | Use For | Speed |
