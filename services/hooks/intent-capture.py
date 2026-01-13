@@ -6,14 +6,14 @@ Captures tool usage and records intent to aOa.
 Fire-and-forget, non-blocking, <10ms.
 """
 
-import sys
 import json
-import re
 import os
-from pathlib import Path
-from urllib.request import Request, urlopen
-from urllib.error import URLError
+import re
+import sys
 from datetime import datetime
+from pathlib import Path
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 AOA_URL = os.environ.get("AOA_URL", "http://localhost:8080")
 # Find AOA data directory
@@ -157,7 +157,7 @@ def extract_files(data: dict) -> list:
                     # Clean term for use as tag
                     search_tag = re.sub(r'[^a-zA-Z0-9_-]', '', aoa_term.split()[0] if ' ' in aoa_term else aoa_term)[:20]
                     if search_tag:
-                        tags.add(f"#{search_tag}")
+                        files.add(f"#{search_tag}")
 
         # Match file paths in command - require at least one directory component
         # and extension must be at word boundary (not .claude matching .c)

@@ -11,26 +11,25 @@ Usage:
     CODEBASE_ROOT=/path/to/code REPOS_ROOT=/path/to/repos python indexer.py
 """
 
+import hashlib
+import json
 import os
 import re
-import json
-import time
-import hashlib
-import threading
 import subprocess
+import threading
+import time
+from collections import OrderedDict, defaultdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Set, Optional, Tuple
-from dataclasses import dataclass, asdict
-from collections import defaultdict, OrderedDict
 
-from flask import Flask, request, jsonify
-from watchdog.observers import Observer
+from flask import Flask, jsonify, request
 from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 # Tree-sitter for code outlines (165+ languages via language-pack)
 try:
     from tree_sitter import Parser, Query, QueryCursor
-    from tree_sitter_language_pack import get_language, get_parser
+    from tree_sitter_language_pack import get_language
     TREE_SITTER_AVAILABLE = True
 
     def get_ts_language(lang_name: str):
@@ -82,10 +81,13 @@ try:
 
 except ImportError:
     TREE_SITTER_AVAILABLE = False
-    get_ts_language = lambda x: None
+    def get_ts_language(x):
+        return None
 
 # Ranking module for predictive file scoring
+import contextlib
 import sys
+
 sys.path.insert(0, '/app')  # For Docker
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # For local
 try:
@@ -133,7 +135,7 @@ def _load_pattern_library():
         try:
             data = json.loads(semantic_file.read_text())
             for cat_name, cat_data in data.get('categories', {}).items():
-                patterns = set(p.lower() for p in cat_data.get('patterns', []))
+                patterns = {p.lower() for p in cat_data.get('patterns', [])}
                 semantic_patterns[cat_name] = {
                     'patterns': patterns,
                     'tag': cat_data.get('tag', f'#{cat_name}'),
@@ -212,7 +214,7 @@ def calculate_intent_score(result_tags: list, search_intent: list) -> float:
     result_set = set(result_tags)
 
     intersection = len(search_set & result_set)
-    union = len(search_set | result_set)
+    len(search_set | result_set)
 
     # Boost for matching search intent (weighted towards search terms)
     match_ratio = intersection / len(search_set) if search_set else 0
@@ -234,10 +236,10 @@ class Location:
     symbol_type: str
     mtime: int
     # Symbol-level metadata for semantic compression tags
-    symbol: Optional[str] = None      # Symbol/function name (e.g., "handleAuth")
-    symbol_kind: Optional[str] = None # Kind (e.g., "function", "class")
-    end_line: Optional[int] = None    # Where the symbol ends
-    content: Optional[str] = None     # GL-046: Line content for O(1) display
+    symbol: str | None = None      # Symbol/function name (e.g., "handleAuth")
+    symbol_kind: str | None = None # Kind (e.g., "function", "class")
+    end_line: int | None = None    # Where the symbol ends
+    content: str | None = None     # GL-046: Line content for O(1) display
 
 @dataclass
 class FileMeta:
@@ -252,7 +254,7 @@ class ChangeRecord:
     file: str
     timestamp: int
     change_type: str  # added, modified, deleted
-    lines_changed: Optional[List[int]] = None
+    lines_changed: list[int] | None = None
 
 
 @dataclass
@@ -261,12 +263,12 @@ class IntentRecord:
     timestamp: int
     session_id: str
     tool: str
-    files: List[str]
-    tags: List[str]
-    tool_use_id: Optional[str] = None  # Claude's toolu_xxx correlation key
-    project_id: Optional[str] = None  # UUID for per-project isolation
-    file_sizes: Optional[Dict[str, int]] = None  # File path -> size in bytes (for baseline calc)
-    output_size: Optional[int] = None  # Actual output size in bytes (for real savings calc)
+    files: list[str]
+    tags: list[str]
+    tool_use_id: str | None = None  # Claude's toolu_xxx correlation key
+    project_id: str | None = None  # UUID for per-project isolation
+    file_sizes: dict[str, int] | None = None  # File path -> size in bytes (for baseline calc)
+    output_size: int | None = None  # Actual output size in bytes (for real savings calc)
 
 
 # ============================================================================
@@ -290,13 +292,13 @@ class LRUContentCache:
         self.max_size = max_size_mb * 1024 * 1024  # Convert to bytes
         self.current_size = 0
         # Key: (project_id, file_path) -> Value: list of lines
-        self.cache: OrderedDict[Tuple[str, str], List[str]] = OrderedDict()
+        self.cache: OrderedDict[tuple[str, str], list[str]] = OrderedDict()
         self.lock = threading.RLock()
         # Stats
         self.hits = 0
         self.misses = 0
 
-    def get(self, project_id: str, file_path: str, file_root: Path) -> Optional[List[str]]:
+    def get(self, project_id: str, file_path: str, file_root: Path) -> list[str] | None:
         """Get file content as lines. Returns None if file doesn't exist."""
         key = (project_id, file_path)
 
@@ -317,14 +319,14 @@ class LRUContentCache:
         except Exception:
             return None
 
-    def get_line(self, project_id: str, file_path: str, line_num: int, file_root: Path) -> Optional[str]:
+    def get_line(self, project_id: str, file_path: str, line_num: int, file_root: Path) -> str | None:
         """Get a specific line from a file (1-indexed)."""
         lines = self.get(project_id, file_path, file_root)
         if lines and 0 < line_num <= len(lines):
             return lines[line_num - 1]
         return None
 
-    def get_lines(self, project_id: str, file_path: str, line_nums: List[int], file_root: Path) -> Dict[int, str]:
+    def get_lines(self, project_id: str, file_path: str, line_nums: list[int], file_root: Path) -> dict[int, str]:
         """Get multiple lines from a file. Returns {line_num: content}."""
         result = {}
         lines = self.get(project_id, file_path, file_root)
@@ -334,7 +336,7 @@ class LRUContentCache:
                     result[ln] = lines[ln - 1]
         return result
 
-    def _add(self, key: Tuple[str, str], lines: List[str]):
+    def _add(self, key: tuple[str, str], lines: list[str]):
         """Add content to cache, evicting LRU entries if needed."""
         size = sum(len(line) for line in lines)
 
@@ -342,7 +344,7 @@ class LRUContentCache:
             # Evict until we have room
             while self.current_size + size > self.max_size and self.cache:
                 evicted_key, evicted_lines = self.cache.popitem(last=False)
-                self.current_size -= sum(len(l) for l in evicted_lines)
+                self.current_size -= sum(len(line) for line in evicted_lines)
 
             self.cache[key] = lines
             self.current_size += size
@@ -353,7 +355,7 @@ class LRUContentCache:
         with self.lock:
             if key in self.cache:
                 lines = self.cache.pop(key)
-                self.current_size -= sum(len(l) for l in lines)
+                self.current_size -= sum(len(line) for line in lines)
 
     def invalidate_project(self, project_id: str):
         """Remove all files for a project from cache."""
@@ -361,7 +363,7 @@ class LRUContentCache:
             keys_to_remove = [k for k in self.cache if k[0] == project_id]
             for key in keys_to_remove:
                 lines = self.cache.pop(key)
-                self.current_size -= sum(len(l) for l in lines)
+                self.current_size -= sum(len(line) for line in lines)
 
     def stats(self) -> dict:
         """Return cache statistics."""
@@ -389,9 +391,9 @@ class OutlineSymbol:
     kind: str  # function, class, method
     start_line: int
     end_line: int
-    signature: Optional[str] = None
-    children: Optional[List['OutlineSymbol']] = None
-    tags: Optional[List[str]] = None  # AI-generated intent tags (via enrichment)
+    signature: str | None = None
+    children: list['OutlineSymbol'] | None = None
+    tags: list[str] | None = None  # AI-generated intent tags (via enrichment)
 
 
 class OutlineParser:
@@ -673,7 +675,7 @@ class OutlineParser:
 
         return self._queries.get(ts_lang)
 
-    def _run_pattern_queries(self, tree, source: bytes, language: str) -> List['OutlineSymbol']:
+    def _run_pattern_queries(self, tree, source: bytes, language: str) -> list['OutlineSymbol']:
         """Run pattern queries to extract framework-specific symbols."""
         query = self.get_query(language)
         if not query:
@@ -815,7 +817,7 @@ class OutlineParser:
 
         return symbols
 
-    def _get_node_name(self, node, source_bytes: bytes, language: str) -> Optional[str]:
+    def _get_node_name(self, node, source_bytes: bytes, language: str) -> str | None:
         """Extract the name of a symbol node."""
         # Different languages have different name child node types
         name_types = {
@@ -860,7 +862,7 @@ class OutlineParser:
             end += 1
         return source_bytes[start:end].decode('utf-8', errors='replace').strip()
 
-    def parse_file(self, file_path: str, language: str) -> List[OutlineSymbol]:
+    def parse_file(self, file_path: str, language: str) -> list[OutlineSymbol]:
         """Parse a file and return its outline."""
         parser = self.get_parser(language)
         if not parser:
@@ -869,7 +871,7 @@ class OutlineParser:
         try:
             with open(file_path, 'rb') as f:
                 source = f.read()
-        except (IOError, OSError):
+        except OSError:
             return []
 
         try:
@@ -1031,13 +1033,13 @@ class CodebaseIndex:
         self.last_indexed = int(time.time())
 
         # Core data structures
-        self.inverted_index: Dict[str, List[Location]] = defaultdict(list)
-        self.files: Dict[str, FileMeta] = {}
-        self.changes: List[ChangeRecord] = []
+        self.inverted_index: dict[str, list[Location]] = defaultdict(list)
+        self.files: dict[str, FileMeta] = {}
+        self.changes: list[ChangeRecord] = []
 
         # Dependency graph
-        self.deps_outgoing: Dict[str, List[str]] = defaultdict(list)
-        self.deps_incoming: Dict[str, List[str]] = defaultdict(list)
+        self.deps_outgoing: dict[str, list[str]] = defaultdict(list)
+        self.deps_incoming: dict[str, list[str]] = defaultdict(list)
 
         # Thread safety
         self.lock = threading.RLock()
@@ -1060,7 +1062,7 @@ class CodebaseIndex:
             return False
         return path.suffix.lower() in self.EXTENSIONS
 
-    def tokenize(self, content: str) -> List[Tuple[str, int, int]]:
+    def tokenize(self, content: str) -> list[tuple[str, int, int]]:
         """Extract tokens with their positions."""
         tokens = []
         for line_num, line in enumerate(content.split('\n'), 1):
@@ -1070,7 +1072,7 @@ class CodebaseIndex:
                     tokens.append((token, line_num, match.start()))
         return tokens
 
-    def _find_enclosing_symbol(self, line_num: int, symbols: List) -> Optional[dict]:
+    def _find_enclosing_symbol(self, line_num: int, symbols: list) -> dict | None:
         """GL-046.2: Find the most specific (smallest) symbol containing a line.
 
         Returns dict with {name, kind, end_line} or None if not in any symbol.
@@ -1197,9 +1199,8 @@ class CodebaseIndex:
         count = 0
 
         for path in self.root.rglob('*'):
-            if path.is_file() and self.should_index(path):
-                if self.index_file(path):
-                    count += 1
+            if path.is_file() and self.should_index(path) and self.index_file(path):
+                count += 1
 
         elapsed = time.time() - start
         print(f"[{self.name}] Indexed {count} files in {elapsed:.2f}s ({len(self.inverted_index)} symbols)")
@@ -1219,7 +1220,7 @@ class CodebaseIndex:
             ))
 
     def search(self, query: str, mode: str = 'recent', limit: int = 20,
-               since: int = None, before: int = None) -> List[dict]:
+               since: int = None, before: int = None) -> list[dict]:
         """Search for a term with filename boosting and optional time filtering."""
         results = []
 
@@ -1278,14 +1279,14 @@ class CodebaseIndex:
 
         return [asdict(loc) for loc in unique[:limit]]
 
-    def search_multi(self, terms: List[str], mode: str = 'recent', limit: int = 20,
-                     since: int = None, before: int = None) -> List[dict]:
+    def search_multi(self, terms: list[str], mode: str = 'recent', limit: int = 20,
+                     since: int = None, before: int = None) -> list[dict]:
         """Search for multiple terms, rank by density."""
         all_results = []
         for term in terms:
             all_results.extend(self.search(term, mode, limit * 2, since=since, before=before))
 
-        file_scores: Dict[str, Tuple[int, int]] = {}
+        file_scores: dict[str, tuple[int, int]] = {}
         for loc in all_results:
             if loc['file'] not in file_scores:
                 file_scores[loc['file']] = (0, loc['mtime'])
@@ -1298,15 +1299,15 @@ class CodebaseIndex:
             reverse=True
         )
 
-        top_files = set(f for f, _ in sorted_files[:limit])
+        top_files = {f for f, _ in sorted_files[:limit]}
         return [loc for loc in all_results if loc['file'] in top_files][:limit]
 
-    def changes_since(self, since: int) -> List[dict]:
+    def changes_since(self, since: int) -> list[dict]:
         """Get changes since timestamp."""
         with self.lock:
             return [asdict(c) for c in self.changes if c.timestamp >= since]
 
-    def list_files(self, pattern: Optional[str] = None, mode: str = 'recent', limit: int = 50) -> List[dict]:
+    def list_files(self, pattern: str | None = None, mode: str = 'recent', limit: int = 50) -> list[dict]:
         """List files matching pattern."""
         with self.lock:
             results = list(self.files.values())
@@ -1371,22 +1372,22 @@ class IndexManager:
         self.global_mode = self.config_dir is not None and (self.config_dir / 'projects.json').exists()
 
         # Local index (legacy mode - your project)
-        self.local: Optional[CodebaseIndex] = None
+        self.local: CodebaseIndex | None = None
         if self.local_root and self.local_root.exists():
             self.local = CodebaseIndex(str(self.local_root), name='local')
 
         # Project indexes (global mode - multiple projects)
-        self.projects: Dict[str, CodebaseIndex] = {}
+        self.projects: dict[str, CodebaseIndex] = {}
 
         # Repo indexes (knowledge repos)
-        self.repos: Dict[str, CodebaseIndex] = {}
+        self.repos: dict[str, CodebaseIndex] = {}
 
         # File watchers
-        self.observers: Dict[str, Observer] = {}
+        self.observers: dict[str, Observer] = {}
 
         self.lock = threading.RLock()
 
-    def get_local(self, project_id: str = None) -> Optional[CodebaseIndex]:
+    def get_local(self, project_id: str = None) -> CodebaseIndex | None:
         """Get the appropriate index for a query.
 
         In global mode, returns the project index if project_id is provided.
@@ -1444,7 +1445,7 @@ class IndexManager:
         except Exception as e:
             print(f"Error loading projects: {e}")
 
-    def _load_project(self, project_id: str, name: str, path: str) -> Optional[CodebaseIndex]:
+    def _load_project(self, project_id: str, name: str, path: str) -> CodebaseIndex | None:
         """Load or create index for a project."""
         # Convert path to container path (user's home is mounted at /userhome)
         container_path = path.replace(self.user_home, '/userhome')
@@ -1465,7 +1466,7 @@ class IndexManager:
             print(f"    -> {len(idx.files)} files indexed")
             return idx
 
-    def register_project(self, project_id: str, name: str, path: str) -> Tuple[bool, str, int]:
+    def register_project(self, project_id: str, name: str, path: str) -> tuple[bool, str, int]:
         """Register and index a new project."""
         try:
             idx = self._load_project(project_id, name, path)
@@ -1476,7 +1477,7 @@ class IndexManager:
         except Exception as e:
             return False, f"Error registering project: {e}", 0
 
-    def unregister_project(self, project_id: str) -> Tuple[bool, str]:
+    def unregister_project(self, project_id: str) -> tuple[bool, str]:
         """Unregister a project and remove its index."""
         with self.lock:
             # Stop watcher
@@ -1485,9 +1486,9 @@ class IndexManager:
             # Remove from index
             if project_id in self.projects:
                 del self.projects[project_id]
-                return True, f"Project unregistered"
+                return True, "Project unregistered"
             else:
-                return False, f"Project not found"
+                return False, "Project not found"
 
     def init_repos(self):
         """Initialize indexes for existing repos."""
@@ -1498,7 +1499,7 @@ class IndexManager:
             if repo_dir.is_dir() and not repo_dir.name.startswith('.'):
                 self._load_repo(repo_dir.name)
 
-    def _load_repo(self, name: str) -> Optional[CodebaseIndex]:
+    def _load_repo(self, name: str) -> CodebaseIndex | None:
         """Load an existing repo into the index."""
         repo_path = self.repos_root / name
         if not repo_path.exists():
@@ -1531,7 +1532,7 @@ class IndexManager:
             self.observers[name].join()
             del self.observers[name]
 
-    def add_repo(self, name: str, git_url: str) -> Tuple[bool, str]:
+    def add_repo(self, name: str, git_url: str) -> tuple[bool, str]:
         """Clone a git repo and index it."""
         repo_path = self.repos_root / name
 
@@ -1561,7 +1562,7 @@ class IndexManager:
         else:
             return False, "Failed to index repo"
 
-    def remove_repo(self, name: str) -> Tuple[bool, str]:
+    def remove_repo(self, name: str) -> tuple[bool, str]:
         """Remove a repo and its index."""
         repo_path = self.repos_root / name
 
@@ -1581,15 +1582,15 @@ class IndexManager:
             else:
                 return False, f"Repo '{name}' not found"
 
-    def list_repos(self) -> List[dict]:
+    def list_repos(self) -> list[dict]:
         """List all knowledge repos."""
         repos = []
         with self.lock:
-            for name, idx in self.repos.items():
+            for _name, idx in self.repos.items():
                 repos.append(idx.get_stats())
         return repos
 
-    def get_repo(self, name: str) -> Optional[CodebaseIndex]:
+    def get_repo(self, name: str) -> CodebaseIndex | None:
         """Get a repo index by name."""
         with self.lock:
             return self.repos.get(name)
@@ -1612,23 +1613,21 @@ class IndexerHandler(FileSystemEventHandler):
         if event.is_directory:
             return
         path = Path(event.src_path)
-        if self.index.should_index(path):
-            if self.index.index_file(path):
-                self.index.record_change(path, 'modified')
-                # GL-046.1: Invalidate content cache on file change
-                try:
-                    rel_path = str(path.relative_to(self.index.root))
-                    content_cache.invalidate(self.index.name, rel_path)
-                except Exception:
-                    pass
+        if self.index.should_index(path) and self.index.index_file(path):
+            self.index.record_change(path, 'modified')
+            # GL-046.1: Invalidate content cache on file change
+            try:
+                rel_path = str(path.relative_to(self.index.root))
+                content_cache.invalidate(self.index.name, rel_path)
+            except Exception:
+                pass
 
     def on_created(self, event):
         if event.is_directory:
             return
         path = Path(event.src_path)
-        if self.index.should_index(path):
-            if self.index.index_file(path):
-                self.index.record_change(path, 'added')
+        if self.index.should_index(path) and self.index.index_file(path):
+            self.index.record_change(path, 'added')
 
     def on_deleted(self, event):
         if event.is_directory:
@@ -1670,10 +1669,10 @@ class IntentIndex:
 
     def __init__(self, redis_client=None):
         # All data structures are nested by project_id
-        self.tag_to_files: Dict[str, Dict[str, Set[str]]] = defaultdict(lambda: defaultdict(set))
-        self.file_to_tags: Dict[str, Dict[str, Set[str]]] = defaultdict(lambda: defaultdict(set))
-        self.timeline: Dict[str, List[IntentRecord]] = defaultdict(list)
-        self.session_intents: Dict[str, Dict[str, List[IntentRecord]]] = defaultdict(lambda: defaultdict(list))
+        self.tag_to_files: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        self.file_to_tags: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        self.timeline: dict[str, list[IntentRecord]] = defaultdict(list)
+        self.session_intents: dict[str, dict[str, list[IntentRecord]]] = defaultdict(lambda: defaultdict(list))
         self.lock = threading.RLock()
         self.redis = redis_client  # Optional Redis for persistence
 
@@ -1681,8 +1680,8 @@ class IntentIndex:
         """Get project key, using default for empty/None."""
         return project_id if project_id else self.DEFAULT_PROJECT
 
-    def record(self, tool: str, files: List[str], tags: List[str], session_id: str,
-               tool_use_id: str = None, project_id: str = None, file_sizes: Dict[str, int] = None,
+    def record(self, tool: str, files: list[str], tags: list[str], session_id: str,
+               tool_use_id: str = None, project_id: str = None, file_sizes: dict[str, int] = None,
                output_size: int = None):
         """Record an intent from a tool use."""
         proj = self._project_key(project_id)
@@ -1742,13 +1741,13 @@ class IntentIndex:
             except Exception as e:
                 print(f"[IntentIndex] Redis persistence error: {e}", flush=True)
 
-    def files_for_tag(self, tag: str, project_id: str = None) -> List[str]:
+    def files_for_tag(self, tag: str, project_id: str = None) -> list[str]:
         """Get files associated with a tag."""
         proj = self._project_key(project_id)
         with self.lock:
             return list(self.tag_to_files[proj].get(tag, set()))
 
-    def tags_for_file(self, file: str, project_id: str = None) -> List[str]:
+    def tags_for_file(self, file: str, project_id: str = None) -> list[str]:
         """Get tags for a file - aggregate semantic tags from all symbols."""
         proj = self._project_key(project_id)
 
@@ -1799,7 +1798,7 @@ class IntentIndex:
                     return list(tags)[:3]
             return []
 
-    def recent(self, since: int = None, limit: int = 50, project_id: str = None) -> List[dict]:
+    def recent(self, since: int = None, limit: int = 50, project_id: str = None) -> list[dict]:
         """Get recent intent records."""
         proj = self._project_key(project_id)
         with self.lock:
@@ -1809,13 +1808,13 @@ class IntentIndex:
             records = records[-limit:]
             return [asdict(r) for r in reversed(records)]
 
-    def session(self, session_id: str, project_id: str = None) -> List[dict]:
+    def session(self, session_id: str, project_id: str = None) -> list[dict]:
         """Get intent records for a session."""
         proj = self._project_key(project_id)
         with self.lock:
             return [asdict(r) for r in self.session_intents[proj].get(session_id, [])]
 
-    def all_tags(self, project_id: str = None) -> List[Tuple[str, int]]:
+    def all_tags(self, project_id: str = None) -> list[tuple[str, int]]:
         """Get all tags with file counts, sorted by count."""
         proj = self._project_key(project_id)
         with self.lock:
@@ -1870,7 +1869,7 @@ class IntentIndex:
 
             for record in self.timeline[proj]:
                 if record.output_size and record.output_size > 0 and record.file_sizes:
-                    for f, size in record.file_sizes.items():
+                    for _f, size in record.file_sizes.items():
                         if size > 0:
                             session_baseline += size // 4
                             session_actual += record.output_size // 4
@@ -1902,7 +1901,7 @@ class IntentIndex:
             }
         }
 
-    def get_rolling_intent(self, project_id: str = None, window: int = 50) -> Dict[str, float]:
+    def get_rolling_intent(self, project_id: str = None, window: int = 50) -> dict[str, float]:
         """Get weighted tag scores from recent N intents.
 
         GL-045: Rolling intent window for smart result ranking.
@@ -1916,7 +1915,7 @@ class IntentIndex:
             Dict[tag, score] where score is position-weighted (recent = higher)
         """
         proj = self._project_key(project_id)
-        tag_scores: Dict[str, float] = {}
+        tag_scores: dict[str, float] = {}
 
         with self.lock:
             recent = self.timeline[proj][-window:] if self.timeline[proj] else []
@@ -1936,7 +1935,7 @@ class IntentIndex:
 
         return tag_scores
 
-    def get_file_affinity(self, project_id: str = None, window: int = 50) -> Dict[str, float]:
+    def get_file_affinity(self, project_id: str = None, window: int = 50) -> dict[str, float]:
         """Get pre-computed affinity scores for files based on rolling intent.
 
         GL-045: Files that match recent intent tags get higher scores.
@@ -1949,7 +1948,7 @@ class IntentIndex:
             return {}
 
         proj = self._project_key(project_id)
-        file_scores: Dict[str, float] = {}
+        file_scores: dict[str, float] = {}
 
         with self.lock:
             for tag, weight in rolling.items():
@@ -1963,8 +1962,8 @@ class IntentIndex:
 # Global Index Manager
 # ============================================================================
 
-manager: Optional[IndexManager] = None
-intent_index: Optional[IntentIndex] = None
+manager: IndexManager | None = None
+intent_index: IntentIndex | None = None
 
 
 # ============================================================================
@@ -2226,10 +2225,8 @@ def semantic_grep():
         # Get file outline (symbols with line ranges)
         symbols = []
         if TREE_SITTER_AVAILABLE and language != 'unknown':
-            try:
+            with contextlib.suppress(Exception):
                 symbols = outline_parser.parse_file(str(full_path), language)
-            except Exception:
-                pass
 
         # Get file-level tags from intent index
         file_tags = []
@@ -2480,7 +2477,7 @@ def mark_enriched():
             'tags_count': tags_indexed + tags_incremented
         })
 
-    except Exception as e:
+    except Exception:
         # Fallback: just append without dedup (legacy behavior)
         with idx.lock:
             for sym in symbols:
@@ -2812,7 +2809,7 @@ def infer_patterns():
                 import json
                 sdata = json.loads(semantic_file.read_text())
                 for cat_name, cat_data in sdata.get('categories', {}).items():
-                    patterns = set(p.lower() for p in cat_data.get('patterns', []))
+                    patterns = {p.lower() for p in cat_data.get('patterns', [])}
                     semantic_patterns[cat_name] = {
                         'patterns': patterns,
                         'tag': cat_data.get('tag', f'#{cat_name}'),
@@ -2820,7 +2817,7 @@ def infer_patterns():
                     }
                 kind_patterns = sdata.get('kind_patterns', {}).get('patterns', {})
                 class_suffixes.update(kind_patterns.get('class', {}).get('suffix_patterns', {}))
-            except:
+            except Exception:
                 pass
 
         if domain_file.exists():
@@ -2834,7 +2831,7 @@ def infer_patterns():
                 for suffix, tag in ddata.get('technical_suffixes', {}).items():
                     if suffix != 'description':
                         class_suffixes[suffix] = tag
-            except:
+            except Exception:
                 pass
 
         if semantic_patterns or domain_keywords:
@@ -2883,7 +2880,7 @@ def infer_patterns():
     result_tags = []
     for sym in symbols:
         name = sym.get('name', '')
-        kind = sym.get('kind', '')
+        sym.get('kind', '')
 
         tags = set()
         tokens = tokenize(name)
@@ -3393,10 +3390,8 @@ def pattern_search():
             if TREE_SITTER_AVAILABLE:
                 language = idx.get_language(full_path)
                 if language in outline_parser.LANG_MAP:
-                    try:
+                    with contextlib.suppress(Exception):
                         symbols = outline_parser.parse_file(str(full_path), language)
-                    except Exception:
-                        pass
 
             for label, regex in compiled.items():
                 if len(results[label]) >= limit:
@@ -3700,9 +3695,10 @@ def metrics_token_rate():
         confidence: high (50+), medium (20+), or low (<20)
         methodology: How the rate was calculated
     """
-    from services.ranking.session_parser import SessionLogParser
-    from pathlib import Path
     import os
+    from pathlib import Path
+
+    from services.ranking.session_parser import SessionLogParser
 
     # Find Claude projects directory
     home = os.path.expanduser('~')
@@ -4305,13 +4301,11 @@ def get_metrics():
             # DEPRECATED: These were fake hardcoded estimates (1500 tokens/hit, 50ms/hit)
             # Real savings will be tracked via intent records with baseline + actual output
             tokens_saved = int(scorer.redis.client.get(f'aoa:{project_id}:savings:tokens:real') or 0)
-            time_saved_ms = 0  # Not tracked yet
         else:
             hits = int(scorer.redis.client.get('aoa:metrics:hits') or 0)
             misses = int(scorer.redis.client.get('aoa:metrics:misses') or 0)
             # DEPRECATED: These were fake hardcoded estimates
             tokens_saved = int(scorer.redis.client.get('aoa:savings:tokens:real') or 0)
-            time_saved_ms = 0  # Not tracked yet
 
         total = hits + misses
         legacy_rate = (hits / total * 100) if total > 0 else 0
@@ -4407,10 +4401,10 @@ def get_token_metrics():
         }
     """
     try:
-        from ranking.session_parser import SessionLogParser
-
         # Get project path from environment
         import os
+
+        from ranking.session_parser import SessionLogParser
         project_path = os.environ.get('CODEBASE_ROOT', '/home/corey/aOa')
 
         parser = SessionLogParser(project_path)
@@ -4616,7 +4610,7 @@ def read_file_snippet(file_path: str, max_lines: int = 20) -> str:
         return ''
 
     try:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(file_path, encoding='utf-8', errors='ignore') as f:
             lines = []
             for i, line in enumerate(f):
                 if i >= max_lines:
@@ -4626,7 +4620,7 @@ def read_file_snippet(file_path: str, max_lines: int = 20) -> str:
                     line = line[:500] + '...\n'
                 lines.append(line)
             return ''.join(lines)
-    except (IOError, OSError):
+    except OSError:
         return ''
 
 
@@ -4891,7 +4885,7 @@ STOPWORDS = {
     'us', 'them', 'my', 'your', 'his', 'its', 'our', 'their',
     'fix', 'add', 'update', 'change', 'modify', 'implement', 'create',
     'make', 'get', 'set', 'find', 'look', 'check', 'help', 'want',
-    'need', 'try', 'work', 'use', 'file', 'code', 'function', 'class'
+    'try', 'work', 'use', 'file', 'code', 'function', 'class'
 }
 
 # Intent patterns from intent-capture.py (tag mapping)
@@ -5176,7 +5170,7 @@ def detect_domain(file_path: str) -> str:
     return "general"
 
 
-def get_recent_tags(limit: int = 5) -> List[str]:
+def get_recent_tags(limit: int = 5) -> list[str]:
     """Get recent intent tags."""
     try:
         stats = intent_index.get_stats()

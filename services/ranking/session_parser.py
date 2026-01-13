@@ -8,10 +8,9 @@ Session logs location: ~/.claude/projects/[project-slug]/agent-*.jsonl
 """
 
 import json
-from pathlib import Path
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
 from datetime import datetime
+from pathlib import Path
 
 # Import Redis client if available
 try:
@@ -76,14 +75,14 @@ class SessionLogParser:
             # Running locally
             self.base_path = Path.home() / '.claude' / 'projects' / self.project_slug
 
-    def list_sessions(self) -> List[Path]:
+    def list_sessions(self) -> list[Path]:
         """List all agent session files."""
         if not self.base_path.exists():
             return []
         # Agent files contain actual tool calls
         return sorted(self.base_path.glob('agent-*.jsonl'))
 
-    def parse_session(self, session_file: Path) -> List[dict]:
+    def parse_session(self, session_file: Path) -> list[dict]:
         """
         Extract tool use events from a session file.
 
@@ -95,7 +94,7 @@ class SessionLogParser:
         """
         events = []
         try:
-            with open(session_file, 'r', encoding='utf-8') as f:
+            with open(session_file, encoding='utf-8') as f:
                 for line in f:
                     if not line.strip():
                         continue
@@ -131,7 +130,7 @@ class SessionLogParser:
 
         return events
 
-    def extract_file_reads(self, events: List[dict]) -> List[str]:
+    def extract_file_reads(self, events: list[dict]) -> list[str]:
         """
         Get ordered list of files read from events.
 
@@ -149,7 +148,7 @@ class SessionLogParser:
                     reads.append(file_path)
         return reads
 
-    def extract_file_writes(self, events: List[dict]) -> List[str]:
+    def extract_file_writes(self, events: list[dict]) -> list[str]:
         """
         Get list of files written/edited.
 
@@ -185,7 +184,7 @@ class SessionLogParser:
             return rel
         return file_path
 
-    def build_transition_matrix(self, normalize: bool = True) -> Dict[str, Dict[str, int]]:
+    def build_transition_matrix(self, normalize: bool = True) -> dict[str, dict[str, int]]:
         """
         Build file transition counts across all sessions.
 
@@ -198,7 +197,7 @@ class SessionLogParser:
         Returns:
             Dict mapping from_file -> {to_file: count}
         """
-        transitions: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        transitions: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
 
         for session_file in self.list_sessions():
             events = self.parse_session(session_file)
@@ -218,7 +217,7 @@ class SessionLogParser:
         return dict(transitions)
 
     def get_transition_probabilities(self, from_file: str,
-                                     transitions: Dict[str, Dict[str, int]]) -> List[Tuple[str, float]]:
+                                     transitions: dict[str, dict[str, int]]) -> list[tuple[str, float]]:
         """
         Get probability distribution for next file given current file.
 
@@ -307,7 +306,7 @@ class SessionLogParser:
 
         for session_file in sessions:
             try:
-                with open(session_file, 'r') as f:
+                with open(session_file) as f:
                     for line in f:
                         line = line.strip()
                         if not line:
@@ -379,7 +378,6 @@ class SessionLogParser:
         Returns:
             Dict with calculated rate and confidence metrics
         """
-        from datetime import datetime
 
         sessions = self.list_all_sessions()
         if not sessions:
@@ -391,7 +389,7 @@ class SessionLogParser:
         for session_file in sessions[-10:]:  # Last 10 sessions
             try:
                 messages = []
-                with open(session_file, 'r') as f:
+                with open(session_file) as f:
                     for line in f:
                         line = line.strip()
                         if not line:
@@ -475,7 +473,7 @@ class SessionLogParser:
             'methodology': 'Calculated from session message timestamps and token counts'
         }
 
-    def list_all_sessions(self) -> List[Path]:
+    def list_all_sessions(self) -> list[Path]:
         """List all session files (both agent-*.jsonl and regular *.jsonl)."""
         if not self.base_path.exists():
             return []
@@ -512,7 +510,7 @@ class SessionLogParser:
 
     @staticmethod
     def predict_next(redis_client: 'RedisClient', current_file: str,
-                     limit: int = 5) -> List[Tuple[str, float]]:
+                     limit: int = 5) -> list[tuple[str, float]]:
         """
         Predict next files based on transition probabilities.
 
@@ -539,8 +537,8 @@ class SessionLogParser:
         return [(file_path, score / total) for file_path, score in results]
 
     @staticmethod
-    def get_all_predictions(redis_client: 'RedisClient', current_files: List[str],
-                            limit: int = 5) -> List[Tuple[str, float]]:
+    def get_all_predictions(redis_client: 'RedisClient', current_files: list[str],
+                            limit: int = 5) -> list[tuple[str, float]]:
         """
         Get predictions based on multiple current files.
 
@@ -554,7 +552,7 @@ class SessionLogParser:
         Returns:
             List of (file_path, combined_score) tuples
         """
-        combined: Dict[str, float] = defaultdict(float)
+        combined: dict[str, float] = defaultdict(float)
 
         for current_file in current_files:
             predictions = SessionLogParser.predict_next(redis_client, current_file, limit=20)
@@ -629,7 +627,7 @@ def main():
             return
 
         result = sp.sync_to_redis(redis_client)
-        print(f"Synced to Redis:")
+        print("Synced to Redis:")
         print(f"  Keys written: {result['keys_written']}")
         print(f"  Total transitions: {result['total_transitions']}")
 

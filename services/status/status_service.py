@@ -11,19 +11,18 @@ Usage:
     python status_service.py
 """
 
+import json
 import os
 import re
-import json
-import time
 import threading
+import time
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, asdict, field
-from flask import Flask, jsonify, request, Response
 
 import redis
 import requests
+from flask import Flask, Response, jsonify, request
 
 app = Flask(__name__)
 
@@ -150,7 +149,7 @@ def _load_pattern_configs():
             data = json.loads(semantic_file.read_text())
             categories = data.get("categories", {})
             for cat_name, cat_data in categories.items():
-                patterns = set(p.lower() for p in cat_data.get("patterns", []))
+                patterns = {p.lower() for p in cat_data.get("patterns", [])}
                 semantic_patterns[cat_name] = {
                     "patterns": patterns,
                     "tag": cat_data.get("tag", f"#{cat_name}"),
@@ -166,7 +165,7 @@ def _load_pattern_configs():
             for pattern, tag in compound.items():
                 normalized = pattern.replace("_", "")
                 domain_keywords[normalized] = tag
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
 
     # Load domain patterns
@@ -184,7 +183,7 @@ def _load_pattern_configs():
             for suffix, tag in suffixes.items():
                 if suffix != "description":
                     class_suffixes[suffix] = tag
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
 
     return semantic_patterns, domain_keywords, class_suffixes
@@ -218,7 +217,7 @@ def _match_semantic_tags(tokens: set) -> set:
     tags = set()
 
     for priority in [1, 2, 3]:
-        for cat_name, cat_data in SEMANTIC_PATTERNS.items():
+        for _cat_name, cat_data in SEMANTIC_PATTERNS.items():
             if cat_data["priority"] != priority:
                 continue
             patterns = cat_data["patterns"]
@@ -284,7 +283,7 @@ class SubagentSyncer:
         """Store last read position for a file."""
         self.redis.hset(Keys.AGENT_SYNC, file_path, position)
 
-    def infer_tags(self, file_path: str, tool_name: str) -> List[str]:
+    def infer_tags(self, file_path: str, tool_name: str) -> list[str]:
         """Infer semantic intent tags from file path and tool name.
 
         Uses pattern library (JSON configs) for intelligent tagging.
@@ -320,7 +319,7 @@ class SubagentSyncer:
 
         return list(tags)
 
-    def parse_agent_file(self, file_path: Path) -> Tuple[List[Dict], Dict]:
+    def parse_agent_file(self, file_path: Path) -> tuple[list[dict], dict]:
         """Parse new lines from an agent log file, extract tool_use events and costs."""
         events = []
         costs = {
@@ -343,7 +342,7 @@ class SubagentSyncer:
             if file_size <= last_pos:
                 return events, costs
 
-            with open(file_path, 'r') as f:
+            with open(file_path) as f:
                 f.seek(last_pos)
                 for line in f:
                     try:
@@ -406,7 +405,7 @@ class SubagentSyncer:
 
         return events, costs
 
-    def sync_project(self, project_slug: str) -> Dict:
+    def sync_project(self, project_slug: str) -> dict:
         """Sync all agent files for a project, tracking baseline costs."""
         project_dir = self.claude_dir / project_slug
         if not project_dir.exists():
@@ -483,7 +482,7 @@ class SubagentSyncer:
             'baseline': baseline
         }
 
-    def sync_all(self) -> Dict:
+    def sync_all(self) -> dict:
         """Sync all projects that have agent files, aggregate baseline costs."""
         now = time.time()
 
@@ -545,11 +544,11 @@ class TokenUsage:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
-    
+
     @property
     def total(self) -> int:
         return self.input_tokens + self.output_tokens
-    
+
     @property
     def cache_hit_rate(self) -> float:
         total_input = self.input_tokens + self.cache_read_tokens
@@ -584,7 +583,7 @@ class StatusLine:
     weekly_pct: str       # "78%"
     weekly_bar: str       # "████████░░"
     duration: str         # "00:34:12"
-    
+
     def format(self) -> str:
         return (
             f"aOa ─ {self.model} │ "
@@ -605,7 +604,7 @@ class StatusManager:
     def __init__(self, redis_url: str):
         self.r = redis.from_url(redis_url, decode_responses=True)
         self._ensure_session()
-    
+
     def _ensure_session(self):
         """Initialize session if needed."""
         if not self.r.hexists(Keys.SESSION, 'session_start'):
@@ -623,11 +622,11 @@ class StatusManager:
                 'last_activity': now,
                 'project': 'default',
             })
-    
+
     # =========================================================================
     # Event Recording
     # =========================================================================
-    
+
     def record_request(
         self,
         model: str,
@@ -639,7 +638,7 @@ class StatusManager:
     ):
         """Record a Claude API request."""
         now = time.time()
-        
+
         # Calculate cost
         pricing = PRICING.get(model, PRICING['sonnet-4'])
         cost = (
@@ -648,7 +647,7 @@ class StatusManager:
             (cache_read_tokens / 1_000_000) * pricing['cache_read'] +
             (cache_write_tokens / 1_000_000) * pricing['cache_write']
         )
-        
+
         # Update session
         pipe = self.r.pipeline()
         pipe.hset(Keys.SESSION, 'model', model)
@@ -660,24 +659,24 @@ class StatusManager:
         pipe.hincrby(Keys.SESSION, 'cache_write_tokens', cache_write_tokens)
         pipe.hincrbyfloat(Keys.SESSION, 'session_cost', cost)
         pipe.hincrby(Keys.SESSION, 'request_count', 1)
-        
+
         # Update totals
         pipe.hincrbyfloat(Keys.METRICS, 'total_cost', cost)
         pipe.hincrby(Keys.METRICS, 'total_requests', 1)
         pipe.hincrby(Keys.METRICS, 'total_input_tokens', input_tokens)
         pipe.hincrby(Keys.METRICS, 'total_output_tokens', output_tokens)
-        
+
         # Daily tracking
         today = datetime.now().strftime('%Y-%m-%d')
         daily_key = Keys.DAILY.format(date=today)
         pipe.hincrbyfloat(daily_key, 'cost', cost)
         pipe.hincrby(daily_key, 'requests', 1)
         pipe.expire(daily_key, 86400 * 30)  # Keep 30 days
-        
+
         # Weekly tracking
         pipe.hincrbyfloat(Keys.WEEKLY, 'cost', cost)
         pipe.hincrby(Keys.WEEKLY, 'requests', 1)
-        
+
         # History
         event = json.dumps({
             'type': 'request',
@@ -690,11 +689,11 @@ class StatusManager:
         })
         pipe.lpush(Keys.HISTORY, event)
         pipe.ltrim(Keys.HISTORY, 0, 999)
-        
+
         pipe.execute()
-        
+
         return cost
-    
+
     def record_model_switch(self, model: str):
         """Record a model change."""
         self.r.hset(Keys.SESSION, 'model', model)
@@ -704,7 +703,7 @@ class StatusManager:
             'ts': time.time(),
         })
         self.r.lpush(Keys.HISTORY, event)
-    
+
     def record_block(self, block_type: str, duration_seconds: int = 0):
         """Record a rate limit block."""
         event = json.dumps({
@@ -715,11 +714,11 @@ class StatusManager:
         })
         self.r.lpush(Keys.HISTORY, event)
         self.r.hincrby(Keys.METRICS, 'blocks_total', 1)
-    
+
     def set_weekly_estimate(self, percentage: float):
         """Set estimated weekly usage percentage."""
         self.r.hset(Keys.WEEKLY, 'estimated_pct', percentage)
-    
+
     def reset_session(self):
         """Reset session stats (keep totals)."""
         now = time.time()
@@ -734,23 +733,23 @@ class StatusManager:
             'session_start': now,
             'last_activity': now,
         })
-    
+
     def reset_weekly(self):
         """Reset weekly stats (call on week boundary)."""
         self.r.delete(Keys.WEEKLY)
-    
+
     # =========================================================================
     # Status Retrieval
     # =========================================================================
-    
+
     def get_session(self) -> SessionState:
         """Get current session state."""
         data = self.r.hgetall(Keys.SESSION)
         metrics = self.r.hgetall(Keys.METRICS)
         weekly = self.r.hgetall(Keys.WEEKLY)
-        
+
         model = data.get('model', 'unknown')
-        
+
         return SessionState(
             model=model,
             context_used=int(data.get('context_used', 0)),
@@ -769,41 +768,41 @@ class StatusManager:
             weekly_usage_pct=float(weekly.get('estimated_pct', 0)),
             project=data.get('project', 'default'),
         )
-    
+
     def get_status_line(self) -> StatusLine:
         """Get formatted status line."""
         session = self.get_session()
-        
+
         # Format helpers
         def fmt_tokens(n: int) -> str:
             if n >= 1000:
                 return f"{n/1000:.1f}k"
             return str(n)
-        
+
         def fmt_cost(c: float) -> str:
             return f"${c:.2f}"
-        
+
         def fmt_duration(start: float) -> str:
             elapsed = int(time.time() - start)
             hours, remainder = divmod(elapsed, 3600)
             minutes, seconds = divmod(remainder, 60)
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-        
+
         def fmt_bar(pct: float, width: int = 10) -> str:
             filled = int(pct / 100 * width)
             return '█' * filled + '░' * (width - filled)
-        
+
         # Context
         ctx_used_k = session.context_used // 1000
         ctx_max_k = session.context_max // 1000
         context = f"{ctx_used_k}k/{ctx_max_k}k"
-        
+
         # Cache hit rate
         cache_pct = int(session.tokens.cache_hit_rate * 100)
-        
+
         # Weekly percentage
         weekly_pct = min(100, session.weekly_usage_pct)
-        
+
         return StatusLine(
             model=session.model.replace('claude-', ''),
             context=context,
@@ -816,8 +815,8 @@ class StatusManager:
             weekly_bar=fmt_bar(weekly_pct),
             duration=fmt_duration(session.session_start),
         )
-    
-    def get_history(self, limit: int = 50) -> List[dict]:
+
+    def get_history(self, limit: int = 50) -> list[dict]:
         """Get recent events."""
         events = self.r.lrange(Keys.HISTORY, 0, limit - 1)
         return [json.loads(e) for e in events]
@@ -827,7 +826,7 @@ class StatusManager:
 # Flask API
 # =============================================================================
 
-manager: Optional[StatusManager] = None
+manager: StatusManager | None = None
 
 @app.route('/health')
 def health():
@@ -894,7 +893,7 @@ def record_event():
     """Record an event from Claude Code."""
     data = request.json
     event_type = data.get('type')
-    
+
     if event_type == 'request':
         cost = manager.record_request(
             model=data.get('model', 'unknown'),
@@ -905,22 +904,22 @@ def record_event():
             context_used=data.get('context_used', 0),
         )
         return jsonify({'status': 'ok', 'cost': cost})
-    
+
     elif event_type == 'model_switch':
         manager.record_model_switch(data.get('model', 'unknown'))
         return jsonify({'status': 'ok'})
-    
+
     elif event_type == 'block':
         manager.record_block(
             block_type=data.get('block_type', 'unknown'),
             duration_seconds=data.get('duration', 0),
         )
         return jsonify({'status': 'ok'})
-    
+
     elif event_type == 'weekly_estimate':
         manager.set_weekly_estimate(data.get('percentage', 0))
         return jsonify({'status': 'ok'})
-    
+
     else:
         return jsonify({'status': 'error', 'message': f'Unknown event type: {event_type}'}), 400
 
@@ -985,7 +984,7 @@ def get_baseline():
 def main():
     global manager, syncer
 
-    print(f"Starting aOa Status Service")
+    print("Starting aOa Status Service")
     print(f"Redis: {REDIS_URL}")
     print(f"Port: {PORT}")
 
@@ -999,7 +998,7 @@ def main():
             redis_client=manager.r,
             intent_url=intent_url
         )
-        print(f"Subagent syncer initialized")
+        print("Subagent syncer initialized")
         print(f"  Claude dir: {syncer.claude_dir}")
         print(f"  Sync interval: {syncer.sync_interval}s")
 
@@ -1014,7 +1013,7 @@ def main():
 
         sync_thread = threading.Thread(target=background_sync, daemon=True)
         sync_thread.start()
-        print(f"Background sync thread started")
+        print("Background sync thread started")
     except Exception as e:
         print(f"Syncer initialization failed: {e}")
         syncer = None

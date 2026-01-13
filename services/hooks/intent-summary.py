@@ -8,12 +8,13 @@ Output: ⚡ aOa 87% │ 877 intents │ 0.1ms │ editing python searching
         Accuracy is FIRST - bright and visible
 """
 
-import sys
+import contextlib
 import json
 import os
+import sys
 import time
-from urllib.request import Request, urlopen
 from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 AOA_URL = os.environ.get("AOA_URL", "http://localhost:8080")
 
@@ -109,10 +110,8 @@ def format_output(data: dict, elapsed_ms: float) -> str:
 
 def main():
     # Read stdin (hook input) but we don't need it
-    try:
+    with contextlib.suppress(Exception):
         json.load(sys.stdin)
-    except Exception:
-        pass
 
     data, elapsed_ms = get_intent_stats()
 

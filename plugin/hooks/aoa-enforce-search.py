@@ -9,6 +9,7 @@ This enforces the aOa-first search pattern for better performance.
 import json
 import sys
 
+
 def main():
     try:
         input_data = json.load(sys.stdin)

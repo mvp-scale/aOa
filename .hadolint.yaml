@@ -1,0 +1,21 @@
+# =============================================================================
+# Hadolint - Dockerfile Linting
+# =============================================================================
+# Docs: https://github.com/hadolint/hadolint
+# Install: brew install hadolint (macOS) or apt-get install hadolint (Debian)
+# Usage: hadolint Dockerfile
+
+ignored:
+  # DL3008: Pin versions in apt-get install
+  # We use --no-install-recommends which is usually sufficient
+  - DL3008
+
+  # DL3013: Pin versions in pip install
+  # We intentionally use latest for dev simplicity
+  - DL3013
+
+trustedRegistries:
+  - docker.io
+  - python
+
+failure-threshold: warning

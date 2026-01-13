@@ -8,7 +8,6 @@ Includes Thompson Sampling for weight optimization (Phase 4).
 import math
 import random
 import time
-from typing import Dict, List, Optional, Tuple
 
 from .redis_client import RedisClient
 
@@ -37,7 +36,7 @@ class Scorer:
     EVIDENCE_WEIGHT = 0.7              # Weight for evidence factor
     STABILITY_WEIGHT = 0.3             # Weight for stability factor
 
-    def __init__(self, redis_client: Optional[RedisClient] = None, db: Optional[int] = None):
+    def __init__(self, redis_client: RedisClient | None = None, db: int | None = None):
         """
         Initialize scorer.
 
@@ -52,8 +51,8 @@ class Scorer:
     # Recording Access
     # =========================================================================
 
-    def record_access(self, file_path: str, tags: Optional[List[str]] = None,
-                      timestamp: Optional[int] = None) -> Dict[str, float]:
+    def record_access(self, file_path: str, tags: list[str] | None = None,
+                      timestamp: int | None = None) -> dict[str, float]:
         """
         Record a file access, updating all scoring signals.
 
@@ -96,20 +95,20 @@ class Scorer:
     # Score Retrieval
     # =========================================================================
 
-    def get_recency_score(self, file_path: str) -> Optional[float]:
+    def get_recency_score(self, file_path: str) -> float | None:
         """Get recency score for a file (timestamp of last access)."""
         return self.redis.zscore(RedisClient.PREFIX_RECENCY, file_path)
 
-    def get_frequency_score(self, file_path: str) -> Optional[float]:
+    def get_frequency_score(self, file_path: str) -> float | None:
         """Get frequency score for a file (access count)."""
         return self.redis.zscore(RedisClient.PREFIX_FREQUENCY, file_path)
 
-    def get_tag_score(self, file_path: str, tag: str) -> Optional[float]:
+    def get_tag_score(self, file_path: str, tag: str) -> float | None:
         """Get tag affinity score for a file and tag."""
         tag_key = f"{RedisClient.PREFIX_TAG}:{tag}"
         return self.redis.zscore(tag_key, file_path)
 
-    def get_first_seen(self, file_path: str) -> Optional[float]:
+    def get_first_seen(self, file_path: str) -> float | None:
         """Get first_seen timestamp for a file."""
         first_seen_key = f"aoa:first_seen:{file_path}"
         val = self.redis.client.get(first_seen_key)
@@ -162,8 +161,8 @@ class Scorer:
     # Ranking
     # =========================================================================
 
-    def get_ranked_files(self, tags: Optional[List[str]] = None,
-                         limit: int = 10, db: Optional[int] = None) -> List[Dict]:
+    def get_ranked_files(self, tags: list[str] | None = None,
+                         limit: int = 10, db: int | None = None) -> list[dict]:
         """
         Get files ranked by composite score.
 
@@ -278,17 +277,17 @@ class Scorer:
 
         return ranked_files
 
-    def get_top_files_by_recency(self, limit: int = 10) -> List[Tuple[str, float]]:
+    def get_top_files_by_recency(self, limit: int = 10) -> list[tuple[str, float]]:
         """Get files sorted by most recent access."""
         return self.redis.zrange(RedisClient.PREFIX_RECENCY, 0, limit - 1,
                                  desc=True, withscores=True)
 
-    def get_top_files_by_frequency(self, limit: int = 10) -> List[Tuple[str, float]]:
+    def get_top_files_by_frequency(self, limit: int = 10) -> list[tuple[str, float]]:
         """Get files sorted by most frequent access."""
         return self.redis.zrange(RedisClient.PREFIX_FREQUENCY, 0, limit - 1,
                                  desc=True, withscores=True)
 
-    def get_files_for_tag(self, tag: str, limit: int = 10) -> List[Tuple[str, float]]:
+    def get_files_for_tag(self, tag: str, limit: int = 10) -> list[tuple[str, float]]:
         """Get files with highest affinity for a tag."""
         tag_key = f"{RedisClient.PREFIX_TAG}:{tag}"
         return self.redis.zrange(tag_key, 0, limit - 1, desc=True, withscores=True)
@@ -298,7 +297,7 @@ class Scorer:
     # =========================================================================
 
     def set_weights(self, recency: float = None, frequency: float = None,
-                    tag: float = None) -> Dict[str, float]:
+                    tag: float = None) -> dict[str, float]:
         """
         Update scoring weights.
 
@@ -319,7 +318,7 @@ class Scorer:
 
         return self.weights.copy()
 
-    def get_weights(self) -> Dict[str, float]:
+    def get_weights(self) -> dict[str, float]:
         """Get current scoring weights."""
         return self.weights.copy()
 
@@ -378,7 +377,7 @@ class Scorer:
     # Statistics
     # =========================================================================
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """Get statistics about current scoring state."""
         recency_count = self.redis.zcard(RedisClient.PREFIX_RECENCY)
         frequency_count = self.redis.zcard(RedisClient.PREFIX_FREQUENCY)
@@ -444,7 +443,7 @@ class WeightTuner:
     # Redis key prefix for tuner data
     REDIS_PREFIX = "aoa:tuner"
 
-    def __init__(self, redis_client: Optional[RedisClient] = None):
+    def __init__(self, redis_client: RedisClient | None = None):
         """
         Initialize with Beta(1,1) priors (uniform) for each arm.
 
@@ -454,7 +453,7 @@ class WeightTuner:
         self.redis = redis_client
         self._current_arm = 0  # Track selected arm for feedback
 
-    def _get_arm_stats(self, arm_idx: int) -> Tuple[int, int]:
+    def _get_arm_stats(self, arm_idx: int) -> tuple[int, int]:
         """
         Get (alpha, beta) for an arm from Redis.
 
@@ -484,7 +483,7 @@ class WeightTuner:
             else:
                 self.redis.client.hincrby(key, "beta", 1)
 
-    def select_weights(self) -> Dict[str, float]:
+    def select_weights(self) -> dict[str, float]:
         """
         Select weights using Thompson Sampling.
 
@@ -518,7 +517,7 @@ class WeightTuner:
             '_arm_idx': best_arm,  # Include for tracking
         }
 
-    def record_feedback(self, hit: bool, arm_idx: Optional[int] = None):
+    def record_feedback(self, hit: bool, arm_idx: int | None = None):
         """
         Record hit/miss feedback for the selected arm.
 
@@ -529,7 +528,7 @@ class WeightTuner:
         arm = arm_idx if arm_idx is not None else self._current_arm
         self._update_arm_stats(arm, hit)
 
-    def get_best_weights(self) -> Dict[str, float]:
+    def get_best_weights(self) -> dict[str, float]:
         """
         Get the arm with highest expected success rate.
         (For exploitation only, no exploration)
@@ -553,7 +552,7 @@ class WeightTuner:
             '_mean': best_mean,
         }
 
-    def get_stats(self) -> List[Dict]:
+    def get_stats(self) -> list[dict]:
         """
         Get statistics for all arms, sorted by mean success rate.
 

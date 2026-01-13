@@ -6,14 +6,14 @@ Captures tool usage and records intent to aOa.
 Fire-and-forget, non-blocking, <10ms.
 """
 
-import sys
 import json
-import re
 import os
-from pathlib import Path
-from urllib.request import Request, urlopen
-from urllib.error import URLError
+import re
+import sys
 from datetime import datetime
+from pathlib import Path
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 AOA_URL = os.environ.get("AOA_URL", "http://localhost:8080")
 # Find AOA data directory
@@ -102,7 +102,7 @@ def _load_pattern_configs():
             data = json.loads(semantic_file.read_text())
             categories = data.get("categories", {})
             for cat_name, cat_data in categories.items():
-                patterns = set(p.lower() for p in cat_data.get("patterns", []))
+                patterns = {p.lower() for p in cat_data.get("patterns", [])}
                 semantic_patterns[cat_name] = {
                     "patterns": patterns,
                     "tag": cat_data.get("tag", f"#{cat_name}"),
@@ -119,7 +119,7 @@ def _load_pattern_configs():
                 # Convert to matchable form: health_check -> healthcheck, health-check, etc.
                 normalized = pattern.replace("_", "")
                 domain_keywords[normalized] = tag
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
 
     # Load domain patterns
@@ -137,7 +137,7 @@ def _load_pattern_configs():
             for suffix, tag in suffixes.items():
                 if suffix != "description":  # Skip metadata
                     class_suffixes[suffix] = tag
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
 
     return semantic_patterns, domain_keywords, class_suffixes
@@ -178,7 +178,7 @@ def _match_semantic_tags(tokens: set) -> set:
 
     # Priority 1 (CRUD) first, then 2 (auth, cache, etc.), then 3
     for priority in [1, 2, 3]:
-        for cat_name, cat_data in SEMANTIC_PATTERNS.items():
+        for _cat_name, cat_data in SEMANTIC_PATTERNS.items():
             if cat_data["priority"] != priority:
                 continue
             # Check if any token starts with any pattern

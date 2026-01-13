@@ -26,13 +26,13 @@ Even if compromised, this service can only access whitelisted URLs.
 
 import os
 import re
+import shutil
 import subprocess
 import tempfile
-import shutil
 import time
-from pathlib import Path
-from typing import Optional, Tuple, List
 from datetime import datetime
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -59,14 +59,14 @@ MAX_REPO_SIZE_MB = int(os.environ.get("MAX_REPO_SIZE_MB", 500))
 CLONE_TIMEOUT = int(os.environ.get("CLONE_TIMEOUT", 300))
 
 # Clone log for audit
-clone_log: List[dict] = []
+clone_log: list[dict] = []
 MAX_LOG_SIZE = 500
 
 # =============================================================================
 # Whitelist Management
 # =============================================================================
 
-def load_whitelist() -> List[str]:
+def load_whitelist() -> list[str]:
     """Load allowed hosts from file."""
     if not WHITELIST_FILE.exists():
         # Initialize with defaults
@@ -80,12 +80,12 @@ def load_whitelist() -> List[str]:
         return DEFAULT_ALLOWED_HOSTS.copy()
 
 
-def save_whitelist(hosts: List[str]):
+def save_whitelist(hosts: list[str]):
     """Save allowed hosts to file."""
     WHITELIST_FILE.write_text("\n".join(hosts))
 
 
-def add_to_whitelist(host: str) -> Tuple[bool, str]:
+def add_to_whitelist(host: str) -> tuple[bool, str]:
     """Add a host to the whitelist."""
     # Validate host format
     if not re.match(r'^[\w\-\.]+$', host):
@@ -103,7 +103,7 @@ def add_to_whitelist(host: str) -> Tuple[bool, str]:
     return True, f"Added '{host}' to whitelist"
 
 
-def remove_from_whitelist(host: str) -> Tuple[bool, str]:
+def remove_from_whitelist(host: str) -> tuple[bool, str]:
     """Remove a host from the whitelist."""
     hosts = load_whitelist()
 
@@ -129,7 +129,7 @@ ALLOWED_HOSTS = load_whitelist()
 # Validation
 # =============================================================================
 
-def validate_git_url(url: str) -> Tuple[bool, str]:
+def validate_git_url(url: str) -> tuple[bool, str]:
     """
     Validate git URL is safe.
 
@@ -163,7 +163,7 @@ def validate_git_url(url: str) -> Tuple[bool, str]:
     return True, "OK"
 
 
-def validate_repo_name(name: str) -> Tuple[bool, str]:
+def validate_repo_name(name: str) -> tuple[bool, str]:
     """Validate repo name is safe."""
     if not name:
         return False, "Repo name required"
@@ -194,7 +194,7 @@ def log_operation(action: str, **kwargs):
 # Git Operations
 # =============================================================================
 
-def git_clone(url: str, name: str, depth: int = 1) -> Tuple[bool, str]:
+def git_clone(url: str, name: str, depth: int = 1) -> tuple[bool, str]:
     """
     Execute git clone with safety restrictions.
 
@@ -266,7 +266,7 @@ def git_clone(url: str, name: str, depth: int = 1) -> Tuple[bool, str]:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def git_pull(name: str) -> Tuple[bool, str]:
+def git_pull(name: str) -> tuple[bool, str]:
     """Pull updates for an existing repo."""
     target_path = REPOS_ROOT / name
 
@@ -301,7 +301,7 @@ def git_pull(name: str) -> Tuple[bool, str]:
         return False, f"Pull error: {e}"
 
 
-def list_repos() -> List[dict]:
+def list_repos() -> list[dict]:
     """List all cloned repos."""
     repos = []
     if REPOS_ROOT.exists():
@@ -312,7 +312,7 @@ def list_repos() -> List[dict]:
                     size_mb = sum(
                         f.stat().st_size for f in repo_dir.rglob("*") if f.is_file()
                     ) / (1024 * 1024)
-                except:
+                except Exception:
                     size_mb = 0
 
                 repos.append({
@@ -322,7 +322,7 @@ def list_repos() -> List[dict]:
     return repos
 
 
-def delete_repo(name: str) -> Tuple[bool, str]:
+def delete_repo(name: str) -> tuple[bool, str]:
     """Delete a cloned repo."""
     target_path = REPOS_ROOT / name
 

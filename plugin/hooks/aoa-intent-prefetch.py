@@ -9,13 +9,13 @@ Output format matches aOa branding:
   ⚡ aOa Prefetch │ 2.3ms │ 4 related files
 """
 
-import sys
 import json
 import os
+import sys
 import time
-from urllib.request import Request, urlopen
 from urllib.error import URLError
 from urllib.parse import quote
+from urllib.request import Request, urlopen
 
 AOA_URL = os.environ.get("AOA_URL", "http://localhost:8080")
 MIN_INTENTS = 10  # Don't prefetch until we have enough data

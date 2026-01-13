@@ -16,13 +16,11 @@ Trust Guarantees:
 
 import os
 import time
-import json
-import httpx
-import asyncio
 from datetime import datetime
-from typing import Optional, Dict, Any
-from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import JSONResponse, PlainTextResponse
+
+import httpx
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import PlainTextResponse
 
 app = FastAPI(
     title="aOa Gateway",
@@ -135,7 +133,7 @@ MAX_LOG_SIZE = 1000
 # HTTP Client
 # =============================================================================
 
-client: Optional[httpx.AsyncClient] = None
+client: httpx.AsyncClient | None = None
 
 
 @app.on_event("startup")
@@ -195,7 +193,7 @@ async def proxy_request(
             media_type=response.headers.get("content-type"),
         )
     except httpx.ConnectError:
-        raise HTTPException(status_code=503, detail=f"Service '{service}' unavailable")
+        raise HTTPException(status_code=503, detail=f"Service '{service}' unavailable") from None
 
 
 def log_request(method: str, path: str, service: str, status: int, ms: float):

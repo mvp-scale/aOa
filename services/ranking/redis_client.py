@@ -5,8 +5,6 @@ Wraps redis-py with aOa-specific sorted set operations for file scoring.
 """
 
 import os
-import time
-from typing import List, Optional, Tuple
 
 import redis
 
@@ -20,7 +18,7 @@ class RedisClient:
     PREFIX_TAG = "aoa:tag"
     PREFIX_COMPOSITE = "aoa:composite"
 
-    def __init__(self, url: Optional[str] = None, db: Optional[int] = None):
+    def __init__(self, url: str | None = None, db: int | None = None):
         """
         Initialize Redis connection.
 
@@ -29,7 +27,7 @@ class RedisClient:
             db: Database number (overrides URL's db if provided)
         """
         self.url = url or os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-        self._client: Optional[redis.Redis] = None
+        self._client: redis.Redis | None = None
         self._db_override = db
 
     @property
@@ -81,7 +79,7 @@ class RedisClient:
         return self.client.zincrby(key, increment, member)
 
     def zrange(self, key: str, start: int = 0, end: int = -1,
-               desc: bool = True, withscores: bool = False) -> List:
+               desc: bool = True, withscores: bool = False) -> list:
         """
         Get range of members from sorted set.
 
@@ -99,7 +97,7 @@ class RedisClient:
             return self.client.zrevrange(key, start, end, withscores=withscores)
         return self.client.zrange(key, start, end, withscores=withscores)
 
-    def zscore(self, key: str, member: str) -> Optional[float]:
+    def zscore(self, key: str, member: str) -> float | None:
         """Get score of member in sorted set."""
         return self.client.zscore(key, member)
 
@@ -115,8 +113,8 @@ class RedisClient:
     # Compound Operations
     # =========================================================================
 
-    def zunionstore(self, dest: str, keys: List[str],
-                    weights: Optional[List[float]] = None,
+    def zunionstore(self, dest: str, keys: list[str],
+                    weights: list[float] | None = None,
                     aggregate: str = 'SUM') -> int:
         """
         Union multiple sorted sets with optional weights.
@@ -136,8 +134,8 @@ class RedisClient:
             return self.client.zunionstore(dest, key_weights, aggregate=aggregate)
         return self.client.zunionstore(dest, keys, aggregate=aggregate)
 
-    def zinterstore(self, dest: str, keys: List[str],
-                    weights: Optional[List[float]] = None,
+    def zinterstore(self, dest: str, keys: list[str],
+                    weights: list[float] | None = None,
                     aggregate: str = 'SUM') -> int:
         """
         Intersect multiple sorted sets with optional weights.
@@ -161,7 +159,7 @@ class RedisClient:
     # Utility Operations
     # =========================================================================
 
-    def keys(self, pattern: str) -> List[str]:
+    def keys(self, pattern: str) -> list[str]:
         """Get all keys matching pattern."""
         return self.client.keys(pattern)
 
@@ -185,7 +183,7 @@ class RedisClient:
     # Lua Script Support (for atomic operations)
     # =========================================================================
 
-    def eval(self, script: str, keys: List[str], args: List) -> any:
+    def eval(self, script: str, keys: list[str], args: list) -> any:
         """
         Execute Lua script.
 

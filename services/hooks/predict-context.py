@@ -14,13 +14,12 @@ Output format:
 }
 """
 
-import sys
 import json
 import os
 import re
-import time
-from urllib.request import Request, urlopen
+import sys
 from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 AOA_URL = os.environ.get("AOA_URL", "http://localhost:8080")
 MIN_INTENTS = 5  # Don't predict until we have enough data (lower for active projects)

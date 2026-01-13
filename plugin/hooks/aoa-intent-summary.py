@@ -8,13 +8,13 @@ Output: ⚡ aOa 87% │ 877 intents │ 0.1ms │ editing python searching
         Accuracy is FIRST - bright and visible
 """
 
-import sys
 import json
 import os
+import sys
 import time
 from pathlib import Path
-from urllib.request import Request, urlopen
 from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 AOA_URL = os.environ.get("AOA_URL", "http://localhost:8080")
 

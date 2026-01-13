@@ -1,0 +1,33 @@
+# =============================================================================
+# yamllint - YAML Linting
+# =============================================================================
+# Docs: https://yamllint.readthedocs.io/
+# Install: pip install yamllint
+# Usage: yamllint docker-compose.yml
+
+extends: default
+
+rules:
+  # Allow long lines (common in docker-compose)
+  line-length:
+    max: 150
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+
+  # Allow multiple documents in one file
+  document-start: disable
+
+  # Indentation: 2 spaces
+  indentation:
+    spaces: 2
+    indent-sequences: true
+
+  # Truthy values: allow yes/no/on/off
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
+
+ignore: |
+  .context/
+  .git/
+  node_modules/
+  .venv/

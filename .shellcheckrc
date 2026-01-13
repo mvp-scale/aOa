@@ -1,0 +1,18 @@
+# =============================================================================
+# ShellCheck - Shell Script Linting
+# =============================================================================
+# Docs: https://www.shellcheck.net/
+# Install: brew install shellcheck (macOS) or apt-get install shellcheck
+# Usage: shellcheck script.sh
+
+# Default shell dialect
+shell=bash
+
+# Disable specific checks
+# SC1091: Not following sourced files (they may not exist during lint)
+# SC2034: Variable appears unused (often used in sourced scripts)
+# SC2155: Declare and assign separately (style preference)
+disable=SC1091,SC2034,SC2155
+
+# Enable optional checks
+enable=require-variable-braces
