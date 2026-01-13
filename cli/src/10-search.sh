@@ -334,22 +334,45 @@ display_ranked_grep_results() {
     fi
     printf "\n\n"
 
-    # GL-046.4: Direct iteration through results - O(1) from API
-    # All formatting done in jq to avoid delimiter issues with content
+    # GL-047.8: Hierarchical format for AI-readable context
+    # Format: file:Parent().method(params)[range]:line content
+    # Each line is self-contained - no state tracking needed
     echo "$result" | jq -r '
+        # Helper: extract params from signature like "def foo(self, x: int) -> str" -> "(x)"
+        def extract_params:
+            if . == null then "()"
+            elif test("\\(.*\\)") then
+                # Extract content between ( and ), drop self, simplify types
+                capture("\\((?<p>[^)]*)\\)").p
+                | split(",")
+                | map(gsub("^\\s+|\\s+$"; ""))  # trim
+                | map(select(. != "self" and . != ""))  # drop self
+                | map(split(":")[0] | gsub("^\\s+|\\s+$"; ""))  # drop type annotations
+                | "(" + join(", ") + ")"
+            else "()"
+            end;
+
         .results[] |
-        # Build symbol info
-        (if .symbol then
-            if .end_line then "\(.symbol)[\(.line)-\(.end_line)]"
-            else "\(.symbol)[\(.line)]"
+        # Extract params from signature
+        (.signature | extract_params) as $params |
+        # Build hierarchical scope: Parent().method(params)[range] or symbol(params)[range] or <module>
+        (
+            if .parent_name then
+                # Has parent: Parent().method(params)[method-range]
+                "\(.parent_name)().\(.symbol // "<anon>")\($params)[\(.start_line // .line)-\(.end_line // .line)]"
+            elif .symbol then
+                # No parent: symbol(params)[range]
+                "\(.symbol)\($params)[\(.start_line // .line)-\(.end_line // .line)]"
+            else
+                # Module level
+                "<module>"
             end
-        else "<module>"
-        end) as $sym |
-        # Build tags (max 3) - tags already have # prefix from API
+        ) as $scope |
+        # Build tags (max 3)
         ((.tags // []) | .[0:3] | join(" ")) as $tags |
-        # Format: file:line: symbol content  #tags
-        "\u001b[1m\(.file)\u001b[0m\u001b[2m:\(.line):\u001b[0m \u001b[33m\($sym)\u001b[0m" +
-        (if .content then " \u001b[2m\(.content)\u001b[0m" else "" end) +
+        # Format: file:scope:line content  #tags
+        "\u001b[1m\(.file)\u001b[0m:\u001b[33m\($scope)\u001b[0m:\u001b[2m\(.line)\u001b[0m" +
+        (if .content then " \(.content)" else "" end) +
         (if ($tags | length) > 0 then "  \u001b[36m\($tags)\u001b[0m" else "" end)
     '
 }

@@ -409,7 +409,14 @@ class Location:
     # Symbol-level metadata for semantic compression tags
     symbol: str | None = None      # Symbol/function name (e.g., "handleAuth")
     symbol_kind: str | None = None # Kind (e.g., "function", "class")
+    start_line: int | None = None  # GL-047.7: Where the symbol starts (for correct range display)
     end_line: int | None = None    # Where the symbol ends
+    signature: str | None = None   # GL-047.7: Definition header (e.g., "def foo(x: int) -> str")
+    # GL-047.8: Parent hierarchy for AI-readable context
+    parent_name: str | None = None       # Parent class/function name (e.g., "OutlineParser")
+    parent_signature: str | None = None  # Parent signature with params (e.g., "class OutlineParser()")
+    parent_start: int | None = None      # Parent start line
+    parent_end: int | None = None        # Parent end line
     content: str | None = None     # GL-046: Line content for O(1) display
     tags: list | None = None       # GL-047: AC-computed dense tags at index time
 
@@ -994,8 +1001,8 @@ class OutlineParser:
         # Different languages have different name child node types
         name_types = {
             'python': ['identifier', 'name'],
-            'typescript': ['identifier', 'property_identifier'],
-            'javascript': ['identifier', 'property_identifier'],
+            'typescript': ['identifier', 'property_identifier', 'type_identifier'],
+            'javascript': ['identifier', 'property_identifier', 'type_identifier'],
             'go': ['identifier', 'field_identifier'],
             'rust': ['identifier', 'type_identifier'],
             'java': ['identifier'],
@@ -1023,16 +1030,60 @@ class OutlineParser:
 
         return None
 
-    def _get_signature(self, node, source_bytes: bytes, max_len: int = 100) -> str:
-        """Extract signature (first line of the node)."""
-        start = node.start_byte
-        # Find end of first line
-        end = start
-        while end < len(source_bytes) and end < start + max_len:
-            if source_bytes[end:end+1] == b'\n':
+    # Body node types by language - where the actual code starts
+    BODY_NODES = {
+        'python': {'block'},
+        'javascript': {'statement_block'},
+        'typescript': {'statement_block'},
+        'go': {'block'},
+        'rust': {'block'},
+        'java': {'block'},
+        'c': {'compound_statement'},
+        'cpp': {'compound_statement'},
+        'ruby': {'body_statement', 'do_block'},
+        'php': {'compound_statement'},
+        'swift': {'function_body'},
+        'kotlin': {'function_body'},
+        'scala': {'block'},
+        'bash': {'compound_statement'},
+        'lua': {'block'},
+    }
+
+    def _get_signature(self, node, source_bytes: bytes, language: str = 'python', max_len: int = 500) -> str:
+        """Extract full signature including multi-line parameters.
+
+        Finds the body node and takes everything from the function start
+        to just before the body begins.
+        """
+        body_types = self.BODY_NODES.get(language, {'block', 'statement_block', 'compound_statement'})
+
+        # Find body node
+        body_start = None
+        for child in node.children:
+            if child.type in body_types:
+                body_start = child.start_byte
                 break
-            end += 1
-        return source_bytes[start:end].decode('utf-8', errors='replace').strip()
+
+        if body_start is not None:
+            # Take everything before the body
+            sig_bytes = source_bytes[node.start_byte:body_start]
+        else:
+            # Fallback: take first line up to max_len
+            start = node.start_byte
+            end = start
+            while end < len(source_bytes) and end < start + max_len:
+                if source_bytes[end:end+1] == b'\n':
+                    break
+                end += 1
+            sig_bytes = source_bytes[start:end]
+
+        # Clean up: decode, normalize whitespace, remove trailing : or {
+        sig = sig_bytes.decode('utf-8', errors='replace')
+        # Collapse multiple whitespace/newlines into single space
+        sig = ' '.join(sig.split())
+        # Remove trailing : or { (Python colon, C-style brace)
+        sig = sig.rstrip(': {')
+        return sig.strip()
 
     def parse_file(self, file_path: str, language: str) -> list[OutlineSymbol]:
         """Parse a file and return its outline."""
@@ -1066,7 +1117,7 @@ class OutlineParser:
                         kind=symbol_types[node.type],
                         start_line=node.start_point[0] + 1,  # 1-indexed
                         end_line=node.end_point[0] + 1,
-                        signature=self._get_signature(node, source),
+                        signature=self._get_signature(node, source, language),
                         children=[]
                     )
                     symbols.append(symbol)
@@ -1250,22 +1301,46 @@ class CodebaseIndex:
     def _find_enclosing_symbol(self, line_num: int, symbols: list) -> dict | None:
         """GL-046.2: Find the most specific (smallest) symbol containing a line.
 
-        Returns dict with {name, kind, start_line, end_line} or None if not in any symbol.
+        Returns dict with symbol info AND parent info for hierarchy.
+        GL-047.8: Added parent tracking for AI-readable context.
         """
+        # Find all symbols containing this line
         candidates = []
         for sym in symbols:
             if sym.start_line <= line_num <= sym.end_line:
                 candidates.append(sym)
         if not candidates:
             return None
-        # Return smallest range (most specific symbol)
-        best = min(candidates, key=lambda s: s.end_line - s.start_line)
-        return {
+
+        # Sort by range size (smallest first = most specific)
+        candidates.sort(key=lambda s: s.end_line - s.start_line)
+
+        # Best = smallest (innermost)
+        best = candidates[0]
+
+        # Parent = next smallest that contains best (if any)
+        parent = None
+        for sym in candidates[1:]:
+            if sym.start_line <= best.start_line and best.end_line <= sym.end_line:
+                parent = sym
+                break
+
+        result = {
             'name': best.name,
             'kind': best.kind,
-            'start_line': best.start_line,  # GL-047: For AC tag lookup
-            'end_line': best.end_line
+            'start_line': best.start_line,
+            'end_line': best.end_line,
+            'signature': best.signature
         }
+
+        # Add parent info if exists
+        if parent:
+            result['parent_name'] = parent.name
+            result['parent_signature'] = parent.signature
+            result['parent_start'] = parent.start_line
+            result['parent_end'] = parent.end_line
+
+        return result
 
     def index_file(self, path: Path) -> bool:
         """Index a single file."""
@@ -1344,7 +1419,14 @@ class CodebaseIndex:
                         content=line_content.strip(),  # GL-046: Store content for O(1) display
                         symbol=enclosing['name'] if enclosing else None,  # GL-046.2
                         symbol_kind=enclosing['kind'] if enclosing else None,  # GL-046.2
+                        start_line=enclosing['start_line'] if enclosing else None,  # GL-047.7
                         end_line=enclosing['end_line'] if enclosing else None,  # GL-046.2
+                        signature=enclosing['signature'] if enclosing else None,  # GL-047.7
+                        # GL-047.8: Parent hierarchy
+                        parent_name=enclosing.get('parent_name') if enclosing else None,
+                        parent_signature=enclosing.get('parent_signature') if enclosing else None,
+                        parent_start=enclosing.get('parent_start') if enclosing else None,
+                        parent_end=enclosing.get('parent_end') if enclosing else None,
                         tags=ac_tags  # GL-047: Pre-computed AC dense tags
                     )
                     self.inverted_index[token].append(loc)
@@ -2488,7 +2570,8 @@ def semantic_grep():
                         'name': sym.name,
                         'kind': sym.kind,
                         'start_line': sym.start_line,
-                        'end_line': sym.end_line
+                        'end_line': sym.end_line,
+                        'signature': sym.signature  # Definition header
                     }
                     symbol_tags = sym.tags or []
                     break

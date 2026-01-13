@@ -521,19 +521,22 @@ cmd_outline() {
         # Use jq to format output with tags inline
         echo "$result" | jq -r --argjson tags "$tags_json" '
             .symbols[] |
+            .signature as $sig |
             .kind as $kind |
             .name as $name |
             .start_line as $start |
             .end_line as $end |
+            ($sig // "\($kind) \($name)") as $header |
             ($tags.tags[$name] // []) | join(" ") as $sym_tags |
             if ($sym_tags | length) > 0 then
-                "  \($kind) \($name) [\($start)-\($end)] \($sym_tags)"
+                "  \($header) [\($start)-\($end)] \($sym_tags)"
             else
-                "  \($kind) \($name) [\($start)-\($end)] (no tags)"
+                "  \($header) [\($start)-\($end)] (no tags)"
             end
         ' 2>/dev/null
     else
-        echo "$result" | jq -r '.symbols[] | "  \(.kind) \(.name) [\(.start_line)-\(.end_line)]"' 2>/dev/null
+        # Show signature (definition header) for each symbol
+        echo "$result" | jq -r '.symbols[] | "  \(.signature // "\(.kind) \(.name)") [\(.start_line)-\(.end_line)]"' 2>/dev/null
     fi
 
     # If tagging requested, output instructions for Claude
