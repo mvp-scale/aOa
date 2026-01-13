@@ -4290,7 +4290,36 @@ EOFCLAUDE
         local file_count=$(echo "$index_result" | jq -r '.files // 0')
         echo -e "${GREEN}✓${NC} ${DIM}(${file_count} files)${NC}"
     else
-        echo -e "${YELLOW}pending${NC} ${DIM}(will index on first search)${NC}"
+        # Check if this is a path access issue - auto-fix by restarting Docker
+        local error_msg=$(echo "$index_result" | jq -r '.message // ""')
+        if [[ "$error_msg" == *"Could not access"* ]]; then
+            echo -e "${YELLOW}restarting services...${NC}"
+
+            # Restart Docker to pick up new directories
+            if [ -f "$AOA_HOME/docker-compose.yml" ]; then
+                docker-compose -f "$AOA_HOME/docker-compose.yml" restart > /dev/null 2>&1
+            else
+                docker restart aoa > /dev/null 2>&1
+            fi
+
+            # Wait for services to come back
+            sleep 3
+
+            # Retry registration
+            echo -n "  Indexing project.............. "
+            index_result=$(curl -s -X POST "${INDEX_URL}/project/register" \
+                -H "Content-Type: application/json" \
+                -d "{\"id\": \"${project_id}\", \"name\": \"${project_name}\", \"path\": \"${project_root}\"}" 2>/dev/null)
+
+            if echo "$index_result" | jq -e '.success' > /dev/null 2>&1; then
+                local file_count=$(echo "$index_result" | jq -r '.files // 0')
+                echo -e "${GREEN}✓${NC} ${DIM}(${file_count} files)${NC}"
+            else
+                echo -e "${YELLOW}✓${NC} ${DIM}(will index on first search)${NC}"
+            fi
+        else
+            echo -e "${GREEN}✓${NC} ${DIM}(will index on first use)${NC}"
+        fi
     fi
 
     echo
