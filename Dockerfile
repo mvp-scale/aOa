@@ -54,7 +54,8 @@ RUN pip install --no-cache-dir \
     pydantic \
     requests \
     tree-sitter \
-    tree-sitter-language-pack
+    tree-sitter-language-pack \
+    pyahocorasick
 
 WORKDIR /app
 

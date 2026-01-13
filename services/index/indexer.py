@@ -26,6 +26,13 @@ from flask import Flask, jsonify, request
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+# Aho-Corasick for O(n) multi-pattern matching (GL-047)
+try:
+    import ahocorasick
+    AHOCORASICK_AVAILABLE = True
+except ImportError:
+    AHOCORASICK_AVAILABLE = False
+
 # Tree-sitter for code outlines (165+ languages via language-pack)
 try:
     from tree_sitter import Parser, Query, QueryCursor
@@ -159,6 +166,170 @@ def _load_pattern_library():
 
 # Load patterns at startup (RAM-cached)
 SEMANTIC_PATTERNS, DOMAIN_KEYWORDS = _load_pattern_library()
+
+
+class AhoCorasickMatcher:
+    """
+    Unified pattern matcher using Aho-Corasick algorithm.
+
+    GL-047: Provides O(n) multi-pattern matching where n = text length.
+    Combines semantic patterns (action verbs) and domain patterns (tech keywords)
+    into a single automaton for efficient density analysis.
+
+    Usage:
+        matcher = AhoCorasickMatcher()
+        hits = matcher.find_all("def get_cached_user_token()")
+        # Returns: [('get', '#read', 'semantic'), ('cache', '#cache', 'domain'), ...]
+
+        density = matcher.density_by_domain(lines)
+        # Returns: {'caching': 3, 'auth': 1, ...}
+    """
+
+    def __init__(self):
+        self.automaton = None
+        self.pattern_meta = {}  # pattern -> {tag, source, category, priority}
+        self._build_automaton()
+
+    def _build_automaton(self):
+        """Build unified automaton from all pattern sources."""
+        if not AHOCORASICK_AVAILABLE:
+            return
+
+        self.automaton = ahocorasick.Automaton()
+
+        # Add semantic patterns (action verbs like create, get, update)
+        for cat_name, cat_data in SEMANTIC_PATTERNS.items():
+            tag = cat_data.get('tag', f'#{cat_name}')
+            priority = cat_data.get('priority', 3)
+            for pattern in cat_data.get('patterns', set()):
+                pattern_lower = pattern.lower()
+                self.pattern_meta[pattern_lower] = {
+                    'tag': tag,
+                    'source': 'semantic',
+                    'category': cat_name,
+                    'priority': priority
+                }
+                self.automaton.add_word(pattern_lower, pattern_lower)
+
+        # Add domain patterns (tech keywords like redis, jwt, kafka)
+        for keyword, tag in DOMAIN_KEYWORDS.items():
+            keyword_lower = keyword.lower()
+            if keyword_lower not in self.pattern_meta:  # Don't overwrite semantic
+                self.pattern_meta[keyword_lower] = {
+                    'tag': tag,
+                    'source': 'domain',
+                    'category': tag.lstrip('#'),  # Use tag as category
+                    'priority': 3
+                }
+                self.automaton.add_word(keyword_lower, keyword_lower)
+
+        # Finalize automaton for searching
+        if self.pattern_meta:
+            self.automaton.make_automaton()
+
+    def find_all(self, text: str) -> list:
+        """
+        Find all pattern matches in text.
+
+        Returns list of (pattern, tag, source) tuples.
+        O(n) where n = len(text), regardless of pattern count.
+        """
+        if not self.automaton or not text:
+            return []
+
+        text_lower = text.lower()
+        results = []
+
+        for end_idx, pattern in self.automaton.iter(text_lower):
+            meta = self.pattern_meta.get(pattern, {})
+            results.append((
+                pattern,
+                meta.get('tag', f'#{pattern}'),
+                meta.get('source', 'unknown')
+            ))
+
+        return results
+
+    def find_all_with_positions(self, text: str) -> list:
+        """
+        Find all pattern matches with their positions.
+
+        Returns list of (start_idx, end_idx, pattern, tag, source) tuples.
+        """
+        if not self.automaton or not text:
+            return []
+
+        text_lower = text.lower()
+        results = []
+
+        for end_idx, pattern in self.automaton.iter(text_lower):
+            start_idx = end_idx - len(pattern) + 1
+            meta = self.pattern_meta.get(pattern, {})
+            results.append((
+                start_idx,
+                end_idx + 1,
+                pattern,
+                meta.get('tag', f'#{pattern}'),
+                meta.get('source', 'unknown')
+            ))
+
+        return results
+
+    def density_by_category(self, text: str) -> dict:
+        """
+        Count pattern hits by category.
+
+        Used for density analysis: high counts = this code IS ABOUT that concept.
+        Returns dict of {category: count}.
+        """
+        if not self.automaton or not text:
+            return {}
+
+        text_lower = text.lower()
+        counts = defaultdict(int)
+
+        for _, pattern in self.automaton.iter(text_lower):
+            meta = self.pattern_meta.get(pattern, {})
+            category = meta.get('category', 'unknown')
+            counts[category] += 1
+
+        return dict(counts)
+
+    def get_dense_tags(self, text: str, threshold: int = 2) -> list:
+        """
+        Get tags that appear frequently (density >= threshold).
+
+        These represent what the code IS ABOUT, not just what it mentions.
+        Returns list of tags sorted by frequency (highest first).
+        """
+        density = self.density_by_category(text)
+        dense = [(cat, count) for cat, count in density.items() if count >= threshold]
+        dense.sort(key=lambda x: -x[1])
+
+        # Convert categories back to tags
+        tags = []
+        for cat, _ in dense:
+            # Find the tag for this category
+            if cat in SEMANTIC_PATTERNS:
+                tags.append(SEMANTIC_PATTERNS[cat].get('tag', f'#{cat}'))
+            else:
+                tags.append(f'#{cat}')
+
+        return tags
+
+    @property
+    def pattern_count(self) -> int:
+        """Number of patterns in the automaton."""
+        return len(self.pattern_meta)
+
+    @property
+    def is_available(self) -> bool:
+        """Check if AC matching is available."""
+        return self.automaton is not None and AHOCORASICK_AVAILABLE
+
+
+# Initialize global matcher (built once at startup)
+AC_MATCHER = AhoCorasickMatcher()
 
 
 def _tokenize_search(text: str) -> set:
@@ -1978,7 +2149,11 @@ def health():
         'status': 'ok',
         'mode': 'global' if manager.global_mode else 'legacy',
         'repos': [r.get_stats() for r in manager.repos.values()],
-        'content_cache': content_cache.stats()  # GL-046.1: LRU cache stats
+        'content_cache': content_cache.stats(),  # GL-046.1: LRU cache stats
+        'ac_matcher': {  # GL-047: Aho-Corasick pattern matcher
+            'available': AC_MATCHER.is_available,
+            'pattern_count': AC_MATCHER.pattern_count
+        }
     }
 
     if local:
@@ -1996,6 +2171,38 @@ def health():
         ]
 
     return jsonify(response)
+
+
+@app.route('/ac/test')
+def ac_test():
+    """
+    GL-047: Test endpoint for Aho-Corasick pattern matcher.
+
+    Usage: /ac/test?text=def get_cached_user_token()
+    """
+    text = request.args.get('text', 'def get_cached_user_token(user_id)')
+
+    if not AC_MATCHER.is_available:
+        return jsonify({
+            'error': 'AC matcher not available',
+            'available': False
+        }), 503
+
+    start = time.time()
+    hits = AC_MATCHER.find_all(text)
+    density = AC_MATCHER.density_by_category(text)
+    dense_tags = AC_MATCHER.get_dense_tags(text, threshold=1)
+    elapsed_ms = (time.time() - start) * 1000
+
+    return jsonify({
+        'text': text,
+        'hits': [{'pattern': h[0], 'tag': h[1], 'source': h[2]} for h in hits],
+        'density': density,
+        'dense_tags': dense_tags,
+        'pattern_count': AC_MATCHER.pattern_count,
+        'elapsed_ms': round(elapsed_ms, 3)
+    })
+
 
 @app.route('/symbol')
 def symbol_search():
