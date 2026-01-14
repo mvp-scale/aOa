@@ -3316,7 +3316,7 @@ cmd_quickstart() {
         return 0
     fi
 
-    echo -e "  Compressing ${BOLD}${pending_count}${NC} files (${workers} workers)"
+    echo -e "  Processing ${BOLD}${pending_count}${NC} files (${workers} workers)"
     echo ""
 
     # Create temp directory to track progress
@@ -3337,6 +3337,15 @@ cmd_quickstart() {
     # Progress bar settings
     local bar_width=40
 
+    # Worker stage tracking
+    local -a tasks=("Parsing" "Extracting" "Indexing" "Mapping" "Compressing")
+    local -a thresholds=()
+    for ((w=1; w<=workers; w++)); do
+        thresholds+=($((w * 100 / workers)))
+    done
+    local printed_stages=0
+    local need_fresh_line=false
+
     # Show progress while processing
     while kill -0 $xargs_pid 2>/dev/null; do
         local done_count=$(ls -1 "${progress_dir}"/done_* 2>/dev/null | wc -l)
@@ -3352,7 +3361,22 @@ cmd_quickstart() {
             for ((i=0; i<filled; i++)); do bar+="█"; done
             for ((i=0; i<empty; i++)); do bar+="░"; done
 
-            printf "\r  [${GREEN}%s${NC}] %3d%% │ %d/%d" "$bar" "$pct" "$processed" "$pending_count"
+            # Update progress bar
+            if $need_fresh_line; then
+                printf "  [${GREEN}%s${NC}] %3d%% │ %d/%d" "$bar" "$pct" "$processed" "$pending_count"
+                need_fresh_line=false
+            else
+                printf "\r  [${GREEN}%s${NC}] %3d%% │ %d/%d" "$bar" "$pct" "$processed" "$pending_count"
+            fi
+
+            # Check if any new worker stages completed
+            while [ $printed_stages -lt $workers ] && [ $pct -ge ${thresholds[$printed_stages]} ]; do
+                local task_idx=$((printed_stages % 5))
+                echo ""
+                echo -e "    ${GREEN}✓${NC} Worker $((printed_stages + 1)): ${tasks[$task_idx]}"
+                printed_stages=$((printed_stages + 1))
+                need_fresh_line=true
+            done
         fi
 
         sleep 0.1
@@ -3364,9 +3388,20 @@ cmd_quickstart() {
     local error_count=$(ls -1 "${progress_dir}"/error_* 2>/dev/null | wc -l)
 
     # Final progress update
-    printf "\r  [${GREEN}"
+    if $need_fresh_line; then
+        printf "  [${GREEN}"
+    else
+        printf "\r  [${GREEN}"
+    fi
     for ((i=0; i<bar_width; i++)); do printf "█"; done
     printf "${NC}] 100%% │ %d/%d\n" "$pending_count" "$pending_count"
+
+    # Print any remaining worker stages
+    while [ $printed_stages -lt $workers ]; do
+        local task_idx=$((printed_stages % 5))
+        echo -e "    ${GREEN}✓${NC} Worker $((printed_stages + 1)): ${tasks[$task_idx]}"
+        printed_stages=$((printed_stages + 1))
+    done
 
     # Cleanup
     rm -rf "$progress_dir"
