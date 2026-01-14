@@ -3638,6 +3638,9 @@ cmd_domains() {
     # GL-054: Intelligence Angle
     local tokens_invested=$(echo "$stats" | jq -r '.tokens_invested // 0')
     local learning_calls=$(echo "$stats" | jq -r '.learning_calls // 0')
+    # GL-059.1: Source counts
+    local seeded_count=$(echo "$stats" | jq -r '.seeded_count // 0')
+    local learned_count=$(echo "$stats" | jq -r '.learned_count // 0')
 
     # Get tokens saved from metrics endpoint
     local metrics=$(curl -s "${INDEX_URL}/metrics?project_id=${project_id}")
@@ -3707,19 +3710,46 @@ cmd_domains() {
 
     # ─────────────────────────────────────────────────────────────────────────
     # aOa Domains Section (stats header + domain list)
+    # GL-059.5: Show Generic vs Learned counts
     # ─────────────────────────────────────────────────────────────────────────
     echo ""
-    echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  ${MAGENTA}${domain_count}${NC} domains ${DIM}│${NC} ${CYAN}${total_terms}${NC} terms ${DIM}│${NC} ${GREEN}${hits_display}${NC} hits ${DIM}│${NC} Learn: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} Tune: ${YELLOW}${tune_display}${NC}"
+    # GL-059.5: New header format with source counts (legend style)
+    local transition_indicator=""
+    if [ "$learned_count" -ge 32 ] 2>/dev/null; then
+        transition_indicator=" ${GREEN}Transitioning...${NC}"
+    fi
+    # Header is the legend: Seeded(-) and Learned(+)
+    echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  Seeded${DIM}(-)${NC} ${MAGENTA}${seeded_count}${NC} ${DIM}│${NC} Learned${YELLOW}(+)${NC} ${MAGENTA}${learned_count}${NC}${transition_indicator} ${DIM}│${NC} ${CYAN}${total_terms}${NC} terms ${DIM}│${NC} ${GREEN}${hits_display}${NC} hits ${DIM}│${NC} Learn: ${YELLOW}${prompt_count}/${prompt_threshold}${NC}"
     echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
-    printf "${DIM}%-22s %5s  %s${NC}\n" "DOMAIN" "HITS" "TERMS"
+    printf "${DIM}%-24s %5s  %s${NC}\n" "DOMAIN" "HITS" "TERMS"
 
     # Display each domain with its top terms
-    echo "$domains_data" | jq -r '.domains[]? | "\(.name)|\(.hits)|\(.created // 0)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null | while IFS='|' read -r name hits created terms; do
+    # GL-059.5: Include source and state in output
+    echo "$domains_data" | jq -r '.domains[]? | "\(.name)|\(.hits)|\(.created // 0)|\(.source // "seeded")|\(.state // "active")|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null | while IFS='|' read -r name hits created source state terms; do
         local hits_fmt
         [ "$hits" -ge 1000 ] && hits_fmt=$(awk "BEGIN {printf \"%.1fk\", $hits/1000}") || hits_fmt="$hits"
 
+        # GL-059.5: Source indicator (- = seeded, + = learned by aOa)
+        local src_ind=""
+        if [ "$source" = "learned" ]; then
+            src_ind="${YELLOW}+${NC}"
+        else
+            src_ind="${DIM}-${NC}"
+        fi
+
         # Truncate domain name if too long
-        local name_trunc="${name:0:22}"
+        local name_trunc="${name:0:20}"
+
+        # GL-059.5: Style based on state
+        local name_style="${MAGENTA}"
+        local terms_style="${CYAN}"
+        if [ "$state" = "stale" ]; then
+            name_style="${DIM}"
+            terms_style="${DIM}"
+        elif [ "$state" = "deprecated" ]; then
+            name_style="${DIM}\033[9m"  # Strikethrough
+            terms_style="${DIM}"
+        fi
 
         # Check if domain is new (created in last hour)
         local is_new=""
@@ -3727,7 +3757,7 @@ cmd_domains() {
             is_new="${GREEN}+${NC}"
         fi
 
-        printf "${is_new}${MAGENTA}%-22s${NC} ${DIM}%5s${NC}  ${CYAN}%s${NC}\n" "$name_trunc" "$hits_fmt" "$terms"
+        printf "${is_new}${src_ind} ${name_style}%-20s${NC} ${DIM}%5s${NC}  ${terms_style}%s${NC}\n" "$name_trunc" "$hits_fmt" "$terms"
     done
 
     # Show remaining count if more than displayed
@@ -3775,8 +3805,9 @@ cmd_domains() {
                 local hits_fmt
                 [ "${domain_hits:-0}" -ge 1000 ] 2>/dev/null && hits_fmt=$(awk "BEGIN {printf \"%.1fk\", ${domain_hits}/1000}") || hits_fmt="${domain_hits:-0}"
                 # Truncate domain name if too long
-                local domain_trunc="${domain:0:22}"
-                printf "${MAGENTA}%-22s${NC} ${DIM}%5s${NC}  ${CYAN}%s${NC}\n" "$domain_trunc" "$hits_fmt" "${domain_terms:-...}"
+                local domain_trunc="${domain:0:20}"
+                # Use + prefix to reinforce learned iconography
+                printf "${YELLOW}+${NC} ${MAGENTA}%-20s${NC} ${DIM}%5s${NC}  ${CYAN}%s${NC}\n" "$domain_trunc" "$hits_fmt" "${domain_terms:-...}"
             done
         else
             echo -e "${DIM}Last learn: ${learn_display} (no new domains found)${NC}"

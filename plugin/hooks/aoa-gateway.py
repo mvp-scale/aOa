@@ -142,28 +142,42 @@ def handle_prompt(data: dict):
         recent = api_get(f"/intent/recent?limit=20&project_id={PROJECT_ID}") or {}
         records = recent.get("records", [])
 
-        # Extract files and tags from recent activity
-        recent_files = []
+        # GL-059.2: Extract file:line locations for function-level assignment
+        locations = []
         recent_tags = set()
         for r in records:
             for f in r.get("files", []):
                 if not f.startswith("pattern:") and not f.startswith("cmd:"):
-                    recent_files.append(f)
+                    locations.append(f)
             for t in r.get("tags", []):
                 recent_tags.add(t)
 
-        files_summary = "\n".join(f"  - {f}" for f in recent_files[:15])
+        # GL-059.2: Resolve locations to functions via symbol lookup
+        symbols_data = api_post("/symbol/lookup", {"locations": locations[:30]}) or {}
+        symbols = symbols_data.get("symbols", [])
+
+        # Format functions for prompt (deduplicated by symbol lookup)
+        if symbols:
+            functions_summary = "\n".join(f"  - {s['qualified']}" for s in symbols[:10])
+        else:
+            # Fallback to file-level if no symbols resolved
+            functions_summary = "\n".join(f"  - {f}" for f in locations[:10])
+
         tags_summary = ", ".join(list(recent_tags)[:10])
-        existing = domain_stats.get("domains_learned_list", [])
-        existing_domains = ", ".join(existing[:10]) if existing else "None"
+
+        # Get ALL existing domains (seeded + learned) so Haiku doesn't duplicate
+        all_domains = api_get(f"/domains/list?project={PROJECT_ID}&limit=100") or {}
+        existing_domain_names = [d['name'] for d in all_domains.get('domains', [])]
+        existing_domains = ", ".join(existing_domain_names[:20]) if existing_domain_names else "@hook_system, @intent_tracking, @api_integration"
 
         # Output learning instructions for Claude
+        # GL-059.2: Target FUNCTIONS, not files
         learning_prompt = f"""## aOa Domain Learning (Auto-triggered)
 
 aOa has collected enough activity to learn new semantic domains.
 
 **Recent files worked on:**
-{files_summary}
+{functions_summary}
 
 **Recent tags:** {tags_summary}
 **Existing domains:** {existing_domains}
@@ -174,7 +188,7 @@ Use this prompt for Haiku:
 ```
 Given this developer activity, identify 1-3 HIGH-LEVEL semantic domains.
 
-Files: {', '.join(recent_files[:10])}
+Files: {', '.join([s['qualified'] for s in symbols[:10]] if symbols else locations[:10])}
 Tags: {tags_summary}
 
 Existing domains (don't duplicate): {existing_domains}
@@ -196,80 +210,32 @@ curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/j
         output_context(learning_prompt)
         return  # Don't output status line when learning is triggered
 
-    # Check if domain tuning is pending (GL-055: every 100 intents)
+    # GL-059.3: Check if domain tuning is pending (every 100 intents)
+    # Tuning is now PURE MATH - no Haiku needed
     if domain_stats and domain_stats.get("tuning_pending"):
-        # Get larger context for tuning (100 files)
-        recent = api_get(f"/intent/recent?limit=100&project_id={PROJECT_ID}") or {}
-        records = recent.get("records", [])
-
-        # Extract unique files from recent activity
-        recent_files = []
-        seen_files = set()
-        for r in records:
-            for f in r.get("files", []):
-                if not f.startswith("pattern:") and not f.startswith("cmd:") and f not in seen_files:
-                    recent_files.append(f)
-                    seen_files.add(f)
-
-        # Get domain stats for context
-        domains = domain_stats.get("domains", 0)
-        total_terms = domain_stats.get("total_terms", 0)
         tune_count = domain_stats.get("tune_count", 0)
 
-        # Format file directories
-        file_dirs = {}
-        for f in recent_files[:100]:
-            parts = f.rsplit('/', 2)
-            if len(parts) >= 2:
-                dir_name = parts[-2] if len(parts) > 1 else '.'
-                file_dirs.setdefault(dir_name, []).append(parts[-1])
+        # GL-059.3: Call math-based tune endpoint directly (no Haiku spawn needed)
+        tune_result = api_post("/domains/tune/math", {"project": PROJECT_ID})
 
-        files_text = "\n".join(
-            f"  - {dir_name}/: {', '.join(files[:5])}{'...' if len(files) > 5 else ''}"
-            for dir_name, files in sorted(file_dirs.items(), key=lambda x: -len(x[1]))[:10]
-        ) or "  (no recent files)"
+        if tune_result and tune_result.get("success"):
+            terms_pruned = tune_result.get("terms_pruned", 0)
+            domains_active = tune_result.get("domains_active", 0)
+            domains_stale = tune_result.get("domains_flagged_stale", 0)
+            domains_deprecated = tune_result.get("domains_deprecated", 0)
 
-        # Output tuning instructions for Claude
-        tuning_prompt = f"""## aOa Domain Tuning (Auto-triggered at {tune_count} intents)
+            # Only output if something changed
+            if terms_pruned > 0 or domains_stale > 0 or domains_deprecated > 0:
+                tuning_report = f"""## aOa Domain Tune Complete (cycle {tune_count})
 
-aOa has accumulated enough usage data for regenerative domain optimization.
-
-**Current state:** {domains} domains, {total_terms} terms
-**Usage context:** {len(recent_files)} unique files from last 100 intents
-
-**Recent file directories:**
-{files_text}
-
-**Your task:** Spawn a Haiku Task to regenerate the optimal domain structure.
-
-Use this prompt for Haiku:
-```
-You are optimizing a semantic domain system based on actual developer usage.
-
-This codebase has been actively developed with these file patterns:
-{files_text}
-
-Design an OPTIMAL domain structure (5-10 domains). Each domain should:
-1. Represent a high-level architectural concept
-2. Have 5-10 specific terms (prefer "session_timeout" over generic "session")
-3. Be distinct from other domains (minimal term overlap)
-
-Return JSON:
-{{"domains": [{{"name": "@domain_name", "description": "what this represents", "terms": ["specific_term1", "specific_term2"]}}]}}
-```
-
-After Haiku responds, POST results to aOa:
-```bash
-curl -s -X POST "localhost:8080/domains/tune" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "result": <haiku_response>}}'
-```
-
-Then clear the pending flag:
-```bash
-curl -s -X POST "localhost:8080/domains/tuned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
-```
+**Math-based optimization applied:**
+- Terms pruned (>30% coverage): {terms_pruned}
+- Domains active: {domains_active}
+- Domains flagged stale: {domains_stale}
+- Domains deprecated: {domains_deprecated}
 """
-        output_context(tuning_prompt)
-        return  # Don't output status line when tuning is triggered
+                output_context(tuning_report)
+                return  # Don't output status line when tuning report shown
 
     # Predict files from prompt keywords (TODO: migrate from predict-context.py)
     prompt = data.get("prompt", "")

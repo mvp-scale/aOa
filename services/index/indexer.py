@@ -3327,6 +3327,98 @@ def get_pending_enrichment():
 
 
 # ============================================================================
+# GL-059.2: Symbol Lookup for Targeted Assignment
+# ============================================================================
+
+@app.route('/symbol/lookup', methods=['POST'])
+def symbol_lookup():
+    """
+    Resolve file:line references to enclosing function/class symbols.
+
+    GL-059.2: Used by gateway hook to target domain assignment at FUNCTIONS,
+    not individual lines. This reduces noise (50 line reads = 1 domain).
+
+    POST body: {"locations": ["file.py:123", "other.py:456"], "project": "optional-id"}
+    Returns: {"symbols": [{"location": "file.py:123", "symbol": "func_name", ...}]}
+    """
+    start = time.time()
+    data = request.get_json(silent=True) or {}
+    locations = data.get('locations', [])
+    project = data.get('project') or request.args.get('project')
+
+    if not locations:
+        return jsonify({'error': 'Missing locations array', 'symbols': []})
+
+    # Get index for this project
+    idx = manager.get_local(project)
+    if not idx:
+        return jsonify({'error': 'No index available', 'symbols': []})
+
+    results = []
+    seen_symbols = set()  # Dedupe: same function accessed multiple times = 1
+
+    for loc in locations:
+        if ':' not in loc:
+            continue
+
+        parts = loc.rsplit(':', 1)
+        file_path = parts[0]
+        try:
+            line_num = int(parts[1].split('-')[0])  # Handle ranges like "280-290"
+        except (ValueError, IndexError):
+            continue
+
+        # Get outline for this file
+        symbols = idx.file_outlines.get(file_path, [])
+
+        # Find innermost enclosing symbol (same logic as enrich_result)
+        enclosing = []
+        for sym in symbols:
+            if sym.start_line <= line_num <= sym.end_line:
+                sym_range = sym.end_line - sym.start_line
+                enclosing.append((sym_range, sym))
+
+        if not enclosing:
+            continue
+
+        # Sort by range (smallest first = most specific)
+        enclosing.sort(key=lambda x: x[0])
+        _, best_match = enclosing[0]
+
+        # Build unique key for deduplication
+        symbol_key = f"{file_path}:{best_match.name}"
+        if symbol_key in seen_symbols:
+            continue
+        seen_symbols.add(symbol_key)
+
+        # Find parent (for class.method style)
+        parent_name = None
+        if len(enclosing) > 1:
+            _, parent = enclosing[1]
+            parent_name = parent.name
+
+        results.append({
+            'location': loc,
+            'file': file_path,
+            'symbol': best_match.name,
+            'kind': best_match.kind,
+            'signature': best_match.signature,
+            'start_line': best_match.start_line,
+            'end_line': best_match.end_line,
+            'parent': parent_name,
+            # Format: file.py:func_name() or file.py:Class.method()
+            'qualified': f"{file_path}:{parent_name}.{best_match.name}()" if parent_name else f"{file_path}:{best_match.name}()"
+        })
+
+    return jsonify({
+        'symbols': results,
+        'total': len(results),
+        'deduplicated_from': len(locations),
+        'ms': (time.time() - start) * 1000
+    })
+
+
+# ============================================================================
 # Domain Pattern Candidates (Learned from quickstart)
 # ============================================================================
 
@@ -3808,7 +3900,7 @@ def seed_domains():
         if not universal:
             return jsonify({'error': 'Universal domains config not found'}), 500
 
-        # Seed each domain
+        # Seed each domain (GL-059.1: mark as seeded)
         seeded = 0
         total_terms = 0
         for d in universal:
@@ -3818,7 +3910,7 @@ def seed_domains():
                 confidence=float(d.get('confidence', 0.8)),
                 terms=d.get('terms', [])
             )
-            learner.add_domain(domain)
+            learner.add_domain(domain, source="seeded")
             seeded += 1
             total_terms += len(domain.terms)
 
@@ -3884,6 +3976,9 @@ def domains_list():
                 'hits': d.get('hits', 0),
                 'term_count': len(d.get('terms', [])),
                 'confidence': d.get('confidence', 0),
+                # GL-059.1: Source and state
+                'source': d.get('source', 'seeded'),
+                'state': d.get('state', 'active'),
             }
             if include_terms:
                 entry['terms'] = list(d.get('terms', []))[:10]  # Limit to 10 terms
@@ -4037,12 +4132,64 @@ def domains_autotune():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/domains/tune/math', methods=['POST'])
+def domains_tune_math():
+    """
+    GL-059.3: Run pure math-based tuning - no Haiku needed.
+
+    Algorithm:
+    - Prune terms with >30% coverage (too generic)
+    - Update domain lifecycle based on hits
+    - Flag domains with <2 remaining terms
+
+    POST body: {"project": "project-id"}
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project') or request.args.get('project')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+
+        # Get current stats before tune
+        before_stats = learner.get_stats()
+
+        # Run math-based tune (GL-059.3)
+        summary = learner.run_math_tune()
+
+        # Get stats after tune
+        after_stats = learner.get_stats()
+
+        return jsonify({
+            'success': True,
+            'project': project_id,
+            'method': 'math',
+            'terms_pruned': summary.get('terms_pruned', 0),
+            'domains_active': summary.get('domains_active', 0),
+            'domains_flagged_stale': summary.get('domains_flagged_stale', 0),
+            'domains_deprecated': summary.get('domains_deprecated', 0),
+            'domains_removed': summary.get('domains_removed', 0),  # GL-059.4
+            'domains_before': before_stats['domains'],
+            'domains_after': after_stats['domains'],
+            'terms_before': before_stats['total_terms'],
+            'terms_after': after_stats['total_terms'],
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/domains/tune', methods=['POST'])
 def domains_tune():
     """
-    Apply regenerative tune results from Haiku via hook.
+    Apply regenerative tune results from Haiku via hook (legacy).
 
-    GL-055: Called when hook triggers Haiku for domain optimization.
+    Note: GL-059.3 moves tuning to /domains/tune/math (pure math, no Haiku).
 
     POST body: {"project": "project-id", "result": {...haiku response...}}
     """

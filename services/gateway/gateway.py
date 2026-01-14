@@ -116,7 +116,9 @@ ROUTES = {
     "/domains/add": ("index", "/domains/add"),  # GL-054: Hook-based domain addition
     "/domains/learned": ("index", "/domains/learned"),  # GL-054: Signal learning complete
     "/domains/tune": ("index", "/domains/tune"),  # GL-055: Apply regenerative tune results
+    "/domains/tune/math": ("index", "/domains/tune/math"),  # GL-059.3: Math-based tuning (no Haiku)
     "/domains/tuned": ("index", "/domains/tuned"),  # GL-055: Signal tuning complete
+    "/symbol/lookup": ("index", "/symbol/lookup"),  # GL-059.2: Resolve file:line to functions
 
     # Status service routes
     "/status": ("status", "/status"),

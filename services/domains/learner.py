@@ -278,20 +278,36 @@ class DomainLearner:
         key = self._key("domains")
         return list(self.redis.client.smembers(key))
 
-    def add_domain(self, domain: Domain) -> None:
-        """Add a new domain with metadata and terms."""
+    def add_domain(self, domain: Domain, source: str = "learned") -> None:
+        """Add a new domain with metadata and terms.
+
+        Args:
+            domain: Domain object with name, description, confidence, terms
+            source: "seeded" for quickstart domains, "learned" for Haiku-discovered
+        """
         # Add to domain set
         domains_key = self._key("domains")
         self.redis.client.sadd(domains_key, domain.name)
 
-        # Store metadata
+        # Store metadata with lifecycle fields (GL-059.1)
         meta_key = self._domain_key(domain.name, "meta")
         self.redis.client.hset(meta_key, mapping={
             "description": domain.description,
             "confidence": domain.confidence,
             "hits": self.STARTER_HITS,
             "created": int(time.time()),
+            # GL-059.1: Lifecycle fields
+            "source": source,  # "seeded" | "learned"
+            "state": "active",  # "active" | "stale" | "deprecated"
+            "stale_cycles": 0,
+            "hits_last_cycle": 0,
         })
+
+        # Update project-level source counters (GL-059.1)
+        if source == "seeded":
+            self.redis.client.incr(self._key("seeded_count"))
+        else:
+            self.redis.client.incr(self._key("learned_count"))
 
         # Store terms
         terms_key = self._domain_key(domain.name, "terms")
@@ -317,6 +333,81 @@ class DomainLearner:
         """Increment hit counter for a domain."""
         meta_key = self._domain_key(name, "meta")
         return self.redis.client.hincrby(meta_key, "hits", 1)
+
+    # =========================================================================
+    # GL-059.1: Lifecycle Management
+    # =========================================================================
+
+    def get_domain_source(self, name: str) -> str:
+        """Get domain source: 'seeded' or 'learned'."""
+        meta_key = self._domain_key(name, "meta")
+        return self.redis.client.hget(meta_key, "source") or "seeded"
+
+    def get_domain_state(self, name: str) -> str:
+        """Get domain state: 'active', 'stale', or 'deprecated'."""
+        meta_key = self._domain_key(name, "meta")
+        return self.redis.client.hget(meta_key, "state") or "active"
+
+    def set_domain_state(self, name: str, state: str) -> None:
+        """Update domain state."""
+        if state not in ("active", "stale", "deprecated"):
+            raise ValueError(f"Invalid state: {state}")
+        meta_key = self._domain_key(name, "meta")
+        self.redis.client.hset(meta_key, "state", state)
+
+    def increment_stale_cycles(self, name: str) -> int:
+        """Increment stale cycle counter. Returns new value."""
+        meta_key = self._domain_key(name, "meta")
+        return self.redis.client.hincrby(meta_key, "stale_cycles", 1)
+
+    def reset_stale_cycles(self, name: str) -> None:
+        """Reset stale cycles to 0 (domain became active again)."""
+        meta_key = self._domain_key(name, "meta")
+        self.redis.client.hset(meta_key, "stale_cycles", 0)
+
+    def get_hits_last_cycle(self, name: str) -> int:
+        """Get hits from last tune cycle."""
+        meta_key = self._domain_key(name, "meta")
+        return int(self.redis.client.hget(meta_key, "hits_last_cycle") or 0)
+
+    def snapshot_cycle_hits(self) -> None:
+        """Snapshot current hits to hits_last_cycle for all domains, then reset."""
+        domains = self.get_all_domains()
+        pipe = self.redis.client.pipeline()
+        for name in domains:
+            meta_key = self._domain_key(name, "meta")
+            # Get current hits
+            hits = self.redis.client.hget(meta_key, "hits") or 0
+            # Store as last cycle hits
+            pipe.hset(meta_key, "hits_last_cycle", hits)
+        pipe.execute()
+
+    def get_source_counts(self) -> dict:
+        """Get counts of seeded vs learned domains.
+
+        Handles legacy domains: if counters are 0 but domains exist,
+        counts them by reading source field (defaults to 'seeded').
+        """
+        seeded = int(self.redis.client.get(self._key("seeded_count")) or 0)
+        learned = int(self.redis.client.get(self._key("learned_count")) or 0)
+
+        # Backfill for legacy domains without counters
+        if seeded == 0 and learned == 0:
+            domains = self.get_all_domains()
+            if domains:
+                for name in domains:
+                    source = self.get_domain_source(name)
+                    if source == "learned":
+                        learned += 1
+                    else:
+                        seeded += 1
+                # Cache for future calls
+                if seeded > 0:
+                    self.redis.client.set(self._key("seeded_count"), seeded)
+                if learned > 0:
+                    self.redis.client.set(self._key("learned_count"), learned)
+
+        return {"seeded": seeded, "learned": learned}
 
     def increment_term_hits(self, terms: list[str]) -> None:
         """Increment hit counters for terms that matched."""
@@ -756,9 +847,130 @@ Return JSON:
   "reasoning": "brief explanation of changes"
 }}"""
 
+    # =========================================================================
+    # GL-059.3: Math-Based Noise Elimination
+    # =========================================================================
+
+    def run_math_tune(self) -> dict:
+        """
+        GL-059.3: Pure math-based tuning - no Haiku needed.
+
+        Algorithm:
+        1. Calculate term coverage: term appears in what % of indexed files
+        2. Prune noisy terms (>30% coverage - too generic to be useful)
+        3. Update domain lifecycle based on hits_last_cycle
+        4. Flag domains with <2 remaining terms
+
+        Returns:
+            Summary of changes made
+        """
+        summary = {
+            'terms_pruned': 0,
+            'domains_flagged_stale': 0,
+            'domains_deprecated': 0,
+            'domains_active': 0,
+        }
+
+        domains = self.get_all_domains()
+        if not domains:
+            return summary
+
+        # Get total file count from Redis (set by indexer)
+        total_files = int(self.redis.client.get("aoa:total_indexed_files") or 1000)
+        coverage_threshold = 0.30  # 30% = too generic
+
+        # Track terms to prune globally
+        terms_to_prune = set()
+
+        for domain_name in domains:
+            # Get domain terms and hits
+            terms = self.get_domain_terms(domain_name)
+            meta = self.get_domain_meta(domain_name)
+            hits_last = int(meta.get('hits_last_cycle', 0))
+            state = meta.get('state', 'active')
+            stale_cycles = int(meta.get('stale_cycles', 0))
+
+            # 1. Check term coverage - prune noisy terms
+            for term in list(terms):
+                # Count files containing this term (from intent records)
+                term_hits_key = self._key("term_hits")
+                term_hit_count = int(self.redis.client.hget(term_hits_key, term) or 0)
+
+                # If term appears in >30% of activity, it's too generic
+                if total_files > 0 and term_hit_count / total_files > coverage_threshold:
+                    terms_to_prune.add(term)
+                    # Remove term from this domain
+                    terms_key = self._domain_key(domain_name, "terms")
+                    self.redis.client.srem(terms_key, term)
+                    # Remove domain from term index
+                    term_key = self._key(f"term:{term}")
+                    self.redis.client.zrem(term_key, domain_name)
+                    summary['terms_pruned'] += 1
+
+            # 2. Update lifecycle based on hits_last_cycle
+            remaining_terms = len(self.get_domain_terms(domain_name))
+
+            if hits_last == 0:
+                # No hits last cycle - move toward stale
+                if state == 'active':
+                    self.set_domain_state(domain_name, 'stale')
+                    self.increment_stale_cycles(domain_name)
+                    summary['domains_flagged_stale'] += 1
+                elif state == 'stale':
+                    new_cycles = self.increment_stale_cycles(domain_name)
+                    if new_cycles >= 2:
+                        # 2 stale cycles = deprecated
+                        self.set_domain_state(domain_name, 'deprecated')
+                        summary['domains_deprecated'] += 1
+            else:
+                # Had hits - reset to active
+                if state != 'active':
+                    self.set_domain_state(domain_name, 'active')
+                    self.reset_stale_cycles(domain_name)
+                summary['domains_active'] += 1
+
+            # 3. Flag domains with too few terms
+            if remaining_terms < 2 and state != 'deprecated':
+                self.set_domain_state(domain_name, 'deprecated')
+                summary['domains_deprecated'] += 1
+
+        # 4. GL-059.4: Graduated Transition - retire seeded when learned is sufficient
+        source_counts = self.get_source_counts()
+        learned_count = source_counts.get('learned', 0)
+        transition_threshold = 32  # Start retiring when 32+ learned domains
+
+        summary['domains_removed'] = 0
+        if learned_count >= transition_threshold:
+            # Get all deprecated seeded domains and remove them
+            for domain_name in list(domains):
+                meta = self.get_domain_meta(domain_name)
+                if meta.get('source') == 'seeded' and meta.get('state') == 'deprecated':
+                    self.remove_domain(domain_name)
+                    # Decrement seeded count
+                    self.redis.client.decr(self._key("seeded_count"))
+                    summary['domains_removed'] += 1
+
+        # 5. Snapshot hits for next cycle and reset
+        self.snapshot_cycle_hits()
+
+        # 5. Update tune tracking
+        self.set_last_tune()
+        self.reset_tune_count()
+        self.clear_tuning_pending()
+        self.set_tune_results(
+            kept=summary['domains_active'],
+            added=0,
+            removed=summary['terms_pruned']
+        )
+
+        return summary
+
     def apply_tune(self, result: dict) -> dict:
         """
-        Apply regenerative tune results from Haiku.
+        Apply regenerative tune results from Haiku (legacy).
+
+        Note: GL-059.3 moves tuning to pure math via run_math_tune().
+        This method kept for backward compatibility.
 
         Unlike apply_autotune (patches), this rebuilds the domain structure
         while preserving high-value domains.
@@ -864,11 +1076,17 @@ Return JSON:
         tune_results = self.get_tune_results()
         learned_details = self.get_learned_details()
 
+        # GL-059.1: Get source counts
+        source_counts = self.get_source_counts()
+
         return {
             "project": self.project_id,
             "domains": len(domains),
             "total_terms": total_terms,
             "total_hits": total_hits,
+            # GL-059.1: Domain sources
+            "seeded_count": source_counts["seeded"],
+            "learned_count": source_counts["learned"],
             # Learning (every 10 prompts)
             "prompt_count": self.get_prompt_count(),
             "prompt_threshold": self.BATCH_SIZE,
