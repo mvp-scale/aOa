@@ -5052,6 +5052,20 @@ def record_intent():
 
     intent_index.record(tool, files, tags, session_id, tool_use_id, project_id, file_sizes, output_size)
 
+    # GL-060.3: Match intent tags against domain terms, increment hits
+    if DOMAINS_AVAILABLE and project_id and tags:
+        try:
+            learner = DomainLearner(project_id)
+            for tag in tags:
+                # Normalize tag (remove # prefix if present)
+                term = tag.lstrip('#').lower()
+                # Find domains that have this term
+                domains_with_term = learner.get_domains_for_term(term)
+                for domain_name in domains_with_term:
+                    learner.increment_domain_hits(domain_name)
+        except Exception:
+            pass  # Don't block intent recording on domain errors
+
     # GL-053 Phase C: Trigger domain learning if threshold reached
     _trigger_domain_learning_if_needed(project_id)
 

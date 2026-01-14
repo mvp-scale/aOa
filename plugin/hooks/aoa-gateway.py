@@ -135,8 +135,35 @@ def handle_prompt(data: dict):
     elapsed = (time.time() - start) * 1000
     print(f"{CYAN}{BOLD}⚡ aOa{NC} {acc} {DIM}│{NC} {total} intents {DIM}│{NC} {GREEN}{elapsed:.1f}ms{NC} {DIM}│{NC} {YELLOW}{tags_str}{NC}")
 
-    # Check if domain learning is pending
+    # Check domain stats for both tuning and learning
     domain_stats = api_get(f"/domains/stats?project={PROJECT_ID}")
+
+    # GL-059.3: Run math-based tuning FIRST (silent, no Haiku needed)
+    # This runs before learning since it's automatic and doesn't block
+    if domain_stats and domain_stats.get("tuning_pending"):
+        tune_count = domain_stats.get("tune_count", 0)
+        tune_result = api_post("/domains/tune/math", {"project": PROJECT_ID})
+
+        if tune_result and tune_result.get("success"):
+            terms_pruned = tune_result.get("terms_pruned", 0)
+            domains_active = tune_result.get("domains_active", 0)
+            domains_stale = tune_result.get("domains_flagged_stale", 0)
+            domains_deprecated = tune_result.get("domains_deprecated", 0)
+
+            # Only output if something changed
+            if terms_pruned > 0 or domains_stale > 0 or domains_deprecated > 0:
+                tuning_report = f"""## aOa Domain Tune Complete (cycle {tune_count})
+
+**Math-based optimization applied:**
+- Terms pruned (>30% coverage): {terms_pruned}
+- Domains active: {domains_active}
+- Domains flagged stale: {domains_stale}
+- Domains deprecated: {domains_deprecated}
+"""
+                output_context(tuning_report)
+                # Don't return - let learning continue if needed
+
+    # Check if domain learning is pending
     if domain_stats and domain_stats.get("learning_pending"):
         # Get recent activity for context
         recent = api_get(f"/intent/recent?limit=20&project_id={PROJECT_ID}") or {}
@@ -202,40 +229,14 @@ After Haiku responds, POST results to aOa:
 curl -s -X POST "localhost:8080/domains/add" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": <haiku_response>}}'
 ```
 
-Then clear the pending flag:
+Then clear the pending flag (include domains so they show in 'aoa domains'):
 ```bash
-curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
+curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": <haiku_domain_names_array>}}'
 ```
+Where <haiku_domain_names_array> is just the domain names, e.g. ["@cli_tooling", "@testing_quality"]
 """
         output_context(learning_prompt)
         return  # Don't output status line when learning is triggered
-
-    # GL-059.3: Check if domain tuning is pending (every 100 intents)
-    # Tuning is now PURE MATH - no Haiku needed
-    if domain_stats and domain_stats.get("tuning_pending"):
-        tune_count = domain_stats.get("tune_count", 0)
-
-        # GL-059.3: Call math-based tune endpoint directly (no Haiku spawn needed)
-        tune_result = api_post("/domains/tune/math", {"project": PROJECT_ID})
-
-        if tune_result and tune_result.get("success"):
-            terms_pruned = tune_result.get("terms_pruned", 0)
-            domains_active = tune_result.get("domains_active", 0)
-            domains_stale = tune_result.get("domains_flagged_stale", 0)
-            domains_deprecated = tune_result.get("domains_deprecated", 0)
-
-            # Only output if something changed
-            if terms_pruned > 0 or domains_stale > 0 or domains_deprecated > 0:
-                tuning_report = f"""## aOa Domain Tune Complete (cycle {tune_count})
-
-**Math-based optimization applied:**
-- Terms pruned (>30% coverage): {terms_pruned}
-- Domains active: {domains_active}
-- Domains flagged stale: {domains_stale}
-- Domains deprecated: {domains_deprecated}
-"""
-                output_context(tuning_report)
-                return  # Don't output status line when tuning report shown
 
     # Predict files from prompt keywords (TODO: migrate from predict-context.py)
     prompt = data.get("prompt", "")

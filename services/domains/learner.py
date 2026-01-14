@@ -333,6 +333,12 @@ class DomainLearner:
         terms_key = self._domain_key(name, "terms")
         return self.redis.client.smembers(terms_key)
 
+    def get_domains_for_term(self, term: str) -> list[str]:
+        """Get domains that have this term (GL-060.3: term -> domain lookup)."""
+        term_key = self._key(f"term:{term}")
+        # Returns list of domain names from sorted set
+        return list(self.redis.client.zrange(term_key, 0, -1))
+
     def increment_domain_hits(self, name: str) -> int:
         """Increment hit counter for a domain."""
         meta_key = self._domain_key(name, "meta")

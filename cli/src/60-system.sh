@@ -964,7 +964,9 @@ cmd_domains() {
         transition_indicator=" ${GREEN}Transitioning...${NC}"
     fi
     # Header is the legend: Seeded(-) and Learned(+)
-    echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  Seeded${DIM}(-)${NC} ${MAGENTA}${seeded_count}${NC} ${DIM}│${NC} Learned${YELLOW}(+)${NC} ${MAGENTA}${learned_count}${NC}${transition_indicator} ${DIM}│${NC} ${CYAN}${total_terms}${NC} terms ${DIM}│${NC} ${GREEN}${hits_display}${NC} hits ${DIM}│${NC} Learn: ${YELLOW}${prompt_count}/${prompt_threshold}${NC}"
+    # Calculate tune progress for display (mod threshold to show cycle progress)
+    local tune_progress=$((tune_count % tune_threshold))
+    echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  Seeded${DIM}(-)${NC} ${MAGENTA}${seeded_count}${NC} ${DIM}│${NC} Learned${YELLOW}(+)${NC} ${MAGENTA}${learned_count}${NC}${transition_indicator} ${DIM}│${NC} ${CYAN}${total_terms}${NC} terms ${DIM}│${NC} ${GREEN}${hits_display}${NC} hits ${DIM}│${NC} Learn: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} Tune: ${YELLOW}${tune_progress}/${tune_threshold}${NC}"
     echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
     printf "${DIM}%-24s %5s  %s${NC}\n" "DOMAIN" "HITS" "TERMS"
 
