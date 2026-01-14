@@ -1038,5 +1038,3 @@ cmd_whitelist() {
             ;;
     esac
 }
-
-cmd_help() {
