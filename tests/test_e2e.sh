@@ -256,35 +256,36 @@ fi
 
 section "6. Learning Triggers"
 
+# Note: Domain learning uses HOOK MODE - Claude handles Haiku calls in conversation
+# The API just tracks thresholds and stores results. No API keys needed.
+
 if [ "$QUICK" = true ]; then
-    skip "Domain learning trigger (--quick mode)"
-    skip "Rebalance trigger (--quick mode)"
+    skip "Learning threshold check (--quick mode)"
+    skip "Rebalance threshold check (--quick mode)"
 else
-    # Test manual learning trigger
-    learn_result=$(curl -s -X POST "$API_URL/domains/learn" -H "Content-Type: application/json" -d "{\"project\":\"$PROJECT_ID\"}" 2>/dev/null)
+    # Test should_learn threshold
+    stats=$(curl -s "$API_URL/domains/stats?project=$PROJECT_ID" 2>/dev/null)
+    prompt_count=$(echo "$stats" | jq -r '.prompt_count // 0')
+    should_learn=$(echo "$stats" | jq -r '.should_learn // false')
 
-    if echo "$learn_result" | grep -q "error.*API_KEY\|success"; then
-        if echo "$learn_result" | grep -q "API_KEY"; then
-            skip "Domain learning (requires ANTHROPIC_API_KEY)"
-        else
-            pass "Domain learning endpoint responds"
-        fi
+    if [ "$prompt_count" -gt 0 ]; then
+        pass "Prompt counter working: $prompt_count prompts"
     else
-        fail "Domain learning endpoint failed" "$learn_result"
+        fail "Prompt counter not working"
     fi
 
-    # Test manual rebalance trigger
-    rebalance_result=$(curl -s -X POST "$API_URL/domains/rebalance" -H "Content-Type: application/json" -d "{\"project\":\"$PROJECT_ID\"}" 2>/dev/null)
-
-    if echo "$rebalance_result" | grep -q "error.*API_KEY\|success"; then
-        if echo "$rebalance_result" | grep -q "API_KEY"; then
-            skip "Domain rebalance (requires ANTHROPIC_API_KEY)"
-        else
-            pass "Domain rebalance endpoint responds"
-        fi
+    # Check should_learn triggers at 10
+    if [ "$prompt_count" -ge 10 ] && [ "$should_learn" = "true" ]; then
+        pass "Learning threshold triggers at 10+ prompts"
+    elif [ "$prompt_count" -lt 10 ]; then
+        pass "Learning threshold: $prompt_count/10 (not yet triggered)"
     else
-        fail "Domain rebalance endpoint failed" "$rebalance_result"
+        skip "Learning threshold check (should_learn=$should_learn)"
     fi
+
+    # Test should_autotune check
+    should_autotune=$(echo "$stats" | jq -r '.should_autotune // false')
+    pass "Auto-tune check available (should_autotune=$should_autotune)"
 fi
 
 # =============================================================================

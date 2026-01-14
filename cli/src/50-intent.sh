@@ -79,6 +79,13 @@ cmd_intent_recent() {
     local intent_stats=$(curl -s "${INDEX_URL}/intent/stats?project_id=${project_id}")
     local first_seen=$(echo "$intent_stats" | jq -r '.first_seen // 0')
 
+    # Get domain learning stats (GL-054)
+    local domain_stats=$(curl -s "${INDEX_URL}/domains/stats?project=${project_id}")
+    local domain_count=$(echo "$domain_stats" | jq -r '.domains // 0')
+    local prompt_count=$(echo "$domain_stats" | jq -r '.prompt_count // 0')
+    local prompt_threshold=$(echo "$domain_stats" | jq -r '.prompt_threshold // 10')
+    local seconds_to_autotune=$(echo "$domain_stats" | jq -r '.seconds_to_autotune // 0')
+
     # Get recent intent records
     local result=$(curl -s "${INDEX_URL}/intent/recent?limit=${limit}&project_id=${project_id}")
     local total=$(echo "$result" | jq -r '.stats.total_records // 0')
@@ -240,6 +247,23 @@ PYEOF
         echo -e "${BOLD}PREDICTIONS${NC}     ${GREEN}${hit_pct_int}% accuracy${NC} (${evaluated} predictions evaluated)"
     else
         echo -e "${BOLD}PREDICTIONS${NC}     ${YELLOW}${hit_pct_int}% accuracy${NC} (${evaluated} predictions, improving)"
+    fi
+    # Domain learning status (GL-054)
+    if [ "$domain_count" -gt 0 ] 2>/dev/null; then
+        # Format auto-tune time
+        local autotune_display=""
+        if [ "$seconds_to_autotune" -gt 0 ] 2>/dev/null; then
+            local hours=$((seconds_to_autotune / 3600))
+            if [ "$hours" -gt 0 ]; then
+                autotune_display="${hours}h"
+            else
+                local mins=$((seconds_to_autotune / 60))
+                autotune_display="${mins}m"
+            fi
+        else
+            autotune_display="now"
+        fi
+        echo -e "${BOLD}DOMAINS${NC}         ${CYAN}${domain_count} active${NC} ${DIM}│${NC} Learning: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} Auto-tune: ${DIM}${autotune_display}${NC}"
     fi
     echo -e "${BOLD}HOW IT WORKS${NC}    ${CYAN}aOa finds exact locations${NC}, so Claude reads only what it needs"
     echo -e "                ${DIM}Time: rolling avg (5/15/30min) of input token processing${NC}"

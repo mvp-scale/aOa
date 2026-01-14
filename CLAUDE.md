@@ -4,6 +4,25 @@
 
 ---
 
+## Hooks, Not API Keys
+
+**CRITICAL: aOa uses Claude Code HOOKS to access Haiku - NOT direct API calls.**
+
+- ❌ NEVER use `ANTHROPIC_API_KEY` or direct Anthropic API calls
+- ✅ ALWAYS use hooks to trigger Haiku via Claude Code's built-in capabilities
+
+Hooks allow aOa to call Haiku without requiring users to have API keys. This is a core architectural decision that enables zero-config learning.
+
+**How it works:**
+1. Hook detects a condition (e.g., `should_learn = true`)
+2. Hook signals Claude Code to spawn a Haiku Task
+3. Haiku Task runs in Claude Code's context (no API key needed)
+4. Results are stored via API calls back to aOa services
+
+This keeps aOa accessible to all users regardless of whether they have Anthropic API access.
+
+---
+
 ## Confidence & Communication
 
 ### Traffic Light System

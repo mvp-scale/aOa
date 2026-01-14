@@ -74,6 +74,7 @@ main() {
         # System
         quickstart|qs) cmd_quickstart "$@" ;;
         learn)      cmd_learn "$@" ;;
+        domains|d)  cmd_domains "$@" ;;
         stats)      cmd_stats ;;
         health)     cmd_health ;;
         metrics)    cmd_metrics ;;

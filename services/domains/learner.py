@@ -68,7 +68,7 @@ class DomainLearner:
     """Manages domain discovery and learning via Haiku."""
 
     BATCH_SIZE = 10  # Prompts per learning batch
-    REBALANCE_INTERVAL = 43200  # 12 hours in seconds
+    AUTOTUNE_INTERVAL = 300  # 5 minutes for testing (TODO: restore to 43200 = 12 hours)
     STARTER_HITS = 10  # Initial hits for new domains
     STARTER_SCORE = 0.5  # Initial term confidence
 
@@ -124,26 +124,116 @@ class DomainLearner:
         return self.get_prompt_count() >= self.BATCH_SIZE
 
     # =========================================================================
-    # Rebalance Timer
+    # Learning Pending Flag (Hook Signal)
     # =========================================================================
 
-    def get_last_rebalance(self) -> int:
-        """Get timestamp of last rebalance."""
-        key = self._key("last_rebalance")
+    def set_learning_pending(self) -> None:
+        """Signal that learning is ready for hook to process."""
+        self.redis.client.set(self._key("learning_pending"), "1")
+
+    def clear_learning_pending(self) -> None:
+        """Clear pending flag after hook completes learning."""
+        self.redis.client.delete(self._key("learning_pending"))
+
+    def is_learning_pending(self) -> bool:
+        """Check if learning is waiting for hook to process."""
+        val = self.redis.client.get(self._key("learning_pending"))
+        return val == b"1" or val == "1"
+
+    # =========================================================================
+    # Auto-tune Timer
+    # =========================================================================
+
+    def get_last_autotune(self) -> int:
+        """Get timestamp of last auto-tune."""
+        key = self._key("last_autotune")
         val = self.redis.client.get(key)
         return int(val) if val else 0
 
-    def set_last_rebalance(self) -> None:
-        """Update rebalance timestamp to now."""
-        key = self._key("last_rebalance")
+    def set_last_autotune(self) -> None:
+        """Update auto-tune timestamp to now."""
+        key = self._key("last_autotune")
         self.redis.client.set(key, int(time.time()))
 
-    def should_rebalance(self) -> bool:
-        """Check if 12+ hours since last rebalance."""
-        last = self.get_last_rebalance()
+    def should_autotune(self) -> bool:
+        """Check if enough time has passed since last auto-tune."""
+        last = self.get_last_autotune()
         if last == 0:
-            return False  # Never rebalanced = nothing to rebalance
-        return (time.time() - last) >= self.REBALANCE_INTERVAL
+            return False  # Never auto-tuned = nothing to tune yet
+        return (time.time() - last) >= self.AUTOTUNE_INTERVAL
+
+    # =========================================================================
+    # Learning History (GL-054)
+    # =========================================================================
+
+    def get_last_learn(self) -> int:
+        """Get timestamp of last learning cycle."""
+        key = self._key("last_learn")
+        val = self.redis.client.get(key)
+        return int(val) if val else 0
+
+    def set_last_learn(self, terms_count: int = 0, terms_list: list[str] = None, domains_list: list[str] = None) -> None:
+        """Update learning timestamp and record what was learned."""
+        self.redis.client.set(self._key("last_learn"), int(time.time()))
+        self.redis.client.set(self._key("terms_learned_last"), terms_count)
+        # Store actual terms and domains learned (for display)
+        if terms_list:
+            self.redis.client.delete(self._key("terms_learned_list"))
+            self.redis.client.rpush(self._key("terms_learned_list"), *terms_list[:20])  # Cap at 20
+        if domains_list:
+            self.redis.client.delete(self._key("domains_learned_list"))
+            self.redis.client.rpush(self._key("domains_learned_list"), *domains_list[:5])  # Cap at 5
+
+    def get_terms_learned_last(self) -> int:
+        """Get count of terms learned in last learning cycle."""
+        key = self._key("terms_learned_last")
+        val = self.redis.client.get(key)
+        return int(val) if val else 0
+
+    def get_learned_details(self) -> dict:
+        """Get details of what was learned in last cycle."""
+        return {
+            'terms': list(self.redis.client.lrange(self._key("terms_learned_list"), 0, -1)),
+            'domains': list(self.redis.client.lrange(self._key("domains_learned_list"), 0, -1)),
+        }
+
+    # =========================================================================
+    # Token Investment Tracking (GL-054)
+    # =========================================================================
+
+    def add_tokens_invested(self, input_tokens: int, output_tokens: int) -> None:
+        """Track tokens invested in domain learning."""
+        total = input_tokens + output_tokens
+        self.redis.client.incrby(self._key("tokens_invested"), total)
+        self.redis.client.set(self._key("tokens_invested_last"), total)
+        self.redis.client.incr(self._key("learning_calls"))
+
+    def get_tokens_invested(self) -> int:
+        """Get total tokens invested in domain learning."""
+        val = self.redis.client.get(self._key("tokens_invested"))
+        return int(val) if val else 0
+
+    def get_tokens_invested_last(self) -> int:
+        """Get tokens invested in last learning call."""
+        val = self.redis.client.get(self._key("tokens_invested_last"))
+        return int(val) if val else 0
+
+    def get_learning_calls(self) -> int:
+        """Get total number of learning API calls made."""
+        val = self.redis.client.get(self._key("learning_calls"))
+        return int(val) if val else 0
+
+    def set_autotune_results(self, merged: int = 0, pruned: int = 0) -> None:
+        """Record results of last auto-tune."""
+        self.redis.client.set(self._key("autotune_merged_last"), merged)
+        self.redis.client.set(self._key("autotune_pruned_last"), pruned)
+
+    def get_autotune_results(self) -> dict:
+        """Get results of last auto-tune."""
+        return {
+            'merged': int(self.redis.client.get(self._key("autotune_merged_last")) or 0),
+            'pruned': int(self.redis.client.get(self._key("autotune_pruned_last")) or 0),
+        }
 
     # =========================================================================
     # Domain Storage
@@ -194,6 +284,29 @@ class DomainLearner:
         meta_key = self._domain_key(name, "meta")
         return self.redis.client.hincrby(meta_key, "hits", 1)
 
+    def increment_term_hits(self, terms: list[str]) -> None:
+        """Increment hit counters for terms that matched."""
+        if not terms:
+            return
+        term_hits_key = self._key("term_hits")
+        pipe = self.redis.client.pipeline()
+        for term in terms:
+            pipe.hincrby(term_hits_key, term, 1)
+        pipe.execute()
+
+    def get_term_hits(self, terms: list[str] = None) -> dict:
+        """Get hit counts for terms. If terms=None, returns all."""
+        term_hits_key = self._key("term_hits")
+        if terms:
+            pipe = self.redis.client.pipeline()
+            for term in terms:
+                pipe.hget(term_hits_key, term)
+            results = pipe.execute()
+            return {term: int(hits or 0) for term, hits in zip(terms, results)}
+        else:
+            all_hits = self.redis.client.hgetall(term_hits_key)
+            return {term: int(hits) for term, hits in all_hits.items()}
+
     def remove_domain(self, name: str) -> None:
         """Remove a domain and all its data."""
         # Get terms first for cleanup
@@ -230,11 +343,12 @@ class DomainLearner:
         results = self.redis.client.zrevrange(term_key, 0, -1, withscores=True)
         return [(name, score) for name, score in results]
 
-    def get_domain_for_symbol(self, symbol: str) -> Optional[str]:
+    def get_domain_for_symbol(self, symbol: str, track_hits: bool = False) -> Optional[str]:
         """
         Get the best matching domain for a symbol name.
 
         Tokenizes the symbol and aggregates domain scores.
+        If track_hits=True, also increments hit counters for matched terms.
         """
         # Simple tokenization: split on non-alphanumeric
         import re
@@ -246,12 +360,20 @@ class DomainLearner:
 
         # Aggregate scores across all tokens
         scores: dict[str, float] = {}
+        matched_terms: list[str] = []
         for token in tokens:
-            for domain, score in self.lookup_term(token):
-                scores[domain] = scores.get(domain, 0) + score
+            results = self.lookup_term(token)
+            if results:
+                matched_terms.append(token)
+                for domain, score in results:
+                    scores[domain] = scores.get(domain, 0) + score
 
         if not scores:
             return None
+
+        # Track term hits if requested
+        if track_hits and matched_terms:
+            self.increment_term_hits(matched_terms)
 
         # Return highest-scoring domain
         return max(scores.items(), key=lambda x: x[1])[0]
@@ -303,9 +425,9 @@ Code samples:
 Output valid JSON only:
 {{"@domain_name": ["term1", "term2", ...]}}"""
 
-    def get_rebalance_prompt(self, domains_with_meta: list[dict]) -> str:
+    def get_autotune_prompt(self, domains_with_meta: list[dict]) -> str:
         """
-        Generate the rebalance prompt for Haiku.
+        Generate the auto-tune prompt for Haiku.
         """
         domains_text = "\n".join(
             f"- {d['name']}: hits={d.get('hits', 0)}, confidence={d.get('confidence', 0)}, "
@@ -337,6 +459,7 @@ Output valid JSON only:
 
         Only available when ANTHROPIC_API_KEY is set.
         Returns parsed JSON or None.
+        Tracks token investment for transparency.
         """
         if not self.anthropic_client:
             return None
@@ -347,6 +470,14 @@ Output valid JSON only:
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}]
             )
+
+            # Track tokens invested (GL-054: Intelligence Angle)
+            if hasattr(response, 'usage'):
+                self.add_tokens_invested(
+                    response.usage.input_tokens,
+                    response.usage.output_tokens
+                )
+
             text = response.content[0].text
             # Extract JSON from response
             import re
@@ -381,27 +512,34 @@ Output valid JSON only:
         return domains
 
     # =========================================================================
-    # Rebalance Operations (GL-053 Phase D)
+    # Auto-tune Operations (GL-053 Phase D)
     # =========================================================================
 
     def get_domains_with_meta(self) -> list[dict]:
-        """Get all domains with their metadata and terms for rebalance."""
+        """Get all domains with their metadata and terms (sorted by hits)."""
         result = []
+        # Get all term hits for sorting
+        all_term_hits = self.get_term_hits()
+
         for name in self.get_all_domains():
             meta = self.get_domain_meta(name)
             terms = list(self.get_domain_terms(name))
+
+            # Sort terms by hit count (highest first)
+            terms_sorted = sorted(terms, key=lambda t: all_term_hits.get(t, 0), reverse=True)
+
             result.append({
                 'name': name,
                 'hits': int(meta.get('hits', 0)),
                 'confidence': float(meta.get('confidence', 0)),
                 'created': int(meta.get('created', 0)),
-                'terms': terms,
+                'terms': terms_sorted,
             })
         return result
 
-    def apply_rebalance(self, result: dict) -> dict:
+    def apply_autotune(self, result: dict) -> dict:
         """
-        Apply rebalance results from Haiku.
+        Apply auto-tune results from Haiku.
 
         Expected format:
         {
@@ -463,14 +601,15 @@ Output valid JSON only:
             self.redis.client.sadd(new_terms_key, term)
             summary['reassigned'] += 1
 
-        # Update rebalance timestamp
-        self.set_last_rebalance()
+        # Update auto-tune timestamp and record results
+        self.set_last_autotune()
+        self.set_autotune_results(merged=summary['merged'], pruned=summary['pruned'])
 
         return summary
 
-    def rebalance_direct(self) -> dict:
+    def autotune_direct(self) -> dict:
         """
-        Run rebalance using direct Haiku API call.
+        Run auto-tune using direct Haiku API call.
 
         Returns summary of actions taken.
         """
@@ -479,15 +618,15 @@ Output valid JSON only:
 
         domains_with_meta = self.get_domains_with_meta()
         if not domains_with_meta:
-            return {'error': 'No domains to rebalance'}
+            return {'error': 'No domains to auto-tune'}
 
-        prompt = self.get_rebalance_prompt(domains_with_meta)
+        prompt = self.get_autotune_prompt(domains_with_meta)
         result = self._call_haiku(prompt)
 
         if not result:
             return {'error': 'Haiku call failed'}
 
-        return self.apply_rebalance(result)
+        return self.apply_autotune(result)
 
     # =========================================================================
     # Stats
@@ -505,14 +644,33 @@ Output valid JSON only:
             meta = self.get_domain_meta(d)
             total_hits += int(meta.get("hits", 0))
 
+        last_autotune = self.get_last_autotune()
+        seconds_to_autotune = max(0, self.AUTOTUNE_INTERVAL - (int(time.time()) - last_autotune)) if last_autotune > 0 else 0
+        autotune_results = self.get_autotune_results()
+        learned_details = self.get_learned_details()
+
         return {
             "project": self.project_id,
             "domains": len(domains),
             "total_terms": total_terms,
             "total_hits": total_hits,
             "prompt_count": self.get_prompt_count(),
+            "prompt_threshold": self.BATCH_SIZE,
             "should_learn": self.should_learn(),
-            "should_rebalance": self.should_rebalance(),
+            "should_autotune": self.should_autotune(),
+            "last_autotune": last_autotune,
+            "autotune_interval": self.AUTOTUNE_INTERVAL,
+            "seconds_to_autotune": seconds_to_autotune,
+            "autotune_merged_last": autotune_results['merged'],
+            "autotune_pruned_last": autotune_results['pruned'],
+            "last_learn": self.get_last_learn(),
+            "terms_learned_last": self.get_terms_learned_last(),
+            "terms_learned_list": learned_details['terms'],
+            "domains_learned_list": learned_details['domains'],
+            # GL-054: Intelligence Angle
+            "tokens_invested": self.get_tokens_invested(),
+            "tokens_invested_last": self.get_tokens_invested_last(),
+            "learning_calls": self.get_learning_calls(),
         }
 
 

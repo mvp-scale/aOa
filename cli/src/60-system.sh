@@ -820,6 +820,162 @@ cmd_learn() {
     echo -e "${DIM}Or manually: aoa learn --store < patterns.json${NC}"
 }
 
+cmd_domains() {
+    # aoa domains - Show domain learning status and top domains with terms
+    local project_id=$(get_project_id)
+    local MAGENTA='\033[0;35m'
+
+    # Get domain stats
+    local stats=$(curl -s "${INDEX_URL}/domains/stats?project=${project_id}")
+
+    local domain_count=$(echo "$stats" | jq -r '.domains // 0')
+    local total_terms=$(echo "$stats" | jq -r '.total_terms // 0')
+    local total_hits=$(echo "$stats" | jq -r '.total_hits // 0')
+    local prompt_count=$(echo "$stats" | jq -r '.prompt_count // 0')
+    local prompt_threshold=$(echo "$stats" | jq -r '.prompt_threshold // 10')
+    local last_learn=$(echo "$stats" | jq -r '.last_learn // 0')
+    local terms_learned=$(echo "$stats" | jq -r '.terms_learned_last // 0')
+    local last_autotune=$(echo "$stats" | jq -r '.last_autotune // 0')
+    local seconds_to_autotune=$(echo "$stats" | jq -r '.seconds_to_autotune // 0')
+    local merged_last=$(echo "$stats" | jq -r '.autotune_merged_last // 0')
+    local pruned_last=$(echo "$stats" | jq -r '.autotune_pruned_last // 0')
+    # GL-054: Intelligence Angle
+    local tokens_invested=$(echo "$stats" | jq -r '.tokens_invested // 0')
+    local learning_calls=$(echo "$stats" | jq -r '.learning_calls // 0')
+
+    # Get tokens saved from metrics endpoint
+    local metrics=$(curl -s "${INDEX_URL}/metrics?project_id=${project_id}")
+    local tokens_saved=$(echo "$metrics" | jq -r '.savings.tokens // 0')
+
+    if [ "$domain_count" -eq 0 ] 2>/dev/null; then
+        echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}"
+        echo ""
+        echo -e "${DIM}No domains seeded yet. Run 'aoa quickstart' to initialize.${NC}"
+        return 0
+    fi
+
+    # Format hits compactly
+    local hits_display
+    if [ "$total_hits" -ge 1000 ]; then
+        hits_display=$(awk "BEGIN {printf \"%.1fk\", $total_hits/1000}")
+    else
+        hits_display="$total_hits"
+    fi
+
+    # Format auto-tune time
+    local tune_display=""
+    if [ "$seconds_to_autotune" -gt 0 ] 2>/dev/null; then
+        local hours=$((seconds_to_autotune / 3600))
+        local mins=$(( (seconds_to_autotune % 3600) / 60 ))
+        [ "$hours" -gt 0 ] && tune_display="${hours}h" || tune_display="${mins}m"
+    else
+        tune_display="ready"
+    fi
+
+    # Compact header: all key info on one line
+    echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  ${CYAN}${domain_count}${NC} domains ${DIM}│${NC} ${total_terms} terms ${DIM}│${NC} ${hits_display} hits ${DIM}│${NC} Learn: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} Tune: ${tune_display}"
+
+    # Get domains with full terms for display
+    local domains_data=$(curl -s "${INDEX_URL}/domains/list?project=${project_id}&limit=10&include_terms=true&include_created=true" 2>/dev/null)
+    local now=$(date +%s)
+
+    echo ""
+    echo -e "${DIM}DOMAIN               HITS    TERMS${NC}"
+
+    # Display each domain with its top terms
+    echo "$domains_data" | jq -r '.domains[]? | "\(.name)|\(.hits)|\(.created // 0)|\(.terms // [] | .[0:6] | join(" "))"' 2>/dev/null | while IFS='|' read -r name hits created terms; do
+        local hits_fmt
+        [ "$hits" -ge 1000 ] && hits_fmt=$(awk "BEGIN {printf \"%.1fk\", $hits/1000}") || hits_fmt="$hits"
+
+        local name_padded=$(printf "%-18s" "$name")
+        local hits_padded=$(printf "%5s" "$hits_fmt")
+
+        # Check if domain is new (created in last hour)
+        local is_new=""
+        if [ "$created" -gt 0 ] 2>/dev/null && [ $((now - created)) -lt 3600 ]; then
+            is_new="${GREEN}+${NC}"
+        fi
+
+        echo -e "${is_new}${MAGENTA}${name_padded}${NC} ${DIM}${hits_padded}${NC}    ${CYAN}${terms}${NC}"
+    done
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Recently Learned Section (GL-054)
+    # ─────────────────────────────────────────────────────────────────────────
+    echo ""
+    echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
+
+    if [ "$last_learn" -gt 0 ] 2>/dev/null; then
+        local learn_ago=$(( now - last_learn ))
+        local learn_display=""
+        if [ "$learn_ago" -lt 60 ]; then
+            learn_display="${learn_ago}s ago"
+        elif [ "$learn_ago" -lt 3600 ]; then
+            learn_display="$((learn_ago / 60))m ago"
+        elif [ "$learn_ago" -lt 86400 ]; then
+            learn_display="$((learn_ago / 3600))h ago"
+        else
+            learn_display="$((learn_ago / 86400))d ago"
+        fi
+
+        # Get learned details
+        local domains_learned=$(echo "$stats" | jq -r '.domains_learned_list // [] | join(" ")')
+        local terms_learned_list=$(echo "$stats" | jq -r '.terms_learned_list // [] | .[0:4] | join(" ")')
+
+        # Show Recently Learned section
+        if [ -n "$domains_learned" ] && [ "$domains_learned" != "" ]; then
+            echo -e "${CYAN}${BOLD}⚡ Recently Learned${NC} ${DIM}(${learn_display})${NC}"
+            # Display each domain with its terms
+            for domain in $domains_learned; do
+                printf "  ${MAGENTA}%-18s${NC} ${CYAN}%s${NC}\n" "$domain" "$terms_learned_list"
+            done
+        elif [ -n "$terms_learned_list" ] && [ "$terms_learned_list" != "" ]; then
+            echo -e "${CYAN}${BOLD}⚡ Recently Learned${NC} ${DIM}(${learn_display})${NC}"
+            echo -e "  ${CYAN}${terms_learned_list}${NC}"
+        else
+            echo -e "${DIM}Last learn: ${learn_display} (no new domains found)${NC}"
+        fi
+
+        # Show auto-tune results if any
+        if [ "$merged_last" -gt 0 ] || [ "$pruned_last" -gt 0 ]; then
+            echo -e "  ${DIM}↻ Tuned: merged ${merged_last}, pruned ${pruned_last}${NC}"
+        fi
+    fi
+
+    # What's next hint
+    if [ "$prompt_count" -ge 7 ] 2>/dev/null; then
+        local remaining=$((prompt_threshold - prompt_count))
+        echo -e "${DIM}→ NEXT Learning in ${remaining} prompts${NC}"
+    fi
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Intelligence Angle Footer (GL-054)
+    # ─────────────────────────────────────────────────────────────────────────
+    echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
+
+    # Format tokens invested
+    local invested_display
+    if [ "$tokens_invested" -ge 1000000 ]; then
+        invested_display=$(awk "BEGIN {printf \"%.1fM\", $tokens_invested/1000000}")
+    elif [ "$tokens_invested" -ge 1000 ]; then
+        invested_display=$(awk "BEGIN {printf \"%.1fk\", $tokens_invested/1000}")
+    else
+        invested_display="$tokens_invested"
+    fi
+
+    # Format tokens saved
+    local saved_display
+    if [ "$tokens_saved" -ge 1000000 ]; then
+        saved_display=$(awk "BEGIN {printf \"%.1fM\", $tokens_saved/1000000}")
+    elif [ "$tokens_saved" -ge 1000 ]; then
+        saved_display=$(awk "BEGIN {printf \"%.1fk\", $tokens_saved/1000}")
+    else
+        saved_display="$tokens_saved"
+    fi
+
+    echo -e "${CYAN}${BOLD}⚡ Intelligence Angle${NC} ${DIM}│${NC} ${invested_display} tokens invested ${DIM}│${NC} ${GREEN}${saved_display}${NC} saved ${DIM}│${NC} ${CYAN}aOa learns → more time to innovate${NC}"
+}
+
 cmd_stats() {
     echo -e "${CYAN}${BOLD}⚡ aOa Stats${NC}"
     echo ""
