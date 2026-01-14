@@ -229,11 +229,10 @@ After Haiku responds, POST results to aOa:
 curl -s -X POST "localhost:8080/domains/add" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": <haiku_response>}}'
 ```
 
-Then clear the pending flag (include domains so they show in 'aoa domains'):
+Then clear the pending flag:
 ```bash
-curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": <haiku_domain_names_array>}}'
+curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
 ```
-Where <haiku_domain_names_array> is just the domain names, e.g. ["@cli_tooling", "@testing_quality"]
 """
         output_context(learning_prompt)
         return  # Don't output status line when learning is triggered

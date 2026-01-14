@@ -3800,7 +3800,7 @@ def _trigger_domain_learning_if_needed(project_id: str):
         tune_count = learner.increment_tune_count()
 
         # Learning trigger (every 10 prompts)
-        if learner.should_learn():
+        if learner.should_learn() and not learner.is_learning_pending():
             thread = threading.Thread(
                 target=_do_domain_learning,
                 args=(project_id,),
@@ -4338,6 +4338,14 @@ def domains_add():
             learner.add_domain(domain)
             added.append(name)
             terms_added.extend(valid_terms)
+
+        # Record what was just added for "Recently Learned" display
+        if added:
+            learner.set_last_learn(
+                terms_count=len(terms_added),
+                terms_list=terms_added[:20],
+                domains_list=added[:5]
+            )
 
         return jsonify({
             'success': True,
