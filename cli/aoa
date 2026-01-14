@@ -3577,8 +3577,46 @@ cmd_learn() {
 
 cmd_domains() {
     # aoa domains - Show domain learning status and top domains with terms
-    local project_id=$(get_project_id)
+    # Usage: aoa domains [--json] [-n LIMIT] [--help]
+
+    local json_output=false
+    local limit=20
     local MAGENTA='\033[0;35m'
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --json|-j)
+                json_output=true
+                shift
+                ;;
+            -n|--limit)
+                limit="${2:-20}"
+                shift 2
+                ;;
+            --help|-h)
+                echo "Usage: aoa domains [OPTIONS]"
+                echo ""
+                echo "Show domain learning status and top domains with terms."
+                echo ""
+                echo "Options:"
+                echo "  --json, -j      Output as JSON (for piping to AI agents)"
+                echo "  -n, --limit N   Show top N domains (default: 20)"
+                echo "  --help, -h      Show this help message"
+                echo ""
+                echo "Examples:"
+                echo "  aoa domains              # Show top 20 domains"
+                echo "  aoa domains -n 10        # Show top 10 domains"
+                echo "  aoa domains --json       # Output full structure as JSON"
+                return 0
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
+    local project_id=$(get_project_id)
 
     # Get domain stats
     local stats=$(curl -s "${INDEX_URL}/domains/stats?project=${project_id}")
@@ -3623,9 +3661,49 @@ cmd_domains() {
     # Format tune counter (GL-055: intent-based)
     local tune_display="${tune_count}/${tune_threshold}"
 
-    # Get domains with full terms for display (top 20)
-    local domains_data=$(curl -s "${INDEX_URL}/domains/list?project=${project_id}&limit=20&include_terms=true&include_created=true" 2>/dev/null)
+    # Get domains with full terms for display
+    local domains_data=$(curl -s "${INDEX_URL}/domains/list?project=${project_id}&limit=${limit}&include_terms=true&include_created=true" 2>/dev/null)
     local now=$(date +%s)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # JSON Output Mode
+    # ─────────────────────────────────────────────────────────────────────────
+    if [ "$json_output" = true ]; then
+        # Combine stats and domains into single JSON object
+        jq -n \
+            --argjson stats "$stats" \
+            --argjson domains "$domains_data" \
+            --arg project "$project_id" \
+            '{
+                project: $project,
+                summary: {
+                    domains: ($stats.domains // 0),
+                    total_terms: ($stats.total_terms // 0),
+                    total_hits: ($stats.total_hits // 0),
+                    tokens_invested: ($stats.tokens_invested // 0),
+                    learning_calls: ($stats.learning_calls // 0)
+                },
+                learning: {
+                    prompt_count: ($stats.prompt_count // 0),
+                    prompt_threshold: ($stats.prompt_threshold // 10),
+                    last_learn: ($stats.last_learn // 0),
+                    domains_learned: ($stats.domains_learned_list // []),
+                    terms_learned: ($stats.terms_learned_list // [])
+                },
+                tuning: {
+                    tune_count: ($stats.tune_count // 0),
+                    tune_threshold: ($stats.tune_threshold // 100),
+                    last_tune: ($stats.last_tune // 0),
+                    last_results: {
+                        kept: ($stats.tune_kept_last // 0),
+                        added: ($stats.tune_added_last // 0),
+                        removed: ($stats.tune_removed_last // 0)
+                    }
+                },
+                domains: ($domains.domains // [])
+            }'
+        return 0
+    fi
 
     # ─────────────────────────────────────────────────────────────────────────
     # aOa Domains Section (stats header + domain list)
@@ -3653,8 +3731,8 @@ cmd_domains() {
     done
 
     # Show remaining count if more than displayed
-    if [ "$domain_count" -gt 20 ] 2>/dev/null; then
-        local remaining=$((domain_count - 20))
+    if [ "$domain_count" -gt "$limit" ] 2>/dev/null; then
+        local remaining=$((domain_count - limit))
         echo -e "${DIM}+${remaining} more domains${NC}"
     fi
 
