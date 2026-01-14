@@ -457,6 +457,57 @@ infer_tags_from_name() {
     fi
 }
 
+# Helper function for parallel quickstart processing (must be top-level for export -f)
+_quickstart_process_file() {
+    local file="$1"
+    local loop_param=""
+    [ -n "$project_id" ] && loop_param="&project=${project_id}"
+
+    # Get outline
+    local result=$(curl -s "${INDEX_URL}/outline?file=${file}${loop_param}")
+    local err=$(echo "$result" | jq -r '.error // empty')
+
+    if [ -n "$err" ]; then
+        touch "${progress_dir}/error_$(echo "$file" | md5sum | cut -c1-8)"
+        return 1
+    fi
+
+    local symbols_json=$(echo "$result" | jq -c '[.symbols[] | {name: .name, kind: .kind, start_line: .start_line, end_line: .end_line}]')
+
+    # Infer tags
+    local infer_payload=$(echo "$symbols_json" | jq '{symbols: [.[] | {name: .name, kind: .kind}]}')
+    local infer_result=$(curl -s -X POST "${INDEX_URL}/patterns/infer" \
+        -H "Content-Type: application/json" \
+        -d "$infer_payload")
+    local inferred_tags=$(echo "$infer_result" | jq -c '.tags // []')
+
+    # Build enriched payload using jq (simpler, faster)
+    local enriched_symbols=$(echo "$result" | jq -c --argjson tags "$inferred_tags" '
+        [.symbols | to_entries | .[] | {
+            name: .value.name,
+            kind: .value.kind,
+            line: .value.start_line,
+            end_line: .value.end_line,
+            tags: ($tags[.key] // [])
+        }]')
+
+    local mark_payload=$(jq -n \
+        --arg file "$file" \
+        --arg project "$project_id" \
+        --argjson symbols "$enriched_symbols" \
+        '{file: $file, project: $project, symbols: $symbols}')
+
+    local http_code=$(curl -s -w "%{http_code}" -o /dev/null -X POST "${INDEX_URL}/outline/enriched" \
+        -H "Content-Type: application/json" \
+        -d "$mark_payload")
+
+    if [ "$http_code" = "200" ]; then
+        touch "${progress_dir}/done_$(echo "$file" | md5sum | cut -c1-8)"
+    else
+        touch "${progress_dir}/error_$(echo "$file" | md5sum | cut -c1-8)"
+    fi
+}
+
 cmd_quickstart() {
     # aoa quickstart           - Initial tagging (only pending files)
     # aoa quickstart --force   - Re-tag ALL files (refresh patterns)
@@ -549,57 +600,6 @@ cmd_quickstart() {
     export INDEX_URL
     export project_id
     export progress_dir
-
-    # Process single file function (exported for xargs)
-    _quickstart_process_file() {
-        local file="$1"
-        local loop_param=""
-        [ -n "$project_id" ] && loop_param="&project=${project_id}"
-
-        # Get outline
-        local result=$(curl -s "${INDEX_URL}/outline?file=${file}${loop_param}")
-        local err=$(echo "$result" | jq -r '.error // empty')
-
-        if [ -n "$err" ]; then
-            touch "${progress_dir}/error_$(echo "$file" | md5sum | cut -c1-8)"
-            return 1
-        fi
-
-        local symbols_json=$(echo "$result" | jq -c '[.symbols[] | {name: .name, kind: .kind, start_line: .start_line, end_line: .end_line}]')
-
-        # Infer tags
-        local infer_payload=$(echo "$symbols_json" | jq '{symbols: [.[] | {name: .name, kind: .kind}]}')
-        local infer_result=$(curl -s -X POST "${INDEX_URL}/patterns/infer" \
-            -H "Content-Type: application/json" \
-            -d "$infer_payload")
-        local inferred_tags=$(echo "$infer_result" | jq -c '.tags // []')
-
-        # Build enriched payload using jq (simpler, faster)
-        local enriched_symbols=$(echo "$result" | jq -c --argjson tags "$inferred_tags" '
-            [.symbols | to_entries | .[] | {
-                name: .value.name,
-                kind: .value.kind,
-                line: .value.start_line,
-                end_line: .value.end_line,
-                tags: ($tags[.key] // [])
-            }]')
-
-        local mark_payload=$(jq -n \
-            --arg file "$file" \
-            --arg project "$project_id" \
-            --argjson symbols "$enriched_symbols" \
-            '{file: $file, project: $project, symbols: $symbols}')
-
-        local http_code=$(curl -s -w "%{http_code}" -o /dev/null -X POST "${INDEX_URL}/outline/enriched" \
-            -H "Content-Type: application/json" \
-            -d "$mark_payload")
-
-        if [ "$http_code" = "200" ]; then
-            touch "${progress_dir}/done_$(echo "$file" | md5sum | cut -c1-8)"
-        else
-            touch "${progress_dir}/error_$(echo "$file" | md5sum | cut -c1-8)"
-        fi
-    }
     export -f _quickstart_process_file
 
     # Start parallel processing in background
@@ -642,7 +642,6 @@ cmd_quickstart() {
 
     # Cleanup
     rm -rf "$progress_dir"
-    unset -f _quickstart_process_file
 
     echo ""
     echo ""
