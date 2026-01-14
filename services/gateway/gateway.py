@@ -106,6 +106,11 @@ ROUTES = {
     "/project/*": ("index", "/project/*"),
     "/projects": ("index", "/projects"),
 
+    # Domain learning routes (GL-053)
+    "/domains/seed": ("index", "/domains/seed"),
+    "/domains/stats": ("index", "/domains/stats"),
+    "/domains/lookup": ("index", "/domains/lookup"),
+
     # Status service routes
     "/status": ("status", "/status"),
     "/status/json": ("status", "/status/json"),

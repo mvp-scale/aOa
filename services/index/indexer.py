@@ -105,6 +105,15 @@ except ImportError:
     Scorer = None
     WeightTuner = None
 
+# Domain learning for dynamic semantic tagging (GL-053)
+try:
+    from domains import DomainLearner, Domain
+    DOMAINS_AVAILABLE = True
+except ImportError:
+    DOMAINS_AVAILABLE = False
+    DomainLearner = None
+    Domain = None
+
 # ============================================================================
 # Pattern Library for Intent Inference (RAM-cached at startup)
 # ============================================================================
@@ -3606,6 +3615,148 @@ def list_projects():
         'projects': projects,
         'global_mode': manager.global_mode
     })
+
+
+# ============================================================================
+# Domain Learning Endpoints (GL-053)
+# ============================================================================
+
+def _load_universal_domains():
+    """Load universal domain definitions from config."""
+    config_paths = [
+        Path('/app/config/universal-domains.json'),  # Docker
+        Path(__file__).parent.parent.parent / 'config' / 'universal-domains.json',  # Local
+    ]
+    for path in config_paths:
+        if path.exists():
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+                    return data.get('domains', [])
+            except (json.JSONDecodeError, IOError):
+                pass
+    return []
+
+
+@app.route('/domains/seed', methods=['POST'])
+def seed_domains():
+    """
+    Seed Redis with universal domains for a project.
+
+    Called by quickstart to provide instant domain coverage.
+    POST body: {"project": "project-id"}
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project') or request.args.get('project')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+
+        # Check if already seeded
+        existing = learner.get_all_domains()
+        if existing:
+            return jsonify({
+                'success': True,
+                'message': 'Already seeded',
+                'domains': len(existing),
+                'project': project_id
+            })
+
+        # Load universal domains
+        universal = _load_universal_domains()
+        if not universal:
+            return jsonify({'error': 'Universal domains config not found'}), 500
+
+        # Seed each domain
+        seeded = 0
+        total_terms = 0
+        for d in universal:
+            domain = Domain(
+                name=d['name'],
+                description=d.get('description', ''),
+                confidence=float(d.get('confidence', 0.8)),
+                terms=d.get('terms', [])
+            )
+            learner.add_domain(domain)
+            seeded += 1
+            total_terms += len(domain.terms)
+
+        # Set initial rebalance timestamp
+        learner.set_last_rebalance()
+
+        return jsonify({
+            'success': True,
+            'message': f'Seeded {seeded} domains with {total_terms} terms',
+            'domains': seeded,
+            'terms': total_terms,
+            'project': project_id
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/stats')
+def domains_stats():
+    """Get domain statistics for a project."""
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    project_id = request.args.get('project')
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+        stats = learner.get_stats()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/lookup')
+def domains_lookup():
+    """Look up domain for a symbol or term."""
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    project_id = request.args.get('project')
+    term = request.args.get('term')
+    symbol = request.args.get('symbol')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+    if not term and not symbol:
+        return jsonify({'error': 'Missing term or symbol parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+
+        if symbol:
+            # Full symbol lookup (tokenize and aggregate)
+            domain = learner.get_domain_for_symbol(symbol)
+            return jsonify({
+                'symbol': symbol,
+                'domain': domain,
+                'project': project_id
+            })
+        else:
+            # Direct term lookup
+            results = learner.lookup_term(term)
+            return jsonify({
+                'term': term,
+                'domains': [{'name': name, 'score': score} for name, score in results],
+                'project': project_id
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/files')
 def files_search():

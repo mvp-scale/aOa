@@ -63,8 +63,15 @@ WORKDIR /app
 COPY services/gateway/gateway.py /app/gateway/
 COPY services/index/indexer.py /app/index/
 COPY services/ranking /app/ranking/
+COPY services/domains /app/domains/
+COPY services/session /app/session/
 COPY services/status/status_service.py /app/status/
 COPY services/proxy/git_proxy.py /app/proxy/
+
+# Copy config files
+COPY config/universal-domains.json /app/config/
+COPY config/semantic-patterns.json /app/config/
+COPY config/domain-patterns.json /app/config/
 
 # Copy CLI (available inside container)
 COPY cli/aoa /usr/local/bin/aoa

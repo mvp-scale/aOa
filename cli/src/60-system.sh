@@ -559,6 +559,19 @@ cmd_quickstart() {
         echo ""
     fi
 
+    # Seed universal domains (GL-053) - first time only
+    local seed_result=$(curl -s -X POST "${INDEX_URL}/domains/seed" \
+        -H "Content-Type: application/json" \
+        -d "{\"project\": \"${project_id:-default}\"}" 2>/dev/null)
+    local seed_domains=$(echo "$seed_result" | jq -r '.domains // 0')
+    local seed_terms=$(echo "$seed_result" | jq -r '.terms // 0')
+    local seed_msg=$(echo "$seed_result" | jq -r '.message // ""')
+
+    if [ "$seed_domains" -gt 0 ] && [ "$seed_msg" != "Already seeded" ]; then
+        echo -e "${GREEN}✓${NC} Seeded ${BOLD}${seed_domains}${NC} domains (${seed_terms} terms)"
+        echo ""
+    fi
+
     # Get pending files for semantic compression
     local pending_result
     if $force; then
