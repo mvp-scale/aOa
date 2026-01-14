@@ -996,13 +996,7 @@ cmd_domains() {
             terms_style="${DIM}"
         fi
 
-        # Check if domain is new (created in last hour)
-        local is_new=""
-        if [ "$created" -gt 0 ] 2>/dev/null && [ $((now - created)) -lt 3600 ]; then
-            is_new="${GREEN}+${NC}"
-        fi
-
-        printf "${is_new}${src_ind} ${name_style}%-20s${NC} ${DIM}%5s${NC}  ${terms_style}%s${NC}\n" "$name_trunc" "$hits_fmt" "$terms"
+        printf "${src_ind} ${name_style}%-20s${NC} ${DIM}%5s${NC}  ${terms_style}%s${NC}\n" "$name_trunc" "$hits_fmt" "$terms"
     done
 
     # Show remaining count if more than displayed

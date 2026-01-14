@@ -269,6 +269,10 @@ class DomainLearner:
             'pruned': int(self.redis.client.get(self._key("autotune_pruned_last")) or 0),
         }
 
+    def set_last_autotune(self) -> None:
+        """Update autotune timestamp to now."""
+        self.redis.client.set(self._key("last_autotune"), int(time.time()))
+
     # =========================================================================
     # Domain Storage
     # =========================================================================
@@ -658,6 +662,8 @@ Output valid JSON only:
                 'hits': int(meta.get('hits', 0)),
                 'confidence': float(meta.get('confidence', 0)),
                 'created': int(meta.get('created', 0)),
+                'source': meta.get('source', 'seeded'),
+                'state': meta.get('state', 'active'),
                 'terms': terms_sorted,
             })
         return result
