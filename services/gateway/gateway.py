@@ -110,6 +110,8 @@ ROUTES = {
     "/domains/seed": ("index", "/domains/seed"),
     "/domains/stats": ("index", "/domains/stats"),
     "/domains/lookup": ("index", "/domains/lookup"),
+    "/domains/learn": ("index", "/domains/learn"),  # GL-053 Phase C: Manual learning trigger
+    "/domains/rebalance": ("index", "/domains/rebalance"),  # GL-053 Phase D: Manual rebalance trigger
 
     # Status service routes
     "/status": ("status", "/status"),

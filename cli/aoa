@@ -478,7 +478,7 @@ display_ranked_grep_results() {
     printf "\n\n"
 
     # GL-047.8: Hierarchical format for AI-readable context
-    # Format: file:Parent().method(params)[range]:line content
+    # Format: file:Parent().method(params)[range]:line content  @domain #tags
     # Each line is self-contained - no state tracking needed
     echo "$result" | jq -r '
         # Helper: extract params from signature like "def foo(self, x: int) -> str" -> "(x)"
@@ -496,7 +496,7 @@ display_ranked_grep_results() {
             end;
 
         # GL-050: Deduplicate by file:line (same as egrep)
-        .results | unique_by("\(.file):\(.line)") | .[] |
+        .results | unique_by(.file + ":" + (.line | tostring)) | .[] |
         # Extract params from signature
         (.signature | extract_params) as $params |
         # Build hierarchical scope: Parent().method(params)[range] or symbol(params)[range] or <module>
@@ -512,11 +512,14 @@ display_ranked_grep_results() {
                 "<module>"
             end
         ) as $scope |
+        # GL-053 Phase E: Domain display in MAGENTA
+        (if .domain then .domain else "" end) as $domain |
         # Build tags (max 3)
         ((.tags // []) | .[0:3] | join(" ")) as $tags |
-        # Format: file:scope:line content  #tags
+        # Format: file:scope:line content  @domain #tags
         "\u001b[1m\(.file)\u001b[0m:\u001b[33m\($scope)\u001b[0m:\u001b[2m\(.line)\u001b[0m" +
         (if .content then " \(.content)" else "" end) +
+        (if ($domain | length) > 0 then "  \u001b[35m\($domain)\u001b[0m" else "" end) +
         (if ($tags | length) > 0 then "  \u001b[36m\($tags)\u001b[0m" else "" end)
     '
 }
@@ -3284,6 +3287,19 @@ cmd_quickstart() {
                 echo -e "${DIM}No enrichment data found${NC}"
             fi
         fi
+        echo ""
+    fi
+
+    # Seed universal domains (GL-053) - first time only
+    local seed_result=$(curl -s -X POST "${INDEX_URL}/domains/seed" \
+        -H "Content-Type: application/json" \
+        -d "{\"project\": \"${project_id:-default}\"}" 2>/dev/null)
+    local seed_domains=$(echo "$seed_result" | jq -r '.domains // 0')
+    local seed_terms=$(echo "$seed_result" | jq -r '.terms // 0')
+    local seed_msg=$(echo "$seed_result" | jq -r '.message // ""')
+
+    if [ "$seed_domains" -gt 0 ] && [ "$seed_msg" != "Already seeded" ]; then
+        echo -e "${GREEN}✓${NC} Seeded ${BOLD}${seed_domains}${NC} domains (${seed_terms} terms)"
         echo ""
     fi
 

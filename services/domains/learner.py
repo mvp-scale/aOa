@@ -381,6 +381,115 @@ Output valid JSON only:
         return domains
 
     # =========================================================================
+    # Rebalance Operations (GL-053 Phase D)
+    # =========================================================================
+
+    def get_domains_with_meta(self) -> list[dict]:
+        """Get all domains with their metadata and terms for rebalance."""
+        result = []
+        for name in self.get_all_domains():
+            meta = self.get_domain_meta(name)
+            terms = list(self.get_domain_terms(name))
+            result.append({
+                'name': name,
+                'hits': int(meta.get('hits', 0)),
+                'confidence': float(meta.get('confidence', 0)),
+                'created': int(meta.get('created', 0)),
+                'terms': terms,
+            })
+        return result
+
+    def apply_rebalance(self, result: dict) -> dict:
+        """
+        Apply rebalance results from Haiku.
+
+        Expected format:
+        {
+            "merge": [{"from": "@old_domain", "into": "@target_domain"}],
+            "prune": ["@unused_domain"],
+            "reassign": {"term": "@new_domain"}
+        }
+
+        Returns summary of actions taken.
+        """
+        summary = {'merged': 0, 'pruned': 0, 'reassigned': 0}
+
+        # Process merges: move terms from old to target, then delete old
+        for merge in result.get('merge', []):
+            from_domain = merge.get('from')
+            into_domain = merge.get('into')
+            if not from_domain or not into_domain:
+                continue
+
+            # Get terms from source domain
+            source_terms = self.get_domain_terms(from_domain)
+
+            # Add terms to target domain
+            if source_terms:
+                target_terms_key = self._domain_key(into_domain, "terms")
+                self.redis.client.sadd(target_terms_key, *source_terms)
+
+                # Update term->domain mappings
+                for term in source_terms:
+                    term_key = self._key(f"term:{term}")
+                    # Remove old mapping, add new
+                    self.redis.client.zrem(term_key, from_domain)
+                    self.redis.client.zadd(term_key, {into_domain: self.STARTER_SCORE})
+
+            # Remove source domain
+            self.remove_domain(from_domain)
+            summary['merged'] += 1
+
+        # Process prunes: delete low-value domains
+        for domain_name in result.get('prune', []):
+            if domain_name in self.get_all_domains():
+                self.remove_domain(domain_name)
+                summary['pruned'] += 1
+
+        # Process reassignments: move terms to new domains
+        for term, new_domain in result.get('reassign', {}).items():
+            term_key = self._key(f"term:{term}")
+            # Get current mappings
+            current = self.redis.client.zrange(term_key, 0, -1)
+            # Remove from all current domains
+            for old_domain in current:
+                self.redis.client.zrem(term_key, old_domain)
+                # Also remove from domain's term set
+                old_terms_key = self._domain_key(old_domain, "terms")
+                self.redis.client.srem(old_terms_key, term)
+            # Add to new domain
+            self.redis.client.zadd(term_key, {new_domain: self.STARTER_SCORE})
+            new_terms_key = self._domain_key(new_domain, "terms")
+            self.redis.client.sadd(new_terms_key, term)
+            summary['reassigned'] += 1
+
+        # Update rebalance timestamp
+        self.set_last_rebalance()
+
+        return summary
+
+    def rebalance_direct(self) -> dict:
+        """
+        Run rebalance using direct Haiku API call.
+
+        Returns summary of actions taken.
+        """
+        if not self.anthropic_client:
+            return {'error': 'ANTHROPIC_API_KEY not set'}
+
+        domains_with_meta = self.get_domains_with_meta()
+        if not domains_with_meta:
+            return {'error': 'No domains to rebalance'}
+
+        prompt = self.get_rebalance_prompt(domains_with_meta)
+        result = self._call_haiku(prompt)
+
+        if not result:
+            return {'error': 'Haiku call failed'}
+
+        return self.apply_rebalance(result)
+
+    # =========================================================================
     # Stats
     # =========================================================================
 

@@ -343,7 +343,7 @@ display_ranked_grep_results() {
     printf "\n\n"
 
     # GL-047.8: Hierarchical format for AI-readable context
-    # Format: file:Parent().method(params)[range]:line content
+    # Format: file:Parent().method(params)[range]:line content  @domain #tags
     # Each line is self-contained - no state tracking needed
     echo "$result" | jq -r '
         # Helper: extract params from signature like "def foo(self, x: int) -> str" -> "(x)"
@@ -361,7 +361,7 @@ display_ranked_grep_results() {
             end;
 
         # GL-050: Deduplicate by file:line (same as egrep)
-        .results | unique_by("\(.file):\(.line)") | .[] |
+        .results | unique_by(.file + ":" + (.line | tostring)) | .[] |
         # Extract params from signature
         (.signature | extract_params) as $params |
         # Build hierarchical scope: Parent().method(params)[range] or symbol(params)[range] or <module>
@@ -377,11 +377,14 @@ display_ranked_grep_results() {
                 "<module>"
             end
         ) as $scope |
+        # GL-053 Phase E: Domain display in MAGENTA
+        (if .domain then .domain else "" end) as $domain |
         # Build tags (max 3)
         ((.tags // []) | .[0:3] | join(" ")) as $tags |
-        # Format: file:scope:line content  #tags
+        # Format: file:scope:line content  @domain #tags
         "\u001b[1m\(.file)\u001b[0m:\u001b[33m\($scope)\u001b[0m:\u001b[2m\(.line)\u001b[0m" +
         (if .content then " \(.content)" else "" end) +
+        (if ($domain | length) > 0 then "  \u001b[35m\($domain)\u001b[0m" else "" end) +
         (if ($tags | length) > 0 then "  \u001b[36m\($tags)\u001b[0m" else "" end)
     '
 }

@@ -4,7 +4,9 @@
     "description": "Domain-specific keyword patterns for semantic code tagging",
     "usage": "Detect domain keywords anywhere in function/variable names",
     "categories_count": 15,
-    "keywords_count": 200
+    "keywords_count": 200,
+    "deprecated": true,
+    "deprecation_note": "GL-053: Replaced by dynamic Redis-based domains. Universal domains seeded via quickstart. This file kept as fallback only."
   },
 
   "domains": {

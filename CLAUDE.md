@@ -252,7 +252,22 @@ curl "localhost:8080/symbol?q=handleAuth"           # Instant search
 curl "localhost:8080/multi?q=auth+login+handler"    # Multi-term ranked
 curl "localhost:8080/files"                          # List indexed files
 curl "localhost:8080/intent/recent"                  # Recent intents
+curl "localhost:8080/domains/stats?project=ID"      # Domain learning stats
 ```
+
+## Semantic Domains (GL-053)
+
+aOa learns semantic domains from your usage patterns. Grep results show `@domain` tags in MAGENTA:
+
+```
+services/auth/handler.py:login()[10-45]:12 def login(user):  @authentication  #api #security
+```
+
+Domains are:
+- **Seeded** on quickstart (32 universal domains like @authentication, @caching, @api)
+- **Learned** automatically every 10 prompts via Haiku
+- **Rebalanced** daily (merge overlapping, prune unused)
+- **Used** for semantic search enhancement
 
 ## Efficiency Comparison
 

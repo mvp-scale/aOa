@@ -477,13 +477,43 @@ def enrich_result(
     if intent_index and project:
         file_tags = list(intent_index.tags_for_file(file_path, project))
 
+    # GL-053 Phase E: Domain lookup from Redis
+    domain = None
+    if DOMAINS_AVAILABLE and project and symbol_name:
+        try:
+            learner = DomainLearner(project)
+            # Look up domain from symbol name (E1)
+            domain = learner.get_domain_for_symbol(symbol_name)
+            # Increment hit counter if domain found (E2)
+            if domain:
+                learner.increment_domain_hits(domain)
+        except Exception:
+            pass  # Non-blocking - don't break search on domain error
+
+    # GL-053: If no tags from intent or outline, use AC matching on content
+    all_tags = file_tags + symbol_tags
+    if not all_tags and AHOCORASICK_AVAILABLE:
+        try:
+            # Use content + symbol name for tag inference
+            text_for_tags = content
+            if symbol_name:
+                text_for_tags = f"{symbol_name} {content}"
+            ac_tags = AC_MATCHER.get_dense_tags(text_for_tags, threshold=1)
+            all_tags = ac_tags[:5]  # Limit to 5 tags
+        except Exception:
+            pass
+
     # Build universal result format
     result = {
         'file': file_path,
         'line': line_num,
         'content': content.strip()[:200],  # Normalized content key
-        'tags': file_tags + symbol_tags
+        'tags': all_tags
     }
+
+    # Add domain if found (E3: will be displayed as @domain in output)
+    if domain:
+        result['domain'] = domain
 
     # Add symbol info if found (all or nothing - consistent shape)
     if symbol_name:
@@ -3638,6 +3668,183 @@ def _load_universal_domains():
     return []
 
 
+# GL-053 Phase C: Continuous domain learning
+_learning_lock = threading.Lock()
+_learning_in_progress = set()  # Track which projects are currently learning
+
+
+def _do_domain_learning(project_id: str):
+    """
+    Background domain learning via Haiku.
+
+    Called when prompt_count >= 10. Extracts recent intent data,
+    calls Haiku for domain discovery and term generation, writes to Redis.
+    """
+    if not DOMAINS_AVAILABLE:
+        return
+
+    # Prevent concurrent learning for same project
+    with _learning_lock:
+        if project_id in _learning_in_progress:
+            return
+        _learning_in_progress.add(project_id)
+
+    try:
+        learner = DomainLearner(project_id)
+
+        # Get recent intents for context
+        recent = intent_index.recent(since_ts=int(time.time()) - 3600, limit=50, project_id=project_id)
+
+        # Extract unique files and tags from recent intents
+        files = set()
+        tags = set()
+        for record in recent:
+            files.update(record.get('files', []))
+            tags.update(record.get('tags', []))
+
+        # Filter to real file paths only
+        files = [f for f in files if f.startswith('/') and not f.startswith('pattern:')]
+        tags = list(tags)
+
+        if not files:
+            print(f"[DomainLearning] No files in recent intents for {project_id}", flush=True)
+            learner.reset_prompt_count()
+            return
+
+        # Get existing domains to avoid duplicates
+        existing = learner.get_all_domains()
+
+        # Build context for Haiku (files touched + tags inferred)
+        context_summary = f"Files: {', '.join(files[:20])}\nTags: {', '.join(tags[:20])}"
+
+        # Call Haiku for domain discovery (C3)
+        discovered = learner.discover_domains_direct(
+            prompts=[context_summary],  # Use context as pseudo-prompt
+            files=files[:20]
+        )
+
+        if discovered:
+            print(f"[DomainLearning] Discovered {len(discovered)} domains for {project_id}", flush=True)
+
+            # Read file samples for term generation
+            file_samples = {}
+            for f in files[:5]:
+                try:
+                    path = Path(f)
+                    if path.exists() and path.stat().st_size < 50000:  # Max 50KB
+                        file_samples[f] = path.read_text()[:2000]
+                except (OSError, IOError):
+                    pass
+
+            # Call Haiku for term generation (C4) and write to Redis (C5)
+            if file_samples and learner.anthropic_client:
+                domain_names = [d.name for d in discovered]
+                terms_prompt = learner.get_terms_prompt(domain_names, file_samples)
+                terms_result = learner._call_haiku(terms_prompt)
+
+                if terms_result:
+                    # Add domains with their terms
+                    for domain in discovered:
+                        domain.terms = terms_result.get(domain.name, [])[:10]
+                        learner.add_domain(domain)
+                        print(f"[DomainLearning] Added domain {domain.name} with {len(domain.terms)} terms", flush=True)
+                else:
+                    # Add domains without terms
+                    for domain in discovered:
+                        learner.add_domain(domain)
+            else:
+                # No file samples or no API - add domains without terms
+                for domain in discovered:
+                    learner.add_domain(domain)
+
+        # Reset counter after learning
+        learner.reset_prompt_count()
+        print(f"[DomainLearning] Completed for {project_id}", flush=True)
+
+    except Exception as e:
+        print(f"[DomainLearning] Error for {project_id}: {e}", flush=True)
+    finally:
+        with _learning_lock:
+            _learning_in_progress.discard(project_id)
+
+
+def _trigger_domain_learning_if_needed(project_id: str):
+    """
+    Check if domain learning should be triggered, spawn background thread if so.
+
+    Called from record_intent() to keep it non-blocking.
+    """
+    if not DOMAINS_AVAILABLE or not project_id:
+        return
+
+    try:
+        learner = DomainLearner(project_id)
+        count = learner.increment_prompt_count()
+
+        if learner.should_learn():
+            # Spawn background thread for learning
+            thread = threading.Thread(
+                target=_do_domain_learning,
+                args=(project_id,),
+                daemon=True
+            )
+            thread.start()
+            print(f"[DomainLearning] Triggered for {project_id} (count={count})", flush=True)
+
+        # GL-053 Phase D: Also check for rebalance (every 12 hours)
+        if learner.should_rebalance():
+            thread = threading.Thread(
+                target=_do_domain_rebalance,
+                args=(project_id,),
+                daemon=True
+            )
+            thread.start()
+            print(f"[DomainRebalance] Triggered for {project_id}", flush=True)
+
+    except Exception as e:
+        print(f"[DomainLearning] Trigger error: {e}", flush=True)
+
+
+# GL-053 Phase D: Background domain rebalance
+_rebalance_in_progress = set()
+
+
+def _do_domain_rebalance(project_id: str):
+    """
+    Background domain rebalance via Haiku.
+
+    Called when 12+ hours since last rebalance. Merges overlapping domains,
+    prunes low-value domains, and reassigns ambiguous terms.
+    """
+    if not DOMAINS_AVAILABLE:
+        return
+
+    # Prevent concurrent rebalance for same project
+    with _learning_lock:
+        if project_id in _rebalance_in_progress:
+            return
+        _rebalance_in_progress.add(project_id)
+
+    try:
+        learner = DomainLearner(project_id)
+
+        # Run rebalance
+        result = learner.rebalance_direct()
+
+        if 'error' in result:
+            print(f"[DomainRebalance] Error for {project_id}: {result['error']}", flush=True)
+        else:
+            print(f"[DomainRebalance] Completed for {project_id}: "
+                  f"merged={result.get('merged', 0)}, pruned={result.get('pruned', 0)}, "
+                  f"reassigned={result.get('reassigned', 0)}", flush=True)
+
+    except Exception as e:
+        print(f"[DomainRebalance] Error for {project_id}: {e}", flush=True)
+    finally:
+        with _learning_lock:
+            _rebalance_in_progress.discard(project_id)
+
+
 @app.route('/domains/seed', methods=['POST'])
 def seed_domains():
     """
@@ -3754,6 +3961,109 @@ def domains_lookup():
                 'domains': [{'name': name, 'score': score} for name, score in results],
                 'project': project_id
             })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/learn', methods=['POST'])
+def domains_learn():
+    """
+    Manually trigger domain learning for a project.
+
+    GL-053 Phase C: Calls Haiku to discover domains and generate terms
+    from recent intent data.
+
+    POST body: {"project": "project-id"}
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project') or request.args.get('project')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+
+        # Check if API key is available
+        if not learner.anthropic_client:
+            return jsonify({
+                'error': 'ANTHROPIC_API_KEY not set - domain learning requires Haiku API access',
+                'project': project_id
+            }), 400
+
+        # Get current stats before learning
+        before_stats = learner.get_stats()
+
+        # Trigger learning synchronously (for testing)
+        _do_domain_learning(project_id)
+
+        # Get stats after learning
+        after_stats = learner.get_stats()
+
+        return jsonify({
+            'success': True,
+            'project': project_id,
+            'domains_before': before_stats['domains'],
+            'domains_after': after_stats['domains'],
+            'terms_before': before_stats['total_terms'],
+            'terms_after': after_stats['total_terms'],
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/rebalance', methods=['POST'])
+def domains_rebalance():
+    """
+    Manually trigger domain rebalance for a project.
+
+    GL-053 Phase D: Calls Haiku to merge overlapping domains,
+    prune low-value domains, and reassign ambiguous terms.
+
+    POST body: {"project": "project-id"}
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project') or request.args.get('project')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+
+        # Check if API key is available
+        if not learner.anthropic_client:
+            return jsonify({
+                'error': 'ANTHROPIC_API_KEY not set - rebalance requires Haiku API access',
+                'project': project_id
+            }), 400
+
+        # Get current stats before rebalance
+        before_stats = learner.get_stats()
+
+        # Run rebalance
+        result = learner.rebalance_direct()
+
+        # Get stats after rebalance
+        after_stats = learner.get_stats()
+
+        return jsonify({
+            'success': True,
+            'project': project_id,
+            'merged': result.get('merged', 0),
+            'pruned': result.get('pruned', 0),
+            'reassigned': result.get('reassigned', 0),
+            'domains_before': before_stats['domains'],
+            'domains_after': after_stats['domains'],
+        })
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -4394,6 +4704,9 @@ def record_intent():
     output_size = data.get('output_size')  # Actual output size for REAL savings calc
 
     intent_index.record(tool, files, tags, session_id, tool_use_id, project_id, file_sizes, output_size)
+
+    # GL-053 Phase C: Trigger domain learning if threshold reached
+    _trigger_domain_learning_if_needed(project_id)
 
     return jsonify({'success': True})
 
