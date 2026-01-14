@@ -463,65 +463,62 @@ display_ranked_grep_results() {
         return 0
     fi
 
-    # Count unique files
-    local file_count=$(echo "$result" | jq -r '[.results[].file] | unique | length')
+    # PERF: Single jq call outputs header info (line 1) then formatted results
+    # Format: file_count<TAB>rolling_intent on first line, then result lines
+    local output
+    output=$(echo "$result" | jq -r '
+        # Helper: extract params from signature like "def foo(self, x: int) -> str" -> "(x)"
+        def extract_params:
+            if . == null then "()"
+            elif test("\\(.*\\)") then
+                capture("\\((?<p>[^)]*)\\)").p
+                | split(",")
+                | map(gsub("^\\s+|\\s+$"; ""))
+                | map(select(. != "self" and . != ""))
+                | map(split(":")[0] | gsub("^\\s+|\\s+$"; ""))
+                | "(" + join(", ") + ")"
+            else "()"
+            end;
 
-    # Get rolling intent from API response (GL-045)
-    # Note: API returns tags with # prefix already, don't double it
-    local rolling_intent=$(echo "$result" | jq -r '.rolling_intent // [] | join(" ")' 2>/dev/null)
+        # First line: header info (file_count<TAB>rolling_intent)
+        ([.results[].file] | unique | length | tostring) + "\t" + ((.rolling_intent // []) | join(" ")),
 
-    # Header: hits | files | timing | intent tags
+        # Remaining lines: formatted results
+        (.results | unique_by(.file + ":" + (.line | tostring)) | .[] |
+            (.signature | extract_params) as $params |
+            (
+                if .parent_name then
+                    "\(.parent_name)().\(.symbol // "<anon>")\($params)[\(.start_line // .line)-\(.end_line // .line)]"
+                elif .symbol then
+                    "\(.symbol)\($params)[\(.start_line // .line)-\(.end_line // .line)]"
+                else
+                    "<module>"
+                end
+            ) as $scope |
+            (if .domain then .domain else "" end) as $domain |
+            ((.tags // []) | .[0:3] | join(" ")) as $tags |
+            "\u001b[1m\(.file)\u001b[0m:\u001b[33m\($scope)\u001b[0m:\u001b[2m\(.line)\u001b[0m" +
+            (if .content then " \(.content)" else "" end) +
+            (if ($domain | length) > 0 then "  \u001b[35m\($domain)\u001b[0m" else "" end) +
+            (if ($tags | length) > 0 then "  \u001b[36m\($tags)\u001b[0m" else "" end)
+        )
+    ')
+
+    # Parse header from first line
+    local header_line
+    header_line=$(echo "$output" | head -1)
+    local file_count="${header_line%%	*}"
+    local rolling_intent="${header_line#*	}"
+
+    # Print header
     printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}" "$count" "$file_count" "$ms"
     if [ -n "$rolling_intent" ] && [ "$rolling_intent" != "" ]; then
         printf " ${DIM}│${NC} ${CYAN}%s${NC}" "$rolling_intent"
     fi
     printf "\n\n"
 
-    # GL-047.8: Hierarchical format for AI-readable context
-    # Format: file:Parent().method(params)[range]:line content  @domain #tags
-    # Each line is self-contained - no state tracking needed
-    echo "$result" | jq -r '
-        # Helper: extract params from signature like "def foo(self, x: int) -> str" -> "(x)"
-        def extract_params:
-            if . == null then "()"
-            elif test("\\(.*\\)") then
-                # Extract content between ( and ), drop self, simplify types
-                capture("\\((?<p>[^)]*)\\)").p
-                | split(",")
-                | map(gsub("^\\s+|\\s+$"; ""))  # trim
-                | map(select(. != "self" and . != ""))  # drop self
-                | map(split(":")[0] | gsub("^\\s+|\\s+$"; ""))  # drop type annotations
-                | "(" + join(", ") + ")"
-            else "()"
-            end;
-
-        # GL-050: Deduplicate by file:line (same as egrep)
-        .results | unique_by(.file + ":" + (.line | tostring)) | .[] |
-        # Extract params from signature
-        (.signature | extract_params) as $params |
-        # Build hierarchical scope: Parent().method(params)[range] or symbol(params)[range] or <module>
-        (
-            if .parent_name then
-                # Has parent: Parent().method(params)[method-range]
-                "\(.parent_name)().\(.symbol // "<anon>")\($params)[\(.start_line // .line)-\(.end_line // .line)]"
-            elif .symbol then
-                # No parent: symbol(params)[range]
-                "\(.symbol)\($params)[\(.start_line // .line)-\(.end_line // .line)]"
-            else
-                # Module level
-                "<module>"
-            end
-        ) as $scope |
-        # GL-053 Phase E: Domain display in MAGENTA
-        (if .domain then .domain else "" end) as $domain |
-        # Build tags (max 3)
-        ((.tags // []) | .[0:3] | join(" ")) as $tags |
-        # Format: file:scope:line content  @domain #tags
-        "\u001b[1m\(.file)\u001b[0m:\u001b[33m\($scope)\u001b[0m:\u001b[2m\(.line)\u001b[0m" +
-        (if .content then " \(.content)" else "" end) +
-        (if ($domain | length) > 0 then "  \u001b[35m\($domain)\u001b[0m" else "" end) +
-        (if ($tags | length) > 0 then "  \u001b[36m\($tags)\u001b[0m" else "" end)
-    '
+    # Print results (skip first line which was header)
+    echo "$output" | tail -n +2
 }
 
 # Keep old function name for backwards compatibility

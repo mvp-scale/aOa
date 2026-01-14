@@ -412,7 +412,8 @@ def enrich_result(
     content: str,
     idx: 'CodebaseIndex',
     intent_index: 'IntentIndex | None' = None,
-    project: str | None = None
+    project: str | None = None,
+    file_tags_cache: dict | None = None
 ) -> dict:
     """
     Universal result enrichment - THE SINGLE SOURCE OF TRUTH.
@@ -472,10 +473,15 @@ def enrich_result(
             _, parent_sym = enclosing[1]  # Second smallest = parent
             parent_name = parent_sym.name
 
-    # Get file-level tags from intent index
+    # Get file-level tags from intent index (use cache if provided to avoid N+1 Redis calls)
     file_tags = []
     if intent_index and project:
-        file_tags = list(intent_index.tags_for_file(file_path, project))
+        if file_tags_cache is not None and file_path in file_tags_cache:
+            file_tags = file_tags_cache[file_path]
+        else:
+            file_tags = list(intent_index.tags_for_file(file_path, project))
+            if file_tags_cache is not None:
+                file_tags_cache[file_path] = file_tags
 
     # GL-053 Phase E: Domain lookup - DISABLED for performance
     # Domain hits now tracked async via intent capture, not inline during search
@@ -2416,43 +2422,23 @@ class IntentIndex:
             return list(self.tag_to_files[proj].get(tag, set()))
 
     def tags_for_file(self, file: str, project_id: str = None) -> list[str]:
-        """Get tags for a file - aggregate semantic tags from all symbols."""
+        """Get tags for a file - O(1) lookup from pre-indexed SET."""
         proj = self._project_key(project_id)
 
-        # GL-047: Scan Redis for semantic tags using correct key pattern
-        # Tags are stored as: tag_count:{project}:{file}:{symbol}:{tag}
+        # Fast path: Direct SET lookup (O(1)) - tags stored by record()
         if self.redis:
             try:
-                pattern = f"tag_count:{proj}:{file}:*"
-                all_tags = {}  # tag -> count
-                cursor = 0
-                while True:
-                    cursor, keys = self.redis.scan(cursor, match=pattern, count=100)
-                    for key in keys:
-                        # Parse key: tag_count:{project}:{file}:{symbol}:{tag}
-                        parts = key.decode() if isinstance(key, bytes) else key
-                        parts = parts.split(':')
-                        if len(parts) >= 5:
-                            tag = '#' + ':'.join(parts[4:]) if not parts[4].startswith('#') else ':'.join(parts[4:])
-                            count = int(self.redis.get(key) or 1)
-                            all_tags[tag] = all_tags.get(tag, 0) + count
-                    if cursor == 0:
-                        break
-
-                if all_tags:
-                    # Filter out generic activity tags only - keep semantic domain tags
-                    # Activity tags describe WHAT Claude is doing, not what the code does
+                tags = self.redis.smembers(f"aoa:{proj}:file_tags:{file}")
+                if tags:
+                    # Filter out generic activity tags
                     generic = {'#executing', '#reading', '#editing', '#creating', '#searching',
                               '#delegating', '#shell', '#python', '#markdown', '#indexing',
                               '#hooks', '#test', '#grep', '#curl'}
-                    semantic = [(t, c) for t, c in all_tags.items() if t not in generic]
-                    # Sort by count (most common first), then alphabetically
-                    semantic.sort(key=lambda x: (-x[1], x[0]))
+                    decoded = [t.decode() if isinstance(t, bytes) else t for t in tags]
+                    semantic = [t for t in decoded if t not in generic]
                     if semantic:
-                        return [t for t, _ in semantic[:3]]
-                    # If no semantic tags after filtering, return top by count
-                    sorted_tags = sorted(all_tags.items(), key=lambda x: (-x[1], x[0]))
-                    return [t for t, _ in sorted_tags[:3]]
+                        return sorted(semantic)[:3]
+                    return sorted(decoded)[:3]
             except Exception:
                 pass  # Fall through
 
@@ -2738,6 +2724,9 @@ def symbol_search():
         fetch_limit = limit * 3 if rank_by_intent else limit
         results = idx.search(q, mode, fetch_limit, since=since_ts, before=before_ts, file_filter=file_filter)
 
+        # PERF: Cache file tags to avoid N+1 Redis calls
+        file_tags_cache = {}
+
         # GL-045: Rank by rolling intent affinity
         rolling_tags = None
         if rank_by_intent and intent_index and results:
@@ -2757,7 +2746,9 @@ def symbol_search():
                 score += file_affinity.get(file_path, 0) * 2
 
                 # Query intent match (boost files with matching tags)
-                file_tags = set(intent_index.tags_for_file(file_path, project))
+                if file_path not in file_tags_cache:
+                    file_tags_cache[file_path] = list(intent_index.tags_for_file(file_path, project))
+                file_tags = set(file_tags_cache[file_path])
                 query_overlap = len(query_intent & file_tags)
                 score += query_overlap * 5
 
@@ -2806,7 +2797,9 @@ def symbol_search():
 
             # GL-046.3: Add file tags to each result (from intent tracking)
             if intent_index and file_path:
-                r['intent_tags'] = list(intent_index.tags_for_file(file_path, project))
+                if file_path not in file_tags_cache:
+                    file_tags_cache[file_path] = list(intent_index.tags_for_file(file_path, project))
+                r['intent_tags'] = file_tags_cache[file_path]
 
             # GL-047: AC tags are already in r['tags'] from Location.tags (computed at index time)
             # Keep both - intent_tags (activity-based) and tags (content-based density)
@@ -2947,6 +2940,7 @@ def semantic_grep():
 
     # 4. GL-050: Universal Output - enrich each match through single function
     results = []
+    file_tags_cache = {}  # PERF: Cache file tags to avoid N+1 Redis calls
     for file_match in matches:
         rel_path = file_match['file']
         for m in file_match['matches']:
@@ -2956,7 +2950,8 @@ def semantic_grep():
                 content=m['text'],
                 idx=idx,
                 intent_index=intent_index,
-                project=project
+                project=project,
+                file_tags_cache=file_tags_cache
             )
             results.append(result)
 
@@ -4847,6 +4842,7 @@ def pattern_search():
     results = {label: [] for label in patterns}
     files_searched = 0
     files_matched = 0
+    file_tags_cache = {}  # PERF: Cache file tags to avoid N+1 Redis calls (210 calls -> 1 per unique file)
 
     with idx.lock:
         for rel_path, meta in idx.files.items():
@@ -4890,7 +4886,8 @@ def pattern_search():
                         content=line_text,
                         idx=idx,
                         intent_index=intent_index,
-                        project=project
+                        project=project,
+                        file_tags_cache=file_tags_cache
                     )
                     results[label].append(result)
                     file_matched = True
