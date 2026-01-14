@@ -477,18 +477,10 @@ def enrich_result(
     if intent_index and project:
         file_tags = list(intent_index.tags_for_file(file_path, project))
 
-    # GL-053 Phase E: Domain lookup from Redis
+    # GL-053 Phase E: Domain lookup - DISABLED for performance
+    # Domain hits now tracked async via intent capture, not inline during search
+    # See: /intent endpoint and aoa-intent-capture hook
     domain = None
-    if DOMAINS_AVAILABLE and project and symbol_name:
-        try:
-            learner = DomainLearner(project)
-            # Look up domain from symbol name (E1), track term hits (GL-054)
-            domain = learner.get_domain_for_symbol(symbol_name, track_hits=True)
-            # Increment hit counter if domain found (E2)
-            if domain:
-                learner.increment_domain_hits(domain)
-        except Exception:
-            pass  # Non-blocking - don't break search on domain error
 
     # GL-053: If no tags from intent or outline, use AC matching on content
     all_tags = file_tags + symbol_tags
