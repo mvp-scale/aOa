@@ -138,8 +138,63 @@ def handle_prompt(data: dict):
     # Check if domain learning is pending
     domain_stats = api_get(f"/domains/stats?project={PROJECT_ID}")
     if domain_stats and domain_stats.get("learning_pending"):
-        # TODO: Output additionalContext to trigger Haiku learning
-        pass
+        # Get recent activity for context
+        recent = api_get(f"/intent/recent?limit=20&project_id={PROJECT_ID}") or {}
+        records = recent.get("records", [])
+
+        # Extract files and tags from recent activity
+        recent_files = []
+        recent_tags = set()
+        for r in records:
+            for f in r.get("files", []):
+                if not f.startswith("pattern:") and not f.startswith("cmd:"):
+                    recent_files.append(f)
+            for t in r.get("tags", []):
+                recent_tags.add(t)
+
+        files_summary = "\n".join(f"  - {f}" for f in recent_files[:15])
+        tags_summary = ", ".join(list(recent_tags)[:10])
+        existing = domain_stats.get("domains_learned_list", [])
+        existing_domains = ", ".join(existing[:10]) if existing else "None"
+
+        # Output learning instructions for Claude
+        learning_prompt = f"""## aOa Domain Learning (Auto-triggered)
+
+aOa has collected enough activity to learn new semantic domains.
+
+**Recent files worked on:**
+{files_summary}
+
+**Recent tags:** {tags_summary}
+**Existing domains:** {existing_domains}
+
+**Your task:** Spawn a Haiku Task to analyze these patterns and discover 1-3 new semantic domains.
+
+Use this prompt for Haiku:
+```
+Given this developer activity, identify 1-3 HIGH-LEVEL semantic domains.
+
+Files: {', '.join(recent_files[:10])}
+Tags: {tags_summary}
+
+Existing domains (don't duplicate): {existing_domains}
+
+Return JSON only:
+{{"domains": [{{"name": "@domain_name", "description": "brief description", "terms": ["term1", "term2", "term3"]}}]}}
+```
+
+After Haiku responds, POST results to aOa:
+```bash
+curl -s -X POST "localhost:8080/domains/add" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": <haiku_response>}}'
+```
+
+Then clear the pending flag:
+```bash
+curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
+```
+"""
+        output_context(learning_prompt)
+        return  # Don't output status line when learning is triggered
 
     # Predict files from prompt keywords (TODO: migrate from predict-context.py)
     prompt = data.get("prompt", "")

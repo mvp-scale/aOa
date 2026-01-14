@@ -671,6 +671,8 @@ Output valid JSON only:
             "tokens_invested": self.get_tokens_invested(),
             "tokens_invested_last": self.get_tokens_invested_last(),
             "learning_calls": self.get_learning_calls(),
+            # Hook signal
+            "learning_pending": self.is_learning_pending(),
         }
 
 

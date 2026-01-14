@@ -3694,9 +3694,8 @@ def _do_domain_learning(project_id: str):
     try:
         learner = DomainLearner(project_id)
         learner.reset_prompt_count()
-        # Don't set last_learn yet - let hook do it when learning completes
-        # This way should_learn stays true until hook processes it
-        print(f"[DomainLearning] Ready for hook - {project_id} (should_learn=true)", flush=True)
+        learner.set_learning_pending()  # Signal hook to trigger Haiku
+        print(f"[DomainLearning] Ready for hook - {project_id} (learning_pending=true)", flush=True)
     except Exception as e:
         print(f"[DomainLearning] Error: {e}", flush=True)
 
@@ -4019,6 +4018,165 @@ def domains_autotune():
             'reassigned': result.get('reassigned', 0),
             'domains_before': before_stats['domains'],
             'domains_after': after_stats['domains'],
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/add', methods=['POST'])
+def domains_add():
+    """
+    Add domains discovered by Haiku via hook.
+
+    POST body: {"project": "project-id", "domains": [{"name": "@domain", "terms": [...]}]}
+
+    Validates input to protect Redis from malformed/hallucinated data.
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project')
+    domains_data = data.get('domains', [])
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    # Validation: domains must be a list
+    if not isinstance(domains_data, list):
+        return jsonify({'error': 'domains must be an array'}), 400
+
+    # Validation: sanity check on count (1-5 domains per learning cycle)
+    if len(domains_data) > 5:
+        return jsonify({'error': f'Too many domains ({len(domains_data)}), max 5 per cycle'}), 400
+
+    if len(domains_data) == 0:
+        return jsonify({'error': 'No domains provided'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+        added = []
+        terms_added = []
+        skipped = []
+
+        for d in domains_data:
+            # Validation: must be a dict
+            if not isinstance(d, dict):
+                skipped.append("non-dict entry")
+                continue
+
+            # Validation: name must be a short string
+            name = d.get('name', '')
+            if not isinstance(name, str) or len(name) < 2 or len(name) > 50:
+                skipped.append(f"invalid name length: {name[:20]}")
+                continue
+
+            # Validation: name should be alphanumeric + underscore (after @)
+            clean_name = name.lstrip('@').replace('_', '')
+            if not clean_name.isalnum():
+                skipped.append(f"invalid chars in name: {name}")
+                continue
+
+            # Normalize name
+            if not name.startswith('@'):
+                name = f"@{name}"
+
+            # Validation: terms must be a list of short strings
+            raw_terms = d.get('terms', [])
+            if not isinstance(raw_terms, list):
+                skipped.append(f"terms not a list for {name}")
+                continue
+
+            # Filter terms: must be strings, 2-30 chars, no spaces (single words)
+            valid_terms = []
+            for t in raw_terms[:10]:  # Max 10 terms per domain
+                if isinstance(t, str) and 2 <= len(t) <= 30 and ' ' not in t:
+                    valid_terms.append(t.lower())
+
+            if len(valid_terms) == 0:
+                skipped.append(f"no valid terms for {name}")
+                continue
+
+            # Validation passed - add domain
+            domain = Domain(
+                name=name,
+                description=str(d.get('description', ''))[:200],  # Cap description
+                confidence=min(1.0, max(0.0, float(d.get('confidence', 0.8)))),
+                terms=valid_terms
+            )
+            learner.add_domain(domain)
+            added.append(name)
+            terms_added.extend(valid_terms)
+
+        return jsonify({
+            'success': True,
+            'project': project_id,
+            'domains_added': added,
+            'terms_added': len(terms_added),
+            'skipped': skipped if skipped else None,
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/learned', methods=['POST'])
+def domains_learned():
+    """
+    Signal that hook-based learning completed.
+    Clears learning_pending flag, updates timestamp, tracks token investment.
+
+    POST body: {
+        "project": "project-id",
+        "domains": [...],
+        "terms": [...],
+        "prompt_chars": 500,    # Optional: character count of Haiku prompt
+        "response_chars": 800   # Optional: character count of Haiku response
+    }
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project')
+    domains_list = data.get('domains', [])
+    terms_list = data.get('terms', [])
+    prompt_chars = data.get('prompt_chars', 0)
+    response_chars = data.get('response_chars', 0)
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+        learner.clear_learning_pending()
+        learner.set_last_learn(
+            terms_count=len(terms_list),
+            terms_list=terms_list[:20],
+            domains_list=domains_list[:5]
+        )
+
+        # Estimate tokens invested (~4 chars per token)
+        # If not provided, estimate from content
+        if prompt_chars == 0:
+            # Estimate: ~600 char prompt template + domain/term content
+            prompt_chars = 600 + len(str(domains_list)) + len(str(terms_list))
+        if response_chars == 0:
+            # Estimate: ~200 chars per domain in response
+            response_chars = 200 * max(1, len(domains_list))
+
+        estimated_input_tokens = prompt_chars // 4
+        estimated_output_tokens = response_chars // 4
+        learner.add_tokens_invested(estimated_input_tokens, estimated_output_tokens)
+
+        total_tokens = estimated_input_tokens + estimated_output_tokens
+        return jsonify({
+            'success': True,
+            'project': project_id,
+            'learning_pending': False,
+            'tokens_invested': total_tokens,
+            'tokens_total': learner.get_tokens_invested(),
         })
 
     except Exception as e:
