@@ -196,6 +196,81 @@ curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/j
         output_context(learning_prompt)
         return  # Don't output status line when learning is triggered
 
+    # Check if domain tuning is pending (GL-055: every 100 intents)
+    if domain_stats and domain_stats.get("tuning_pending"):
+        # Get larger context for tuning (100 files)
+        recent = api_get(f"/intent/recent?limit=100&project_id={PROJECT_ID}") or {}
+        records = recent.get("records", [])
+
+        # Extract unique files from recent activity
+        recent_files = []
+        seen_files = set()
+        for r in records:
+            for f in r.get("files", []):
+                if not f.startswith("pattern:") and not f.startswith("cmd:") and f not in seen_files:
+                    recent_files.append(f)
+                    seen_files.add(f)
+
+        # Get domain stats for context
+        domains = domain_stats.get("domains", 0)
+        total_terms = domain_stats.get("total_terms", 0)
+        tune_count = domain_stats.get("tune_count", 0)
+
+        # Format file directories
+        file_dirs = {}
+        for f in recent_files[:100]:
+            parts = f.rsplit('/', 2)
+            if len(parts) >= 2:
+                dir_name = parts[-2] if len(parts) > 1 else '.'
+                file_dirs.setdefault(dir_name, []).append(parts[-1])
+
+        files_text = "\n".join(
+            f"  - {dir_name}/: {', '.join(files[:5])}{'...' if len(files) > 5 else ''}"
+            for dir_name, files in sorted(file_dirs.items(), key=lambda x: -len(x[1]))[:10]
+        ) or "  (no recent files)"
+
+        # Output tuning instructions for Claude
+        tuning_prompt = f"""## aOa Domain Tuning (Auto-triggered at {tune_count} intents)
+
+aOa has accumulated enough usage data for regenerative domain optimization.
+
+**Current state:** {domains} domains, {total_terms} terms
+**Usage context:** {len(recent_files)} unique files from last 100 intents
+
+**Recent file directories:**
+{files_text}
+
+**Your task:** Spawn a Haiku Task to regenerate the optimal domain structure.
+
+Use this prompt for Haiku:
+```
+You are optimizing a semantic domain system based on actual developer usage.
+
+This codebase has been actively developed with these file patterns:
+{files_text}
+
+Design an OPTIMAL domain structure (5-10 domains). Each domain should:
+1. Represent a high-level architectural concept
+2. Have 5-10 specific terms (prefer "session_timeout" over generic "session")
+3. Be distinct from other domains (minimal term overlap)
+
+Return JSON:
+{{"domains": [{{"name": "@domain_name", "description": "what this represents", "terms": ["specific_term1", "specific_term2"]}}]}}
+```
+
+After Haiku responds, POST results to aOa:
+```bash
+curl -s -X POST "localhost:8080/domains/tune" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "result": <haiku_response>}}'
+```
+
+Then clear the pending flag:
+```bash
+curl -s -X POST "localhost:8080/domains/tuned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
+```
+"""
+        output_context(tuning_prompt)
+        return  # Don't output status line when tuning is triggered
+
     # Predict files from prompt keywords (TODO: migrate from predict-context.py)
     prompt = data.get("prompt", "")
     if prompt and total >= 5:

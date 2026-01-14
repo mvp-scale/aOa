@@ -3702,62 +3702,75 @@ def _do_domain_learning(project_id: str):
 
 def _trigger_domain_learning_if_needed(project_id: str):
     """
-    Check if domain learning should be triggered, spawn background thread if so.
+    Check if domain learning/tuning should be triggered, spawn background thread if so.
 
     Called from record_intent() to keep it non-blocking.
+
+    Two thresholds:
+    - Learning: every 10 prompts (incremental domain discovery)
+    - Tuning: every 100 intents (regenerative optimization)
     """
     if not DOMAINS_AVAILABLE or not project_id:
         return
 
     try:
         learner = DomainLearner(project_id)
-        count = learner.increment_prompt_count()
 
+        # Increment both counters
+        prompt_count = learner.increment_prompt_count()
+        tune_count = learner.increment_tune_count()
+
+        # Learning trigger (every 10 prompts)
         if learner.should_learn():
-            # Spawn background thread for learning
             thread = threading.Thread(
                 target=_do_domain_learning,
                 args=(project_id,),
                 daemon=True
             )
             thread.start()
-            print(f"[DomainLearning] Triggered for {project_id} (count={count})", flush=True)
+            print(f"[DomainLearning] Triggered for {project_id} (count={prompt_count})", flush=True)
 
-        # GL-053 Phase D: Also check for auto-tune
-        if learner.should_autotune():
+        # Tuning trigger (every 100 intents) - GL-055
+        if learner.should_tune() and not learner.is_tuning_pending():
             thread = threading.Thread(
-                target=_do_domain_autotune,
+                target=_do_domain_tune,
                 args=(project_id,),
                 daemon=True
             )
             thread.start()
-            print(f"[DomainAutotune] Triggered for {project_id}", flush=True)
+            print(f"[DomainTune] Triggered for {project_id} (intents={tune_count})", flush=True)
 
     except Exception as e:
         print(f"[DomainLearning] Trigger error: {e}", flush=True)
 
 
-# GL-053 Phase D: Background domain auto-tune
-_autotune_in_progress = set()
+# GL-055: Background domain tune
+_tune_in_progress = set()
 
 
-def _do_domain_autotune(project_id: str):
+def _do_domain_tune(project_id: str):
     """
-    Domain auto-tune threshold reached - update timestamp.
+    Domain tune threshold reached - set pending flag for hook.
 
-    NOTE: Actual auto-tuning happens via HOOK MODE - Claude handles Haiku calls
-    in the conversation context. This function just updates the timestamp.
-    The hook checks should_autotune and prompts Claude to merge/prune domains.
+    NOTE: Actual tuning happens via HOOK MODE - Claude handles Haiku calls
+    in the conversation context. This function just sets the tuning_pending flag.
+    The hook checks tuning_pending and prompts Claude to regenerate domains.
     """
     if not DOMAINS_AVAILABLE:
         return
 
+    if project_id in _tune_in_progress:
+        return
+
+    _tune_in_progress.add(project_id)
     try:
         learner = DomainLearner(project_id)
-        learner.set_last_autotune()
-        print(f"[DomainAutotune] Threshold reached for {project_id}, timestamp updated (hook mode)", flush=True)
+        learner.set_tuning_pending()
+        print(f"[DomainTune] Threshold reached for {project_id}, tuning_pending set (hook mode)", flush=True)
     except Exception as e:
-        print(f"[DomainAutotune] Error: {e}", flush=True)
+        print(f"[DomainTune] Error: {e}", flush=True)
+    finally:
+        _tune_in_progress.discard(project_id)
 
 
 @app.route('/domains/seed', methods=['POST'])
@@ -4018,6 +4031,89 @@ def domains_autotune():
             'reassigned': result.get('reassigned', 0),
             'domains_before': before_stats['domains'],
             'domains_after': after_stats['domains'],
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/tune', methods=['POST'])
+def domains_tune():
+    """
+    Apply regenerative tune results from Haiku via hook.
+
+    GL-055: Called when hook triggers Haiku for domain optimization.
+
+    POST body: {"project": "project-id", "result": {...haiku response...}}
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project') or request.args.get('project')
+    result = data.get('result', {})
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    if not result:
+        return jsonify({'error': 'Missing result parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+
+        # Get current stats before tune
+        before_stats = learner.get_stats()
+
+        # Apply tune
+        summary = learner.apply_tune(result)
+
+        # Get stats after tune
+        after_stats = learner.get_stats()
+
+        return jsonify({
+            'success': True,
+            'project': project_id,
+            'kept': summary.get('kept', 0),
+            'added': summary.get('added', 0),
+            'removed': summary.get('removed', 0),
+            'terms_updated': summary.get('terms_updated', 0),
+            'domains_before': before_stats['domains'],
+            'domains_after': after_stats['domains'],
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/tuned', methods=['POST'])
+def domains_tuned():
+    """
+    Clear tuning pending flag after hook completes.
+
+    GL-055: Called by hook after Haiku tune is processed.
+
+    POST body: {"project": "project-id"}
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project') or request.args.get('project')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+        learner.clear_tuning_pending()
+        learner.reset_tune_count()
+        learner.set_last_tune()
+
+        return jsonify({
+            'success': True,
+            'project': project_id,
+            'message': 'Tuning completed, counter reset'
         })
 
     except Exception as e:

@@ -68,9 +68,10 @@ class DomainLearner:
     """Manages domain discovery and learning via Haiku."""
 
     BATCH_SIZE = 10  # Prompts per learning batch
-    AUTOTUNE_INTERVAL = 300  # 5 minutes for testing (TODO: restore to 43200 = 12 hours)
+    TUNE_THRESHOLD = 100  # Intents per regenerative tune
     STARTER_HITS = 10  # Initial hits for new domains
     STARTER_SCORE = 0.5  # Initial term confidence
+    PRESERVE_THRESHOLD = 20  # Keep domains with hits >= this during tune
 
     def __init__(self, project_id: str, redis_url: Optional[str] = None):
         """Initialize with project identifier."""
@@ -141,26 +142,59 @@ class DomainLearner:
         return val == b"1" or val == "1"
 
     # =========================================================================
-    # Auto-tune Timer
+    # Tune Counter (Regenerative Tune Trigger)
     # =========================================================================
 
-    def get_last_autotune(self) -> int:
-        """Get timestamp of last auto-tune."""
-        key = self._key("last_autotune")
+    def increment_tune_count(self) -> int:
+        """Increment and return current tune count (called on each intent)."""
+        key = self._key("tune_count")
+        return self.redis.client.incr(key)
+
+    def get_tune_count(self) -> int:
+        """Get current tune count."""
+        key = self._key("tune_count")
         val = self.redis.client.get(key)
         return int(val) if val else 0
 
-    def set_last_autotune(self) -> None:
-        """Update auto-tune timestamp to now."""
-        key = self._key("last_autotune")
+    def reset_tune_count(self) -> None:
+        """Reset tune counter after regenerative tune."""
+        key = self._key("tune_count")
+        self.redis.client.set(key, 0)
+
+    def should_tune(self) -> bool:
+        """Check if we've accumulated enough intents for regenerative tune."""
+        # Must have at least some domains to tune
+        if not self.get_all_domains():
+            return False
+        return self.get_tune_count() >= self.TUNE_THRESHOLD
+
+    def get_last_tune(self) -> int:
+        """Get timestamp of last regenerative tune."""
+        key = self._key("last_tune")
+        val = self.redis.client.get(key)
+        return int(val) if val else 0
+
+    def set_last_tune(self) -> None:
+        """Update tune timestamp to now."""
+        key = self._key("last_tune")
         self.redis.client.set(key, int(time.time()))
 
-    def should_autotune(self) -> bool:
-        """Check if enough time has passed since last auto-tune."""
-        last = self.get_last_autotune()
-        if last == 0:
-            return False  # Never auto-tuned = nothing to tune yet
-        return (time.time() - last) >= self.AUTOTUNE_INTERVAL
+    # =========================================================================
+    # Tuning Pending Flag (Hook Signal)
+    # =========================================================================
+
+    def set_tuning_pending(self) -> None:
+        """Signal that tuning is ready for hook to process."""
+        self.redis.client.set(self._key("tuning_pending"), "1")
+
+    def clear_tuning_pending(self) -> None:
+        """Clear pending flag after hook completes tuning."""
+        self.redis.client.delete(self._key("tuning_pending"))
+
+    def is_tuning_pending(self) -> bool:
+        """Check if tuning is waiting for hook to process."""
+        val = self.redis.client.get(self._key("tuning_pending"))
+        return val == b"1" or val == "1"
 
     # =========================================================================
     # Learning History (GL-054)
@@ -629,6 +663,189 @@ Output valid JSON only:
         return self.apply_autotune(result)
 
     # =========================================================================
+    # Regenerative Tune (GL-055: Intent-based tuning)
+    # =========================================================================
+
+    def get_noisy_terms(self, threshold: int = 3) -> list[str]:
+        """Get terms that appear in multiple domains (noisy/ambiguous)."""
+        noisy = []
+        # Scan all terms
+        for domain in self.get_all_domains():
+            for term in self.get_domain_terms(domain):
+                results = self.lookup_term(term)
+                if len(results) >= threshold:
+                    noisy.append(term)
+        return list(set(noisy))
+
+    def get_recent_files_from_intents(self, limit: int = 100) -> list[str]:
+        """Get recent unique files from intent history."""
+        # This will be populated by the caller from /intent/recent API
+        # For now, return empty - hook will provide this data
+        return []
+
+    def get_tune_prompt(self, recent_files: list[str], domains_with_meta: list[dict],
+                        noisy_terms: list[str]) -> str:
+        """
+        Generate regenerative tune prompt for Haiku.
+
+        Unlike autotune (patch-based), this asks for OPTIMAL structure.
+        """
+        # Format domains
+        high_hit = [d for d in domains_with_meta if d.get('hits', 0) >= self.PRESERVE_THRESHOLD]
+        low_hit = [d for d in domains_with_meta if d.get('hits', 0) < self.PRESERVE_THRESHOLD]
+
+        high_hit_text = "\n".join(
+            f"  - {d['name']}: {d.get('hits', 0)} hits, terms: {d.get('terms', [])[:5]}"
+            for d in sorted(high_hit, key=lambda x: x.get('hits', 0), reverse=True)
+        ) or "  (none)"
+
+        low_hit_text = "\n".join(
+            f"  - {d['name']}: {d.get('hits', 0)} hits, terms: {d.get('terms', [])[:5]}"
+            for d in low_hit
+        ) or "  (none)"
+
+        # Format files (group by directory)
+        file_dirs = {}
+        for f in recent_files[:100]:
+            parts = f.rsplit('/', 2)
+            if len(parts) >= 2:
+                dir_name = parts[-2] if len(parts) > 1 else '.'
+                file_dirs.setdefault(dir_name, []).append(parts[-1])
+
+        files_text = "\n".join(
+            f"  - {dir_name}/: {', '.join(files[:5])}{'...' if len(files) > 5 else ''}"
+            for dir_name, files in sorted(file_dirs.items(), key=lambda x: -len(x[1]))[:10]
+        ) or "  (no recent files)"
+
+        noisy_text = ", ".join(noisy_terms[:15]) or "(none)"
+
+        return f"""You are optimizing a semantic domain system based on actual usage.
+
+CURRENT STATE ({len(domains_with_meta)} domains):
+
+High-value domains (hits >= {self.PRESERVE_THRESHOLD}, PRESERVE these):
+{high_hit_text}
+
+Low-value domains (candidates for merge/removal):
+{low_hit_text}
+
+Noisy terms (in 3+ domains, need assignment): {noisy_text}
+
+RECENT USAGE (last {len(recent_files)} files):
+{files_text}
+
+YOUR TASK:
+Design the OPTIMAL domain structure. Consider:
+1. Keep high-value domains that are working
+2. Merge or remove low-value domains
+3. Assign noisy terms to their best single domain
+4. Create specific terms (prefer "session_timeout" over generic "session")
+5. Each domain should have 5-10 focused terms
+
+Return JSON:
+{{
+  "domains": [
+    {{
+      "name": "@domain_name",
+      "description": "what this domain represents",
+      "terms": ["specific_term1", "specific_term2", "..."],
+      "action": "keep|merge_into|new"
+    }}
+  ],
+  "remove": ["@domain_to_delete"],
+  "reasoning": "brief explanation of changes"
+}}"""
+
+    def apply_tune(self, result: dict) -> dict:
+        """
+        Apply regenerative tune results from Haiku.
+
+        Unlike apply_autotune (patches), this rebuilds the domain structure
+        while preserving high-value domains.
+        """
+        summary = {'kept': 0, 'added': 0, 'removed': 0, 'terms_updated': 0}
+
+        if not result or 'domains' not in result:
+            return {'error': 'Invalid tune result'}
+
+        current_domains = set(self.get_all_domains())
+        new_domains = {d['name'] for d in result.get('domains', [])}
+
+        # 1. Process domains from Haiku response
+        for domain_data in result.get('domains', []):
+            name = domain_data.get('name', '').strip()
+            if not name:
+                continue
+
+            action = domain_data.get('action', 'keep')
+            terms = domain_data.get('terms', [])
+            description = domain_data.get('description', '')
+
+            if name in current_domains:
+                # Existing domain - update terms if provided
+                if terms and action != 'remove':
+                    # Update term mappings
+                    for term in terms:
+                        term_key = self._key(f"term:{term}")
+                        # Remove from other domains, add to this one
+                        self.redis.client.zadd(term_key, {name: self.STARTER_SCORE})
+                        terms_key = self._domain_key(name, "terms")
+                        self.redis.client.sadd(terms_key, term)
+                        summary['terms_updated'] += 1
+                    summary['kept'] += 1
+            else:
+                # New domain from tune
+                domain = Domain(
+                    name=name,
+                    description=description,
+                    confidence=0.7,
+                    terms=terms
+                )
+                self.add_domain(domain)
+                summary['added'] += 1
+
+        # 2. Remove domains marked for removal
+        for domain_name in result.get('remove', []):
+            if domain_name in current_domains:
+                # Check if high-value (extra protection)
+                meta = self.get_domain_meta(domain_name)
+                hits = int(meta.get('hits', 0))
+                if hits < self.PRESERVE_THRESHOLD:
+                    self.remove_domain(domain_name)
+                    summary['removed'] += 1
+
+        # 3. Update tune tracking
+        self.set_last_tune()
+        self.reset_tune_count()
+        self.clear_tuning_pending()
+        self.set_tune_results(
+            kept=summary['kept'],
+            added=summary['added'],
+            removed=summary['removed']
+        )
+
+        return summary
+
+    def set_tune_results(self, kept: int = 0, added: int = 0, removed: int = 0) -> None:
+        """Store results of last tune for display."""
+        self.redis.client.hset(self._key("tune_results"), mapping={
+            "kept": kept,
+            "added": added,
+            "removed": removed,
+            "timestamp": int(time.time())
+        })
+
+    def get_tune_results(self) -> dict:
+        """Get results of last tune."""
+        results = self.redis.client.hgetall(self._key("tune_results"))
+        return {
+            'kept': int(results.get('kept', 0)),
+            'added': int(results.get('added', 0)),
+            'removed': int(results.get('removed', 0)),
+            'timestamp': int(results.get('timestamp', 0))
+        }
+
+    # =========================================================================
     # Stats
     # =========================================================================
 
@@ -644,9 +861,7 @@ Output valid JSON only:
             meta = self.get_domain_meta(d)
             total_hits += int(meta.get("hits", 0))
 
-        last_autotune = self.get_last_autotune()
-        seconds_to_autotune = max(0, self.AUTOTUNE_INTERVAL - (int(time.time()) - last_autotune)) if last_autotune > 0 else 0
-        autotune_results = self.get_autotune_results()
+        tune_results = self.get_tune_results()
         learned_details = self.get_learned_details()
 
         return {
@@ -654,25 +869,28 @@ Output valid JSON only:
             "domains": len(domains),
             "total_terms": total_terms,
             "total_hits": total_hits,
+            # Learning (every 10 prompts)
             "prompt_count": self.get_prompt_count(),
             "prompt_threshold": self.BATCH_SIZE,
             "should_learn": self.should_learn(),
-            "should_autotune": self.should_autotune(),
-            "last_autotune": last_autotune,
-            "autotune_interval": self.AUTOTUNE_INTERVAL,
-            "seconds_to_autotune": seconds_to_autotune,
-            "autotune_merged_last": autotune_results['merged'],
-            "autotune_pruned_last": autotune_results['pruned'],
+            "learning_pending": self.is_learning_pending(),
             "last_learn": self.get_last_learn(),
             "terms_learned_last": self.get_terms_learned_last(),
             "terms_learned_list": learned_details['terms'],
             "domains_learned_list": learned_details['domains'],
+            # Tuning (every 100 intents)
+            "tune_count": self.get_tune_count(),
+            "tune_threshold": self.TUNE_THRESHOLD,
+            "should_tune": self.should_tune(),
+            "tuning_pending": self.is_tuning_pending(),
+            "last_tune": self.get_last_tune(),
+            "tune_kept_last": tune_results['kept'],
+            "tune_added_last": tune_results['added'],
+            "tune_removed_last": tune_results['removed'],
             # GL-054: Intelligence Angle
             "tokens_invested": self.get_tokens_invested(),
             "tokens_invested_last": self.get_tokens_invested_last(),
             "learning_calls": self.get_learning_calls(),
-            # Hook signal
-            "learning_pending": self.is_learning_pending(),
         }
 
 

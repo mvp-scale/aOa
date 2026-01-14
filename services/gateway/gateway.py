@@ -115,6 +115,8 @@ ROUTES = {
     "/domains/autotune": ("index", "/domains/autotune"),  # GL-053 Phase D: Manual auto-tune trigger
     "/domains/add": ("index", "/domains/add"),  # GL-054: Hook-based domain addition
     "/domains/learned": ("index", "/domains/learned"),  # GL-054: Signal learning complete
+    "/domains/tune": ("index", "/domains/tune"),  # GL-055: Apply regenerative tune results
+    "/domains/tuned": ("index", "/domains/tuned"),  # GL-055: Signal tuning complete
 
     # Status service routes
     "/status": ("status", "/status"),

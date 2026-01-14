@@ -3590,10 +3590,13 @@ cmd_domains() {
     local prompt_threshold=$(echo "$stats" | jq -r '.prompt_threshold // 10')
     local last_learn=$(echo "$stats" | jq -r '.last_learn // 0')
     local terms_learned=$(echo "$stats" | jq -r '.terms_learned_last // 0')
-    local last_autotune=$(echo "$stats" | jq -r '.last_autotune // 0')
-    local seconds_to_autotune=$(echo "$stats" | jq -r '.seconds_to_autotune // 0')
-    local merged_last=$(echo "$stats" | jq -r '.autotune_merged_last // 0')
-    local pruned_last=$(echo "$stats" | jq -r '.autotune_pruned_last // 0')
+    # GL-055: Intent-based tuning
+    local tune_count=$(echo "$stats" | jq -r '.tune_count // 0')
+    local tune_threshold=$(echo "$stats" | jq -r '.tune_threshold // 100')
+    local last_tune=$(echo "$stats" | jq -r '.last_tune // 0')
+    local tune_kept=$(echo "$stats" | jq -r '.tune_kept_last // 0')
+    local tune_added=$(echo "$stats" | jq -r '.tune_added_last // 0')
+    local tune_removed=$(echo "$stats" | jq -r '.tune_removed_last // 0')
     # GL-054: Intelligence Angle
     local tokens_invested=$(echo "$stats" | jq -r '.tokens_invested // 0')
     local learning_calls=$(echo "$stats" | jq -r '.learning_calls // 0')
@@ -3617,15 +3620,8 @@ cmd_domains() {
         hits_display="$total_hits"
     fi
 
-    # Format auto-tune time
-    local tune_display=""
-    if [ "$seconds_to_autotune" -gt 0 ] 2>/dev/null; then
-        local hours=$((seconds_to_autotune / 3600))
-        local mins=$(( (seconds_to_autotune % 3600) / 60 ))
-        [ "$hours" -gt 0 ] && tune_display="${hours}h" || tune_display="${mins}m"
-    else
-        tune_display="ready"
-    fi
+    # Format tune counter (GL-055: intent-based)
+    local tune_display="${tune_count}/${tune_threshold}"
 
     # Get domains with full terms for display (top 20)
     local domains_data=$(curl -s "${INDEX_URL}/domains/list?project=${project_id}&limit=20&include_terms=true&include_created=true" 2>/dev/null)
@@ -3635,7 +3631,7 @@ cmd_domains() {
     # aOa Domains Section (stats header + domain list)
     # ─────────────────────────────────────────────────────────────────────────
     echo ""
-    echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  ${CYAN}${domain_count}${NC} domains ${DIM}│${NC} ${total_terms} terms ${DIM}│${NC} ${hits_display} hits ${DIM}│${NC} Learn: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} Tune: ${tune_display}"
+    echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  ${MAGENTA}${domain_count}${NC} domains ${DIM}│${NC} ${CYAN}${total_terms}${NC} terms ${DIM}│${NC} ${GREEN}${hits_display}${NC} hits ${DIM}│${NC} Learn: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} Tune: ${YELLOW}${tune_display}${NC}"
     echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
     printf "${DIM}%-22s %5s  %s${NC}\n" "DOMAIN" "HITS" "TERMS"
 
@@ -3708,9 +3704,9 @@ cmd_domains() {
             echo -e "${DIM}Last learn: ${learn_display} (no new domains found)${NC}"
         fi
 
-        # Show auto-tune results if any
-        if [ "$merged_last" -gt 0 ] || [ "$pruned_last" -gt 0 ]; then
-            echo -e "${DIM}↻ Tuned: merged ${merged_last}, pruned ${pruned_last}${NC}"
+        # Show tune results if any (GL-055)
+        if [ "$tune_kept" -gt 0 ] || [ "$tune_added" -gt 0 ] || [ "$tune_removed" -gt 0 ]; then
+            echo -e "${DIM}↻ Last tune: kept ${tune_kept}, added ${tune_added}, removed ${tune_removed}${NC}"
         fi
     fi
 
