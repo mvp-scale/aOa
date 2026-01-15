@@ -426,7 +426,7 @@ display_semantic_grep_results() {
         [ $shown -ge $max_files ] && break
 
         local file=$(echo "$file_result" | jq -r '.file')
-        local file_tags=$(echo "$file_result" | jq -r '.file_tags | .[0:3] | map("#" + .) | join(" ")' 2>/dev/null)
+        local file_tags=$(echo "$file_result" | jq -r '.file_tags | .[0:3] | map(if startswith("@") then . else "#" + . end) | join(" ")' 2>/dev/null)
         local score=$(echo "$file_result" | jq -r '.score // 0' 2>/dev/null)
 
         # File header with tags

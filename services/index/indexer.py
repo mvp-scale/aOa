@@ -483,10 +483,20 @@ def enrich_result(
             if file_tags_cache is not None:
                 file_tags_cache[file_path] = file_tags
 
-    # GL-053 Phase E: Domain lookup - DISABLED for performance
-    # Domain hits now tracked async via intent capture, not inline during search
-    # See: /intent endpoint and aoa-intent-capture hook
+    # GL-071.6: Symbol-level domain lookup (O(1) Redis)
+    # Check PARENT first (route/class level), then fall back to symbol
     domain = None
+    if intent_index and project:
+        # Priority 1: Parent-level domain (e.g., route decorator, class)
+        if parent_name:
+            parent_domains = intent_index.domains_for_symbol(file_path, parent_name, project)
+            if parent_domains:
+                domain = parent_domains[0]
+        # Priority 2: Symbol-level domain (fallback)
+        if not domain and symbol_name:
+            symbol_domains = intent_index.domains_for_symbol(file_path, symbol_name, project)
+            if symbol_domains:
+                domain = symbol_domains[0]
 
     # GL-053: If no tags from intent or outline, use AC matching on content
     all_tags = file_tags + symbol_tags
@@ -639,6 +649,9 @@ class IntentRecord:
     project_id: str | None = None  # UUID for per-project isolation
     file_sizes: dict[str, int] | None = None  # File path -> size in bytes (for baseline calc)
     output_size: int | None = None  # Actual output size in bytes (for real savings calc)
+    # GL-069.5: Rich locations - resolved symbols from file:line references
+    # Format: [{"file": "path.py", "symbol": "func", "parent": "Class", "qualified": "path.py:Class.func()"}]
+    locations: list[dict] | None = None
 
 
 # ============================================================================
@@ -1303,14 +1316,23 @@ class OutlineParser:
                     if parent:
                         path = source[node.start_byte:node.end_byte].decode('utf-8', errors='replace').strip('"\'')
                         # Try to find method from decorator
-                        method = 'ROUTE'
+                        # Supports both FastAPI (.get/.post) and Flask (methods=['GET'])
+                        method = 'GET'  # Default to GET (most common)
                         for child in parent.children:
                             if child.type == 'decorator':
                                 dec_text = source[child.start_byte:child.end_byte].decode('utf-8', errors='replace')
+                                dec_lower = dec_text.lower()
+                                # FastAPI style: @app.post("/path")
                                 for m in ['get', 'post', 'put', 'delete', 'patch']:
-                                    if f'.{m}(' in dec_text.lower():
+                                    if f'.{m}(' in dec_lower:
                                         method = m.upper()
                                         break
+                                # Flask style: @app.route("/path", methods=['POST'])
+                                if "methods=" in dec_lower or "methods =" in dec_lower:
+                                    for m in ['get', 'post', 'put', 'delete', 'patch']:
+                                        if f"'{m}'" in dec_lower or f'"{m}"' in dec_lower:
+                                            method = m.upper()
+                                            break
                         name = f"{method} {path}"
                         symbols.append(OutlineSymbol(
                             name=name,
@@ -2356,7 +2378,7 @@ class IntentIndex:
 
     def record(self, tool: str, files: list[str], tags: list[str], session_id: str,
                tool_use_id: str = None, project_id: str = None, file_sizes: dict[str, int] = None,
-               output_size: int = None):
+               output_size: int = None, locations: list[dict] = None):
         """Record an intent from a tool use."""
         proj = self._project_key(project_id)
         record = IntentRecord(
@@ -2368,7 +2390,8 @@ class IntentIndex:
             tool_use_id=tool_use_id,
             project_id=project_id,
             file_sizes=file_sizes or {},
-            output_size=output_size
+            output_size=output_size,
+            locations=locations or []  # GL-069.5: Rich symbol locations
         )
 
         # Calculate token savings for this record
@@ -2451,6 +2474,23 @@ class IntentIndex:
                 if f.endswith(file) or file in f:
                     return list(tags)[:3]
             return []
+
+    def domains_for_symbol(self, file: str, symbol: str, project_id: str = None) -> list[str]:
+        """GL-071.5: Get domains assigned to a specific symbol - O(1) Redis lookup."""
+        if not self.redis or not symbol:
+            return []
+
+        proj = self._project_key(project_id)
+        try:
+            r = self.redis.client if hasattr(self.redis, 'client') else self.redis
+            symbol_key = f"aoa:{proj}:symbol_domains:{file}:{symbol}"
+            domains = r.smembers(symbol_key)
+            if domains:
+                decoded = [d.decode() if isinstance(d, bytes) else d for d in domains]
+                return sorted(decoded)[:3]  # Limit to 3 most relevant
+        except Exception:
+            pass
+        return []
 
     def recent(self, since: int = None, limit: int = 50, project_id: str = None) -> list[dict]:
         """Get recent intent records."""
@@ -4065,6 +4105,40 @@ def domains_learn():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/domains/trigger-learn', methods=['POST'])
+def domains_trigger_learn():
+    """
+    GL-070: Trigger hook-side learning by setting learning_pending flag.
+
+    This lets the next UserPromptSubmit hook execute automatic domain generation.
+    For testing or manual learning triggers.
+
+    POST body: {"project": "project-id"}
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project') or request.args.get('project')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+        learner.set_learning_pending()
+
+        return jsonify({
+            'success': True,
+            'project': project_id,
+            'learning_pending': True,
+            'message': 'Next UserPromptSubmit will trigger hook-side domain learning'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/domains/autotune', methods=['POST'])
 def domains_autotune():
     """
@@ -4391,6 +4465,8 @@ def domains_learned():
     project_id = data.get('project')
     domains_list = data.get('domains', [])
     terms_list = data.get('terms', [])
+    files_list = data.get('files', [])  # GL-071: Files to assign domains to
+    locations_list = data.get('locations', [])  # GL-071.1: Rich symbol locations
     prompt_chars = data.get('prompt_chars', 0)
     response_chars = data.get('response_chars', 0)
 
@@ -4433,12 +4509,172 @@ def domains_learned():
                 project_id=project_id
             )
 
+        # GL-069.8: Clear orphans that now match new terms
+        # After learning adds new terms, check if any orphans now have matches
+        orphans_cleared = 0
+        if terms_list:
+            orphans = learner.get_orphan_tags(limit=100)
+            matched_orphans = []
+            for orphan in orphans:
+                # Check if orphan now matches a term (including new ones)
+                domains = learner.get_domains_for_term(orphan)
+                if domains:
+                    matched_orphans.append(orphan)
+            if matched_orphans:
+                orphans_cleared = learner.clear_orphan_tags(matched_orphans)
+
+        # GL-071: Assign domains to recent files
+        # Roll out newly learned domains to files passed from hook
+        files_assigned = 0
+        if domains_list and files_list and intent_index and intent_index.redis:
+            try:
+                proj = intent_index._project_key(project_id)
+                r = intent_index.redis.client if hasattr(intent_index.redis, 'client') else intent_index.redis
+
+                for file_path in files_list:
+                    # Skip invalid files
+                    if not file_path or not isinstance(file_path, str):
+                        continue
+                    file_tags_key = f"aoa:{proj}:file_tags:{file_path}"
+                    for domain in domains_list:
+                        # Ensure domain has @ prefix
+                        domain_tag = domain if domain.startswith('@') else f"@{domain}"
+                        r.sadd(file_tags_key, domain_tag)
+                    files_assigned += 1
+            except Exception as e:
+                # Don't fail the whole request if assignment fails
+                pass
+
+        # GL-071.4: Assign domains to symbols (symbol-level storage)
+        # Key format: aoa:{proj}:symbol_domains:{file}:{symbol} -> set of @domains
+        symbols_assigned = 0
+        if domains_list and locations_list and intent_index and intent_index.redis:
+            try:
+                proj = intent_index._project_key(project_id)
+                r = intent_index.redis.client if hasattr(intent_index.redis, 'client') else intent_index.redis
+
+                for loc in locations_list:
+                    file_path = loc.get('file', '')
+                    symbol = loc.get('symbol', '')
+                    parent = loc.get('parent', '')  # GL-071: Prefer parent for domain assignment
+                    if not file_path or not symbol:
+                        continue
+
+                    # Store domains at PARENT level when available (route/class level)
+                    # This allows child symbols to inherit parent's domain
+                    target_symbol = parent if parent else symbol
+                    symbol_key = f"aoa:{proj}:symbol_domains:{file_path}:{target_symbol}"
+                    for domain in domains_list:
+                        domain_tag = domain if domain.startswith('@') else f"@{domain}"
+                        r.sadd(symbol_key, domain_tag)
+                    symbols_assigned += 1
+
+                    # Track which symbols exist in each file (for lookup)
+                    file_symbols_key = f"aoa:{proj}:file_symbols:{file_path}"
+                    r.sadd(file_symbols_key, target_symbol)
+            except Exception as e:
+                # Don't fail the whole request if assignment fails
+                pass
+
         return jsonify({
             'success': True,
             'project': project_id,
             'learning_pending': False,
             'tokens_invested': total_tokens,
             'tokens_total': learner.get_tokens_invested(),
+            'orphans_cleared': orphans_cleared,  # GL-069.8
+            'files_assigned': files_assigned,  # GL-071
+            'symbols_assigned': symbols_assigned,  # GL-071.4
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/tags', methods=['POST'])
+def domains_tags():
+    """
+    GL-069.1: Per-prompt semantic tag matching.
+
+    Receives tags generated by Claude for a prompt, matches them against
+    existing domain terms, increments hits for matches, stores orphans.
+
+    POST body: {"project": "project-id", "tags": ["tag1", "tag2", ...]}
+
+    Returns:
+        - matched: tags that hit existing domain terms
+        - orphaned: tags stored for learning cycle
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project')
+    tags = data.get('tags', [])
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    # Validation: tags must be a list
+    if not isinstance(tags, list):
+        return jsonify({'error': 'tags must be an array'}), 400
+
+    # Validation: sanity check on count (3-5 tags per prompt)
+    if len(tags) > 10:
+        tags = tags[:10]  # Truncate, don't reject
+
+    if len(tags) == 0:
+        return jsonify({'matched': [], 'orphaned': [], 'message': 'No tags provided'})
+
+    try:
+        learner = DomainLearner(project_id)
+
+        # Match tags against existing terms
+        result = learner.match_tags_to_terms(tags)
+
+        return jsonify({
+            'success': True,
+            'project': project_id,
+            'matched': result['matched'],
+            'matched_count': len(result['matched']),
+            'orphaned': result['orphaned'],
+            'orphan_count': len(result['orphaned']),
+            'total_orphans': learner.get_orphan_count(),
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/orphans')
+def domains_orphans():
+    """
+    GL-069.6: Get orphan tags for learning cycle.
+
+    Orphan tags are semantic tags that didn't match any existing domain terms.
+    They represent unmet intent and inform domain discovery.
+
+    Query params:
+        project: project ID
+        limit: max orphans to return (default 50)
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    project_id = request.args.get('project')
+    limit = int(request.args.get('limit', 50))
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+        orphans = learner.get_orphan_tags(limit=limit)
+
+        return jsonify({
+            'project': project_id,
+            'orphans': orphans,
+            'count': len(orphans),
         })
 
     except Exception as e:
@@ -5056,6 +5292,104 @@ def repo_pattern_search(name):
 # API Endpoints - Intent Tracking
 # ============================================================================
 
+
+def resolve_file_locations(files: list[str], idx) -> list[dict]:
+    """
+    GL-069.5: Resolve file:line references to rich symbol locations.
+
+    Takes a list of file paths (some with :line suffixes) and resolves them
+    to enclosing function/class symbols using the index's outline data.
+
+    Returns list of dicts with: file, symbol, kind, parent, qualified, start_line, end_line
+    """
+    if not files or not idx:
+        return []
+
+    locations = []
+    seen_symbols = set()  # Dedupe: same function accessed multiple times = 1
+
+    # Get index root for path normalization
+    idx_root = str(idx.root) if hasattr(idx, 'root') else ''
+
+    for file_ref in files:
+        # Skip patterns and commands
+        if file_ref.startswith('pattern:') or file_ref.startswith('cmd:'):
+            continue
+
+        # Extract file path and line number
+        if ':' not in file_ref:
+            continue
+
+        parts = file_ref.rsplit(':', 1)
+        file_path = parts[0]
+        try:
+            # Handle ranges like "100-150" or offsets like "100+"
+            line_str = parts[1].split('-')[0].rstrip('+')
+            line_num = int(line_str)
+        except (ValueError, IndexError):
+            continue
+
+        # Normalize path: try multiple variants to find match
+        # Index stores relative paths, but hooks send absolute paths
+        symbols = idx.file_outlines.get(file_path, [])
+
+        if not symbols:
+            # Try stripping index root
+            if idx_root and file_path.startswith(idx_root):
+                rel_path = file_path[len(idx_root):].lstrip('/')
+                symbols = idx.file_outlines.get(rel_path, [])
+
+        if not symbols:
+            # Try finding relative path by suffix matching
+            # e.g., /home/user/proj/services/foo.py -> services/foo.py
+            for indexed_path in idx.file_outlines.keys():
+                if file_path.endswith('/' + indexed_path) or file_path == indexed_path:
+                    symbols = idx.file_outlines[indexed_path]
+                    file_path = indexed_path  # Use indexed path for qualified name
+                    break
+
+        if not symbols:
+            continue
+
+        # Find innermost enclosing symbol
+        enclosing = []
+        for sym in symbols:
+            if sym.start_line <= line_num <= sym.end_line:
+                sym_range = sym.end_line - sym.start_line
+                enclosing.append((sym_range, sym))
+
+        if not enclosing:
+            continue
+
+        # Sort by range (smallest first = most specific)
+        enclosing.sort(key=lambda x: x[0])
+        _, best_match = enclosing[0]
+
+        # Dedupe by symbol
+        symbol_key = f"{file_path}:{best_match.name}"
+        if symbol_key in seen_symbols:
+            continue
+        seen_symbols.add(symbol_key)
+
+        # Find parent (for class.method style)
+        parent_name = None
+        if len(enclosing) > 1:
+            _, parent = enclosing[1]
+            parent_name = parent.name
+
+        locations.append({
+            'file': file_path,
+            'symbol': best_match.name,
+            'kind': best_match.kind,
+            'parent': parent_name,
+            'start_line': best_match.start_line,
+            'end_line': best_match.end_line,
+            'qualified': f"{file_path}:{parent_name}.{best_match.name}()" if parent_name else f"{file_path}:{best_match.name}()"
+        })
+
+    return locations
+
+
 @app.route('/intent', methods=['POST'])
 def record_intent():
     """
@@ -5082,7 +5416,11 @@ def record_intent():
     file_sizes = data.get('file_sizes', {})  # File path -> size for baseline calc
     output_size = data.get('output_size')  # Actual output size for REAL savings calc
 
-    intent_index.record(tool, files, tags, session_id, tool_use_id, project_id, file_sizes, output_size)
+    # GL-069.5: Resolve file:line references to rich symbol locations
+    idx = manager.get_local(project_id)
+    locations = resolve_file_locations(files, idx) if idx else []
+
+    intent_index.record(tool, files, tags, session_id, tool_use_id, project_id, file_sizes, output_size, locations)
 
     # GL-062: Feed scorer for prediction ranking
     # Record file access to build recency/frequency/tag data for predictions

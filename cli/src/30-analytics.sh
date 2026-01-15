@@ -536,7 +536,14 @@ cmd_outline() {
         ' 2>/dev/null
     else
         # Show signature (definition header) for each symbol
-        echo "$result" | jq -r '.symbols[] | "  \(.signature // "\(.kind) \(.name)") [\(.start_line)-\(.end_line)]"' 2>/dev/null
+        # For routes, show parsed name (POST /path) instead of raw decorator
+        echo "$result" | jq -r '.symbols[] |
+            if .kind == "route" then
+                "  \(.name) [\(.start_line)-\(.end_line)]"
+            else
+                "  \(.signature // "\(.kind) \(.name)") [\(.start_line)-\(.end_line)]"
+            end
+        ' 2>/dev/null
     fi
 
     # If tagging requested, output instructions for Claude

@@ -533,20 +533,16 @@ PYEOF
         fi
 
         if [ "$action" = "Learn" ]; then
-            # Domain learning event with rotating quotes
+            # Domain learning event
             attribution="${GREEN}+${AOA_LEARN_COUNT} domains${NC}"
             impact="${CYAN}${AOA_LEARN_TOKENS} tokens${NC} invested"
-            # Rotate through cheeky messages - tag in aOa cyan, text in bold yellow (Star Wars gold)
-            case $((RANDOM % 3)) in
-                0) tags="${CYAN}#evolving${NC}"; target="${BOLD}${YELLOW}aOa learns → you build faster${NC}" ;;
-                1) tags="${CYAN}#enlightened${NC}"; target="${BOLD}${YELLOW}The force grows stronger${NC}" ;;
-                2) tags="${CYAN}#growing${NC}"; target="${BOLD}${YELLOW}Knowledge is power${NC}" ;;
-            esac
+            tags="${CYAN}#learning${NC}"
+            target="${BOLD}${YELLOW}This is the way.${NC}"
         elif [ "$action" = "Tune" ]; then
             # Domain tuning event
             attribution="${CYAN}cycle ${AOA_TUNE_CYCLE}${NC}"
             impact="${DIM}${AOA_TUNE_STALE} stale, ${AOA_TUNE_PRUNED} pruned${NC}"
-            tags="${CYAN}#refined${NC}"
+            tags="${CYAN}#tuning${NC}"
             target="${BOLD}${YELLOW}This is the way.${NC}"
         elif [ "$action" = "Predict" ] || [ "$action" = "Intent" ] || [ "$action" = "Outline" ] || [ "$action" = "Search" ] || [ "$action" = "Find" ] || [ "$action" = "Locate" ] || [ "$action" = "Tree" ] || [ "$action" = "Memory" ]; then
             : # Impact already set above for aOa native operations

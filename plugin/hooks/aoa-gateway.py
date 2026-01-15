@@ -516,60 +516,133 @@ def handle_prompt(data: dict):
 
     # Check if domain learning is pending
     if domain_stats and domain_stats.get("learning_pending"):
+        # GL-070: Hook-side automatic domain generation
+        # Instead of outputting instructions for Claude, execute learning directly
+        # This ensures 100% reliability - no dependence on Claude compliance
+
         # Get recent activity for context
         recent = api_get(f"/intent/recent?limit=20&project_id={PROJECT_ID}") or {}
         records = recent.get("records", [])
 
-        # GL-059.2: Extract file:line locations for function-level assignment
-        locations = []
+        # Extract keywords from activity and recent files (GL-071)
         recent_tags = set()
+        file_keywords = set()
+        recent_files = set()  # GL-071: Collect files for domain assignment
+        recent_locations = []  # GL-071.1: Rich symbol locations for domain assignment
+        seen_symbols = set()  # Dedupe locations
         for r in records:
+            # GL-071: Extract files
             for f in r.get("files", []):
-                if not f.startswith("pattern:") and not f.startswith("cmd:"):
-                    locations.append(f)
+                if f and not f.startswith('.context/') and not f.startswith('learn:'):
+                    recent_files.add(f)
+            # Extract tags
             for t in r.get("tags", []):
-                recent_tags.add(t)
+                clean = t.lstrip('#').lower()
+                if len(clean) >= 3 and clean not in {'reading', 'editing', 'creating', 'executing', 'search'}:
+                    recent_tags.add(clean)
+            # GL-071.1: Extract rich locations for symbol-level domain assignment
+            for loc in r.get("locations", []):
+                symbol = loc.get("symbol", "")
+                file_path = loc.get("file", "")
+                if symbol and file_path and len(symbol) >= 3:
+                    # Dedupe by file:symbol
+                    key = f"{file_path}:{symbol}"
+                    if key not in seen_symbols:
+                        seen_symbols.add(key)
+                        recent_locations.append({
+                            "file": file_path,
+                            "symbol": symbol,
+                            "kind": loc.get("kind", ""),
+                            "parent": loc.get("parent"),
+                            "start_line": loc.get("start_line"),
+                            "end_line": loc.get("end_line")
+                        })
+                    # Also extract keywords from symbol names
+                    words = re.split(r'[_\s]|(?<=[a-z])(?=[A-Z])', symbol)
+                    for w in words:
+                        if len(w) >= 3:
+                            file_keywords.add(w.lower())
 
-        # GL-059.2: Resolve locations to functions via symbol lookup
-        symbols_data = api_post("/symbol/lookup", {"locations": locations[:30]}) or {}
-        symbols = symbols_data.get("symbols", [])
+        # Get orphan tags (high-value signals)
+        orphan_tags = []
+        orphan_count = domain_stats.get("orphan_count", 0)
+        if orphan_count > 0:
+            orphan_data = api_get(f"/domains/orphans?project={PROJECT_ID}&limit=20")
+            if orphan_data:
+                orphan_tags = orphan_data.get("orphans", [])
 
-        # Format functions for prompt (deduplicated by symbol lookup)
-        if symbols:
-            functions_summary = "\n".join(f"  - {s['qualified']}" for s in symbols[:10])
-        else:
-            # Fallback to file-level if no symbols resolved
-            functions_summary = "\n".join(f"  - {f}" for f in locations[:10])
-
-        tags_summary = ", ".join(list(recent_tags)[:10])
-
-        # Get ALL existing domains (seeded + learned) so Haiku doesn't duplicate
+        # Get existing domain names to avoid duplicates
         all_domains = api_get(f"/domains/list?project={PROJECT_ID}&limit=100") or {}
-        existing_domain_names = [d['name'] for d in all_domains.get('domains', [])]
-        existing_domains = ", ".join(existing_domain_names[:20]) if existing_domain_names else "@hook_system, @intent_tracking, @api_integration"
+        existing_names = {d['name'].lower() for d in all_domains.get('domains', [])}
 
-        # Output learning instructions for Claude (YOU are the model - no Task tool)
-        learning_prompt = f"""## aOa Domain Learning (Auto-triggered)
+        # Generate domain from activity
+        # Combine orphan tags (unmet intent) with recent tags
+        all_terms = list(orphan_tags) + list(recent_tags) + list(file_keywords)
+        unique_terms = list(dict.fromkeys(all_terms))[:8]  # Dedupe, limit to 8
 
-Generate 1-3 semantic domains from this activity (YOU are the model - no Task tool):
+        if len(unique_terms) >= 2:
+            # Create domain name from first term
+            domain_base = unique_terms[0].replace(' ', '_')
+            domain_name = f"@{domain_base}_activity"
 
-**Files:** {', '.join([s['qualified'] for s in symbols[:10]] if symbols else locations[:10])}
-**Tags:** {tags_summary}
-**Existing (don't duplicate):** {existing_domains}
+            # Skip if domain already exists
+            if domain_name.lower() not in existing_names:
+                new_domain = {
+                    "name": domain_name,
+                    "description": f"Activity pattern: {', '.join(unique_terms[:3])}",
+                    "terms": unique_terms
+                }
 
-Output JSON: {{"domains": [{{"name": "@domain_name", "description": "what intent this captures", "terms": ["intent_term1", "intent_term2"]}}]}}
+                # Execute learning directly in hook
+                add_result = api_post("/domains/add", {
+                    "project": PROJECT_ID,
+                    "domains": [new_domain]
+                }, timeout=5)
 
-Then run:
+                if add_result and add_result.get("success"):
+                    # Signal learning complete (include domain + locations for symbol-level assignment)
+                    learn_result = api_post("/domains/learned", {
+                        "project": PROJECT_ID,
+                        "domains": [domain_name],
+                        "terms": unique_terms,
+                        "files": list(recent_files)[:50],  # GL-071: Pass files for domain assignment
+                        "locations": recent_locations[:100]  # GL-071.1: Rich symbol locations
+                    }, timeout=5)
+
+                    orphans_cleared = learn_result.get("orphans_cleared", 0) if learn_result else 0
+                    output_context(f"## aOa Domain Learned (Auto)\n\n**{domain_name}**: {', '.join(unique_terms[:5])}\n- Orphans absorbed: {orphans_cleared}")
+                else:
+                    # Learning failed, clear pending anyway to avoid stuck state
+                    api_post("/domains/learned", {"project": PROJECT_ID}, timeout=2)
+            else:
+                # Domain exists, just clear pending
+                api_post("/domains/learned", {"project": PROJECT_ID}, timeout=2)
+        else:
+            # Not enough terms, just clear pending
+            api_post("/domains/learned", {"project": PROJECT_ID}, timeout=2)
+
+        # Don't return - continue to show status line
+
+    # GL-069.1: Per-prompt semantic tag generation
+    # Only when: domains exist, learning NOT pending, and we have a prompt
+    prompt = data.get("prompt", "")
+    if prompt and domain_stats and domain_stats.get("domains", 0) > 0:
+        # Output minimal tag generation instructions
+        tag_prompt = f"""## aOa Semantic Tags (Per-Prompt)
+
+Generate 3-5 semantic tags for this prompt. Tags should capture the user's INTENT, not just keywords.
+
+**User prompt:** {prompt[:200]}{'...' if len(prompt) > 200 else ''}
+
+Output JSON then curl: {{"tags": ["tag1", "tag2", "tag3"]}}
+
 ```bash
-curl -s -X POST "localhost:8080/domains/add" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": YOUR_JSON}}'
-curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
+curl -s -X POST "localhost:8080/domains/tags" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "tags": YOUR_TAGS}}'
 ```
 """
-        output_context(learning_prompt)
-        return  # Don't output status line when learning is triggered
+        output_context(tag_prompt)
 
     # Predict files from prompt keywords
-    prompt = data.get("prompt", "")
     session_id = data.get("session_id", "unknown")
 
     if prompt and total >= MIN_INTENTS:

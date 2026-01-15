@@ -442,6 +442,107 @@ class DomainLearner:
             all_hits = self.redis.client.hgetall(term_hits_key)
             return {term: int(hits) for term, hits in all_hits.items()}
 
+    # =========================================================================
+    # GL-069.1: Orphan Tag Storage
+    # =========================================================================
+
+    def add_orphan_tags(self, tags: list[str]) -> int:
+        """
+        Store unmatched tags as orphans for the learning cycle.
+
+        Orphan tags are semantic tags that didn't match any existing domain terms.
+        They represent unmet intent and inform domain discovery in the next
+        learning cycle.
+
+        Returns: number of orphan tags added
+        """
+        if not tags:
+            return 0
+        orphan_key = self._key("orphan_tags")
+        # Use sorted set with timestamp as score for ordering
+        now = time.time()
+        pipe = self.redis.client.pipeline()
+        for tag in tags:
+            # Normalize: lowercase, strip #
+            clean_tag = tag.lower().lstrip('#')
+            if len(clean_tag) >= 2:
+                pipe.zadd(orphan_key, {clean_tag: now})
+        results = pipe.execute()
+        return sum(1 for r in results if r)
+
+    def get_orphan_tags(self, limit: int = 50) -> list[str]:
+        """
+        Get orphan tags for the learning cycle.
+
+        Returns most recent orphan tags (newest first).
+        """
+        orphan_key = self._key("orphan_tags")
+        # Get by score descending (newest first)
+        return list(self.redis.client.zrevrange(orphan_key, 0, limit - 1))
+
+    def clear_orphan_tags(self, tags: list[str] = None) -> int:
+        """
+        Clear orphan tags.
+
+        If tags provided, only clear those specific tags (they were matched).
+        If tags=None, clear all orphans (full reset).
+
+        Returns: number of tags cleared
+        """
+        orphan_key = self._key("orphan_tags")
+        if tags:
+            pipe = self.redis.client.pipeline()
+            for tag in tags:
+                clean_tag = tag.lower().lstrip('#')
+                pipe.zrem(orphan_key, clean_tag)
+            results = pipe.execute()
+            return sum(1 for r in results if r)
+        else:
+            count = self.redis.client.zcard(orphan_key)
+            self.redis.client.delete(orphan_key)
+            return count
+
+    def get_orphan_count(self) -> int:
+        """Get count of orphan tags waiting for learning."""
+        orphan_key = self._key("orphan_tags")
+        return self.redis.client.zcard(orphan_key)
+
+    def match_tags_to_terms(self, tags: list[str]) -> dict:
+        """
+        Match semantic tags against existing domain terms.
+
+        For each tag, checks if it matches any domain term.
+        Returns dict with 'matched' and 'orphaned' lists.
+        Also increments hit counters for matched terms.
+        """
+        if not tags:
+            return {'matched': [], 'orphaned': []}
+
+        matched = []
+        orphaned = []
+
+        for tag in tags:
+            clean_tag = tag.lower().lstrip('#')
+            if len(clean_tag) < 2:
+                continue
+
+            # Check if tag matches any domain term
+            domains = self.get_domains_for_term(clean_tag)
+            if domains:
+                matched.append(clean_tag)
+            else:
+                orphaned.append(clean_tag)
+
+        # Increment hits for matched terms
+        if matched:
+            self.increment_term_hits(matched)
+
+        # Store orphaned tags for learning cycle
+        if orphaned:
+            self.add_orphan_tags(orphaned)
+
+        return {'matched': matched, 'orphaned': orphaned}
+
     def remove_domain(self, name: str) -> None:
         """Remove a domain and all its data."""
         # Get terms first for cleanup
@@ -1121,6 +1222,8 @@ Return JSON:
             "tokens_invested": self.get_tokens_invested(),
             "tokens_invested_last": self.get_tokens_invested_last(),
             "learning_calls": self.get_learning_calls(),
+            # GL-069.1: Orphan tags
+            "orphan_count": self.get_orphan_count(),
         }
 
 
