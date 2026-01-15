@@ -429,6 +429,11 @@ class DomainLearner:
             pipe.hincrby(term_hits_key, term, 1)
         pipe.execute()
 
+    def increment_term_hits(self, term: str, amount: int = 1) -> int:
+        """GL-071: Increment hit count for a term (validates term relevance)."""
+        term_hits_key = self._key("term_hits")
+        return self.redis.client.hincrby(term_hits_key, term.lower(), amount)
+
     def get_term_hits(self, terms: list[str] = None) -> dict:
         """Get hit counts for terms. If terms=None, returns all."""
         term_hits_key = self._key("term_hits")

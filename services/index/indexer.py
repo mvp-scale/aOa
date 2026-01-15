@@ -571,6 +571,39 @@ def format_search_response(
             r['score'] = calculate_intent_score(r.get('tags', []), search_intent)
         results.sort(key=lambda r: r['score'], reverse=True)
 
+    # GL-071: Enrich terms from top search results (100% non-blocking)
+    # Top results validate term relevance - fire and forget
+    if DOMAINS_AVAILABLE and project and results:
+        # Snapshot top 10 for background processing
+        top_results = results[:10]
+        def _enrich_top_terms():
+            try:
+                learner = DomainLearner(project)
+                seen_terms = set()
+                seen_domains = set()
+
+                # Collect all unique terms from top results
+                for r in top_results:
+                    for tag in r.get('tags', []):
+                        term = tag.lstrip('#@').lower()
+                        if term and len(term) >= 3:
+                            seen_terms.add(term)
+
+                # For each term: increment term hits AND all domains containing it
+                for term in seen_terms:
+                    learner.increment_term_hits(term)
+                    # Find ALL domains with this term and increment their hits
+                    domains_with_term = learner.get_domains_for_term(term)
+                    for domain_name in domains_with_term:
+                        if domain_name not in seen_domains:
+                            seen_domains.add(domain_name)
+                            learner.increment_domain_hits(domain_name)
+            except Exception:
+                pass  # Silent fail - never block search
+        # Fire and forget
+        import threading
+        threading.Thread(target=_enrich_top_terms, daemon=True).start()
+
     # Build response - return ALL results, display layer limits
     response = {
         'results': results,
