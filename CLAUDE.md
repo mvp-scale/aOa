@@ -60,7 +60,7 @@ When the user addresses an agent by name using "Hey [AgentName]", spawn that age
 
 | Trigger | Agent | Purpose |
 |---------|-------|---------|
-| "Hey Beacon" | beacon | Project continuity - work board, progress tracking, session handoffs |
+| "Hey B" / "Hey Beacon" | beacon | Project continuity - work board, progress tracking, session handoffs |
 | "Hey 131" | 131 | Research-only problem solving with parallel solution discovery |
 | "Hey GH" | gh | Growth Hacker - solutions architect, problem decomposer |
 
