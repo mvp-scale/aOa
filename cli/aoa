@@ -4392,8 +4392,12 @@ EOFCLAUDE
     echo -e "${GREEN}${BOLD}✓ aOa enabled for ${project_name}${NC}"
     echo
     echo -e "${DIM}Restart Claude Code to activate hooks.${NC}"
-    echo -e "${DIM}Then try: aoa search <term>${NC}"
     echo
+
+    # Auto-cascade to quickstart for first-time setup
+    echo -e "${CYAN}${BOLD}Starting semantic tagging...${NC}"
+    echo
+    cmd_quickstart
 }
 
 cmd_remove() {
