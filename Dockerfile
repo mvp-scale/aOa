@@ -68,10 +68,8 @@ COPY services/session /app/session/
 COPY services/status/status_service.py /app/status/
 COPY services/proxy/git_proxy.py /app/proxy/
 
-# Copy config files
+# Copy config files (GL-074: unified v2 format)
 COPY config/universal-domains.json /app/config/
-COPY config/semantic-patterns.json /app/config/
-COPY config/domain-patterns.json /app/config/
 
 # Copy CLI (available inside container)
 COPY cli/aoa /usr/local/bin/aoa
