@@ -1,8 +1,14 @@
-# aOa - 5 Angles. 1 Attack.
+# CRITICAL: aOa Search Override
 
-**CRITICAL: This project has aOa installed. ALWAYS use `aoa grep` instead of Grep/Glob.**
+**ALWAYS use `aoa grep` instead of Grep/Glob tools.**
+
+`aoa grep` and `aoa egrep` work like Unix grep/egrep but use O(1) indexed search (10-100x faster). Results include `file:func[range]:line` — use [range] to read only relevant code.
+
+See `.aoa/USAGE.md` for details.
 
 ---
+
+# aOa - 5 Angles. 1 Attack.
 
 ## Hooks, Not API Keys
 

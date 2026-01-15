@@ -4233,80 +4233,39 @@ EOFREADME
     cp "$AOA_HOME/plugin/USAGE.md" "$project_root/.aoa/USAGE.md" 2>/dev/null || true
     echo -e "${GREEN}✓${NC}"
 
-    # Add aOa reference to CLAUDE.md
+    # Add aOa reference to CLAUDE.md - PREPEND for priority
     echo -n "  Updating CLAUDE.md............ "
     local claude_md="$project_root/CLAUDE.md"
-    local aoa_marker="# aOa Integration"
+
+    # Compact aOa section (305 bytes) - designed to override default tool preferences
+    local aoa_section
+    read -r -d '' aoa_section << 'EOFAOA' || true
+# CRITICAL: aOa Search Override
+
+**ALWAYS use `aoa grep` instead of Grep/Glob tools.**
+
+`aoa grep` and `aoa egrep` work like Unix grep/egrep but use O(1) indexed search (10-100x faster). Results include `file:func[range]:line` — use [range] to read only relevant code.
+
+See `.aoa/USAGE.md` for details.
+
+---
+
+EOFAOA
 
     if [ -f "$claude_md" ]; then
         # Check if already has aOa section
-        if ! grep -q "$aoa_marker" "$claude_md" 2>/dev/null; then
-            # Append aOa reference
-            cat >> "$claude_md" << 'EOFCLAUDE'
-
-# aOa Integration
-
-**Treat `aoa grep` and `aoa egrep` like standard Unix grep.** Same flags, O(1) speed.
-
-## Result Format
-
-```
-file:Class.method[range]:line <grep output> @domain #tags
-```
-
-- **file** — source path
-- **Class.method** — containing class and function
-- **[range]** — function start-end lines (read only what matters)
-- **:line** — exact match line number
-- **<grep output>** — standard grep content
-- **@domain** — semantic domain (e.g., @authentication)
-- **#tags** — intent indicators from your session
-
-## Quick Reference
-
-| Instead of | Use |
-|------------|-----|
-| `grep pattern` | `aoa grep pattern` |
-| `grep -E "a\|b"` | `aoa egrep "a\|b"` |
-| `grep -i`, `-w`, `-c` | Same flags work |
-
-See `.aoa/USAGE.md` for full guide.
-EOFCLAUDE
-            echo -e "${GREEN}✓${NC} ${DIM}(appended)${NC}"
+        if ! grep -q "CRITICAL: aOa" "$claude_md" 2>/dev/null; then
+            # PREPEND aOa section (not append) for priority
+            local existing_content=$(cat "$claude_md")
+            echo "$aoa_section" > "$claude_md"
+            echo "$existing_content" >> "$claude_md"
+            echo -e "${GREEN}✓${NC} ${DIM}(prepended)${NC}"
         else
             echo -e "${YELLOW}✓${NC} ${DIM}(already present)${NC}"
         fi
     else
-        # Create CLAUDE.md with full aOa section
-        cat > "$claude_md" << 'EOFCLAUDE'
-# aOa Integration
-
-**Treat `aoa grep` and `aoa egrep` like standard Unix grep.** Same flags, O(1) speed.
-
-## Result Format
-
-```
-file:Class.method[range]:line <grep output> @domain #tags
-```
-
-- **file** — source path
-- **Class.method** — containing class and function
-- **[range]** — function start-end lines (read only what matters)
-- **:line** — exact match line number
-- **<grep output>** — standard grep content
-- **@domain** — semantic domain (e.g., @authentication)
-- **#tags** — intent indicators from your session
-
-## Quick Reference
-
-| Instead of | Use |
-|------------|-----|
-| `grep pattern` | `aoa grep pattern` |
-| `grep -E "a\|b"` | `aoa egrep "a\|b"` |
-| `grep -i`, `-w`, `-c` | Same flags work |
-
-See `.aoa/USAGE.md` for full guide.
-EOFCLAUDE
+        # Create CLAUDE.md with aOa section
+        echo "$aoa_section" > "$claude_md"
         echo -e "${GREEN}✓${NC} ${DIM}(created)${NC}"
     fi
 
