@@ -638,13 +638,18 @@ Existing (skip similar): {existing_str}
 Bad: "increment_term_hits" | Good: "hits"
 Bad: @term_hit_validation | Good: @prediction
 
+VALIDATION before POST:
+- Domain names: must start with @, lowercase, no spaces
+- Terms: must be real words (3+ chars), no empty strings
+- JSON: must be valid, parseable
+
 After generating, POST result:
 ```bash
 curl -s -X POST "localhost:8080/domains/add" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": YOUR_DOMAINS}}'
 curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
 ```
 
-Output JSON: {{"domains":[{{"name":"@example","terms":["w1","w2","w3"]}}]}}"""
+Output JSON: {{"domains":[{{"name":"@example","terms":["word1","word2","word3"]}}]}}"""
 
             output_context(haiku_prompt)
         else:
