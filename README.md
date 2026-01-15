@@ -110,6 +110,8 @@ Claude: "I see the issue. Line 47."
 
 **150 tokens.** Same result. **99% savings.**
 
+Want the technical breakdown? See [AOA_COMPARISON.md](AOA_COMPARISON.md) for a real-world 11x token reduction case study.
+
 ---
 
 ## No LSP. No MCP. Just Semantic Compression.
@@ -129,13 +131,14 @@ It taps into Claude Code hooks. That's it. No servers to configure. No language-
 
 | Angle | What It Does |
 |-------|--------------|
-| **Symbol** | O(1) lookup across your entire codebase |
-| **Intent** | Learns from every tool call, builds semantic understanding |
-| **Intel** | Searches external repos without polluting your results |
-| **Signal** | Recency, frequency, filename matching, transitions |
-| **Strike** | Prefetches files before you ask |
+| **Search** | O(1) indexed lookup—same syntax as grep, 100x faster |
+| **File** | Navigate structure without reading everything |
+| **Behavioral** | Learns your work patterns, predicts next files |
+| **Outline** | Semantic compression—searchable by meaning, not just keywords |
+| **Intent** | Tracks session activity, shows savings in real-time |
+| **Intel** | Domains (local semantic labels) + external repos (isolated) |
 
-All five angles converge into **one confident answer**.
+All angles converge into **one confident answer**.
 
 ---
 
@@ -160,39 +163,31 @@ aoa init
 
 Each project gets its own isolated index. Your work-project doesn't pollute your side-project.
 
-### 3. Say Hello
+### 3. Start Searching
 
-Open Claude Code in your project and say:
+Your codebase is already indexed. Try it:
 
-```
-"Hey aOa"
-```
-
-Claude responds:
-
-```
-⚡ aOa activated
-
-Your codebase is already indexed—fast symbol search works right now.
-Try it: `aoa grep [anything]`
-
-I found 247 files that need semantic compression.
-Let me tag these in the background. This is FREE—doesn't use your tokens.
-
-Takes about 2-3 minutes. To watch progress, open another terminal:
-  aoa intent
-
-Keep coding. I'm not blocking you.
-Once done, I'll find code by meaning, not just keywords.
+```bash
+aoa grep handleAuth
 ```
 
-That's it:
-- ✅ **Search works NOW** (indexing already done)
-- ✅ **Semantic tagging is FREE** (background, doesn't use your tokens)
-- ✅ **Not blocking** (keep coding)
-- ✅ **Watch progress:** `aoa intent` in another terminal
+Instant results. O(1) lookup.
 
-After tagging completes, you'll see the status line:
+### 4. Optional: Semantic Compression
+
+Run `aoa quickstart` to enable semantic search (~1 minute):
+
+```bash
+aoa quickstart
+```
+
+This adds semantic domains and intent tracking to your search results. You'll see enriched output:
+
+```
+file:Class.method[range]:line <grep output> @domain #tags
+```
+
+After completion, your status line shows:
 
 ```
 ⚡ aOa 🟢 42 │ ↓12k ⚡1m30s saved │ ctx:28k/200k (14%) │ Opus 4.5

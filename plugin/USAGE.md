@@ -9,16 +9,36 @@
 **Why:** Grep scans everything. aOa is O(1) indexed. 100x faster.
 
 ```bash
+# Basic search
 aoa grep handleAuth           # Find any symbol
 aoa grep "auth token"         # Multi-term OR (ranked)
 aoa grep -a auth,session      # Multi-term AND (all required)
-aoa egrep "TODO|FIXME"        # Regex patterns
+
+# Unix grep parity
+aoa grep -i auth              # Case insensitive
+aoa grep -w token             # Whole word match
+aoa grep -c error             # Count matches only
+aoa grep -q config && echo y  # Quiet (exit code only)
+
+# Regex with egrep
+aoa egrep "TODO|FIXME"        # OR patterns
+aoa egrep "def\s+handle"      # Regex patterns
+aoa egrep -e auth -e login    # Multiple patterns
+
+# Combine flags
+aoa grep -i -w Auth           # Case insensitive + whole word
+aoa grep --help               # All flags and examples
 ```
 
-**Result:** `file:function()[45-89]:52 #tags`
-- Function name and line range `[45-89]` — read only what matters
-- Line 52 matched — jump directly there
-- Tags — semantic context
+**Result format:**
+```
+file:Class.method[range]:line <grep output> @domain #tags
+```
+- `Class.method` — containing class and function
+- `[range]` — function line range (read only what matters)
+- `<grep output>` — standard grep content
+- `@domain` — semantic domain
+- `#tags` — intent indicators
 
 ---
 
@@ -52,10 +72,10 @@ aoa changes 1h                # Recently modified
 **Why:** Compress meaning into searchable tags. One scan, searchable forever.
 
 ```bash
-aoa outline <file>            # See structure
+aoa outline <file>            # See structure without reading all
 aoa outline --pending         # Files needing tags
+aoa outline --json            # Machine-readable output
 aoa quickstart                # Tag your codebase (~1 min)
-aoa grep "#authentication"    # Search by concept
 ```
 
 ---
@@ -65,25 +85,29 @@ aoa grep "#authentication"    # Search by concept
 **Why:** See your session as aOa sees it—operations, patterns, savings.
 
 ```bash
-aoa intent                    # Activity dashboard
-aoa intent recent             # Recent operations
-aoa intent tags               # All semantic tags
-aoa intent stats              # Totals and savings
+aoa intent                    # Recent activity (default 20)
+aoa intent -n 50              # Show more records
 ```
 
 ---
 
-## Intel (Extension) — Reference repos without bloat
+## Intel Angle — Knowledge sources (local + external)
 
-**Why:** Get external repo knowledge without server overhead or token bloat.
+**Why:** Understand your code semantically (domains) and reference external repos without bloat.
 
 ```bash
+# Domains - semantic labels for your code
+aoa domains                   # Show learned domains and terms
+aoa domains -n 10             # Show top 10 domains
+aoa domains --json            # Machine-readable output
+
+# External repos - isolated from your code
 aoa repo add flask https://github.com/pallets/flask
-aoa repo flask search Blueprint
-aoa repo list                 # Your intel sources
+aoa repo flask search Blueprint  # Search Flask repo (explicit)
+aoa repo list                    # Your intel sources
 ```
 
-Same O(1) search on external repos. Fast, isolated, no bloat.
+**External repos are isolated** - they never mix with your project code. Searching is explicit (`aoa repo <name> search`), not automatic. This saves tokens vs MCP servers by avoiding context bloat.
 
 ---
 
@@ -93,8 +117,11 @@ Same O(1) search on external repos. Fast, isolated, no bloat.
 aoa health                    # Check all angles
 aoa help                      # Full command list
 aoa <command> --help          # Flags for any command
+aoa wipe                      # Reset project data
 ```
 
 ---
+
+**Every command supports `--help`** for detailed flags and examples.
 
 **The value:** 50 lines instead of 3,700. Instant search. Every session builds on the last.

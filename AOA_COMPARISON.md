@@ -157,7 +157,47 @@ For teams running hundreds of research tasks per day, this compounds significant
 
 ## Why aOa Works
 
-### Traditional Search Flow
+### The Semantic Compression Advantage
+
+**Traditional grep returns content:**
+```
+ws-requestor.js:461:  async _scheduleReconnect() {
+ws-requestor.js:462:    const delay = this._calculateBackoff();
+ws-requestor.js:463:    this.reconnectTimer = setTimeout(() => {
+...
+```
+
+You get lines. You read files. You piece it together.
+
+**aOa returns intelligence:**
+```
+ws-requestor.js:WsRequestor()._scheduleReconnect()[461-479]:461 <async _scheduleReconnect()> @websocket #retry #reconnect
+```
+
+Let's break down what this one line tells you:
+
+```
+ws-requestor.js  :  WsRequestor()  .  _scheduleReconnect()  [461-479]  :461  <async _scheduleReconnect()>  @websocket  #retry #reconnect
+│                   │                 │                      │          │    │                           │           │
+│                   │                 │                      │          │    │                           │           │
+└─file              └─class           └─method               └─range    └─ln └─grep output              └─domain    └─intent tags
+```
+
+**Before you read a single line of code**, you already know:
+- **Where** - `ws-requestor.js`
+- **What class** - `WsRequestor()`
+- **What method** - `_scheduleReconnect()`
+- **Function scope** - lines 461-479 (read 18 lines, not 1,200)
+- **Match line** - :461 (exact location)
+- **Grep content** - `<async _scheduleReconnect()>` (standard grep output)
+- **Semantic domain** - `@websocket` (this is WebSocket-related code)
+- **Intent tags** - `#retry #reconnect` (ranked by your current work)
+
+**That's semantic compression.** Less data. More meaning.
+
+### Search Flow Comparison
+
+**Traditional:**
 ```
 Grep "reconnect" → 200 lines of matches → Read file A →
 Grep "retry" → 150 lines → Read file B →
@@ -165,19 +205,26 @@ Grep "session" → 300 lines → Read file C →
 ... repeat until understanding emerges
 ```
 
-### aOa Search Flow
+**aOa:**
 ```
 aoa grep "reconnect retry" →
-  WsRequestor()._scheduleReconnect()[461-479] #retry #websocket
-  WsRequestor().request()[72-315] #session #reconnect
+  WsRequestor()._scheduleReconnect()[461-479]:461 @websocket #retry
+  WsRequestor().request()[72-315]:89 @session #reconnect
 
-→ Targeted read of lines 461-479 only
+→ Read lines 461-479 only (18 lines)
 → Done
 ```
 
-The difference: **Coordinates vs Content**
+**The difference:** Coordinates + intelligence vs raw content
 
-aOa gives you precise locations. Standard search gives you content to wade through.
+### Results Ranked By Your Intent
+
+As you work, aOa learns what you're focusing on:
+- Files you've touched recently rank higher
+- Code matching your session's semantic tags gets boosted
+- Results adapt to your current context
+
+Every search gets smarter. Every session builds on the last.
 
 ---
 
