@@ -21,6 +21,17 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+# GL-072: Add services path for SessionReader import
+SERVICES_PATH = Path(__file__).parent.parent.parent / "services"
+if str(SERVICES_PATH) not in sys.path:
+    sys.path.insert(0, str(SERVICES_PATH))
+
+try:
+    from session.reader import SessionReader
+    SESSION_READER_AVAILABLE = True
+except ImportError:
+    SESSION_READER_AVAILABLE = False
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -573,52 +584,71 @@ def handle_prompt(data: dict):
 
         # Get existing domain names to avoid duplicates
         all_domains = api_get(f"/domains/list?project={PROJECT_ID}&limit=100") or {}
-        existing_names = {d['name'].lower() for d in all_domains.get('domains', [])}
+        existing_names = [d['name'] for d in all_domains.get('domains', [])]
 
-        # Generate domain from activity
-        # Combine orphan tags (unmet intent) with recent tags
-        all_terms = list(orphan_tags) + list(recent_tags) + list(file_keywords)
-        unique_terms = list(dict.fromkeys(all_terms))[:8]  # Dedupe, limit to 8
+        # GL-072: Use Haiku for semantic domain generation
+        # Gather rich activity data for the prompt
 
-        if len(unique_terms) >= 2:
-            # Create domain name from first term
-            domain_base = unique_terms[0].replace(' ', '_')
-            domain_name = f"@{domain_base}_activity"
+        # 1. User prompts from SessionReader (if available)
+        user_prompts = []
+        if SESSION_READER_AVAILABLE:
+            try:
+                reader = SessionReader(str(PROJECT_ROOT))
+                user_prompts = reader.get_recent_prompts(10)
+                # Clean prompts - truncate and filter noise
+                user_prompts = [p[:150] for p in user_prompts if len(p) > 15 and not p.startswith('/')][:8]
+            except Exception:
+                pass
 
-            # Skip if domain already exists
-            if domain_name.lower() not in existing_names:
-                new_domain = {
-                    "name": domain_name,
-                    "description": f"Activity pattern: {', '.join(unique_terms[:3])}",
-                    "terms": unique_terms
-                }
+        # 2. Files + symbols from intent locations (what was read)
+        file_symbols = []
+        for loc in recent_locations[:15]:
+            symbol = loc.get("symbol", "")
+            file_path = loc.get("file", "").replace(str(PROJECT_ROOT) + "/", "")
+            if symbol and file_path:
+                file_symbols.append(f"{file_path}:{symbol}()")
 
-                # Execute learning directly in hook
-                add_result = api_post("/domains/add", {
-                    "project": PROJECT_ID,
-                    "domains": [new_domain]
-                }, timeout=5)
+        # 3. Orphan tags already collected above
 
-                if add_result and add_result.get("success"):
-                    # Signal learning complete (include domain + locations for symbol-level assignment)
-                    learn_result = api_post("/domains/learned", {
-                        "project": PROJECT_ID,
-                        "domains": [domain_name],
-                        "terms": unique_terms,
-                        "files": list(recent_files)[:50],  # GL-071: Pass files for domain assignment
-                        "locations": recent_locations[:100]  # GL-071.1: Rich symbol locations
-                    }, timeout=5)
+        # Build Haiku prompt if we have enough data
+        has_data = len(user_prompts) >= 2 or len(file_symbols) >= 2 or len(orphan_tags) >= 2
 
-                    orphans_cleared = learn_result.get("orphans_cleared", 0) if learn_result else 0
-                    output_context(f"## aOa Domain Learned (Auto)\n\n**{domain_name}**: {', '.join(unique_terms[:5])}\n- Orphans absorbed: {orphans_cleared}")
-                else:
-                    # Learning failed, clear pending anyway to avoid stuck state
-                    api_post("/domains/learned", {"project": PROJECT_ID}, timeout=2)
-            else:
-                # Domain exists, just clear pending
-                api_post("/domains/learned", {"project": PROJECT_ID}, timeout=2)
+        if has_data:
+            # Format activity data for prompt
+            prompts_str = "; ".join(user_prompts[:5]) if user_prompts else "(none)"
+            files_str = ", ".join(file_symbols[:10]) if file_symbols else "(none)"
+            orphans_str = ", ".join(orphan_tags[:15]) if orphan_tags else "(none)"
+            existing_str = ", ".join(existing_names[:20])
+
+            haiku_prompt = f"""## aOa Domain Learning (GL-072)
+
+Create 1-3 code domains from this activity. Use Haiku model.
+
+Domain = semantic label (@auth, @cache, @render)
+Terms = 3-7 grep-able words per domain (single words preferred)
+CRITICAL: All terms must be UNIQUE across domains - no duplicates
+
+Activity:
+- Prompts: {prompts_str}
+- Reads: {files_str}
+- Orphans: {orphans_str}
+
+Existing (skip similar): {existing_str}
+
+Bad: "increment_term_hits" | Good: "hits"
+Bad: @term_hit_validation | Good: @prediction
+
+After generating, POST result:
+```bash
+curl -s -X POST "localhost:8080/domains/add" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": YOUR_DOMAINS}}'
+curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
+```
+
+Output JSON: {{"domains":[{{"name":"@example","terms":["w1","w2","w3"]}}]}}"""
+
+            output_context(haiku_prompt)
         else:
-            # Not enough terms, just clear pending
+            # Not enough data, clear pending
             api_post("/domains/learned", {"project": PROJECT_ID}, timeout=2)
 
         # Don't return - continue to show status line
