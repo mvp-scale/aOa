@@ -70,75 +70,66 @@ TOOL_TAGS = {
 # ============================================================================
 
 def _load_pattern_configs():
-    """Load semantic and domain pattern configs from JSON.
+    """Load pattern configs from universal-domains.json (v2 format).
+
+    GL-074: Migrated from legacy semantic-patterns.json + domain-patterns.json
+    to unified universal-domains.json with three-level hierarchy:
+    @domain -> semantic_term -> matches[]
 
     Called once at import time. Returns optimized lookup structures.
     """
-    semantic_patterns = {}  # category -> {patterns: set, tag: str, priority: int}
-    domain_keywords = {}    # keyword -> tag
-    class_suffixes = {}     # suffix -> tag
+    semantic_patterns = {}  # semantic_term -> {patterns: set, tag: @domain, priority: int}
+    domain_keywords = {}    # match -> @domain
+    class_suffixes = {}     # suffix -> tag (kept for backwards compat)
 
-    # Find config directory (relative to this file or from AOA_HOME)
+    # Find config directory
     config_paths = [
         HOOK_DIR.parent.parent / "config",  # project/config/
         Path("/home") / os.environ.get("USER", "user") / ".aoa" / "config",  # ~/.aoa/config/
         Path(__file__).parent.parent.parent / "config",  # aOa/config/
     ]
 
-    semantic_file = None
-    domain_file = None
-
+    universal_file = None
     for config_dir in config_paths:
-        if (config_dir / "semantic-patterns.json").exists():
-            semantic_file = config_dir / "semantic-patterns.json"
-        if (config_dir / "domain-patterns.json").exists():
-            domain_file = config_dir / "domain-patterns.json"
-        if semantic_file and domain_file:
+        candidate = config_dir / "universal-domains.json"
+        if candidate.exists():
+            universal_file = candidate
             break
 
-    # Load semantic patterns
-    if semantic_file:
-        try:
-            data = json.loads(semantic_file.read_text())
-            categories = data.get("categories", {})
-            for cat_name, cat_data in categories.items():
-                patterns = {p.lower() for p in cat_data.get("patterns", [])}
-                semantic_patterns[cat_name] = {
-                    "patterns": patterns,
-                    "tag": cat_data.get("tag", f"#{cat_name}"),
-                    "priority": cat_data.get("priority", 3)
-                }
+    if not universal_file:
+        return semantic_patterns, domain_keywords, class_suffixes
 
-            # Load class suffix patterns
-            kind_patterns = data.get("kind_patterns", {}).get("patterns", {})
-            class_suffixes.update(kind_patterns.get("class", {}).get("suffix_patterns", {}))
+    try:
+        data = json.loads(universal_file.read_text())
+        # Handle both array format (v2) and object format (with _meta)
+        domains = data if isinstance(data, list) else data.get("domains", [])
 
-            # Load compound patterns (multi-word)
-            compound = data.get("compound_patterns", {}).get("patterns", {})
-            for pattern, tag in compound.items():
-                # Convert to matchable form: health_check -> healthcheck, health-check, etc.
-                normalized = pattern.replace("_", "")
-                domain_keywords[normalized] = tag
-        except (OSError, json.JSONDecodeError):
-            pass
+        for domain in domains:
+            domain_name = domain.get("name", "")  # e.g., "@authentication"
+            terms = domain.get("terms", {})
 
-    # Load domain patterns
-    if domain_file:
-        try:
-            data = json.loads(domain_file.read_text())
-            domains = data.get("domains", {})
-            for domain_name, domain_data in domains.items():
-                tag = domain_data.get("tag", f"#{domain_name}")
-                for keyword in domain_data.get("keywords", []):
-                    domain_keywords[keyword.lower()] = tag
+            # v2 format: terms is dict of semantic_term -> matches[]
+            if isinstance(terms, dict):
+                for semantic_term, matches in terms.items():
+                    # Build semantic patterns
+                    patterns = {m.lower() for m in matches}
+                    semantic_patterns[semantic_term] = {
+                        "patterns": patterns,
+                        "tag": domain_name,
+                        "priority": 3
+                    }
 
-            # Load technical suffixes
-            suffixes = data.get("technical_suffixes", {})
-            for suffix, tag in suffixes.items():
-                if suffix != "description":  # Skip metadata
-                    class_suffixes[suffix] = tag
-        except (OSError, json.JSONDecodeError):
-            pass
+                    # Build match -> domain lookup
+                    for match in matches:
+                        domain_keywords[match.lower()] = domain_name
+
+            # Flat format fallback
+            elif isinstance(terms, list):
+                for match in terms:
+                    domain_keywords[match.lower()] = domain_name
+
+    except (OSError, json.JSONDecodeError):
+        pass
 
     return semantic_patterns, domain_keywords, class_suffixes
 

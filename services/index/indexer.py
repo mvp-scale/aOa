@@ -119,14 +119,20 @@ except ImportError:
 # ============================================================================
 
 def _load_pattern_library():
-    """Load semantic and domain pattern configs from JSON.
+    """Load semantic and domain pattern configs from universal-domains.json (v2).
 
-    Used for:
-    1. Inferring intent tags from search terms
-    2. Ranking search results by intent alignment
+    v2 Structure: @domain -> semantic_term -> matches[]
+
+    Returns:
+    - semantic_patterns: semantic_term -> {patterns: set, tag: @domain, priority: int}
+    - domain_keywords: match -> @domain
+    - term_to_domain: semantic_term -> @domain (for reverse lookup)
+    - match_to_term: match -> semantic_term (for tagging)
     """
-    semantic_patterns = {}  # category -> {patterns: set, tag: str, priority: int}
-    domain_keywords = {}    # keyword -> tag
+    semantic_patterns = {}  # semantic_term -> {patterns: set, tag: @domain, priority: int}
+    domain_keywords = {}    # match -> @domain
+    term_to_domain = {}     # semantic_term -> @domain
+    match_to_term = {}      # match -> semantic_term
 
     # Find config directory
     config_paths = [
@@ -135,41 +141,50 @@ def _load_pattern_library():
         Path.home() / '.aoa' / 'config',  # User config
     ]
 
-    semantic_file = None
-    domain_file = None
-
+    universal_file = None
     for config_dir in config_paths:
-        if (config_dir / 'semantic-patterns.json').exists():
-            semantic_file = config_dir / 'semantic-patterns.json'
-        if (config_dir / 'domain-patterns.json').exists():
-            domain_file = config_dir / 'domain-patterns.json'
-        if semantic_file and domain_file:
+        candidate = config_dir / 'universal-domains.json'
+        if candidate.exists():
+            universal_file = candidate
             break
 
-    # Load semantic patterns
-    if semantic_file:
-        try:
-            data = json.loads(semantic_file.read_text())
-            for cat_name, cat_data in data.get('categories', {}).items():
-                patterns = {p.lower() for p in cat_data.get('patterns', [])}
-                semantic_patterns[cat_name] = {
-                    'patterns': patterns,
-                    'tag': cat_data.get('tag', f'#{cat_name}'),
-                    'priority': cat_data.get('priority', 3)
-                }
-        except Exception:
-            pass
+    if not universal_file:
+        return semantic_patterns, domain_keywords
 
-    # Load domain patterns
-    if domain_file:
-        try:
-            data = json.loads(domain_file.read_text())
-            for domain_name, domain_data in data.get('domains', {}).items():
-                tag = domain_data.get('tag', f'#{domain_name}')
-                for keyword in domain_data.get('keywords', []):
-                    domain_keywords[keyword.lower()] = tag
-        except Exception:
-            pass
+    try:
+        data = json.loads(universal_file.read_text())
+        # Handle both array format (v2) and object format (with _meta)
+        domains = data if isinstance(data, list) else data.get('domains', [])
+
+        for domain in domains:
+            domain_name = domain.get('name', '')  # e.g., "@authentication"
+            terms = domain.get('terms', {})
+
+            # v2 format: terms is dict of semantic_term -> matches[]
+            if isinstance(terms, dict):
+                for semantic_term, matches in terms.items():
+                    # Build semantic patterns (semantic_term -> matches)
+                    patterns = {m.lower() for m in matches}
+                    semantic_patterns[semantic_term] = {
+                        'patterns': patterns,
+                        'tag': domain_name,  # @authentication
+                        'priority': 3
+                    }
+                    term_to_domain[semantic_term] = domain_name
+
+                    # Build match lookups
+                    for match in matches:
+                        match_lower = match.lower()
+                        domain_keywords[match_lower] = domain_name
+                        match_to_term[match_lower] = semantic_term
+
+            # Flat format fallback: terms is list of matches
+            elif isinstance(terms, list):
+                for match in terms:
+                    domain_keywords[match.lower()] = domain_name
+
+    except Exception:
+        pass
 
     return semantic_patterns, domain_keywords
 
@@ -3804,7 +3819,11 @@ def list_projects():
 # ============================================================================
 
 def _load_universal_domains():
-    """Load universal domain definitions from config."""
+    """Load universal domain definitions from config.
+
+    Supports both v2 format (terms as dict) and flat format (terms as list).
+    Returns raw domain data for seed_domains() to process.
+    """
     config_paths = [
         Path('/app/config/universal-domains.json'),  # Docker
         Path(__file__).parent.parent.parent / 'config' / 'universal-domains.json',  # Local
@@ -3814,6 +3833,9 @@ def _load_universal_domains():
             try:
                 with open(path) as f:
                     data = json.load(f)
+                    # Handle both array format (v2) and object format (with _meta)
+                    if isinstance(data, list):
+                        return data
                     return data.get('domains', [])
             except (json.JSONDecodeError, IOError):
                 pass
@@ -3923,6 +3945,57 @@ def _do_domain_tune(project_id: str):
         _tune_in_progress.discard(project_id)
 
 
+@app.route('/project/wipe', methods=['POST'])
+def project_wipe():
+    """
+    Full project data wipe - removes all aOa data for a project.
+
+    POST body: {"project": "project-id"}
+
+    Deletes:
+    - All domains (seeded and learned)
+    - Intent history
+    - Semantic tags and enrichment
+    - Learning counters and stats
+    """
+    data = request.json or {}
+    project_id = data.get('project') or request.args.get('project')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project parameter', 'success': False}), 400
+
+    try:
+        import redis
+        # Get Redis connection
+        r = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+
+        # Use Lua script for atomic bulk delete
+        lua_script = """
+        local keys = redis.call('keys', ARGV[1])
+        for i=1,#keys do
+            redis.call('del', keys[i])
+        end
+        return #keys
+        """
+
+        # Clear both aoa:* (domains, intents) and enriched:* (file compression)
+        deleted_aoa = r.eval(lua_script, 0, f"aoa:{project_id}:*")
+        deleted_enriched = r.eval(lua_script, 0, f"enriched:{project_id}:*")
+        total_deleted = deleted_aoa + deleted_enriched
+
+        return jsonify({
+            'success': True,
+            'deleted': total_deleted,
+            'deleted_domains': deleted_aoa,
+            'deleted_enrichment': deleted_enriched,
+            'project': project_id,
+            'message': f'Wiped {total_deleted} records for project'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
 @app.route('/domains/seed', methods=['POST'])
 def seed_domains():
     """
@@ -3959,14 +4032,30 @@ def seed_domains():
             return jsonify({'error': 'Universal domains config not found'}), 500
 
         # Seed each domain (GL-059.1: mark as seeded)
+        # GL-074: Support both v2 (terms as dict) and flat (terms as list)
         seeded = 0
         total_terms = 0
+        total_matches = 0
         for d in universal:
+            terms_data = d.get('terms', [])
+
+            # v2 format: terms is dict of semantic_term -> matches[]
+            # Flatten to list of all matches for Domain storage
+            if isinstance(terms_data, dict):
+                all_matches = []
+                for semantic_term, matches in terms_data.items():
+                    all_matches.extend(matches)
+                terms_list = all_matches
+                total_matches += len(all_matches)
+            else:
+                # Flat format: terms is already a list
+                terms_list = terms_data
+
             domain = Domain(
                 name=d['name'],
                 description=d.get('description', ''),
                 confidence=float(d.get('confidence', 0.8)),
-                terms=d.get('terms', [])
+                terms=terms_list
             )
             learner.add_domain(domain, source="seeded")
             seeded += 1

@@ -700,30 +700,48 @@ cmd_quickstart() {
 
     echo -e "${GREEN}✓${NC} ${BOLD}${done_count} files${NC} semantically compressed"
     echo ""
+    echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
+    echo ""
 
     if [ "$error_count" -gt 0 ]; then
         echo -e "  ${YELLOW}!${NC} ${error_count} files had errors"
         echo ""
     fi
 
-    echo -e "  ${DIM}Before:${NC} grep 'handleAuth' → 12 matches → read 8 files → find method"
-    echo -e "  ${DIM}Cost: 50,000 tokens, 30 seconds${NC}"
+    echo -e "  ${BOLD}What is semantic compression?${NC}"
+    echo ""
+    echo -e "  Semantic compression changes how search results are processed to deliver"
+    echo -e "  faster, targeted responses that AI can read with minimal context."
+    echo ""
+
+    echo -e "  ${DIM}Without aOa:${NC}"
+    echo ""
+    echo -e "    grep 'auth' → 12 matches → read 8 files → find method"
+    echo -e "    Cost: ${RED}${BOLD}50,000 tokens, 30 seconds${NC}"
     echo ""
 
     echo -e "  ${CYAN}With aOa:${NC}"
-    echo -e "    aoa grep handleAuth"
     echo ""
-    echo -e "    ${GREEN}auth/service.py${NC}:AuthService().${GREEN}handleAuth${NC}(request)[${CYAN}47-89${NC}]  ${DIM}#auth #validation${NC}"
+    echo -e "    ${DIM}\$${NC} aoa grep auth"
+    echo -e "        ${DIM}↓${NC}"
+    echo -e "    ${CYAN}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}13${NC} hits ${DIM}│${NC} 6 files ${DIM}│${NC} ${GREEN}2.1ms${NC}"
     echo ""
-    echo -e "    Class. Method. Line range. Tags."
-    echo -e "    AI reads ${BOLD}42 lines${NC}, not 8 files."
-    echo -e "    ${GREEN}Cost: 800 tokens, 5ms${NC}"
+    echo -e "    ${GREEN}auth/service.py${NC}:${BOLD}AuthService${NC}().${GREEN}handleAuth${NC}(request)[${CYAN}47-89${NC}]:${YELLOW}52${NC}  ${MAGENTA}@authentication${NC}  ${DIM}#auth #validation${NC}"
+    echo ""
+    echo -e "    ${DIM}What does this line mean?${NC}"
+    echo ""
+    echo -e "    ${GREEN}auth/service.py${NC}    :    ${BOLD}AuthService${NC}()    .    ${GREEN}handleAuth${NC}(req)    [${CYAN}47-89${NC}]    :${YELLOW}52${NC}     ${MAGENTA}@authentication${NC}     ${DIM}#auth #validation${NC}"
+    echo -e "         ${DIM}│${NC}                    ${DIM}│${NC}                      ${DIM}│${NC}                  ${DIM}│${NC}          ${DIM}│${NC}            ${DIM}│${NC}                     ${DIM}│${NC}"
+    echo -e "         ${DIM}↓${NC}                    ${DIM}↓${NC}                      ${DIM}↓${NC}                  ${DIM}↓${NC}          ${DIM}↓${NC}            ${DIM}↓${NC}                     ${DIM}↓${NC}"
+    echo -e "       file                class                 method              range        line         domain                  tags"
+    echo ""
+    echo -e "    AI reads ${CYAN}42 lines${NC}, not 8 files."
     echo ""
 
-    echo -e "  ${BOLD}Savings: 98% fewer tokens. Minutes → milliseconds.${NC}"
+    echo -e "  ${CYAN}${BOLD}⚡ Signal Angle${NC}"
+    echo -e "  ${DIM}──────────────────────────────────────────────────────────────────${NC}"
+    echo -e "  ${BOLD}98% fewer tokens${NC} ${DIM}│${NC} ${GREEN}5ms searches${NC} ${DIM}│${NC} ${CYAN}aOa enriches${NC} → ${BOLD}Claude decides faster.${NC}"
     echo ""
-
-    echo -e "${DIM}Ready. Try: aoa grep <anything>${NC}"
 }
 
 cmd_learn() {
@@ -1310,6 +1328,66 @@ cmd_reset() {
             return 1
             ;;
     esac
+}
+
+cmd_wipe() {
+    # Full project data wipe with confirmation
+    local project_id=$(get_project_id)
+    local project_root=$(get_project_root)
+    local home_file="$project_root/.aoa/home.json"
+
+    if [ -z "$project_id" ]; then
+        echo -e "${RED}✗ No project ID found${NC}"
+        echo -e "${DIM}Run 'aoa init' first${NC}"
+        return 1
+    fi
+
+    # Show warning
+    echo -e "${YELLOW}${BOLD}⚠  WARNING: Full Project Wipe${NC}"
+    echo ""
+    echo -e "This will remove ALL data for this project:"
+    echo -e "  ${DIM}•${NC} Domains (seeded and learned)"
+    echo -e "  ${DIM}•${NC} Intent history"
+    echo -e "  ${DIM}•${NC} Semantic tags and enrichment"
+    echo -e "  ${DIM}•${NC} Learning counters and stats"
+    echo ""
+    echo -e "${DIM}From: ${home_file}${NC}"
+    echo -e "  project_root: ${CYAN}${project_root}${NC}"
+    echo -e "  project_id:   ${DIM}${project_id}${NC}"
+    echo ""
+
+    # Check for --force flag
+    if [[ "$1" == "--force" || "$1" == "-f" ]]; then
+        echo -e "${DIM}Skipping confirmation (--force)${NC}"
+    else
+        echo -n -e "Type ${BOLD}yes${NC} to confirm: "
+        read -r confirm
+        if [[ "$confirm" != "yes" ]]; then
+            echo -e "${DIM}Aborted${NC}"
+            return 0
+        fi
+    fi
+
+    echo ""
+    echo -e "${DIM}Wiping project data...${NC}"
+
+    # Call API endpoint to wipe
+    local result=$(curl -s -X POST "${INDEX_URL}/project/wipe" \
+        -H "Content-Type: application/json" \
+        -d "{\"project\": \"${project_id}\"}" 2>/dev/null)
+
+    local success=$(echo "$result" | jq -r '.success // false')
+    local deleted=$(echo "$result" | jq -r '.deleted // 0')
+
+    if [[ "$success" == "true" ]]; then
+        echo -e "${GREEN}✓${NC} Wiped ${BOLD}${deleted}${NC} records"
+        echo ""
+        echo -e "${DIM}Run 'aoa quickstart' to reinitialize${NC}"
+    else
+        local error=$(echo "$result" | jq -r '.error // "Unknown error"')
+        echo -e "${RED}✗ Wipe failed: ${error}${NC}"
+        return 1
+    fi
 }
 
 cmd_whitelist() {

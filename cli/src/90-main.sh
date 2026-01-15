@@ -32,6 +32,7 @@ main() {
         # Session
         history|h)  cmd_history "$@" ;;
         reset)      cmd_reset "$@" ;;
+        wipe)       cmd_wipe "$@" ;;
 
         # Search (Unix parity)
         grep|g)     cmd_grep "$@" ;;
