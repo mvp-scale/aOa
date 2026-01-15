@@ -13,6 +13,33 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
+# =========================================================================
+# TRUST-BUILDING INTRO (before processing)
+# =========================================================================
+
+echo -e "${CYAN}${BOLD}⚡ aOa Quickstart${NC}"
+echo ""
+echo -e "  Found ${BOLD}70 files${NC} in your project."
+echo ""
+echo -e "  ${DIM}•${NC} ${BOLD}Read-only${NC} — no files modified"
+echo -e "  ${DIM}•${NC} ${BOLD}Local only${NC} — nothing leaves your machine"
+echo -e "  ${DIM}•${NC} ${BOLD}Respects .gitignore${NC} — only your source code"
+echo ""
+echo -e "  ${DIM}~1 minute for most projects.${NC}"
+echo ""
+echo -e "  Press ${BOLD}Y${NC} to continue, or ${DIM}N${NC} to skip: ${GREEN}Y${NC}"
+echo ""
+
+# [Progress bar would go here]
+echo -e "  Processing ${BOLD}70${NC} files (4 workers)"
+echo ""
+echo -e "  [${GREEN}████████████████████████████████████████${NC}] 100%"
+echo ""
+
+# =========================================================================
+# COMPLETION OUTPUT (after processing)
+# =========================================================================
+
 echo -e "${GREEN}✓${NC} ${BOLD}70 files${NC} semantically compressed"
 echo ""
 echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
@@ -36,19 +63,19 @@ echo -e "    ${DIM}\$${NC} aoa grep auth"
 echo -e "        ${DIM}↓${NC}"
 echo -e "    ${CYAN}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}13${NC} hits ${DIM}│${NC} 6 files ${DIM}│${NC} ${GREEN}2.1ms${NC}"
 echo ""
-echo -e "    ${GREEN}auth/service.py${NC}:${BOLD}AuthService${NC}().${GREEN}handleAuth${NC}(request)[${CYAN}47-89${NC}]:${YELLOW}52${NC}  ${MAGENTA}@authentication${NC}  ${DIM}#auth #validation${NC}"
+echo -e "    ${GREEN}auth/service.py${NC}:${BOLD}AuthService${NC}().${GREEN}handleAuth${NC}(request)[${CYAN}47-89${NC}]:${YELLOW}52${NC} ${DIM}<${NC}def login():${DIM}>${NC}  ${MAGENTA}@authentication${NC}  ${DIM}#auth #validation${NC}"
 echo ""
 echo -e "    ${DIM}What does this line mean?${NC}"
 echo ""
-echo -e "    ${GREEN}auth/service.py${NC}    :    ${BOLD}AuthService${NC}()    .    ${GREEN}handleAuth${NC}(req)    [${CYAN}47-89${NC}]    :${YELLOW}52${NC}     ${MAGENTA}@authentication${NC}     ${DIM}#auth #validation${NC}"
-echo -e "         ${DIM}│${NC}                    ${DIM}│${NC}                      ${DIM}│${NC}                  ${DIM}│${NC}          ${DIM}│${NC}            ${DIM}│${NC}                     ${DIM}│${NC}"
-echo -e "         ${DIM}↓${NC}                    ${DIM}↓${NC}                      ${DIM}↓${NC}                  ${DIM}↓${NC}          ${DIM}↓${NC}            ${DIM}↓${NC}                     ${DIM}↓${NC}"
-echo -e "       file                class                 method              range        line         domain                  tags"
+echo -e "    ${GREEN}auth/service.py${NC}  :  ${BOLD}AuthService${NC}()  .  ${GREEN}handleAuth${NC}(req)  [${CYAN}47-89${NC}]  :${YELLOW}52${NC}  ${DIM}<${NC}def login()${DIM}>${NC}  ${MAGENTA}@authentication${NC}  ${DIM}#auth #validation${NC}"
+echo -e "    ${DIM}│                   │                 │                │        │    │              │                │${NC}"
+echo -e "    ${DIM}│                   │                 │                │        │    │              │                │${NC}"
+echo -e "    ${DIM}└─file              └─class           └─method         └─range  └─ln └─grep         └─domain         └─tags${NC}"
 echo ""
-echo -e "    AI reads ${CYAN}42 lines${NC}, not 8 files."
+echo -e "    AI reads ${CYAN}${BOLD}42 lines${NC}, ${RED}not 8 files${NC}. ${BOLD}Less data. More meaning.${NC} ${CYAN}That's semantic compression.${NC}"
 echo ""
 
 echo -e "  ${CYAN}${BOLD}⚡ Signal Angle${NC}"
 echo -e "  ${DIM}──────────────────────────────────────────────────────────────────${NC}"
-echo -e "  ${BOLD}98% fewer tokens${NC} ${DIM}│${NC} ${GREEN}5ms searches${NC} ${DIM}│${NC} ${CYAN}aOa enriches${NC} → ${BOLD}Claude decides faster.${NC}"
+echo -e "  ${BOLD}O(1) indexed search${NC} ${DIM}│${NC} ${GREEN}Results ranked by your intent${NC} ${DIM}│${NC} ${CYAN}aOa enriches${NC} → ${BOLD}Claude decides faster.${NC}"
 echo ""
