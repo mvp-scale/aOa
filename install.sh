@@ -38,12 +38,19 @@ AOA_DATA="$SCRIPT_DIR/data"
 # =============================================================================
 # Default: unified (single container, simpler)
 # --compose: multi-container with docker-compose (full isolation)
+# --global: install CLI to /usr/local/bin for all users (requires sudo)
 
 USE_COMPOSE=0
-if [[ "$1" == "--compose" ]]; then
-    USE_COMPOSE=1
-    shift
-fi
+GLOBAL_INSTALL=0
+
+# Parse all flags
+while [[ "$1" == --* ]]; do
+    case "$1" in
+        --compose) USE_COMPOSE=1; shift ;;
+        --global)  GLOBAL_INSTALL=1; shift ;;
+        *) break ;;
+    esac
+done
 
 # =============================================================================
 # Uninstall Mode
@@ -95,9 +102,13 @@ if [[ "$1" == "--uninstall" ]]; then
         FOUND_ITEMS=$((FOUND_ITEMS + 1))
     fi
 
-    # 4. CLI in PATH
+    # 4. CLI in PATH (check both user and global locations)
     if [ -f "$HOME/bin/aoa" ]; then
         echo -e "  ${DIM}•${NC} CLI: ${BOLD}~/bin/aoa${NC}"
+        FOUND_ITEMS=$((FOUND_ITEMS + 1))
+    fi
+    if [ -L "/usr/local/bin/aoa" ]; then
+        echo -e "  ${DIM}•${NC} CLI: ${BOLD}/usr/local/bin/aoa${NC} (global)"
         FOUND_ITEMS=$((FOUND_ITEMS + 1))
     fi
 
@@ -219,10 +230,15 @@ if [[ "$1" == "--uninstall" ]]; then
         echo -e "${GREEN}✓${NC}"
     fi
 
-    # 5. Remove CLI
+    # 5. Remove CLI (both user and global locations)
     if [ -f "$HOME/bin/aoa" ]; then
         echo -n "  Removing ~/bin/aoa............ "
         rm -f "$HOME/bin/aoa"
+        echo -e "${GREEN}✓${NC}"
+    fi
+    if [ -L "/usr/local/bin/aoa" ]; then
+        echo -n "  Removing /usr/local/bin/aoa... "
+        sudo rm -f /usr/local/bin/aoa
         echo -e "${GREEN}✓${NC}"
     fi
 
@@ -612,31 +628,41 @@ echo
 # Make CLI executable
 chmod +x "$AOA_HOME/cli/aoa"
 
-# Symlink to ~/bin
-mkdir -p "$HOME/bin"
-ln -sf "$AOA_HOME/cli/aoa" "$HOME/bin/aoa"
-echo -e "  ${GREEN}✓ Symlinked to ~/bin/aoa${NC}"
-
-# Check if ~/bin is in PATH
+# Symlink CLI to appropriate location
 PATH_UPDATED=0
-if [[ ":$PATH:" != *":$HOME/bin:"* ]]; then
-    # Detect shell config file
-    SHELL_CONFIG=""
-    if [ -n "$ZSH_VERSION" ] || [ -f "$HOME/.zshrc" ]; then
-        SHELL_CONFIG="$HOME/.zshrc"
-    elif [ -f "$HOME/.bashrc" ]; then
-        SHELL_CONFIG="$HOME/.bashrc"
-    elif [ -f "$HOME/.bash_profile" ]; then
-        SHELL_CONFIG="$HOME/.bash_profile"
-    fi
+if [ "$GLOBAL_INSTALL" -eq 1 ]; then
+    # Global install: symlink to /usr/local/bin (requires sudo)
+    echo -e "  ${DIM}Installing CLI globally (requires sudo)...${NC}"
+    sudo ln -sf "$AOA_HOME/cli/aoa" /usr/local/bin/aoa
+    CLI_LOCATION="/usr/local/bin/aoa"
+    echo -e "  ${GREEN}✓ Symlinked to /usr/local/bin/aoa${NC}"
+else
+    # User install: symlink to ~/bin
+    mkdir -p "$HOME/bin"
+    ln -sf "$AOA_HOME/cli/aoa" "$HOME/bin/aoa"
+    CLI_LOCATION="~/bin/aoa"
+    echo -e "  ${GREEN}✓ Symlinked to ~/bin/aoa${NC}"
 
-    if [ -n "$SHELL_CONFIG" ]; then
-        if ! grep -q 'export PATH="\$HOME/bin:\$PATH"' "$SHELL_CONFIG" 2>/dev/null; then
-            echo "" >> "$SHELL_CONFIG"
-            echo "# Added by aOa installer" >> "$SHELL_CONFIG"
-            echo 'export PATH="$HOME/bin:$PATH"' >> "$SHELL_CONFIG"
-            echo -e "  ${GREEN}✓ Added ~/bin to PATH in ${SHELL_CONFIG##*/}${NC}"
-            PATH_UPDATED=1
+    # Check if ~/bin is in PATH
+    if [[ ":$PATH:" != *":$HOME/bin:"* ]]; then
+        # Detect shell config file
+        SHELL_CONFIG=""
+        if [ -n "$ZSH_VERSION" ] || [ -f "$HOME/.zshrc" ]; then
+            SHELL_CONFIG="$HOME/.zshrc"
+        elif [ -f "$HOME/.bashrc" ]; then
+            SHELL_CONFIG="$HOME/.bashrc"
+        elif [ -f "$HOME/.bash_profile" ]; then
+            SHELL_CONFIG="$HOME/.bash_profile"
+        fi
+
+        if [ -n "$SHELL_CONFIG" ]; then
+            if ! grep -q 'export PATH="\$HOME/bin:\$PATH"' "$SHELL_CONFIG" 2>/dev/null; then
+                echo "" >> "$SHELL_CONFIG"
+                echo "# Added by aOa installer" >> "$SHELL_CONFIG"
+                echo 'export PATH="$HOME/bin:$PATH"' >> "$SHELL_CONFIG"
+                echo -e "  ${GREEN}✓ Added ~/bin to PATH in ${SHELL_CONFIG##*/}${NC}"
+                PATH_UPDATED=1
+            fi
         fi
     fi
 fi
@@ -664,7 +690,7 @@ if [ "$USE_COMPOSE" -eq 1 ]; then
 else
     echo -e "  ${DIM}•${NC} Docker container      ${DIM}- Unified container on port 8080${NC}"
 fi
-echo -e "  ${DIM}•${NC} ~/bin/aoa → ${BOLD}${AOA_HOME}/cli/aoa${NC}"
+echo -e "  ${DIM}•${NC} ${CLI_LOCATION} → ${BOLD}${AOA_HOME}/cli/aoa${NC}"
 echo
 
 echo -e "${YELLOW}${BOLD}Next steps:${NC}"
