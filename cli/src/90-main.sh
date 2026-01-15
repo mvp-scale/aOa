@@ -78,7 +78,6 @@ main() {
         stats)      cmd_stats ;;
         health)     cmd_health ;;
         metrics)    cmd_metrics ;;
-        rate)       cmd_rate ;;
         baseline|bl) cmd_baseline ;;
         memory|mem) cmd_memory "$@" ;;
         services|svc|map) cmd_services ;;

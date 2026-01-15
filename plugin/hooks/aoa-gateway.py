@@ -14,6 +14,7 @@ Usage: python3 aoa-gateway.py --event=<event> < stdin_json
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -39,6 +40,238 @@ if AOA_HOME.exists():
 # ANSI colors
 CYAN, GREEN, YELLOW, RED = "\033[96m", "\033[92m", "\033[93m", "\033[91m"
 BOLD, DIM, NC = "\033[1m", "\033[2m", "\033[0m"
+
+# Prediction settings
+MIN_INTENTS = 5
+MAX_SNIPPET_LINES = 15
+MAX_FILES = 3
+
+# Stopwords for keyword extraction
+STOPWORDS = {
+    'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'what', 'how',
+    'can', 'you', 'are', 'please', 'help', 'want', 'need', 'make', 'use', 'get',
+    'add', 'fix', 'update', 'change', 'create', 'delete', 'remove', 'show', 'find',
+    'look', 'see', 'let', 'know', 'would', 'could', 'should', 'will', 'just',
+    'like', 'also', 'more', 'some', 'any', 'all', 'new', 'now', 'about', 'into'
+}
+
+# =============================================================================
+# Intent Capture (ported from aoa-intent-capture.py)
+# =============================================================================
+
+# Intent patterns: (regex, [tags])
+INTENT_PATTERNS = [
+    (r'auth|login|session|oauth|jwt|password', ['#authentication', '#security']),
+    (r'test[s]?[/_]|_test\.|\bspec[s]?\b|pytest|unittest', ['#testing']),
+    (r'config|settings|\.env|\.yaml|\.yml|\.json', ['#configuration']),
+    (r'api|endpoint|route|handler|controller', ['#api']),
+    (r'index|search|query|grep|find', ['#search']),
+    (r'model|schema|entity|db|database|migration|sql', ['#data']),
+    (r'component|view|template|page|ui|style|css|html', ['#frontend']),
+    (r'deploy|docker|k8s|ci|cd|pipeline|github', ['#devops']),
+    (r'error|exception|catch|throw|raise|fail', ['#errors']),
+    (r'log|debug|trace|print|console', ['#logging']),
+    (r'cache|redis|memory|store', ['#caching']),
+    (r'async|await|promise|thread|concurrent', ['#async']),
+    (r'hook|plugin|extension|middleware', ['#hooks']),
+    (r'doc|readme|comment|docstring', ['#documentation']),
+    (r'util|helper|common|shared|lib', ['#utilities']),
+]
+
+# Tool action tags
+TOOL_TAGS = {
+    'Read': '#reading',
+    'Edit': '#editing',
+    'Write': '#creating',
+    'Bash': '#executing',
+    'Grep': '#searching',
+    'Glob': '#searching',
+    'Task': '#delegating',
+}
+
+
+def _tokenize(text: str) -> set:
+    """Tokenize a string into matchable parts."""
+    tokens = set()
+    parts = re.split(r'[/_\-.\s]+', text)
+    for part in parts:
+        if not part:
+            continue
+        part_lower = part.lower()
+        tokens.add(part_lower)
+        # Split camelCase
+        camel_parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+', part)
+        for cp in camel_parts:
+            tokens.add(cp.lower())
+    return tokens
+
+
+def infer_tags(files: list, tool: str) -> list:
+    """Infer semantic intent tags from file paths and tool."""
+    tags = set()
+
+    # Add tool action tag
+    if tool in TOOL_TAGS:
+        tags.add(TOOL_TAGS[tool])
+
+    # Collect all tokens from all files
+    combined_text = ""
+    for f in files:
+        if f.startswith('pattern:') or f.startswith('cmd:'):
+            continue
+        combined_text += " " + f
+
+    # Match against intent patterns
+    for pattern, pattern_tags in INTENT_PATTERNS:
+        if re.search(pattern, combined_text, re.IGNORECASE):
+            tags.update(pattern_tags)
+
+    return list(tags)
+
+
+def extract_files(data: dict) -> tuple:
+    """Extract file paths and search tags from tool input/output."""
+    files = set()
+    search_tags = set()
+    tool_input = data.get('tool_input', {})
+
+    # Common field names for file paths
+    for key in ['file_path', 'path', 'file', 'notebook_path']:
+        if key in tool_input:
+            val = tool_input[key]
+            if val and isinstance(val, str):
+                offset = tool_input.get('offset')
+                limit = tool_input.get('limit')
+                if offset is not None and limit is not None:
+                    files.add(f"{val}:{offset}-{offset + limit}")
+                elif offset is not None:
+                    files.add(f"{val}:{offset}+")
+                else:
+                    files.add(val)
+
+    # Array of paths
+    if 'paths' in tool_input:
+        for p in tool_input['paths']:
+            if p and isinstance(p, str):
+                files.add(p)
+
+    # Extract paths from bash commands
+    if 'command' in tool_input:
+        cmd = tool_input['command']
+        tool_response = data.get('tool_response', '')
+        if isinstance(tool_response, dict):
+            tool_response = tool_response.get('stdout', tool_response.get('output', str(tool_response)))
+
+        # Detect aOa commands
+        aoa_matches = re.findall(
+            r'\baoa\s+(grep|egrep|find|tree|locate|head|tail|lines|hot|touched|focus|predict|outline|search|multi|pattern)'
+            r'(?:\s+(-[a-z]))?(?:\s+(.+?))?(?:\s*$|\s*\||\s*&&|\s*;|\s*2>)',
+            cmd
+        )
+        if aoa_matches:
+            match = aoa_matches[-1]
+            aoa_cmd = match[0]
+            aoa_flag = match[1] if match[1] else ""
+            aoa_term = (match[2] or "").strip().strip('"\'')[:40]
+
+            # Determine search type
+            if aoa_cmd == "grep":
+                if aoa_flag == "-a":
+                    search_type = "multi-and"
+                elif aoa_flag == "-E":
+                    search_type = "regex"
+                elif ' ' in aoa_term or '|' in aoa_term:
+                    search_type = "multi-or"
+                else:
+                    search_type = "indexed"
+            elif aoa_cmd == "egrep":
+                search_type = "regex"
+            else:
+                search_type = aoa_cmd
+
+            # Extract hits and time from response
+            hits = "0"
+            time_ms = "0"
+            if isinstance(tool_response, str):
+                response_clean = re.sub(r'\x1b\[[0-9;]*m', '', tool_response)
+                hit_match = re.search(r'(\d+)\s*hits?\s*[│|]\s*([\d.]+)(?:ms)?', response_clean)
+                if hit_match:
+                    hits = hit_match.group(1)
+                    time_ms = hit_match.group(2)
+
+            full_cmd = f"aoa {aoa_cmd}"
+            if aoa_flag:
+                full_cmd += f" {aoa_flag}"
+            if aoa_term:
+                full_cmd += f" {aoa_term}"
+            full_cmd_safe = full_cmd.replace(':', '\\:')
+
+            files.add(f"cmd:aoa:{search_type}:{full_cmd_safe}:{hits}:{time_ms}")
+
+            # Extract result files from aOa output
+            if isinstance(tool_response, str) and int(hits) > 0:
+                response_clean = re.sub(r'\x1b\[[0-9;]*m', '', tool_response)
+                result_files = re.findall(
+                    r'^\s+([\w\-_./]+\.(?:py|js|ts|tsx|jsx|go|rs|java|cpp|c|h|md|json|yaml|yml|sh|sql)):\d+',
+                    response_clean, re.MULTILINE
+                )
+                unique_results = list(dict.fromkeys(result_files))[:20]
+                for result_file in unique_results:
+                    files.add(result_file)
+                if aoa_term and unique_results:
+                    clean_tag = re.sub(r'[^a-zA-Z0-9_-]', '', aoa_term.split()[0] if ' ' in aoa_term else aoa_term)[:20]
+                    if clean_tag:
+                        search_tags.add(f"#{clean_tag}")
+
+        # Match file paths in command
+        matches = re.findall(r'/[\w\-_]+(?:/[\w.\-_]+)+\.(?:py|js|ts|tsx|jsx|go|rs|java|cpp|c|h|md|json|yaml|yml|sh|sql)\b', cmd)
+        for m in matches:
+            if len(m) > 5 and '/' in m[1:]:
+                files.add(m)
+
+    # Extract from grep/glob patterns
+    if 'pattern' in tool_input:
+        pattern = tool_input['pattern']
+        if '/' in pattern or '*' in pattern:
+            files.add(f"pattern:{pattern}")
+
+    return list(files)[:20], list(search_tags)
+
+
+def get_file_sizes(files: list) -> dict:
+    """Get file sizes for baseline token calculation."""
+    file_sizes = {}
+    for file_path in files:
+        if file_path.startswith('pattern:') or file_path.startswith('cmd:'):
+            continue
+        if not file_path.startswith('/'):
+            continue
+        actual_path = file_path.split(':')[0] if ':' in file_path else file_path
+        try:
+            stat_result = os.stat(actual_path)
+            file_sizes[file_path] = stat_result.st_size
+        except OSError:
+            pass
+    return file_sizes
+
+
+def get_output_size(data: dict) -> int:
+    """Extract actual output size from tool_response."""
+    tool_response = data.get('tool_response', {})
+    if not tool_response:
+        return 0
+    if isinstance(tool_response, str):
+        return len(tool_response)
+    if 'content' in tool_response:
+        content = tool_response['content']
+        if isinstance(content, str):
+            return len(content)
+        return len(str(content))
+    try:
+        return len(json.dumps(tool_response))
+    except (TypeError, ValueError):
+        return 0
+
 
 # =============================================================================
 # Shared Utilities
@@ -88,6 +321,109 @@ def output_deny(reason: str):
             "permissionDecisionReason": reason
         }
     }))
+
+
+# =============================================================================
+# Prediction System (ported from aoa-predict-context.py)
+# =============================================================================
+
+def extract_keywords(prompt: str) -> list:
+    """Extract likely file/symbol keywords from user's prompt."""
+    # Find potential identifiers (camelCase, snake_case, etc.)
+    words = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', prompt.lower())
+
+    # Filter stopwords and very short words
+    keywords = [w for w in words if w not in STOPWORDS and len(w) > 2]
+
+    # Also extract file-like patterns
+    file_patterns = re.findall(r'[\w\-]+\.(py|js|ts|tsx|md|json|yaml|yml)', prompt.lower())
+    for fp in file_patterns:
+        name = fp.rsplit('.', 1)[0]
+        if name and name not in keywords:
+            keywords.append(name)
+
+    # Dedupe while preserving order
+    seen = set()
+    unique = []
+    for k in keywords:
+        if k not in seen:
+            seen.add(k)
+            unique.append(k)
+
+    return unique[:10]
+
+
+def get_predictions(keywords: list) -> dict:
+    """Call aOa /predict endpoint with extracted keywords."""
+    if not keywords:
+        return {'files': []}
+
+    keyword_str = ','.join(keywords)
+    return api_get(f"/predict?keywords={keyword_str}&limit={MAX_FILES}&snippet_lines={MAX_SNIPPET_LINES}") or {'files': []}
+
+
+def format_prediction_context(files: list, keywords: list) -> str:
+    """Format predicted files as additionalContext for Claude."""
+    if not files:
+        return ""
+
+    project_root = str(PROJECT_ROOT)
+
+    def rel_path(path):
+        if path.startswith(project_root):
+            return path[len(project_root):].lstrip('/')
+        return path
+
+    parts = ["## aOa Predicted Files", ""]
+    parts.append(f"Based on keywords: {', '.join(keywords[:5])}")
+    parts.append("")
+
+    for f in files:
+        path = rel_path(f.get('path', ''))
+        confidence = f.get('confidence', 0)
+        snippet = f.get('snippet', '')
+
+        parts.append(f"### `{path}` ({confidence:.0%} confidence)")
+        parts.append("")
+
+        if snippet:
+            ext = path.rsplit('.', 1)[-1] if '.' in path else ''
+            lang = ext if ext in ['py', 'js', 'ts', 'tsx', 'json', 'yaml', 'md', 'sh'] else ''
+            parts.append(f"```{lang}")
+            parts.append(snippet.rstrip())
+            parts.append("```")
+            parts.append("")
+
+    parts.append("*Consider these files if relevant to your task.*")
+    return "\n".join(parts)
+
+
+def log_prediction(session_id: str, files: list, keywords: list):
+    """Log prediction for hit/miss tracking and intent display."""
+    if not files:
+        return
+
+    file_paths = [f.get('path', '') for f in files]
+    avg_confidence = sum(f.get('confidence', 0) for f in files) / len(files) if files else 0
+
+    # Log to /predict/log for hit/miss tracking
+    api_post("/predict/log", {
+        'session_id': session_id,
+        'predicted_files': file_paths,
+        'tags': keywords[:5],
+        'trigger_file': 'UserPromptSubmit',
+        'confidence': avg_confidence
+    }, timeout=1)
+
+    # Record as Predict intent for aoa intent display
+    api_post("/intent", {
+        'session_id': session_id,
+        'project_id': PROJECT_ID,
+        'tool': 'Predict',
+        'files': file_paths[:5],
+        'tags': [f"#{k}" for k in keywords[:3]] + [f"@{avg_confidence:.0%}"]
+    }, timeout=1)
+
 
 # =============================================================================
 # Event Handlers
@@ -237,40 +573,50 @@ curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/j
         output_context(learning_prompt)
         return  # Don't output status line when learning is triggered
 
-    # Predict files from prompt keywords (TODO: migrate from predict-context.py)
+    # Predict files from prompt keywords
     prompt = data.get("prompt", "")
-    if prompt and total >= 5:
-        # TODO: Extract keywords, get predictions, output context
-        pass
+    session_id = data.get("session_id", "unknown")
+
+    if prompt and total >= MIN_INTENTS:
+        keywords = extract_keywords(prompt)
+        if keywords:
+            predictions = get_predictions(keywords)
+            files = predictions.get('files', [])
+
+            if files:
+                # Log prediction for hit/miss tracking
+                log_prediction(session_id, files, keywords)
+
+                # Format and output context for Claude
+                context = format_prediction_context(files, keywords)
+                if context:
+                    output_context(context)
 
 
 def handle_tool(data: dict):
     """
-    PostToolUse: Capture intent, increment domain counter.
+    PostToolUse: Capture intent with full file/tag extraction.
 
-    Combines: aoa-intent-capture.py functionality
+    Ported from: aoa-intent-capture.py
     """
     tool = data.get("tool_name", "unknown")
-    tool_input = data.get("tool_input", {})
     session_id = data.get("session_id", "unknown")
     tool_use_id = data.get("tool_use_id")
 
-    # Extract files from tool input
-    files = []
-    for key in ["file_path", "path", "file", "notebook_path"]:
-        if key in tool_input and tool_input[key]:
-            files.append(tool_input[key])
-            break
+    # Extract files and search tags from tool data
+    files, search_tags = extract_files(data)
 
-    # Infer tags from file paths (simplified)
-    tags = []
-    for f in files:
-        if "test" in f.lower():
-            tags.append("#testing")
-        if "auth" in f.lower():
-            tags.append("#authentication")
+    # Infer semantic tags from file paths
+    tags = infer_tags(files, tool)
+    tags.extend(search_tags)
 
-    # Record intent
+    # Get file sizes for baseline token calculation
+    file_sizes = get_file_sizes(files)
+
+    # Get actual output size
+    output_size = get_output_size(data)
+
+    # Record intent (fire-and-forget)
     if files or tags:
         api_post("/intent", {
             "session_id": session_id,
@@ -278,7 +624,9 @@ def handle_tool(data: dict):
             "tool": tool,
             "files": files,
             "tags": tags,
-            "tool_use_id": tool_use_id
+            "tool_use_id": tool_use_id,
+            "file_sizes": file_sizes,
+            "output_size": output_size,
         }, timeout=2)
 
 

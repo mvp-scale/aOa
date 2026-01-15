@@ -11,14 +11,7 @@
 #   - 02-utils.sh: get_project_id()
 #
 # COMMANDS PROVIDED
-#   cmd_intent        Main intent command dispatcher
-#   cmd_intent_recent Show recent intents
-#   cmd_intent_tags   Show intent-derived tags
-#   cmd_intent_files  Files touched by recent intent
-#   cmd_intent_file   Intent history for a specific file
-#   cmd_intent_stats  Intent statistics
-#   cmd_intent_store  Store a new intent
-#   cmd_rate          Rate a prediction (feedback loop)
+#   cmd_intent        Show recent activity and session metrics
 #
 # =============================================================================
 
@@ -27,44 +20,61 @@
 # =============================================================================
 
 cmd_intent() {
-    local subcmd="${1:-recent}"
-    shift || true
+    # aoa intent - Show recent activity and session metrics
+    # Usage: aoa intent [OPTIONS]
+    # Flat command like aoa domains
 
-    case "$subcmd" in
-        recent|r)
-            cmd_intent_recent "$@"
-            ;;
-        tags|t)
-            cmd_intent_tags "$@"
-            ;;
-        files|f)
-            cmd_intent_files "$@"
-            ;;
-        file)
-            cmd_intent_file "$@"
-            ;;
-        stats)
-            cmd_intent_stats "$@"
-            ;;
-        store|s)
-            cmd_intent_store "$@"
-            ;;
-        *)
-            echo -e "${BOLD}Intent Tracking${NC}"
-            echo ""
-            echo "Commands:"
-            echo "  aoa intent recent [since]   Recent intent records (e.g., 1h, 30m)"
-            echo "  aoa intent tags             All tags with file counts"
-            echo "  aoa intent files <tag>      Files associated with a tag"
-            echo "  aoa intent file <path>      Tags associated with a file"
-            echo "  aoa intent stats            Intent index statistics"
-            echo "  aoa intent store <tags> [files...]  Store AI-generated intent tags"
-            ;;
-    esac
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                echo "Usage: aoa intent [OPTIONS]"
+                echo ""
+                echo "Show recent activity and session metrics."
+                echo ""
+                echo "Options:"
+                echo "  -n, --limit N   Show N recent records (default: 20)"
+                echo "  --help, -h      Show this help message"
+                echo ""
+                echo "Examples:"
+                echo "  aoa intent              # Show 20 recent records"
+                echo "  aoa intent -n 10        # Show 10 recent records"
+                return 0
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    # Pass all args to the display function
+    cmd_intent_recent "$@"
 }
 
 cmd_intent_recent() {
-    local limit="${1:-20}"
+    local limit=20
+
+    # Parse -n flag for limit (consistent with aoa domains -n)
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -n|--limit)
+                limit="$2"
+                shift 2
+                ;;
+            -n*)
+                limit="${1#-n}"
+                shift
+                ;;
+            *)
+                # First positional arg is also limit for backwards compat
+                if [[ "$1" =~ ^[0-9]+$ ]]; then
+                    limit="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
     local project_id=$(get_project_id)
 
     # Get metrics for header
@@ -87,7 +97,9 @@ cmd_intent_recent() {
     local seconds_to_autotune=$(echo "$domain_stats" | jq -r '.seconds_to_autotune // 0')
 
     # Get recent intent records
-    local result=$(curl -s "${INDEX_URL}/intent/recent?limit=${limit}&project_id=${project_id}")
+    # Request 3x limit from API to ensure enough after filtering out records without files
+    local api_limit=$((limit * 3))
+    local result=$(curl -s "${INDEX_URL}/intent/recent?limit=${api_limit}&project_id=${project_id}")
     local total=$(echo "$result" | jq -r '.stats.total_records // 0')
 
     # Format tokens with k suffix
@@ -222,52 +234,31 @@ PYEOF
         since_date=$(date -d "@${first_seen}" "+%b %d" 2>/dev/null || date -r "${first_seen}" "+%b %d" 2>/dev/null)
     fi
 
-    # Header
-    echo -e "${CYAN}${BOLD}aOa Activity${NC}                                                 Session"
-    echo ""
-    # Only show savings if we have REAL data (not fabricated)
-    if [ "$tokens_saved" -gt 0 ] 2>/dev/null; then
-        local savings_suffix=""
-        if [ -n "$since_date" ]; then
-            savings_suffix=" ${DIM}(since ${since_date})${NC}"
-        fi
-        if [ -n "$time_display" ]; then
-            echo -e "${BOLD}SAVINGS${NC}         ${GREEN}↓${tokens_k}k tokens${NC} ${CYAN}${time_display}${NC}${savings_suffix}"
-        else
-            echo -e "${BOLD}SAVINGS${NC}         ${GREEN}↓${tokens_k}k tokens${NC}${savings_suffix}"
-        fi
-    else
-        echo -e "${BOLD}SAVINGS${NC}         ${DIM}(no measured savings yet)${NC}"
-    fi
-    # Show prediction capability level (matches status line logic)
+    # Header - horizontal format matching aoa domains style
     local min_intents=30
-    if [ "$total" -lt "$min_intents" ] 2>/dev/null; then
-        echo -e "${BOLD}PREDICTIONS${NC}     ${YELLOW}Learning${NC} (${total}/${min_intents} intents toward full prediction)"
-    elif [ "$hit_pct_int" -ge 80 ] 2>/dev/null; then
-        echo -e "${BOLD}PREDICTIONS${NC}     ${GREEN}${hit_pct_int}% accuracy${NC} (${evaluated} predictions evaluated)"
+
+    # Build savings display
+    local savings_display=""
+    if [ "$tokens_saved" -gt 0 ] 2>/dev/null; then
+        local date_suffix=""
+        [ -n "$since_date" ] && date_suffix=" (${since_date})"
+        savings_display="Savings ${GREEN}↓${tokens_k}k${NC}${date_suffix}"
     else
-        echo -e "${BOLD}PREDICTIONS${NC}     ${YELLOW}${hit_pct_int}% accuracy${NC} (${evaluated} predictions, improving)"
+        savings_display="Savings ${DIM}(none yet)${NC}"
     fi
-    # Domain learning status (GL-054)
-    if [ "$domain_count" -gt 0 ] 2>/dev/null; then
-        # Format auto-tune time
-        local autotune_display=""
-        if [ "$seconds_to_autotune" -gt 0 ] 2>/dev/null; then
-            local hours=$((seconds_to_autotune / 3600))
-            if [ "$hours" -gt 0 ]; then
-                autotune_display="${hours}h"
-            else
-                local mins=$((seconds_to_autotune / 60))
-                autotune_display="${mins}m"
-            fi
-        else
-            autotune_display="now"
-        fi
-        echo -e "${BOLD}DOMAINS${NC}         ${CYAN}${domain_count} active${NC} ${DIM}│${NC} Learning: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} Auto-tune: ${DIM}${autotune_display}${NC}"
+
+    # Build predictions display
+    local pred_display=""
+    if [ "$total" -lt "$min_intents" ] 2>/dev/null; then
+        pred_display="Predictions: ${YELLOW}learning${NC}"
+    elif [ "$hit_pct_int" -ge 80 ] 2>/dev/null; then
+        pred_display="Predictions: ${GREEN}${hit_pct_int}%${NC}"
+    else
+        pred_display="Predictions: ${YELLOW}${hit_pct_int}%${NC}"
     fi
-    echo -e "${BOLD}HOW IT WORKS${NC}    ${CYAN}aOa finds exact locations${NC}, so Claude reads only what it needs"
-    echo -e "                ${DIM}Time: rolling avg (5/15/30min) of input token processing${NC}"
-    echo ""
+
+    # Assemble header line
+    echo -e "${CYAN}${BOLD}⚡ aOa Activity${NC}  ${savings_display} ${DIM}│${NC} ${CYAN}${time_display}${NC} ${DIM}│${NC} ${pred_display}"
     echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────────────────${NC}"
     echo ""
     echo -e "ACTION     SOURCE   ATTRIB       aOa IMPACT                TAGS                                                    TARGET"
@@ -287,7 +278,7 @@ PYEOF
         } |
         # Use ASCII Unit Separator (0x1F) - designed for field separation, never in user input
         "\(.tool)\u001f\(.files)\u001f\(.tags)\u001f\(.file_size // 0)\u001f\(.output_size // 0)\u001f\(.file_count)"
-    ' 2>/dev/null | while IFS=$'\x1f' read -r tool file tags file_size output_size file_count; do
+    ' 2>/dev/null | head -n "$limit" | while IFS=$'\x1f' read -r tool file tags file_size output_size file_count; do
         # Map tool to action and determine source
         local action="$tool"
         local source="Claude"
@@ -352,6 +343,28 @@ PYEOF
                 ;;
             Predict)
                 source="aOa"
+                ;;
+            Learn)
+                # Domain learning event - format: learn:domains_added:tokens_invested
+                action="Learn"
+                source="aOa"
+                # file contains: learn:3:201 (3 domains, 201 tokens)
+                local learn_count=$(echo "$file" | cut -d: -f2)
+                local learn_tokens=$(echo "$file" | cut -d: -f3)
+                export AOA_LEARN_COUNT="$learn_count"
+                export AOA_LEARN_TOKENS="$learn_tokens"
+                ;;
+            Tune)
+                # Domain tuning event - format: tune:cycle:stale:pruned
+                action="Tune"
+                source="aOa"
+                # file contains: tune:121:35:0 (cycle 121, 35 stale, 0 pruned)
+                local tune_cycle=$(echo "$file" | cut -d: -f2)
+                local tune_stale=$(echo "$file" | cut -d: -f3)
+                local tune_pruned=$(echo "$file" | cut -d: -f4)
+                export AOA_TUNE_CYCLE="$tune_cycle"
+                export AOA_TUNE_STALE="$tune_stale"
+                export AOA_TUNE_PRUNED="$tune_pruned"
                 ;;
         esac
 
@@ -516,7 +529,27 @@ PYEOF
             attribution="-"  # Default, may be upgraded to "aOa guided" below
         fi
 
-        if [ "$action" = "Predict" ] || [ "$action" = "Intent" ] || [ "$action" = "Outline" ] || [ "$action" = "Search" ] || [ "$action" = "Find" ] || [ "$action" = "Locate" ] || [ "$action" = "Tree" ] || [ "$action" = "Memory" ]; then
+        if [ "$action" = "Learn" ]; then
+            # Domain learning event with rotating quotes
+            attribution="${GREEN}+${AOA_LEARN_COUNT} domains${NC}"
+            impact="${CYAN}${AOA_LEARN_TOKENS} tokens${NC} invested"
+            # Rotate through cheeky messages - tag in aOa cyan, text in bold yellow (Star Wars gold)
+            case $((RANDOM % 3)) in
+                0) tags="${CYAN}#evolving${NC}"; target="${BOLD}${YELLOW}aOa learns → you build faster${NC}" ;;
+                1) tags="${CYAN}#enlightened${NC}"; target="${BOLD}${YELLOW}The force grows stronger${NC}" ;;
+                2) tags="${CYAN}#growing${NC}"; target="${BOLD}${YELLOW}Knowledge is power${NC}" ;;
+            esac
+        elif [ "$action" = "Tune" ]; then
+            # Domain tuning event with rotating quotes
+            attribution="${CYAN}cycle ${AOA_TUNE_CYCLE}${NC}"
+            impact="${DIM}${AOA_TUNE_STALE} stale, ${AOA_TUNE_PRUNED} pruned${NC}"
+            # Rotate through cheeky messages - tag in aOa cyan, text in bold yellow (Star Wars gold)
+            case $((RANDOM % 3)) in
+                0) tags="${CYAN}#refined${NC}"; target="${BOLD}${YELLOW}This is the way.${NC}" ;;
+                1) tags="${CYAN}#sharpened${NC}"; target="${BOLD}${YELLOW}Always in motion, the future is${NC}" ;;
+                2) tags="${CYAN}#balanced${NC}"; target="${BOLD}${YELLOW}Do or do not${NC}" ;;
+            esac
+        elif [ "$action" = "Predict" ] || [ "$action" = "Intent" ] || [ "$action" = "Outline" ] || [ "$action" = "Search" ] || [ "$action" = "Find" ] || [ "$action" = "Locate" ] || [ "$action" = "Tree" ] || [ "$action" = "Memory" ]; then
             : # Impact already set above for aOa native operations
         elif [ "$saved" = "-" ]; then
             impact="-"
@@ -610,221 +643,9 @@ PYEOF
         fi
     done
 
+    # Intent Angle footer - matching aoa domains style
     echo ""
+    echo -e "${CYAN}${BOLD}⚡ Intent Angle${NC}"
     echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────────────────${NC}"
-    echo ""
-    echo -e "${DIM}${limit} of ${total} operations.  Use: watch -n 2 aoa intent${NC}"
+    echo -e "${CYAN}${domain_count} domains${NC} ${DIM}│${NC} Learning: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} ${CYAN}aOa finds exact locations → Claude reads only what it needs.${NC}"
 }
-
-cmd_intent_tags() {
-    local project_id=$(get_project_id)
-    local result=$(curl -s "${INDEX_URL}/intent/tags?project_id=${project_id}")
-
-    echo -e "${BOLD}Intent Tags${NC}"
-    echo ""
-
-    echo "$result" | jq -r '.tags[] | "  \(.tag) (\(.count) files)"' 2>/dev/null || echo "  (no tags yet)"
-}
-
-cmd_intent_files() {
-    local tag="$1"
-    local project_id=$(get_project_id)
-
-    if [ -z "$tag" ]; then
-        echo "Usage: aoa intent files <tag>"
-        echo "Example: aoa intent files authentication"
-        return 1
-    fi
-
-    local result=$(curl -s "${INDEX_URL}/intent/files?tag=${tag}&project_id=${project_id}")
-
-    local actual_tag=$(echo "$result" | jq -r '.tag')
-    echo -e "${BOLD}Files for ${actual_tag}${NC}"
-    echo ""
-
-    echo "$result" | jq -r '.files[]' 2>/dev/null || echo "  (no files)"
-}
-
-cmd_intent_file() {
-    local path="$1"
-    local project_id=$(get_project_id)
-
-    if [ -z "$path" ]; then
-        echo "Usage: aoa intent file <path>"
-        return 1
-    fi
-
-    local result=$(curl -s "${INDEX_URL}/intent/file?path=${path}&project_id=${project_id}")
-
-    echo -e "${BOLD}Tags for ${path}${NC}"
-    echo ""
-
-    echo "$result" | jq -r '.tags[]' 2>/dev/null || echo "  (no tags)"
-}
-
-cmd_intent_stats() {
-    local project_id=$(get_project_id)
-
-    # Get metrics
-    local metrics=$(curl -s "${INDEX_URL}/metrics?project_id=${project_id}")
-    local hit_pct=$(echo "$metrics" | jq -r '.rolling.hit_at_5_pct // 0')
-    local evaluated=$(echo "$metrics" | jq -r '.rolling.evaluated // 0')
-    local hits=$(echo "$metrics" | jq -r '.rolling.hits // 0')
-    local tokens_saved=$(echo "$metrics" | jq -r '.savings.tokens // 0')
-
-    # Get intent stats
-    local stats=$(curl -s "${INDEX_URL}/intent/stats?project_id=${project_id}")
-    local total=$(echo "$stats" | jq -r '.total_records // 0')
-    local unique_tags=$(echo "$stats" | jq -r '.unique_tags // 0')
-    local unique_files=$(echo "$stats" | jq -r '.unique_files // 0')
-    local first_seen=$(echo "$stats" | jq -r '.first_seen // 0')
-
-    local hit_pct_int=$(printf "%.0f" "$hit_pct")
-    local min_intents=30
-
-    # Format first_seen as date
-    local since_date=""
-    if [ "$first_seen" -gt 0 ] 2>/dev/null; then
-        since_date=$(date -d "@${first_seen}" "+%b %d" 2>/dev/null || date -r "${first_seen}" "+%b %d" 2>/dev/null)
-    fi
-
-    # Header
-    echo -e "${CYAN}${BOLD}aOa Session Statistics${NC}                                      ${total} operations"
-    echo ""
-    echo -e "${BOLD}WHAT WE TRACK (REAL DATA)${NC}"
-    # Show prediction capability level (matches status line logic)
-    if [ "$total" -lt "$min_intents" ] 2>/dev/null; then
-        echo -e "  Predictions:      ${YELLOW}Learning${NC} (${total}/${min_intents} toward full prediction)"
-    elif [ "$hit_pct_int" -ge 80 ] 2>/dev/null; then
-        echo -e "  Predictions:      ${GREEN}${hit_pct_int}% accuracy${NC} (${evaluated} evaluated)"
-    else
-        echo -e "  Predictions:      ${YELLOW}${hit_pct_int}% accuracy${NC} (${evaluated} evaluated, improving)"
-    fi
-    echo -e "  Operations:       ${total}"
-    echo -e "  Unique files:     ${unique_files}"
-    echo -e "  Unique tags:      ${unique_tags}"
-    echo ""
-    echo -e "${BOLD}TOKEN SAVINGS${NC}"
-    if [ "$tokens_saved" -gt 0 ] 2>/dev/null; then
-        local tokens_k=$(awk "BEGIN {printf \"%.1f\", $tokens_saved/1000}")
-        if [ -n "$since_date" ]; then
-            echo -e "  Measured:         ${GREEN}↓${tokens_k}k tokens${NC} ${DIM}(since ${since_date})${NC}"
-        else
-            echo -e "  Measured:         ${GREEN}↓${tokens_k}k tokens${NC}"
-        fi
-    else
-        echo -e "  ${DIM}Not yet measured - requires capturing actual output tokens${NC}"
-        echo -e "  ${DIM}Baseline (file sizes) is captured; actual output capture coming soon${NC}"
-    fi
-    echo ""
-    echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────────────────${NC}"
-    echo ""
-    echo -e "${DIM}Run 'aoa intent' to see recent activity with per-operation details${NC}"
-}
-
-cmd_intent_store() {
-    # Store AI-generated intent tags
-    # Usage: aoa intent store "#tag1 #tag2 #tag3" [file1] [file2] ...
-    local tags_str="$1"
-    shift || true
-
-    if [ -z "$tags_str" ]; then
-        echo -e "${RED}Usage: aoa intent store \"#tag1 #tag2\" [file1] [file2]${NC}"
-        echo -e "${DIM}Example: aoa intent store \"#auth #validation\" src/auth.py${NC}"
-        return 1
-    fi
-
-    local project_id=$(get_project_id)
-    local session_id="${AOA_SESSION_ID:-$(date +%Y%m%d)}"
-
-    # Parse tags (space or comma separated)
-    local tags_json=$(echo "$tags_str" | tr ',' ' ' | xargs -n1 | sed 's/^#*/#/' | jq -R . | jq -s .)
-
-    # Collect files (remaining args, or use current context files)
-    local files_json="[]"
-    if [ $# -gt 0 ]; then
-        files_json=$(printf '%s\n' "$@" | jq -R . | jq -s .)
-    fi
-
-    # Build and send request
-    local payload=$(jq -n \
-        --arg sid "$session_id" \
-        --arg pid "$project_id" \
-        --argjson tags "$tags_json" \
-        --argjson files "$files_json" \
-        '{session_id: $sid, project_id: $pid, tool: "Intent", tags: $tags, files: $files}')
-
-    local result=$(curl -s -X POST "${INDEX_URL}/intent" \
-        -H "Content-Type: application/json" \
-        -d "$payload")
-
-    if echo "$result" | jq -e '.success' > /dev/null 2>&1; then
-        local tag_count=$(echo "$tags_json" | jq 'length')
-        echo -e "${GREEN}✓${NC} Stored ${tag_count} tags"
-    else
-        echo -e "${RED}✗${NC} Failed to store tags"
-        return 1
-    fi
-}
-
-cmd_rate() {
-    # Show token savings with estimated time savings
-    # Uses conservative LLM processing rates based on documented performance
-
-    echo -e "${CYAN}${BOLD}Time Savings Estimation${NC}"
-    echo ""
-
-    # Get current token savings from intent stats
-    local project_id=$(get_project_id)
-    local metrics=$(curl -s "${INDEX_URL}/metrics?project_id=${project_id}")
-    local tokens_saved=$(echo "$metrics" | jq -r '.savings.tokens // 0')
-    local tokens_k=$(awk "BEGIN {printf \"%.1f\", $tokens_saved/1000}")
-
-    echo -e "${BOLD}YOUR TOKEN SAVINGS${NC}"
-    if [ "$tokens_saved" -gt 0 ] 2>/dev/null; then
-        echo -e "  Measured:         ${GREEN}↓${tokens_k}k tokens${NC}"
-    else
-        echo -e "  ${DIM}(no measured savings yet)${NC}"
-    fi
-    echo ""
-
-    echo -e "${BOLD}TIME SAVINGS MODEL${NC}"
-    echo -e "  ${DIM}LLMs process tokens at documented rates:${NC}"
-    echo -e "    Input tokens:   ~100-500 tokens/second"
-    echo -e "    Output tokens:  ~20-100 tokens/second"
-    echo ""
-    echo -e "  ${BOLD}Conservative estimate:${NC} 5-10ms per token (combined)"
-    echo ""
-
-    echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────────────────${NC}"
-    echo ""
-
-    if [ "$tokens_saved" -gt 0 ] 2>/dev/null; then
-        # Calculate time savings range
-        local time_low=$(awk "BEGIN {printf \"%.1f\", $tokens_saved * 5 / 1000}")   # 5ms/token
-        local time_high=$(awk "BEGIN {printf \"%.1f\", $tokens_saved * 10 / 1000}") # 10ms/token
-
-        echo -e "${BOLD}ESTIMATED TIME SAVINGS${NC}"
-        echo -e "  Low estimate:     ${CYAN}~${time_low}s${NC} (at 5ms/token)"
-        echo -e "  High estimate:    ${CYAN}~${time_high}s${NC} (at 10ms/token)"
-        echo ""
-
-        # Additional context for large savings
-        if [ "$tokens_saved" -gt 100000 ]; then
-            local mins_low=$(awk "BEGIN {printf \"%.1f\", $time_low / 60}")
-            local mins_high=$(awk "BEGIN {printf \"%.1f\", $time_high / 60}")
-            echo -e "  That's ${GREEN}${mins_low}-${mins_high} minutes${NC} of LLM processing avoided"
-            echo ""
-        fi
-
-        echo -e "${DIM}Plus search speed: aOa search (~5ms) vs grep (~2-3 seconds)${NC}"
-    else
-        echo -e "${BOLD}EXAMPLE${NC}"
-        echo -e "  If you save 22k tokens:"
-        echo -e "    Low:  22k × 5ms  = ${CYAN}~110s${NC}"
-        echo -e "    High: 22k × 10ms = ${CYAN}~220s${NC}"
-    fi
-    echo ""
-    echo -e "${DIM}Note: Estimates based on typical Claude API processing speeds${NC}"
-}
-

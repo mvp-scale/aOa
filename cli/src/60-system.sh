@@ -1088,7 +1088,7 @@ cmd_domains() {
     echo ""
     echo -e "${CYAN}${BOLD}⚡ Intelligence Angle${NC}"
     echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
-    echo -e "${invested_display} invested ${DIM}│${NC} ${GREEN}${saved_display}${NC} saved ${DIM}│${NC} ${CYAN}aOa learns → you build faster. This is the way.${NC}"
+    echo -e "${invested_display} invested ${DIM}│${NC} ${GREEN}${saved_display}${NC} saved ${DIM}│${NC} ${CYAN}aOa learns → you build faster.${NC} ${BOLD}${YELLOW}This is the way.${NC}"
 }
 
 cmd_stats() {

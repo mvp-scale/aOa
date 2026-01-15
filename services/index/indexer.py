@@ -3772,8 +3772,8 @@ def _do_domain_learning(project_id: str):
 
     try:
         learner = DomainLearner(project_id)
-        learner.reset_prompt_count()
-        learner.set_learning_pending()  # Signal hook to trigger Haiku
+        learner.set_learning_pending()  # Signal hook FIRST to block new increments
+        learner.reset_prompt_count()    # THEN reset count safely
         print(f"[DomainLearning] Ready for hook - {project_id} (learning_pending=true)", flush=True)
     except Exception as e:
         print(f"[DomainLearning] Error: {e}", flush=True)
@@ -3795,8 +3795,14 @@ def _trigger_domain_learning_if_needed(project_id: str):
     try:
         learner = DomainLearner(project_id)
 
-        # Increment both counters
-        prompt_count = learner.increment_prompt_count()
+        # Only increment prompt count if learning is NOT pending
+        # This prevents count from exceeding threshold while waiting for hook
+        if not learner.is_learning_pending():
+            prompt_count = learner.increment_prompt_count()
+        else:
+            prompt_count = learner.get_prompt_count()
+
+        # Always increment tune count (tuning happens server-side, not via hook)
         tune_count = learner.increment_tune_count()
 
         # Learning trigger (every 10 prompts)
@@ -4152,6 +4158,19 @@ def domains_tune_math():
         # Get stats after tune
         after_stats = learner.get_stats()
 
+        # Record Tune event in intent stream (GL-058)
+        tune_cycle = learner.get_tune_count()
+        stale_count = summary.get('domains_flagged_stale', 0)
+        pruned_count = summary.get('terms_pruned', 0)
+        intent_index.record(
+            tool="Tune",
+            files=[f"tune:{tune_cycle}:{stale_count}:{pruned_count}"],
+            tags=["#tuning"],
+            session_id="aoa-system",
+            tool_use_id=None,
+            project_id=project_id
+        )
+
         return jsonify({
             'success': True,
             'project': project_id,
@@ -4409,6 +4428,19 @@ def domains_learned():
         learner.add_tokens_invested(estimated_input_tokens, estimated_output_tokens)
 
         total_tokens = estimated_input_tokens + estimated_output_tokens
+
+        # Record Learn event in intent stream (GL-058)
+        if domains_list:
+            domain_tags = [f"#{d.lstrip('@')}" for d in domains_list[:5]]
+            intent_index.record(
+                tool="Learn",
+                files=[f"learn:{len(domains_list)}:{total_tokens}"],
+                tags=domain_tags,
+                session_id="aoa-system",
+                tool_use_id=None,
+                project_id=project_id
+            )
+
         return jsonify({
             'success': True,
             'project': project_id,
