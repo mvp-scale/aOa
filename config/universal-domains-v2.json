@@ -1,0 +1,354 @@
+[
+  {
+    "name": "@authentication",
+    "description": "Identity verification - who is this user?",
+    "terms": {
+      "identity_verification": ["login", "logout", "signin", "signout", "authenticate", "unauthenticate"],
+      "credential_management": ["password", "credential", "secret", "hash_password", "verify_password", "passwd"],
+      "session_handling": ["session_start", "session_end", "session_id", "invalidate_session", "session_token", "session_expire"],
+      "multi_factor": ["mfa", "totp", "otp", "two_factor", "2fa", "authenticator"],
+      "identity_provider": ["oauth", "saml", "sso", "openid", "oidc", "identity_provider"]
+    }
+  },
+  {
+    "name": "@authorization",
+    "description": "Access control - what can this user do?",
+    "terms": {
+      "permission_checking": ["can_access", "has_permission", "is_allowed", "check_permission", "authorize", "permitted"],
+      "role_management": ["role", "assign_role", "remove_role", "role_based", "rbac", "user_role"],
+      "access_policy": ["policy", "acl", "access_control", "permission_policy", "grant", "revoke"],
+      "resource_ownership": ["owner", "owned_by", "belongs_to", "resource_owner", "ownership"],
+      "scope_enforcement": ["scope", "capability", "entitlement", "privilege", "access_level"]
+    }
+  },
+  {
+    "name": "@persistence",
+    "description": "Data storage - how data is saved and retrieved",
+    "terms": {
+      "data_writing": ["save", "insert", "create", "persist", "store", "write_to_db"],
+      "data_reading": ["fetch", "retrieve", "load", "find", "query", "select", "get_from_db"],
+      "data_modification": ["update", "modify", "patch", "upsert", "merge"],
+      "data_removal": ["delete", "remove", "purge", "drop", "truncate", "soft_delete"],
+      "transaction_control": ["transaction", "commit", "rollback", "begin_transaction", "savepoint"]
+    }
+  },
+  {
+    "name": "@caching",
+    "description": "Performance optimization through temporary storage",
+    "terms": {
+      "cache_storage": ["cache_set", "cache_put", "store_cache", "add_to_cache", "cache_write"],
+      "cache_retrieval": ["cache_get", "cache_hit", "from_cache", "cached", "lookup_cache"],
+      "cache_invalidation": ["cache_delete", "invalidate", "cache_clear", "evict", "expire_cache", "bust_cache"],
+      "cache_strategy": ["ttl", "lru", "lfu", "cache_policy", "expiration", "time_to_live"],
+      "distributed_cache": ["redis", "memcached", "distributed_cache", "cache_cluster", "cache_node"]
+    }
+  },
+  {
+    "name": "@validation",
+    "description": "Input checking and data integrity verification",
+    "terms": {
+      "format_validation": ["validate", "is_valid", "check_format", "validate_format", "format_check"],
+      "type_checking": ["is_string", "is_number", "is_array", "type_check", "isinstance", "typeof"],
+      "constraint_enforcement": ["required", "optional", "min_length", "max_length", "in_range", "pattern"],
+      "sanitization": ["clean", "strip", "normalize", "trim"],
+      "schema_validation": ["schema", "validate_schema", "json_schema", "pydantic", "marshmallow"]
+    }
+  },
+  {
+    "name": "@error_handling",
+    "description": "Exception management and failure recovery",
+    "terms": {
+      "exception_catching": ["try", "catch", "except", "rescue", "handle_error", "on_error"],
+      "error_propagation": ["raise", "throw", "rethrow", "propagate", "bubble_up"],
+      "error_recovery": ["retry", "fallback", "recover", "compensate", "circuit_breaker"],
+      "error_classification": ["error_code", "error_type", "exception_class", "error_category", "fault"],
+      "error_reporting": ["error_message", "stack_trace", "traceback", "error_context", "error_details"]
+    }
+  },
+  {
+    "name": "@logging",
+    "description": "Application logging and observability",
+    "terms": {
+      "log_levels": ["debug", "info", "warn", "error", "fatal", "trace", "critical"],
+      "log_output": ["log", "logger", "print", "console", "stdout", "write_log"],
+      "structured_logging": ["log_context", "log_metadata", "structured_log", "json_log", "log_fields"],
+      "log_management": ["log_rotate", "log_file", "log_handler", "log_sink", "log_destination"],
+      "tracing": ["span", "trace_id", "correlation_id", "request_id", "distributed_tracing"]
+    }
+  },
+  {
+    "name": "@configuration",
+    "description": "Application settings and environment management",
+    "terms": {
+      "config_loading": ["load_config", "read_config", "parse_config", "config_file", "settings"],
+      "environment_vars": ["env", "getenv", "environ", "dotenv", "environment_variable"],
+      "config_defaults": ["default_value", "config_default", "default_config"],
+      "feature_flags": ["feature_flag", "toggle", "feature_toggle", "flag", "experiment"],
+      "secrets_management": ["vault", "keyring", "secret_manager", "credential_store"]
+    }
+  },
+  {
+    "name": "@routing",
+    "description": "Request routing and endpoint mapping",
+    "terms": {
+      "route_definition": ["route", "endpoint", "path", "url_pattern", "url_rule"],
+      "http_methods": ["get", "post", "put", "head", "options"],
+      "route_parameters": ["path_param", "url_param", "route_param", "slug", "dynamic_route"],
+      "middleware_chain": ["middleware", "before_request", "after_request", "interceptor", "filter"],
+      "route_matching": ["match_route", "resolve_route", "router", "url_map"]
+    }
+  },
+  {
+    "name": "@serialization",
+    "description": "Data encoding and format conversion",
+    "terms": {
+      "json_handling": ["json_encode", "json_decode", "to_json", "from_json", "json_dumps", "json_loads"],
+      "object_conversion": ["serialize", "deserialize", "marshal", "unmarshal", "to_dict", "from_dict"],
+      "binary_encoding": ["encode", "decode", "pack", "unpack", "bytes", "binary"],
+      "format_specific": ["xml", "yaml", "protobuf", "msgpack", "pickle", "csv"],
+      "schema_mapping": ["mapping", "transform", "convert", "coerce"]
+    }
+  },
+  {
+    "name": "@http",
+    "description": "HTTP protocol handling and web communication",
+    "terms": {
+      "request_handling": ["request", "http_request", "req", "incoming_request", "client_request"],
+      "response_building": ["response", "http_response", "res", "send_response", "return_response"],
+      "status_codes": ["status_code", "http_status", "200", "404", "500"],
+      "headers_management": ["header", "set_header", "get_header", "content_type", "authorization_header"],
+      "client_operations": ["http_client", "requests", "urllib", "aiohttp", "httpx"]
+    }
+  },
+  {
+    "name": "@messaging",
+    "description": "Asynchronous communication and message queues",
+    "terms": {
+      "message_publishing": ["publish", "send_message", "enqueue", "broadcast", "produce"],
+      "message_consuming": ["subscribe", "consume", "dequeue", "on_message", "receive"],
+      "queue_management": ["queue", "topic", "channel", "exchange", "message_queue"],
+      "message_patterns": ["pub_sub", "fanout", "point_to_point", "request_reply", "event_bus"],
+      "delivery_guarantees": ["ack", "nack", "acknowledge", "dead_letter", "retry_queue", "dlq"]
+    }
+  },
+  {
+    "name": "@testing",
+    "description": "Test automation and quality assurance",
+    "terms": {
+      "test_structure": ["test", "test_case", "test_suite", "describe", "it", "spec"],
+      "assertions": ["assert", "expect", "should", "assertEqual", "assertTrue", "verify"],
+      "test_fixtures": ["fixture", "setup", "teardown", "before", "after", "beforeEach"],
+      "mocking": ["mock", "stub", "fake", "spy", "monkeypatch"],
+      "test_types": ["unit_test", "integration_test", "e2e_test", "acceptance_test", "smoke_test"]
+    }
+  },
+  {
+    "name": "@security",
+    "description": "Encryption, protection, and secure coding",
+    "terms": {
+      "encryption": ["encrypt", "decrypt", "cipher", "aes", "rsa", "crypto"],
+      "hashing": ["hash", "digest", "sha256", "md5", "bcrypt", "argon2"],
+      "key_management": ["key", "private_key", "public_key", "secret_key", "key_pair", "signing_key"],
+      "vulnerability_prevention": ["sanitize", "escape", "xss", "csrf", "sql_injection", "injection"],
+      "secure_communication": ["tls", "ssl", "https", "certificate", "secure_socket", "handshake"]
+    }
+  },
+  {
+    "name": "@concurrency",
+    "description": "Parallel processing and thread management",
+    "terms": {
+      "thread_management": ["thread", "spawn", "fork", "thread_pool", "worker_thread", "threading"],
+      "synchronization": ["lock", "mutex", "semaphore", "barrier", "synchronized", "critical_section"],
+      "async_patterns": ["async", "await", "promise", "future", "coroutine", "asyncio"],
+      "parallel_execution": ["parallel", "concurrent", "multiprocess", "pool", "executor", "map_async"],
+      "coordination": ["wait", "signal", "condition", "event"]
+    }
+  },
+  {
+    "name": "@events",
+    "description": "Event-driven patterns and reactive programming",
+    "terms": {
+      "event_dispatching": ["emit", "dispatch", "trigger", "fire", "raise_event", "send_event"],
+      "event_handling": ["on", "handler", "listener", "callback", "event_handler", "handle_event"],
+      "event_subscription": ["addEventListener", "attach", "register_handler", "hook"],
+      "event_lifecycle": ["once", "off", "removeListener", "unbind", "detach", "unregister"],
+      "event_propagation": ["bubble", "capture", "stopPropagation", "preventDefault", "event_chain"]
+    }
+  },
+  {
+    "name": "@file_io",
+    "description": "File system operations and I/O handling",
+    "terms": {
+      "file_reading": ["read_file", "open", "fread", "readlines", "file_get_contents", "load_file"],
+      "file_writing": ["write_file", "fwrite", "writelines", "file_put_contents", "save_file"],
+      "file_management": ["rename", "copy", "move", "unlink", "rm", "chmod", "chown"],
+      "directory_ops": ["mkdir", "rmdir", "listdir", "scandir", "walk", "glob"],
+      "path_handling": ["path_join", "basename", "dirname", "abspath", "realpath", "exists"]
+    }
+  },
+  {
+    "name": "@networking",
+    "description": "Network protocols and low-level communication",
+    "terms": {
+      "socket_operations": ["socket", "connect", "accept", "listen", "close_socket"],
+      "data_transfer": ["send", "recv", "sendto", "recvfrom", "sendall", "read_socket"],
+      "protocol_handling": ["tcp", "udp", "ip", "dns", "dhcp", "icmp"],
+      "connection_management": ["keepalive", "timeout", "backlog", "connection_pool", "reconnect"],
+      "address_resolution": ["gethostbyname", "getaddrinfo", "resolve", "dns_query"]
+    }
+  },
+  {
+    "name": "@websocket",
+    "description": "Real-time bidirectional communication",
+    "terms": {
+      "connection_lifecycle": ["ws_connect", "ws_close", "onopen", "onclose"],
+      "message_handling": ["onmessage", "ws_send", "ws_receive", "binary_message"],
+      "connection_state": ["readyState", "CONNECTING", "CLOSING", "CLOSED"],
+      "protocols": ["ws", "wss", "socket_io", "sockjs", "signalr", "pusher"],
+      "heartbeat": ["pong", "heartbeat", "keepalive_ws", "connection_alive"]
+    }
+  },
+  {
+    "name": "@scheduling",
+    "description": "Task scheduling and time-based execution",
+    "terms": {
+      "cron_patterns": ["cron", "crontab", "schedule", "recurring", "periodic", "interval"],
+      "job_management": ["job", "task", "worker", "background_job", "delayed_job", "sidekiq"],
+      "timing_control": ["delay", "sleep", "setTimeout", "setInterval", "throttle", "debounce"],
+      "scheduler_ops": ["run_at", "run_every", "next_run", "last_run", "schedule_at"],
+      "task_lifecycle": ["enqueue_at", "perform_later", "async_task", "celery", "rq"]
+    }
+  },
+  {
+    "name": "@monitoring",
+    "description": "Observability, metrics, and system health",
+    "terms": {
+      "metrics_collection": ["metric", "counter", "gauge", "histogram", "timer", "increment"],
+      "health_checks": ["health", "healthcheck", "liveness", "readiness", "ping", "status"],
+      "alerting": ["alert", "alarm", "threshold", "trigger_alert", "pagerduty", "oncall"],
+      "instrumentation": ["instrument", "measure", "observe", "record", "prometheus", "statsd"],
+      "dashboards": ["dashboard", "grafana", "datadog", "newrelic", "apm", "telemetry"]
+    }
+  },
+  {
+    "name": "@deployment",
+    "description": "CI/CD pipelines and infrastructure management",
+    "terms": {
+      "build_process": ["build", "compile", "bundle", "package", "artifact", "dist"],
+      "deployment_ops": ["deploy", "release", "rollout", "promote", "ship"],
+      "environment_management": ["staging", "production", "development", "canary", "blue_green"],
+      "container_ops": ["docker", "container", "kubernetes", "k8s", "pod", "helm"],
+      "pipeline_stages": ["ci", "cd", "pipeline", "workflow", "github_actions", "jenkins"]
+    }
+  },
+  {
+    "name": "@notification",
+    "description": "Alerts, emails, and push notifications",
+    "terms": {
+      "email_sending": ["send_email", "mailer", "smtp", "email_template", "sendgrid", "mailgun"],
+      "push_notifications": ["push", "fcm", "apns", "web_push", "notification_service", "firebase"],
+      "in_app_notifications": ["notify", "toast", "snackbar", "flash_message", "banner"],
+      "sms_messaging": ["sms", "twilio", "text_message", "send_sms", "phone_notification"],
+      "notification_preferences": ["unsubscribe", "preferences", "opt_out", "notification_settings", "mute"]
+    }
+  },
+  {
+    "name": "@search",
+    "description": "Full-text search and indexing",
+    "terms": {
+      "search_execution": ["search", "full_text", "fts"],
+      "indexing": ["index", "reindex", "indexer", "inverted_index", "tokenize", "analyze"],
+      "search_engines": ["elasticsearch", "solr", "algolia", "meilisearch", "typesense", "lucene"],
+      "query_features": ["facet", "aggregate", "highlight", "suggest", "autocomplete"],
+      "ranking": ["score", "relevance", "boost", "weight", "rank", "sort_by"]
+    }
+  },
+  {
+    "name": "@analytics",
+    "description": "Usage tracking and business intelligence",
+    "terms": {
+      "event_tracking": ["track", "analytics_event", "pageview", "conversion", "funnel"],
+      "user_tracking": ["identify", "user_id", "anonymous_id", "cohort", "segment"],
+      "analytics_platforms": ["google_analytics", "mixpanel", "amplitude", "heap", "posthog", "plausible"],
+      "data_collection": ["collect", "log_event", "record_event", "beacon"],
+      "reporting": ["report", "kpi", "insight", "trend"]
+    }
+  },
+  {
+    "name": "@state",
+    "description": "State management and reactive stores",
+    "terms": {
+      "state_operations": ["setState", "getState", "updateState", "resetState", "state"],
+      "store_patterns": ["reducer", "action", "selector", "slice"],
+      "state_libraries": ["redux", "mobx", "zustand", "recoil", "jotai", "pinia", "vuex"],
+      "reactivity": ["reactive", "observable", "computed", "derived", "watch", "effect"],
+      "persistence": ["rehydrate", "storage", "localStorage", "sessionStorage"]
+    }
+  },
+  {
+    "name": "@rendering",
+    "description": "UI rendering and view generation",
+    "terms": {
+      "component_rendering": ["render", "component", "template", "view", "jsx", "tsx"],
+      "dom_manipulation": ["createElement", "appendChild", "innerHTML", "textContent", "virtual_dom"],
+      "rendering_lifecycle": ["mount", "unmount", "shouldComponentUpdate", "useEffect"],
+      "templating": ["handlebars", "jinja", "ejs", "mustache", "pug", "blade"],
+      "hydration": ["ssr", "server_render", "client_render", "isomorphic", "universal"]
+    }
+  },
+  {
+    "name": "@cli",
+    "description": "Command-line interfaces and terminal utilities",
+    "terms": {
+      "argument_parsing": ["argparse", "argv", "optparse", "commander", "yargs"],
+      "command_structure": ["command", "subcommand", "option", "positional", "argument"],
+      "terminal_io": ["stdin", "stderr", "readline", "prompt", "input"],
+      "output_formatting": ["color", "chalk", "table", "spinner", "progress_bar", "ascii"],
+      "cli_frameworks": ["typer", "docopt", "oclif", "ink", "blessed"]
+    }
+  },
+  {
+    "name": "@database",
+    "description": "Database-specific patterns, ORMs, and migrations",
+    "terms": {
+      "orm_operations": ["model", "entity", "repository", "activerecord", "datamapper", "orm"],
+      "query_building": ["query_builder", "where", "order_by", "offset"],
+      "migrations": ["migrate", "migration", "schema_change", "alter_table", "add_column", "alembic"],
+      "connection_handling": ["connection", "engine", "cursor", "execute"],
+      "database_types": ["postgres", "mysql", "sqlite", "mongodb", "dynamodb", "cassandra"]
+    }
+  },
+  {
+    "name": "@api",
+    "description": "API design patterns and integration",
+    "terms": {
+      "api_design": ["rest", "graphql", "grpc", "openapi", "swagger", "api_spec"],
+      "versioning": ["v1", "v2", "api_version", "version_header", "url_versioning"],
+      "rate_limiting": ["rate_limit", "quota", "rate_limiter", "backoff"],
+      "api_documentation": ["docs", "endpoint_docs", "api_reference"],
+      "api_client": ["client", "sdk", "wrapper", "api_client", "rest_client"]
+    }
+  },
+  {
+    "name": "@internationalization",
+    "description": "Localization and multi-language support",
+    "terms": {
+      "translation": ["translate", "t", "i18n", "gettext", "localize", "tr"],
+      "locale_handling": ["locale", "language", "lang", "set_locale", "current_locale", "detect_locale"],
+      "formatting": ["format_date", "format_number", "format_currency", "plural", "pluralize"],
+      "translation_files": ["messages", "translations", "po", "mo", "json_locale", "yaml_locale"],
+      "rtl_support": ["rtl", "ltr", "direction", "bidi", "text_direction"]
+    }
+  },
+  {
+    "name": "@payment",
+    "description": "Transactions, billing, and payment processing",
+    "terms": {
+      "payment_processing": ["charge", "pay", "payment", "checkout", "purchase"],
+      "payment_providers": ["stripe", "paypal", "braintree", "square", "adyen", "payment_gateway"],
+      "subscription_billing": ["subscription", "billing_cycle", "invoice", "plan", "tier"],
+      "refunds": ["refund", "chargeback", "dispute", "reversal", "credit"],
+      "payment_methods": ["card", "credit_card", "bank_transfer", "wallet", "payment_method", "ach"]
+    }
+  }
+]

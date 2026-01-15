@@ -1,201 +1,202 @@
 {
   "_meta": {
-    "version": "1.0.0",
-    "description": "Universal domain definitions for aOa semantic tagging. Seeded on quickstart for instant coverage across all codebases.",
-    "updated": "2026-01-14"
+    "version": "2.0.0",
+    "description": "Universal domain definitions for aOa semantic tagging. Covers fundamental coding challenges that exist across all codebases.",
+    "updated": "2026-01-15",
+    "design": "Each domain represents a universal coding challenge. Terms are greppable indicators that map to semantic concepts."
   },
   "domains": [
     {
       "name": "@authentication",
-      "description": "User identity verification, login/logout, session management",
+      "description": "Identity verification - who is this user?",
       "confidence": 0.9,
-      "terms": ["auth", "login", "logout", "signin", "signout", "authenticate", "credential", "password", "token", "jwt", "oauth", "session", "identity", "principal", "user_auth", "verify_user", "check_auth"]
+      "terms": ["login", "logout", "signin", "signout", "authenticate", "credential", "password", "sso", "oauth", "saml", "ldap", "mfa", "totp", "passkey"]
     },
     {
       "name": "@authorization",
-      "description": "Access control, permissions, roles, policies",
+      "description": "Access control - what can they do?",
       "confidence": 0.9,
-      "terms": ["authorize", "permission", "role", "access_control", "acl", "rbac", "policy", "grant", "deny", "allowed", "forbidden", "can_access", "has_permission", "check_permission", "require_role"]
+      "terms": ["authorize", "permission", "role", "acl", "rbac", "policy", "grant", "deny", "forbidden", "allowed", "access_control", "privilege", "scope", "claim"]
     },
     {
-      "name": "@database",
-      "description": "Data persistence, queries, ORM, migrations",
+      "name": "@session",
+      "description": "User session and token management",
       "confidence": 0.9,
-      "terms": ["database", "query", "sql", "orm", "model", "schema", "migration", "repository", "entity", "record", "table", "column", "index", "transaction", "commit", "rollback", "cursor", "connection_pool"]
+      "terms": ["token", "jwt", "bearer", "refresh_token", "access_token", "cookie", "csrf", "xsrf", "nonce", "expiry", "revoke", "session_id"]
     },
     {
-      "name": "@api",
-      "description": "HTTP endpoints, REST, GraphQL, request handling",
+      "name": "@persistence",
+      "description": "Data storage and retrieval",
       "confidence": 0.9,
-      "terms": ["api", "endpoint", "route", "handler", "controller", "request", "response", "rest", "graphql", "http", "get", "post", "put", "delete", "patch", "middleware", "router"]
+      "terms": ["database", "repository", "entity", "model", "schema", "migration", "transaction", "commit", "rollback", "cursor", "connection_pool", "orm"]
     },
     {
-      "name": "@testing",
-      "description": "Unit tests, integration tests, mocks, assertions",
-      "confidence": 0.9,
-      "terms": ["test", "spec", "describe", "expect", "assert", "mock", "stub", "spy", "fixture", "setup", "teardown", "beforeEach", "afterEach", "it", "should", "verify", "unittest", "pytest", "jest"]
-    },
-    {
-      "name": "@configuration",
-      "description": "App settings, environment variables, feature flags",
+      "name": "@query",
+      "description": "Data querying and filtering",
       "confidence": 0.85,
-      "terms": ["config", "settings", "env", "environment", "option", "preference", "feature_flag", "toggle", "constant", "default", "override", "load_config", "get_setting", "dotenv"]
-    },
-    {
-      "name": "@logging",
-      "description": "Log output, debugging, tracing, monitoring",
-      "confidence": 0.85,
-      "terms": ["log", "logger", "debug", "info", "warn", "error", "trace", "print", "console", "stdout", "stderr", "level", "format", "handler", "appender", "syslog"]
-    },
-    {
-      "name": "@error_handling",
-      "description": "Exceptions, error recovery, fault tolerance",
-      "confidence": 0.9,
-      "terms": ["error", "exception", "throw", "catch", "try", "finally", "raise", "handle", "recover", "fallback", "retry", "circuit_breaker", "error_handler", "on_error", "fail", "panic"]
+      "terms": ["select", "insert", "update", "where", "join", "aggregate", "index", "prepared_statement", "parameterized", "resultset", "fetch", "execute"]
     },
     {
       "name": "@caching",
-      "description": "In-memory cache, distributed cache, memoization",
-      "confidence": 0.85,
-      "terms": ["cache", "cached", "memoize", "redis", "memcached", "lru", "ttl", "expire", "invalidate", "refresh", "hit", "miss", "store", "retrieve", "warm", "cold"]
+      "description": "Performance optimization through caching",
+      "confidence": 0.9,
+      "terms": ["cache", "redis", "memcached", "ttl", "invalidate", "evict", "lru", "memoize", "warm", "cold", "hit", "miss"]
     },
     {
       "name": "@validation",
-      "description": "Input validation, sanitization, schema enforcement",
+      "description": "Input validation and sanitization",
+      "confidence": 0.9,
+      "terms": ["validate", "validator", "sanitize", "constraint", "required", "optional", "pattern", "bounds", "range", "whitelist", "blacklist"]
+    },
+    {
+      "name": "@error_handling",
+      "description": "Exception handling and recovery",
+      "confidence": 0.9,
+      "terms": ["exception", "throw", "catch", "finally", "raise", "recover", "fallback", "retry", "circuit_breaker", "panic", "rescue", "on_error"]
+    },
+    {
+      "name": "@logging",
+      "description": "Application logging and debugging",
       "confidence": 0.85,
-      "terms": ["validate", "validator", "sanitize", "schema", "check", "verify", "constraint", "rule", "required", "optional", "pattern", "format", "type_check", "bounds", "range"]
+      "terms": ["logger", "debug", "info", "warn", "error", "trace", "stdout", "stderr", "appender", "syslog", "log_level", "structured_log"]
+    },
+    {
+      "name": "@configuration",
+      "description": "Application settings and environment",
+      "confidence": 0.85,
+      "terms": ["config", "settings", "env", "environment", "dotenv", "preference", "feature_flag", "toggle", "constant", "default", "override"]
+    },
+    {
+      "name": "@routing",
+      "description": "Request routing and URL handling",
+      "confidence": 0.9,
+      "terms": ["route", "router", "endpoint", "path", "url", "uri", "param", "query_string", "slug", "redirect", "rewrite"]
+    },
+    {
+      "name": "@middleware",
+      "description": "Request/response processing pipeline",
+      "confidence": 0.85,
+      "terms": ["interceptor", "filter", "pipe", "chain", "before_action", "after_action", "around", "hook", "plugin", "preprocess", "postprocess"]
+    },
+    {
+      "name": "@controller",
+      "description": "Request handling and business logic dispatch",
+      "confidence": 0.85,
+      "terms": ["invoke", "process_request", "handle_request", "respond", "route_handler", "request_handler", "endpoint_handler", "action_handler"]
     },
     {
       "name": "@serialization",
-      "description": "JSON, XML, protobuf, data encoding/decoding",
+      "description": "Data encoding and decoding",
       "confidence": 0.85,
-      "terms": ["serialize", "deserialize", "json", "xml", "yaml", "protobuf", "marshal", "unmarshal", "encode", "decode", "parse", "stringify", "dump", "load", "to_dict", "from_dict"]
+      "terms": ["serialize", "deserialize", "marshal", "unmarshal", "encode", "decode", "parse", "stringify", "dump", "load", "to_dict", "from_dict"]
     },
     {
-      "name": "@security",
-      "description": "Encryption, hashing, secrets, vulnerability prevention",
-      "confidence": 0.9,
-      "terms": ["encrypt", "decrypt", "hash", "salt", "secret", "secure", "crypto", "cipher", "key", "sign", "verify", "hmac", "aes", "rsa", "certificate", "ssl", "tls", "sanitize", "escape"]
-    },
-    {
-      "name": "@concurrency",
-      "description": "Threads, async, locks, parallel processing",
+      "name": "@http",
+      "description": "HTTP protocol handling",
       "confidence": 0.85,
-      "terms": ["async", "await", "thread", "process", "parallel", "concurrent", "lock", "mutex", "semaphore", "queue", "worker", "pool", "spawn", "join", "atomic", "synchronize", "future", "promise"]
-    },
-    {
-      "name": "@events",
-      "description": "Event emitters, pub/sub, message queues, webhooks",
-      "confidence": 0.85,
-      "terms": ["event", "emit", "listen", "subscribe", "publish", "dispatch", "handler", "callback", "hook", "trigger", "observer", "listener", "message", "queue", "topic", "channel", "webhook"]
-    },
-    {
-      "name": "@file_io",
-      "description": "File reading, writing, streaming, paths",
-      "confidence": 0.85,
-      "terms": ["file", "read", "write", "open", "close", "stream", "buffer", "path", "directory", "folder", "exists", "create", "delete", "move", "copy", "rename", "stat", "glob"]
+      "terms": ["https", "request", "response", "status_code", "header", "body", "get", "post", "put", "patch", "delete", "rest"]
     },
     {
       "name": "@networking",
-      "description": "HTTP clients, sockets, DNS, protocols",
+      "description": "Network communication and protocols",
       "confidence": 0.85,
-      "terms": ["http", "https", "socket", "tcp", "udp", "dns", "url", "uri", "fetch", "request", "client", "connection", "timeout", "retry", "proxy", "host", "port", "header"]
+      "terms": ["socket", "tcp", "udp", "dns", "host", "port", "timeout", "connection", "handshake", "protocol", "packet"]
     },
     {
-      "name": "@cli",
-      "description": "Command-line interfaces, argument parsing, terminal",
-      "confidence": 0.85,
-      "terms": ["cli", "command", "arg", "argv", "flag", "option", "parse", "terminal", "console", "stdin", "stdout", "prompt", "input", "output", "shell", "exec", "spawn", "subprocess"]
-    },
-    {
-      "name": "@ui",
-      "description": "User interface, components, rendering, state",
-      "confidence": 0.85,
-      "terms": ["component", "render", "view", "template", "layout", "style", "css", "dom", "element", "widget", "button", "form", "input", "modal", "dialog", "menu", "navigation", "theme"]
-    },
-    {
-      "name": "@state",
-      "description": "State management, stores, reducers, reactivity",
-      "confidence": 0.85,
-      "terms": ["state", "store", "reducer", "action", "dispatch", "selector", "subscribe", "reactive", "observable", "computed", "watch", "effect", "atom", "signal", "context", "provider"]
-    },
-    {
-      "name": "@data_transform",
-      "description": "Data mapping, filtering, aggregation, pipelines",
+      "name": "@websocket",
+      "description": "Real-time bidirectional communication",
       "confidence": 0.8,
-      "terms": ["map", "filter", "reduce", "transform", "convert", "aggregate", "group", "sort", "merge", "flatten", "normalize", "denormalize", "pipeline", "chain", "compose"]
+      "terms": ["websocket", "ws", "wss", "realtime", "bidirectional", "push", "subscribe", "broadcast", "channel", "room"]
+    },
+    {
+      "name": "@messaging",
+      "description": "Async messaging and queues",
+      "confidence": 0.85,
+      "terms": ["queue", "message", "kafka", "rabbitmq", "sqs", "pubsub", "producer", "consumer", "broker", "topic", "partition"]
+    },
+    {
+      "name": "@events",
+      "description": "Event-driven architecture",
+      "confidence": 0.85,
+      "terms": ["event", "emit", "listener", "subscriber", "publisher", "dispatch", "trigger", "callback", "observer", "handler"]
+    },
+    {
+      "name": "@testing",
+      "description": "Test automation and verification",
+      "confidence": 0.9,
+      "terms": ["test", "spec", "describe", "expect", "assert", "mock", "stub", "spy", "fixture", "setup", "teardown", "beforeEach", "afterEach"]
+    },
+    {
+      "name": "@security",
+      "description": "Encryption and data protection",
+      "confidence": 0.9,
+      "terms": ["encrypt", "decrypt", "hash", "salt", "secret", "crypto", "cipher", "sign", "verify", "hmac", "aes", "rsa", "certificate"]
+    },
+    {
+      "name": "@file_io",
+      "description": "File system operations",
+      "confidence": 0.85,
+      "terms": ["file", "read", "write", "open", "close", "stream", "buffer", "filepath", "directory", "exists", "mkdir", "rename", "stat"]
+    },
+    {
+      "name": "@concurrency",
+      "description": "Parallel and async processing",
+      "confidence": 0.85,
+      "terms": ["async", "await", "thread", "process", "parallel", "concurrent", "lock", "mutex", "semaphore", "atomic", "spawn", "fork", "goroutine"]
     },
     {
       "name": "@scheduling",
-      "description": "Cron jobs, task scheduling, timers, intervals",
+      "description": "Task scheduling and timers",
       "confidence": 0.8,
-      "terms": ["schedule", "cron", "job", "task", "timer", "interval", "delay", "timeout", "recurring", "periodic", "once", "at", "every", "run_at", "schedule_task", "background"]
+      "terms": ["schedule", "cron", "job", "task", "timer", "interval", "delay", "recurring", "periodic", "background", "worker"]
     },
     {
       "name": "@monitoring",
-      "description": "Metrics, health checks, alerting, observability",
+      "description": "Observability and health checks",
       "confidence": 0.8,
-      "terms": ["metric", "monitor", "health", "check", "alert", "trace", "span", "telemetry", "prometheus", "grafana", "dashboard", "counter", "gauge", "histogram", "latency", "throughput"]
+      "terms": ["metric", "monitor", "health", "healthcheck", "alert", "span", "telemetry", "prometheus", "grafana", "dashboard", "latency", "throughput"]
     },
     {
       "name": "@deployment",
-      "description": "CI/CD, containers, infrastructure, releases",
+      "description": "CI/CD and infrastructure",
       "confidence": 0.8,
-      "terms": ["deploy", "release", "build", "ci", "cd", "pipeline", "docker", "container", "kubernetes", "helm", "terraform", "ansible", "artifact", "package", "publish", "rollout", "rollback"]
-    },
-    {
-      "name": "@search",
-      "description": "Full-text search, indexing, ranking, queries",
-      "confidence": 0.8,
-      "terms": ["search", "index", "query", "filter", "rank", "score", "match", "fuzzy", "autocomplete", "suggest", "highlight", "facet", "elasticsearch", "solr", "lucene", "inverted"]
-    },
-    {
-      "name": "@analytics",
-      "description": "Usage tracking, metrics collection, reporting",
-      "confidence": 0.8,
-      "terms": ["analytics", "track", "event", "metric", "report", "dashboard", "funnel", "cohort", "segment", "conversion", "retention", "engagement", "pageview", "session", "user_id"]
+      "terms": ["deploy", "release", "build", "pipeline", "docker", "container", "kubernetes", "helm", "terraform", "artifact", "rollout"]
     },
     {
       "name": "@notification",
-      "description": "Push notifications, email, SMS, alerts",
+      "description": "User notifications and alerts",
       "confidence": 0.8,
-      "terms": ["notification", "notify", "alert", "email", "sms", "push", "send", "broadcast", "template", "recipient", "subscribe", "unsubscribe", "preference", "channel", "delivery"]
+      "terms": ["notification", "notify", "email", "sms", "send", "recipient", "delivery", "unsubscribe", "inbox", "outbox"]
     },
     {
-      "name": "@payment",
-      "description": "Transactions, billing, subscriptions, refunds",
+      "name": "@search",
+      "description": "Full-text search and indexing",
       "confidence": 0.8,
-      "terms": ["payment", "pay", "charge", "refund", "subscription", "billing", "invoice", "transaction", "checkout", "cart", "order", "price", "discount", "coupon", "stripe", "paypal"]
+      "terms": ["search", "fulltext", "elasticsearch", "solr", "lucene", "rank", "score", "fuzzy", "autocomplete", "suggest", "facet"]
     },
     {
-      "name": "@media",
-      "description": "Images, video, audio, file uploads",
+      "name": "@analytics",
+      "description": "Usage tracking and metrics",
       "confidence": 0.8,
-      "terms": ["image", "video", "audio", "media", "upload", "download", "resize", "compress", "thumbnail", "encode", "decode", "stream", "player", "recorder", "cdn", "storage"]
+      "terms": ["analytics", "track", "pageview", "funnel", "cohort", "segment", "conversion", "retention", "engagement", "report"]
     },
     {
-      "name": "@localization",
-      "description": "i18n, translations, locale, formatting",
-      "confidence": 0.8,
-      "terms": ["i18n", "l10n", "locale", "translate", "translation", "language", "format", "currency", "date_format", "number_format", "rtl", "ltr", "plural", "interpolate", "message"]
+      "name": "@state",
+      "description": "Application state management",
+      "confidence": 0.85,
+      "terms": ["state", "store", "reducer", "action", "selector", "reactive", "observable", "computed", "watch", "effect", "atom", "signal"]
     },
     {
-      "name": "@rate_limiting",
-      "description": "Throttling, quotas, abuse prevention",
-      "confidence": 0.8,
-      "terms": ["rate_limit", "throttle", "quota", "limit", "cooldown", "backoff", "retry_after", "bucket", "window", "requests_per", "too_many", "abuse", "spam", "flood"]
+      "name": "@rendering",
+      "description": "UI rendering and display",
+      "confidence": 0.85,
+      "terms": ["render", "component", "view", "template", "layout", "dom", "element", "widget", "paint", "hydrate", "virtual_dom"]
     },
     {
-      "name": "@feature_flags",
-      "description": "Feature toggles, A/B testing, rollouts",
+      "name": "@cli",
+      "description": "Command-line interface handling",
       "confidence": 0.8,
-      "terms": ["feature_flag", "toggle", "flag", "variant", "experiment", "ab_test", "rollout", "canary", "percentage", "enabled", "disabled", "override", "segment", "targeting"]
-    },
-    {
-      "name": "@migrations",
-      "description": "Database migrations, schema changes, versioning",
-      "confidence": 0.8,
-      "terms": ["migration", "migrate", "upgrade", "downgrade", "version", "revision", "alter", "create_table", "drop_table", "add_column", "remove_column", "seed", "rollback"]
+      "terms": ["cli", "command", "arg", "argv", "flag", "option", "terminal", "console", "stdin", "prompt", "shell", "subprocess"]
     }
   ]
 }
