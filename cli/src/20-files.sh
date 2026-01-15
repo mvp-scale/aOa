@@ -252,7 +252,37 @@ cmd_lines() {
 }
 
 cmd_changes() {
-    local since="${1:-300}"
+    local input="${1:-5m}"
+    local since
+    local display
+
+    # Parse duration: 30s, 5m, 1h, 2d -> seconds
+    if [[ "$input" =~ ^([0-9]+)([smhd])$ ]]; then
+        local num="${BASH_REMATCH[1]}"
+        local unit="${BASH_REMATCH[2]}"
+        case "$unit" in
+            s) since=$num; display="${num}s" ;;
+            m) since=$((num * 60)); display="${num}m" ;;
+            h) since=$((num * 3600)); display="${num}h" ;;
+            d) since=$((num * 86400)); display="${num}d" ;;
+        esac
+    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+        # Plain number = seconds
+        since=$input
+        display="${input}s"
+    else
+        echo "Usage: aoa changes [duration]"
+        echo ""
+        echo "Duration format: 30s, 5m, 1h, 2d (default: 5m)"
+        echo ""
+        echo "Examples:"
+        echo "  aoa changes          # Last 5 minutes"
+        echo "  aoa changes 30m      # Last 30 minutes"
+        echo "  aoa changes 1h       # Last hour"
+        echo "  aoa changes 2d       # Last 2 days"
+        return 1
+    fi
+
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
@@ -260,10 +290,13 @@ cmd_changes() {
     fi
 
     local result=$(curl -s "${INDEX_URL}/changes?since=${since}${project_param}")
-    local count=$(echo "$result" | jq -r '.results | length')
+    local count=$(echo "$result" | jq -r '.results | length // 0' 2>/dev/null || echo "0")
 
-    printf "${CYAN}${BOLD}📝 %s changed files${NC} ${DIM}(last %ss)${NC}\n" "$count" "$since"
-    echo "$result" | jq -r '.results[] | "  \(.file) (\(.changes) changes)"'
+    printf "${CYAN}${BOLD}📝 %s changed files${NC} ${DIM}(last %s)${NC}\n" "$count" "$display"
+
+    if [ "$count" -gt 0 ] 2>/dev/null; then
+        echo "$result" | jq -r '.results[] | "  \(.file) (\(.changes) changes)"' 2>/dev/null || true
+    fi
 }
 
 cmd_files() {

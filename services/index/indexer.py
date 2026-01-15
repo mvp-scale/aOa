@@ -3401,6 +3401,74 @@ def get_pending_enrichment():
     })
 
 
+@app.route('/file')
+def get_file_content():
+    """Get file content with optional line range. Used by aoa head/lines/tail."""
+    start = time.time()
+
+    file_path = request.args.get('path')
+    lines_param = request.args.get('lines')  # "1-50" or "-20" (tail) or "30" (head)
+    project = request.args.get('project')
+
+    if not file_path:
+        return jsonify({'error': 'Missing path parameter'}), 400
+
+    idx = manager.get_local(project)
+    if not idx:
+        return jsonify({'error': 'No index available'}), 404
+
+    # Resolve path (same pattern as /outline)
+    full_path = Path(idx.root) / file_path if not Path(file_path).is_absolute() else Path(file_path)
+
+    if not full_path.exists():
+        return jsonify({'error': f'File not found: {file_path}'}), 404
+
+    # Read content
+    try:
+        content = full_path.read_text(encoding='utf-8', errors='ignore')
+        all_lines = content.split('\n')
+    except Exception as e:
+        return jsonify({'error': f'Cannot read file: {e}'}), 500
+
+    total_lines = len(all_lines)
+
+    # Parse line range
+    if lines_param:
+        if lines_param.startswith('-'):
+            # Tail: last N lines
+            n = int(lines_param[1:])
+            extracted = all_lines[-n:]
+            line_range = (max(1, total_lines - n + 1), total_lines)
+        elif '-' in lines_param:
+            # Range: start-end
+            parts = lines_param.split('-')
+            start_l = int(parts[0]) - 1
+            end_l = int(parts[1]) if len(parts) > 1 else total_lines
+            extracted = all_lines[start_l:end_l]
+            line_range = (start_l + 1, min(end_l, total_lines))
+        else:
+            # Head: first N lines
+            n = int(lines_param)
+            extracted = all_lines[:n]
+            line_range = (1, min(n, total_lines))
+
+        return jsonify({
+            'content': '\n'.join(extracted),
+            'lines': line_range,
+            'total_lines': total_lines,
+            'file': file_path,
+            'ms': (time.time() - start) * 1000
+        })
+    else:
+        return jsonify({
+            'content': content,
+            'lines': (1, total_lines),
+            'total_lines': total_lines,
+            'file': file_path,
+            'ms': (time.time() - start) * 1000
+        })
+
+
 # ============================================================================
 # GL-059.2: Symbol Lookup for Targeted Assignment
 # ============================================================================

@@ -31,12 +31,12 @@ cmd_hot() {
     fi
 
     local result=$(curl -s "${INDEX_URL}/predict?limit=${limit}${project_param}")
-    local count=$(echo "$result" | jq -r '.predictions | length // 0' 2>/dev/null || echo "0")
+    local count=$(echo "$result" | jq -r '.files | length // 0' 2>/dev/null || echo "0")
 
     printf "${CYAN}${BOLD}🔥 %s hot files${NC}\n" "$count"
 
     if [ "$count" -gt 0 ] 2>/dev/null; then
-        echo "$result" | jq -r '.predictions[] | "  \(.file) (\(.score | . * 100 | floor)%)"' 2>/dev/null || true
+        echo "$result" | jq -r '.files[] | "  \(.path) (\(.confidence * 100 | floor)%)"' 2>/dev/null || true
     fi
     return 0
 }

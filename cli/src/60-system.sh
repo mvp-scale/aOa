@@ -1319,15 +1319,24 @@ cmd_metrics() {
 cmd_history() {
     local limit="${1:-20}"
 
-    curl -s "${STATUS_URL}/history?limit=${limit}" | jq -r '.events[] |
+    local result=$(curl -s "${STATUS_URL}/history?limit=${limit}")
+    local count=$(echo "$result" | jq -r '.events | length // 0')
+
+    if [ "$count" -eq 0 ]; then
+        echo -e "${DIM}No history recorded yet${NC}"
+        return 0
+    fi
+
+    printf "${CYAN}${BOLD}📜 %s events${NC}\n" "$count"
+    echo "$result" | jq -r '.events[] |
         if .type == "request" then
-            "[\(.ts | strftime("%H:%M:%S"))] \(.model) in:\(.input) out:\(.output) $\(.cost)"
+            "  [\(.ts | strftime("%H:%M:%S"))] \(.model) in:\(.input) out:\(.output) $\(.cost)"
         elif .type == "model_switch" then
-            "[\(.ts | strftime("%H:%M:%S"))] -> \(.model)"
+            "  [\(.ts | strftime("%H:%M:%S"))] -> \(.model)"
         elif .type == "block" then
-            "[\(.ts | strftime("%H:%M:%S"))] BLOCKED \(.block_type)"
+            "  [\(.ts | strftime("%H:%M:%S"))] BLOCKED \(.block_type)"
         else
-            "[\(.ts | strftime("%H:%M:%S"))] \(.type)"
+            "  [\(.ts | strftime("%H:%M:%S"))] \(.type)"
         end
     '
 }
