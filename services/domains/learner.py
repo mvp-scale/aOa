@@ -419,20 +419,31 @@ class DomainLearner:
 
         return {"seeded": seeded, "learned": learned}
 
-    def increment_term_hits(self, terms: list[str]) -> None:
-        """Increment hit counters for terms that matched."""
-        if not terms:
-            return
-        term_hits_key = self._key("term_hits")
-        pipe = self.redis.client.pipeline()
-        for term in terms:
-            pipe.hincrby(term_hits_key, term, 1)
-        pipe.execute()
+    def increment_term_hits(self, terms, amount: int = 1) -> int:
+        """
+        Increment hit counters for term(s).
 
-    def increment_term_hits(self, term: str, amount: int = 1) -> int:
-        """GL-071: Increment hit count for a term (validates term relevance)."""
+        Args:
+            terms: Single term (str) or list of terms (list[str])
+            amount: Amount to increment (only used for single term)
+
+        Returns:
+            New hit count (single term) or 0 (batch)
+        """
         term_hits_key = self._key("term_hits")
-        return self.redis.client.hincrby(term_hits_key, term.lower(), amount)
+
+        # Handle list of terms (batch mode)
+        if isinstance(terms, list):
+            if not terms:
+                return 0
+            pipe = self.redis.client.pipeline()
+            for term in terms:
+                pipe.hincrby(term_hits_key, term.lower(), 1)
+            pipe.execute()
+            return 0
+
+        # Handle single term
+        return self.redis.client.hincrby(term_hits_key, terms.lower(), amount)
 
     def get_term_hits(self, terms: list[str] = None) -> dict:
         """Get hit counts for terms. If terms=None, returns all."""
