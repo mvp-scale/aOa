@@ -579,7 +579,7 @@ def format_search_response(
         rolling_tags = intent_index.get_rolling_intent(project, window=50)
         if rolling_tags:
             top_tags = sorted(rolling_tags.items(), key=lambda x: x[1], reverse=True)[:5]
-            response['rolling_intent'] = [f"#{tag}" for tag, _ in top_tags]
+            response['rolling_intent'] = [tag for tag, _ in top_tags]  # Tags already have # prefix
 
     return response
 
@@ -3759,24 +3759,16 @@ def _do_domain_learning(project_id: str):
     aOa uses HOOKS to access Haiku, not direct API calls.
     This keeps aOa accessible without requiring API keys.
 
-    Flow:
-    1. This function sets should_learn = true and resets counter
-    2. Hook detects should_learn in next status check
-    3. Hook prompts Claude to spawn Haiku Task for learning
-    4. Results POSTed back via /domains/add endpoint
-
-    See CLAUDE.md "Hooks, Not API Keys" section.
+    GL-062: Fire-and-forget - pending flag and count reset happen in trigger,
+    not here. This function just logs that learning was triggered.
+    The hook will output instructions, but we don't wait for completion.
+    Counter keeps going, and if Claude doesn't complete learning, it triggers
+    again in another 10 prompts. This is resilient vs. blocking forever.
     """
     if not DOMAINS_AVAILABLE:
         return
 
-    try:
-        learner = DomainLearner(project_id)
-        learner.set_learning_pending()  # Signal hook FIRST to block new increments
-        learner.reset_prompt_count()    # THEN reset count safely
-        print(f"[DomainLearning] Ready for hook - {project_id} (learning_pending=true)", flush=True)
-    except Exception as e:
-        print(f"[DomainLearning] Error: {e}", flush=True)
+    print(f"[DomainLearning] Ready for hook - {project_id}", flush=True)
 
 
 def _trigger_domain_learning_if_needed(project_id: str):
@@ -3795,18 +3787,18 @@ def _trigger_domain_learning_if_needed(project_id: str):
     try:
         learner = DomainLearner(project_id)
 
-        # Only increment prompt count if learning is NOT pending
-        # This prevents count from exceeding threshold while waiting for hook
-        if not learner.is_learning_pending():
-            prompt_count = learner.increment_prompt_count()
-        else:
-            prompt_count = learner.get_prompt_count()
+        # GL-062: Fire-and-forget learning - always increment, never block
+        # The pending flag was causing permanent blocks when Claude didn't complete the loop
+        prompt_count = learner.increment_prompt_count()
 
         # Always increment tune count (tuning happens server-side, not via hook)
         tune_count = learner.increment_tune_count()
 
         # Learning trigger (every 10 prompts)
-        if learner.should_learn() and not learner.is_learning_pending():
+        # Fire-and-forget: set pending, reset count, trigger - don't wait for completion
+        if learner.should_learn():
+            learner.set_learning_pending()
+            learner.reset_prompt_count()
             thread = threading.Thread(
                 target=_do_domain_learning,
                 args=(project_id,),
@@ -4969,7 +4961,7 @@ def pattern_search():
 
         if rolling_tags:
             top_tags = sorted(rolling_tags.items(), key=lambda x: x[1], reverse=True)[:5]
-            response['rolling_intent'] = [f"#{tag}" for tag, _ in top_tags]
+            response['rolling_intent'] = [tag for tag, _ in top_tags]  # Tags already have # prefix
 
     return jsonify(response)
 

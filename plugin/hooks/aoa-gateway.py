@@ -52,7 +52,18 @@ STOPWORDS = {
     'can', 'you', 'are', 'please', 'help', 'want', 'need', 'make', 'use', 'get',
     'add', 'fix', 'update', 'change', 'create', 'delete', 'remove', 'show', 'find',
     'look', 'see', 'let', 'know', 'would', 'could', 'should', 'will', 'just',
-    'like', 'also', 'more', 'some', 'any', 'all', 'new', 'now', 'about', 'into'
+    'like', 'also', 'more', 'some', 'any', 'all', 'new', 'now', 'about', 'into',
+    # Additional common words that aren't useful as keywords
+    'then', 'through', 'when', 'where', 'which', 'while', 'been', 'being', 'were',
+    'they', 'them', 'their', 'there', 'these', 'those', 'your', 'yours', 'our',
+    'has', 'had', 'does', 'did', 'doing', 'done', 'going', 'goes', 'went', 'come',
+    'came', 'take', 'took', 'give', 'gave', 'made', 'said', 'tell', 'told', 'ask',
+    'asked', 'why', 'yes', 'not', 'but', 'only', 'very', 'even', 'still', 'already',
+    'again', 'back', 'here', 'there', 'over', 'under', 'before', 'after', 'between',
+    'each', 'every', 'both', 'most', 'other', 'such', 'same', 'different', 'next',
+    'first', 'last', 'many', 'much', 'few', 'less', 'own', 'way', 'thing', 'things',
+    'something', 'anything', 'nothing', 'everything', 'someone', 'anyone', 'everyone',
+    'watching', 'commands', 'command', 'run', 'running', 'work', 'working', 'works',
 }
 
 # =============================================================================
@@ -416,12 +427,16 @@ def log_prediction(session_id: str, files: list, keywords: list):
     }, timeout=1)
 
     # Record as Predict intent for aoa intent display
+    # Tags should reflect what was predicted, not raw search keywords
+    # Use infer_tags on predicted files for semantic meaning
+    predicted_tags = infer_tags(file_paths[:5], 'Predict')
+    predicted_tags.append(f"@{avg_confidence:.0%}")
     api_post("/intent", {
         'session_id': session_id,
         'project_id': PROJECT_ID,
         'tool': 'Predict',
         'files': file_paths[:5],
-        'tags': [f"#{k}" for k in keywords[:3]] + [f"@{avg_confidence:.0%}"]
+        'tags': predicted_tags
     }, timeout=1)
 
 
@@ -533,40 +548,20 @@ def handle_prompt(data: dict):
         existing_domain_names = [d['name'] for d in all_domains.get('domains', [])]
         existing_domains = ", ".join(existing_domain_names[:20]) if existing_domain_names else "@hook_system, @intent_tracking, @api_integration"
 
-        # Output learning instructions for Claude
-        # GL-059.2: Target FUNCTIONS, not files
+        # Output learning instructions for Claude (YOU are the model - no Task tool)
         learning_prompt = f"""## aOa Domain Learning (Auto-triggered)
 
-aOa has collected enough activity to learn new semantic domains.
+Generate 1-3 semantic domains from this activity (YOU are the model - no Task tool):
 
-**Recent files worked on:**
-{functions_summary}
+**Files:** {', '.join([s['qualified'] for s in symbols[:10]] if symbols else locations[:10])}
+**Tags:** {tags_summary}
+**Existing (don't duplicate):** {existing_domains}
 
-**Recent tags:** {tags_summary}
-**Existing domains:** {existing_domains}
+Output JSON: {{"domains": [{{"name": "@domain_name", "description": "what intent this captures", "terms": ["intent_term1", "intent_term2"]}}]}}
 
-**Your task:** Spawn a Haiku Task to analyze these patterns and discover 1-3 new semantic domains.
-
-Use this prompt for Haiku:
-```
-Given this developer activity, identify 1-3 HIGH-LEVEL semantic domains.
-
-Files: {', '.join([s['qualified'] for s in symbols[:10]] if symbols else locations[:10])}
-Tags: {tags_summary}
-
-Existing domains (don't duplicate): {existing_domains}
-
-Return JSON only:
-{{"domains": [{{"name": "@domain_name", "description": "brief description", "terms": ["term1", "term2", "term3"]}}]}}
-```
-
-After Haiku responds, POST results to aOa:
+Then run:
 ```bash
-curl -s -X POST "localhost:8080/domains/add" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": <haiku_response>}}'
-```
-
-Then clear the pending flag:
-```bash
+curl -s -X POST "localhost:8080/domains/add" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": YOUR_JSON}}'
 curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
 ```
 """

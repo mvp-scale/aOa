@@ -478,6 +478,9 @@ PYEOF
             else
                 impact="${CYAN}1 file${NC} suggested"
             fi
+            # TARGET: show keywords (tags without #) instead of first file
+            local keywords=$(echo "$tags" | sed 's/#//g' | xargs)
+            target="keywords: ${keywords}"
         elif [ "$action" = "Intent" ]; then
             # Haiku semantic tagging
             attribution="${CYAN}semantic${NC}"
