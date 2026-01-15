@@ -629,6 +629,19 @@ def handle_tool(data: dict):
             "output_size": output_size,
         }, timeout=2)
 
+    # GL-062: Check if accessed files match predictions (for hit/miss tracking)
+    # Only check for file-accessing tools
+    if tool in ('Read', 'Edit', 'Write') and files:
+        for file_path in files:
+            if file_path.startswith('pattern:') or file_path.startswith('cmd:'):
+                continue
+            base_path = file_path.split(':')[0] if ':' in file_path else file_path
+            api_post("/predict/check", {
+                "session_id": session_id,
+                "project_id": PROJECT_ID,
+                "file": base_path
+            }, timeout=1)
+
 
 def handle_enforce(data: dict):
     """

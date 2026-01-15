@@ -5092,6 +5092,20 @@ def record_intent():
 
     intent_index.record(tool, files, tags, session_id, tool_use_id, project_id, file_sizes, output_size)
 
+    # GL-062: Feed scorer for prediction ranking
+    # Record file access to build recency/frequency/tag data for predictions
+    if RANKING_AVAILABLE and scorer is not None:
+        for file_path in files:
+            # Skip patterns and commands, only score real files
+            if file_path.startswith('pattern:') or file_path.startswith('cmd:'):
+                continue
+            # Extract base path (remove :line-range suffixes)
+            base_path = file_path.split(':')[0] if ':' in file_path else file_path
+            try:
+                scorer.record_access(base_path, tags=tags)
+            except Exception:
+                pass  # Don't block on scorer errors
+
     # GL-060.3: Match intent tags against domain terms, increment hits
     if DOMAINS_AVAILABLE and project_id and tags:
         try:

@@ -540,15 +540,11 @@ PYEOF
                 2) tags="${CYAN}#growing${NC}"; target="${BOLD}${YELLOW}Knowledge is power${NC}" ;;
             esac
         elif [ "$action" = "Tune" ]; then
-            # Domain tuning event with rotating quotes
+            # Domain tuning event
             attribution="${CYAN}cycle ${AOA_TUNE_CYCLE}${NC}"
             impact="${DIM}${AOA_TUNE_STALE} stale, ${AOA_TUNE_PRUNED} pruned${NC}"
-            # Rotate through cheeky messages - tag in aOa cyan, text in bold yellow (Star Wars gold)
-            case $((RANDOM % 3)) in
-                0) tags="${CYAN}#refined${NC}"; target="${BOLD}${YELLOW}This is the way.${NC}" ;;
-                1) tags="${CYAN}#sharpened${NC}"; target="${BOLD}${YELLOW}Always in motion, the future is${NC}" ;;
-                2) tags="${CYAN}#balanced${NC}"; target="${BOLD}${YELLOW}Do or do not${NC}" ;;
-            esac
+            tags="${CYAN}#refined${NC}"
+            target="${BOLD}${YELLOW}This is the way.${NC}"
         elif [ "$action" = "Predict" ] || [ "$action" = "Intent" ] || [ "$action" = "Outline" ] || [ "$action" = "Search" ] || [ "$action" = "Find" ] || [ "$action" = "Locate" ] || [ "$action" = "Tree" ] || [ "$action" = "Memory" ]; then
             : # Impact already set above for aOa native operations
         elif [ "$saved" = "-" ]; then
@@ -626,7 +622,15 @@ PYEOF
         [ $attrib_pad -gt 0 ] && printf "%${attrib_pad}s" ""
         echo -ne " $impact"
         [ $impact_pad -gt 0 ] && printf "%${impact_pad}s" ""
-        printf " %-55s " "$tags"
+        # Tags need echo -e to render color codes (e.g., for Tune/Learn events)
+        # Strip ANSI codes for padding calculation
+        local tags_visible=$(echo -e "$tags" | sed 's/\x1b\[[0-9;]*m//g')
+        local tags_len=${#tags_visible}
+        local tags_pad=$((55 - tags_len))
+        echo -n " "
+        echo -ne "$tags"
+        [ $tags_pad -gt 0 ] && printf "%${tags_pad}s" ""
+        echo -n " "
         # Format aOa commands with branding: aOa in CYAN, command in GREEN
         if [[ "$target" == AOA_CMD:* ]]; then
             local aoa_display="${target#AOA_CMD:}"
@@ -639,7 +643,8 @@ PYEOF
                 echo -e "${CYAN}aOa${NC} ${aoa_display#aoa }"
             fi
         else
-            echo "$target"
+            # Use echo -e for targets with color codes (e.g., Tune/Learn messages)
+            echo -e "$target"
         fi
     done
 
@@ -647,5 +652,5 @@ PYEOF
     echo ""
     echo -e "${CYAN}${BOLD}⚡ Intent Angle${NC}"
     echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────────────────${NC}"
-    echo -e "${CYAN}${domain_count} domains${NC} ${DIM}│${NC} Learning: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} ${CYAN}aOa finds exact locations → Claude reads only what it needs.${NC}"
+    echo -e "${CYAN}${domain_count} domains${NC} ${DIM}│${NC} Learning: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} ${CYAN}aOa finds exact locations →${NC} ${BOLD}${YELLOW}Claude reads only what it needs.${NC}"
 }
