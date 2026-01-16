@@ -694,96 +694,25 @@ echo -e "${GREEN}✓${NC}"
 
 # Create settings template (for aoa init)
 echo -n "  Creating settings template.... "
-cat > "$AOA_DATA/settings.template.json" << 'EOFCONFIG'
-{
-  "_comment": "Permissions are pre-approved (no prompts). Patterns use glob syntax: 'command:*' means 'command followed by anything'",
-  "permissions": {
-    "allow": [
-      "Bash(aoa grep:*)",
-      "Bash(aoa egrep:*)",
-      "Bash(aoa find:*)",
-      "Bash(aoa tree:*)",
-      "Bash(aoa locate:*)",
-      "Bash(aoa head:*)",
-      "Bash(aoa tail:*)",
-      "Bash(aoa lines:*)",
-      "Bash(aoa hot:*)",
-      "Bash(aoa touched:*)",
-      "Bash(aoa focus:*)",
-      "Bash(aoa predict:*)",
-      "Bash(aoa health:*)",
-      "Bash(aoa help:*)",
-      "Bash(aoa metrics:*)",
-      "Bash(aoa baseline:*)",
-      "Bash(aoa intent:*)",
-      "Bash(aoa services:*)",
-      "Bash(aoa changes:*)",
-      "Bash(aoa files:*)",
-      "Bash(aoa outline:*)",
-      "Bash(aoa projects:*)",
-      "Bash(aoa search:*)",
-      "Bash(aoa multi:*)",
-      "Bash(aoa pattern:*)",
-      "Bash(docker-compose:*)",
-      "Bash(docker ps:*)",
-      "Bash(docker logs:*)",
-      "Bash(docker run:*)",
-      "Bash(docker exec:*)",
-      "Bash(docker stop:*)",
-      "Bash(docker rm:*)",
-      "Bash(docker build:*)",
-      "Bash(curl:*)",
-      "Bash(ls:*)"
-    ]
-  },
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/aoa-intent-summary.py\"",
-            "timeout": 2
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/aoa-predict-context.py\"",
-            "timeout": 3
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Read|Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/aoa-intent-prefetch.py\"",
-            "timeout": 2
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Read|Edit|Write|Bash|Grep|Glob",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/aoa-intent-capture.py\"",
-            "timeout": 5
-          }
-        ]
-      }
-    ]
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/aoa-status-line.sh\""
-  }
-}
-EOFCONFIG
+
+# Assemble from component templates
+jq -n \
+  --slurpfile perms "$AOA_HOME/plugin/templates/permissions.allow.json" \
+  --slurpfile hooks "$AOA_HOME/plugin/templates/hooks.json" \
+  '{
+    _comment: "Permissions are pre-approved (no prompts). Patterns use glob syntax: '"'"'command:*'"'"' means '"'"'command followed by anything'"'"'",
+    permissions: {allow: $perms[0]},
+    hooks: $hooks[0].hooks,
+    statusLine: $hooks[0].statusLine
+  }' > "$AOA_DATA/settings.template.json"
+
+# Validate assembled template
+if ! jq empty "$AOA_DATA/settings.template.json" 2>/dev/null; then
+    echo -e "${RED}✗ Template validation failed${NC}"
+    echo -e "${DIM}Check plugin/templates/*.json for syntax errors${NC}"
+    exit 1
+fi
+
 echo -e "${GREEN}✓${NC}"
 
 echo

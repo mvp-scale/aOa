@@ -4447,6 +4447,13 @@ EOFAOA
         ' "$AOA_DATA/settings.template.json" "$project_root/.claude/settings.local.json" \
           > "$project_root/.claude/settings.local.json.new"
 
+        # Validate merged result
+        if ! jq empty "$project_root/.claude/settings.local.json.new" 2>/dev/null; then
+            echo -e "${RED}✗ Merge failed${NC}"
+            echo -e "${DIM}Settings backup preserved, .new file left for inspection${NC}"
+            return 1
+        fi
+
         mv "$project_root/.claude/settings.local.json.new" "$project_root/.claude/settings.local.json"
         echo -e "${GREEN}✓${NC} ${DIM}(merged, backup created)${NC}"
     fi
