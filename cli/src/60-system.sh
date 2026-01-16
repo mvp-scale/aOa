@@ -128,7 +128,7 @@ cmd_stop() {
 
     echo
     echo -e "${DIM}Tip: To change port, edit ${AOA_HOME}/.env and restart:${NC}"
-    echo -e "${DIM}  GATEWAY_PORT=8081${NC}"
+    echo -e "${DIM}  AOA_GATEWAY_PORT=8081${NC}"
     echo -e "${DIM}  aoa stop && aoa start${NC}"
 }
 
@@ -153,13 +153,13 @@ cmd_info() {
 
     if [ -f "$env_file" ]; then
         projects_root=$(grep "^PROJECTS_ROOT=" "$env_file" 2>/dev/null | cut -d'=' -f2 || echo "$HOME")
-        gateway_port=$(grep "^GATEWAY_PORT=" "$env_file" 2>/dev/null | cut -d'=' -f2 || echo "8080")
+        gateway_port=$(grep "^AOA_GATEWAY_PORT=" "$env_file" 2>/dev/null | cut -d'=' -f2 || echo "8080")
     fi
 
     # Show Docker configuration from .env
     echo -e "${BOLD}Docker Configuration:${NC} ${DIM}(from .env)${NC}"
     echo -e "  PROJECTS_ROOT:   ${projects_root} → /userhome"
-    echo -e "  GATEWAY_PORT:    ${gateway_port}"
+    echo -e "  AOA_GATEWAY_PORT: ${gateway_port}"
     echo -e "  Claude sessions: ${projects_root}/.claude ${DIM}(auto-derived)${NC}"
     echo ""
     echo -e "  ${DIM}Edit .env in aOa root to change, then restart Docker${NC}"

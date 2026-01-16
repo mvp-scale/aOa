@@ -477,7 +477,7 @@ async def catch_all(path: str, request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("GATEWAY_PORT", 8080))
+    port = int(os.environ.get("AOA_GATEWAY_PORT", 8080))
     print(f"Starting aOa Gateway on port {port}")
     print(f"Services: {SERVICES}")
     uvicorn.run(app, host="0.0.0.0", port=port)
