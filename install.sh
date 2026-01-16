@@ -349,8 +349,8 @@ echo -e "${GREEN}✓${NC}"
 
 # Check if user can actually RUN Docker (permissions + daemon)
 echo -n "  Docker accessible............. "
-DOCKER_ERR=$(docker info 2>&1)
-if [ $? -eq 0 ]; then
+# Note: Using if-then form to prevent set -e from triggering on failure
+if DOCKER_ERR=$(docker info 2>&1); then
     echo -e "${GREEN}✓${NC}"
 else
     # Diagnose the failure
