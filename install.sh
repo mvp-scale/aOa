@@ -550,7 +550,7 @@ echo
 
 # Set default gateway configuration
 AOA_GATEWAY_HOST="${AOA_GATEWAY_HOST:-localhost}"
-AOA_AOA_GATEWAY_PORT="${AOA_AOA_GATEWAY_PORT:-8080}"
+AOA_GATEWAY_PORT="${AOA_GATEWAY_PORT:-8080}"
 
 # Function to check if port is available
 check_port() {
