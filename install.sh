@@ -796,19 +796,58 @@ echo
 
 cd "$AOA_HOME"
 
+# Rolling window build output (shows last 10 lines, updates in place)
+WINDOW_SIZE=10
+build_with_progress() {
+    local cmd="$1"
+    local lines=()
+    local i
+
+    # Print placeholder lines
+    for ((i=0; i<WINDOW_SIZE; i++)); do
+        echo -e "  ${DIM}...${NC}"
+    done
+
+    # Run build and capture output line by line
+    eval "$cmd" 2>&1 | while IFS= read -r line; do
+        # Truncate long lines
+        line="${line:0:70}"
+        lines+=("$line")
+        # Keep only last WINDOW_SIZE lines
+        if [ ${#lines[@]} -gt $WINDOW_SIZE ]; then
+            lines=("${lines[@]:1}")
+        fi
+
+        # Move cursor up and clear lines
+        printf '\033[%dA' $WINDOW_SIZE
+        for ((i=0; i<WINDOW_SIZE; i++)); do
+            printf '\033[2K'  # Clear line
+            if [ $i -lt ${#lines[@]} ]; then
+                echo -e "  ${DIM}${lines[$i]}${NC}"
+            else
+                echo -e "  ${DIM}...${NC}"
+            fi
+        done
+    done
+
+    # Clear the window and show completion
+    printf '\033[%dA' $WINDOW_SIZE
+    for ((i=0; i<WINDOW_SIZE; i++)); do
+        printf '\033[2K\n'
+    done
+    printf '\033[%dA' $WINDOW_SIZE
+}
+
 if [ "$USE_COMPOSE" -eq 1 ]; then
     echo -e "  ${DIM}Building Docker images (compose mode)...${NC}"
-    echo -e "  ${DIM}This may take a minute on first run.${NC}"
     echo
-    docker compose build --no-cache --quiet
+    build_with_progress "docker compose build --no-cache"
 else
     echo -e "  ${DIM}Building unified Docker image...${NC}"
-    echo -e "  ${DIM}This may take a minute on first run.${NC}"
     echo
-    docker build --no-cache -t aoa . --quiet
+    build_with_progress "docker build --no-cache -t aoa ."
 fi
 
-echo
 echo -e "  ${GREEN}✓ Docker image(s) built${NC}"
 echo
 sleep 1
