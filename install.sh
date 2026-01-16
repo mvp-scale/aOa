@@ -362,11 +362,23 @@ else
         if getent group docker 2>/dev/null | grep -qw "$USER"; then
             echo -e "  ${YELLOW}You're in the docker group, but this session doesn't have it yet.${NC}"
             echo
-            echo -e "  ${BOLD}Fix (no sudo needed):${NC}"
-            echo -e "    ${DIM}\$${NC} newgrp docker"
-            echo -e "    ${DIM}\$${NC} ./install.sh"
-            echo
-            echo -e "  ${DIM}Or log out and back in for a permanent fix.${NC}"
+            echo -n -e "  ${CYAN}Continue installation with docker group? [Y/n] ${NC}"
+            read -r continue_choice
+
+            if [[ ! "$continue_choice" =~ ^[Nn]$ ]]; then
+                echo
+                echo -e "  ${DIM}Restarting installer with docker group...${NC}"
+                echo
+                # Use sg to run installer with the docker group
+                exec sg docker -c "$0 $*"
+            else
+                echo
+                echo -e "  ${BOLD}To continue later:${NC}"
+                echo -e "    ${DIM}\$${NC} newgrp docker    ${DIM}# activate group (this session)${NC}"
+                echo -e "    ${DIM}\$${NC} ./install.sh"
+                echo
+                echo -e "  ${DIM}Or log out and back in for permanent access.${NC}"
+            fi
         else
             # User not in docker group - check if they can fix it themselves
             echo -e "  ${YELLOW}Your user ($USER) is not in the 'docker' group.${NC}"
@@ -393,12 +405,25 @@ else
                     if sudo usermod -aG docker "$USER" 2>/dev/null; then
                         echo -e "${GREEN}✓${NC}"
                         echo
-                        echo -e "  ${GREEN}Done!${NC} Now activate the group:"
+                        echo -e "  ${GREEN}✓ Added $USER to docker group${NC}"
                         echo
-                        echo -e "    ${DIM}\$${NC} newgrp docker"
-                        echo -e "    ${DIM}\$${NC} ./install.sh"
-                        echo
-                        echo -e "  ${DIM}Or log out and back in for a permanent fix.${NC}"
+                        echo -n -e "  ${CYAN}Continue installation now? [Y/n] ${NC}"
+                        read -r continue_choice
+
+                        if [[ ! "$continue_choice" =~ ^[Nn]$ ]]; then
+                            echo
+                            echo -e "  ${DIM}Restarting installer with docker group...${NC}"
+                            echo
+                            # Use sg to run installer with the new group membership
+                            exec sg docker -c "$0 $*"
+                        else
+                            echo
+                            echo -e "  ${BOLD}To continue later:${NC}"
+                            echo -e "    ${DIM}\$${NC} newgrp docker    ${DIM}# activate group (this session)${NC}"
+                            echo -e "    ${DIM}\$${NC} ./install.sh"
+                            echo
+                            echo -e "  ${DIM}Or log out and back in for permanent access.${NC}"
+                        fi
                     else
                         echo -e "${RED}✗ Failed${NC}"
                         echo
