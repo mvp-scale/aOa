@@ -73,6 +73,8 @@ main() {
         repo|r)     cmd_repo "$@" ;;
 
         # System
+        start)      cmd_start ;;
+        stop)       cmd_stop ;;
         quickstart|qs) cmd_quickstart "$@" ;;
         learn)      cmd_learn "$@" ;;
         domains|d)  cmd_domains "$@" ;;

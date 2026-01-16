@@ -11,6 +11,8 @@
 #   - 02-utils.sh: get_project_id(), get_project_root()
 #
 # COMMANDS PROVIDED
+#   cmd_start       Start aOa Docker services
+#   cmd_stop        Stop aOa Docker services
 #   cmd_health      Check service health
 #   cmd_info        Show project/index info
 #   cmd_services    Show running services
@@ -25,6 +27,89 @@
 #   cmd_learn       Discover new patterns
 #
 # =============================================================================
+
+# =============================================================================
+# Service Control
+# =============================================================================
+
+cmd_start() {
+    echo -e "${CYAN}${BOLD}⚡ Starting aOa Services${NC}"
+    echo
+
+    # Check if already running
+    if curl -s --connect-timeout 1 "http://localhost:${GATEWAY_PORT:-8080}/health" > /dev/null 2>&1; then
+        echo -e "  ${GREEN}✓ Services already running on port ${GATEWAY_PORT:-8080}${NC}"
+        return 0
+    fi
+
+    # Try docker-compose first, fall back to unified container
+    if [ -f "$AOA_HOME/docker-compose.yml" ]; then
+        local compose_count=$(cd "$AOA_HOME" && docker compose ps -q 2>/dev/null | wc -l)
+        if [ "$compose_count" -gt 0 ]; then
+            echo -e "  ${DIM}Starting docker-compose services...${NC}"
+            cd "$AOA_HOME" && docker compose start
+        else
+            echo -e "  ${DIM}Starting docker-compose services...${NC}"
+            cd "$AOA_HOME" && docker compose up -d
+        fi
+    else
+        echo -e "  ${DIM}Starting unified container...${NC}"
+        docker start aoa 2>/dev/null || {
+            echo -e "  ${RED}✗ Container 'aoa' not found${NC}"
+            echo -e "  ${DIM}Run install.sh first to create the container${NC}"
+            return 1
+        }
+    fi
+
+    # Wait for services
+    echo -n "  Waiting for services"
+    for i in {1..10}; do
+        if curl -s --connect-timeout 1 "http://localhost:${GATEWAY_PORT:-8080}/health" > /dev/null 2>&1; then
+            echo
+            echo -e "  ${GREEN}✓ Services running on port ${GATEWAY_PORT:-8080}${NC}"
+            return 0
+        fi
+        echo -n "."
+        sleep 1
+    done
+    echo
+    echo -e "  ${YELLOW}! Services may still be starting${NC}"
+}
+
+cmd_stop() {
+    echo -e "${CYAN}${BOLD}⚡ Stopping aOa Services${NC}"
+    echo
+
+    local stopped=false
+
+    # Try docker-compose first
+    if [ -f "$AOA_HOME/docker-compose.yml" ]; then
+        local compose_count=$(cd "$AOA_HOME" && docker compose ps -q 2>/dev/null | wc -l)
+        if [ "$compose_count" -gt 0 ]; then
+            echo -e "  ${DIM}Stopping docker-compose services...${NC}"
+            cd "$AOA_HOME" && docker compose stop
+            stopped=true
+        fi
+    fi
+
+    # Try unified container
+    if docker ps -q -f name=aoa 2>/dev/null | grep -q .; then
+        echo -e "  ${DIM}Stopping unified container...${NC}"
+        docker stop aoa > /dev/null 2>&1
+        stopped=true
+    fi
+
+    if $stopped; then
+        echo -e "  ${GREEN}✓ Services stopped${NC}"
+    else
+        echo -e "  ${DIM}No running services found${NC}"
+    fi
+
+    echo
+    echo -e "${DIM}Tip: To change port, set AOA_GATEWAY_PORT before starting:${NC}"
+    echo -e "${DIM}  export AOA_GATEWAY_PORT=8081${NC}"
+    echo -e "${DIM}  aoa start${NC}"
+}
 
 # =============================================================================
 # Utility Commands

@@ -77,6 +77,8 @@ INTEL ANGLE (external reference)
   repo <name> search <t> Search in a specific repo
 
 SYSTEM
+  start                  Start aOa Docker services
+  stop                   Stop aOa Docker services
   health                 Check all angles
   info                   Show indexing config, mounts, registered projects
   metrics                Prediction accuracy and savings
