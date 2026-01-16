@@ -303,7 +303,7 @@ if [ "$USE_COMPOSE" -eq 0 ]; then
     echo -e "      ${DIM}• One container, one port (8080)${NC}"
     echo -e "      ${DIM}• All services via supervisord${NC}"
     echo -e "      ${DIM}• Simpler, fewer resources${NC}"
-    echo -e "      ${DIM}• Change port in .aoa/config.json${NC}"
+    echo -e "      ${DIM}• Change port in .env${NC}"
     echo
     echo -e "  ${BOLD}[2]${NC} Docker Compose"
     echo -e "      ${DIM}• 5 separate containers${NC}"

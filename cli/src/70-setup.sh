@@ -140,8 +140,8 @@ aoa remove           # Remove aOa from this project
 
 ## Global Settings
 
-To change aOa settings (port, confidence threshold, etc.),
-edit the config.json in your global aOa installation.
+To change aOa settings (port, limits, paths),
+edit the .env file in your aOa installation directory.
 EOFREADME
     fi
 

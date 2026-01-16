@@ -204,7 +204,7 @@ cmd_info() {
     echo -e "  ✗ Files outside registered projects"
     echo -e "  ✗ Unrecognized file extensions"
     echo ""
-    echo -e "${DIM}See: .aoa/config.json for full configuration${NC}"
+    echo -e "${DIM}See: .env in aOa installation for configuration${NC}"
 }
 
 cmd_services() {
