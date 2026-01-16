@@ -4463,7 +4463,11 @@ EOFAOA
     echo
     echo -e "${DIM}Restart Claude Code to activate hooks.${NC}"
     echo
-    echo -e "${DIM}Run 'aoa quickstart' to enable semantic tagging.${NC}"
+
+    # Auto-cascade to quickstart for first-time setup
+    echo -e "${CYAN}${BOLD}Starting semantic tagging...${NC}"
+    echo
+    cmd_quickstart
 }
 
 cmd_remove() {
