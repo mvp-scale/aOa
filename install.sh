@@ -335,17 +335,138 @@ echo -e "${CYAN}${BOLD}[1/5] Checking Prerequisites${NC}"
 echo -e "${DIM}─────────────────────────────────────────────────────────────────${NC}"
 echo
 
-# Check Docker
-echo -n "  Docker........................ "
-if command -v docker &> /dev/null; then
-    echo -e "${GREEN}✓ Found${NC}"
-else
+# Check Docker installation
+echo -n "  Docker installed.............. "
+if ! command -v docker &> /dev/null; then
     echo -e "${RED}✗ Not found${NC}"
     echo
     echo -e "  ${YELLOW}Docker is required to run aOa services.${NC}"
-    echo "  Install from: https://docs.docker.com/get-docker/"
+    echo -e "  Install from: ${DIM}https://docs.docker.com/get-docker/${NC}"
     echo
     exit 1
+fi
+echo -e "${GREEN}✓${NC}"
+
+# Check if user can actually RUN Docker (permissions + daemon)
+echo -n "  Docker accessible............. "
+DOCKER_ERR=$(docker info 2>&1)
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓${NC}"
+else
+    # Diagnose the failure
+    if echo "$DOCKER_ERR" | grep -qiE "permission denied|connect.*denied"; then
+        echo -e "${RED}✗ Permission denied${NC}"
+        echo
+
+        # Is user already in docker group but session doesn't have it?
+        if getent group docker 2>/dev/null | grep -qw "$USER"; then
+            echo -e "  ${YELLOW}You're in the docker group, but this session doesn't have it yet.${NC}"
+            echo
+            echo -e "  ${BOLD}Fix (no sudo needed):${NC}"
+            echo -e "    ${DIM}\$${NC} newgrp docker"
+            echo -e "    ${DIM}\$${NC} ./install.sh"
+            echo
+            echo -e "  ${DIM}Or log out and back in for a permanent fix.${NC}"
+        else
+            # User not in docker group - check if they can fix it themselves
+            echo -e "  ${YELLOW}Your user ($USER) is not in the 'docker' group.${NC}"
+            echo
+
+            # Check for sudo access (non-interactive check)
+            if sudo -n true 2>/dev/null; then
+                # User has passwordless sudo
+                HAS_SUDO=1
+            elif groups 2>/dev/null | grep -qwE "sudo|wheel|admin"; then
+                # User is in a sudo-capable group
+                HAS_SUDO=1
+            else
+                HAS_SUDO=0
+            fi
+
+            if [ "$HAS_SUDO" -eq 1 ]; then
+                echo -n -e "  ${CYAN}Add $USER to docker group? [Y/n] ${NC}"
+                read -r add_choice
+
+                if [[ ! "$add_choice" =~ ^[Nn]$ ]]; then
+                    echo
+                    echo -n "  Adding to docker group........ "
+                    if sudo usermod -aG docker "$USER" 2>/dev/null; then
+                        echo -e "${GREEN}✓${NC}"
+                        echo
+                        echo -e "  ${GREEN}Done!${NC} Now activate the group:"
+                        echo
+                        echo -e "    ${DIM}\$${NC} newgrp docker"
+                        echo -e "    ${DIM}\$${NC} ./install.sh"
+                        echo
+                        echo -e "  ${DIM}Or log out and back in for a permanent fix.${NC}"
+                    else
+                        echo -e "${RED}✗ Failed${NC}"
+                        echo
+                        echo -e "  ${DIM}Try manually: sudo usermod -aG docker $USER${NC}"
+                    fi
+                fi
+            else
+                # No sudo - need sysadmin help
+                echo -e "  ${BOLD}Ask your system administrator to run:${NC}"
+                echo
+                echo -e "    ${CYAN}sudo usermod -aG docker $USER${NC}"
+                echo
+                echo -e "  ${DIM}Then log out and back in (or run 'newgrp docker').${NC}"
+            fi
+        fi
+        echo
+        exit 1
+
+    elif echo "$DOCKER_ERR" | grep -qiE "cannot connect|connection refused|daemon running"; then
+        echo -e "${RED}✗ Docker daemon not running${NC}"
+        echo
+
+        # Check for sudo access
+        if sudo -n true 2>/dev/null || groups 2>/dev/null | grep -qwE "sudo|wheel|admin"; then
+            echo -n -e "  ${CYAN}Start Docker daemon? [Y/n] ${NC}"
+            read -r start_choice
+
+            if [[ ! "$start_choice" =~ ^[Nn]$ ]]; then
+                echo
+                echo -n "  Starting Docker............... "
+                if sudo systemctl start docker 2>/dev/null; then
+                    echo -e "${GREEN}✓${NC}"
+                    sleep 2
+                    # Re-check
+                    if docker info &>/dev/null; then
+                        echo -e "  ${GREEN}Docker is now running.${NC}"
+                        echo
+                    else
+                        echo -e "  ${YELLOW}Docker started but still not accessible.${NC}"
+                        echo -e "  ${DIM}You may need to be in the docker group.${NC}"
+                        echo
+                        exit 1
+                    fi
+                else
+                    echo -e "${RED}✗ Failed${NC}"
+                    echo
+                    echo -e "  ${DIM}Try: sudo systemctl start docker${NC}"
+                    exit 1
+                fi
+            else
+                exit 1
+            fi
+        else
+            echo -e "  ${BOLD}Ask your system administrator to run:${NC}"
+            echo
+            echo -e "    ${CYAN}sudo systemctl start docker${NC}"
+            echo -e "    ${CYAN}sudo systemctl enable docker${NC}  ${DIM}(to start on boot)${NC}"
+            echo
+            exit 1
+        fi
+    else
+        # Unknown error
+        echo -e "${RED}✗ Error${NC}"
+        echo
+        echo -e "  ${DIM}${DOCKER_ERR}${NC}" | head -3
+        echo
+        exit 1
+    fi
 fi
 
 # Check Python3
