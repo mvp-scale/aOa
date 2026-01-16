@@ -48,25 +48,30 @@ set -e
 #   - 00-header.sh: set -e must be active
 #
 # PROVIDES
-#   GATEWAY_HOST, GATEWAY_PORT   Service connection settings
+#   AOA_GATEWAY_HOST, AOA_GATEWAY_PORT   Service connection settings
 #   INDEX_URL, STATUS_URL        API endpoint URLs
 #   AOA_HOME, AOA_DATA           Installation paths
 #   BOLD, DIM, GREEN, etc.       ANSI color codes for output formatting
 #
 # =============================================================================
 
-# Gateway configuration (connects to aOa index service)
-GATEWAY_HOST="${AOA_GATEWAY_HOST:-localhost}"
-GATEWAY_PORT="${AOA_GATEWAY_PORT:-8080}"
-
 # Find AOA_HOME by locating the CLI script itself
 CLI_PATH="$(readlink -f "$0")"
 AOA_HOME="$(dirname "$(dirname "$CLI_PATH")")"
 AOA_DATA="${AOA_DATA:-$AOA_HOME/data}"
 
+# Source .env to get port configuration (written by install.sh)
+if [ -f "$AOA_HOME/.env" ]; then
+    source "$AOA_HOME/.env"
+fi
+
+# Gateway configuration (connects to aOa Docker container)
+AOA_GATEWAY_HOST="${AOA_GATEWAY_HOST:-localhost}"
+AOA_GATEWAY_PORT="${AOA_GATEWAY_PORT:-8080}"
+
 # Service URLs
-INDEX_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
-STATUS_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
+INDEX_URL="http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}"
+STATUS_URL="http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}"
 
 # ANSI Colors
 BOLD='\033[1m'
@@ -2654,7 +2659,7 @@ cmd_start() {
     echo
 
     local instance_name="aoa-${USER}"
-    local gateway_port="${GATEWAY_PORT:-8080}"
+    local gateway_port="${AOA_GATEWAY_PORT:-8080}"
 
     # Read installation mode from .env
     local use_compose=0
@@ -2745,7 +2750,7 @@ cmd_stop() {
 
     echo
     echo -e "${DIM}Tip: To change port, edit ${AOA_HOME}/.env and restart:${NC}"
-    echo -e "${DIM}  GATEWAY_PORT=8081${NC}"
+    echo -e "${DIM}  AOA_GATEWAY_PORT=8081${NC}"
     echo -e "${DIM}  aoa stop && aoa start${NC}"
 }
 
@@ -2770,13 +2775,13 @@ cmd_info() {
 
     if [ -f "$env_file" ]; then
         projects_root=$(grep "^PROJECTS_ROOT=" "$env_file" 2>/dev/null | cut -d'=' -f2 || echo "$HOME")
-        gateway_port=$(grep "^GATEWAY_PORT=" "$env_file" 2>/dev/null | cut -d'=' -f2 || echo "8080")
+        gateway_port=$(grep "^AOA_GATEWAY_PORT=" "$env_file" 2>/dev/null | cut -d'=' -f2 || echo "8080")
     fi
 
     # Show Docker configuration from .env
     echo -e "${BOLD}Docker Configuration:${NC} ${DIM}(from .env)${NC}"
     echo -e "  PROJECTS_ROOT:   ${projects_root} → /userhome"
-    echo -e "  GATEWAY_PORT:    ${gateway_port}"
+    echo -e "  AOA_GATEWAY_PORT: ${gateway_port}"
     echo -e "  Claude sessions: ${projects_root}/.claude ${DIM}(auto-derived)${NC}"
     echo ""
     echo -e "  ${DIM}Edit .env in aOa root to change, then restart Docker${NC}"

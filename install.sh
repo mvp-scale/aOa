@@ -548,8 +548,9 @@ PROJECTS_ROOT="$(cd "$PROJECTS_ROOT" && pwd)"
 echo -e "  ${GREEN}✓ Projects root: ${PROJECTS_ROOT}${NC}"
 echo
 
-# Set default gateway port if not already set
-GATEWAY_PORT="${GATEWAY_PORT:-8080}"
+# Set default gateway configuration
+AOA_GATEWAY_HOST="${AOA_GATEWAY_HOST:-localhost}"
+AOA_AOA_GATEWAY_PORT="${AOA_AOA_GATEWAY_PORT:-8080}"
 
 # Function to check if port is available
 check_port() {
@@ -567,8 +568,8 @@ check_port() {
 }
 
 # Check if chosen port is available
-echo -n "  Port ${GATEWAY_PORT}.................... "
-if check_port "$GATEWAY_PORT"; then
+echo -n "  Port ${AOA_GATEWAY_PORT}.................... "
+if check_port "$AOA_GATEWAY_PORT"; then
     echo -e "${GREEN}✓ Available${NC}"
 else
     echo -e "${YELLOW}! In use${NC}"
@@ -582,11 +583,11 @@ else
         echo
     else
         # Something else is using the port
-        echo -e "  ${YELLOW}Port ${GATEWAY_PORT} is in use by another service.${NC}"
+        echo -e "  ${YELLOW}Port ${AOA_GATEWAY_PORT} is in use by another service.${NC}"
         echo
 
         # Find next available port starting from 8081
-        NEW_PORT=$((GATEWAY_PORT + 1))
+        NEW_PORT=$((AOA_GATEWAY_PORT + 1))
         while ! check_port "$NEW_PORT" && [ "$NEW_PORT" -lt 9000 ]; do
             NEW_PORT=$((NEW_PORT + 1))
         done
@@ -596,8 +597,8 @@ else
             read -r port_choice
 
             if [[ ! "$port_choice" =~ ^[Nn]$ ]]; then
-                GATEWAY_PORT="$NEW_PORT"
-                echo -e "  ${GREEN}✓ Using port ${GATEWAY_PORT}${NC}"
+                AOA_GATEWAY_PORT="$NEW_PORT"
+                echo -e "  ${GREEN}✓ Using port ${AOA_GATEWAY_PORT}${NC}"
             else
                 echo
                 echo -n -e "  ${CYAN}Enter custom port: ${NC}"
@@ -605,11 +606,11 @@ else
 
                 if [[ "$custom_port" =~ ^[0-9]+$ ]] && [ "$custom_port" -ge 1024 ] && [ "$custom_port" -le 65535 ]; then
                     if check_port "$custom_port"; then
-                        GATEWAY_PORT="$custom_port"
-                        echo -e "  ${GREEN}✓ Using port ${GATEWAY_PORT}${NC}"
+                        AOA_GATEWAY_PORT="$custom_port"
+                        echo -e "  ${GREEN}✓ Using port ${AOA_GATEWAY_PORT}${NC}"
                     else
                         echo -e "  ${RED}✗ Port ${custom_port} is also in use${NC}"
-                        echo -e "  ${DIM}Free up port ${GATEWAY_PORT} or set GATEWAY_PORT=<port> before running installer${NC}"
+                        echo -e "  ${DIM}Free up port ${AOA_GATEWAY_PORT} or set AOA_GATEWAY_PORT=<port> before running installer${NC}"
                         exit 1
                     fi
                 else
@@ -619,7 +620,7 @@ else
             fi
         else
             echo -e "  ${RED}✗ No available ports found in range 8080-8999${NC}"
-            echo -e "  ${DIM}Free up a port or set GATEWAY_PORT=<port> before running installer${NC}"
+            echo -e "  ${DIM}Free up a port or set AOA_GATEWAY_PORT=<port> before running installer${NC}"
             exit 1
         fi
     fi
@@ -646,8 +647,9 @@ USE_COMPOSE=${USE_COMPOSE}
 # Only projects registered via 'aoa init' within this root are indexed.
 PROJECTS_ROOT=${PROJECTS_ROOT}
 
-# Gateway port (change if 8080 is in use)
-GATEWAY_PORT=${GATEWAY_PORT}
+# Gateway configuration
+AOA_GATEWAY_HOST=${AOA_GATEWAY_HOST}
+AOA_GATEWAY_PORT=${AOA_GATEWAY_PORT}
 EOF
 echo -e "${GREEN}✓${NC}"
 
@@ -878,7 +880,7 @@ else
     # Use instance-scoped name for multi-user support
     docker run -d \
         --name "aoa-${USER}" \
-        -p "${GATEWAY_PORT}:8080" \
+        -p "${AOA_GATEWAY_PORT}:8080" \
         -v "${PROJECTS_ROOT}:/userhome:ro" \
         -v "${AOA_DATA}/repos:/repos:rw" \
         -v "${AOA_DATA}/indexes:/indexes:rw" \
@@ -897,8 +899,8 @@ done
 echo
 
 # Verify services are running
-if curl -s "http://localhost:${GATEWAY_PORT}/health" > /dev/null 2>&1; then
-    echo -e "  ${GREEN}✓ Services running on port ${GATEWAY_PORT}${NC}"
+if curl -s "http://localhost:${AOA_GATEWAY_PORT}/health" > /dev/null 2>&1; then
+    echo -e "  ${GREEN}✓ Services running on port ${AOA_GATEWAY_PORT}${NC}"
 else
     echo -e "  ${YELLOW}! Services starting... (may take a moment)${NC}"
 fi
@@ -974,9 +976,9 @@ echo -e "${GREEN}${BOLD}What was installed:${NC}"
 echo -e "  ${DIM}•${NC} ${BOLD}${AOA_HOME}${NC}"
 echo -e "      ${DIM}└─ data/              Runtime state (indexes, repos, config)${NC}"
 if [ "$USE_COMPOSE" -eq 1 ]; then
-    echo -e "  ${DIM}•${NC} Docker Compose        ${DIM}- Project: aoa-${USER}, Port: ${GATEWAY_PORT}${NC}"
+    echo -e "  ${DIM}•${NC} Docker Compose        ${DIM}- Project: aoa-${USER}, Port: ${AOA_GATEWAY_PORT}${NC}"
 else
-    echo -e "  ${DIM}•${NC} Docker container      ${DIM}- Name: aoa-${USER}, Port: ${GATEWAY_PORT}${NC}"
+    echo -e "  ${DIM}•${NC} Docker container      ${DIM}- Name: aoa-${USER}, Port: ${AOA_GATEWAY_PORT}${NC}"
 fi
 echo -e "  ${DIM}•${NC} ${CLI_LOCATION} → ${BOLD}${AOA_HOME}/cli/aoa${NC}"
 echo
