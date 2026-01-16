@@ -4235,6 +4235,31 @@ cmd_init() {
         return 1
     fi
 
+    # Check if running from a subfolder
+    local current_dir="$(pwd)"
+    if [ "$current_dir" != "$project_root" ]; then
+        echo -e "  ${YELLOW}⚠ Subfolder detected${NC}"
+        echo
+        echo -e "  You're in:  ${BOLD}${current_dir}${NC}"
+        echo -e "  Git root:   ${BOLD}${project_root}${NC}"
+        echo
+        echo -e "  ${DIM}To maintain O(1) search performance, aOa uses one index per${NC}"
+        echo -e "  ${DIM}project at its git root. Multiple indices would compete and${NC}"
+        echo -e "  ${DIM}degrade the speed gains you're here for.${NC}"
+        echo
+        echo -e "  Initialize from the git root:"
+        echo
+        echo -e "    ${CYAN}cd ${project_root} && aoa init${NC}"
+        echo
+        echo -e "  Launch Claude Code from there. Tell Claude:"
+        echo
+        echo -e "    ${DIM}\"cd to ${project_root} so aOa hooks are active\"${NC}"
+        echo
+        echo -e "  ${DIM}All subfolders remain fully accessible.${NC}"
+        echo
+        return 1
+    fi
+
     local project_name=$(get_project_name)
 
     # Check if already has a project_id, otherwise generate new one
