@@ -579,51 +579,54 @@ else
     OUR_CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E "^aoa-${USER}$|^aoa$" || true)
     if [ -n "$OUR_CONTAINER" ]; then
         echo -e "  ${DIM}Found existing aOa container: ${OUR_CONTAINER}${NC}"
-        echo -e "  ${DIM}It will be stopped and replaced during installation.${NC}"
-        echo
     else
-        # Something else is using the port
-        echo -e "  ${YELLOW}Port ${AOA_GATEWAY_PORT} is in use by another service.${NC}"
-        echo
+        echo -e "  ${DIM}Port ${AOA_GATEWAY_PORT} is in use by another service.${NC}"
+    fi
+    echo
 
-        # Find next available port starting from 8081
-        NEW_PORT=$((AOA_GATEWAY_PORT + 1))
-        while ! check_port "$NEW_PORT" && [ "$NEW_PORT" -lt 9000 ]; do
-            NEW_PORT=$((NEW_PORT + 1))
-        done
+    # Find next available port
+    NEW_PORT=$((AOA_GATEWAY_PORT + 1))
+    while ! check_port "$NEW_PORT" && [ "$NEW_PORT" -lt 9000 ]; do
+        NEW_PORT=$((NEW_PORT + 1))
+    done
 
-        if [ "$NEW_PORT" -lt 9000 ]; then
-            echo -n -e "  ${CYAN}Use port ${NEW_PORT} instead? [Y/n] ${NC}"
-            read -r port_choice
+    # Offer options: keep current, use suggested, or enter custom
+    echo -e "  ${BOLD}Options:${NC}"
+    echo -e "    ${BOLD}1${NC}) Keep port ${AOA_GATEWAY_PORT} ${DIM}(will replace existing container)${NC}"
+    if [ "$NEW_PORT" -lt 9000 ]; then
+        echo -e "    ${BOLD}2${NC}) Use port ${NEW_PORT} ${DIM}(next available)${NC}"
+    fi
+    echo -e "    ${BOLD}3${NC}) Enter custom port"
+    echo
+    echo -n -e "  ${CYAN}Choice [1]: ${NC}"
+    read -r port_choice
 
-            if [[ ! "$port_choice" =~ ^[Nn]$ ]]; then
+    case "$port_choice" in
+        2)
+            if [ "$NEW_PORT" -lt 9000 ]; then
                 AOA_GATEWAY_PORT="$NEW_PORT"
                 echo -e "  ${GREEN}✓ Using port ${AOA_GATEWAY_PORT}${NC}"
             else
-                echo
-                echo -n -e "  ${CYAN}Enter custom port: ${NC}"
-                read -r custom_port
-
-                if [[ "$custom_port" =~ ^[0-9]+$ ]] && [ "$custom_port" -ge 1024 ] && [ "$custom_port" -le 65535 ]; then
-                    if check_port "$custom_port"; then
-                        AOA_GATEWAY_PORT="$custom_port"
-                        echo -e "  ${GREEN}✓ Using port ${AOA_GATEWAY_PORT}${NC}"
-                    else
-                        echo -e "  ${RED}✗ Port ${custom_port} is also in use${NC}"
-                        echo -e "  ${DIM}Free up port ${AOA_GATEWAY_PORT} or set AOA_GATEWAY_PORT=<port> before running installer${NC}"
-                        exit 1
-                    fi
-                else
-                    echo -e "  ${RED}✗ Invalid port (must be 1024-65535)${NC}"
-                    exit 1
-                fi
+                echo -e "  ${RED}✗ No available ports found${NC}"
+                exit 1
             fi
-        else
-            echo -e "  ${RED}✗ No available ports found in range 8080-8999${NC}"
-            echo -e "  ${DIM}Free up a port or set AOA_GATEWAY_PORT=<port> before running installer${NC}"
-            exit 1
-        fi
-    fi
+            ;;
+        3)
+            echo -n -e "  ${CYAN}Enter port: ${NC}"
+            read -r custom_port
+            if [[ "$custom_port" =~ ^[0-9]+$ ]] && [ "$custom_port" -ge 1024 ] && [ "$custom_port" -le 65535 ]; then
+                AOA_GATEWAY_PORT="$custom_port"
+                echo -e "  ${GREEN}✓ Using port ${AOA_GATEWAY_PORT}${NC}"
+            else
+                echo -e "  ${RED}✗ Invalid port (must be 1024-65535)${NC}"
+                exit 1
+            fi
+            ;;
+        *)
+            # Default: keep current port (will replace container)
+            echo -e "  ${GREEN}✓ Keeping port ${AOA_GATEWAY_PORT}${NC}"
+            ;;
+    esac
     echo
 fi
 
