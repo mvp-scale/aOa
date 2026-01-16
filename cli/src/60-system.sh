@@ -36,26 +36,38 @@ cmd_start() {
     echo -e "${CYAN}${BOLD}⚡ Starting aOa Services${NC}"
     echo
 
+    local instance_name="aoa-${USER}"
+    local gateway_port="${GATEWAY_PORT:-8080}"
+
+    # Read installation mode from .env
+    local use_compose=0
+    if [ -f "$AOA_HOME/.env" ]; then
+        source "$AOA_HOME/.env"
+        use_compose="${USE_COMPOSE:-0}"
+    fi
+
     # Check if already running
-    if curl -s --connect-timeout 1 "http://localhost:${GATEWAY_PORT:-8080}/health" > /dev/null 2>&1; then
-        echo -e "  ${GREEN}✓ Services already running on port ${GATEWAY_PORT:-8080}${NC}"
+    if curl -s --connect-timeout 1 "http://localhost:${gateway_port}/health" > /dev/null 2>&1; then
+        echo -e "  ${GREEN}✓ Services already running on port ${gateway_port}${NC}"
         return 0
     fi
 
-    # Try docker-compose first, fall back to unified container
-    if [ -f "$AOA_HOME/docker-compose.yml" ]; then
-        local compose_count=$(cd "$AOA_HOME" && docker compose ps -q 2>/dev/null | wc -l)
+    # Start based on installation mode
+    if [ "$use_compose" -eq 1 ]; then
+        # Docker Compose mode
+        local compose_count=$(cd "$AOA_HOME" && docker compose -p "$instance_name" ps -q 2>/dev/null | wc -l)
         if [ "$compose_count" -gt 0 ]; then
-            echo -e "  ${DIM}Starting docker-compose services...${NC}"
-            cd "$AOA_HOME" && docker compose start
+            echo -e "  ${DIM}Starting docker-compose services (${instance_name})...${NC}"
+            cd "$AOA_HOME" && docker compose -p "$instance_name" start
         else
-            echo -e "  ${DIM}Starting docker-compose services...${NC}"
-            cd "$AOA_HOME" && docker compose up -d
+            echo -e "  ${DIM}Starting docker-compose services (${instance_name})...${NC}"
+            cd "$AOA_HOME" && docker compose -p "$instance_name" up -d
         fi
     else
-        echo -e "  ${DIM}Starting unified container...${NC}"
-        docker start aoa 2>/dev/null || {
-            echo -e "  ${RED}✗ Container 'aoa' not found${NC}"
+        # Unified container mode
+        echo -e "  ${DIM}Starting unified container (${instance_name})...${NC}"
+        docker start "$instance_name" 2>/dev/null || {
+            echo -e "  ${RED}✗ Container '${instance_name}' not found${NC}"
             echo -e "  ${DIM}Run install.sh first to create the container${NC}"
             return 1
         }
@@ -64,9 +76,9 @@ cmd_start() {
     # Wait for services
     echo -n "  Waiting for services"
     for i in {1..10}; do
-        if curl -s --connect-timeout 1 "http://localhost:${GATEWAY_PORT:-8080}/health" > /dev/null 2>&1; then
+        if curl -s --connect-timeout 1 "http://localhost:${gateway_port}/health" > /dev/null 2>&1; then
             echo
-            echo -e "  ${GREEN}✓ Services running on port ${GATEWAY_PORT:-8080}${NC}"
+            echo -e "  ${GREEN}✓ Services running on port ${gateway_port}${NC}"
             return 0
         fi
         echo -n "."
@@ -80,35 +92,44 @@ cmd_stop() {
     echo -e "${CYAN}${BOLD}⚡ Stopping aOa Services${NC}"
     echo
 
+    local instance_name="aoa-${USER}"
     local stopped=false
 
-    # Try docker-compose first
-    if [ -f "$AOA_HOME/docker-compose.yml" ]; then
-        local compose_count=$(cd "$AOA_HOME" && docker compose ps -q 2>/dev/null | wc -l)
-        if [ "$compose_count" -gt 0 ]; then
-            echo -e "  ${DIM}Stopping docker-compose services...${NC}"
-            cd "$AOA_HOME" && docker compose stop
-            stopped=true
-        fi
+    # Read installation mode from .env
+    local use_compose=0
+    if [ -f "$AOA_HOME/.env" ]; then
+        source "$AOA_HOME/.env"
+        use_compose="${USE_COMPOSE:-0}"
     fi
 
-    # Try unified container
-    if docker ps -q -f name=aoa 2>/dev/null | grep -q .; then
-        echo -e "  ${DIM}Stopping unified container...${NC}"
-        docker stop aoa > /dev/null 2>&1
-        stopped=true
+    # Stop based on installation mode
+    if [ "$use_compose" -eq 1 ]; then
+        # Docker Compose mode
+        local compose_count=$(cd "$AOA_HOME" && docker compose -p "$instance_name" ps -q 2>/dev/null | wc -l)
+        if [ "$compose_count" -gt 0 ]; then
+            echo -e "  ${DIM}Stopping docker-compose services (${instance_name})...${NC}"
+            cd "$AOA_HOME" && docker compose -p "$instance_name" stop
+            stopped=true
+        fi
+    else
+        # Unified container mode
+        if docker ps -q -f name="$instance_name" 2>/dev/null | grep -q .; then
+            echo -e "  ${DIM}Stopping unified container (${instance_name})...${NC}"
+            docker stop "$instance_name" > /dev/null 2>&1
+            stopped=true
+        fi
     fi
 
     if $stopped; then
         echo -e "  ${GREEN}✓ Services stopped${NC}"
     else
-        echo -e "  ${DIM}No running services found${NC}"
+        echo -e "  ${DIM}No running services found for ${instance_name}${NC}"
     fi
 
     echo
-    echo -e "${DIM}Tip: To change port, set AOA_GATEWAY_PORT before starting:${NC}"
-    echo -e "${DIM}  export AOA_GATEWAY_PORT=8081${NC}"
-    echo -e "${DIM}  aoa start${NC}"
+    echo -e "${DIM}Tip: To change port, edit ${AOA_HOME}/.env and restart:${NC}"
+    echo -e "${DIM}  GATEWAY_PORT=8081${NC}"
+    echo -e "${DIM}  aoa stop && aoa start${NC}"
 }
 
 # =============================================================================

@@ -71,16 +71,29 @@ if [[ "$1" == "--uninstall" ]]; then
 
     FOUND_ITEMS=0
 
-    # 1. Docker containers (check both unified and compose)
+    # 1. Docker containers (check both instance-scoped and legacy)
     AOA_UNIFIED=0
     AOA_COMPOSE=0
-    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^aoa$"; then
+
+    # Check for instance-scoped container
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^aoa-${USER}$"; then
         AOA_UNIFIED=1
-        echo -e "  ${DIM}•${NC} Docker container: ${BOLD}aoa${NC} (unified)"
+        echo -e "  ${DIM}•${NC} Docker container: ${BOLD}aoa-${USER}${NC} (unified)"
+        FOUND_ITEMS=$((FOUND_ITEMS + 1))
+    elif docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^aoa$"; then
+        # Legacy container name
+        AOA_UNIFIED=1
+        echo -e "  ${DIM}•${NC} Docker container: ${BOLD}aoa${NC} (unified, legacy)"
         FOUND_ITEMS=$((FOUND_ITEMS + 1))
     fi
+
+    # Check for compose services (instance-scoped)
     if [ -f "$AOA_HOME/docker-compose.yml" ]; then
-        AOA_COMPOSE_COUNT=$(cd "$AOA_HOME" && docker compose ps -q 2>/dev/null | wc -l)
+        AOA_COMPOSE_COUNT=$(cd "$AOA_HOME" && docker compose -p "aoa-${USER}" ps -q 2>/dev/null | wc -l)
+        if [ "$AOA_COMPOSE_COUNT" -eq 0 ]; then
+            # Try legacy project name
+            AOA_COMPOSE_COUNT=$(cd "$AOA_HOME" && docker compose ps -q 2>/dev/null | wc -l)
+        fi
         if [ "$AOA_COMPOSE_COUNT" -gt 0 ]; then
             AOA_COMPOSE=1
             echo -e "  ${DIM}•${NC} Docker services: ${BOLD}${AOA_COMPOSE_COUNT} running${NC} (compose)"
@@ -148,15 +161,20 @@ if [[ "$1" == "--uninstall" ]]; then
     echo -e "${CYAN}${BOLD}Removing aOa...${NC}"
     echo
 
-    # 1. Stop and remove Docker containers/services (both modes)
+    # 1. Stop and remove Docker containers/services (instance-scoped and legacy)
     if [ "$AOA_UNIFIED" -eq 1 ]; then
         echo -n "  Stopping container............ "
+        docker stop "aoa-${USER}" > /dev/null 2>&1 || true
+        docker rm "aoa-${USER}" > /dev/null 2>&1 || true
+        # Legacy name
         docker stop aoa > /dev/null 2>&1 || true
         docker rm aoa > /dev/null 2>&1 || true
         echo -e "${GREEN}✓${NC}"
     fi
     if [ "$AOA_COMPOSE" -eq 1 ]; then
         echo -n "  Stopping services............. "
+        cd "$AOA_HOME" && docker compose -p "aoa-${USER}" down --volumes --remove-orphans > /dev/null 2>&1 || true
+        # Try legacy project name too
         cd "$AOA_HOME" && docker compose down --volumes --remove-orphans > /dev/null 2>&1 || true
         echo -e "${GREEN}✓${NC}"
     fi
@@ -384,6 +402,9 @@ PROJECTS_ROOT="$(cd "$PROJECTS_ROOT" && pwd)"
 echo -e "  ${GREEN}✓ Projects root: ${PROJECTS_ROOT}${NC}"
 echo
 
+# Set default gateway port if not already set
+GATEWAY_PORT="${GATEWAY_PORT:-8080}"
+
 # Create .env file
 echo -n "  Creating .env configuration... "
 cat > "$AOA_HOME/.env" << EOF
@@ -394,15 +415,18 @@ cat > "$AOA_HOME/.env" << EOF
 # Edit this file and restart Docker to change paths.
 #
 # View current config: aoa info
-# Restart: docker-compose down && docker-compose up -d
+# Restart: aoa stop && aoa start
 # =============================================================================
+
+# Installation mode (0=unified single container, 1=docker-compose)
+USE_COMPOSE=${USE_COMPOSE}
 
 # Root directory for user projects (mounted read-only to /userhome)
 # Only projects registered via 'aoa init' within this root are indexed.
 PROJECTS_ROOT=${PROJECTS_ROOT}
 
 # Gateway port (change if 8080 is in use)
-GATEWAY_PORT=8080
+GATEWAY_PORT=${GATEWAY_PORT}
 EOF
 echo -e "${GREEN}✓${NC}"
 
@@ -576,21 +600,25 @@ echo -e "${CYAN}${BOLD}[5/6] Starting aOa Services${NC}"
 echo -e "${DIM}─────────────────────────────────────────────────────────────────${NC}"
 echo
 
-# Clean up ANY existing aOa containers (both modes) to prevent conflicts
-docker compose -f "$AOA_HOME/docker-compose.yml" down 2>/dev/null || true
+# Clean up existing aOa containers for THIS user instance
+docker compose -p "aoa-${USER}" -f "$AOA_HOME/docker-compose.yml" down 2>/dev/null || true
+docker stop "aoa-${USER}" 2>/dev/null || true
+docker rm "aoa-${USER}" 2>/dev/null || true
+# Legacy cleanup (old non-scoped containers)
 docker stop aoa 2>/dev/null || true
 docker rm aoa 2>/dev/null || true
 
 if [ "$USE_COMPOSE" -eq 1 ]; then
     # Start all services via docker-compose (reads from .env)
+    # Use instance-scoped project name for multi-user support
     cd "$AOA_HOME"
-    docker compose up -d
+    docker compose -p "aoa-${USER}" up -d
 else
     # Start unified single container
-    # Mount PROJECTS_ROOT so indexer can access all projects within it
+    # Use instance-scoped name for multi-user support
     docker run -d \
-        --name aoa \
-        -p 8080:8080 \
+        --name "aoa-${USER}" \
+        -p "${GATEWAY_PORT}:8080" \
         -v "${PROJECTS_ROOT}:/userhome:ro" \
         -v "${AOA_DATA}/repos:/repos:rw" \
         -v "${AOA_DATA}/indexes:/indexes:rw" \
@@ -609,8 +637,8 @@ done
 echo
 
 # Verify services are running
-if curl -s http://localhost:8080/health > /dev/null 2>&1; then
-    echo -e "  ${GREEN}✓ Services running on port 8080${NC}"
+if curl -s "http://localhost:${GATEWAY_PORT}/health" > /dev/null 2>&1; then
+    echo -e "  ${GREEN}✓ Services running on port ${GATEWAY_PORT}${NC}"
 else
     echo -e "  ${YELLOW}! Services starting... (may take a moment)${NC}"
 fi
@@ -686,9 +714,9 @@ echo -e "${GREEN}${BOLD}What was installed:${NC}"
 echo -e "  ${DIM}•${NC} ${BOLD}${AOA_HOME}${NC}"
 echo -e "      ${DIM}└─ data/              Runtime state (indexes, repos, config)${NC}"
 if [ "$USE_COMPOSE" -eq 1 ]; then
-    echo -e "  ${DIM}•${NC} Docker Compose        ${DIM}- 5 containers on port 8080${NC}"
+    echo -e "  ${DIM}•${NC} Docker Compose        ${DIM}- Project: aoa-${USER}, Port: ${GATEWAY_PORT}${NC}"
 else
-    echo -e "  ${DIM}•${NC} Docker container      ${DIM}- Unified container on port 8080${NC}"
+    echo -e "  ${DIM}•${NC} Docker container      ${DIM}- Name: aoa-${USER}, Port: ${GATEWAY_PORT}${NC}"
 fi
 echo -e "  ${DIM}•${NC} ${CLI_LOCATION} → ${BOLD}${AOA_HOME}/cli/aoa${NC}"
 echo
