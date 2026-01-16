@@ -69,6 +69,9 @@ fi
 AOA_GATEWAY_HOST="${AOA_GATEWAY_HOST:-localhost}"
 AOA_GATEWAY_PORT="${AOA_GATEWAY_PORT:-8080}"
 
+# Instance name (multi-user support)
+INSTANCE_NAME="aoa-${USER}"
+
 # Service URLs
 INDEX_URL="http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}"
 STATUS_URL="http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}"
@@ -83,6 +86,17 @@ CYAN='\033[0;36m'
 RED='\033[0;31m'
 BRIGHT_RED='\033[1;91m'  # Search term highlighting
 NC='\033[0m'             # No color (reset)
+# Helper: Execute command in aOa container (tries instance name, falls back to legacy)
+docker_exec_aoa() {
+    if docker exec "$INSTANCE_NAME" "$@" 2>/dev/null; then
+        return 0
+    elif docker exec aoa "$@" 2>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # =============================================================================
 # SECTION 02: Utility Functions
 # =============================================================================
@@ -2658,7 +2672,6 @@ cmd_start() {
     echo -e "${CYAN}${BOLD}⚡ Starting aOa Services${NC}"
     echo
 
-    local instance_name="aoa-${USER}"
     local gateway_port="${AOA_GATEWAY_PORT:-8080}"
 
     # Read installation mode from .env
@@ -2677,19 +2690,19 @@ cmd_start() {
     # Start based on installation mode
     if [ "$use_compose" -eq 1 ]; then
         # Docker Compose mode
-        local compose_count=$(cd "$AOA_HOME" && docker compose -p "$instance_name" ps -q 2>/dev/null | wc -l)
+        local compose_count=$(cd "$AOA_HOME" && docker compose -p "$INSTANCE_NAME" ps -q 2>/dev/null | wc -l)
         if [ "$compose_count" -gt 0 ]; then
-            echo -e "  ${DIM}Starting docker-compose services (${instance_name})...${NC}"
-            cd "$AOA_HOME" && docker compose -p "$instance_name" start
+            echo -e "  ${DIM}Starting docker-compose services (${INSTANCE_NAME})...${NC}"
+            cd "$AOA_HOME" && docker compose -p "$INSTANCE_NAME" start
         else
-            echo -e "  ${DIM}Starting docker-compose services (${instance_name})...${NC}"
-            cd "$AOA_HOME" && docker compose -p "$instance_name" up -d
+            echo -e "  ${DIM}Starting docker-compose services (${INSTANCE_NAME})...${NC}"
+            cd "$AOA_HOME" && docker compose -p "$INSTANCE_NAME" up -d
         fi
     else
         # Unified container mode
-        echo -e "  ${DIM}Starting unified container (${instance_name})...${NC}"
-        docker start "$instance_name" 2>/dev/null || {
-            echo -e "  ${RED}✗ Container '${instance_name}' not found${NC}"
+        echo -e "  ${DIM}Starting unified container (${INSTANCE_NAME})...${NC}"
+        docker start "$INSTANCE_NAME" 2>/dev/null || {
+            echo -e "  ${RED}✗ Container '${INSTANCE_NAME}' not found${NC}"
             echo -e "  ${DIM}Run install.sh first to create the container${NC}"
             return 1
         }
@@ -2714,7 +2727,6 @@ cmd_stop() {
     echo -e "${CYAN}${BOLD}⚡ Stopping aOa Services${NC}"
     echo
 
-    local instance_name="aoa-${USER}"
     local stopped=false
 
     # Read installation mode from .env
@@ -2727,17 +2739,17 @@ cmd_stop() {
     # Stop based on installation mode
     if [ "$use_compose" -eq 1 ]; then
         # Docker Compose mode
-        local compose_count=$(cd "$AOA_HOME" && docker compose -p "$instance_name" ps -q 2>/dev/null | wc -l)
+        local compose_count=$(cd "$AOA_HOME" && docker compose -p "$INSTANCE_NAME" ps -q 2>/dev/null | wc -l)
         if [ "$compose_count" -gt 0 ]; then
-            echo -e "  ${DIM}Stopping docker-compose services (${instance_name})...${NC}"
-            cd "$AOA_HOME" && docker compose -p "$instance_name" stop
+            echo -e "  ${DIM}Stopping docker-compose services (${INSTANCE_NAME})...${NC}"
+            cd "$AOA_HOME" && docker compose -p "$INSTANCE_NAME" stop
             stopped=true
         fi
     else
         # Unified container mode
-        if docker ps -q -f name="$instance_name" 2>/dev/null | grep -q .; then
-            echo -e "  ${DIM}Stopping unified container (${instance_name})...${NC}"
-            docker stop "$instance_name" > /dev/null 2>&1
+        if docker ps -q -f name="$INSTANCE_NAME" 2>/dev/null | grep -q .; then
+            echo -e "  ${DIM}Stopping unified container (${INSTANCE_NAME})...${NC}"
+            docker stop "$INSTANCE_NAME" > /dev/null 2>&1
             stopped=true
         fi
     fi
@@ -2745,7 +2757,7 @@ cmd_stop() {
     if $stopped; then
         echo -e "  ${GREEN}✓ Services stopped${NC}"
     else
-        echo -e "  ${DIM}No running services found for ${instance_name}${NC}"
+        echo -e "  ${DIM}No running services found for ${INSTANCE_NAME}${NC}"
     fi
 
     echo
@@ -2900,7 +2912,7 @@ EOF
     curl -s --connect-timeout 1 "http://localhost:8080/status" > /dev/null 2>&1 && status_ok=true
 
     # Check Redis (works in both unified and compose modes)
-    if docker exec aoa redis-cli ping > /dev/null 2>&1; then
+    if docker_exec_aoa redis-cli ping > /dev/null 2>&1; then
         redis_ok=true
     elif docker exec aoa-redis-1 redis-cli ping > /dev/null 2>&1; then
         redis_ok=true
@@ -2988,8 +3000,10 @@ cmd_health() {
 
     # Check Docker
     echo -n "  Docker:        "
-    if docker ps --filter "name=aoa" --format "{{.Names}}" 2>/dev/null | grep -q "aoa"; then
-        echo -e "${GREEN}✓${NC} Container running"
+    if docker ps --filter "name=$INSTANCE_NAME" --format "{{.Names}}" 2>/dev/null | grep -q "$INSTANCE_NAME"; then
+        echo -e "${GREEN}✓${NC} Container running ($INSTANCE_NAME)"
+    elif docker ps --filter "name=aoa" --format "{{.Names}}" 2>/dev/null | grep -q "^aoa$"; then
+        echo -e "${GREEN}✓${NC} Container running (aoa, legacy)"
     else
         echo -e "${RED}✗${NC} Container not found"
         all_ok=false
@@ -3016,7 +3030,7 @@ cmd_health() {
 
     # Check Redis
     echo -n "  Redis:         "
-    if docker exec aoa redis-cli ping > /dev/null 2>&1; then
+    if docker_exec_aoa redis-cli ping > /dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} Connected"
     elif docker exec aoa-redis-1 redis-cli ping > /dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} Connected"
@@ -3104,7 +3118,7 @@ cmd_health() {
 
     # Check semantic compression (outline angle)
     echo -n "  Outline:       "
-    if docker exec aoa python3 -c "import tree_sitter" > /dev/null 2>&1 || \
+    if docker_exec_aoa python3 -c "import tree_sitter" > /dev/null 2>&1 || \
        docker exec aoa-index-1 python3 -c "import tree_sitter" > /dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} Semantic compression ready"
     else
@@ -3256,7 +3270,7 @@ cmd_quickstart() {
     # Check services first
     if ! curl -s --connect-timeout 2 "${INDEX_URL}/health" > /dev/null 2>&1; then
         echo -e "${RED}✗ aOa services not running${NC}"
-        echo -e "${DIM}Start with: docker start aoa${NC}"
+        echo -e "${DIM}Start with: aoa start${NC}"
         return 1
     fi
 
