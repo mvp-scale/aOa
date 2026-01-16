@@ -551,6 +551,81 @@ echo
 # Set default gateway port if not already set
 GATEWAY_PORT="${GATEWAY_PORT:-8080}"
 
+# Function to check if port is available
+check_port() {
+    local port=$1
+    # Check if something is listening on this port
+    if command -v ss &>/dev/null; then
+        ss -tln 2>/dev/null | grep -q ":${port} " && return 1
+    elif command -v netstat &>/dev/null; then
+        netstat -tln 2>/dev/null | grep -q ":${port} " && return 1
+    else
+        # Fallback: try to connect
+        (echo >/dev/tcp/localhost/${port}) 2>/dev/null && return 1
+    fi
+    return 0
+}
+
+# Check if chosen port is available
+echo -n "  Port ${GATEWAY_PORT}.................... "
+if check_port "$GATEWAY_PORT"; then
+    echo -e "${GREEN}✓ Available${NC}"
+else
+    echo -e "${YELLOW}! In use${NC}"
+    echo
+
+    # Check if it's our own aOa container
+    OUR_CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E "^aoa-${USER}$|^aoa$" || true)
+    if [ -n "$OUR_CONTAINER" ]; then
+        echo -e "  ${DIM}Found existing aOa container: ${OUR_CONTAINER}${NC}"
+        echo -e "  ${DIM}It will be stopped and replaced during installation.${NC}"
+        echo
+    else
+        # Something else is using the port
+        echo -e "  ${YELLOW}Port ${GATEWAY_PORT} is in use by another service.${NC}"
+        echo
+
+        # Find next available port starting from 8081
+        NEW_PORT=$((GATEWAY_PORT + 1))
+        while ! check_port "$NEW_PORT" && [ "$NEW_PORT" -lt 9000 ]; do
+            NEW_PORT=$((NEW_PORT + 1))
+        done
+
+        if [ "$NEW_PORT" -lt 9000 ]; then
+            echo -n -e "  ${CYAN}Use port ${NEW_PORT} instead? [Y/n] ${NC}"
+            read -r port_choice
+
+            if [[ ! "$port_choice" =~ ^[Nn]$ ]]; then
+                GATEWAY_PORT="$NEW_PORT"
+                echo -e "  ${GREEN}✓ Using port ${GATEWAY_PORT}${NC}"
+            else
+                echo
+                echo -n -e "  ${CYAN}Enter custom port: ${NC}"
+                read -r custom_port
+
+                if [[ "$custom_port" =~ ^[0-9]+$ ]] && [ "$custom_port" -ge 1024 ] && [ "$custom_port" -le 65535 ]; then
+                    if check_port "$custom_port"; then
+                        GATEWAY_PORT="$custom_port"
+                        echo -e "  ${GREEN}✓ Using port ${GATEWAY_PORT}${NC}"
+                    else
+                        echo -e "  ${RED}✗ Port ${custom_port} is also in use${NC}"
+                        echo -e "  ${DIM}Free up port ${GATEWAY_PORT} or set GATEWAY_PORT=<port> before running installer${NC}"
+                        exit 1
+                    fi
+                else
+                    echo -e "  ${RED}✗ Invalid port (must be 1024-65535)${NC}"
+                    exit 1
+                fi
+            fi
+        else
+            echo -e "  ${RED}✗ No available ports found in range 8080-8999${NC}"
+            echo -e "  ${DIM}Free up a port or set GATEWAY_PORT=<port> before running installer${NC}"
+            exit 1
+        fi
+    fi
+    echo
+fi
+
 # Create .env file
 echo -n "  Creating .env configuration... "
 cat > "$AOA_HOME/.env" << EOF
