@@ -4615,10 +4615,22 @@ cmd_remove() {
     fi
     echo -e "${GREEN}✓${NC}"
 
-    # Notify service to remove index
+    # Notify service to remove index and wipe Redis data
     echo -n "  Removing index................ "
-    curl -s -X DELETE "${INDEX_URL}/project/${project_id}" > /dev/null 2>&1 || true
+    local delete_response
+    delete_response=$(curl -s -X DELETE "${INDEX_URL}/project/${project_id}" 2>/dev/null) || true
     echo -e "${GREEN}✓${NC}"
+
+    # Show Redis cleanup details (intents, domains, enrichment)
+    echo -n "  Clearing stored data.......... "
+    local redis_total=$(echo "$delete_response" | jq -r '.redis_deleted.total // 0' 2>/dev/null)
+    local redis_domains=$(echo "$delete_response" | jq -r '.redis_deleted.domains // 0' 2>/dev/null)
+    local redis_enrichment=$(echo "$delete_response" | jq -r '.redis_deleted.enrichment // 0' 2>/dev/null)
+    if [ "$redis_total" != "0" ] && [ -n "$redis_total" ]; then
+        echo -e "${GREEN}✓${NC} ${DIM}(${redis_domains} intents/domains, ${redis_enrichment} enriched)${NC}"
+    else
+        echo -e "${GREEN}✓${NC} ${DIM}(none found)${NC}"
+    fi
 
     # Clean up CLAUDE.md - remove aOa Integration section
     echo -n "  Cleaning CLAUDE.md............ "

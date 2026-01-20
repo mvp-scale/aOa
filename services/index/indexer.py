@@ -3855,12 +3855,40 @@ def register_project():
 
 @app.route('/project/<project_id>', methods=['DELETE'])
 def unregister_project(project_id):
-    """Unregister a project and remove its index."""
+    """Unregister a project, remove its index, and wipe all stored data."""
+    # First, wipe all Redis data for this project
+    redis_deleted = {'domains': 0, 'enrichment': 0, 'total': 0}
+    try:
+        import redis as redis_lib
+        r = redis_lib.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+
+        # Use Lua script for atomic bulk delete
+        lua_script = """
+        local keys = redis.call('keys', ARGV[1])
+        for i=1,#keys do
+            redis.call('del', keys[i])
+        end
+        return #keys
+        """
+
+        # Clear aoa:* (domains, intents, metrics) and enriched:* (semantic compression)
+        deleted_aoa = r.eval(lua_script, 0, f"aoa:{project_id}:*")
+        deleted_enriched = r.eval(lua_script, 0, f"enriched:{project_id}:*")
+        redis_deleted = {
+            'domains': deleted_aoa,
+            'enrichment': deleted_enriched,
+            'total': deleted_aoa + deleted_enriched
+        }
+    except Exception:
+        pass  # Redis may not be available, continue with index removal
+
+    # Then unregister from memory
     success, message = manager.unregister_project(project_id)
 
     return jsonify({
         'success': success,
-        'message': message
+        'message': message,
+        'redis_deleted': redis_deleted
     })
 
 
@@ -4011,57 +4039,6 @@ def _do_domain_tune(project_id: str):
         print(f"[DomainTune] Error: {e}", flush=True)
     finally:
         _tune_in_progress.discard(project_id)
-
-
-@app.route('/project/wipe', methods=['POST'])
-def project_wipe():
-    """
-    Full project data wipe - removes all aOa data for a project.
-
-    POST body: {"project": "project-id"}
-
-    Deletes:
-    - All domains (seeded and learned)
-    - Intent history
-    - Semantic tags and enrichment
-    - Learning counters and stats
-    """
-    data = request.json or {}
-    project_id = data.get('project') or request.args.get('project')
-
-    if not project_id:
-        return jsonify({'error': 'Missing project parameter', 'success': False}), 400
-
-    try:
-        import redis
-        # Get Redis connection
-        r = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
-
-        # Use Lua script for atomic bulk delete
-        lua_script = """
-        local keys = redis.call('keys', ARGV[1])
-        for i=1,#keys do
-            redis.call('del', keys[i])
-        end
-        return #keys
-        """
-
-        # Clear both aoa:* (domains, intents) and enriched:* (file compression)
-        deleted_aoa = r.eval(lua_script, 0, f"aoa:{project_id}:*")
-        deleted_enriched = r.eval(lua_script, 0, f"enriched:{project_id}:*")
-        total_deleted = deleted_aoa + deleted_enriched
-
-        return jsonify({
-            'success': True,
-            'deleted': total_deleted,
-            'deleted_domains': deleted_aoa,
-            'deleted_enrichment': deleted_enriched,
-            'project': project_id,
-            'message': f'Wiped {total_deleted} records for project'
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e), 'success': False}), 500
 
 
 @app.route('/domains/seed', methods=['POST'])
