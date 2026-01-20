@@ -48,33 +48,25 @@ set -e
 #   - 00-header.sh: set -e must be active
 #
 # PROVIDES
-#   AOA_GATEWAY_HOST, AOA_GATEWAY_PORT   Service connection settings
+#   GATEWAY_HOST, GATEWAY_PORT   Service connection settings
 #   INDEX_URL, STATUS_URL        API endpoint URLs
 #   AOA_HOME, AOA_DATA           Installation paths
 #   BOLD, DIM, GREEN, etc.       ANSI color codes for output formatting
 #
 # =============================================================================
 
+# Gateway configuration (connects to aOa index service)
+GATEWAY_HOST="${AOA_GATEWAY_HOST:-localhost}"
+GATEWAY_PORT="${AOA_GATEWAY_PORT:-8080}"
+
 # Find AOA_HOME by locating the CLI script itself
 CLI_PATH="$(readlink -f "$0")"
 AOA_HOME="$(dirname "$(dirname "$CLI_PATH")")"
 AOA_DATA="${AOA_DATA:-$AOA_HOME/data}"
 
-# Source .env to get port configuration (written by install.sh)
-if [ -f "$AOA_HOME/.env" ]; then
-    source "$AOA_HOME/.env"
-fi
-
-# Gateway configuration (connects to aOa Docker container)
-AOA_GATEWAY_HOST="${AOA_GATEWAY_HOST:-localhost}"
-AOA_GATEWAY_PORT="${AOA_GATEWAY_PORT:-8080}"
-
-# Instance name (multi-user support)
-INSTANCE_NAME="aoa-${USER}"
-
 # Service URLs
-INDEX_URL="http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}"
-STATUS_URL="http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}"
+INDEX_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
+STATUS_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
 
 # ANSI Colors
 BOLD='\033[1m'
@@ -86,17 +78,6 @@ CYAN='\033[0;36m'
 RED='\033[0;31m'
 BRIGHT_RED='\033[1;91m'  # Search term highlighting
 NC='\033[0m'             # No color (reset)
-# Helper: Execute command in aOa container (tries instance name, falls back to legacy)
-docker_exec_aoa() {
-    if docker exec "$INSTANCE_NAME" "$@" 2>/dev/null; then
-        return 0
-    elif docker exec aoa "$@" 2>/dev/null; then
-        return 0
-    else
-        return 1
-    fi
-}
-
 # =============================================================================
 # SECTION 02: Utility Functions
 # =============================================================================
@@ -2665,6 +2646,74 @@ PYEOF
 # =============================================================================
 
 # =============================================================================
+# Environment Export (for shell integration)
+# =============================================================================
+
+cmd_env() {
+    # Output export statements for shell integration
+    # Usage: eval "$(aoa env)" - sets AOA_URL in current shell
+    # Claude Code and hooks will inherit this, avoiding file reads
+
+    local host="localhost"
+    local port="8080"
+
+    # Read from .env (source of truth)
+    if [ -f "$AOA_HOME/.env" ]; then
+        host=$(grep "^AOA_GATEWAY_HOST=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "localhost")
+        port=$(grep "^AOA_GATEWAY_PORT=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "8080")
+    fi
+
+    echo "export AOA_URL=\"http://${host}:${port}\""
+    echo "export AOA_GATEWAY_HOST=\"${host}\""
+    echo "export AOA_GATEWAY_PORT=\"${port}\""
+}
+
+cmd_port() {
+    # Change aOa port - updates .env, restarts Docker, informs user
+    # Usage: aoa port <new_port>
+
+    local new_port="$1"
+
+    # Show current port if no argument
+    if [ -z "$new_port" ]; then
+        local current_port=$(grep "^AOA_GATEWAY_PORT=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "8080")
+        echo -e "${CYAN}${BOLD}⚡ aOa Port${NC}"
+        echo
+        echo -e "  Current: ${BOLD}${current_port}${NC}"
+        echo
+        echo -e "  ${DIM}To change: aoa port <new_port>${NC}"
+        return 0
+    fi
+
+    # Validate port number
+    if ! [[ "$new_port" =~ ^[0-9]+$ ]] || [ "$new_port" -lt 1024 ] || [ "$new_port" -gt 65535 ]; then
+        echo -e "${RED}Invalid port: ${new_port}${NC}"
+        echo -e "${DIM}Must be a number between 1024-65535${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}${BOLD}⚡ Changing aOa Port to ${new_port}${NC}"
+    echo
+
+    # Update .env
+    echo -n "  Updating .env................. "
+    sed -i "s/^AOA_GATEWAY_PORT=.*/AOA_GATEWAY_PORT=${new_port}/" "$AOA_HOME/.env"
+    echo -e "${GREEN}✓${NC}"
+
+    # Restart Docker
+    echo -n "  Restarting Docker............. "
+    cmd_stop > /dev/null 2>&1
+    cmd_start > /dev/null 2>&1
+    echo -e "${GREEN}✓${NC}"
+
+    echo
+    echo -e "${GREEN}${BOLD}✓ Port changed to ${new_port}${NC}"
+    echo
+    echo -e "  ${YELLOW}→ Open a new terminal${NC} for Claude to use the new port."
+    echo -e "  ${DIM}Or run: source ~/.bashrc${NC}"
+}
+
+# =============================================================================
 # Service Control
 # =============================================================================
 
@@ -2672,7 +2721,8 @@ cmd_start() {
     echo -e "${CYAN}${BOLD}⚡ Starting aOa Services${NC}"
     echo
 
-    local gateway_port="${AOA_GATEWAY_PORT:-8080}"
+    local instance_name="aoa-${USER}"
+    local gateway_port="${GATEWAY_PORT:-8080}"
 
     # Read installation mode from .env
     local use_compose=0
@@ -2690,19 +2740,19 @@ cmd_start() {
     # Start based on installation mode
     if [ "$use_compose" -eq 1 ]; then
         # Docker Compose mode
-        local compose_count=$(cd "$AOA_HOME" && docker compose -p "$INSTANCE_NAME" ps -q 2>/dev/null | wc -l)
+        local compose_count=$(cd "$AOA_HOME" && docker compose -p "$instance_name" ps -q 2>/dev/null | wc -l)
         if [ "$compose_count" -gt 0 ]; then
-            echo -e "  ${DIM}Starting docker-compose services (${INSTANCE_NAME})...${NC}"
-            cd "$AOA_HOME" && docker compose -p "$INSTANCE_NAME" start
+            echo -e "  ${DIM}Starting docker-compose services (${instance_name})...${NC}"
+            cd "$AOA_HOME" && docker compose -p "$instance_name" start
         else
-            echo -e "  ${DIM}Starting docker-compose services (${INSTANCE_NAME})...${NC}"
-            cd "$AOA_HOME" && docker compose -p "$INSTANCE_NAME" up -d
+            echo -e "  ${DIM}Starting docker-compose services (${instance_name})...${NC}"
+            cd "$AOA_HOME" && docker compose -p "$instance_name" up -d
         fi
     else
         # Unified container mode
-        echo -e "  ${DIM}Starting unified container (${INSTANCE_NAME})...${NC}"
-        docker start "$INSTANCE_NAME" 2>/dev/null || {
-            echo -e "  ${RED}✗ Container '${INSTANCE_NAME}' not found${NC}"
+        echo -e "  ${DIM}Starting unified container (${instance_name})...${NC}"
+        docker start "$instance_name" 2>/dev/null || {
+            echo -e "  ${RED}✗ Container '${instance_name}' not found${NC}"
             echo -e "  ${DIM}Run install.sh first to create the container${NC}"
             return 1
         }
@@ -2727,6 +2777,7 @@ cmd_stop() {
     echo -e "${CYAN}${BOLD}⚡ Stopping aOa Services${NC}"
     echo
 
+    local instance_name="aoa-${USER}"
     local stopped=false
 
     # Read installation mode from .env
@@ -2739,17 +2790,17 @@ cmd_stop() {
     # Stop based on installation mode
     if [ "$use_compose" -eq 1 ]; then
         # Docker Compose mode
-        local compose_count=$(cd "$AOA_HOME" && docker compose -p "$INSTANCE_NAME" ps -q 2>/dev/null | wc -l)
+        local compose_count=$(cd "$AOA_HOME" && docker compose -p "$instance_name" ps -q 2>/dev/null | wc -l)
         if [ "$compose_count" -gt 0 ]; then
-            echo -e "  ${DIM}Stopping docker-compose services (${INSTANCE_NAME})...${NC}"
-            cd "$AOA_HOME" && docker compose -p "$INSTANCE_NAME" stop
+            echo -e "  ${DIM}Stopping docker-compose services (${instance_name})...${NC}"
+            cd "$AOA_HOME" && docker compose -p "$instance_name" stop
             stopped=true
         fi
     else
         # Unified container mode
-        if docker ps -q -f name="$INSTANCE_NAME" 2>/dev/null | grep -q .; then
-            echo -e "  ${DIM}Stopping unified container (${INSTANCE_NAME})...${NC}"
-            docker stop "$INSTANCE_NAME" > /dev/null 2>&1
+        if docker ps -q -f name="$instance_name" 2>/dev/null | grep -q .; then
+            echo -e "  ${DIM}Stopping unified container (${instance_name})...${NC}"
+            docker stop "$instance_name" > /dev/null 2>&1
             stopped=true
         fi
     fi
@@ -2757,7 +2808,7 @@ cmd_stop() {
     if $stopped; then
         echo -e "  ${GREEN}✓ Services stopped${NC}"
     else
-        echo -e "  ${DIM}No running services found for ${INSTANCE_NAME}${NC}"
+        echo -e "  ${DIM}No running services found for ${instance_name}${NC}"
     fi
 
     echo
@@ -2838,7 +2889,7 @@ cmd_info() {
     echo -e "  ✗ Files outside registered projects"
     echo -e "  ✗ Unrecognized file extensions"
     echo ""
-    echo -e "${DIM}See: .aoa/config.json for full configuration${NC}"
+    echo -e "${DIM}See: .env in aOa installation for configuration${NC}"
 }
 
 cmd_services() {
@@ -2912,7 +2963,7 @@ EOF
     curl -s --connect-timeout 1 "http://localhost:8080/status" > /dev/null 2>&1 && status_ok=true
 
     # Check Redis (works in both unified and compose modes)
-    if docker_exec_aoa redis-cli ping > /dev/null 2>&1; then
+    if docker exec aoa redis-cli ping > /dev/null 2>&1; then
         redis_ok=true
     elif docker exec aoa-redis-1 redis-cli ping > /dev/null 2>&1; then
         redis_ok=true
@@ -3000,10 +3051,8 @@ cmd_health() {
 
     # Check Docker
     echo -n "  Docker:        "
-    if docker ps --filter "name=$INSTANCE_NAME" --format "{{.Names}}" 2>/dev/null | grep -q "$INSTANCE_NAME"; then
-        echo -e "${GREEN}✓${NC} Container running ($INSTANCE_NAME)"
-    elif docker ps --filter "name=aoa" --format "{{.Names}}" 2>/dev/null | grep -q "^aoa$"; then
-        echo -e "${GREEN}✓${NC} Container running (aoa, legacy)"
+    if docker ps --filter "name=aoa" --format "{{.Names}}" 2>/dev/null | grep -q "aoa"; then
+        echo -e "${GREEN}✓${NC} Container running"
     else
         echo -e "${RED}✗${NC} Container not found"
         all_ok=false
@@ -3030,7 +3079,7 @@ cmd_health() {
 
     # Check Redis
     echo -n "  Redis:         "
-    if docker_exec_aoa redis-cli ping > /dev/null 2>&1; then
+    if docker exec aoa redis-cli ping > /dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} Connected"
     elif docker exec aoa-redis-1 redis-cli ping > /dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} Connected"
@@ -3118,7 +3167,7 @@ cmd_health() {
 
     # Check semantic compression (outline angle)
     echo -n "  Outline:       "
-    if docker_exec_aoa python3 -c "import tree_sitter" > /dev/null 2>&1 || \
+    if docker exec aoa python3 -c "import tree_sitter" > /dev/null 2>&1 || \
        docker exec aoa-index-1 python3 -c "import tree_sitter" > /dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} Semantic compression ready"
     else
@@ -3270,7 +3319,7 @@ cmd_quickstart() {
     # Check services first
     if ! curl -s --connect-timeout 2 "${INDEX_URL}/health" > /dev/null 2>&1; then
         echo -e "${RED}✗ aOa services not running${NC}"
-        echo -e "${DIM}Start with: aoa start${NC}"
+        echo -e "${DIM}Start with: docker start aoa${NC}"
         return 1
     fi
 
@@ -4249,31 +4298,6 @@ cmd_init() {
         return 1
     fi
 
-    # Check if running from a subfolder
-    local current_dir="$(pwd)"
-    if [ "$current_dir" != "$project_root" ]; then
-        echo -e "  ${YELLOW}⚠ Subfolder detected${NC}"
-        echo
-        echo -e "  You're in:  ${BOLD}${current_dir}${NC}"
-        echo -e "  Git root:   ${BOLD}${project_root}${NC}"
-        echo
-        echo -e "  ${DIM}To maintain O(1) search performance, aOa uses one index per${NC}"
-        echo -e "  ${DIM}project at its git root. Multiple indices would compete and${NC}"
-        echo -e "  ${DIM}degrade the speed gains you're here for.${NC}"
-        echo
-        echo -e "  Initialize from the git root:"
-        echo
-        echo -e "    ${CYAN}cd ${project_root} && aoa init${NC}"
-        echo
-        echo -e "  Launch Claude Code from there. Tell Claude:"
-        echo
-        echo -e "    ${DIM}\"cd to ${project_root} so aOa hooks are active\"${NC}"
-        echo
-        echo -e "  ${DIM}All subfolders remain fully accessible.${NC}"
-        echo
-        return 1
-    fi
-
     local project_name=$(get_project_name)
 
     # Check if already has a project_id, otherwise generate new one
@@ -4374,8 +4398,8 @@ aoa remove           # Remove aOa from this project
 
 ## Global Settings
 
-To change aOa settings (port, confidence threshold, etc.),
-edit the config.json in your global aOa installation.
+To change aOa settings (port, limits, paths),
+edit the .env file in your aOa installation directory.
 EOFREADME
     fi
 
@@ -4461,13 +4485,6 @@ EOFAOA
         ' "$AOA_DATA/settings.template.json" "$project_root/.claude/settings.local.json" \
           > "$project_root/.claude/settings.local.json.new"
 
-        # Validate merged result
-        if ! jq empty "$project_root/.claude/settings.local.json.new" 2>/dev/null; then
-            echo -e "${RED}✗ Merge failed${NC}"
-            echo -e "${DIM}Settings backup preserved, .new file left for inspection${NC}"
-            return 1
-        fi
-
         mv "$project_root/.claude/settings.local.json.new" "$project_root/.claude/settings.local.json"
         echo -e "${GREEN}✓${NC} ${DIM}(merged, backup created)${NC}"
     fi
@@ -4514,6 +4531,37 @@ EOFAOA
     echo -e "${CYAN}${BOLD}Starting semantic tagging...${NC}"
     echo
     cmd_quickstart
+
+    # Shell integration - persist AOA_URL for zero-cost hook lookups
+    echo
+    echo -e "${CYAN}${BOLD}⚡ Shell Integration${NC}"
+    echo
+
+    local shell_rc=""
+    local shell_name=""
+
+    # Detect shell
+    if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "$(command -v zsh)" ]; then
+        shell_rc="$HOME/.zshrc"
+        shell_name="zsh"
+    else
+        shell_rc="$HOME/.bashrc"
+        shell_name="bash"
+    fi
+
+    # Check if already integrated
+    if grep -q 'eval "\$(aoa env)"' "$shell_rc" 2>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} Shell integration already configured in ${shell_rc}"
+    else
+        # Add to shell rc
+        echo '' >> "$shell_rc"
+        echo '# aOa - O(1) environment (zero-cost hook config)' >> "$shell_rc"
+        echo 'eval "$(aoa env)"' >> "$shell_rc"
+        echo -e "  ${GREEN}✓${NC} Added to ${shell_rc}"
+        echo
+        echo -e "  ${DIM}New shells will have AOA_URL set automatically.${NC}"
+        echo -e "  ${DIM}For this shell, run: ${NC}${BOLD}source ${shell_rc}${NC}"
+    fi
 }
 
 cmd_remove() {
@@ -4862,6 +4910,8 @@ main() {
         # System
         start)      cmd_start ;;
         stop)       cmd_stop ;;
+        env)        cmd_env ;;
+        port)       cmd_port "$@" ;;
         quickstart|qs) cmd_quickstart "$@" ;;
         learn)      cmd_learn "$@" ;;
         domains|d)  cmd_domains "$@" ;;

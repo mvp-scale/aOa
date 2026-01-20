@@ -273,6 +273,37 @@ EOFAOA
     echo -e "${CYAN}${BOLD}Starting semantic tagging...${NC}"
     echo
     cmd_quickstart
+
+    # Shell integration - persist AOA_URL for zero-cost hook lookups
+    echo
+    echo -e "${CYAN}${BOLD}⚡ Shell Integration${NC}"
+    echo
+
+    local shell_rc=""
+    local shell_name=""
+
+    # Detect shell
+    if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "$(command -v zsh)" ]; then
+        shell_rc="$HOME/.zshrc"
+        shell_name="zsh"
+    else
+        shell_rc="$HOME/.bashrc"
+        shell_name="bash"
+    fi
+
+    # Check if already integrated
+    if grep -q 'eval "\$(aoa env)"' "$shell_rc" 2>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} Shell integration already configured in ${shell_rc}"
+    else
+        # Add to shell rc
+        echo '' >> "$shell_rc"
+        echo '# aOa - O(1) environment (zero-cost hook config)' >> "$shell_rc"
+        echo 'eval "$(aoa env)"' >> "$shell_rc"
+        echo -e "  ${GREEN}✓${NC} Added to ${shell_rc}"
+        echo
+        echo -e "  ${DIM}New shells will have AOA_URL set automatically.${NC}"
+        echo -e "  ${DIM}For this shell, run: ${NC}${BOLD}source ${shell_rc}${NC}"
+    fi
 }
 
 cmd_remove() {

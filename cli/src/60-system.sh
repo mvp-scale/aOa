@@ -29,6 +29,74 @@
 # =============================================================================
 
 # =============================================================================
+# Environment Export (for shell integration)
+# =============================================================================
+
+cmd_env() {
+    # Output export statements for shell integration
+    # Usage: eval "$(aoa env)" - sets AOA_URL in current shell
+    # Claude Code and hooks will inherit this, avoiding file reads
+
+    local host="localhost"
+    local port="8080"
+
+    # Read from .env (source of truth)
+    if [ -f "$AOA_HOME/.env" ]; then
+        host=$(grep "^AOA_GATEWAY_HOST=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "localhost")
+        port=$(grep "^AOA_GATEWAY_PORT=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "8080")
+    fi
+
+    echo "export AOA_URL=\"http://${host}:${port}\""
+    echo "export AOA_GATEWAY_HOST=\"${host}\""
+    echo "export AOA_GATEWAY_PORT=\"${port}\""
+}
+
+cmd_port() {
+    # Change aOa port - updates .env, restarts Docker, informs user
+    # Usage: aoa port <new_port>
+
+    local new_port="$1"
+
+    # Show current port if no argument
+    if [ -z "$new_port" ]; then
+        local current_port=$(grep "^AOA_GATEWAY_PORT=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "8080")
+        echo -e "${CYAN}${BOLD}⚡ aOa Port${NC}"
+        echo
+        echo -e "  Current: ${BOLD}${current_port}${NC}"
+        echo
+        echo -e "  ${DIM}To change: aoa port <new_port>${NC}"
+        return 0
+    fi
+
+    # Validate port number
+    if ! [[ "$new_port" =~ ^[0-9]+$ ]] || [ "$new_port" -lt 1024 ] || [ "$new_port" -gt 65535 ]; then
+        echo -e "${RED}Invalid port: ${new_port}${NC}"
+        echo -e "${DIM}Must be a number between 1024-65535${NC}"
+        return 1
+    fi
+
+    echo -e "${CYAN}${BOLD}⚡ Changing aOa Port to ${new_port}${NC}"
+    echo
+
+    # Update .env
+    echo -n "  Updating .env................. "
+    sed -i "s/^AOA_GATEWAY_PORT=.*/AOA_GATEWAY_PORT=${new_port}/" "$AOA_HOME/.env"
+    echo -e "${GREEN}✓${NC}"
+
+    # Restart Docker
+    echo -n "  Restarting Docker............. "
+    cmd_stop > /dev/null 2>&1
+    cmd_start > /dev/null 2>&1
+    echo -e "${GREEN}✓${NC}"
+
+    echo
+    echo -e "${GREEN}${BOLD}✓ Port changed to ${new_port}${NC}"
+    echo
+    echo -e "  ${YELLOW}→ Open a new terminal${NC} for Claude to use the new port."
+    echo -e "  ${DIM}Or run: source ~/.bashrc${NC}"
+}
+
+# =============================================================================
 # Service Control
 # =============================================================================
 
