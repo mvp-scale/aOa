@@ -125,7 +125,18 @@ if [[ "$1" == "--uninstall" ]]; then
         FOUND_ITEMS=$((FOUND_ITEMS + 1))
     fi
 
-    # 5. Check for registered projects (will clean them up)
+    # 5. Check for shell integration
+    for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+        if [ -f "$shell_rc" ]; then
+            if grep -q '# BEGIN aOa' "$shell_rc" 2>/dev/null || grep -q 'eval "\$(aoa env)"' "$shell_rc" 2>/dev/null; then
+                echo -e "  ${DIM}•${NC} Shell integration: ${BOLD}${shell_rc##*/}${NC}"
+                FOUND_ITEMS=$((FOUND_ITEMS + 1))
+                break  # Only report once
+            fi
+        fi
+    done
+
+    # 6. Check for registered projects (will clean them up)
     PROJECTS_TO_CLEAN=()
     if [ -f "$AOA_DATA/projects.json" ]; then
         PROJECT_COUNT=$(jq 'length' "$AOA_DATA/projects.json" 2>/dev/null || echo 0)
@@ -259,6 +270,25 @@ if [[ "$1" == "--uninstall" ]]; then
         sudo rm -f /usr/local/bin/aoa
         echo -e "${GREEN}✓${NC}"
     fi
+
+    # 6. Remove shell integration (between markers)
+    for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+        if [ -f "$shell_rc" ] && grep -q '# BEGIN aOa' "$shell_rc" 2>/dev/null; then
+            echo -n "  Removing from ${shell_rc##*/}........... "
+            sed -i '/# BEGIN aOa/,/# END aOa/d' "$shell_rc"
+            echo -e "${GREEN}✓${NC}"
+        fi
+    done
+
+    # Also remove old eval-style integration if present
+    for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+        if [ -f "$shell_rc" ] && grep -q 'eval "\$(aoa env)"' "$shell_rc" 2>/dev/null; then
+            echo -n "  Removing old integration from ${shell_rc##*/}... "
+            sed -i '/# aOa - O(1) environment/d' "$shell_rc"
+            sed -i '/eval "\$(aoa env)"/d' "$shell_rc"
+            echo -e "${GREEN}✓${NC}"
+        fi
+    done
 
     echo
     echo -e "  ${GREEN}${BOLD}✓ aOa uninstalled${NC}"
@@ -631,7 +661,8 @@ else
 fi
 
 # Create .env file
-echo -n "  Creating .env configuration... "
+echo -e "  ${BOLD}Creating configuration:${NC}"
+echo
 cat > "$AOA_HOME/.env" << EOF
 # =============================================================================
 # aOa Docker Configuration
@@ -654,7 +685,11 @@ PROJECTS_ROOT=${PROJECTS_ROOT}
 AOA_GATEWAY_HOST=${AOA_GATEWAY_HOST}
 AOA_GATEWAY_PORT=${AOA_GATEWAY_PORT}
 EOF
-echo -e "${GREEN}✓${NC}"
+echo -e "  .env........................ ${GREEN}✓${NC} ${DIM}${AOA_HOME}/.env${NC}"
+echo -e "    PROJECTS_ROOT           = ${BOLD}${PROJECTS_ROOT}${NC}"
+echo -e "    AOA_GATEWAY_HOST        = ${BOLD}${AOA_GATEWAY_HOST}${NC}"
+echo -e "    AOA_GATEWAY_PORT        = ${BOLD}${AOA_GATEWAY_PORT}${NC}"
+echo
 
 # Auto-detect Claude sessions
 CLAUDE_SESSIONS=""
@@ -665,10 +700,53 @@ elif [ -d "${HOME}/.claude" ]; then
 fi
 
 if [ -n "$CLAUDE_SESSIONS" ]; then
-    echo -e "  ${GREEN}✓ Claude sessions found: ${CLAUDE_SESSIONS}${NC}"
+    echo -e "  Claude sessions............. ${GREEN}✓${NC} ${DIM}${CLAUDE_SESSIONS}${NC}"
 else
-    echo -e "  ${DIM}  Claude sessions not found (will be created on first use)${NC}"
+    echo -e "  Claude sessions............. ${DIM}not found (will be created on first use)${NC}"
     CLAUDE_SESSIONS="${HOME}/.claude"
+fi
+
+# Shell integration - add env vars to user's shell config
+echo
+SHELL_CONFIG=""
+if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "$(command -v zsh)" ] || [ -f "$HOME/.zshrc" ]; then
+    SHELL_CONFIG="$HOME/.zshrc"
+elif [ -f "$HOME/.bashrc" ]; then
+    SHELL_CONFIG="$HOME/.bashrc"
+elif [ -f "$HOME/.bash_profile" ]; then
+    SHELL_CONFIG="$HOME/.bash_profile"
+elif [ -f "$HOME/.profile" ]; then
+    SHELL_CONFIG="$HOME/.profile"
+fi
+
+if [ -n "$SHELL_CONFIG" ]; then
+    # Check if already integrated (look for our marker)
+    if grep -q '# BEGIN aOa' "$SHELL_CONFIG" 2>/dev/null; then
+        # Update existing integration (replace between markers)
+        sed -i '/# BEGIN aOa/,/# END aOa/d' "$SHELL_CONFIG"
+    fi
+
+    # Add fresh integration with direct exports (no eval)
+    cat >> "$SHELL_CONFIG" << EOFSHELL
+
+# BEGIN aOa
+export AOA_URL="http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}"
+export AOA_GATEWAY_HOST="${AOA_GATEWAY_HOST}"
+export AOA_GATEWAY_PORT="${AOA_GATEWAY_PORT}"
+# END aOa
+EOFSHELL
+
+    echo -e "  Shell integration........... ${GREEN}✓${NC} ${DIM}${SHELL_CONFIG}${NC}"
+    echo -e "    AOA_URL                 = ${BOLD}http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}${NC}"
+
+    # Store shell config path in .env for future updates (e.g., aoa port)
+    echo "" >> "$AOA_HOME/.env"
+    echo "# Shell config location (for aoa port updates)" >> "$AOA_HOME/.env"
+    echo "SHELL_CONFIG=${SHELL_CONFIG}" >> "$AOA_HOME/.env"
+else
+    echo -e "  Shell integration........... ${YELLOW}!${NC} ${DIM}No shell config found${NC}"
+    echo -e "    ${DIM}Manually add to your shell config:${NC}"
+    echo -e "    ${DIM}export AOA_URL=\"http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}\"${NC}"
 fi
 
 echo
