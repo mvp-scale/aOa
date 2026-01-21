@@ -8,6 +8,20 @@ See `.aoa/USAGE.md` for details.
 
 ---
 
+## CRITICAL: CLI Build Requirement
+
+**The `cli/aoa` file is GENERATED from `cli/src/*.sh` files.**
+
+After ANY change to files in `cli/src/`, you MUST rebuild:
+
+```bash
+./cli/build.sh
+```
+
+If `aoa grep` returns 0 results but the API works, **you forgot to rebuild**.
+
+---
+
 # aOa - 5 Angles. 1 Attack.
 
 ## Hooks, Not API Keys

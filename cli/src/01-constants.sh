@@ -10,25 +10,33 @@
 #   - 00-header.sh: set -e must be active
 #
 # PROVIDES
-#   GATEWAY_HOST, GATEWAY_PORT   Service connection settings
-#   INDEX_URL, STATUS_URL        API endpoint URLs
+#   AOA_URL                      Main API endpoint (external access)
+#   AOA_DOCKER_HOST/PORT         Docker networking (install.sh only)
 #   AOA_HOME, AOA_DATA           Installation paths
 #   BOLD, DIM, GREEN, etc.       ANSI color codes for output formatting
 #
 # =============================================================================
-
-# Gateway configuration (connects to aOa index service)
-GATEWAY_HOST="${AOA_GATEWAY_HOST:-localhost}"
-GATEWAY_PORT="${AOA_GATEWAY_PORT:-8080}"
 
 # Find AOA_HOME by locating the CLI script itself
 CLI_PATH="$(readlink -f "$0")"
 AOA_HOME="$(dirname "$(dirname "$CLI_PATH")")"
 AOA_DATA="${AOA_DATA:-$AOA_HOME/data}"
 
-# Service URLs
-INDEX_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
-STATUS_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
+# AOA_URL: Main API endpoint - single source of truth
+# Priority: 1) Environment variable, 2) home.json, 3) Default
+if [ -z "$AOA_URL" ]; then
+    # Try to read from home.json
+    if [ -f "$AOA_HOME/.aoa/home.json" ]; then
+        AOA_URL=$(jq -r '.aoa_url // empty' "$AOA_HOME/.aoa/home.json" 2>/dev/null)
+    fi
+    # Fall back to default if still not set
+    AOA_URL="${AOA_URL:-http://localhost:8080}"
+fi
+export AOA_URL
+
+# Legacy aliases for backwards compatibility (deprecated - use AOA_URL)
+INDEX_URL="${AOA_URL}"
+STATUS_URL="${AOA_URL}"
 
 # ANSI Colors
 BOLD='\033[1m'

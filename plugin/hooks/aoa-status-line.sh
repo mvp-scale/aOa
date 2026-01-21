@@ -10,7 +10,6 @@
 
 set -uo pipefail
 
-AOA_URL="${AOA_URL:-http://localhost:8080}"
 MIN_INTENTS=30
 
 # Find AOA data directory from .aoa/home.json
@@ -18,11 +17,16 @@ HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$HOOK_DIR")")"
 AOA_HOME_FILE="$PROJECT_ROOT/.aoa/home.json"
 
+# AOA_URL: Priority is 1) env var, 2) home.json, 3) default
 if [ -f "$AOA_HOME_FILE" ]; then
     PROJECT_ID=$(jq -r '.project_id // ""' "$AOA_HOME_FILE" 2>/dev/null)
+    if [ -z "${AOA_URL:-}" ]; then
+        AOA_URL=$(jq -r '.aoa_url // ""' "$AOA_HOME_FILE" 2>/dev/null)
+    fi
 else
     PROJECT_ID=""
 fi
+AOA_URL="${AOA_URL:-http://localhost:8080}"
 
 # ANSI colors
 CYAN='\033[96m'
@@ -292,5 +296,5 @@ fi
 # Line 1: Environment context
 echo -e "${LINE1}"
 
-# Line 2: aOa status
+# Line 2: aOa status (clean, no intent tags - those go in `aoa domains`)
 echo -e "${CYAN}${BOLD}⚡ aOa${RESET} ${LIGHT} ${INTENT_DISPLAY} ${SEP} ${MIDDLE} ${SEP} ctx:${CTX_COLOR}${TOTAL_FMT}/${CTX_SIZE_FMT}${RESET} ${DIM}(${PERCENT}%)${RESET} ${SEP} ${MODEL}"

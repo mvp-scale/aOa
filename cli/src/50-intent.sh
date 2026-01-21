@@ -274,11 +274,12 @@ PYEOF
             file_count: (.files | length),
             tags: (.tags[0:6] | join(" ")),
             file_size: (if (.file_sizes and .files[0]) then .file_sizes[.files[0]] else null end),
-            output_size: .output_size
+            output_size: .output_size,
+            confidence: .confidence
         } |
         # Use ASCII Unit Separator (0x1F) - designed for field separation, never in user input
-        "\(.tool)\u001f\(.files)\u001f\(.tags)\u001f\(.file_size // 0)\u001f\(.output_size // 0)\u001f\(.file_count)"
-    ' 2>/dev/null | head -n "$limit" | while IFS=$'\x1f' read -r tool file tags file_size output_size file_count; do
+        "\(.tool)\u001f\(.files)\u001f\(.tags)\u001f\(.file_size // 0)\u001f\(.output_size // 0)\u001f\(.file_count)\u001f\(.confidence // 0)"
+    ' 2>/dev/null | head -n "$limit" | while IFS=$'\x1f' read -r tool file tags file_size output_size file_count confidence; do
         # Map tool to action and determine source
         local action="$tool"
         local source="Claude"
@@ -463,12 +464,11 @@ PYEOF
 
         # Special handling for aOa native operations - tell meaningful stories
         if [ "$action" = "Predict" ]; then
-            # Extract confidence from tags (format: @XX%)
-            local confidence=$(echo "$tags" | grep -oE '@[0-9]+%' | head -1 | tr -d '@')
-            if [ -n "$confidence" ]; then
-                attribution="${CYAN}${confidence}${NC} conf"
-                # Remove confidence from tags to avoid duplication
-                tags=$(echo "$tags" | sed 's/@[0-9]*%//' | sed 's/  / /g' | xargs)
+            # Use confidence field (0-1 float) if available
+            if [ -n "$confidence" ] && [ "$confidence" != "0" ] && [ "$confidence" != "null" ]; then
+                # Convert float to percentage (e.g., 0.45 -> 45%)
+                local conf_pct=$(awk "BEGIN {printf \"%.0f\", $confidence * 100}")
+                attribution="${CYAN}${conf_pct}%${NC} conf"
             else
                 attribution="${CYAN}predicted${NC}"
             fi

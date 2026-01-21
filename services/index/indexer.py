@@ -2716,9 +2716,19 @@ intent_index: IntentIndex | None = None
 def health():
     local = manager.get_local()
 
+    # Check Redis connectivity
+    redis_connected = False
+    if intent_index and intent_index.redis:
+        try:
+            intent_index.redis.client.ping()
+            redis_connected = True
+        except Exception:
+            pass
+
     response = {
         'status': 'ok',
         'mode': 'global' if manager.global_mode else 'legacy',
+        'redis': {'connected': redis_connected},
         'repos': [r.get_stats() for r in manager.repos.values()],
         'content_cache': content_cache.stats(),  # GL-046.1: LRU cache stats
         'ac_matcher': {  # GL-047: Aho-Corasick pattern matcher
@@ -5826,17 +5836,17 @@ def log_prediction():
             'hit': None  # Will be set by /predict/check
         }
 
-        # Store prediction with 60s TTL (for quick lookup during active session)
+        # Store prediction with 24h TTL (matches rolling window for proper hit tracking)
         scorer.redis.client.setex(
             prediction_key,
-            60,  # 60 second TTL
+            ROLLING_WINDOW_SECONDS,  # 24 hour TTL - predictions persist for rolling analysis
             json.dumps(prediction_data)
         )
 
         # Also add to session's prediction list for quick lookup
         session_predictions_key = f"aoa:predictions:{session_id}"
         scorer.redis.client.lpush(session_predictions_key, prediction_key)
-        scorer.redis.client.expire(session_predictions_key, 3600)  # 1 hour TTL for session
+        scorer.redis.client.expire(session_predictions_key, ROLLING_WINDOW_SECONDS)  # 24h TTL to match rolling window
 
         # Phase 4: Add to rolling predictions ZSET for Hit@5 calculation
         # Score = timestamp, Member = prediction_id

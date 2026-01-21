@@ -36,15 +36,25 @@ except ImportError:
 # Configuration
 # =============================================================================
 
-AOA_URL = os.environ.get("AOA_URL", "http://localhost:8080")
 HOOK_DIR = Path(__file__).parent
 PROJECT_ROOT = HOOK_DIR.parent.parent
-AOA_HOME = PROJECT_ROOT / ".aoa" / "home.json"
+HOME_JSON = PROJECT_ROOT / ".aoa" / "home.json"
 PROJECT_ID = ""
 
-if AOA_HOME.exists():
+# AOA_URL: Priority is 1) env var, 2) home.json, 3) default
+AOA_URL = os.environ.get("AOA_URL")
+if not AOA_URL and HOME_JSON.exists():
     try:
-        PROJECT_ID = json.loads(AOA_HOME.read_text()).get("project_id", "")
+        home_data = json.loads(HOME_JSON.read_text())
+        AOA_URL = home_data.get("aoa_url")
+        PROJECT_ID = home_data.get("project_id", "")
+    except (json.JSONDecodeError, OSError):
+        pass
+if not AOA_URL:
+    AOA_URL = "http://localhost:8080"
+elif HOME_JSON.exists() and not PROJECT_ID:
+    try:
+        PROJECT_ID = json.loads(HOME_JSON.read_text()).get("project_id", "")
     except (json.JSONDecodeError, OSError):
         pass
 
@@ -441,13 +451,14 @@ def log_prediction(session_id: str, files: list, keywords: list):
     # Tags should reflect what was predicted, not raw search keywords
     # Use infer_tags on predicted files for semantic meaning
     predicted_tags = infer_tags(file_paths[:5], 'Predict')
-    predicted_tags.append(f"@{avg_confidence:.0%}")
+    # Note: confidence passed as separate field, not as a tag
     api_post("/intent", {
         'session_id': session_id,
         'project_id': PROJECT_ID,
         'tool': 'Predict',
         'files': file_paths[:5],
-        'tags': predicted_tags
+        'tags': predicted_tags,
+        'confidence': avg_confidence
     }, timeout=1)
 
 
@@ -645,8 +656,8 @@ VALIDATION before POST:
 
 After generating, POST result:
 ```bash
-curl -s -X POST "localhost:8080/domains/add" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": YOUR_DOMAINS}}'
-curl -s -X POST "localhost:8080/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
+curl -s -X POST "{AOA_URL}/domains/add" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": YOUR_DOMAINS}}'
+curl -s -X POST "{AOA_URL}/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
 ```
 
 Output JSON: {{"domains":[{{"name":"@example","terms":["word1","word2","word3"]}}]}}"""
@@ -658,24 +669,10 @@ Output JSON: {{"domains":[{{"name":"@example","terms":["word1","word2","word3"]}
 
         # Don't return - continue to show status line
 
-    # GL-069.1: Per-prompt semantic tag generation
-    # Only when: domains exist, learning NOT pending, and we have a prompt
+    # GL-069.1: Per-prompt semantic tagging - REMOVED
+    # Tags are generated internally by the hook (pattern-based) and shown in status line.
+    # Claude doesn't need to generate per-prompt tags - hook handles it silently.
     prompt = data.get("prompt", "")
-    if prompt and domain_stats and domain_stats.get("domains", 0) > 0:
-        # Output minimal tag generation instructions
-        tag_prompt = f"""## aOa Semantic Tags (Per-Prompt)
-
-Generate 3-5 semantic tags for this prompt. Tags should capture the user's INTENT, not just keywords.
-
-**User prompt:** {prompt[:200]}{'...' if len(prompt) > 200 else ''}
-
-Output JSON then curl: {{"tags": ["tag1", "tag2", "tag3"]}}
-
-```bash
-curl -s -X POST "localhost:8080/domains/tags" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "tags": YOUR_TAGS}}'
-```
-"""
-        output_context(tag_prompt)
 
     # Predict files from prompt keywords
     session_id = data.get("session_id", "unknown")

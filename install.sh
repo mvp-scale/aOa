@@ -579,8 +579,8 @@ echo -e "  ${GREEN}✓ Projects root: ${PROJECTS_ROOT}${NC}"
 echo
 
 # Set default gateway configuration
-AOA_GATEWAY_HOST="${AOA_GATEWAY_HOST:-localhost}"
-AOA_GATEWAY_PORT="${AOA_GATEWAY_PORT:-8080}"
+AOA_DOCKER_HOST="${AOA_DOCKER_HOST:-localhost}"
+AOA_DOCKER_PORT="${AOA_DOCKER_PORT:-8080}"
 
 # Function to check if port is available
 check_port() {
@@ -598,8 +598,8 @@ check_port() {
 }
 
 # Check if chosen port is available
-echo -n "  Port ${AOA_GATEWAY_PORT}.................... "
-if check_port "$AOA_GATEWAY_PORT"; then
+echo -n "  Port ${AOA_DOCKER_PORT}.................... "
+if check_port "$AOA_DOCKER_PORT"; then
     echo -e "${GREEN}✓ Available${NC}"
 else
     echo -e "${YELLOW}! In use${NC}"
@@ -610,19 +610,19 @@ else
     if [ -n "$OUR_CONTAINER" ]; then
         echo -e "  ${DIM}Found existing aOa container: ${OUR_CONTAINER}${NC}"
     else
-        echo -e "  ${DIM}Port ${AOA_GATEWAY_PORT} is in use by another service.${NC}"
+        echo -e "  ${DIM}Port ${AOA_DOCKER_PORT} is in use by another service.${NC}"
     fi
     echo
 
     # Find next available port
-    NEW_PORT=$((AOA_GATEWAY_PORT + 1))
+    NEW_PORT=$((AOA_DOCKER_PORT + 1))
     while ! check_port "$NEW_PORT" && [ "$NEW_PORT" -lt 9000 ]; do
         NEW_PORT=$((NEW_PORT + 1))
     done
 
     # Offer options: keep current, use suggested, or enter custom
     echo -e "  ${BOLD}Options:${NC}"
-    echo -e "    ${BOLD}1${NC}) Keep port ${AOA_GATEWAY_PORT} ${DIM}(will replace existing container)${NC}"
+    echo -e "    ${BOLD}1${NC}) Keep port ${AOA_DOCKER_PORT} ${DIM}(will replace existing container)${NC}"
     if [ "$NEW_PORT" -lt 9000 ]; then
         echo -e "    ${BOLD}2${NC}) Use port ${NEW_PORT} ${DIM}(next available)${NC}"
     fi
@@ -634,8 +634,8 @@ else
     case "$port_choice" in
         2)
             if [ "$NEW_PORT" -lt 9000 ]; then
-                AOA_GATEWAY_PORT="$NEW_PORT"
-                echo -e "  ${GREEN}✓ Using port ${AOA_GATEWAY_PORT}${NC}"
+                AOA_DOCKER_PORT="$NEW_PORT"
+                echo -e "  ${GREEN}✓ Using port ${AOA_DOCKER_PORT}${NC}"
             else
                 echo -e "  ${RED}✗ No available ports found${NC}"
                 exit 1
@@ -645,8 +645,8 @@ else
             echo -n -e "  ${CYAN}Enter port: ${NC}"
             read -r custom_port
             if [[ "$custom_port" =~ ^[0-9]+$ ]] && [ "$custom_port" -ge 1024 ] && [ "$custom_port" -le 65535 ]; then
-                AOA_GATEWAY_PORT="$custom_port"
-                echo -e "  ${GREEN}✓ Using port ${AOA_GATEWAY_PORT}${NC}"
+                AOA_DOCKER_PORT="$custom_port"
+                echo -e "  ${GREEN}✓ Using port ${AOA_DOCKER_PORT}${NC}"
             else
                 echo -e "  ${RED}✗ Invalid port (must be 1024-65535)${NC}"
                 exit 1
@@ -654,7 +654,7 @@ else
             ;;
         *)
             # Default: keep current port (will replace container)
-            echo -e "  ${GREEN}✓ Keeping port ${AOA_GATEWAY_PORT}${NC}"
+            echo -e "  ${GREEN}✓ Keeping port ${AOA_DOCKER_PORT}${NC}"
             ;;
     esac
     echo
@@ -682,13 +682,16 @@ USE_COMPOSE=${USE_COMPOSE}
 PROJECTS_ROOT=${PROJECTS_ROOT}
 
 # Gateway configuration
-AOA_GATEWAY_HOST=${AOA_GATEWAY_HOST}
-AOA_GATEWAY_PORT=${AOA_GATEWAY_PORT}
+AOA_DOCKER_HOST=${AOA_DOCKER_HOST}
+AOA_DOCKER_PORT=${AOA_DOCKER_PORT}
+
+# Performance tuning
+AOA_CONTENT_CACHE_MB=${AOA_CONTENT_CACHE_MB:-500}
 EOF
 echo -e "  .env........................ ${GREEN}✓${NC} ${DIM}${AOA_HOME}/.env${NC}"
 echo -e "    PROJECTS_ROOT           = ${BOLD}${PROJECTS_ROOT}${NC}"
-echo -e "    AOA_GATEWAY_HOST        = ${BOLD}${AOA_GATEWAY_HOST}${NC}"
-echo -e "    AOA_GATEWAY_PORT        = ${BOLD}${AOA_GATEWAY_PORT}${NC}"
+echo -e "    AOA_DOCKER_HOST        = ${BOLD}${AOA_DOCKER_HOST}${NC}"
+echo -e "    AOA_DOCKER_PORT        = ${BOLD}${AOA_DOCKER_PORT}${NC}"
 echo
 
 # Auto-detect Claude sessions
@@ -730,14 +733,14 @@ if [ -n "$SHELL_CONFIG" ]; then
     cat >> "$SHELL_CONFIG" << EOFSHELL
 
 # BEGIN aOa
-export AOA_URL="http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}"
-export AOA_GATEWAY_HOST="${AOA_GATEWAY_HOST}"
-export AOA_GATEWAY_PORT="${AOA_GATEWAY_PORT}"
+export AOA_URL="http://${AOA_DOCKER_HOST}:${AOA_DOCKER_PORT}"
+export AOA_DOCKER_HOST="${AOA_DOCKER_HOST}"
+export AOA_DOCKER_PORT="${AOA_DOCKER_PORT}"
 # END aOa
 EOFSHELL
 
     echo -e "  Shell integration........... ${GREEN}✓${NC} ${DIM}${SHELL_CONFIG}${NC}"
-    echo -e "    AOA_URL                 = ${BOLD}http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}${NC}"
+    echo -e "    AOA_URL                 = ${BOLD}http://${AOA_DOCKER_HOST}:${AOA_DOCKER_PORT}${NC}"
 
     # Store shell config path in .env for future updates (e.g., aoa port)
     echo "" >> "$AOA_HOME/.env"
@@ -746,7 +749,7 @@ EOFSHELL
 else
     echo -e "  Shell integration........... ${YELLOW}!${NC} ${DIM}No shell config found${NC}"
     echo -e "    ${DIM}Manually add to your shell config:${NC}"
-    echo -e "    ${DIM}export AOA_URL=\"http://${AOA_GATEWAY_HOST}:${AOA_GATEWAY_PORT}\"${NC}"
+    echo -e "    ${DIM}export AOA_URL=\"http://${AOA_DOCKER_HOST}:${AOA_DOCKER_PORT}\"${NC}"
 fi
 
 echo
@@ -890,13 +893,17 @@ else
     # Use instance-scoped name for multi-user support
     docker run -d \
         --name "aoa-${USER}" \
-        -p "${AOA_GATEWAY_PORT}:8080" \
+        -p "${AOA_DOCKER_PORT}:8080" \
+        -v "${AOA_HOME}:/codebase:ro" \
         -v "${PROJECTS_ROOT}:/userhome:ro" \
         -v "${AOA_DATA}/repos:/repos:rw" \
         -v "${AOA_DATA}/indexes:/indexes:rw" \
         -v "${AOA_DATA}:/config:rw" \
+        -v "${AOA_HOME}/config:/app/config:ro" \
         -v "${CLAUDE_SESSIONS}:/claude-sessions:ro" \
         -e "USER_HOME=${PROJECTS_ROOT}" \
+        -e "CODEBASE_ROOT=/codebase" \
+        -e "AOA_CONTENT_CACHE_MB=${AOA_CONTENT_CACHE_MB:-500}" \
         --restart unless-stopped \
         aoa > /dev/null
 fi
@@ -909,8 +916,8 @@ done
 echo
 
 # Verify services are running
-if curl -s "http://localhost:${AOA_GATEWAY_PORT}/health" > /dev/null 2>&1; then
-    echo -e "  ${GREEN}✓ Services running on port ${AOA_GATEWAY_PORT}${NC}"
+if curl -s "http://localhost:${AOA_DOCKER_PORT}/health" > /dev/null 2>&1; then
+    echo -e "  ${GREEN}✓ Services running on port ${AOA_DOCKER_PORT}${NC}"
 else
     echo -e "  ${YELLOW}! Services starting... (may take a moment)${NC}"
 fi
@@ -986,9 +993,9 @@ echo -e "${GREEN}${BOLD}What was installed:${NC}"
 echo -e "  ${DIM}•${NC} ${BOLD}${AOA_HOME}${NC}"
 echo -e "      ${DIM}└─ data/              Runtime state (indexes, repos, config)${NC}"
 if [ "$USE_COMPOSE" -eq 1 ]; then
-    echo -e "  ${DIM}•${NC} Docker Compose        ${DIM}- Project: aoa-${USER}, Port: ${AOA_GATEWAY_PORT}${NC}"
+    echo -e "  ${DIM}•${NC} Docker Compose        ${DIM}- Project: aoa-${USER}, Port: ${AOA_DOCKER_PORT}${NC}"
 else
-    echo -e "  ${DIM}•${NC} Docker container      ${DIM}- Name: aoa-${USER}, Port: ${AOA_GATEWAY_PORT}${NC}"
+    echo -e "  ${DIM}•${NC} Docker container      ${DIM}- Name: aoa-${USER}, Port: ${AOA_DOCKER_PORT}${NC}"
 fi
 echo -e "  ${DIM}•${NC} ${CLI_LOCATION} → ${BOLD}${AOA_HOME}/cli/aoa${NC}"
 echo

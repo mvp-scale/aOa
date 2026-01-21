@@ -48,25 +48,33 @@ set -e
 #   - 00-header.sh: set -e must be active
 #
 # PROVIDES
-#   GATEWAY_HOST, GATEWAY_PORT   Service connection settings
-#   INDEX_URL, STATUS_URL        API endpoint URLs
+#   AOA_URL                      Main API endpoint (external access)
+#   AOA_DOCKER_HOST/PORT         Docker networking (install.sh only)
 #   AOA_HOME, AOA_DATA           Installation paths
 #   BOLD, DIM, GREEN, etc.       ANSI color codes for output formatting
 #
 # =============================================================================
-
-# Gateway configuration (connects to aOa index service)
-GATEWAY_HOST="${AOA_GATEWAY_HOST:-localhost}"
-GATEWAY_PORT="${AOA_GATEWAY_PORT:-8080}"
 
 # Find AOA_HOME by locating the CLI script itself
 CLI_PATH="$(readlink -f "$0")"
 AOA_HOME="$(dirname "$(dirname "$CLI_PATH")")"
 AOA_DATA="${AOA_DATA:-$AOA_HOME/data}"
 
-# Service URLs
-INDEX_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
-STATUS_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
+# AOA_URL: Main API endpoint - single source of truth
+# Priority: 1) Environment variable, 2) home.json, 3) Default
+if [ -z "$AOA_URL" ]; then
+    # Try to read from home.json
+    if [ -f "$AOA_HOME/.aoa/home.json" ]; then
+        AOA_URL=$(jq -r '.aoa_url // empty' "$AOA_HOME/.aoa/home.json" 2>/dev/null)
+    fi
+    # Fall back to default if still not set
+    AOA_URL="${AOA_URL:-http://localhost:8080}"
+fi
+export AOA_URL
+
+# Legacy aliases for backwards compatibility (deprecated - use AOA_URL)
+INDEX_URL="${AOA_URL}"
+STATUS_URL="${AOA_URL}"
 
 # ANSI Colors
 BOLD='\033[1m'
@@ -2236,11 +2244,12 @@ PYEOF
             file_count: (.files | length),
             tags: (.tags[0:6] | join(" ")),
             file_size: (if (.file_sizes and .files[0]) then .file_sizes[.files[0]] else null end),
-            output_size: .output_size
+            output_size: .output_size,
+            confidence: .confidence
         } |
         # Use ASCII Unit Separator (0x1F) - designed for field separation, never in user input
-        "\(.tool)\u001f\(.files)\u001f\(.tags)\u001f\(.file_size // 0)\u001f\(.output_size // 0)\u001f\(.file_count)"
-    ' 2>/dev/null | head -n "$limit" | while IFS=$'\x1f' read -r tool file tags file_size output_size file_count; do
+        "\(.tool)\u001f\(.files)\u001f\(.tags)\u001f\(.file_size // 0)\u001f\(.output_size // 0)\u001f\(.file_count)\u001f\(.confidence // 0)"
+    ' 2>/dev/null | head -n "$limit" | while IFS=$'\x1f' read -r tool file tags file_size output_size file_count confidence; do
         # Map tool to action and determine source
         local action="$tool"
         local source="Claude"
@@ -2425,12 +2434,11 @@ PYEOF
 
         # Special handling for aOa native operations - tell meaningful stories
         if [ "$action" = "Predict" ]; then
-            # Extract confidence from tags (format: @XX%)
-            local confidence=$(echo "$tags" | grep -oE '@[0-9]+%' | head -1 | tr -d '@')
-            if [ -n "$confidence" ]; then
-                attribution="${CYAN}${confidence}${NC} conf"
-                # Remove confidence from tags to avoid duplication
-                tags=$(echo "$tags" | sed 's/@[0-9]*%//' | sed 's/  / /g' | xargs)
+            # Use confidence field (0-1 float) if available
+            if [ -n "$confidence" ] && [ "$confidence" != "0" ] && [ "$confidence" != "null" ]; then
+                # Convert float to percentage (e.g., 0.45 -> 45%)
+                local conf_pct=$(awk "BEGIN {printf \"%.0f\", $confidence * 100}")
+                attribution="${CYAN}${conf_pct}%${NC} conf"
             else
                 attribution="${CYAN}predicted${NC}"
             fi
@@ -2659,13 +2667,13 @@ cmd_env() {
 
     # Read from .env (source of truth)
     if [ -f "$AOA_HOME/.env" ]; then
-        host=$(grep "^AOA_GATEWAY_HOST=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "localhost")
-        port=$(grep "^AOA_GATEWAY_PORT=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "8080")
+        host=$(grep "^AOA_DOCKER_HOST=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "localhost")
+        port=$(grep "^AOA_DOCKER_PORT=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "8080")
     fi
 
     echo "export AOA_URL=\"http://${host}:${port}\""
-    echo "export AOA_GATEWAY_HOST=\"${host}\""
-    echo "export AOA_GATEWAY_PORT=\"${port}\""
+    echo "export AOA_DOCKER_HOST=\"${host}\""
+    echo "export AOA_DOCKER_PORT=\"${port}\""
 }
 
 cmd_port() {
@@ -2676,7 +2684,7 @@ cmd_port() {
 
     # Show current port if no argument
     if [ -z "$new_port" ]; then
-        local current_port=$(grep "^AOA_GATEWAY_PORT=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "8080")
+        local current_port=$(grep "^AOA_DOCKER_PORT=" "$AOA_HOME/.env" 2>/dev/null | cut -d'=' -f2 || echo "8080")
         echo -e "${CYAN}${BOLD}⚡ aOa Port${NC}"
         echo
         echo -e "  Current: ${BOLD}${current_port}${NC}"
@@ -2697,7 +2705,7 @@ cmd_port() {
 
     # Update .env
     echo -n "  Updating .env................. "
-    sed -i "s/^AOA_GATEWAY_PORT=.*/AOA_GATEWAY_PORT=${new_port}/" "$AOA_HOME/.env"
+    sed -i "s/^AOA_DOCKER_PORT=.*/AOA_DOCKER_PORT=${new_port}/" "$AOA_HOME/.env"
     echo -e "${GREEN}✓${NC}"
 
     # Restart Docker
@@ -2813,7 +2821,7 @@ cmd_stop() {
 
     echo
     echo -e "${DIM}Tip: To change port, edit ${AOA_HOME}/.env and restart:${NC}"
-    echo -e "${DIM}  AOA_GATEWAY_PORT=8081${NC}"
+    echo -e "${DIM}  AOA_DOCKER_PORT=8081${NC}"
     echo -e "${DIM}  aoa stop && aoa start${NC}"
 }
 
@@ -2838,13 +2846,13 @@ cmd_info() {
 
     if [ -f "$env_file" ]; then
         projects_root=$(grep "^PROJECTS_ROOT=" "$env_file" 2>/dev/null | cut -d'=' -f2 || echo "$HOME")
-        gateway_port=$(grep "^AOA_GATEWAY_PORT=" "$env_file" 2>/dev/null | cut -d'=' -f2 || echo "8080")
+        gateway_port=$(grep "^AOA_DOCKER_PORT=" "$env_file" 2>/dev/null | cut -d'=' -f2 || echo "8080")
     fi
 
     # Show Docker configuration from .env
     echo -e "${BOLD}Docker Configuration:${NC} ${DIM}(from .env)${NC}"
     echo -e "  PROJECTS_ROOT:   ${projects_root} → /userhome"
-    echo -e "  AOA_GATEWAY_PORT: ${gateway_port}"
+    echo -e "  AOA_DOCKER_PORT: ${gateway_port}"
     echo -e "  Claude sessions: ${projects_root}/.claude ${DIM}(auto-derived)${NC}"
     echo ""
     echo -e "  ${DIM}Edit .env in aOa root to change, then restart Docker${NC}"
@@ -3049,9 +3057,12 @@ cmd_health() {
     # =========================================================================
     echo -e "${BOLD}Services${NC}"
 
+    # Find the aoa container (could be aoa, aoa-corey, aoa-bray, etc.)
+    local aoa_container=$(docker ps --filter "name=aoa" --format "{{.Names}}" 2>/dev/null | head -1)
+
     # Check Docker
     echo -n "  Docker:        "
-    if docker ps --filter "name=aoa" --format "{{.Names}}" 2>/dev/null | grep -q "aoa"; then
+    if [ -n "$aoa_container" ]; then
         echo -e "${GREEN}✓${NC} Container running"
     else
         echo -e "${RED}✗${NC} Container not found"
@@ -3077,11 +3088,10 @@ cmd_health() {
         all_ok=false
     fi
 
-    # Check Redis
+    # Check Redis via API (actual service connectivity, not just container)
     echo -n "  Redis:         "
-    if docker exec aoa redis-cli ping > /dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} Connected"
-    elif docker exec aoa-redis-1 redis-cli ping > /dev/null 2>&1; then
+    local redis_status=$(echo "$idx_health" | jq -r '.redis.connected // false')
+    if [ "$redis_status" = "true" ]; then
         echo -e "${GREEN}✓${NC} Connected"
     else
         echo -e "${YELLOW}!${NC} Not connected ${DIM}(predictions disabled)${NC}"
@@ -3105,10 +3115,10 @@ cmd_health() {
         all_ok=false
     fi
 
-    # Check hooks (essential: intent-capture + status-line)
+    # Check hooks (essential: gateway + status-line)
     echo -n "  Hooks:         "
     local hook_count=0
-    [ -f "$project_root/.claude/hooks/aoa-intent-capture.py" ] && hook_count=$((hook_count + 1))
+    [ -f "$project_root/.claude/hooks/aoa-gateway.py" ] && hook_count=$((hook_count + 1))
     [ -f "$project_root/.claude/hooks/aoa-status-line.sh" ] && hook_count=$((hook_count + 1))
 
     if [ "$hook_count" -eq 2 ]; then
@@ -3124,7 +3134,7 @@ cmd_health() {
     # Check CLAUDE.md
     echo -n "  CLAUDE.md:     "
     if [ -f "$project_root/CLAUDE.md" ]; then
-        if grep -q "aoa search" "$project_root/CLAUDE.md" 2>/dev/null; then
+        if grep -qi "aoa grep\|aoa search" "$project_root/CLAUDE.md" 2>/dev/null; then
             echo -e "${GREEN}✓${NC} Present with aOa instructions"
         else
             echo -e "${YELLOW}!${NC} Present ${DIM}(missing aOa instructions)${NC}"
@@ -3165,10 +3175,9 @@ cmd_health() {
         warnings=$((warnings + 1))
     fi
 
-    # Check semantic compression (outline angle)
+    # Check semantic compression (outline angle, use detected container)
     echo -n "  Outline:       "
-    if docker exec aoa python3 -c "import tree_sitter" > /dev/null 2>&1 || \
-       docker exec aoa-index-1 python3 -c "import tree_sitter" > /dev/null 2>&1; then
+    if [ -n "$aoa_container" ] && docker exec "$aoa_container" python3 -c "import tree_sitter" > /dev/null 2>&1; then
         echo -e "${GREEN}✓${NC} Semantic compression ready"
     else
         echo -e "${YELLOW}!${NC} Semantic compression unavailable"
@@ -3890,6 +3899,31 @@ cmd_domains() {
         fi
     fi
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Dynamic Intent Section (GL-072: Real-time Haiku-generated tags)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # Fetch recent intent records to extract Haiku-generated tags
+    # Note: intents may not have project_id set, so fetch without filter
+    local recent_intents=$(curl -s "${INDEX_URL}/intent/recent?limit=10" 2>/dev/null)
+
+    # Extract unique tags from recent intents, keeping only rich semantic tags (with underscores)
+    local dynamic_tags=$(echo "$recent_intents" | jq -r '
+        [.records[]?.tags // []] | flatten | unique |
+        map(select(contains("_"))) | .[0:10] | join("  ")
+    ' 2>/dev/null)
+
+    if [ -n "$dynamic_tags" ] && [ "$dynamic_tags" != "" ] && [ "$dynamic_tags" != "null" ]; then
+        echo ""
+        echo -e "${CYAN}${BOLD}⚡ Dynamic Intent${NC} ${DIM}(real-time)${NC}"
+        echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
+        # Truncate to ~85 chars to prevent overflow
+        local truncated=$(echo "$dynamic_tags" | cut -c1-85)
+        if [ ${#dynamic_tags} -gt 85 ]; then
+            truncated="${truncated}..."
+        fi
+        echo -e "${MAGENTA}${truncated}${NC}"
+    fi
 
     # ─────────────────────────────────────────────────────────────────────────
     # Intelligence Angle Footer (GL-054)
@@ -4350,6 +4384,7 @@ cmd_init() {
     cat > "$project_root/.aoa/home.json" << EOFHOME
 {
   "aoa_home": "$AOA_HOME",
+  "aoa_url": "$AOA_URL",
   "data_dir": "$AOA_DATA",
   "project_id": "$project_id",
   "project_root": "$project_root"
@@ -4531,6 +4566,37 @@ EOFAOA
     echo -e "${CYAN}${BOLD}Starting semantic tagging...${NC}"
     echo
     cmd_quickstart
+
+    # Shell integration - persist AOA_URL for zero-cost hook lookups
+    echo
+    echo -e "${CYAN}${BOLD}⚡ Shell Integration${NC}"
+    echo
+
+    local shell_rc=""
+    local shell_name=""
+
+    # Detect shell
+    if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "$(command -v zsh)" ]; then
+        shell_rc="$HOME/.zshrc"
+        shell_name="zsh"
+    else
+        shell_rc="$HOME/.bashrc"
+        shell_name="bash"
+    fi
+
+    # Check if already integrated
+    if grep -q 'eval "\$(aoa env)"' "$shell_rc" 2>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} Shell integration already configured in ${shell_rc}"
+    else
+        # Add to shell rc
+        echo '' >> "$shell_rc"
+        echo '# aOa - O(1) environment (zero-cost hook config)' >> "$shell_rc"
+        echo 'eval "$(aoa env)"' >> "$shell_rc"
+        echo -e "  ${GREEN}✓${NC} Added to ${shell_rc}"
+        echo
+        echo -e "  ${DIM}New shells will have AOA_URL set automatically.${NC}"
+        echo -e "  ${DIM}For this shell, run: ${NC}${BOLD}source ${shell_rc}${NC}"
+    fi
 }
 
 cmd_remove() {
@@ -4584,22 +4650,10 @@ cmd_remove() {
     fi
     echo -e "${GREEN}✓${NC}"
 
-    # Notify service to remove index and wipe Redis data
+    # Notify service to remove index
     echo -n "  Removing index................ "
-    local delete_response
-    delete_response=$(curl -s -X DELETE "${INDEX_URL}/project/${project_id}" 2>/dev/null) || true
+    curl -s -X DELETE "${INDEX_URL}/project/${project_id}" > /dev/null 2>&1 || true
     echo -e "${GREEN}✓${NC}"
-
-    # Show Redis cleanup details (intents, domains, enrichment)
-    echo -n "  Clearing stored data.......... "
-    local redis_total=$(echo "$delete_response" | jq -r '.redis_deleted.total // 0' 2>/dev/null)
-    local redis_domains=$(echo "$delete_response" | jq -r '.redis_deleted.domains // 0' 2>/dev/null)
-    local redis_enrichment=$(echo "$delete_response" | jq -r '.redis_deleted.enrichment // 0' 2>/dev/null)
-    if [ "$redis_total" != "0" ] && [ -n "$redis_total" ]; then
-        echo -e "${GREEN}✓${NC} ${DIM}(${redis_domains} intents/domains, ${redis_enrichment} enriched)${NC}"
-    else
-        echo -e "${GREEN}✓${NC} ${DIM}(none found)${NC}"
-    fi
 
     # Clean up CLAUDE.md - remove aOa Integration section
     echo -n "  Cleaning CLAUDE.md............ "

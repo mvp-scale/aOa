@@ -59,6 +59,9 @@ RUN pip install --no-cache-dir \
 
 WORKDIR /app
 
+# Default environment variables (can be overridden at runtime with -e)
+ENV AOA_CONTENT_CACHE_MB=500
+
 # Copy all services
 COPY services/gateway/gateway.py /app/gateway/
 COPY services/index/indexer.py /app/index/
@@ -95,7 +98,7 @@ stderr_logfile=/var/log/supervisor/redis-error.log
 [program:index]
 command=python /app/index/indexer.py
 directory=/app/index
-environment=CODEBASE_ROOT="",REPOS_ROOT="/repos",CONFIG_DIR="/config",INDEXES_DIR="/indexes",CLAUDE_SESSIONS="/claude-sessions",REDIS_URL="redis://localhost:6379/0",PORT="9999",USER_HOME="%(ENV_USER_HOME)s",AOA_CONTENT_CACHE_MB="500"
+environment=CODEBASE_ROOT="%(ENV_CODEBASE_ROOT)s",REPOS_ROOT="/repos",CONFIG_DIR="/config",INDEXES_DIR="/indexes",CLAUDE_SESSIONS="/claude-sessions",REDIS_URL="redis://localhost:6379/0",PORT="9999",USER_HOME="%(ENV_USER_HOME)s",AOA_CONTENT_CACHE_MB="%(ENV_AOA_CONTENT_CACHE_MB)s"
 autostart=true
 autorestart=true
 stdout_logfile=/var/log/supervisor/index.log

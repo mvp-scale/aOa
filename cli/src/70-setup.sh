@@ -92,6 +92,7 @@ cmd_init() {
     cat > "$project_root/.aoa/home.json" << EOFHOME
 {
   "aoa_home": "$AOA_HOME",
+  "aoa_url": "$AOA_URL",
   "data_dir": "$AOA_DATA",
   "project_id": "$project_id",
   "project_root": "$project_root"
