@@ -702,10 +702,23 @@ Output JSON: {{"domains":[{{"name":"@example","terms":["word1","word2","word3"]}
 
         # Don't return - continue to show status line
 
-    # GL-069.1: Per-prompt semantic tagging - REMOVED
-    # Tags are generated internally by the hook (pattern-based) and shown in status line.
-    # Claude doesn't need to generate per-prompt tags - hook handles it silently.
+    # GL-069.1: Per-prompt semantic tag generation
+    # Only when: domains exist, learning NOT pending, and we have a prompt
     prompt = data.get("prompt", "")
+    if prompt and domain_stats and domain_stats.get("domains", 0) > 0:
+        tag_prompt = f"""## aOa Semantic Tags (Per-Prompt)
+
+Generate 3-5 semantic tags for this prompt. Tags should capture the user's INTENT, not just keywords.
+
+**User prompt:** {prompt[:200]}{'...' if len(prompt) > 200 else ''}
+
+Output JSON then curl: {{"tags": ["tag1", "tag2", "tag3"]}}
+
+```bash
+curl -s -X POST "{AOA_URL}/domains/tags" -H "Content-Type: application/json" -d '{{"project_id": "{PROJECT_ID}", "tags": YOUR_TAGS}}'
+```
+"""
+        output_context(tag_prompt)
 
     # Predict files from prompt keywords
     session_id = data.get("session_id", "unknown")
