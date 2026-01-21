@@ -636,7 +636,7 @@ infer_tags_from_name() {
 _quickstart_process_file() {
     local file="$1"
     local loop_param=""
-    [ -n "$project_id" ] && loop_param="&project=${project_id}"
+    [ -n "$project_id" ] && loop_param="&project_id=${project_id}"
 
     # Get outline
     local result=$(curl -s "${INDEX_URL}/outline?file=${file}${loop_param}")
@@ -670,7 +670,7 @@ _quickstart_process_file() {
         --arg file "$file" \
         --arg project "$project_id" \
         --argjson symbols "$enriched_symbols" \
-        '{file: $file, project: $project, symbols: $symbols}')
+        '{file: $file, project_id: $project, symbols: $symbols}')
 
     local http_code=$(curl -s -w "%{http_code}" -o /dev/null -X POST "${INDEX_URL}/outline/enriched" \
         -H "Content-Type: application/json" \
@@ -711,7 +711,7 @@ cmd_quickstart() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="?project=${project_id}"
+        project_param="?project_id=${project_id}"
     fi
 
     # Handle --reset: Clear all enrichment data for this project
@@ -737,7 +737,7 @@ cmd_quickstart() {
     # Seed universal domains (GL-053) - first time only
     local seed_result=$(curl -s -X POST "${INDEX_URL}/domains/seed" \
         -H "Content-Type: application/json" \
-        -d "{\"project\": \"${project_id:-default}\"}" 2>/dev/null)
+        -d "{\"project_id\": \"${project_id:-default}\"}" 2>/dev/null)
     local seed_domains=$(echo "$seed_result" | jq -r '.domains // 0')
     local seed_terms=$(echo "$seed_result" | jq -r '.terms // 0')
     local seed_msg=$(echo "$seed_result" | jq -r '.message // ""')
@@ -947,7 +947,7 @@ cmd_learn() {
 
     local project_id=$(get_project_id)
     local project_param=""
-    [ -n "$project_id" ] && project_param="?project=${project_id}"
+    [ -n "$project_id" ] && project_param="?project_id=${project_id}"
 
     # Check for flags
     case "$1" in
@@ -1078,7 +1078,7 @@ cmd_domains() {
     local project_id=$(get_project_id)
 
     # Get domain stats
-    local stats=$(curl -s "${INDEX_URL}/domains/stats?project=${project_id}")
+    local stats=$(curl -s "${INDEX_URL}/domains/stats?project_id=${project_id}")
 
     local domain_count=$(echo "$stats" | jq -r '.domains // 0')
     local total_terms=$(echo "$stats" | jq -r '.total_terms // 0')
@@ -1124,7 +1124,7 @@ cmd_domains() {
     local tune_display="${tune_count}/${tune_threshold}"
 
     # Get domains with full terms for display
-    local domains_data=$(curl -s "${INDEX_URL}/domains/list?project=${project_id}&limit=${limit}&include_terms=true&include_created=true" 2>/dev/null)
+    local domains_data=$(curl -s "${INDEX_URL}/domains/list?project_id=${project_id}&limit=${limit}&include_terms=true&include_created=true" 2>/dev/null)
     local now=$(date +%s)
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -1137,7 +1137,7 @@ cmd_domains() {
             --argjson domains "$domains_data" \
             --arg project "$project_id" \
             '{
-                project: $project,
+                project_id: $project,
                 summary: {
                     domains: ($stats.domains // 0),
                     total_terms: ($stats.total_terms // 0),
@@ -1253,7 +1253,7 @@ cmd_domains() {
                 local domain_info=$(echo "$domains_data" | jq -r --arg d "$domain" '.domains[]? | select(.name == $d) | "\(.hits // 0)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null)
                 if [ -z "$domain_info" ] || [ "$domain_info" = "|" ]; then
                     # Fallback: fetch directly if not in top 20
-                    domain_info=$(curl -s "${INDEX_URL}/domains/list?project=${project_id}&limit=50&include_terms=true" 2>/dev/null | jq -r --arg d "$domain" '.domains[]? | select(.name == $d) | "\(.hits // 0)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null)
+                    domain_info=$(curl -s "${INDEX_URL}/domains/list?project_id=${project_id}&limit=50&include_terms=true" 2>/dev/null | jq -r --arg d "$domain" '.domains[]? | select(.name == $d) | "\(.hits // 0)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null)
                 fi
                 local domain_hits=$(echo "$domain_info" | cut -d'|' -f1)
                 local domain_terms=$(echo "$domain_info" | cut -d'|' -f2)
@@ -1279,13 +1279,14 @@ cmd_domains() {
     # ─────────────────────────────────────────────────────────────────────────
 
     # Fetch recent intent records to extract Haiku-generated tags
-    # Note: intents may not have project_id set, so fetch without filter
-    local recent_intents=$(curl -s "${INDEX_URL}/intent/recent?limit=10" 2>/dev/null)
+    local project_param=""
+    [ -n "$project_id" ] && project_param="&project_id=${project_id}"
+    local recent_intents=$(curl -s "${INDEX_URL}/intent/recent?limit=10${project_param}" 2>/dev/null)
 
-    # Extract unique tags from recent intents, keeping only rich semantic tags (with underscores)
+    # Extract unique tags from recent intents, filtering out overly verbose ones (3+ underscores)
     local dynamic_tags=$(echo "$recent_intents" | jq -r '
         [.records[]?.tags // []] | flatten | unique |
-        map(select(contains("_"))) | .[0:10] | join("  ")
+        map(select(gsub("_"; "") | length >= (. | length) - 2)) | .[0:10] | join("  ")
     ' 2>/dev/null)
 
     if [ -n "$dynamic_tags" ] && [ "$dynamic_tags" != "" ] && [ "$dynamic_tags" != "null" ]; then
@@ -1344,7 +1345,7 @@ cmd_stats() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="?project=${project_id}"
+        project_param="?project_id=${project_id}"
     fi
 
     # Get index health

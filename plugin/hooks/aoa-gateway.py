@@ -33,30 +33,15 @@ except ImportError:
     SESSION_READER_AVAILABLE = False
 
 # =============================================================================
-# Configuration
+# Configuration - Pure env vars, no file I/O
 # =============================================================================
 
 HOOK_DIR = Path(__file__).parent
 PROJECT_ROOT = HOOK_DIR.parent.parent
-HOME_JSON = PROJECT_ROOT / ".aoa" / "home.json"
-PROJECT_ID = ""
 
-# AOA_URL: Priority is 1) env var, 2) home.json, 3) default
-AOA_URL = os.environ.get("AOA_URL")
-if not AOA_URL and HOME_JSON.exists():
-    try:
-        home_data = json.loads(HOME_JSON.read_text())
-        AOA_URL = home_data.get("aoa_url")
-        PROJECT_ID = home_data.get("project_id", "")
-    except (json.JSONDecodeError, OSError):
-        pass
-if not AOA_URL:
-    AOA_URL = "http://localhost:8080"
-elif HOME_JSON.exists() and not PROJECT_ID:
-    try:
-        PROJECT_ID = json.loads(HOME_JSON.read_text()).get("project_id", "")
-    except (json.JSONDecodeError, OSError):
-        pass
+# Read from environment - set by shell integration (install.sh)
+AOA_URL = os.environ.get("AOA_URL", "http://localhost:8080")
+PROJECT_ID = os.environ.get("AOA_PROJECT_ID", "")
 
 # ANSI colors
 CYAN, GREEN, YELLOW, RED = "\033[96m", "\033[92m", "\033[93m", "\033[91m"
@@ -310,9 +295,14 @@ def get_output_size(data: dict) -> int:
 # =============================================================================
 
 def api_get(path: str, timeout: float = 2) -> dict | None:
-    """GET request to aOa API."""
+    """GET request to aOa API. Auto-includes project_id from env."""
     try:
-        req = Request(f"{AOA_URL}{path}")
+        url = f"{AOA_URL}{path}"
+        # Auto-inject project_id if not already present
+        if PROJECT_ID and "project_id=" not in path:
+            sep = "&" if "?" in path else "?"
+            url = f"{url}{sep}project_id={PROJECT_ID}"
+        req = Request(url)
         with urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode())
     except (URLError, Exception):
@@ -320,8 +310,11 @@ def api_get(path: str, timeout: float = 2) -> dict | None:
 
 
 def api_post(path: str, data: dict, timeout: float = 2) -> dict | None:
-    """POST request to aOa API."""
+    """POST request to aOa API. Auto-includes project_id from env."""
     try:
+        # Auto-inject project_id if not already present
+        if PROJECT_ID and "project_id" not in data:
+            data = {**data, "project_id": PROJECT_ID}
         req = Request(
             f"{AOA_URL}{path}",
             data=json.dumps(data).encode(),
@@ -509,13 +502,13 @@ def handle_prompt(data: dict):
     print(f"{CYAN}{BOLD}⚡ aOa{NC} {acc} {DIM}│{NC} {total} intents {DIM}│{NC} {GREEN}{elapsed:.1f}ms{NC} {DIM}│{NC} {YELLOW}{tags_str}{NC}")
 
     # Check domain stats for both tuning and learning
-    domain_stats = api_get(f"/domains/stats?project={PROJECT_ID}")
+    domain_stats = api_get(f"/domains/stats?project_id={PROJECT_ID}")
 
     # GL-059.3: Run math-based tuning FIRST (silent, no Haiku needed)
     # This runs before learning since it's automatic and doesn't block
     if domain_stats and domain_stats.get("tuning_pending"):
         tune_count = domain_stats.get("tune_count", 0)
-        tune_result = api_post("/domains/tune/math", {"project": PROJECT_ID})
+        tune_result = api_post("/domains/tune/math", {"project_id": PROJECT_ID})
 
         if tune_result and tune_result.get("success"):
             terms_pruned = tune_result.get("terms_pruned", 0)
@@ -543,7 +536,7 @@ def handle_prompt(data: dict):
         # This ensures 100% reliability - no dependence on Claude compliance
 
         # Get recent activity for context
-        recent = api_get(f"/intent/recent?limit=20&project_id={PROJECT_ID}") or {}
+        recent = api_get("/intent/recent?limit=20") or {}
         records = recent.get("records", [])
 
         # Extract keywords from activity and recent files (GL-071)
@@ -589,12 +582,12 @@ def handle_prompt(data: dict):
         orphan_tags = []
         orphan_count = domain_stats.get("orphan_count", 0)
         if orphan_count > 0:
-            orphan_data = api_get(f"/domains/orphans?project={PROJECT_ID}&limit=20")
+            orphan_data = api_get(f"/domains/orphans?project_id={PROJECT_ID}&limit=20")
             if orphan_data:
                 orphan_tags = orphan_data.get("orphans", [])
 
         # Get existing domain names to avoid duplicates
-        all_domains = api_get(f"/domains/list?project={PROJECT_ID}&limit=100") or {}
+        all_domains = api_get(f"/domains/list?project_id={PROJECT_ID}&limit=100") or {}
         existing_names = [d['name'] for d in all_domains.get('domains', [])]
 
         # GL-072: Use Haiku for semantic domain generation
@@ -631,7 +624,46 @@ def handle_prompt(data: dict):
             orphans_str = ", ".join(orphan_tags[:15]) if orphan_tags else "(none)"
             existing_str = ", ".join(existing_names[:20])
 
-            haiku_prompt = f"""## aOa Domain Learning (GL-072)
+            # GL-075: Generate basic domains directly from orphan tags
+            # This ensures learning ALWAYS produces results when triggered
+            auto_domains = []
+            if orphan_tags:
+                # Group orphan tags by first letter/prefix to create domains
+                # e.g., orphans like "gateway", "grep", "glob" -> @gateway domain
+                for tag in orphan_tags[:3]:  # Max 3 auto-domains
+                    clean_tag = tag.lstrip('#@').lower()
+                    if len(clean_tag) >= 3:
+                        domain_name = f"@{clean_tag}"
+                        # Extract related terms from file_symbols
+                        related_terms = [clean_tag]
+                        for sym in file_symbols[:5]:
+                            parts = sym.split(':')[-1].replace('()', '').lower()
+                            if clean_tag in parts or parts in clean_tag:
+                                if len(parts) >= 3 and parts not in related_terms:
+                                    related_terms.append(parts)
+                        if len(related_terms) >= 2:
+                            auto_domains.append({
+                                "name": domain_name,
+                                "terms": related_terms[:7]
+                            })
+
+            # If we generated auto-domains, POST them directly
+            if auto_domains:
+                add_result = api_post("/domains/add", {
+                    "project_id": PROJECT_ID,
+                    "domains": auto_domains
+                }, timeout=3)
+
+                if add_result and add_result.get("domains_added"):
+                    # Learning succeeded - clear pending
+                    api_post("/domains/learned", {
+                        "project_id": PROJECT_ID,
+                        "domains": add_result.get("domains_added", []),
+                        "terms": []
+                    }, timeout=2)
+            else:
+                # Fall back to Claude-assisted learning via prompt
+                haiku_prompt = f"""## aOa Domain Learning (GL-072)
 
 Create 1-3 code domains from this activity. Use Haiku model.
 
@@ -662,10 +694,11 @@ curl -s -X POST "{AOA_URL}/domains/learned" -H "Content-Type: application/json" 
 
 Output JSON: {{"domains":[{{"name":"@example","terms":["word1","word2","word3"]}}]}}"""
 
-            output_context(haiku_prompt)
+                output_context(haiku_prompt)
         else:
-            # Not enough data, clear pending
-            api_post("/domains/learned", {"project": PROJECT_ID}, timeout=2)
+            # Not enough data - DON'T clear pending, let it accumulate
+            # Only clear if we genuinely have nothing to learn from
+            pass  # Learning pending stays set, will retry next prompt
 
         # Don't return - continue to show status line
 

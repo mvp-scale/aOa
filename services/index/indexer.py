@@ -4,7 +4,7 @@ Codebase Indexer - Multi-Index Architecture
 Fast symbol lookup with isolated local and knowledge repo indexes.
 
 Architecture:
-  - LOCAL index: Your project code (always active, default)
+  - LOCAL index: Your project_id code (always active, default)
   - REPO indexes: Knowledge repos (only queried explicitly)
 
 Usage:
@@ -427,7 +427,7 @@ def enrich_result(
     content: str,
     idx: 'CodebaseIndex',
     intent_index: 'IntentIndex | None' = None,
-    project: str | None = None,
+    project_id: str | None = None,
     file_tags_cache: dict | None = None
 ) -> dict:
     """
@@ -441,7 +441,7 @@ def enrich_result(
         content: The matched line content
         idx: CodebaseIndex with file_outlines
         intent_index: Optional IntentIndex for tags
-        project: Project ID for tag lookup
+        project_id: Project ID for tag lookup
 
     Returns:
         Standardized result dict with consistent keys
@@ -490,26 +490,26 @@ def enrich_result(
 
     # Get file-level tags from intent index (use cache if provided to avoid N+1 Redis calls)
     file_tags = []
-    if intent_index and project:
+    if intent_index and project_id:
         if file_tags_cache is not None and file_path in file_tags_cache:
             file_tags = file_tags_cache[file_path]
         else:
-            file_tags = list(intent_index.tags_for_file(file_path, project))
+            file_tags = list(intent_index.tags_for_file(file_path, project_id))
             if file_tags_cache is not None:
                 file_tags_cache[file_path] = file_tags
 
     # GL-071.6: Symbol-level domain lookup (O(1) Redis)
     # Check PARENT first (route/class level), then fall back to symbol
     domain = None
-    if intent_index and project:
+    if intent_index and project_id:
         # Priority 1: Parent-level domain (e.g., route decorator, class)
         if parent_name:
-            parent_domains = intent_index.domains_for_symbol(file_path, parent_name, project)
+            parent_domains = intent_index.domains_for_symbol(file_path, parent_name, project_id)
             if parent_domains:
                 domain = parent_domains[0]
         # Priority 2: Symbol-level domain (fallback)
         if not domain and symbol_name:
-            symbol_domains = intent_index.domains_for_symbol(file_path, symbol_name, project)
+            symbol_domains = intent_index.domains_for_symbol(file_path, symbol_name, project_id)
             if symbol_domains:
                 domain = symbol_domains[0]
 
@@ -557,7 +557,7 @@ def format_search_response(
     files_searched: int,
     search_intent: list | None = None,
     intent_index: 'IntentIndex | None' = None,
-    project: str | None = None
+    project_id: str | None = None
 ) -> dict:
     """
     Universal response format - THE SINGLE SOURCE OF TRUTH.
@@ -572,7 +572,7 @@ def format_search_response(
         files_searched: Number of files examined
         search_intent: Inferred search intent tags
         intent_index: Optional IntentIndex for rolling intent
-        project: Project ID for rolling intent
+        project_id: Project ID for rolling intent
 
     Returns:
         Standardized response dict ready for jsonify()
@@ -588,12 +588,12 @@ def format_search_response(
 
     # GL-071: Enrich terms from top search results (100% non-blocking)
     # Top results validate term relevance - fire and forget
-    if DOMAINS_AVAILABLE and project and results:
+    if DOMAINS_AVAILABLE and project_id and results:
         # Snapshot top 10 for background processing
         top_results = results[:10]
         def _enrich_top_terms():
             try:
-                learner = DomainLearner(project)
+                learner = DomainLearner(project_id)
                 seen_terms = set()
                 seen_domains = set()
 
@@ -633,8 +633,8 @@ def format_search_response(
         response['search_intent'] = search_intent
 
     # Add rolling intent if available
-    if intent_index and project:
-        rolling_tags = intent_index.get_rolling_intent(project, window=50)
+    if intent_index and project_id:
+        rolling_tags = intent_index.get_rolling_intent(project_id, window=50)
         if rolling_tags:
             top_tags = sorted(rolling_tags.items(), key=lambda x: x[1], reverse=True)[:5]
             response['rolling_intent'] = [tag for tag, _ in top_tags]  # Tags already have # prefix
@@ -694,7 +694,7 @@ class IntentRecord:
     files: list[str]
     tags: list[str]
     tool_use_id: str | None = None  # Claude's toolu_xxx correlation key
-    project_id: str | None = None  # UUID for per-project isolation
+    project_id: str | None = None  # UUID for per-project_id isolation
     file_sizes: dict[str, int] | None = None  # File path -> size in bytes (for baseline calc)
     output_size: int | None = None  # Actual output size in bytes (for real savings calc)
     # GL-069.5: Rich locations - resolved symbols from file:line references
@@ -789,7 +789,7 @@ class LRUContentCache:
                 self.current_size -= sum(len(line) for line in lines)
 
     def invalidate_project(self, project_id: str):
-        """Remove all files for a project from cache."""
+        """Remove all files for a project_id from cache."""
         with self.lock:
             keys_to_remove = [k for k in self.cache if k[0] == project_id]
             for key in keys_to_remove:
@@ -2095,11 +2095,11 @@ class CodebaseIndex:
 # ============================================================================
 
 class IndexManager:
-    """Manages multiple isolated indexes: local project + knowledge repos.
+    """Manages multiple isolated indexes: local project_id + knowledge repos.
 
     Supports two modes:
     - Legacy mode: Single local index from CODEBASE_ROOT
-    - Global mode: Multiple project indexes from /config/projects.json
+    - Global mode: Multiple project_id indexes from /config/projects.json
     """
 
     def __init__(self, local_root: str, repos_root: str, config_dir: str = None, indexes_dir: str = None):
@@ -2115,7 +2115,7 @@ class IndexManager:
         # Determine mode
         self.global_mode = self.config_dir is not None and (self.config_dir / 'projects.json').exists()
 
-        # Local index (legacy mode - your project)
+        # Local index (legacy mode - your project_id)
         self.local: CodebaseIndex | None = None
         if self.local_root and self.local_root.exists():
             self.local = CodebaseIndex(str(self.local_root), name='local')
@@ -2134,11 +2134,11 @@ class IndexManager:
     def get_local(self, project_id: str = None) -> CodebaseIndex | None:
         """Get the appropriate index for a query.
 
-        In global mode, returns the project index if project_id is provided.
+        In global mode, returns the project_id index if project_id is provided.
         In legacy mode, returns the single local index.
 
         IMPORTANT: In global mode, if project_id is provided but not found,
-        returns None to prevent cross-project data leakage.
+        returns None to prevent cross-project_id data leakage.
         In legacy mode, always falls back to the single local index.
         """
         if project_id:
@@ -2152,10 +2152,10 @@ class IndexManager:
             # In global mode, don't fall back to wrong index
             return None
 
-        # No project ID - legacy mode fallback
+        # No project_id ID - legacy mode fallback
         if self.local:
             return self.local
-        # Return first project if available (legacy compatibility)
+        # Return first project_id if available (legacy compatibility)
         if self.projects:
             return next(iter(self.projects.values()))
         return None
@@ -2167,7 +2167,7 @@ class IndexManager:
             self.local.full_scan()
             self._start_watcher('local', self.local)
         elif self.global_mode:
-            print("Global mode: No single local index, using project indexes")
+            print("Global mode: No single local index, using project_id indexes")
             self._load_projects()
 
     def _load_projects(self):
@@ -2190,7 +2190,7 @@ class IndexManager:
             print(f"Error loading projects: {e}")
 
     def _load_project(self, project_id: str, name: str, path: str) -> CodebaseIndex | None:
-        """Load or create index for a project."""
+        """Load or create index for a project_id."""
         # Convert path to container path (user's home is mounted at /userhome)
         container_path = path.replace(self.user_home, '/userhome')
 
@@ -2202,30 +2202,30 @@ class IndexManager:
             if project_id in self.projects:
                 return self.projects[project_id]
 
-            print(f"  Loading project: {name} ({project_id})")
+            print(f"  Loading project_id: {name} ({project_id})")
             idx = CodebaseIndex(container_path, name=name)
             idx.full_scan()
             self.projects[project_id] = idx
-            self._start_watcher(f"project:{project_id}", idx)
+            self._start_watcher(f"project_id:{project_id}", idx)
             print(f"    -> {len(idx.files)} files indexed")
             return idx
 
     def register_project(self, project_id: str, name: str, path: str) -> tuple[bool, str, int]:
-        """Register and index a new project."""
+        """Register and index a new project_id."""
         try:
             idx = self._load_project(project_id, name, path)
             if idx:
                 return True, f"Project '{name}' registered", len(idx.files)
             else:
-                return False, f"Could not access project path: {path}", 0
+                return False, f"Could not access project_id path: {path}", 0
         except Exception as e:
-            return False, f"Error registering project: {e}", 0
+            return False, f"Error registering project_id: {e}", 0
 
     def unregister_project(self, project_id: str) -> tuple[bool, str]:
-        """Unregister a project and remove its index."""
+        """Unregister a project_id and remove its index."""
         with self.lock:
             # Stop watcher
-            self._stop_watcher(f"project:{project_id}")
+            self._stop_watcher(f"project_id:{project_id}")
 
             # Remove from index
             if project_id in self.projects:
@@ -2396,9 +2396,9 @@ class IndexerHandler(FileSystemEventHandler):
 
 class IntentIndex:
     """
-    Bidirectional index for intent tracking with per-project isolation.
+    Bidirectional index for intent tracking with per-project_id isolation.
 
-    Stores (per project):
+    Stores (per project_id):
     - tag -> files: Which files are associated with each intent tag
     - file -> tags: Which intent tags are associated with each file
     - timeline: Chronological list of all intent records (in-memory, session-scoped)
@@ -2421,7 +2421,7 @@ class IntentIndex:
         self.redis = redis_client  # Optional Redis for persistence
 
     def _project_key(self, project_id: str = None) -> str:
-        """Get project key, using default for empty/None."""
+        """Get project_id key, using default for empty/None."""
         return project_id if project_id else self.DEFAULT_PROJECT
 
     def record(self, tool: str, files: list[str], tags: list[str], session_id: str,
@@ -2453,11 +2453,11 @@ class IntentIndex:
                     break  # Only count first file
 
         with self.lock:
-            # Add to project-specific timeline
+            # Add to project_id-specific timeline
             self.timeline[proj].append(record)
             self.session_intents[proj][session_id].append(record)
 
-            # Update project-specific bidirectional indexes
+            # Update project_id-specific bidirectional indexes
             for tag in tags:
                 for f in files:
                     self.tag_to_files[proj][tag].add(f)
@@ -2792,7 +2792,7 @@ def symbol_search():
         q = request.args.get('q', '')
         mode = request.args.get('mode', 'recent')
         limit = int(request.args.get('limit', 20))
-        project = request.args.get('project')  # Optional project ID
+        project_id = request.args.get('project_id')  # Optional project ID
         since = request.args.get('since')  # Unix timestamp or seconds ago
         before = request.args.get('before')  # Unix timestamp or seconds ago
         file_filter = request.args.get('filter')  # GL-051: File pattern filter (Unix grep parity)
@@ -2809,11 +2809,11 @@ def symbol_search():
             before_val = int(before)
             before_ts = before_val if before_val > 1000000000 else now - before_val
 
-        idx = manager.get_local(project)
+        idx = manager.get_local(project_id)
         if not idx:
             return jsonify({
                 'error': 'No index available',
-                'message': 'Run "aoa init" in a project to register it',
+                'message': 'Run "aoa init" in a project_id to register it',
                 'results': [],
                 'ms': 0
             }), 404
@@ -2829,7 +2829,7 @@ def symbol_search():
         rolling_tags = None
         if rank_by_intent and intent_index and results:
             # Get file affinity from rolling intent window (default 50)
-            file_affinity = intent_index.get_file_affinity(project, window=50)
+            file_affinity = intent_index.get_file_affinity(project_id, window=50)
 
             # Infer query intent from search term
             query_intent = set(infer_search_intent(q)) if q else set()
@@ -2845,7 +2845,7 @@ def symbol_search():
 
                 # Query intent match (boost files with matching tags)
                 if file_path not in file_tags_cache:
-                    file_tags_cache[file_path] = list(intent_index.tags_for_file(file_path, project))
+                    file_tags_cache[file_path] = list(intent_index.tags_for_file(file_path, project_id))
                 file_tags = set(file_tags_cache[file_path])
                 query_overlap = len(query_intent & file_tags)
                 score += query_overlap * 5
@@ -2872,7 +2872,7 @@ def symbol_search():
             results.sort(key=lambda r: r.get('intent_score', 0), reverse=True)
 
             # Get rolling tags for response (for UI display)
-            rolling_tags = intent_index.get_rolling_intent(project, window=50)
+            rolling_tags = intent_index.get_rolling_intent(project_id, window=50)
 
         # Trim to requested limit
         results = results[:limit]
@@ -2884,7 +2884,7 @@ def symbol_search():
             line_num = r.get('line', 0)
             if file_path and line_num > 0:
                 line_content = content_cache.get_line(
-                    project or 'local',
+                    project_id or 'local',
                     file_path,
                     line_num,
                     idx.root
@@ -2896,7 +2896,7 @@ def symbol_search():
             # GL-046.3: Add file tags to each result (from intent tracking)
             if intent_index and file_path:
                 if file_path not in file_tags_cache:
-                    file_tags_cache[file_path] = list(intent_index.tags_for_file(file_path, project))
+                    file_tags_cache[file_path] = list(intent_index.tags_for_file(file_path, project_id))
                 r['intent_tags'] = file_tags_cache[file_path]
 
             # GL-047: AC tags are already in r['tags'] from Location.tags (computed at index time)
@@ -2905,7 +2905,7 @@ def symbol_search():
         response = {
             'results': results,
             'index': idx.name,
-            'project': project,
+            'project_id': project_id,
             'ms': (time.time() - start) * 1000,
             'cache': content_cache.stats()  # Include cache stats for monitoring
         }
@@ -2941,14 +2941,14 @@ def semantic_grep():
 
     Query params:
         q: Search term (required)
-        project: Project ID (optional)
+        project_id: Project ID (optional)
         limit: Max results (default 50)
         regex: Enable regex mode (default false, like grep vs egrep)
     """
     start = time.time()
 
     q = request.args.get('q', '')
-    project = request.args.get('project')
+    project_id = request.args.get('project_id')
     # GL-050: Unix parity - case-sensitive by default, -i flag for insensitive
     case_insensitive = request.args.get('ci', '0') == '1'
     use_regex = request.args.get('regex', 'false').lower() == 'true'
@@ -2965,7 +2965,7 @@ def semantic_grep():
     if not q:
         return jsonify({'error': 'Missing search term', 'results': [], 'ms': 0}), 400
 
-    idx = manager.get_local(project)
+    idx = manager.get_local(project_id)
     if not idx:
         return jsonify({'error': 'No index available', 'results': [], 'ms': 0}), 404
 
@@ -2990,7 +2990,7 @@ def semantic_grep():
     files_with_hits = set()
 
     # GL-050: Use LRU cache for content (same as egrep)
-    project_id = project or 'local'
+    project_id = project_id or 'local'
 
     with idx.lock:
         for rel_path, meta in idx.files.items():
@@ -3048,7 +3048,7 @@ def semantic_grep():
                 content=m['text'],
                 idx=idx,
                 intent_index=intent_index,
-                project=project,
+                project_id=project_id,
                 file_tags_cache=file_tags_cache
             )
             results.append(result)
@@ -3061,7 +3061,7 @@ def semantic_grep():
         files_searched=files_searched,
         search_intent=search_intent,
         intent_index=intent_index,
-        project=project
+        project_id=project_id
     )
 
     return jsonify(response)
@@ -3077,7 +3077,7 @@ def multi_search():
         terms = q.split() if q else []
         mode = request.args.get('mode', 'recent')
         limit = int(request.args.get('limit', 20))
-        project = request.args.get('project')
+        project_id = request.args.get('project_id')
         since = request.args.get('since')
         before = request.args.get('before')
         file_filter = request.args.get('filter')  # GL-051
@@ -3086,7 +3086,7 @@ def multi_search():
         terms = data.get('terms', [])
         mode = data.get('mode', 'recent')
         limit = int(data.get('limit', 20))
-        project = data.get('project')
+        project_id = data.get('project_id')
         since = data.get('since')
         before = data.get('before')
         file_filter = data.get('filter')  # GL-051
@@ -3102,7 +3102,7 @@ def multi_search():
         before_val = int(before)
         before_ts = before_val if before_val > 1000000000 else now - before_val
 
-    idx = manager.get_local(project)
+    idx = manager.get_local(project_id)
     if not idx:
         return jsonify({'error': 'No index available', 'results': [], 'ms': 0}), 404
 
@@ -3111,7 +3111,7 @@ def multi_search():
     return jsonify({
         'results': results,
         'index': idx.name,
-        'project': project,
+        'project_id': project_id,
         'ms': (time.time() - start) * 1000
     })
 
@@ -3122,7 +3122,7 @@ def get_outline():
     start = time.time()
 
     file_path = request.args.get('file')
-    project = request.args.get('project')
+    project_id = request.args.get('project_id')
 
     if not file_path:
         return jsonify({'error': 'Missing file parameter', 'symbols': [], 'ms': 0}), 400
@@ -3135,7 +3135,7 @@ def get_outline():
             'ms': 0
         }), 503
 
-    idx = manager.get_local(project)
+    idx = manager.get_local(project_id)
     if not idx:
         return jsonify({'error': 'No index available', 'symbols': [], 'ms': 0}), 404
 
@@ -3163,11 +3163,11 @@ def get_outline():
         import redis
         r = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
         # Use request param or fallback to "local"
-        project_key = project or "local"
+        project_key = project_id or "local"
 
         for sym in symbols:
             sym_dict = asdict(sym)
-            # Look up tags for this symbol: tag_meta:{project}:{file}:{symbol}:{tag}
+            # Look up tags for this symbol: tag_meta:{project_id}:{file}:{symbol}:{tag}
             pattern = f"tag_meta:{project_key}:{file_path}:{sym.name}:*"
             tag_keys = r.keys(pattern)
             sym_dict['tags'] = [k.decode().split(':')[-1] for k in tag_keys] if tag_keys else []
@@ -3191,20 +3191,20 @@ def mark_enriched():
     """Store semantic compression tags with counting (idempotent, tracks confidence)."""
     data = request.json
     file_path = data.get('file')
-    project = data.get('project')
+    project_id = data.get('project_id')
     symbols = data.get('symbols', [])  # List of {name, kind, line, end_line, tags}
 
     if not file_path:
         return jsonify({'success': False, 'error': 'Missing file parameter'}), 400
 
-    idx = manager.get_local(project)
+    idx = manager.get_local(project_id)
     if not idx:
         return jsonify({'success': False, 'error': 'No index available'}), 404
 
     tags_indexed = 0
     tags_incremented = 0
     mtime = int(time.time())
-    project_key = project or 'default'
+    project_key = project_id or 'default'
 
     # Use Redis for tag counting (dedup + confidence tracking)
     try:
@@ -3219,7 +3219,7 @@ def mark_enriched():
             tags = sym.get('tags', [])
 
             for tag in tags:
-                # Key: tag_count:{project}:{file}:{symbol}:{tag}
+                # Key: tag_count:{project_id}:{file}:{symbol}:{tag}
                 count_key = f"tag_count:{project_key}:{file_path}:{sym_name}:{tag}"
 
                 # Increment count (creates key with value 1 if doesn't exist)
@@ -3298,14 +3298,14 @@ def mark_enriched():
 def get_symbol_tags():
     """Get semantic tags for symbols in a file, with confidence counts."""
     file_path = request.args.get('file', '')
-    project = request.args.get('project')
+    project_id = request.args.get('project_id')
     include_counts = request.args.get('counts', 'false').lower() == 'true'
 
-    idx = manager.get_local(project)
+    idx = manager.get_local(project_id)
     if not idx:
         return jsonify({'error': 'No index available', 'tags': {}}), 404
 
-    project_key = project or 'default'
+    project_key = project_id or 'default'
     tags_by_symbol = {}
 
     # Try to get counts from Redis
@@ -3319,7 +3319,7 @@ def get_symbol_tags():
         while True:
             cursor, keys = r.scan(cursor, match=pattern, count=100)
             for key in keys:
-                # Parse key: tag_count:{project}:{file}:{symbol}:{tag}
+                # Parse key: tag_count:{project_id}:{file}:{symbol}:{tag}
                 parts = key.decode().split(':')
                 if len(parts) >= 5:
                     symbol_name = parts[3]
@@ -3363,9 +3363,9 @@ def get_symbol_tags():
 def get_pending_enrichment():
     """Get files that need enrichment (modified since last enriched or never enriched)."""
     start = time.time()
-    project = request.args.get('project')
+    project_id = request.args.get('project_id')
 
-    idx = manager.get_local(project)
+    idx = manager.get_local(project_id)
     if not idx:
         return jsonify({'error': 'No index available', 'pending': [], 'ms': 0}), 404
 
@@ -3382,7 +3382,7 @@ def get_pending_enrichment():
         # Check if file has been enriched
         enriched_at = 0
         if r:
-            key = f"enriched:{project or 'default'}:{rel_path}"
+            key = f"enriched:{project_id or 'default'}:{rel_path}"
             data = r.hgetall(key)
             if data and b'enriched_at' in data:
                 enriched_at = int(data[b'enriched_at'])
@@ -3418,12 +3418,12 @@ def get_file_content():
 
     file_path = request.args.get('path')
     lines_param = request.args.get('lines')  # "1-50" or "-20" (tail) or "30" (head)
-    project = request.args.get('project')
+    project_id = request.args.get('project_id')
 
     if not file_path:
         return jsonify({'error': 'Missing path parameter'}), 400
 
-    idx = manager.get_local(project)
+    idx = manager.get_local(project_id)
     if not idx:
         return jsonify({'error': 'No index available'}), 404
 
@@ -3491,19 +3491,19 @@ def symbol_lookup():
     GL-059.2: Used by gateway hook to target domain assignment at FUNCTIONS,
     not individual lines. This reduces noise (50 line reads = 1 domain).
 
-    POST body: {"locations": ["file.py:123", "other.py:456"], "project": "optional-id"}
+    POST body: {"locations": ["file.py:123", "other.py:456"], "project_id": "optional-id"}
     Returns: {"symbols": [{"location": "file.py:123", "symbol": "func_name", ...}]}
     """
     start = time.time()
     data = request.get_json(silent=True) or {}
     locations = data.get('locations', [])
-    project = data.get('project') or request.args.get('project')
+    project_id = data.get('project_id') or request.args.get('project_id')
 
     if not locations:
         return jsonify({'error': 'Missing locations array', 'symbols': []})
 
-    # Get index for this project
-    idx = manager.get_local(project)
+    # Get index for this project_id
+    idx = manager.get_local(project_id)
     if not idx:
         return jsonify({'error': 'No index available', 'symbols': []})
 
@@ -3577,20 +3577,20 @@ def symbol_lookup():
 
 @app.route('/patterns/candidates', methods=['GET', 'POST'])
 def domain_candidates():
-    """Store or retrieve project-specific domain keyword candidates.
+    """Store or retrieve project_id-specific domain keyword candidates.
 
     POST: Store word frequencies discovered during quickstart
-    GET: Retrieve stored candidates for a project
+    GET: Retrieve stored candidates for a project_id
 
     These are high-frequency words NOT in universal patterns -
-    candidates for project-specific tags.
+    candidates for project_id-specific tags.
     """
-    # Handle project param differently for GET vs POST
+    # Handle project_id param differently for GET vs POST
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
-        project = request.args.get('project') or data.get('project', '')
+        project_id = request.args.get('project_id') or data.get('project_id', '')
     else:
-        project = request.args.get('project', '')
+        project_id = request.args.get('project_id', '')
 
     try:
         import redis
@@ -3598,7 +3598,7 @@ def domain_candidates():
     except Exception:
         return jsonify({'error': 'Redis not available'}), 503
 
-    redis_key = f"aoa:{project or 'default'}:domain_candidates"
+    redis_key = f"aoa:{project_id or 'default'}:domain_candidates"
 
     if request.method == 'POST':
         if not data:
@@ -3663,17 +3663,17 @@ def domain_candidates():
 
 @app.route('/patterns/learned', methods=['GET', 'POST'])
 def learned_patterns():
-    """Store or retrieve project-specific learned patterns.
+    """Store or retrieve project_id-specific learned patterns.
 
     POST: Store keyword->tag mappings (from Claude analysis or user input)
     GET: Retrieve learned patterns for merging with universal patterns
     """
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
-        project = request.args.get('project') or data.get('project', '')
+        project_id = request.args.get('project_id') or data.get('project_id', '')
     else:
         data = {}
-        project = request.args.get('project', '')
+        project_id = request.args.get('project_id', '')
 
     try:
         import redis
@@ -3681,7 +3681,7 @@ def learned_patterns():
     except Exception:
         return jsonify({'error': 'Redis not available'}), 503
 
-    redis_key = f"aoa:{project or 'default'}:learned_patterns"
+    redis_key = f"aoa:{project_id or 'default'}:learned_patterns"
 
     if request.method == 'POST':
         if not data:
@@ -3843,9 +3843,9 @@ def infer_patterns():
 # Project Management Endpoints (Global Mode)
 # ============================================================================
 
-@app.route('/project/register', methods=['POST'])
+@app.route('/project_id/register', methods=['POST'])
 def register_project():
-    """Register a new project for indexing."""
+    """Register a new project_id for indexing."""
     data = request.json
     project_id = data.get('id')
     name = data.get('name')
@@ -3863,10 +3863,10 @@ def register_project():
     })
 
 
-@app.route('/project/<project_id>', methods=['DELETE'])
+@app.route('/project_id/<project_id>', methods=['DELETE'])
 def unregister_project(project_id):
-    """Unregister a project, remove its index, and wipe all stored data."""
-    # First, wipe all Redis data for this project
+    """Unregister a project_id, remove its index, and wipe all stored data."""
+    # First, wipe all Redis data for this project_id
     redis_deleted = {'domains': 0, 'enrichment': 0, 'total': 0}
     try:
         import redis as redis_lib
@@ -4054,19 +4054,19 @@ def _do_domain_tune(project_id: str):
 @app.route('/domains/seed', methods=['POST'])
 def seed_domains():
     """
-    Seed Redis with universal domains for a project.
+    Seed Redis with universal domains for a project_id.
 
     Called by quickstart to provide instant domain coverage.
-    POST body: {"project": "project-id"}
+    POST body: {"project_id": "project_id-id"}
     """
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
     data = request.json or {}
-    project_id = data.get('project') or request.args.get('project')
+    project_id = data.get('project_id') or request.args.get('project_id')
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     try:
         learner = DomainLearner(project_id)
@@ -4078,7 +4078,7 @@ def seed_domains():
                 'success': True,
                 'message': 'Already seeded',
                 'domains': len(existing),
-                'project': project_id
+                'project_id': project_id
             })
 
         # Load universal domains
@@ -4124,7 +4124,7 @@ def seed_domains():
             'message': f'Seeded {seeded} domains with {total_terms} terms',
             'domains': seeded,
             'terms': total_terms,
-            'project': project_id
+            'project_id': project_id
         })
 
     except Exception as e:
@@ -4133,13 +4133,13 @@ def seed_domains():
 
 @app.route('/domains/stats')
 def domains_stats():
-    """Get domain statistics for a project."""
+    """Get domain statistics for a project_id."""
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
-    project_id = request.args.get('project')
+    project_id = request.args.get('project_id')
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     try:
         learner = DomainLearner(project_id)
@@ -4155,13 +4155,13 @@ def domains_list():
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
-    project_id = request.args.get('project')
+    project_id = request.args.get('project_id')
     limit = int(request.args.get('limit', 10))
     include_terms = request.args.get('include_terms', '').lower() == 'true'
     include_created = request.args.get('include_created', '').lower() == 'true'
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     try:
         learner = DomainLearner(project_id)
@@ -4199,12 +4199,12 @@ def domains_lookup():
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
-    project_id = request.args.get('project')
+    project_id = request.args.get('project_id')
     term = request.args.get('term')
     symbol = request.args.get('symbol')
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
     if not term and not symbol:
         return jsonify({'error': 'Missing term or symbol parameter'}), 400
 
@@ -4217,7 +4217,7 @@ def domains_lookup():
             return jsonify({
                 'symbol': symbol,
                 'domain': domain,
-                'project': project_id
+                'project_id': project_id
             })
         else:
             # Direct term lookup
@@ -4225,7 +4225,7 @@ def domains_lookup():
             return jsonify({
                 'term': term,
                 'domains': [{'name': name, 'score': score} for name, score in results],
-                'project': project_id
+                'project_id': project_id
             })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -4234,21 +4234,21 @@ def domains_lookup():
 @app.route('/domains/learn', methods=['POST'])
 def domains_learn():
     """
-    Manually trigger domain learning for a project.
+    Manually trigger domain learning for a project_id.
 
     GL-053 Phase C: Calls Haiku to discover domains and generate terms
     from recent intent data.
 
-    POST body: {"project": "project-id"}
+    POST body: {"project_id": "project_id-id"}
     """
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
     data = request.json or {}
-    project_id = data.get('project') or request.args.get('project')
+    project_id = data.get('project_id') or request.args.get('project_id')
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     try:
         learner = DomainLearner(project_id)
@@ -4257,7 +4257,7 @@ def domains_learn():
         if not learner.anthropic_client:
             return jsonify({
                 'error': 'ANTHROPIC_API_KEY not set - domain learning requires Haiku API access',
-                'project': project_id
+                'project_id': project_id
             }), 400
 
         # Get current stats before learning
@@ -4271,7 +4271,7 @@ def domains_learn():
 
         return jsonify({
             'success': True,
-            'project': project_id,
+            'project_id': project_id,
             'domains_before': before_stats['domains'],
             'domains_after': after_stats['domains'],
             'terms_before': before_stats['total_terms'],
@@ -4290,16 +4290,16 @@ def domains_trigger_learn():
     This lets the next UserPromptSubmit hook execute automatic domain generation.
     For testing or manual learning triggers.
 
-    POST body: {"project": "project-id"}
+    POST body: {"project_id": "project_id-id"}
     """
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
     data = request.json or {}
-    project_id = data.get('project') or request.args.get('project')
+    project_id = data.get('project_id') or request.args.get('project_id')
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     try:
         learner = DomainLearner(project_id)
@@ -4307,7 +4307,7 @@ def domains_trigger_learn():
 
         return jsonify({
             'success': True,
-            'project': project_id,
+            'project_id': project_id,
             'learning_pending': True,
             'message': 'Next UserPromptSubmit will trigger hook-side domain learning'
         })
@@ -4319,21 +4319,21 @@ def domains_trigger_learn():
 @app.route('/domains/autotune', methods=['POST'])
 def domains_autotune():
     """
-    Manually trigger domain auto-tune for a project.
+    Manually trigger domain auto-tune for a project_id.
 
     GL-053 Phase D: Calls Haiku to merge overlapping domains,
     prune low-value domains, and reassign ambiguous terms.
 
-    POST body: {"project": "project-id"}
+    POST body: {"project_id": "project_id-id"}
     """
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
     data = request.json or {}
-    project_id = data.get('project') or request.args.get('project')
+    project_id = data.get('project_id') or request.args.get('project_id')
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     try:
         learner = DomainLearner(project_id)
@@ -4342,7 +4342,7 @@ def domains_autotune():
         if not learner.anthropic_client:
             return jsonify({
                 'error': 'ANTHROPIC_API_KEY not set - auto-tune requires Haiku API access',
-                'project': project_id
+                'project_id': project_id
             }), 400
 
         # Get current stats before auto-tune
@@ -4356,7 +4356,7 @@ def domains_autotune():
 
         return jsonify({
             'success': True,
-            'project': project_id,
+            'project_id': project_id,
             'merged': result.get('merged', 0),
             'pruned': result.get('pruned', 0),
             'reassigned': result.get('reassigned', 0),
@@ -4378,16 +4378,16 @@ def domains_tune_math():
     - Update domain lifecycle based on hits
     - Flag domains with <2 remaining terms
 
-    POST body: {"project": "project-id"}
+    POST body: {"project_id": "project_id-id"}
     """
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
     data = request.json or {}
-    project_id = data.get('project') or request.args.get('project')
+    project_id = data.get('project_id') or request.args.get('project_id')
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     try:
         learner = DomainLearner(project_id)
@@ -4416,7 +4416,7 @@ def domains_tune_math():
 
         return jsonify({
             'success': True,
-            'project': project_id,
+            'project_id': project_id,
             'method': 'math',
             'terms_pruned': summary.get('terms_pruned', 0),
             'domains_active': summary.get('domains_active', 0),
@@ -4440,17 +4440,17 @@ def domains_tune():
 
     Note: GL-059.3 moves tuning to /domains/tune/math (pure math, no Haiku).
 
-    POST body: {"project": "project-id", "result": {...haiku response...}}
+    POST body: {"project_id": "project_id-id", "result": {...haiku response...}}
     """
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
     data = request.json or {}
-    project_id = data.get('project') or request.args.get('project')
+    project_id = data.get('project_id') or request.args.get('project_id')
     result = data.get('result', {})
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     if not result:
         return jsonify({'error': 'Missing result parameter'}), 400
@@ -4469,7 +4469,7 @@ def domains_tune():
 
         return jsonify({
             'success': True,
-            'project': project_id,
+            'project_id': project_id,
             'kept': summary.get('kept', 0),
             'added': summary.get('added', 0),
             'removed': summary.get('removed', 0),
@@ -4489,16 +4489,16 @@ def domains_tuned():
 
     GL-055: Called by hook after Haiku tune is processed.
 
-    POST body: {"project": "project-id"}
+    POST body: {"project_id": "project_id-id"}
     """
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
     data = request.json or {}
-    project_id = data.get('project') or request.args.get('project')
+    project_id = data.get('project_id') or request.args.get('project_id')
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     try:
         learner = DomainLearner(project_id)
@@ -4508,7 +4508,7 @@ def domains_tuned():
 
         return jsonify({
             'success': True,
-            'project': project_id,
+            'project_id': project_id,
             'message': 'Tuning completed, counter reset'
         })
 
@@ -4521,7 +4521,7 @@ def domains_add():
     """
     Add domains discovered by Haiku via hook.
 
-    POST body: {"project": "project-id", "domains": [{"name": "@domain", "terms": [...]}]}
+    POST body: {"project_id": "project_id-id", "domains": [{"name": "@domain", "terms": [...]}]}
 
     Validates input to protect Redis from malformed/hallucinated data.
     """
@@ -4529,11 +4529,11 @@ def domains_add():
         return jsonify({'error': 'Domain learning module not available'}), 500
 
     data = request.json or {}
-    project_id = data.get('project')
+    project_id = data.get('project_id')
     domains_data = data.get('domains', [])
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     # Validation: domains must be a list
     if not isinstance(domains_data, list):
@@ -4611,7 +4611,7 @@ def domains_add():
 
         return jsonify({
             'success': True,
-            'project': project_id,
+            'project_id': project_id,
             'domains_added': added,
             'terms_added': len(terms_added),
             'skipped': skipped if skipped else None,
@@ -4628,7 +4628,7 @@ def domains_learned():
     Clears learning_pending flag, updates timestamp, tracks token investment.
 
     POST body: {
-        "project": "project-id",
+        "project_id": "project_id-id",
         "domains": [...],
         "terms": [...],
         "prompt_chars": 500,    # Optional: character count of Haiku prompt
@@ -4639,7 +4639,7 @@ def domains_learned():
         return jsonify({'error': 'Domain learning module not available'}), 500
 
     data = request.json or {}
-    project_id = data.get('project')
+    project_id = data.get('project_id')
     domains_list = data.get('domains', [])
     terms_list = data.get('terms', [])
     files_list = data.get('files', [])  # GL-071: Files to assign domains to
@@ -4648,7 +4648,7 @@ def domains_learned():
     response_chars = data.get('response_chars', 0)
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     try:
         learner = DomainLearner(project_id)
@@ -4755,7 +4755,7 @@ def domains_learned():
 
         return jsonify({
             'success': True,
-            'project': project_id,
+            'project_id': project_id,
             'learning_pending': False,
             'tokens_invested': total_tokens,
             'tokens_total': learner.get_tokens_invested(),
@@ -4776,7 +4776,7 @@ def domains_tags():
     Receives tags generated by Claude for a prompt, matches them against
     existing domain terms, increments hits for matches, stores orphans.
 
-    POST body: {"project": "project-id", "tags": ["tag1", "tag2", ...]}
+    POST body: {"project_id": "project_id-id", "tags": ["tag1", "tag2", ...]}
 
     Returns:
         - matched: tags that hit existing domain terms
@@ -4786,11 +4786,11 @@ def domains_tags():
         return jsonify({'error': 'Domain learning module not available'}), 500
 
     data = request.json or {}
-    project_id = data.get('project')
+    project_id = data.get('project_id')
     tags = data.get('tags', [])
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     # Validation: tags must be a list
     if not isinstance(tags, list):
@@ -4811,7 +4811,7 @@ def domains_tags():
 
         return jsonify({
             'success': True,
-            'project': project_id,
+            'project_id': project_id,
             'matched': result['matched'],
             'matched_count': len(result['matched']),
             'orphaned': result['orphaned'],
@@ -4832,24 +4832,24 @@ def domains_orphans():
     They represent unmet intent and inform domain discovery.
 
     Query params:
-        project: project ID
+        project_id: project_id ID
         limit: max orphans to return (default 50)
     """
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
-    project_id = request.args.get('project')
+    project_id = request.args.get('project_id')
     limit = int(request.args.get('limit', 50))
 
     if not project_id:
-        return jsonify({'error': 'Missing project parameter'}), 400
+        return jsonify({'error': 'Missing project_id parameter'}), 400
 
     try:
         learner = DomainLearner(project_id)
         orphans = learner.get_orphan_tags(limit=limit)
 
         return jsonify({
-            'project': project_id,
+            'project_id': project_id,
             'orphans': orphans,
             'count': len(orphans),
         })
@@ -4864,9 +4864,9 @@ def files_search():
     pattern = request.args.get('match')
     mode = request.args.get('mode', 'recent')
     limit = int(request.args.get('limit', 50))
-    project = request.args.get('project')
+    project_id = request.args.get('project_id')
 
-    idx = manager.get_local(project)
+    idx = manager.get_local(project_id)
     if not idx:
         return jsonify({'error': 'No index available', 'results': [], 'ms': 0}), 404
 
@@ -4875,7 +4875,7 @@ def files_search():
     return jsonify({
         'results': results,
         'index': idx.name,
-        'project': project,
+        'project_id': project_id,
         'ms': (time.time() - start) * 1000
     })
 
@@ -4883,9 +4883,9 @@ def files_search():
 def changes():
     start = time.time()
     since_param = request.args.get('since', '300')
-    project = request.args.get('project')
+    project_id = request.args.get('project_id')
 
-    idx = manager.get_local(project)
+    idx = manager.get_local(project_id)
     if not idx:
         return jsonify({'error': 'No index available', 'added': [], 'modified': [], 'deleted': [], 'ms': 0}), 404
 
@@ -4906,7 +4906,7 @@ def changes():
         'modified': modified,
         'deleted': deleted,
         'index': idx.name,
-        'project': project,
+        'project_id': project_id,
         'ms': (time.time() - start) * 1000
     })
 
@@ -4957,9 +4957,9 @@ def file_content():
 def file_meta():
     """Get file metadata (size, language, mtime) for baseline calculations."""
     path = request.args.get('path', '')
-    project = request.args.get('project')
+    project_id = request.args.get('project_id')
 
-    idx = manager.get_local(project)
+    idx = manager.get_local(project_id)
     if not idx:
         return jsonify({'error': 'No index available'}), 404
 
@@ -5245,7 +5245,7 @@ def pattern_search():
 
     patterns = data.get('patterns', {})
     repo_name = data.get('repo')  # None = local
-    project = data.get('project')  # Optional project ID for intent tracking
+    project_id = data.get('project_id')  # Optional project ID for intent tracking
     since = data.get('since')  # seconds ago
     # GL-050: Unix parity - case-sensitive by default, ci=true for insensitive
     case_insensitive = data.get('ci', False)
@@ -5267,7 +5267,7 @@ def pattern_search():
         if not idx:
             return jsonify({'error': f"Repo '{repo_name}' not found"}), 404
     else:
-        idx = manager.get_local(project)
+        idx = manager.get_local(project_id)
 
     # Compile patterns
     flags = re.MULTILINE | (re.IGNORECASE if case_insensitive else 0)
@@ -5310,7 +5310,7 @@ def pattern_search():
             files_searched += 1
 
             # GL-046.1: Use LRU cache instead of disk read
-            project_id = project or 'local'
+            project_id = project_id or 'local'
             lines = content_cache.get(project_id, rel_path, idx.root)
             if not lines:
                 continue  # File not accessible
@@ -5331,7 +5331,7 @@ def pattern_search():
                         content=line_text,
                         idx=idx,
                         intent_index=intent_index,
-                        project=project,
+                        project_id=project_id,
                         file_tags_cache=file_tags_cache
                     )
                     results[label].append(result)
@@ -5355,13 +5355,13 @@ def pattern_search():
             files_searched=files_searched,
             search_intent=None,  # No intent inference for regex patterns
             intent_index=intent_index,
-            project=project
+            project_id=project_id
         )
     else:
         # Multi-pattern - keep label grouping but use consistent format
         rolling_tags = None
-        if intent_index and project:
-            rolling_tags = intent_index.get_rolling_intent(project, window=50)
+        if intent_index and project_id:
+            rolling_tags = intent_index.get_rolling_intent(project_id, window=50)
 
         response = {
             'results': results,
@@ -5579,7 +5579,7 @@ def record_intent():
         "tags": ["#authentication", "#editing"],
         "session_id": "abc123",
         "tool_use_id": "toolu_xxx",  # Claude's correlation key
-        "project_id": "uuid-here"    # Per-project isolation
+        "project_id": "uuid-here"    # Per-project_id isolation
     }
     """
     data = request.json
@@ -5589,7 +5589,7 @@ def record_intent():
     tags = data.get('tags', [])
     session_id = data.get('session_id', 'unknown')
     tool_use_id = data.get('tool_use_id')  # Claude's toolu_xxx ID
-    project_id = data.get('project_id')  # UUID for per-project isolation
+    project_id = data.get('project_id')  # UUID for per-project_id isolation
     file_sizes = data.get('file_sizes', {})  # File path -> size for baseline calc
     output_size = data.get('output_size')  # Actual output size for REAL savings calc
 
@@ -5765,7 +5765,7 @@ def metrics_token_rate():
             'error': 'No Claude projects directory found'
         })
 
-    # Get the most recent project directory
+    # Get the most recent project_id directory
     project_dirs = sorted(projects_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
     if not project_dirs:
         return jsonify({
@@ -5775,7 +5775,7 @@ def metrics_token_rate():
             'error': 'No session data found'
         })
 
-    # Use the most recent project for rate calculation
+    # Use the most recent project_id for rate calculation
     parser = SessionLogParser(project_dirs[0])
     rate_data = parser.calculate_token_rate()
 
@@ -5900,7 +5900,7 @@ def check_prediction_hit():
     data = request.json
     session_id = data.get('session_id', 'unknown')
     file_path = data.get('file', '')
-    project_id = data.get('project_id', '')  # UUID for per-project metrics
+    project_id = data.get('project_id', '')  # UUID for per-project_id metrics
 
     if not file_path:
         return jsonify({'hit': False})
@@ -5919,7 +5919,7 @@ def check_prediction_hit():
                     # Record the hit - global (system monitoring)
                     scorer.redis.client.incr('aoa:metrics:hits')
 
-                    # Record per-project hit count (NOT fabricated savings)
+                    # Record per-project_id hit count (NOT fabricated savings)
                     # Real savings are calculated when we have both baseline + actual output
                     if project_id:
                         scorer.redis.client.incr(f'aoa:{project_id}:metrics:hits')
@@ -5967,7 +5967,7 @@ def prediction_stats():
     project_id = request.args.get('project_id')
 
     try:
-        # Legacy cumulative counters (per-project if project_id provided)
+        # Legacy cumulative counters (per-project_id if project_id provided)
         if project_id:
             hits = int(scorer.redis.client.get(f'aoa:{project_id}:metrics:hits') or 0)
             misses = int(scorer.redis.client.get(f'aoa:{project_id}:metrics:misses') or 0)
@@ -6285,7 +6285,7 @@ def get_metrics():
     Unified metrics endpoint showing accuracy, tuner performance, and trends.
 
     Query params:
-        project_id: UUID for per-project metrics (optional, for future per-project support)
+        project_id: UUID for per-project_id metrics (optional, for future per-project_id support)
 
     Returns:
         {
@@ -6317,8 +6317,8 @@ def get_metrics():
             }
         }
     """
-    # Accept project_id for future per-project metrics support
-    # TODO: Implement per-project Redis key prefixing for metrics
+    # Accept project_id for future per-project_id metrics support
+    # TODO: Implement per-project_id Redis key prefixing for metrics
     project_id = request.args.get('project_id')
 
     if not RANKING_AVAILABLE or scorer is None:
@@ -6345,7 +6345,7 @@ def get_metrics():
                 'total_samples': sum(a['samples'] for a in all_stats),
             }
 
-        # Legacy cumulative stats (per-project if project_id provided, else global)
+        # Legacy cumulative stats (per-project_id if project_id provided, else global)
         # Note: tokens_saved and time_saved_ms are DEPRECATED - they were fabricated estimates
         # Real savings require capturing actual output tokens (Phase 2)
         if project_id:
@@ -6454,7 +6454,7 @@ def get_token_metrics():
         }
     """
     try:
-        # Get project path from environment
+        # Get project_id path from environment
         import os
 
         from ranking.session_parser import SessionLogParser
@@ -7454,9 +7454,9 @@ def main():
     print("=" * 60)
     print("aOa Index Service - Multi-Index Architecture")
     if global_mode:
-        print("Mode: GLOBAL (multi-project)")
+        print("Mode: GLOBAL (multi-project_id)")
     else:
-        print("Mode: LEGACY (single project)")
+        print("Mode: LEGACY (single project_id)")
     print("=" * 60)
 
     # Initialize ranking scorer and weight tuner FIRST (need Redis for intent index)
@@ -7507,7 +7507,7 @@ def main():
     if manager.local:
         print(f"Local: {len(manager.local.files)} files, {len(manager.local.inverted_index)} symbols")
     if manager.projects:
-        print(f"Projects: {len(manager.projects)} project indexes loaded")
+        print(f"Projects: {len(manager.projects)} project_id indexes loaded")
     print(f"Repos: {len(manager.repos)} knowledge repos loaded")
     print()
 

@@ -27,7 +27,7 @@ cmd_hot() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     local result=$(curl -s "${INDEX_URL}/predict?limit=${limit}${project_param}")
@@ -133,7 +133,7 @@ cmd_touched() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     # Parse time string
@@ -178,7 +178,7 @@ cmd_focus() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="?project=${project_id}"
+        project_param="?project_id=${project_id}"
     fi
 
     local result=$(curl -s "${INDEX_URL}/memory${project_param}")
@@ -201,7 +201,7 @@ cmd_predict() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     local url="${INDEX_URL}/transitions/predict?limit=5${project_param}"
@@ -283,7 +283,7 @@ cmd_outline() {
 
         # Add project_id if not present
         if [ -n "$project_id" ]; then
-            json_input=$(echo "$json_input" | jq --arg pid "$project_id" '. + {project: $pid}')
+            json_input=$(echo "$json_input" | jq --arg pid "$project_id" '. + {project_id: $pid}')
         fi
 
         local result=$(echo "$json_input" | curl -s -X POST "${INDEX_URL}/outline/enriched" \
@@ -375,7 +375,7 @@ cmd_outline() {
         local project_id=$(get_project_id)
         local project_param=""
         if [ -n "$project_id" ]; then
-            project_param="?project=${project_id}"
+            project_param="?project_id=${project_id}"
         fi
 
         local result=$(curl -s "${INDEX_URL}/outline/pending${project_param}")
@@ -415,7 +415,7 @@ cmd_outline() {
         local project_id=$(get_project_id)
         local project_param=""
         if [ -n "$project_id" ]; then
-            project_param="?project=${project_id}"
+            project_param="?project_id=${project_id}"
         fi
 
         # Get pending files from the service
@@ -479,7 +479,7 @@ cmd_outline() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     local result=$(curl -s "${INDEX_URL}/outline?file=${file}${project_param}")
@@ -567,7 +567,7 @@ cmd_outline_status() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="?project=${project_id}"
+        project_param="?project_id=${project_id}"
     fi
 
     local result=$(curl -s "${INDEX_URL}/outline/pending${project_param}")

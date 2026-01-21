@@ -187,7 +187,7 @@ fi
 section "4. Grep with Domains"
 
 # Test grep returns domain field
-grep_result=$(curl -s "$API_URL/grep?q=context_search&project=$PROJECT_ID&limit=1" 2>/dev/null)
+grep_result=$(curl -s "$API_URL/grep?q=context_search&project_id=$PROJECT_ID&limit=1" 2>/dev/null)
 grep_domain=$(echo "$grep_result" | jq -r '.results[0].domain // empty')
 
 if [ -n "$grep_domain" ]; then
@@ -298,7 +298,7 @@ section "7. Hit Counter"
 hits_before=$(docker exec aoa-redis-1 redis-cli HGET "aoa:$PROJECT_ID:domain:@authentication:meta" hits 2>/dev/null || echo "0")
 
 # Run grep that should trigger hit
-curl -s "$API_URL/grep?q=login&project=$PROJECT_ID&limit=1" >/dev/null 2>&1
+curl -s "$API_URL/grep?q=login&project_id=$PROJECT_ID&limit=1" >/dev/null 2>&1
 
 # Check hits increased
 hits_after=$(docker exec aoa-redis-1 redis-cli HGET "aoa:$PROJECT_ID:domain:@authentication:meta" hits 2>/dev/null || echo "0")

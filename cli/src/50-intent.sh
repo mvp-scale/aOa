@@ -90,7 +90,7 @@ cmd_intent_recent() {
     local first_seen=$(echo "$intent_stats" | jq -r '.first_seen // 0')
 
     # Get domain learning stats (GL-054)
-    local domain_stats=$(curl -s "${INDEX_URL}/domains/stats?project=${project_id}")
+    local domain_stats=$(curl -s "${INDEX_URL}/domains/stats?project_id=${project_id}")
     local domain_count=$(echo "$domain_stats" | jq -r '.domains // 0')
     local prompt_count=$(echo "$domain_stats" | jq -r '.prompt_count // 0')
     local prompt_threshold=$(echo "$domain_stats" | jq -r '.prompt_threshold // 10')

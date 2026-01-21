@@ -80,7 +80,7 @@ cmd_find() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     local url="${INDEX_URL}/files?mode=${mode}&limit=${limit}${project_param}"
@@ -102,7 +102,7 @@ cmd_tree() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     # Use /files endpoint and build tree structure
@@ -144,7 +144,7 @@ cmd_locate() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     local result=$(curl -s "${INDEX_URL}/files?match=*${name}*&limit=20${project_param}")
@@ -172,7 +172,7 @@ cmd_head() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     local result=$(curl -s "${INDEX_URL}/file?path=${file}&lines=1-${lines}${project_param}")
@@ -204,7 +204,7 @@ cmd_tail() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     local result=$(curl -s "${INDEX_URL}/file?path=${file}&lines=-${lines}${project_param}")
@@ -236,7 +236,7 @@ cmd_lines() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     local result=$(curl -s "${INDEX_URL}/file?path=${file}&lines=${range}${project_param}")
@@ -286,7 +286,7 @@ cmd_changes() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     local result=$(curl -s "${INDEX_URL}/changes?since=${since}${project_param}")
@@ -304,7 +304,7 @@ cmd_files() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     local result=$(curl -s "${INDEX_URL}/files?limit=${limit}${project_param}")

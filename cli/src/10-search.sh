@@ -227,7 +227,7 @@ cmd_grep() {
     local project_id=$(get_project_id)
     local project_param=""
     if [ -n "$project_id" ]; then
-        project_param="&project=${project_id}"
+        project_param="&project_id=${project_id}"
     fi
 
     local result
