@@ -1,0 +1,122 @@
+[
+  {
+    "name": "@indexer",
+    "description": "Core search engine - O(1) symbol lookup and pattern matching",
+    "terms": {
+      "search_commands": ["grep", "egrep", "multi", "search", "find", "locate", "symbol"],
+      "index_structure": ["aho_corasick", "automaton", "tokenize", "index", "trie", "match"],
+      "result_handling": ["hits", "ranked", "timing", "output", "format", "files"],
+      "pattern_types": ["pattern", "regex", "literal", "working_set", "intersection"]
+    }
+  },
+  {
+    "name": "@gateway",
+    "description": "API gateway - request routing and service proxying",
+    "terms": {
+      "routing": ["route", "upstream", "proxy_pass", "endpoint", "path", "routes"],
+      "http_handling": ["request", "response", "get", "post", "method", "status"],
+      "service_mapping": ["index", "status", "proxy", "port", "host", "forward"],
+      "health_checks": ["health", "ping", "alive", "ready", "check", "gateway"]
+    }
+  },
+  {
+    "name": "@hooks",
+    "description": "Claude Code hooks - event capture and context injection",
+    "terms": {
+      "event_handlers": ["handle_prompt", "handle_tool", "handle_enforce", "userpromptsubmit", "posttooluse"],
+      "context_injection": ["output_context", "additional_context", "stderr", "stdout", "json"],
+      "data_extraction": ["extract_files", "extract_keywords", "infer_tags", "tokenize", "stopwords"],
+      "status_display": ["status_line", "statusline", "format", "color", "ansi", "display"]
+    }
+  },
+  {
+    "name": "@domains",
+    "description": "Semantic domain learning and compression",
+    "terms": {
+      "domain_lifecycle": ["add_domain", "seed", "quickstart", "domains_add", "domains_learned"],
+      "term_management": ["terms", "orphan", "matched", "unmatched", "submit_tags", "match_tags"],
+      "learning_cycle": ["learn", "learning_pending", "prompt_count", "threshold", "trigger"],
+      "domain_tuning": ["tune", "kept", "added", "removed", "rebalance", "prune", "decay"]
+    }
+  },
+  {
+    "name": "@intent",
+    "description": "User intent capture and goal tracking",
+    "terms": {
+      "capture_flow": ["intent", "record", "capture", "track", "tool_use_id", "session_id"],
+      "goal_extraction": ["goal", "prompt", "tags", "score", "filter", "goal_history"],
+      "intent_storage": ["prompt_records", "redis", "zset", "timestamp", "expire"],
+      "file_tracking": ["files", "locations", "symbols", "file_tags", "assignment"]
+    }
+  },
+  {
+    "name": "@prediction",
+    "description": "File prediction and confidence scoring",
+    "terms": {
+      "prediction_engine": ["predict", "keywords", "confidence", "probability", "sample"],
+      "hit_tracking": ["hit", "miss", "accuracy", "rate", "evaluate", "log_prediction"],
+      "thompson_sampling": ["thompson", "alpha", "beta", "bandit", "exploration"],
+      "ranking_scores": ["score", "rank", "boost", "weight", "decay", "scorer"]
+    }
+  },
+  {
+    "name": "@cli",
+    "description": "Command line interface - aoa commands and output",
+    "terms": {
+      "command_handlers": ["cmd_grep", "cmd_domains", "cmd_intent", "cmd_health", "cmd_quickstart"],
+      "argument_parsing": ["parse", "shift", "case", "getopts", "flag", "option"],
+      "output_formatting": ["printf", "echo", "color", "bold", "dim", "cyan", "magenta"],
+      "cli_structure": ["build", "src", "section", "header", "main", "help"]
+    }
+  },
+  {
+    "name": "@redis",
+    "description": "Redis data persistence and caching",
+    "terms": {
+      "connection": ["redis", "client", "connect", "pool", "pipeline", "redis_client"],
+      "data_structures": ["string", "set", "zset", "hash", "list", "sorted_set"],
+      "operations": ["get", "set", "sadd", "zadd", "expire", "delete", "incr"],
+      "key_patterns": ["key", "prefix", "aoa", "proj", "ttl", "project_key"]
+    }
+  },
+  {
+    "name": "@outline",
+    "description": "Code structure analysis via tree-sitter",
+    "terms": {
+      "parsing": ["treesitter", "tree_sitter", "parse", "ast", "node", "cursor"],
+      "symbol_types": ["function", "class", "method", "variable", "definition", "kind"],
+      "enrichment": ["enriched", "outline", "pending", "tagged", "semantic", "enrich"],
+      "file_mapping": ["file_tags", "symbol_domains", "file_symbols", "assignment", "rollout"]
+    }
+  },
+  {
+    "name": "@context",
+    "description": "Project documentation and session continuity",
+    "terms": {
+      "work_tracking": ["board", "current", "backlog", "completed", "session", "phase"],
+      "planning": ["plan", "gl", "task", "status", "goal", "decision"],
+      "documentation": ["details", "archive", "summary", "reference", "readme"],
+      "session_mgmt": ["beacon", "resume", "handoff", "bridge", "continuity", "session"]
+    }
+  },
+  {
+    "name": "@plugin",
+    "description": "Claude Code plugin structure and installation",
+    "terms": {
+      "plugin_structure": ["plugin", "skill", "agent", "command", "template", "marketplace"],
+      "configuration": ["settings", "hooks_json", "permissions", "local", "allow"],
+      "installation": ["install", "init", "remove", "copy", "symlink", "uninstall"],
+      "runtime_env": ["claude", "aoa", "project_id", "session_id", "cwd", "env"]
+    }
+  },
+  {
+    "name": "@docker",
+    "description": "Containerization and service orchestration",
+    "terms": {
+      "image_building": ["dockerfile", "build", "image", "tag", "push", "docker"],
+      "orchestration": ["compose", "service", "container", "network", "volume", "depends"],
+      "process_mgmt": ["supervisor", "entrypoint", "restart", "healthcheck", "supervisord"],
+      "environment": ["env", "port", "host", "expose", "bind", "environment"]
+    }
+  }
+]

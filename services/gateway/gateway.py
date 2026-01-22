@@ -118,8 +118,9 @@ ROUTES = {
     "/domains/tune": ("index", "/domains/tune"),  # GL-055: Apply regenerative tune results
     "/domains/tune/math": ("index", "/domains/tune/math"),  # GL-059.3: Math-based tuning (no Haiku)
     "/domains/tuned": ("index", "/domains/tuned"),  # GL-055: Signal tuning complete
-    "/domains/tags": ("index", "/domains/tags"),  # GL-069.1: Per-prompt semantic tag matching
-    "/domains/orphans": ("index", "/domains/orphans"),  # GL-069.6: Get orphan tags for learning
+    "/domains/submit-tags": ("index", "/domains/submit-tags"),  # GL-069.1: Per-prompt semantic tag matching
+    "/domains/unmatched-tags": ("index", "/domains/unmatched-tags"),  # GL-069.6: Get unmatched tags for learning
+    "/domains/goal-history": ("index", "/domains/goal-history"),  # GL-078: Get goal history for learning
     "/domains/trigger-learn": ("index", "/domains/trigger-learn"),  # GL-070: Trigger hook-side learning
     "/symbol/lookup": ("index", "/symbol/lookup"),  # GL-059.2: Resolve file:line to functions
 

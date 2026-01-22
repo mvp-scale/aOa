@@ -11,31 +11,9 @@
         ]
       }
     ],
-    "PreToolUse": [
-      {
-        "matcher": "Grep|Glob",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/aoa-gateway.py\" --event=enforce",
-            "timeout": 1
-          }
-        ]
-      },
-      {
-        "matcher": "Read|Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/aoa-gateway.py\" --event=prefetch",
-            "timeout": 2
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
-        "matcher": "Read|Edit|Write|Bash|Grep|Glob",
+        "matcher": "Read|Edit|Write|Bash",
         "hooks": [
           {
             "type": "command",
@@ -43,11 +21,22 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/aoa-gateway.py\" --event=enforce",
+            "timeout": 2
+          }
+        ]
       }
     ]
   },
   "statusLine": {
     "type": "command",
-    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/aoa-status-line.sh\""
+    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/aoa-status-line.sh\"",
+    "timeout": 0.5
   }
 }

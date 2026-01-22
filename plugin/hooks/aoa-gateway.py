@@ -582,7 +582,7 @@ def handle_prompt(data: dict):
         orphan_tags = []
         orphan_count = domain_stats.get("orphan_count", 0)
         if orphan_count > 0:
-            orphan_data = api_get(f"/domains/orphans?project_id={PROJECT_ID}&limit=20")
+            orphan_data = api_get(f"/domains/unmatched-tags?project_id={PROJECT_ID}&limit=20")
             if orphan_data:
                 orphan_tags = orphan_data.get("orphans", [])
 
@@ -612,16 +612,32 @@ def handle_prompt(data: dict):
             if symbol and file_path:
                 file_symbols.append(f"{file_path}:{symbol}()")
 
-        # 3. Orphan tags already collected above
+        # 3. GL-078: Fetch goal history (goal + tags) from last 10 prompts
+        prompt_records = api_get(f"/domains/goal-history?project_id={PROJECT_ID}&limit=10") or {}
+        goal_records = prompt_records.get('prompts', [])
 
         # Build Haiku prompt if we have enough data
-        has_data = len(user_prompts) >= 2 or len(file_symbols) >= 2 or len(orphan_tags) >= 2
+        has_data = len(user_prompts) >= 2 or len(file_symbols) >= 2 or len(goal_records) >= 2 or len(orphan_tags) >= 2
 
         if has_data:
             # Format activity data for prompt
             prompts_str = "; ".join(user_prompts[:5]) if user_prompts else "(none)"
             files_str = ", ".join(file_symbols[:10]) if file_symbols else "(none)"
-            orphans_str = ", ".join(orphan_tags[:15]) if orphan_tags else "(none)"
+
+            # GL-078: Format goal-focused records
+            goals_str = ""
+            if goal_records:
+                goal_lines = []
+                for rec in goal_records[:10]:
+                    goal = rec.get('goal', '')
+                    tags = [t.get('tag', t) if isinstance(t, dict) else t for t in rec.get('tags', [])]
+                    if goal and tags:
+                        goal_lines.append(f"{goal} → {', '.join(tags[:5])}")
+                goals_str = "\n  - ".join(goal_lines) if goal_lines else "(none)"
+            else:
+                # Fallback to flat orphan tags if no goal records yet
+                goals_str = ", ".join(orphan_tags[:15]) if orphan_tags else "(none)"
+
             existing_str = ", ".join(existing_names[:20])
 
             # GL-075: Generate basic domains directly from orphan tags
@@ -655,44 +671,42 @@ def handle_prompt(data: dict):
                 }, timeout=3)
 
                 if add_result and add_result.get("domains_added"):
-                    # Learning succeeded - clear pending
+                    # Learning succeeded - clear pending and assign to files/symbols
                     api_post("/domains/learned", {
                         "project_id": PROJECT_ID,
                         "domains": add_result.get("domains_added", []),
-                        "terms": []
-                    }, timeout=2)
+                        "terms": [],
+                        "files": list(recent_files)[:50],        # GL-071: Files for domain assignment
+                        "locations": recent_locations[:100]       # GL-071.1: Symbol locations
+                    }, timeout=5)
             else:
                 # Fall back to Claude-assisted learning via prompt
-                haiku_prompt = f"""## aOa Domain Learning (GL-072)
+                # Serialize files and locations for assignment
+                files_json = json.dumps(list(recent_files)[:50])
+                locations_json = json.dumps(recent_locations[:50])
 
-Create 1-3 code domains from this activity. Use Haiku model.
+                haiku_prompt = f"""## ⚡ aOa Learn
 
-Domain = semantic label (@auth, @cache, @render)
-Terms = 3-7 grep-able words per domain (single words preferred)
-CRITICAL: All terms must be UNIQUE across domains - no duplicates
+Create 1-3 domains from activity. Use Haiku.
 
-Activity:
-- Prompts: {prompts_str}
-- Reads: {files_str}
-- Orphans: {orphans_str}
+**Activity:**
+- Prompts: {prompts_str[:300]}
+- Reads: {files_str[:200]}
+- Goals: {goals_str[:250]}
 
-Existing (skip similar): {existing_str}
+**Skip similar:** {existing_str[:200]}
 
-Bad: "increment_term_hits" | Good: "hits"
-Bad: @term_hit_validation | Good: @prediction
+**Rules:** @lowercase, 3-7 single-word terms, unique across domains
 
-VALIDATION before POST:
-- Domain names: must start with @, lowercase, no spaces
-- Terms: must be real words (3+ chars), no empty strings
-- JSON: must be valid, parseable
-
-After generating, POST result:
-```bash
-curl -s -X POST "{AOA_URL}/domains/add" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}", "domains": YOUR_DOMAINS}}'
-curl -s -X POST "{AOA_URL}/domains/learned" -H "Content-Type: application/json" -d '{{"project": "{PROJECT_ID}"}}'
+**Step 1:** POST to `{AOA_URL}/domains/add`:
+```json
+{{"project_id": "{PROJECT_ID}", "domains": [{{"name": "@example", "terms": ["word1", "word2"]}}]}}
 ```
 
-Output JSON: {{"domains":[{{"name":"@example","terms":["word1","word2","word3"]}}]}}"""
+**Step 2:** POST to `{AOA_URL}/domains/learned` with files for assignment:
+```json
+{{"project_id": "{PROJECT_ID}", "domains": ["@your_domain"], "files": {files_json}, "locations": {locations_json}}}
+```"""
 
                 output_context(haiku_prompt)
         else:
@@ -706,18 +720,20 @@ Output JSON: {{"domains":[{{"name":"@example","terms":["word1","word2","word3"]}
     # Only when: domains exist, learning NOT pending, and we have a prompt
     prompt = data.get("prompt", "")
     if prompt and domain_stats and domain_stats.get("domains", 0) > 0:
-        tag_prompt = f"""## aOa Semantic Tags (Per-Prompt)
+        tag_prompt = f"""## ⚡ aOa Tag (GL-069.1)
 
-Generate 3-5 semantic tags for this prompt. Tags should capture the user's INTENT, not just keywords.
+**User prompt:** {prompt[:250]}{'...' if len(prompt) > 250 else ''}
 
-**User prompt:** {prompt[:200]}{'...' if len(prompt) > 200 else ''}
+**Instructions:**
+1. Extract the developer's GOAL (what they're trying to accomplish)
+2. Generate 7-10 intent tags based on that goal
+3. Score each tag 1-10 (how well it aligns to the goal)
+4. Filter to tags scoring >= 7
 
-Output JSON then curl: {{"tags": ["tag1", "tag2", "tag3"]}}
-
-```bash
-curl -s -X POST "{AOA_URL}/domains/tags" -H "Content-Type: application/json" -d '{{"project_id": "{PROJECT_ID}", "tags": YOUR_TAGS}}'
-```
-"""
+**POST to** `{AOA_URL}/domains/submit-tags`:
+```json
+{{"project_id": "{PROJECT_ID}", "goal": "the extracted goal", "tags": [{{"tag": "name", "score": N}}, ...]}}
+```"""
         output_context(tag_prompt)
 
     # Predict files from prompt keywords
@@ -791,35 +807,45 @@ def handle_tool(data: dict):
 
 def handle_enforce(data: dict):
     """
-    PreToolUse (Grep|Glob): Redirect to aoa grep/find.
+    PostToolUse (Grep|Glob): Soft guidance after tool runs.
 
-    From: aoa-enforce-search.py
+    NOTE: PreToolUse deny doesn't work (tool still executes per playbook Test 7).
+    Instead, use PostToolUse with additionalContext for soft guidance.
+    User gets their result AND learns about the faster aOa alternative.
     """
     tool = data.get("tool_name", "")
     tool_input = data.get("tool_input", {})
 
     if tool == "Grep":
         pattern = tool_input.get("pattern", "<pattern>")
-        output_deny(f"""Use aoa grep instead of Grep. It's 10-100x faster.
+        output_context(f"""## ⚡ aOa Tip
 
-Your search: {pattern}
+`aoa grep` is 10-100x faster than Grep for indexed codebases.
 
-Syntax:
-  aoa grep {pattern}           # Symbol lookup (instant)
-  aoa grep "term1 term2"       # Multi-term OR search
-  aoa grep -a term1,term2      # Multi-term AND search
-  aoa egrep "regex"            # Regex (working set only)""")
+Your search: `{pattern}`
+
+**Next time, try:**
+```bash
+aoa grep {pattern}           # Symbol lookup (instant)
+aoa grep "term1 term2"       # Multi-term OR search
+aoa grep -a term1,term2      # Multi-term AND search
+aoa egrep "regex"            # Regex (working set only)
+```""", "PostToolUse")
 
     elif tool == "Glob":
         pattern = tool_input.get("pattern", "<pattern>")
-        output_deny(f"""Use aoa find/locate instead of Glob. It's faster.
+        output_context(f"""## ⚡ aOa Tip
 
-Your search: {pattern}
+`aoa find/locate` is faster than Glob for indexed codebases.
 
-Commands:
-  aoa find "{pattern}"         # Find files by pattern
-  aoa locate <name>            # Fast filename search
-  aoa tree [dir]               # Directory structure""")
+Your search: `{pattern}`
+
+**Next time, try:**
+```bash
+aoa find "{pattern}"         # Find files by pattern
+aoa locate <name>            # Fast filename search
+aoa tree [dir]               # Directory structure
+```""", "PostToolUse")
 
 
 def handle_prefetch(data: dict):

@@ -523,6 +523,56 @@ class DomainLearner:
         orphan_key = self._key("orphan_tags")
         return self.redis.client.zcard(orphan_key)
 
+    def add_prompt_record(self, goal: str, tags: list) -> bool:
+        """
+        GL-078: Store a prompt record (goal + tags) for grouped learning.
+
+        Stores the last 10 prompts with their goals and tags as JSON.
+        Used for display (last 2) and learning cycle (last 10).
+
+        Args:
+            goal: Developer's goal for this prompt
+            tags: List of tag dicts [{"tag": "name", "score": N}, ...]
+
+        Returns: True if stored successfully
+        """
+        import json
+        import time
+
+        prompts_key = self._key("prompt_records")
+        record = {
+            "goal": goal,
+            "tags": tags,
+            "timestamp": time.time()
+        }
+
+        try:
+            # Add to front of list (LPUSH = newest first)
+            self.redis.client.lpush(prompts_key, json.dumps(record))
+            # Keep only last 10
+            self.redis.client.ltrim(prompts_key, 0, 9)
+            return True
+        except Exception:
+            return False
+
+    def get_prompt_records(self, limit: int = 10) -> list[dict]:
+        """
+        GL-078: Get recent prompt records for display or learning.
+
+        Args:
+            limit: Max number of records (default 10)
+
+        Returns: List of {"goal": "...", "tags": [...], "timestamp": N}
+        """
+        import json
+
+        prompts_key = self._key("prompt_records")
+        try:
+            records = self.redis.client.lrange(prompts_key, 0, limit - 1)
+            return [json.loads(r) for r in records]
+        except Exception:
+            return []
+
     def match_tags_to_terms(self, tags: list[str]) -> dict:
         """
         Match semantic tags against existing domain terms.
