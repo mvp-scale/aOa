@@ -55,7 +55,8 @@ RUN pip install --no-cache-dir \
     requests \
     tree-sitter \
     tree-sitter-language-pack \
-    pyahocorasick
+    pyahocorasick \
+    anthropic
 
 WORKDIR /app
 

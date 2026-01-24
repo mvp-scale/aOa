@@ -1,0 +1,868 @@
+{
+  "total_chunks": 959,
+  "embedding_dim": 384,
+  "model": "all-MiniLM-L6-v2",
+  "clusters": [
+    {
+      "cluster_id": 0,
+      "size": 42,
+      "primary_directory": "hooks",
+      "directories": {
+        "hooks": 25,
+        "archive": 7,
+        "gateway": 6,
+        "domains": 2,
+        "metrics": 1
+      },
+      "files": {
+        "aoa-gateway.py": 22,
+        "gateway.py": 6,
+        "aoa-enforce-search.py": 3,
+        "aoa-auto-outline.py": 3,
+        "test-hook.py": 3
+      },
+      "keywords": [
+        "aoa",
+        "get",
+        "pattern",
+        "json",
+        "data",
+        "tool",
+        "grep",
+        "path",
+        "print",
+        "files",
+        "request",
+        "search",
+        "sys",
+        "event",
+        "prompt"
+      ],
+      "sample_signatures": [
+        "def main():",
+        "#!/usr/bin/env python3",
+        "def get_output_size(data: dict) -> int:",
+        "def api_get(path: str, timeout: float = 2) -> dict | None:",
+        "def api_post(path: str, data: dict, timeout: float = 2) -> dict | None:"
+      ]
+    },
+    {
+      "cluster_id": 1,
+      "size": 48,
+      "primary_directory": "domains",
+      "directories": {
+        "domains": 35,
+        "ranking": 12,
+        "index": 1
+      },
+      "files": {
+        "learner.py": 35,
+        "redis_client.py": 12,
+        "indexer.py": 1
+      },
+      "keywords": [
+        "str",
+        "client",
+        "redis",
+        "term",
+        "terms",
+        "key",
+        "keyword",
+        "get",
+        "list",
+        "domain",
+        "int",
+        "name",
+        "_key",
+        "set",
+        "keys"
+      ],
+      "sample_signatures": [
+        "def domains_for_symbol(self, file: str, symbol: str, project_id: str = None) -> list[str]:",
+        "def _key(self, suffix: str) -> str:",
+        "def _domain_key(self, name: str, suffix: str) -> str:",
+        "def get_all_domains(self) -> list[str]:",
+        "def get_domain_meta(self, name: str) -> dict:"
+      ]
+    },
+    {
+      "cluster_id": 2,
+      "size": 41,
+      "primary_directory": "hooks",
+      "directories": {
+        "hooks": 16,
+        "archive": 15,
+        "src": 8,
+        "status": 1,
+        "domains": 1
+      },
+      "files": {
+        "50-intent.sh": 7,
+        "aoa-intent-summary.py": 6,
+        "aoa-intent-capture.py": 5,
+        "intent-capture.py": 5,
+        "intent-summary.py": 4
+      },
+      "keywords": [
+        "get",
+        "data",
+        "aoa",
+        "json",
+        "intent",
+        "stats",
+        "tags",
+        "request",
+        "req",
+        "time",
+        "print",
+        "tool_response",
+        "session_id",
+        "tool",
+        "files"
+      ],
+      "sample_signatures": [
+        "def handle_prompt(data: dict):",
+        "r = dur / tok",
+        "#!/usr/bin/env python3",
+        "def get_intent_stats():",
+        "def get_accuracy():"
+      ]
+    },
+    {
+      "cluster_id": 3,
+      "size": 55,
+      "primary_directory": "ranking",
+      "directories": {
+        "ranking": 28,
+        "index": 13,
+        "metrics": 10,
+        "hooks": 2,
+        "archive": 1
+      },
+      "files": {
+        "scorer.py": 25,
+        "indexer.py": 13,
+        "ir-metrics.py": 10,
+        "intent-summary.py": 2,
+        "session_parser.py": 2
+      },
+      "keywords": [
+        "get",
+        "redis",
+        "tag",
+        "recency",
+        "scorer",
+        "predictions",
+        "int",
+        "hit",
+        "str",
+        "frequency",
+        "tags",
+        "score",
+        "float",
+        "file_path",
+        "confidence"
+      ],
+      "sample_signatures": [
+        "#!/usr/bin/env python3",
+        "def hit_rate_at_k(predictions: list[str], ground_truth: list[str], k: int = 10) -> float:",
+        "def reciprocal_rank(predictions: list[str], ground_truth: list[str]) -> float:",
+        "def precision_at_k(predictions: list[str], ground_truth: list[str], k: int = 10) -> float:",
+        "def recall_at_k(predictions: list[str], ground_truth: list[str], k: int = 10) -> float:"
+      ]
+    },
+    {
+      "cluster_id": 4,
+      "size": 56,
+      "primary_directory": "rubrics",
+      "directories": {
+        "rubrics": 24,
+        "tests": 20,
+        "lib": 5,
+        "benchmarks": 4,
+        "hooks": 1
+      },
+      "files": {
+        "test_unix_parity.sh": 15,
+        "phase1-scoring.sh": 9,
+        "phase2-scoring.sh": 9,
+        "assert.sh": 5,
+        "test_e2e.sh": 5
+      },
+      "keywords": [
+        "echo",
+        "aoa",
+        "grep",
+        "local",
+        "result",
+        "then",
+        "dev",
+        "pass",
+        "should",
+        "egrep",
+        "file",
+        "fail",
+        "files",
+        "flag",
+        "term"
+      ],
+      "sample_signatures": [
+        "#!/bin/bash",
+        "return 1",
+        "#!/bin/bash"
+      ]
+    },
+    {
+      "cluster_id": 5,
+      "size": 72,
+      "primary_directory": "index",
+      "directories": {
+        "index": 69,
+        "domains": 2,
+        "status": 1
+      },
+      "files": {
+        "indexer.py": 69,
+        "learner.py": 2,
+        "status_service.py": 1
+      },
+      "keywords": [
+        "str",
+        "project_id",
+        "path",
+        "file",
+        "name",
+        "index",
+        "get",
+        "idx",
+        "files",
+        "time",
+        "int",
+        "list",
+        "file_path",
+        "local",
+        "print"
+      ],
+      "sample_signatures": [
+        "#!/usr/bin/env python3",
+        "def is_available(self) -> bool:",
+        "class FileMeta:",
+        "class ChangeRecord:",
+        "class LRUContentCache:"
+      ]
+    },
+    {
+      "cluster_id": 6,
+      "size": 48,
+      "primary_directory": "src",
+      "directories": {
+        "src": 32,
+        "hooks": 10,
+        "codebase": 3,
+        "rubrics": 3
+      },
+      "files": {
+        "50-intent.sh": 12,
+        "60-system.sh": 12,
+        "aoa-status-line.sh": 10,
+        "30-analytics.sh": 5,
+        "test-quickstart-output.sh": 2
+      },
+      "keywords": [
+        "echo",
+        "local",
+        "then",
+        "aoa",
+        "tags",
+        "dev",
+        "printf",
+        "files",
+        "file",
+        "action",
+        "show",
+        "result",
+        "project_id",
+        "grep",
+        "metrics"
+      ],
+      "sample_signatures": [
+        "#!/bin/bash",
+        "echo -e \"  faster, targeted responses that AI can read with minimal context.\"",
+        "for ((i=0; i<WINDOW_SIZE; i++)); do",
+        "total_grep_calls=$((total_grep_calls + g_calls))",
+        "echo \"\""
+      ]
+    },
+    {
+      "cluster_id": 7,
+      "size": 57,
+      "primary_directory": "hooks",
+      "directories": {
+        "hooks": 19,
+        "index": 17,
+        "archive": 10,
+        "status": 4,
+        "rubrics": 3
+      },
+      "files": {
+        "indexer.py": 17,
+        "aoa-gateway.py": 8,
+        "predict-context.py": 6,
+        "aoa-predict-context.py": 5,
+        "status_service.py": 4
+      },
+      "keywords": [
+        "files",
+        "get",
+        "path",
+        "file_path",
+        "file",
+        "append",
+        "keywords",
+        "tags",
+        "session_id",
+        "list",
+        "str",
+        "data",
+        "confidence",
+        "limit",
+        "parts"
+      ],
+      "sample_signatures": [
+        "def save_results(results: dict, output_dir: Path):",
+        "EXPECTED_PATTERNS[27]=\"hash|encrypt|crypto\"",
+        "setup",
+        "# Build some data",
+        "def get_file_sizes(files: list) -> dict:"
+      ]
+    },
+    {
+      "cluster_id": 8,
+      "size": 54,
+      "primary_directory": "src",
+      "directories": {
+        "src": 49,
+        "rubrics": 4,
+        "tests": 1
+      },
+      "files": {
+        "60-system.sh": 15,
+        "10-search.sh": 12,
+        "30-analytics.sh": 7,
+        "20-files.sh": 5,
+        "40-repos.sh": 5
+      },
+      "keywords": [
+        "echo",
+        "local",
+        "then",
+        "aoa",
+        "result",
+        "file",
+        "project_id",
+        "files",
+        "curl",
+        "tags",
+        "dev",
+        "count",
+        "error",
+        "domains",
+        "name"
+      ],
+      "sample_signatures": [
+        "SEARCH_TERMS[3]=\"handler\"",
+        "SEARCH_TERMS[15]=\"async\"",
+        "fi",
+        "if [ \"$term_count\" -gt 0 ]; then"
+      ]
+    },
+    {
+      "cluster_id": 9,
+      "size": 55,
+      "primary_directory": "index",
+      "directories": {
+        "index": 54,
+        "metrics": 1
+      },
+      "files": {
+        "indexer.py": 54,
+        "ir-metrics.py": 1
+      },
+      "keywords": [
+        "get",
+        "jsonify",
+        "project_id",
+        "time",
+        "request",
+        "data",
+        "file",
+        "name",
+        "error",
+        "args",
+        "repo",
+        "tags",
+        "app",
+        "route",
+        "start"
+      ],
+      "sample_signatures": [
+        "def fetch_predictions(url: str, tags: list[str], limit: int = 10) -> list[str]:",
+        "def ac_test():",
+        "def multi_search():",
+        "def mark_enriched():",
+        "for loc in locations:"
+      ]
+    },
+    {
+      "cluster_id": 10,
+      "size": 53,
+      "primary_directory": "index",
+      "directories": {
+        "index": 20,
+        "domains": 15,
+        "hooks": 9,
+        "status": 5,
+        "archive": 4
+      },
+      "files": {
+        "indexer.py": 20,
+        "learner.py": 15,
+        "aoa-gateway.py": 8,
+        "status_service.py": 5,
+        "aoa-intent-capture.py": 3
+      },
+      "keywords": [
+        "terms",
+        "domain",
+        "get",
+        "name",
+        "domains",
+        "keywords",
+        "list",
+        "str",
+        "tokens",
+        "term",
+        "lower",
+        "set",
+        "patterns",
+        "match",
+        "add"
+      ],
+      "sample_signatures": [
+        "'look', 'see', 'let', 'know', 'would', 'could', 'should', 'will', 'just',",
+        "def _tokenize(text: str) -> set:",
+        "search_type = \"regex\"",
+        "def extract_keywords(prompt: str) -> list:",
+        "def _load_pattern_configs():"
+      ]
+    },
+    {
+      "cluster_id": 11,
+      "size": 30,
+      "primary_directory": "src",
+      "directories": {
+        "src": 18,
+        "hooks": 5,
+        "codebase": 3,
+        "tests": 2,
+        "benchmarks": 1
+      },
+      "files": {
+        "70-setup.sh": 4,
+        "install.sh": 3,
+        "60-system.sh": 3,
+        "test_e2e.sh": 2,
+        "aoa-status-line.sh": 2
+      },
+      "keywords": [
+        "echo",
+        "aoa",
+        "local",
+        "then",
+        "dev",
+        "docker",
+        "files",
+        "project",
+        "grep",
+        "file",
+        "claude",
+        "show",
+        "search",
+        "json",
+        "hooks"
+      ],
+      "sample_signatures": [
+        "#!/bin/bash",
+        "*) break ;;",
+        "echo -e \"  ${DIM}Using single container mode${NC}\"",
+        "export AOA_URL REDIS_CLI",
+        "#!/bin/bash"
+      ]
+    },
+    {
+      "cluster_id": 12,
+      "size": 54,
+      "primary_directory": "index",
+      "directories": {
+        "index": 31,
+        "domains": 19,
+        "hooks": 2,
+        "gateway": 1,
+        "src": 1
+      },
+      "files": {
+        "indexer.py": 31,
+        "learner.py": 18,
+        "aoa-gateway.py": 2,
+        "gateway.py": 1,
+        "__init__.py": 1
+      },
+      "keywords": [
+        "project_id",
+        "domains",
+        "get",
+        "domain",
+        "jsonify",
+        "learner",
+        "error",
+        "terms",
+        "name",
+        "learning",
+        "result",
+        "data",
+        "tune",
+        "prompt",
+        "request"
+      ],
+      "sample_signatures": [
+        "# Memory API (Phase 5) - Dynamic working context",
+        "def get_ts_language(x):",
+        "def _do_domain_learning(project_id: str):",
+        "def _trigger_domain_learning_if_needed(project_id: str):"
+      ]
+    },
+    {
+      "cluster_id": 13,
+      "size": 33,
+      "primary_directory": "proxy",
+      "directories": {
+        "proxy": 27,
+        "gateway": 5,
+        "index": 1
+      },
+      "files": {
+        "git_proxy.py": 27,
+        "gateway.py": 5,
+        "indexer.py": 1
+      },
+      "keywords": [
+        "name",
+        "git",
+        "host",
+        "str",
+        "success",
+        "hosts",
+        "url",
+        "clone",
+        "msg",
+        "error",
+        "repo",
+        "service",
+        "get",
+        "only",
+        "repos"
+      ],
+      "sample_signatures": [
+        "\"/git/status\": (\"git-proxy\", \"/status\"),",
+        "async def proxy_request(",
+        "async def network():",
+        "\"exposed_port\": None,",
+        "async def verify():"
+      ]
+    },
+    {
+      "cluster_id": 14,
+      "size": 23,
+      "primary_directory": "ranking",
+      "directories": {
+        "ranking": 11,
+        "session": 10,
+        "index": 1,
+        "hooks": 1
+      },
+      "files": {
+        "session_parser.py": 11,
+        "reader.py": 9,
+        "__init__.py": 1,
+        "indexer.py": 1,
+        "test-hook.py": 1
+      },
+      "keywords": [
+        "get",
+        "files",
+        "str",
+        "list",
+        "events",
+        "file",
+        "session",
+        "path",
+        "print",
+        "transitions",
+        "dict",
+        "file_path",
+        "prompts",
+        "len",
+        "sessions"
+      ],
+      "sample_signatures": [
+        "\"\"\"Session reading services for Claude session files.\"\"\"",
+        "#!/usr/bin/env python3",
+        "class SessionReader:",
+        "def __init__(self, project_path: Optional[str] = None):",
+        "def _find_session_dir(self) -> Optional[Path]:"
+      ]
+    },
+    {
+      "cluster_id": 15,
+      "size": 44,
+      "primary_directory": "domains",
+      "directories": {
+        "domains": 38,
+        "ranking": 6
+      },
+      "files": {
+        "learner.py": 38,
+        "scorer.py": 4,
+        "redis_client.py": 2
+      },
+      "keywords": [
+        "redis",
+        "client",
+        "int",
+        "_key",
+        "get",
+        "val",
+        "key",
+        "learning",
+        "last",
+        "tune",
+        "set",
+        "str",
+        "timestamp",
+        "time",
+        "keys"
+      ],
+      "sample_signatures": [
+        "def _term_key(self, term: str, suffix: str) -> str:",
+        "def increment_prompt_count(self) -> int:",
+        "def get_prompt_count(self) -> int:",
+        "def reset_prompt_count(self) -> None:",
+        "def should_learn(self) -> bool:"
+      ]
+    },
+    {
+      "cluster_id": 16,
+      "size": 34,
+      "primary_directory": "index",
+      "directories": {
+        "index": 14,
+        "ranking": 9,
+        "status": 7,
+        "domains": 4
+      },
+      "files": {
+        "indexer.py": 14,
+        "status_service.py": 7,
+        "redis_client.py": 6,
+        "learner.py": 4,
+        "session_parser.py": 3
+      },
+      "keywords": [
+        "redis",
+        "get",
+        "project_id",
+        "data",
+        "jsonify",
+        "str",
+        "time",
+        "aoa",
+        "args",
+        "int",
+        "session",
+        "file_path",
+        "file",
+        "print",
+        "error"
+      ],
+      "sample_signatures": [
+        "def __init__(self, redis_client=None):",
+        "r.hsetnx(redis_key, 'first_seen', int(time.time()))",
+        "def get_stats(self, project_id: str = None) -> dict:",
+        "break",
+        "def health():"
+      ]
+    },
+    {
+      "cluster_id": 17,
+      "size": 32,
+      "primary_directory": "codebase",
+      "directories": {
+        "codebase": 23,
+        "src": 8,
+        "ranking": 1
+      },
+      "files": {
+        "install.sh": 19,
+        "60-system.sh": 4,
+        "build-docker.sh": 3,
+        "70-setup.sh": 3,
+        "restart.sh": 1
+      },
+      "keywords": [
+        "echo",
+        "aoa",
+        "then",
+        "docker",
+        "dev",
+        "claude",
+        "local",
+        "port",
+        "env",
+        "projects",
+        "project_root",
+        "project",
+        "bin",
+        "check",
+        "hooks"
+      ],
+      "sample_signatures": [
+        "fi",
+        "fi",
+        "# Force remove all images (even if containers exist)",
+        "fi",
+        "# Header"
+      ]
+    },
+    {
+      "cluster_id": 18,
+      "size": 32,
+      "primary_directory": "index",
+      "directories": {
+        "index": 31,
+        "session": 1
+      },
+      "files": {
+        "indexer.py": 31,
+        "reader.py": 1
+      },
+      "keywords": [
+        "identifier",
+        "node",
+        "language",
+        "child",
+        "path",
+        "str",
+        "name",
+        "parent",
+        "get",
+        "source",
+        "symbols",
+        "children",
+        "symbol",
+        "match",
+        "arguments"
+      ],
+      "sample_signatures": [
+        "def _encode_path(self, path: str) -> str:",
+        "def get_ts_language(lang_name: str):",
+        "def __init__(self):",
+        "def pattern_count(self) -> int:"
+      ]
+    },
+    {
+      "cluster_id": 19,
+      "size": 52,
+      "primary_directory": "archive",
+      "directories": {
+        "archive": 15,
+        "index": 15,
+        "hooks": 14,
+        "status": 4,
+        "src": 2
+      },
+      "files": {
+        "indexer.py": 15,
+        "aoa-gateway.py": 8,
+        "aoa-intent-capture.py": 8,
+        "aoa-intent-summary.py": 5,
+        "intent-capture.py": 5
+      },
+      "keywords": [
+        "tags",
+        "files",
+        "file",
+        "pattern",
+        "intent",
+        "get",
+        "add",
+        "list",
+        "file_path",
+        "search",
+        "index",
+        "tool",
+        "str",
+        "match",
+        "data"
+      ],
+      "sample_signatures": [
+        "def infer_tags(files: list, tool: str) -> list:",
+        "def extract_files(data: dict) -> tuple:",
+        "# Extract from grep/glob patterns",
+        "def handle_tool(data: dict):"
+      ]
+    },
+    {
+      "cluster_id": 20,
+      "size": 44,
+      "primary_directory": "status",
+      "directories": {
+        "status": 33,
+        "gateway": 5,
+        "ranking": 4,
+        "index": 1,
+        "domains": 1
+      },
+      "files": {
+        "status_service.py": 33,
+        "gateway.py": 5,
+        "session_parser.py": 4,
+        "indexer.py": 1,
+        "learner.py": 1
+      },
+      "keywords": [
+        "get",
+        "session",
+        "int",
+        "keys",
+        "stats",
+        "input_tokens",
+        "model",
+        "str",
+        "status",
+        "output_tokens",
+        "cache_read_tokens",
+        "data",
+        "pipe",
+        "time",
+        "event"
+      ],
+      "sample_signatures": [
+        "async def startup():",
+        "def log_request(method: str, path: str, service: str, status: int, ms: float):",
+        "async def gateway_health():",
+        "async def audit():",
+        "def _count_by_key(items: list, key: str) -> dict:"
+      ]
+    }
+  ]
+}

@@ -3274,21 +3274,26 @@ _quickstart_process_file() {
 
     local symbols_json=$(echo "$result" | jq -c '[.symbols[] | {name: .name, kind: .kind, start_line: .start_line, end_line: .end_line}]')
 
-    # Infer tags
+    # Infer tags and domains from project-domains.json (v2 format)
+    # Returns: {tags: [[...], ...], domains: [[...], ...]}
     local infer_payload=$(echo "$symbols_json" | jq '{symbols: [.[] | {name: .name, kind: .kind}]}')
     local infer_result=$(curl -s -X POST "${INDEX_URL}/patterns/infer" \
         -H "Content-Type: application/json" \
         -d "$infer_payload")
     local inferred_tags=$(echo "$infer_result" | jq -c '.tags // []')
+    local inferred_domains=$(echo "$infer_result" | jq -c '.domains // []')
 
-    # Build enriched payload using jq (simpler, faster)
-    local enriched_symbols=$(echo "$result" | jq -c --argjson tags "$inferred_tags" '
+    # GL-084: Build enriched payload with both tags and domains
+    # - tags: #term tags for specific symbols
+    # - domains: @domain tags for symbol_domains storage
+    local enriched_symbols=$(echo "$result" | jq -c --argjson tags "$inferred_tags" --argjson domains "$inferred_domains" '
         [.symbols | to_entries | .[] | {
             name: .value.name,
             kind: .value.kind,
             line: .value.start_line,
             end_line: .value.end_line,
-            tags: ($tags[.key] // [])
+            tags: ($tags[.key] // []),
+            domains: ($domains[.key] // [])
         }]')
 
     local mark_payload=$(jq -n \
@@ -3359,17 +3364,29 @@ cmd_quickstart() {
         echo ""
     fi
 
-    # Seed universal domains (GL-053) - first time only
-    local seed_result=$(curl -s -X POST "${INDEX_URL}/domains/seed" \
-        -H "Content-Type: application/json" \
-        -d "{\"project_id\": \"${project_id:-default}\"}" 2>/dev/null)
-    local seed_domains=$(echo "$seed_result" | jq -r '.domains // 0')
-    local seed_terms=$(echo "$seed_result" | jq -r '.terms // 0')
-    local seed_msg=$(echo "$seed_result" | jq -r '.message // ""')
+    # GL-084: Universal domain seeding removed - use /aoa setup skill for personalized domains
+    # Projects start with 0 domains until setup skill runs Haiku analysis
 
-    if [ "$seed_domains" -gt 0 ] && [ "$seed_msg" != "Already seeded" ]; then
-        echo -e "${GREEN}✓${NC} Seeded ${BOLD}${seed_domains}${NC} domains (${seed_terms} terms)"
-        echo ""
+    # GL-083: Load project-specific domains if available (from aoa analyze)
+    local project_root=$(get_project_root)
+    local project_domains_file="${project_root}/.aoa/project-domains.json"
+
+    if [ -f "$project_domains_file" ]; then
+        local project_domains=$(cat "$project_domains_file" 2>/dev/null)
+        if [ -n "$project_domains" ] && echo "$project_domains" | jq -e '.' > /dev/null 2>&1; then
+            local proj_seed_result=$(curl -s -X POST "${INDEX_URL}/domains/add" \
+                -H "Content-Type: application/json" \
+                -d "{\"project_id\": \"${project_id:-default}\", \"domains\": ${project_domains}, \"source\": \"analyzed\"}" 2>/dev/null)
+            # GL-084: domains_added is an array of names, terms_added is a count
+            local proj_domains=$(echo "$proj_seed_result" | jq -r '.domains_added | length // 0')
+            local proj_terms=$(echo "$proj_seed_result" | jq -r '.terms_added // 0')
+
+            if [ "$proj_domains" -gt 0 ] || [ "$proj_terms" -gt 0 ]; then
+                echo -e "${GREEN}✓${NC} Loaded ${BOLD}${proj_domains}${NC} project domains (${proj_terms} terms)"
+                echo -e "  ${DIM}from: .aoa/project-domains.json${NC}"
+                echo ""
+            fi
+        fi
     fi
 
     # Get pending files for semantic compression
@@ -3660,12 +3677,136 @@ cmd_learn() {
 }
 
 cmd_domains() {
-    # aoa domains - Show domain learning status and top domains with terms
-    # Usage: aoa domains [--json] [-n LIMIT] [--help]
+    # aoa domains - Domain management and status
+    # Usage: aoa domains [SUBCOMMAND] [OPTIONS]
+    #
+    # Subcommands:
+    #   init     - Initialize skeleton domains from JSON stdin
+    #   build    - Add terms+keywords to one domain
+    #   add      - Add a single new domain
+    #   refresh  - Re-generate a stale domain
+    #   (none)   - Show domain status (default)
 
+    local MAGENTA='\033[0;35m'
+    local project_id=$(get_project_id)
+
+    # Check for subcommands first
+    case "${1:-}" in
+        init)
+            # aoa domains init - bulk create skeletons from JSON file or stdin
+            shift
+            local json_input=""
+            local file_path=""
+
+            # Check for --file flag
+            if [ "${1:-}" = "--file" ] || [ "${1:-}" = "-f" ]; then
+                file_path="${2:-}"
+                if [ -z "$file_path" ] || [ ! -f "$file_path" ]; then
+                    echo -e "${RED}Error: File not found: ${file_path}${NC}" >&2
+                    return 1
+                fi
+                json_input=$(cat "$file_path")
+            else
+                # Read from stdin
+                json_input=$(cat)
+            fi
+
+            if [ -z "$json_input" ]; then
+                echo -e "${RED}Error: No JSON input provided${NC}" >&2
+                echo "Usage: aoa domains init --file path/to/domains.json" >&2
+                return 1
+            fi
+            local result=$(curl -s -X POST "${INDEX_URL}/domains/init-skeleton" \
+                -H "Content-Type: application/json" \
+                -d "{\"project_id\":\"${project_id}\",\"domains\":${json_input}}")
+            local count=$(echo "$result" | jq -r '.domains_created // 0')
+            local error=$(echo "$result" | jq -r '.error // empty')
+            if [ -n "$error" ]; then
+                echo -e "${RED}Error: ${error}${NC}" >&2
+                return 1
+            fi
+            echo "$count"
+            return 0
+            ;;
+        build)
+            # aoa domains build @name - add terms+keywords to one domain
+            # Reads from .aoa/domains/enrichment.json by default
+            shift
+            local domain_name="${1:-}"
+            if [ -z "$domain_name" ]; then
+                echo -e "${RED}Error: Domain name required${NC}" >&2
+                echo "Usage: aoa domains build @search" >&2
+                return 1
+            fi
+            local enrichment_file=".aoa/domains/enrichment.json"
+            if [ ! -f "$enrichment_file" ]; then
+                echo -e "${RED}Error: No enrichment file found at ${enrichment_file}${NC}" >&2
+                return 1
+            fi
+            local json_input=$(cat "$enrichment_file")
+            if [ -z "$json_input" ]; then
+                echo -e "${RED}Error: Enrichment file is empty${NC}" >&2
+                return 1
+            fi
+            local result=$(curl -s -X POST "${INDEX_URL}/domains/enrich" \
+                -H "Content-Type: application/json" \
+                -d "{\"project_id\":\"${project_id}\",\"domain\":\"${domain_name}\",\"term_keywords\":${json_input}}")
+            local error=$(echo "$result" | jq -r '.error // empty')
+            if [ -n "$error" ]; then
+                echo -e "${RED}Error: ${error}${NC}" >&2
+                return 1
+            fi
+            echo "$result" | jq -r '.keywords_added // 0'
+            return 0
+            ;;
+        add)
+            # aoa domains add - add a single new domain from JSON stdin
+            shift
+            local json_input=$(cat)
+            if [ -z "$json_input" ]; then
+                echo -e "${RED}Error: No JSON input provided${NC}" >&2
+                echo "Usage: echo '{\"name\":\"@new\",...}' | aoa domains add" >&2
+                return 1
+            fi
+            # Wrap single domain in array for init-skeleton endpoint
+            local result=$(curl -s -X POST "${INDEX_URL}/domains/init-skeleton" \
+                -H "Content-Type: application/json" \
+                -d "{\"project_id\":\"${project_id}\",\"domains\":[${json_input}]}")
+            local count=$(echo "$result" | jq -r '.domains_created // 0')
+            local error=$(echo "$result" | jq -r '.error // empty')
+            if [ -n "$error" ]; then
+                echo -e "${RED}Error: ${error}${NC}" >&2
+                return 1
+            fi
+            echo "$count"
+            return 0
+            ;;
+        refresh)
+            # aoa domains refresh @name - mark domain for re-generation
+            shift
+            local domain_name="${1:-}"
+            if [ -z "$domain_name" ]; then
+                echo -e "${RED}Error: Domain name required${NC}" >&2
+                echo "Usage: aoa domains refresh @search" >&2
+                return 1
+            fi
+            # Mark domain as unenriched so it gets rebuilt
+            local result=$(curl -s -X POST "${INDEX_URL}/domains/unenrich" \
+                -H "Content-Type: application/json" \
+                -d "{\"project_id\":\"${project_id}\",\"domain\":\"${domain_name}\"}")
+            local error=$(echo "$result" | jq -r '.error // empty')
+            if [ -n "$error" ]; then
+                echo -e "${RED}Error: ${error}${NC}" >&2
+                return 1
+            fi
+            echo "ok"
+            return 0
+            ;;
+    esac
+
+    # Default: show domain status
     local json_output=false
     local limit=20
-    local MAGENTA='\033[0;35m'
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -3679,19 +3820,25 @@ cmd_domains() {
                 shift 2
                 ;;
             --help|-h)
-                echo "Usage: aoa domains [OPTIONS]"
+                echo "Usage: aoa domains [SUBCOMMAND] [OPTIONS]"
                 echo ""
-                echo "Show domain learning status and top domains with terms."
+                echo "Domain management and status."
                 echo ""
-                echo "Options:"
-                echo "  --json, -j      Output as JSON (for piping to AI agents)"
-                echo "  -n, --limit N   Show top N domains (default: 20)"
-                echo "  --help, -h      Show this help message"
+                echo "Subcommands:"
+                echo "  init              Initialize skeleton domains from JSON stdin"
+                echo "  build @name       Add terms+keywords to one domain"
+                echo "  add               Add a single new domain from JSON stdin"
+                echo "  refresh @name     Mark domain for re-generation"
+                echo ""
+                echo "Options (for status display):"
+                echo "  --json, -j        Output as JSON"
+                echo "  -n, --limit N     Show top N domains (default: 20)"
+                echo "  --help, -h        Show this help message"
                 echo ""
                 echo "Examples:"
-                echo "  aoa domains              # Show top 20 domains"
-                echo "  aoa domains -n 10        # Show top 10 domains"
-                echo "  aoa domains --json       # Output full structure as JSON"
+                echo "  aoa domains                    # Show domain status"
+                echo "  echo '[...]' | aoa domains init   # Init skeletons"
+                echo "  aoa domains refresh @search    # Mark for rebuild"
                 return 0
                 ;;
             *)
@@ -3709,22 +3856,18 @@ cmd_domains() {
     local total_terms=$(echo "$stats" | jq -r '.total_terms // 0')
     local total_hits=$(echo "$stats" | jq -r '.total_hits // 0')
     local prompt_count=$(echo "$stats" | jq -r '.prompt_count // 0')
-    local prompt_threshold=$(echo "$stats" | jq -r '.prompt_threshold // 10')
-    local last_learn=$(echo "$stats" | jq -r '.last_learn // 0')
-    local terms_learned=$(echo "$stats" | jq -r '.terms_learned_last // 0')
-    # GL-055: Intent-based tuning
-    local tune_count=$(echo "$stats" | jq -r '.tune_count // 0')
-    local tune_threshold=$(echo "$stats" | jq -r '.tune_threshold // 100')
-    local last_tune=$(echo "$stats" | jq -r '.last_tune // 0')
-    local tune_kept=$(echo "$stats" | jq -r '.tune_kept_last // 0')
-    local tune_added=$(echo "$stats" | jq -r '.tune_added_last // 0')
-    local tune_removed=$(echo "$stats" | jq -r '.tune_removed_last // 0')
-    # GL-054: Intelligence Angle
+    # GL-083: Rebalance-based system (every 25 prompts)
+    local rebalance_threshold=25
+    local rebalance_progress=$((prompt_count % rebalance_threshold))
+    # GL-054: Intelligence Angle (legacy - may be removed)
     local tokens_invested=$(echo "$stats" | jq -r '.tokens_invested // 0')
-    local learning_calls=$(echo "$stats" | jq -r '.learning_calls // 0')
     # GL-059.1: Source counts
     local seeded_count=$(echo "$stats" | jq -r '.seeded_count // 0')
     local learned_count=$(echo "$stats" | jq -r '.learned_count // 0')
+    # GL-085: Enrichment status
+    local enriched_count=$(echo "$stats" | jq -r '.enrichment.enriched // 0')
+    local enrichment_total=$(echo "$stats" | jq -r '.enrichment.total // 0')
+    local enrichment_complete=$(echo "$stats" | jq -r '.enrichment.complete // false')
 
     # Get tokens saved from metrics endpoint
     local metrics=$(curl -s "${INDEX_URL}/metrics?project_id=${project_id}")
@@ -3733,7 +3876,7 @@ cmd_domains() {
     if [ "$domain_count" -eq 0 ] 2>/dev/null; then
         echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}"
         echo ""
-        echo -e "${DIM}No domains seeded yet. Run 'aoa quickstart' to initialize.${NC}"
+        echo -e "${DIM}No domains found. Run '/aoa-start' to initialize.${NC}"
         return 0
     fi
 
@@ -3744,9 +3887,6 @@ cmd_domains() {
     else
         hits_display="$total_hits"
     fi
-
-    # Format tune counter (GL-055: intent-based)
-    local tune_display="${tune_count}/${tune_threshold}"
 
     # Get domains with full terms for display
     local domains_data=$(curl -s "${INDEX_URL}/domains/list?project_id=${project_id}&limit=${limit}&include_terms=true&include_created=true" 2>/dev/null)
@@ -3795,49 +3935,44 @@ cmd_domains() {
     # ─────────────────────────────────────────────────────────────────────────
     # aOa Domains Section (stats header + domain list)
     # GL-059.5: Show Generic vs Learned counts
+    # GL-085: Show enrichment progress
     # ─────────────────────────────────────────────────────────────────────────
     echo ""
-    # GL-059.5: New header format with source counts (legend style)
-    local transition_indicator=""
-    if [ "$learned_count" -ge 32 ] 2>/dev/null; then
-        transition_indicator=" ${GREEN}Transitioning...${NC}"
+    # GL-085: Show enrichment progress OR rebalance based on state
+    local progress_display
+    local in_enrichment=false
+    if [ "$enrichment_total" -gt 0 ] && [ "$enrichment_complete" != "true" ]; then
+        progress_display="${YELLOW}Building: ${enriched_count}/${enrichment_total}${NC}"
+        in_enrichment=true
+    else
+        progress_display="Rebalance: ${YELLOW}${rebalance_progress}/${rebalance_threshold}${NC}"
     fi
-    # Header is the legend: Seeded(-) and Learned(+)
-    # Calculate tune progress for display (mod threshold to show cycle progress)
-    local tune_progress=$((tune_count % tune_threshold))
-    echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  Seeded${DIM}(-)${NC} ${MAGENTA}${seeded_count}${NC} ${DIM}│${NC} Learned${YELLOW}(+)${NC} ${MAGENTA}${learned_count}${NC}${transition_indicator} ${DIM}│${NC} ${CYAN}${total_terms}${NC} terms ${DIM}│${NC} ${GREEN}${hits_display}${NC} hits ${DIM}│${NC} Learn: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} Tune: ${YELLOW}${tune_progress}/${tune_threshold}${NC}"
+
+    # Adjust header based on state
+    if [ "$in_enrichment" = true ] && [ "$total_terms" -eq 0 ]; then
+        # Skeleton phase - no terms yet
+        echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  ${MAGENTA}${domain_count}${NC} skeletons ${DIM}│${NC} ${progress_display}"
+    else
+        echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  ${MAGENTA}${domain_count}${NC} domains ${DIM}│${NC} ${CYAN}${total_terms}${NC} terms ${DIM}│${NC} ${GREEN}${hits_display}${NC} hits ${DIM}│${NC} ${progress_display}"
+    fi
     echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
-    printf "${DIM}%-24s %5s  %s${NC}\n" "DOMAIN" "HITS" "TERMS"
 
-    # Display each domain with its top terms
-    # GL-059.5: Include source and state in output
-    echo "$domains_data" | jq -r '.domains[]? | "\(.name)|\(.hits)|\(.created // 0)|\(.source // "seeded")|\(.state // "active")|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null | while IFS='|' read -r name hits created source state terms; do
-        local hits_fmt
-        [ "$hits" -ge 1000 ] && hits_fmt=$(awk "BEGIN {printf \"%.1fk\", $hits/1000}") || hits_fmt="$hits"
+    # Column header - always same format
+    printf "${DIM}%-30s %5s  %s${NC}\n" "DOMAIN" "HITS" "TERMS"
 
-        # GL-059.5: Source indicator (- = seeded, + = learned by aOa)
-        local src_ind=""
-        if [ "$source" = "learned" ]; then
-            src_ind="${YELLOW}+${NC}"
+    # Display each domain
+    echo "$domains_data" | jq -r '.domains[]? | "\(.name)|\(.hits // 0)|\(.enriched // false)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null | while IFS='|' read -r name hits enriched terms; do
+        # Truncate domain name if too long (28 chars to fit column)
+        local name_trunc="${name:0:28}"
+
+        # Show hits and terms - use "--" when not enriched
+        if [ "$enriched" = "true" ] && [ -n "$terms" ]; then
+            local hits_fmt
+            [ "$hits" -ge 1000 ] && hits_fmt=$(awk "BEGIN {printf \"%.1fk\", $hits/1000}") || hits_fmt="$hits"
+            printf "  ${MAGENTA}%-28s${NC} ${DIM}%5s${NC}  ${CYAN}%s${NC}\n" "$name_trunc" "$hits_fmt" "$terms"
         else
-            src_ind="${DIM}-${NC}"
+            printf "  ${MAGENTA}%-28s${NC} ${DIM}%5s${NC}  ${DIM}-- enrichment required${NC}\n" "$name_trunc" "--"
         fi
-
-        # Truncate domain name if too long
-        local name_trunc="${name:0:20}"
-
-        # GL-059.5: Style based on state
-        local name_style="${MAGENTA}"
-        local terms_style="${CYAN}"
-        if [ "$state" = "stale" ]; then
-            name_style="${DIM}"
-            terms_style="${DIM}"
-        elif [ "$state" = "deprecated" ]; then
-            name_style="${DIM}\033[9m"  # Strikethrough
-            terms_style="${DIM}"
-        fi
-
-        printf "${src_ind} ${name_style}%-20s${NC} ${DIM}%5s${NC}  ${terms_style}%s${NC}\n" "$name_trunc" "$hits_fmt" "$terms"
     done
 
     # Show remaining count if more than displayed
@@ -4389,6 +4524,9 @@ cmd_init() {
 }
 EOFHOME
 
+    # structure.txt - pre-staged tree for /aoa-setup skill
+    aoa tree > "$project_root/.aoa/structure.txt" 2>/dev/null || true
+
     # whitelist.txt - optional repos/URLs for this project
     if [ ! -f "$project_root/.aoa/whitelist.txt" ]; then
         cat > "$project_root/.aoa/whitelist.txt" << 'EOFWHITELIST'
@@ -4757,6 +4895,92 @@ cmd_projects() {
 }
 
 # =============================================================================
+# cmd_analyze - Generate project-specific domains via parallel Haiku analysis
+# GL-083: Replaces per-prompt learning with one-time semantic analysis
+# =============================================================================
+
+cmd_analyze() {
+    echo -e "${CYAN}${BOLD}⚡ aOa Analyze${NC}"
+    echo
+
+    # Check services first
+    if ! curl -s --connect-timeout 2 "${INDEX_URL}/health" > /dev/null 2>&1; then
+        echo -e "${RED}✗ aOa services not running${NC}"
+        echo -e "${DIM}Start with: docker start aoa${NC}"
+        return 1
+    fi
+
+    # Get project info
+    local project_root=$(get_project_root)
+    if [ -z "$project_root" ]; then
+        echo -e "${RED}Not in a git repository.${NC}"
+        return 1
+    fi
+
+    local project_id=$(get_project_id)
+    local project_name=$(get_project_name)
+
+    echo -e "  Project: ${BOLD}${project_name}${NC}"
+    echo -e "  Path:    ${DIM}${project_root}${NC}"
+    echo
+
+    # Phase 1, Task 2: Directory scanning
+    echo -e "  ${DIM}Scanning directories...${NC}"
+
+    # Get top-level directories (excluding hidden, node_modules, etc.)
+    local directories=$(find "$project_root" -maxdepth 2 -type d \
+        ! -path '*/\.*' \
+        ! -path '*/node_modules*' \
+        ! -path '*/__pycache__*' \
+        ! -path '*/venv*' \
+        ! -path '*/.git*' \
+        ! -path '*/dist*' \
+        ! -path '*/build*' \
+        2>/dev/null | head -20)
+
+    local dir_count=$(echo "$directories" | wc -l)
+    echo -e "  Found ${BOLD}${dir_count}${NC} directory clusters"
+    echo
+
+    # Phase 1, Task 3-4: Call analyze API (parallel Haiku happens server-side)
+    echo -e "  ${DIM}Generating project domains via Haiku...${NC}"
+
+    local analyze_result=$(curl -s -X POST "${INDEX_URL}/analyze/project" \
+        -H "Content-Type: application/json" \
+        -d "{\"project_id\": \"${project_id}\", \"project_root\": \"${project_root}\"}" \
+        --max-time 120 2>/dev/null)
+
+    if [ -z "$analyze_result" ]; then
+        echo -e "${RED}✗ Analysis failed (timeout or service error)${NC}"
+        return 1
+    fi
+
+    local success=$(echo "$analyze_result" | jq -r '.success // false')
+
+    if [ "$success" != "true" ]; then
+        local error=$(echo "$analyze_result" | jq -r '.error // "Unknown error"')
+        echo -e "${RED}✗ Analysis failed: ${error}${NC}"
+        return 1
+    fi
+
+    # Phase 1, Task 5-6: Results
+    local domains_count=$(echo "$analyze_result" | jq -r '.domains_count // 0')
+    local terms_count=$(echo "$analyze_result" | jq -r '.terms_count // 0')
+    local output_file=$(echo "$analyze_result" | jq -r '.output_file // ""')
+
+    echo -e "${GREEN}✓${NC} Generated ${BOLD}${domains_count}${NC} domains (${terms_count} terms)"
+
+    if [ -n "$output_file" ]; then
+        echo -e "  ${DIM}Saved to: ${output_file}${NC}"
+    fi
+
+    echo
+    echo -e "${GREEN}${BOLD}✓ Analysis complete${NC}"
+    echo
+    echo -e "${DIM}Run 'aoa quickstart' to seed these domains.${NC}"
+}
+
+# =============================================================================
 # SECTION 80: Help & Documentation
 # =============================================================================
 #
@@ -4952,6 +5176,7 @@ main() {
         env)        cmd_env ;;
         port)       cmd_port "$@" ;;
         quickstart|qs) cmd_quickstart "$@" ;;
+        analyze|az) cmd_analyze "$@" ;;
         learn)      cmd_learn "$@" ;;
         domains|d)  cmd_domains "$@" ;;
         stats)      cmd_stats ;;

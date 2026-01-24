@@ -39,42 +39,26 @@ CWD=$(echo "$input" | jq -r '.cwd // ""' 2>/dev/null)
 # === LINE 1: Environment Context ===
 USERNAME="${USER:-$(whoami)}"
 
-# Get git info if in a git repo
+# Get git branch (Claude Code shows file counts/changes natively, so we skip that)
 GIT_BRANCH=""
-GIT_CHANGES=""
 if [ -n "$CWD" ] && [ -d "$CWD/.git" ] || git -C "$CWD" rev-parse --git-dir >/dev/null 2>&1; then
     GIT_BRANCH=$(git -C "$CWD" symbolic-ref --short HEAD 2>/dev/null || git -C "$CWD" rev-parse --short HEAD 2>/dev/null)
-
-    # Get insertions/deletions from staged + unstaged changes
-    GIT_STAT=$(git -C "$CWD" diff --shortstat HEAD 2>/dev/null)
-    if [ -n "$GIT_STAT" ]; then
-        INSERTIONS=$(echo "$GIT_STAT" | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "0")
-        DELETIONS=$(echo "$GIT_STAT" | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo "0")
-        [ -z "$INSERTIONS" ] && INSERTIONS=0
-        [ -z "$DELETIONS" ] && DELETIONS=0
-        if [ "$INSERTIONS" -gt 0 ] || [ "$DELETIONS" -gt 0 ]; then
-            GIT_CHANGES="${GREEN}+${INSERTIONS}${RESET}/${RED}-${DELETIONS}${RESET}"
-        fi
-    fi
 fi
 
-# Get Claude Code version from CLI
-CC_VERSION=$(claude --version 2>/dev/null | grep -oP '[\d.]+' | head -1 || echo "")
+# Get Claude Code version from filesystem (instant - no process spawn)
+CC_VERSION=$(ls -t "${HOME}/.local/share/claude/versions/" 2>/dev/null | head -1)
 CC_VER_DISPLAY=""
 if [ -n "$CC_VERSION" ]; then
     CC_VER_DISPLAY="${DIM}cc${RESET}${CYAN}${CC_VERSION}${RESET}"
 fi
 
-# Build Line 1
+# Build Line 1 (git changes shown natively by Claude Code)
 LINE1="${MAGENTA}${USERNAME}${RESET}:${CYAN}${CWD}${RESET}"
 if [ -n "$GIT_BRANCH" ]; then
     LINE1="${LINE1} ${DIM}(${RESET}${YELLOW}${GIT_BRANCH}${RESET}${DIM})${RESET}"
 fi
-if [ -n "$GIT_CHANGES" ]; then
-    LINE1="${LINE1} ${GIT_CHANGES}"
-fi
 if [ -n "$CC_VER_DISPLAY" ]; then
-    LINE1="${LINE1} ${DIM}${CC_VER_DISPLAY}${RESET}"
+    LINE1="${LINE1} ${CC_VER_DISPLAY}"
 fi
 
 # Format CWD (show last 2 path components) - for compact display
@@ -236,6 +220,33 @@ INTENT_STATS=$(curl -s --max-time 0.2 "${INTENT_URL}" 2>/dev/null)
 INTENTS=$(echo "$INTENT_STATS" | jq -r '.total_records // 0' 2>/dev/null)
 INTENTS=${INTENTS:-0}
 
+# Get domain stats to detect fresh projects and enrichment status
+DOMAIN_URL="${AOA_URL}/domains/stats"
+if [ -n "$PROJECT_ID" ]; then
+    DOMAIN_URL="${DOMAIN_URL}?project_id=${PROJECT_ID}"
+fi
+DOMAIN_STATS=$(curl -s --max-time 0.2 "${DOMAIN_URL}" 2>/dev/null)
+ANALYZED_DOMAINS=$(echo "$DOMAIN_STATS" | jq -r '.learned_count // 0' 2>/dev/null)
+ANALYZED_DOMAINS=${ANALYZED_DOMAINS:-0}
+TOTAL_DOMAINS=$(echo "$DOMAIN_STATS" | jq -r '.domains // 0' 2>/dev/null)
+TOTAL_DOMAINS=${TOTAL_DOMAINS:-0}
+
+# GL-085: Get enrichment status
+ENRICHED_COUNT=$(echo "$DOMAIN_STATS" | jq -r '.enrichment.enriched // 0' 2>/dev/null)
+ENRICHED_COUNT=${ENRICHED_COUNT:-0}
+ENRICHMENT_TOTAL=$(echo "$DOMAIN_STATS" | jq -r '.enrichment.total // 0' 2>/dev/null)
+ENRICHMENT_TOTAL=${ENRICHMENT_TOTAL:-0}
+ENRICHMENT_COMPLETE=$(echo "$DOMAIN_STATS" | jq -r '.enrichment.complete // false' 2>/dev/null)
+
+# Fresh project: initialized but no domains at all
+IS_FRESH=false
+IS_ENRICHING=false
+if [ "$TOTAL_DOMAINS" -eq 0 ]; then
+    IS_FRESH=true
+elif [ "$ENRICHMENT_TOTAL" -gt 0 ] && [ "$ENRICHMENT_COMPLETE" != "true" ]; then
+    IS_ENRICHING=true
+fi
+
 # === BUILD DISPLAY ===
 SEP="${DIM}│${RESET}"
 
@@ -284,5 +295,14 @@ fi
 # Line 1: Environment context
 echo -e "${LINE1}"
 
-# Line 2: aOa status (clean, no intent tags - those go in `aoa domains`)
-echo -e "${CYAN}${BOLD}⚡ aOa${RESET} ${LIGHT} ${INTENT_DISPLAY} ${SEP} ${MIDDLE} ${SEP} ctx:${CTX_COLOR}${TOTAL_FMT}/${CTX_SIZE_FMT}${RESET} ${DIM}(${PERCENT}%)${RESET} ${SEP} ${MODEL}"
+# Line 2: aOa status
+if [ "$IS_FRESH" = true ]; then
+    # Fresh project - show setup nudge
+    echo -e "${CYAN}${BOLD}⚡ aOa${RESET} ${DIM}initialized${RESET} ${SEP} ctx:${CTX_COLOR}${TOTAL_FMT}/${CTX_SIZE_FMT}${RESET} ${DIM}(${PERCENT}%)${RESET} ${SEP} ${MODEL} ${SEP} ${YELLOW}run: /aoa-start${RESET}"
+elif [ "$IS_ENRICHING" = true ]; then
+    # GL-085: Domains exist but enrichment in progress
+    echo -e "${CYAN}${BOLD}⚡ aOa${RESET} ${YELLOW}enriching...${RESET} ${SEP} ${ENRICHED_COUNT}/${ENRICHMENT_TOTAL} domains ${SEP} ctx:${CTX_COLOR}${TOTAL_FMT}/${CTX_SIZE_FMT}${RESET} ${DIM}(${PERCENT}%)${RESET} ${SEP} ${MODEL}"
+else
+    # Normal operation - show metrics
+    echo -e "${CYAN}${BOLD}⚡ aOa${RESET} ${LIGHT} ${INTENT_DISPLAY} ${SEP} ${MIDDLE} ${SEP} ctx:${CTX_COLOR}${TOTAL_FMT}/${CTX_SIZE_FMT}${RESET} ${DIM}(${PERCENT}%)${RESET} ${SEP} ${MODEL}"
+fi

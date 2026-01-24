@@ -99,6 +99,9 @@ cmd_init() {
 }
 EOFHOME
 
+    # structure.txt - pre-staged tree for /aoa-setup skill
+    aoa tree > "$project_root/.aoa/structure.txt" 2>/dev/null || true
+
     # whitelist.txt - optional repos/URLs for this project
     if [ ! -f "$project_root/.aoa/whitelist.txt" ]; then
         cat > "$project_root/.aoa/whitelist.txt" << 'EOFWHITELIST'
@@ -464,5 +467,91 @@ cmd_projects() {
 
     echo
     echo -e "${DIM}${count} project(s) registered${NC}"
+}
+
+# =============================================================================
+# cmd_analyze - Generate project-specific domains via parallel Haiku analysis
+# GL-083: Replaces per-prompt learning with one-time semantic analysis
+# =============================================================================
+
+cmd_analyze() {
+    echo -e "${CYAN}${BOLD}⚡ aOa Analyze${NC}"
+    echo
+
+    # Check services first
+    if ! curl -s --connect-timeout 2 "${INDEX_URL}/health" > /dev/null 2>&1; then
+        echo -e "${RED}✗ aOa services not running${NC}"
+        echo -e "${DIM}Start with: docker start aoa${NC}"
+        return 1
+    fi
+
+    # Get project info
+    local project_root=$(get_project_root)
+    if [ -z "$project_root" ]; then
+        echo -e "${RED}Not in a git repository.${NC}"
+        return 1
+    fi
+
+    local project_id=$(get_project_id)
+    local project_name=$(get_project_name)
+
+    echo -e "  Project: ${BOLD}${project_name}${NC}"
+    echo -e "  Path:    ${DIM}${project_root}${NC}"
+    echo
+
+    # Phase 1, Task 2: Directory scanning
+    echo -e "  ${DIM}Scanning directories...${NC}"
+
+    # Get top-level directories (excluding hidden, node_modules, etc.)
+    local directories=$(find "$project_root" -maxdepth 2 -type d \
+        ! -path '*/\.*' \
+        ! -path '*/node_modules*' \
+        ! -path '*/__pycache__*' \
+        ! -path '*/venv*' \
+        ! -path '*/.git*' \
+        ! -path '*/dist*' \
+        ! -path '*/build*' \
+        2>/dev/null | head -20)
+
+    local dir_count=$(echo "$directories" | wc -l)
+    echo -e "  Found ${BOLD}${dir_count}${NC} directory clusters"
+    echo
+
+    # Phase 1, Task 3-4: Call analyze API (parallel Haiku happens server-side)
+    echo -e "  ${DIM}Generating project domains via Haiku...${NC}"
+
+    local analyze_result=$(curl -s -X POST "${INDEX_URL}/analyze/project" \
+        -H "Content-Type: application/json" \
+        -d "{\"project_id\": \"${project_id}\", \"project_root\": \"${project_root}\"}" \
+        --max-time 120 2>/dev/null)
+
+    if [ -z "$analyze_result" ]; then
+        echo -e "${RED}✗ Analysis failed (timeout or service error)${NC}"
+        return 1
+    fi
+
+    local success=$(echo "$analyze_result" | jq -r '.success // false')
+
+    if [ "$success" != "true" ]; then
+        local error=$(echo "$analyze_result" | jq -r '.error // "Unknown error"')
+        echo -e "${RED}✗ Analysis failed: ${error}${NC}"
+        return 1
+    fi
+
+    # Phase 1, Task 5-6: Results
+    local domains_count=$(echo "$analyze_result" | jq -r '.domains_count // 0')
+    local terms_count=$(echo "$analyze_result" | jq -r '.terms_count // 0')
+    local output_file=$(echo "$analyze_result" | jq -r '.output_file // ""')
+
+    echo -e "${GREEN}✓${NC} Generated ${BOLD}${domains_count}${NC} domains (${terms_count} terms)"
+
+    if [ -n "$output_file" ]; then
+        echo -e "  ${DIM}Saved to: ${output_file}${NC}"
+    fi
+
+    echo
+    echo -e "${GREEN}${BOLD}✓ Analysis complete${NC}"
+    echo
+    echo -e "${DIM}Run 'aoa quickstart' to seed these domains.${NC}"
 }
 

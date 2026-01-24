@@ -122,7 +122,16 @@ ROUTES = {
     "/domains/unmatched-tags": ("index", "/domains/unmatched-tags"),  # GL-069.6: Get unmatched tags for learning
     "/domains/goal-history": ("index", "/domains/goal-history"),  # GL-078: Get goal history for learning
     "/domains/trigger-learn": ("index", "/domains/trigger-learn"),  # GL-070: Trigger hook-side learning
+    "/analyze/project": ("index", "/analyze/project"),  # GL-083: One-time project analysis
     "/symbol/lookup": ("index", "/symbol/lookup"),  # GL-059.2: Resolve file:line to functions
+
+    # GL-085: Lazy domain enrichment routes
+    "/domains/init-skeleton": ("index", "/domains/init-skeleton"),  # Initialize skeleton domains
+    "/domains/unenriched": ("index", "/domains/unenriched"),  # Get next domain needing enrichment
+    "/domains/enrich": ("index", "/domains/enrich"),  # Add keywords to domain
+    "/domains/unenrich": ("index", "/domains/unenrich"),  # Mark domain for rebuild
+    "/domains/enrichment-status": ("index", "/domains/enrichment-status"),  # Get enrichment progress
+    "/domains/enrichment-prompt": ("index", "/domains/enrichment-prompt"),  # Get Haiku prompt for enrichment
 
     # Status service routes
     "/status": ("status", "/status"),

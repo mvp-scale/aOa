@@ -119,7 +119,10 @@ except ImportError:
 # ============================================================================
 
 def _load_pattern_library():
-    """Load semantic and domain pattern configs from universal-domains.json (v2).
+    """Load semantic and domain pattern configs from project-domains.json.
+
+    GL-084: Universal domains removed. Only project-specific domains are used.
+    Generated via /aoa-setup skill.
 
     v2 Structure: @domain -> semantic_term -> matches[]
 
@@ -134,25 +137,25 @@ def _load_pattern_library():
     term_to_domain = {}     # semantic_term -> @domain
     match_to_term = {}      # match -> semantic_term
 
-    # Find config directory
-    config_paths = [
-        Path('/app/config'),  # Docker
-        Path(__file__).parent.parent.parent / 'config',  # Local dev
-        Path.home() / '.aoa' / 'config',  # User config
+    # GL-084: Only project-domains.json - no universal fallback
+    # Generated via /aoa-setup or aoa analyze
+    project_paths = [
+        Path(os.environ.get('CODEBASE_ROOT', '.')) / '.aoa' / 'project-domains.json',
+        Path('/app/.aoa/project-domains.json'),  # Docker mounted
     ]
 
-    universal_file = None
-    for config_dir in config_paths:
-        candidate = config_dir / 'universal-domains.json'
-        if candidate.exists():
-            universal_file = candidate
+    domains_file = None
+    for path in project_paths:
+        if path.exists():
+            domains_file = path
             break
 
-    if not universal_file:
+    if not domains_file:
+        # No project domains yet - run /aoa-setup to generate
         return semantic_patterns, domain_keywords
 
     try:
-        data = json.loads(universal_file.read_text())
+        data = json.loads(domains_file.read_text())
         # Handle both array format (v2) and object format (with _meta)
         domains = data if isinstance(data, list) else data.get('domains', [])
 
@@ -324,20 +327,19 @@ class AhoCorasickMatcher:
         Get tags that appear frequently (density >= threshold).
 
         These represent what the code IS ABOUT, not just what it mentions.
-        Returns list of tags sorted by frequency (highest first).
+        Returns list of #term tags sorted by frequency (highest first).
+
+        GL-084: Returns #term_name, NOT @domain. Domains are handled separately.
         """
         density = self.density_by_category(text)
         dense = [(cat, count) for cat, count in density.items() if count >= threshold]
         dense.sort(key=lambda x: -x[1])
 
-        # Convert categories back to tags
+        # Convert categories to #term tags (not @domain)
         tags = []
         for cat, _ in dense:
-            # Find the tag for this category
-            if cat in SEMANTIC_PATTERNS:
-                tags.append(SEMANTIC_PATTERNS[cat].get('tag', f'#{cat}'))
-            else:
-                tags.append(f'#{cat}')
+            # cat is the term_name, return as #term
+            tags.append(f'#{cat}')
 
         return tags
 
@@ -498,31 +500,53 @@ def enrich_result(
             if file_tags_cache is not None:
                 file_tags_cache[file_path] = file_tags
 
-    # GL-071.6: Symbol-level domain lookup (O(1) Redis)
-    # Check PARENT first (route/class level), then fall back to symbol
+    # GL-084: Domain/Term hierarchy
+    # - @domain (magenta): ONLY on symbol definition line (line == start_line)
+    # - #term (cyan): On lines INSIDE symbol where keywords match content
+    #
+    # This creates the visual hierarchy:
+    #   file.py:login()[10-45]:10 def login(user):  @authentication
+    #   file.py:login()[10-45]:25   token = jwt.encode()  #token_lifecycle
+
     domain = None
+    term_tags = []
+    is_definition_line = start_line is not None and line_num == start_line
+
     if intent_index and project_id:
-        # Priority 1: Parent-level domain (e.g., route decorator, class)
-        if parent_name:
-            parent_domains = intent_index.domains_for_symbol(file_path, parent_name, project_id)
-            if parent_domains:
-                domain = parent_domains[0]
-        # Priority 2: Symbol-level domain (fallback)
-        if not domain and symbol_name:
+        # Look up domain for the enclosing symbol
+        if symbol_name:
             symbol_domains = intent_index.domains_for_symbol(file_path, symbol_name, project_id)
             if symbol_domains:
                 domain = symbol_domains[0]
+        # Fallback to parent domain
+        if not domain and parent_name:
+            parent_domains = intent_index.domains_for_symbol(file_path, parent_name, project_id)
+            if parent_domains:
+                domain = parent_domains[0]
 
-    # GL-053: If no tags from intent or outline, use AC matching on content
-    all_tags = file_tags + symbol_tags
+    # GL-084: Match keywords from project-domains to get #term tags
+    # Only for lines INSIDE a symbol (not the definition line)
+    # Uses WORD BOUNDARY matching - "start" won't match inside "quickstart"
+    if not is_definition_line and SEMANTIC_PATTERNS:
+        import re
+        # Tokenize content into words (split on non-alphanumeric, keep underscores)
+        content_tokens = set(re.findall(r'[a-z][a-z0-9_]*', content.lower()))
+        for term_name, term_data in SEMANTIC_PATTERNS.items():
+            patterns = term_data.get('patterns', set())
+            # Check if any keyword is an exact token match
+            if patterns & content_tokens:  # Set intersection
+                term_tags.append(f"#{term_name}")
+        term_tags = term_tags[:3]  # Limit to 3 terms per line
+
+    # GL-053: Fallback to AC matching if no tags
+    all_tags = file_tags + symbol_tags + term_tags
     if not all_tags and AHOCORASICK_AVAILABLE:
         try:
-            # Use content + symbol name for tag inference
             text_for_tags = content
             if symbol_name:
                 text_for_tags = f"{symbol_name} {content}"
             ac_tags = AC_MATCHER.get_dense_tags(text_for_tags, threshold=1)
-            all_tags = ac_tags[:5]  # Limit to 5 tags
+            all_tags = ac_tags[:5]
         except Exception:
             pass
 
@@ -530,12 +554,12 @@ def enrich_result(
     result = {
         'file': file_path,
         'line': line_num,
-        'content': content.strip()[:200],  # Normalized content key
+        'content': content.strip()[:200],
         'tags': all_tags
     }
 
-    # Add domain if found (E3: will be displayed as @domain in output)
-    if domain:
+    # GL-084: Only show @domain on definition lines
+    if domain and is_definition_line:
         result['domain'] = domain
 
     # Add symbol info if found (all or nothing - consistent shape)
@@ -3188,11 +3212,22 @@ def get_outline():
 
 @app.route('/outline/enriched', methods=['POST'])
 def mark_enriched():
-    """Store semantic compression tags with counting (idempotent, tracks confidence)."""
+    """Store semantic compression tags with counting (idempotent, tracks confidence).
+
+    POST body: {
+        file: string,
+        project_id: string,
+        symbols: [{name, kind, line, end_line, tags, domains?}]
+    }
+
+    Tags are stored as:
+    - #term tags: tag_count/tag_meta keys (for counting/confidence)
+    - @domain tags: aoa:{proj}:symbol_domains:{file}:{symbol} (for lookup in enrich_result)
+    """
     data = request.json
     file_path = data.get('file')
     project_id = data.get('project_id')
-    symbols = data.get('symbols', [])  # List of {name, kind, line, end_line, tags}
+    symbols = data.get('symbols', [])  # List of {name, kind, line, end_line, tags, domains?}
 
     if not file_path:
         return jsonify({'success': False, 'error': 'Missing file parameter'}), 400
@@ -3203,6 +3238,7 @@ def mark_enriched():
 
     tags_indexed = 0
     tags_incremented = 0
+    domains_assigned = 0
     mtime = int(time.time())
     project_key = project_id or 'default'
 
@@ -3217,8 +3253,26 @@ def mark_enriched():
             line = sym.get('line', 0)
             end_line = sym.get('end_line', line)
             tags = sym.get('tags', [])
+            domains = sym.get('domains', [])  # GL-084: Domain tags for symbol_domains storage
+
+            # GL-084: Store @domain tags in symbol_domains for enrich_result lookup
+            # Key format: aoa:{proj}:symbol_domains:{file}:{symbol}
+            if domains:
+                symbol_domains_key = f"aoa:{project_key}:symbol_domains:{file_path}:{sym_name}"
+                for domain in domains:
+                    domain_tag = domain if domain.startswith('@') else f"@{domain}"
+                    r.sadd(symbol_domains_key, domain_tag)
+                    domains_assigned += 1
+
+                # Track which symbols exist in this file
+                file_symbols_key = f"aoa:{project_key}:file_symbols:{file_path}"
+                r.sadd(file_symbols_key, sym_name)
 
             for tag in tags:
+                # Skip @domain tags from regular tag storage (already handled above)
+                if tag.startswith('@'):
+                    continue
+
                 # Key: tag_count:{project_id}:{file}:{symbol}:{tag}
                 count_key = f"tag_count:{project_key}:{file_path}:{sym_name}:{tag}"
 
@@ -3257,7 +3311,8 @@ def mark_enriched():
         enrich_key = f"enriched:{project_key}:{file_path}"
         r.hset(enrich_key, mapping={
             'enriched_at': mtime,
-            'tags_count': tags_indexed + tags_incremented
+            'tags_count': tags_indexed + tags_incremented,
+            'domains_count': domains_assigned
         })
 
     except Exception:
@@ -3289,6 +3344,7 @@ def mark_enriched():
         'file': file_path,
         'tags_indexed': tags_indexed,
         'tags_incremented': tags_incremented,
+        'domains_assigned': domains_assigned,
         'symbols_processed': len(symbols),
         'enriched_at': mtime
     })
@@ -3716,12 +3772,19 @@ def learned_patterns():
 
 @app.route('/patterns/infer', methods=['POST'])
 def infer_patterns():
-    """Infer tags from symbol names using the pattern library.
+    """Infer tags from symbol names using project-domains.json (v2 format).
 
     POST body: {"symbols": [{"name": "getUserById", "kind": "function"}, ...]}
-    Returns: {"tags": [["#read", "#user"], ...]}
+    Returns: {"tags": [["#term_name", "@domain"], ...], "domains": ["@domain", ...]}
 
-    Uses the same pattern library as the Python hooks (semantic-patterns.json + domain-patterns.json).
+    v2 format matching:
+    - Matches KEYWORDS from terms against symbol tokens
+    - Returns #term_name when keyword matches
+    - Returns @domain_name at parent/container level
+
+    Hierarchy:
+    - @domain: Applied to parent containers (class, module, route)
+    - #term: Applied to specific symbols where keywords match
     """
     import re
     from pathlib import Path
@@ -3730,113 +3793,109 @@ def infer_patterns():
     symbols = data.get('symbols', [])
 
     if not symbols:
-        return jsonify({'tags': []})
+        return jsonify({'tags': [], 'domains': []})
 
-    # Load pattern configs (cached after first call)
-    config_paths = [
-        Path('/app/config'),  # Docker mount
-        Path(__file__).parent.parent / 'config',  # Local dev
-        Path('/codebase/config'),  # Alternative
+    # Load project-domains.json (v2 format)
+    # GL-084: Keywords in terms enable semantic matching
+    project_paths = [
+        Path(os.environ.get('CODEBASE_ROOT', '.')) / '.aoa' / 'project-domains.json',
+        Path('/app/.aoa/project-domains.json'),  # Docker mounted
     ]
 
-    semantic_patterns = {}
-    domain_keywords = {}
-    class_suffixes = {}
+    # Build lookup tables from v2 format:
+    # keyword -> term_name (for #term tagging)
+    # keyword -> domain_name (for @domain tagging)
+    # term_name -> domain_name (for reverse lookup)
+    keyword_to_term = {}      # "grep" -> "grep_operations"
+    keyword_to_domain = {}    # "grep" -> "@search_engine"
+    term_to_domain = {}       # "grep_operations" -> "@search_engine"
 
-    for config_dir in config_paths:
-        semantic_file = config_dir / 'semantic-patterns.json'
-        domain_file = config_dir / 'domain-patterns.json'
-
-        if semantic_file.exists():
+    for path in project_paths:
+        if path.exists():
             try:
-                import json
-                sdata = json.loads(semantic_file.read_text())
-                for cat_name, cat_data in sdata.get('categories', {}).items():
-                    patterns = {p.lower() for p in cat_data.get('patterns', [])}
-                    semantic_patterns[cat_name] = {
-                        'patterns': patterns,
-                        'tag': cat_data.get('tag', f'#{cat_name}'),
-                        'priority': cat_data.get('priority', 3)
-                    }
-                kind_patterns = sdata.get('kind_patterns', {}).get('patterns', {})
-                class_suffixes.update(kind_patterns.get('class', {}).get('suffix_patterns', {}))
+                domains_data = json.loads(path.read_text())
+                # Handle array format (v2)
+                domains = domains_data if isinstance(domains_data, list) else domains_data.get('domains', [])
+
+                for domain in domains:
+                    domain_name = domain.get('name', '')  # e.g., "@search_engine"
+                    if not domain_name.startswith('@'):
+                        domain_name = f"@{domain_name}"
+
+                    terms = domain.get('terms', {})
+                    if isinstance(terms, dict):
+                        for term_name, keywords in terms.items():
+                            term_to_domain[term_name] = domain_name
+                            if isinstance(keywords, list):
+                                for kw in keywords:
+                                    kw_lower = kw.lower()
+                                    keyword_to_term[kw_lower] = term_name
+                                    keyword_to_domain[kw_lower] = domain_name
+                break  # Found and loaded
             except Exception:
                 pass
-
-        if domain_file.exists():
-            try:
-                import json
-                ddata = json.loads(domain_file.read_text())
-                for domain_name, domain_data in ddata.get('domains', {}).items():
-                    tag = domain_data.get('tag', f'#{domain_name}')
-                    for keyword in domain_data.get('keywords', []):
-                        domain_keywords[keyword.lower()] = tag
-                for suffix, tag in ddata.get('technical_suffixes', {}).items():
-                    if suffix != 'description':
-                        class_suffixes[suffix] = tag
-            except Exception:
-                pass
-
-        if semantic_patterns or domain_keywords:
-            break
 
     def tokenize(text):
+        """Split symbol name into matchable tokens."""
         tokens = set()
+        # Split on common separators
         parts = re.split(r'[/_\-.\s]+', text)
         for part in parts:
             if not part:
                 continue
             tokens.add(part.lower())
+            # Also split camelCase
             camel_parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+', part)
             for cp in camel_parts:
-                tokens.add(cp.lower())
+                if len(cp) >= 2:  # Skip single chars
+                    tokens.add(cp.lower())
         return tokens
 
-    def match_semantic(tokens):
-        tags = set()
-        for cat_data in semantic_patterns.values():
-            for token in tokens:
-                for pattern in cat_data['patterns']:
-                    if token.startswith(pattern) or token == pattern:
-                        tags.add(cat_data['tag'])
-                        break
-        return tags
+    def match_keywords(tokens, full_text):
+        """Match tokens against keyword library using EXACT token matching.
 
-    def match_domain(tokens, full_text):
-        tags = set()
-        full_lower = full_text.lower()
-        for keyword, tag in domain_keywords.items():
-            if keyword in tokens or keyword in full_lower:
-                tags.add(tag)
-        return tags
+        Word boundary matching - "start" won't match inside "quickstart".
 
-    def match_suffix(name):
-        tags = set()
-        basename = name.split('.')[-1] if '.' in name else name
-        for suffix, tag in class_suffixes.items():
-            if basename.lower().endswith(suffix.lower()):
-                tags.add(tag)
-                break
-        return tags
+        Returns:
+            terms: set of #term_name matches
+            domains: set of @domain matches
+        """
+        terms = set()
+        domains = set()
+
+        # Only use exact token matches (no substring matching)
+        for token in tokens:
+            if token in keyword_to_term:
+                terms.add(f"#{keyword_to_term[token]}")
+                domains.add(keyword_to_domain[token])
+
+        return terms, domains
 
     # Process each symbol
     result_tags = []
+    result_domains = []
+
     for sym in symbols:
         name = sym.get('name', '')
-        sym.get('kind', '')
+        kind = sym.get('kind', '')
 
-        tags = set()
         tokens = tokenize(name)
+        terms, domains = match_keywords(tokens, name)
 
-        # Match patterns
-        tags.update(match_semantic(tokens))
-        tags.update(match_domain(tokens, name))
-        tags.update(match_suffix(name))
+        # GL-084: Separation of concerns
+        # - tags: ONLY #term tags (for lines inside symbols)
+        # - domains: @domain tags (stored separately in symbol_domains)
+        #
+        # At display time:
+        # - Definition line shows @domain (from symbol_domains lookup)
+        # - Inner lines show #term (from tags array or content matching)
+        result_tags.append(list(terms)[:5])  # Always #terms, never @domains
+        result_domains.append(list(domains)[:2])  # For symbol_domains storage
 
-        # Limit to 5 tags
-        result_tags.append(list(tags)[:5])
-
-    return jsonify({'tags': result_tags})
+    return jsonify({
+        'tags': result_tags,
+        'domains': result_domains  # Stored in symbol_domains Redis keys
+    })
 
 
 # ============================================================================
@@ -3924,28 +3983,7 @@ def list_projects():
 # Domain Learning Endpoints (GL-053)
 # ============================================================================
 
-def _load_universal_domains():
-    """Load universal domain definitions from config.
-
-    Supports both v2 format (terms as dict) and flat format (terms as list).
-    Returns raw domain data for seed_domains() to process.
-    """
-    config_paths = [
-        Path('/app/config/universal-domains.json'),  # Docker
-        Path(__file__).parent.parent.parent / 'config' / 'universal-domains.json',  # Local
-    ]
-    for path in config_paths:
-        if path.exists():
-            try:
-                with open(path) as f:
-                    data = json.load(f)
-                    # Handle both array format (v2) and object format (with _meta)
-                    if isinstance(data, list):
-                        return data
-                    return data.get('domains', [])
-            except (json.JSONDecodeError, IOError):
-                pass
-    return []
+# GL-084: _load_universal_domains() removed - use project-domains.json via /aoa-setup
 
 
 # GL-053 Phase C: Continuous domain learning
@@ -3988,145 +4026,380 @@ def _trigger_domain_learning_if_needed(project_id: str):
     try:
         learner = DomainLearner(project_id)
 
-        # GL-062: Fire-and-forget learning - always increment, never block
-        # The pending flag was causing permanent blocks when Claude didn't complete the loop
+        # GL-083: Simplified - just track prompt count for rebalance
         prompt_count = learner.increment_prompt_count()
 
-        # Always increment tune count (tuning happens server-side, not via hook)
-        tune_count = learner.increment_tune_count()
-
-        # Learning trigger (every 10 prompts)
-        # Fire-and-forget: set pending, reset count, trigger - don't wait for completion
-        if learner.should_learn():
-            learner.set_learning_pending()
-            learner.reset_prompt_count()
-            thread = threading.Thread(
-                target=_do_domain_learning,
-                args=(project_id,),
-                daemon=True
-            )
-            thread.start()
-            print(f"[DomainLearning] Triggered for {project_id} (count={prompt_count})", flush=True)
-
-        # Tuning trigger (every 100 intents) - GL-055
-        if learner.should_tune() and not learner.is_tuning_pending():
-            thread = threading.Thread(
-                target=_do_domain_tune,
-                args=(project_id,),
-                daemon=True
-            )
-            thread.start()
-            print(f"[DomainTune] Triggered for {project_id} (intents={tune_count})", flush=True)
+        # GL-083: Rebalance trigger (every 25 prompts) - replaces per-prompt learning
+        if learner.should_rebalance() and prompt_count > 0:
+            rebalance_result = learner.rebalance_keywords()
+            if rebalance_result.get('added', 0) > 0:
+                print(f"[Rebalance] {project_id}: +{rebalance_result['added']} keywords assigned", flush=True)
 
     except Exception as e:
-        print(f"[DomainLearning] Trigger error: {e}", flush=True)
+        print(f"[Rebalance] Trigger error: {e}", flush=True)
 
 
-# GL-055: Background domain tune
-_tune_in_progress = set()
+# GL-083: Removed _do_domain_tune - tuning now handled by rebalance_keywords()
 
+# =============================================================================
+# Project Analysis (GL-083)
+# =============================================================================
 
-def _do_domain_tune(project_id: str):
+@app.route('/analyze/project', methods=['POST'])
+def analyze_project():
     """
-    Domain tune threshold reached - set pending flag for hook.
+    Analyze project via parallel Haiku to generate project-specific domains.
 
-    NOTE: Actual tuning happens via HOOK MODE - Claude handles Haiku calls
-    in the conversation context. This function just sets the tuning_pending flag.
-    The hook checks tuning_pending and prompts Claude to regenerate domains.
-    """
-    if not DOMAINS_AVAILABLE:
-        return
+    GL-083: One-time analysis replaces per-prompt learning.
 
-    if project_id in _tune_in_progress:
-        return
+    POST body: {
+        "project_id": "uuid",
+        "project_root": "/path/to/project"
+    }
 
-    _tune_in_progress.add(project_id)
-    try:
-        learner = DomainLearner(project_id)
-        learner.set_tuning_pending()
-        print(f"[DomainTune] Threshold reached for {project_id}, tuning_pending set (hook mode)", flush=True)
-    except Exception as e:
-        print(f"[DomainTune] Error: {e}", flush=True)
-    finally:
-        _tune_in_progress.discard(project_id)
-
-
-@app.route('/domains/seed', methods=['POST'])
-def seed_domains():
-    """
-    Seed Redis with universal domains for a project_id.
-
-    Called by quickstart to provide instant domain coverage.
-    POST body: {"project_id": "project_id-id"}
+    Returns: {
+        "success": bool,
+        "domains_count": int,
+        "terms_count": int,
+        "output_file": str (if saved)
+    }
     """
     if not DOMAINS_AVAILABLE:
         return jsonify({'error': 'Domain learning module not available'}), 500
 
     data = request.json or {}
     project_id = data.get('project_id') or request.args.get('project_id')
+    project_root = data.get('project_root')
 
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    if not project_root:
+        return jsonify({'error': 'Missing project_root parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+
+        # Check if Anthropic client is available
+        if not learner.anthropic_client:
+            return jsonify({
+                'error': 'Anthropic API key not configured. Set AOA_ANTHROPIC_KEY environment variable.',
+                'success': False
+            }), 400
+
+        # Get indexed files for this project
+        project_files = []
+        if project_id in _project_caches:
+            cache = _project_caches[project_id]
+            project_files = list(cache.keys())
+
+        # Run parallel analysis
+        result = learner.analyze_project(project_root, project_files)
+
+        if not result.get('success'):
+            return jsonify(result), 400
+
+        # Save to project-domains.json in config directory
+        import os
+        config_dir = os.path.join(project_root, '.aoa')
+        os.makedirs(config_dir, exist_ok=True)
+        output_file = os.path.join(config_dir, 'project-domains.json')
+
+        if learner.save_project_domains(result['domains'], output_file):
+            result['output_file'] = output_file
+
+        # Also seed these domains into Redis for immediate use
+        for d in result['domains']:
+            domain = Domain(
+                name=d['name'],
+                description=d.get('description', ''),
+                confidence=0.9,
+                terms=d.get('terms', [])
+            )
+            learner.add_domain(domain, source="analyzed")
+
+        return jsonify({
+            'success': True,
+            'domains_count': result['domains_count'],
+            'terms_count': result['terms_count'],
+            'clusters_analyzed': result.get('clusters_analyzed', 0),
+            'output_file': result.get('output_file', ''),
+            'project_id': project_id
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@app.route('/domains/seed', methods=['POST'])
+def seed_domains():
+    """
+    DEPRECATED: Universal domain seeding removed in GL-084.
+
+    Use /aoa-setup skill to generate project-specific domains instead.
+    """
+    return jsonify({
+        'error': 'Universal domain seeding removed. Use /aoa-setup to generate project-specific domains.',
+        'success': False,
+        'deprecated': True
+    }), 410  # 410 Gone
+
+
+# =========================================================================
+# GL-085: Lazy Domain Enrichment Endpoints
+# =========================================================================
+
+@app.route('/domains/init-skeleton', methods=['POST'])
+def domains_init_skeleton():
+    """
+    Initialize domains from skeleton (names + terms only, no keywords).
+
+    GL-085: Called by /aoa-start skill. Sets enriched=false on all domains.
+    Keywords are added lazily via hook-triggered enrichment.
+
+    POST body: {
+        "project_id": "xxx",
+        "domains": [
+            {"name": "@domain", "description": "...", "terms": ["term1", "term2"]}
+        ]
+    }
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+    domains = data.get('domains', [])
+
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    if not domains:
+        return jsonify({'error': 'No domains provided'}), 400
+
+    if len(domains) > 40:
+        return jsonify({'error': f'Too many domains ({len(domains)}), max 40'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+        result = learner.init_skeleton(domains)
+        return jsonify({
+            'success': True,
+            'project_id': project_id,
+            **result
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/unenriched')
+def domains_unenriched():
+    """
+    Get one domain that needs keyword enrichment.
+
+    GL-085: Called by hook to find next domain to enrich.
+
+    Returns: {"domain": {"name": "@x", "description": "...", "terms": [...]}}
+    Or: {"domain": null} if all enriched
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    project_id = request.args.get('project_id')
     if not project_id:
         return jsonify({'error': 'Missing project_id parameter'}), 400
 
     try:
         learner = DomainLearner(project_id)
+        domain = learner.get_unenriched_domain()
+        status = learner.get_enrichment_status()
+        return jsonify({
+            'domain': domain,
+            'enrichment': status
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-        # Check if already seeded
-        existing = learner.get_all_domains()
-        if existing:
-            return jsonify({
-                'success': True,
-                'message': 'Already seeded',
-                'domains': len(existing),
-                'project_id': project_id
-            })
 
-        # Load universal domains
-        universal = _load_universal_domains()
-        if not universal:
-            return jsonify({'error': 'Universal domains config not found'}), 500
+@app.route('/domains/enrich', methods=['POST'])
+def domains_enrich():
+    """
+    Add keywords to a domain's terms and mark as enriched.
 
-        # Seed each domain (GL-059.1: mark as seeded)
-        # GL-074: Support both v2 (terms as dict) and flat (terms as list)
-        seeded = 0
-        total_terms = 0
-        total_matches = 0
-        for d in universal:
-            terms_data = d.get('terms', [])
+    GL-085: Called after Haiku generates keywords for a domain.
 
-            # v2 format: terms is dict of semantic_term -> matches[]
-            # Flatten to list of all matches for Domain storage
-            if isinstance(terms_data, dict):
-                all_matches = []
-                for semantic_term, matches in terms_data.items():
-                    all_matches.extend(matches)
-                terms_list = all_matches
-                total_matches += len(all_matches)
-            else:
-                # Flat format: terms is already a list
-                terms_list = terms_data
+    POST body: {
+        "project_id": "xxx",
+        "domain": "@domain_name",
+        "term_keywords": {
+            "term1": ["kw1", "kw2", ...],
+            "term2": ["kw3", "kw4", ...]
+        }
+    }
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
 
-            domain = Domain(
-                name=d['name'],
-                description=d.get('description', ''),
-                confidence=float(d.get('confidence', 0.8)),
-                terms=terms_list
-            )
-            learner.add_domain(domain, source="seeded")
-            seeded += 1
-            total_terms += len(domain.terms)
+    data = request.json or {}
+    project_id = data.get('project_id')
+    domain_name = data.get('domain')
+    term_keywords = data.get('term_keywords', {})
 
-        # Set initial auto-tune timestamp
-        learner.set_last_autotune()
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    if not domain_name:
+        return jsonify({'error': 'Missing domain parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+        result = learner.enrich_domain(domain_name, term_keywords)
+        status = learner.get_enrichment_status()
+
+        # GL-085: Auto-tag files matching the new keywords
+        files_tagged = 0
+        symbols_tagged = 0
+        all_keywords = []
+        for keywords in term_keywords.values():
+            all_keywords.extend(keywords)
+
+        if all_keywords and intent_index and intent_index.redis:
+            try:
+                # Get the local index
+                idx = manager.get_local(project_id)
+                if idx:
+                    # Search for each keyword and collect matching files/symbols
+                    matched_locations = {}  # file -> set of symbols
+
+                    for keyword in all_keywords[:50]:  # Limit to avoid slowdown
+                        # Search symbol index for this keyword
+                        matches = idx.search(keyword, mode='recent', limit=100)
+                        for match in matches:
+                            file_path = match.get('file', '')
+                            symbol = match.get('name', '')
+                            if file_path and symbol:
+                                if file_path not in matched_locations:
+                                    matched_locations[file_path] = set()
+                                matched_locations[file_path].add(symbol)
+
+                    # Tag the matched files/symbols
+                    proj = intent_index._project_key(project_id)
+                    r = intent_index.redis.client if hasattr(intent_index.redis, 'client') else intent_index.redis
+                    domain_tag = domain_name if domain_name.startswith('@') else f"@{domain_name}"
+
+                    for file_path, symbols in matched_locations.items():
+                        # Tag file
+                        file_tags_key = f"aoa:{proj}:file_tags:{file_path}"
+                        r.sadd(file_tags_key, domain_tag)
+                        files_tagged += 1
+
+                        # Tag symbols
+                        for symbol in symbols:
+                            symbol_key = f"aoa:{proj}:symbol_domains:{file_path}:{symbol}"
+                            r.sadd(symbol_key, domain_tag)
+                            symbols_tagged += 1
+
+                        # Track symbols in file
+                        file_symbols_key = f"aoa:{proj}:file_symbols:{file_path}"
+                        r.sadd(file_symbols_key, *symbols)
+
+            except Exception:
+                pass  # Don't fail enrichment if tagging fails
 
         return jsonify({
             'success': True,
-            'message': f'Seeded {seeded} domains with {total_terms} terms',
-            'domains': seeded,
-            'terms': total_terms,
-            'project_id': project_id
+            'project_id': project_id,
+            **result,
+            'enrichment': status,
+            'files_tagged': files_tagged,
+            'symbols_tagged': symbols_tagged
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
+
+@app.route('/domains/enrichment-status')
+def domains_enrichment_status():
+    """
+    Get enrichment progress for status line display.
+
+    GL-085: Shows X/Y domains enriched.
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    project_id = request.args.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+        status = learner.get_enrichment_status()
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/unenrich', methods=['POST'])
+def domains_unenrich():
+    """
+    Mark a domain as unenriched (for refresh/rebuild).
+
+    POST body: {"project_id": "xxx", "domain": "@domain_name"}
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+    domain_name = data.get('domain')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+    if not domain_name:
+        return jsonify({'error': 'Missing domain parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+        learner.set_domain_enriched(domain_name, False)
+        return jsonify({'success': True, 'domain': domain_name, 'enriched': False})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/enrichment-prompt')
+def domains_enrichment_prompt():
+    """
+    Get the Haiku prompt for enriching one domain.
+
+    GL-085: Returns prompt text for the hook to pass to Haiku Task.
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    project_id = request.args.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+        domain = learner.get_unenriched_domain()
+
+        if not domain:
+            return jsonify({
+                'prompt': None,
+                'domain': None,
+                'message': 'All domains enriched'
+            })
+
+        prompt = learner.get_enrichment_prompt(domain)
+        return jsonify({
+            'prompt': prompt,
+            'domain': domain['name'],
+            'terms': domain['terms']
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -4144,6 +4417,9 @@ def domains_stats():
     try:
         learner = DomainLearner(project_id)
         stats = learner.get_stats()
+        # GL-085: Add enrichment status
+        enrichment = learner.get_enrichment_status()
+        stats['enrichment'] = enrichment
         return jsonify(stats)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -4159,6 +4435,7 @@ def domains_list():
     limit = int(request.args.get('limit', 10))
     include_terms = request.args.get('include_terms', '').lower() == 'true'
     include_created = request.args.get('include_created', '').lower() == 'true'
+    include_keywords = request.args.get('include_keywords', '').lower() == 'true'
 
     if not project_id:
         return jsonify({'error': 'Missing project_id parameter'}), 400
@@ -4173,17 +4450,34 @@ def domains_list():
         # Format for output
         result = []
         for d in domains_with_meta[:limit]:
+            # GL-085: Check enrichment status
+            enriched = learner.is_domain_enriched(d['name'])
+
             entry = {
                 'name': d['name'],
+                'description': d.get('description', ''),
                 'hits': d.get('hits', 0),
                 'term_count': len(d.get('terms', [])),
                 'confidence': d.get('confidence', 0),
                 # GL-059.1: Source and state
                 'source': d.get('source', 'seeded'),
                 'state': d.get('state', 'active'),
+                # GL-085: Enrichment status
+                'enriched': enriched,
             }
             if include_terms:
-                entry['terms'] = list(d.get('terms', []))[:10]  # Limit to 10 terms
+                terms = list(d.get('terms', []))[:10]  # Limit to 10 terms
+                entry['terms'] = terms
+
+                # GL-085: Optionally include keywords for each term
+                if include_keywords:
+                    term_keywords = {}
+                    for term in terms:
+                        keywords = learner.get_term_keywords(term)
+                        if keywords:
+                            term_keywords[term] = list(keywords)[:10]
+                    entry['term_keywords'] = term_keywords
+
             if include_created:
                 entry['created'] = d.get('created', 0)
             result.append(entry)
@@ -4531,6 +4825,7 @@ def domains_add():
     data = request.json or {}
     project_id = data.get('project_id')
     domains_data = data.get('domains', [])
+    source = data.get('source', 'learned')  # GL-083: 'analyzed' allows bulk loading
 
     if not project_id:
         return jsonify({'error': 'Missing project_id parameter'}), 400
@@ -4539,9 +4834,11 @@ def domains_add():
     if not isinstance(domains_data, list):
         return jsonify({'error': 'domains must be an array'}), 400
 
-    # Validation: sanity check on count (1-5 domains per learning cycle)
-    if len(domains_data) > 5:
-        return jsonify({'error': f'Too many domains ({len(domains_data)}), max 5 per cycle'}), 400
+    # Validation: sanity check on count
+    # GL-083: Allow more domains for 'analyzed' source (from aoa analyze)
+    max_domains = 30 if source == 'analyzed' else 5
+    if len(domains_data) > max_domains:
+        return jsonify({'error': f'Too many domains ({len(domains_data)}), max {max_domains}'}), 400
 
     if len(domains_data) == 0:
         return jsonify({'error': 'No domains provided'}), 400
@@ -4574,15 +4871,22 @@ def domains_add():
             if not name.startswith('@'):
                 name = f"@{name}"
 
-            # Validation: terms must be a list of short strings
+            # Validation: terms must be a list or dict (v2 format)
             raw_terms = d.get('terms', [])
-            if not isinstance(raw_terms, list):
-                skipped.append(f"terms not a list for {name}")
+
+            # GL-084: v2 format - terms is dict of {term_name: [keywords]}
+            # Store TERM NAMES as the terms (not flattened keywords)
+            # Keywords are used for matching in _load_pattern_library()
+            if isinstance(raw_terms, dict):
+                # Extract term names (keys) as the terms to store
+                raw_terms = list(raw_terms.keys())
+            elif not isinstance(raw_terms, list):
+                skipped.append(f"terms not a list or dict for {name}")
                 continue
 
             # Filter terms: must be strings, 2-30 chars, no spaces (single words)
             valid_terms = []
-            for t in raw_terms[:10]:  # Max 10 terms per domain
+            for t in raw_terms[:50]:  # Allow more terms from v2 format (was 10)
                 if isinstance(t, str) and 2 <= len(t) <= 30 and ' ' not in t:
                     valid_terms.append(t.lower())
 
@@ -4597,7 +4901,7 @@ def domains_add():
                 confidence=min(1.0, max(0.0, float(d.get('confidence', 0.8)))),
                 terms=valid_terms
             )
-            learner.add_domain(domain)
+            learner.add_domain(domain, source=source)  # GL-083: Pass through source
             added.append(name)
             terms_added.extend(valid_terms)
 

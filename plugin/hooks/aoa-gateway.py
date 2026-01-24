@@ -3,10 +3,12 @@
 aOa Gateway - Single entry point for all Claude Code hooks.
 
 Events:
-  --event=prompt   UserPromptSubmit: status, predictions, learning trigger
-  --event=tool     PostToolUse: intent capture, domain counter
-  --event=enforce  PreToolUse: redirect Grep/Glob to aoa
-  --event=prefetch PreToolUse: prefetch related files
+  --event=prompt   UserPromptSubmit: status line, predictions
+  --event=tool     PostToolUse: intent capture
+  --event=enforce  PostToolUse: soft guidance for Grep/Glob
+  --event=prefetch PreToolUse: prefetch related files (TODO)
+
+GL-083: Simplified - removed per-prompt learning/tagging (now via `aoa analyze`)
 
 Usage: python3 aoa-gateway.py --event=<event> < stdin_json
 """
@@ -20,17 +22,6 @@ import time
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
-
-# GL-072: Add services path for SessionReader import
-SERVICES_PATH = Path(__file__).parent.parent.parent / "services"
-if str(SERVICES_PATH) not in sys.path:
-    sys.path.insert(0, str(SERVICES_PATH))
-
-try:
-    from session.reader import SessionReader
-    SESSION_READER_AVAILABLE = True
-except ImportError:
-    SESSION_READER_AVAILABLE = False
 
 # =============================================================================
 # Configuration - Pure env vars, no file I/O
@@ -529,214 +520,47 @@ def handle_prompt(data: dict):
                 output_context(tuning_report)
                 # Don't return - let learning continue if needed
 
-    # Check if domain learning is pending
-    if domain_stats and domain_stats.get("learning_pending"):
-        # GL-070: Hook-side automatic domain generation
-        # Instead of outputting instructions for Claude, execute learning directly
-        # This ensures 100% reliability - no dependence on Claude compliance
+    # GL-083: Removed GL-072 per-prompt learning (replaced by `aoa analyze`)
+    # Domains now generated via one-time `aoa analyze` command with parallel Haiku
 
-        # Get recent activity for context
-        recent = api_get("/intent/recent?limit=20") or {}
-        records = recent.get("records", [])
+    # GL-083: Removed GL-069.1 per-prompt tag generation (costly, low value)
+    # Tags now come from pattern matching in infer_tags() - no LLM needed
 
-        # Extract keywords from activity and recent files (GL-071)
-        recent_tags = set()
-        file_keywords = set()
-        recent_files = set()  # GL-071: Collect files for domain assignment
-        recent_locations = []  # GL-071.1: Rich symbol locations for domain assignment
-        seen_symbols = set()  # Dedupe locations
-        for r in records:
-            # GL-071: Extract files
-            for f in r.get("files", []):
-                if f and not f.startswith('.context/') and not f.startswith('learn:'):
-                    recent_files.add(f)
-            # Extract tags
-            for t in r.get("tags", []):
-                clean = t.lstrip('#').lower()
-                if len(clean) >= 3 and clean not in {'reading', 'editing', 'creating', 'executing', 'search'}:
-                    recent_tags.add(clean)
-            # GL-071.1: Extract rich locations for symbol-level domain assignment
-            for loc in r.get("locations", []):
-                symbol = loc.get("symbol", "")
-                file_path = loc.get("file", "")
-                if symbol and file_path and len(symbol) >= 3:
-                    # Dedupe by file:symbol
-                    key = f"{file_path}:{symbol}"
-                    if key not in seen_symbols:
-                        seen_symbols.add(key)
-                        recent_locations.append({
-                            "file": file_path,
-                            "symbol": symbol,
-                            "kind": loc.get("kind", ""),
-                            "parent": loc.get("parent"),
-                            "start_line": loc.get("start_line"),
-                            "end_line": loc.get("end_line")
-                        })
-                    # Also extract keywords from symbol names
-                    words = re.split(r'[_\s]|(?<=[a-z])(?=[A-Z])', symbol)
-                    for w in words:
-                        if len(w) >= 3:
-                            file_keywords.add(w.lower())
+    # GL-085: Lazy domain enrichment - check for unenriched domains
+    enrichment_data = api_get(f"/domains/unenriched?project_id={PROJECT_ID}")
+    if enrichment_data and enrichment_data.get('domain'):
+        domain = enrichment_data['domain']
+        status = enrichment_data.get('enrichment', {})
+        enriched = status.get('enriched', 0)
+        total = status.get('total', 0)
 
-        # Get orphan tags (high-value signals)
-        orphan_tags = []
-        orphan_count = domain_stats.get("orphan_count", 0)
-        if orphan_count > 0:
-            orphan_data = api_get(f"/domains/unmatched-tags?project_id={PROJECT_ID}&limit=20")
-            if orphan_data:
-                orphan_tags = orphan_data.get("orphans", [])
+        # Get the enrichment prompt
+        prompt_data = api_get(f"/domains/enrichment-prompt?project_id={PROJECT_ID}")
+        if prompt_data and prompt_data.get('prompt'):
+            enrichment_context = f"""## aOa Domain Enrichment ({enriched}/{total})
 
-        # Get existing domain names to avoid duplicates
-        all_domains = api_get(f"/domains/list?project_id={PROJECT_ID}&limit=100") or {}
-        existing_names = [d['name'] for d in all_domains.get('domains', [])]
+**Domain to enrich:** {domain['name']}
+**Terms:** {', '.join(domain.get('terms', []))}
 
-        # GL-072: Use Haiku for semantic domain generation
-        # Gather rich activity data for the prompt
+Use the Task tool to spawn a Haiku agent with this prompt:
 
-        # 1. User prompts from SessionReader (if available)
-        user_prompts = []
-        if SESSION_READER_AVAILABLE:
-            try:
-                reader = SessionReader(str(PROJECT_ROOT))
-                user_prompts = reader.get_recent_prompts(10)
-                # Clean prompts - truncate and filter noise
-                user_prompts = [p[:150] for p in user_prompts if len(p) > 15 and not p.startswith('/')][:8]
-            except Exception:
-                pass
-
-        # 2. Files + symbols from intent locations (what was read)
-        file_symbols = []
-        for loc in recent_locations[:15]:
-            symbol = loc.get("symbol", "")
-            file_path = loc.get("file", "").replace(str(PROJECT_ROOT) + "/", "")
-            if symbol and file_path:
-                file_symbols.append(f"{file_path}:{symbol}()")
-
-        # 3. GL-078: Fetch goal history (goal + tags) from last 10 prompts
-        prompt_records = api_get(f"/domains/goal-history?project_id={PROJECT_ID}&limit=10") or {}
-        goal_records = prompt_records.get('prompts', [])
-
-        # Build Haiku prompt if we have enough data
-        has_data = len(user_prompts) >= 2 or len(file_symbols) >= 2 or len(goal_records) >= 2 or len(orphan_tags) >= 2
-
-        if has_data:
-            # Format activity data for prompt
-            prompts_str = "; ".join(user_prompts[:5]) if user_prompts else "(none)"
-            files_str = ", ".join(file_symbols[:10]) if file_symbols else "(none)"
-
-            # GL-078: Format goal-focused records
-            goals_str = ""
-            if goal_records:
-                goal_lines = []
-                for rec in goal_records[:10]:
-                    goal = rec.get('goal', '')
-                    tags = [t.get('tag', t) if isinstance(t, dict) else t for t in rec.get('tags', [])]
-                    if goal and tags:
-                        goal_lines.append(f"{goal} → {', '.join(tags[:5])}")
-                goals_str = "\n  - ".join(goal_lines) if goal_lines else "(none)"
-            else:
-                # Fallback to flat orphan tags if no goal records yet
-                goals_str = ", ".join(orphan_tags[:15]) if orphan_tags else "(none)"
-
-            existing_str = ", ".join(existing_names[:20])
-
-            # GL-075: Generate basic domains directly from orphan tags
-            # This ensures learning ALWAYS produces results when triggered
-            auto_domains = []
-            if orphan_tags:
-                # Group orphan tags by first letter/prefix to create domains
-                # e.g., orphans like "gateway", "grep", "glob" -> @gateway domain
-                for tag in orphan_tags[:3]:  # Max 3 auto-domains
-                    clean_tag = tag.lstrip('#@').lower()
-                    if len(clean_tag) >= 3:
-                        domain_name = f"@{clean_tag}"
-                        # Extract related terms from file_symbols
-                        related_terms = [clean_tag]
-                        for sym in file_symbols[:5]:
-                            parts = sym.split(':')[-1].replace('()', '').lower()
-                            if clean_tag in parts or parts in clean_tag:
-                                if len(parts) >= 3 and parts not in related_terms:
-                                    related_terms.append(parts)
-                        if len(related_terms) >= 2:
-                            auto_domains.append({
-                                "name": domain_name,
-                                "terms": related_terms[:7]
-                            })
-
-            # If we generated auto-domains, POST them directly
-            if auto_domains:
-                add_result = api_post("/domains/add", {
-                    "project_id": PROJECT_ID,
-                    "domains": auto_domains
-                }, timeout=3)
-
-                if add_result and add_result.get("domains_added"):
-                    # Learning succeeded - clear pending and assign to files/symbols
-                    api_post("/domains/learned", {
-                        "project_id": PROJECT_ID,
-                        "domains": add_result.get("domains_added", []),
-                        "terms": [],
-                        "files": list(recent_files)[:50],        # GL-071: Files for domain assignment
-                        "locations": recent_locations[:100]       # GL-071.1: Symbol locations
-                    }, timeout=5)
-            else:
-                # Fall back to Claude-assisted learning via prompt
-                # Serialize files and locations for assignment
-                files_json = json.dumps(list(recent_files)[:50])
-                locations_json = json.dumps(recent_locations[:50])
-
-                haiku_prompt = f"""## ⚡ aOa Learn
-
-Create 1-3 domains from activity. Use Haiku.
-
-**Activity:**
-- Prompts: {prompts_str[:300]}
-- Reads: {files_str[:200]}
-- Goals: {goals_str[:250]}
-
-**Skip similar:** {existing_str[:200]}
-
-**Rules:** @lowercase, 3-7 single-word terms, unique across domains
-
-**Step 1:** POST to `{AOA_URL}/domains/add`:
-```json
-{{"project_id": "{PROJECT_ID}", "domains": [{{"name": "@example", "terms": ["word1", "word2"]}}]}}
+```
+{prompt_data['prompt']}
 ```
 
-**Step 2:** POST to `{AOA_URL}/domains/learned` with files for assignment:
-```json
-{{"project_id": "{PROJECT_ID}", "domains": ["@your_domain"], "files": {files_json}, "locations": {locations_json}}}
-```"""
+After Haiku responds with JSON, POST the result to:
+```bash
+curl -X POST "http://localhost:8080/domains/enrich" \\
+  -H "Content-Type: application/json" \\
+  -d '{{"project_id": "{PROJECT_ID}", "domain": "{domain['name']}", "term_keywords": <HAIKU_JSON>}}'
+```
 
-                output_context(haiku_prompt)
-        else:
-            # Not enough data - DON'T clear pending, let it accumulate
-            # Only clear if we genuinely have nothing to learn from
-            pass  # Learning pending stays set, will retry next prompt
-
-        # Don't return - continue to show status line
-
-    # GL-069.1: Per-prompt semantic tag generation
-    # Only when: domains exist, learning NOT pending, and we have a prompt
-    prompt = data.get("prompt", "")
-    if prompt and domain_stats and domain_stats.get("domains", 0) > 0:
-        tag_prompt = f"""## ⚡ aOa Tag (GL-069.1)
-
-**User prompt:** {prompt[:250]}{'...' if len(prompt) > 250 else ''}
-
-**Instructions:**
-1. Extract the developer's GOAL (what they're trying to accomplish)
-2. Generate 7-10 intent tags based on that goal
-3. Score each tag 1-10 (how well it aligns to the goal)
-4. Filter to tags scoring >= 7
-
-**POST to** `{AOA_URL}/domains/submit-tags`:
-```json
-{{"project_id": "{PROJECT_ID}", "goal": "the extracted goal", "tags": [{{"tag": "name", "score": N}}, ...]}}
-```"""
-        output_context(tag_prompt)
+This enriches one domain per prompt. Progress: {enriched}/{total} domains enriched.
+"""
+            output_context(enrichment_context)
 
     # Predict files from prompt keywords
+    prompt = data.get("prompt", "")
     session_id = data.get("session_id", "unknown")
 
     if prompt and total >= MIN_INTENTS:

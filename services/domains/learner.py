@@ -69,7 +69,7 @@ class DomainLearner:
 
     BATCH_SIZE = 10  # Prompts per learning batch
     TUNE_THRESHOLD = 100  # Intents per regenerative tune
-    STARTER_HITS = 10  # Initial hits for new domains
+    STARTER_HITS = 0  # Domains start fresh, accumulate hits from actual usage
     STARTER_SCORE = 0.5  # Initial term confidence
     PRESERVE_THRESHOLD = 20  # Keep domains with hits >= this during tune
 
@@ -83,7 +83,8 @@ class DomainLearner:
     def anthropic_client(self):
         """Lazy-initialize Anthropic client for direct mode."""
         if self._anthropic is None and ANTHROPIC_AVAILABLE:
-            api_key = os.environ.get('ANTHROPIC_API_KEY')
+            # GL-083: Support AOA_ANTHROPIC_KEY (preferred) and ANTHROPIC_API_KEY (fallback)
+            api_key = os.environ.get('AOA_ANTHROPIC_KEY') or os.environ.get('ANTHROPIC_API_KEY')
             if api_key:
                 self._anthropic = anthropic.Anthropic(api_key=api_key)
         return self._anthropic
@@ -99,6 +100,10 @@ class DomainLearner:
     def _domain_key(self, name: str, suffix: str) -> str:
         """Generate domain-specific Redis key."""
         return f"aoa:{self.project_id}:domain:{name}:{suffix}"
+
+    def _term_key(self, term: str, suffix: str) -> str:
+        """Generate term-specific Redis key."""
+        return f"aoa:{self.project_id}:term:{term}:{suffix}"
 
     # =========================================================================
     # Prompt Counter (Batch Trigger)
@@ -293,7 +298,7 @@ class DomainLearner:
         domains_key = self._key("domains")
         self.redis.client.sadd(domains_key, domain.name)
 
-        # Store metadata with lifecycle fields (GL-059.1)
+        # Store metadata with lifecycle fields (GL-059.1) and enrichment (GL-085)
         meta_key = self._domain_key(domain.name, "meta")
         self.redis.client.hset(meta_key, mapping={
             "description": domain.description,
@@ -301,10 +306,12 @@ class DomainLearner:
             "hits": self.STARTER_HITS,
             "created": int(time.time()),
             # GL-059.1: Lifecycle fields
-            "source": source,  # "seeded" | "learned"
+            "source": source,  # "seeded" | "learned" | "skeleton"
             "state": "active",  # "active" | "stale" | "deprecated"
             "stale_cycles": 0,
             "hits_last_cycle": 0,
+            # GL-085: Lazy enrichment
+            "enriched": "false",  # "false" until keywords added
         })
 
         # Update project-level source counters (GL-059.1)
@@ -343,6 +350,165 @@ class DomainLearner:
         """Increment hit counter for a domain."""
         meta_key = self._domain_key(name, "meta")
         return self.redis.client.hincrby(meta_key, "hits", 1)
+
+    # =========================================================================
+    # GL-085: Lazy Domain Enrichment
+    # =========================================================================
+
+    def is_domain_enriched(self, name: str) -> bool:
+        """Check if domain has been enriched with keywords."""
+        meta_key = self._domain_key(name, "meta")
+        val = self.redis.client.hget(meta_key, "enriched")
+        return val == "true" or val == b"true"
+
+    def set_domain_enriched(self, name: str, enriched: bool = True) -> None:
+        """Mark domain as enriched (keywords have been added)."""
+        meta_key = self._domain_key(name, "meta")
+        self.redis.client.hset(meta_key, "enriched", "true" if enriched else "false")
+
+    def get_unenriched_domain(self) -> Optional[dict]:
+        """
+        Get one domain that needs enrichment.
+
+        Returns dict with name, description, terms or None if all enriched.
+        """
+        for name in self.get_all_domains():
+            if not self.is_domain_enriched(name):
+                meta = self.get_domain_meta(name)
+                terms = list(self.get_domain_terms(name))
+                return {
+                    'name': name,
+                    'description': meta.get('description', ''),
+                    'terms': terms
+                }
+        return None
+
+    def get_enrichment_status(self) -> dict:
+        """Get enrichment progress: enriched count, total count."""
+        domains = self.get_all_domains()
+        total = len(domains)
+        enriched = sum(1 for d in domains if self.is_domain_enriched(d))
+        return {
+            'enriched': enriched,
+            'total': total,
+            'pending': total - enriched,
+            'complete': enriched == total and total > 0
+        }
+
+    def add_term_keywords(self, term: str, keywords: list[str]) -> int:
+        """
+        Store keywords for a term.
+
+        GL-085: Keywords stored in Redis SET at term:{name}:keywords
+        Returns number of keywords added.
+        """
+        if not keywords:
+            return 0
+        keywords_key = self._term_key(term, "keywords")
+        # Normalize keywords: lowercase, filter short ones
+        clean_keywords = [k.lower() for k in keywords if len(k) >= 3]
+        if clean_keywords:
+            return self.redis.client.sadd(keywords_key, *clean_keywords)
+        return 0
+
+    def get_term_keywords(self, term: str) -> set[str]:
+        """Get keywords for a term."""
+        keywords_key = self._term_key(term, "keywords")
+        return self.redis.client.smembers(keywords_key)
+
+    def enrich_domain(self, name: str, term_keywords: dict[str, list[str]]) -> dict:
+        """
+        Add keywords to a domain's terms and mark as enriched.
+
+        Args:
+            name: Domain name (e.g., "@authentication")
+            term_keywords: Dict of {term_name: [keyword1, keyword2, ...]}
+
+        Returns:
+            Summary of what was added
+        """
+        terms_added = 0
+        keywords_added = 0
+
+        # Add terms to domain's term set
+        terms_key = self._domain_key(name, "terms")
+        term_names = list(term_keywords.keys())
+        if term_names:
+            self.redis.client.sadd(terms_key, *term_names)
+
+        for term, keywords in term_keywords.items():
+            count = self.add_term_keywords(term, keywords)
+            if count > 0:
+                terms_added += 1
+                keywords_added += count
+
+        # Mark domain as enriched
+        self.set_domain_enriched(name, True)
+
+        return {
+            'domain': name,
+            'terms_enriched': terms_added,
+            'keywords_added': keywords_added
+        }
+
+    def init_skeleton(self, domains: list[dict]) -> dict:
+        """
+        Initialize domains from skeleton (names + terms only, no keywords).
+
+        GL-085: Called by /aoa-start skill. Sets enriched=false on all.
+
+        Args:
+            domains: List of {name, description, terms[]}
+
+        Returns:
+            Summary of domains created
+        """
+        created = []
+        for d in domains:
+            name = d.get('name', '')
+            if not name.startswith('@'):
+                name = f"@{name}"
+
+            domain = Domain(
+                name=name,
+                description=d.get('description', ''),
+                confidence=0.5,  # Skeleton confidence
+                terms=d.get('terms', [])
+            )
+            self.add_domain(domain, source="skeleton")
+            created.append(name)
+
+        return {
+            'domains_created': len(created),
+            'domains': created
+        }
+
+    def get_enrichment_prompt(self, domain: dict) -> str:
+        """
+        Generate Haiku prompt for enriching one domain with keywords.
+
+        GL-085: Small focused prompt for lazy enrichment.
+        """
+        name = domain.get('name', '')
+        description = domain.get('description', '')
+        terms = domain.get('terms', [])
+
+        terms_list = '\n'.join(f"- {t}" for t in terms)
+
+        return f"""Add keywords for domain {name}: {description}
+
+Terms to enrich:
+{terms_list}
+
+For each term, provide 7-10 specific keywords that would match code in this domain.
+Keywords must be:
+- Single words only (no underscores)
+- 3+ characters
+- Actual identifiers from code (function names, variable names, etc.)
+- NOT generic words (get, set, data, file, handle, process)
+
+Return JSON only:
+{{"term_name": ["keyword1", "keyword2", ...], ...}}"""
 
     # =========================================================================
     # GL-059.1: Lifecycle Management
@@ -814,6 +980,140 @@ Output valid JSON only:
         return domains
 
     # =========================================================================
+    # Keyword Tracking (GL-083 - Every-25 Rebalance)
+    # =========================================================================
+
+    def add_keyword_to_term(self, keyword: str, term: str) -> None:
+        """Assign keyword to term (one keyword -> one term mapping)."""
+        index_key = self._key("keyword_index")
+        self.redis.client.hset(index_key, keyword.lower(), term)
+
+    def get_term_for_keyword(self, keyword: str) -> str | None:
+        """Get which term owns this keyword."""
+        index_key = self._key("keyword_index")
+        result = self.redis.client.hget(index_key, keyword.lower())
+        return result.decode() if result else None
+
+    def get_all_keywords(self) -> dict:
+        """Get all keyword->term mappings."""
+        index_key = self._key("keyword_index")
+        result = self.redis.client.hgetall(index_key)
+        return {k.decode(): v.decode() for k, v in result.items()} if result else {}
+
+    def record_gap_keyword(self, keyword: str) -> None:
+        """Record a search keyword that found no domain match."""
+        gap_key = self._key("gap_keywords")
+        self.redis.client.sadd(gap_key, keyword.lower())
+
+    def get_gap_keywords(self, limit: int = 50) -> list[str]:
+        """Get keywords that had no domain matches."""
+        gap_key = self._key("gap_keywords")
+        # Get random sample to avoid always processing same ones
+        result = self.redis.client.srandmember(gap_key, limit)
+        return [k.decode() for k in result] if result else []
+
+    def clear_gap_keyword(self, keyword: str) -> None:
+        """Remove keyword from gaps after assignment."""
+        gap_key = self._key("gap_keywords")
+        self.redis.client.srem(gap_key, keyword.lower())
+
+    def get_gap_keyword_count(self) -> int:
+        """Count of unmatched keywords."""
+        gap_key = self._key("gap_keywords")
+        return self.redis.client.scard(gap_key) or 0
+
+    def increment_keyword_search(self, keyword: str) -> int:
+        """Track how many times a keyword was searched."""
+        key = self._key(f"keyword:{keyword.lower()}:searches")
+        return self.redis.client.incr(key)
+
+    def increment_keyword_access(self, keyword: str) -> int:
+        """Track how many times a keyword led to file access."""
+        key = self._key(f"keyword:{keyword.lower()}:accesses")
+        return self.redis.client.incr(key)
+
+    def get_keyword_stats(self, keyword: str) -> dict:
+        """Get search and access counts for a keyword."""
+        search_key = self._key(f"keyword:{keyword.lower()}:searches")
+        access_key = self._key(f"keyword:{keyword.lower()}:accesses")
+        searches = self.redis.client.get(search_key)
+        accesses = self.redis.client.get(access_key)
+        return {
+            "keyword": keyword,
+            "searches": int(searches) if searches else 0,
+            "accesses": int(accesses) if accesses else 0
+        }
+
+    # =========================================================================
+    # Every-25 Rebalance (GL-083)
+    # =========================================================================
+
+    REBALANCE_THRESHOLD = 25  # GL-083: Rebalance every 25 prompts
+
+    def should_rebalance(self) -> bool:
+        """Check if we should run keyword rebalance."""
+        return self.get_prompt_count() % self.REBALANCE_THRESHOLD == 0
+
+    def rebalance_keywords(self) -> dict:
+        """
+        Every-25 rebalance - pure Redis, no LLM needed.
+
+        GL-083: Assigns gap keywords to best-fit terms based on co-occurrence.
+        """
+        stats = {'added': 0, 'stale_marked': 0, 'gaps_processed': 0}
+
+        # 1. Process gap keywords
+        gaps = self.get_gap_keywords(limit=30)
+        stats['gaps_processed'] = len(gaps)
+
+        for keyword in gaps:
+            # Find best term based on existing domain terms
+            best_term = self._find_best_term_for_keyword(keyword)
+            if best_term:
+                self.add_keyword_to_term(keyword, best_term)
+                self.clear_gap_keyword(keyword)
+                stats['added'] += 1
+
+        # 2. Record rebalance timestamp
+        self.redis.client.set(self._key("last_rebalance"), int(time.time()))
+
+        return stats
+
+    def _find_best_term_for_keyword(self, keyword: str) -> str | None:
+        """
+        Find best existing term to assign keyword to.
+
+        Simple heuristic: find term with most character overlap.
+        """
+        keyword_lower = keyword.lower()
+        best_term = None
+        best_score = 0
+
+        # Get all domains and their terms
+        for domain_name in self.get_all_domains():
+            terms = self.get_domain_terms(domain_name)
+            for term in terms:
+                term_lower = term.lower()
+                # Score: substring match or character overlap
+                if keyword_lower in term_lower or term_lower in keyword_lower:
+                    score = len(keyword_lower) + len(term_lower)
+                else:
+                    # Character overlap
+                    score = len(set(keyword_lower) & set(term_lower))
+
+                if score > best_score:
+                    best_score = score
+                    best_term = term
+
+        # Require minimum score to avoid bad matches
+        return best_term if best_score >= 3 else None
+
+    def get_last_rebalance(self) -> int:
+        """Get timestamp of last rebalance."""
+        val = self.redis.client.get(self._key("last_rebalance"))
+        return int(val) if val else 0
+
+    # =========================================================================
     # Auto-tune Operations (GL-053 Phase D)
     # =========================================================================
 
@@ -1239,6 +1539,241 @@ Return JSON:
     # =========================================================================
     # Stats
     # =========================================================================
+
+    # =========================================================================
+    # Project Analysis (GL-083)
+    # =========================================================================
+
+    def get_cluster_analysis_prompt(self, directory: str, files: list[str]) -> str:
+        """
+        Generate Haiku prompt for analyzing a directory cluster.
+
+        GL-083: One-time project analysis replaces per-prompt learning.
+        GL-084: Returns v2 format with 5-10 terms per domain, 7-10 keywords per term.
+        """
+        file_list = "\n".join(f"  - {f}" for f in files[:50])
+
+        return f"""Generate 20-32 semantic domains from this codebase structure.
+
+Directory: {directory}
+Files:
+{file_list}
+
+STRUCTURE:
+- Domain (@name): A high-level capability area
+- Terms: 5-10 intent labels per domain (underscores OK: #token_lifecycle)
+- Keywords: 7-10 single-word identifiers per term (NO underscores - these are matched)
+
+PURPOSE:
+Terms are semantic handles for AI agents. When grep returns scattered results,
+terms provide instant context. A term answers: "What is the developer trying
+to accomplish?"
+
+GOOD TERMS: #token_lifecycle, #stock_sync, #cart_checkout, #webhook_ingestion
+BAD TERMS: #process_payment (too generic), #handle_user_auth (just a function name)
+
+GOOD KEYWORDS: token, jwt, refresh, expire, validate, bearer, decode
+BAD KEYWORDS: token_validation, user_auth (underscores), t (too short)
+
+REQUIREMENTS:
+- Generate 20-32 domains covering the full codebase
+- Each domain MUST have 5-10 terms
+- Each term MUST have 7-10 keywords
+- Keywords: single words only, 3+ characters, no underscores
+- Terms: intent-driven, not function-name derivatives
+- Keywords: actual identifiers, filenames, or tokens from the codebase
+
+Respond with ONLY valid JSON (no markdown, no explanation):
+{{
+  "domains": [
+    {{
+      "name": "@domain_name",
+      "description": "Capability this provides",
+      "terms": {{
+        "intent_label": ["keyword", "another", "single", "words", "only", "here", "matched"]
+      }}
+    }}
+  ]
+}}"""
+
+    def analyze_cluster(self, directory: str, files: list[str]) -> list[dict]:
+        """
+        Analyze a single directory cluster via Haiku.
+
+        Returns list of domain dicts or empty list on failure.
+        """
+        if not files:
+            return []
+
+        prompt = self.get_cluster_analysis_prompt(directory, files)
+        result = self._call_haiku(prompt)
+
+        if result and "domains" in result:
+            return result["domains"]
+        return []
+
+    def analyze_project(self, project_root: str, file_list: list[str] = None) -> dict:
+        """
+        Analyze entire project via parallel Haiku calls.
+
+        GL-083: One-time semantic analysis to generate project-domains.json.
+
+        Args:
+            project_root: Path to project
+            file_list: Optional pre-computed file list
+
+        Returns:
+            {
+                "success": bool,
+                "domains": [...],
+                "domains_count": int,
+                "terms_count": int,
+                "clusters_analyzed": int
+            }
+        """
+        import concurrent.futures
+        from pathlib import Path
+        from collections import defaultdict
+
+        # Group files by top-level directory
+        clusters = defaultdict(list)
+
+        if file_list:
+            files = file_list
+        else:
+            # Get files from index
+            files = self.get_recent_files_from_intents(limit=500)
+
+        # Group by two-level directory for better granularity
+        # e.g., "services/gateway" instead of just "services"
+        for f in files:
+            # Get relative path
+            if f.startswith(project_root):
+                rel = f[len(project_root):].lstrip("/")
+            else:
+                rel = f
+
+            # Get directory grouping (two levels if available)
+            parts = rel.split("/")
+            if len(parts) > 2:
+                # Use two-level: "services/gateway"
+                dir_key = f"{parts[0]}/{parts[1]}"
+            elif len(parts) > 1:
+                # Single level: "cli"
+                dir_key = parts[0]
+            else:
+                dir_key = "_root"
+
+            clusters[dir_key].append(rel)
+
+        # Filter to clusters with enough files
+        valid_clusters = {k: v for k, v in clusters.items()
+                        if len(v) >= 2 and not k.startswith(".")}
+
+        if not valid_clusters:
+            return {
+                "success": False,
+                "error": "No valid file clusters found",
+                "domains": [],
+                "domains_count": 0,
+                "terms_count": 0
+            }
+
+        # Parallel Haiku analysis (max 5 concurrent)
+        all_domains = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {
+                executor.submit(self.analyze_cluster, dir_name, files): dir_name
+                for dir_name, files in list(valid_clusters.items())[:15]
+            }
+
+            for future in concurrent.futures.as_completed(futures):
+                dir_name = futures[future]
+                try:
+                    domains = future.result()
+                    all_domains.extend(domains)
+                except Exception as e:
+                    print(f"Cluster {dir_name} failed: {e}")
+
+        # Dedupe and merge domains
+        merged = self._merge_domains(all_domains)
+
+        # Count terms (term clusters) and keywords
+        total_terms = 0
+        total_keywords = 0
+        for d in merged:
+            terms = d.get("terms", {})
+            if isinstance(terms, dict):
+                total_terms += len(terms)  # Number of term clusters
+                total_keywords += sum(len(kws) for kws in terms.values())
+            else:
+                # Legacy flat array
+                total_keywords += len(terms)
+
+        return {
+            "success": True,
+            "domains": merged,
+            "domains_count": len(merged),
+            "terms_count": total_terms,
+            "keywords_count": total_keywords,
+            "clusters_analyzed": len(valid_clusters)
+        }
+
+    def _merge_domains(self, domains: list[dict]) -> list[dict]:
+        """
+        Merge and dedupe domains from multiple clusters.
+
+        Combines domains with similar names, merges their term hierarchies.
+        Supports both v2 format (terms as dict) and legacy (terms as list).
+        """
+        merged = {}
+
+        for d in domains:
+            name = d.get("name", "").lower().strip()
+            if not name.startswith("@"):
+                name = f"@{name}"
+
+            terms_data = d.get("terms", {})
+
+            # Handle legacy flat array format - convert to dict
+            if isinstance(terms_data, list):
+                terms_data = {"keywords": terms_data}
+
+            if name in merged:
+                # Merge term clusters
+                existing_terms = merged[name].get("terms", {})
+                for cluster_name, keywords in terms_data.items():
+                    if cluster_name in existing_terms:
+                        # Union keywords, limit to 20 per cluster
+                        combined = list(set(existing_terms[cluster_name]) | set(keywords))
+                        existing_terms[cluster_name] = combined[:20]
+                    else:
+                        existing_terms[cluster_name] = keywords[:20]
+                merged[name]["terms"] = existing_terms
+            else:
+                # Limit clusters to 10 per domain, keywords to 20 per cluster
+                limited_terms = {}
+                for cluster_name, keywords in list(terms_data.items())[:10]:
+                    limited_terms[cluster_name] = keywords[:20] if isinstance(keywords, list) else []
+
+                merged[name] = {
+                    "name": name,
+                    "description": d.get("description", ""),
+                    "terms": limited_terms
+                }
+
+        return list(merged.values())
+
+    def save_project_domains(self, domains: list[dict], output_path: str) -> bool:
+        """Save analyzed domains to project-domains.json."""
+        try:
+            import json
+            with open(output_path, "w") as f:
+                json.dump(domains, f, indent=2)
+            return True
+        except Exception as e:
+            print(f"Failed to save domains: {e}")
+            return False
 
     def get_stats(self) -> dict:
         """Get domain learning statistics."""

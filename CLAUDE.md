@@ -74,45 +74,35 @@ When the user addresses an agent by name using "Hey [AgentName]", spawn that age
 | "Hey 131" | 131 | Research-only problem solving with parallel solution discovery |
 | "Hey GH" | gh | Growth Hacker - solutions architect, problem decomposer |
 
-### aOa Quickstart (SPECIAL - First-Time Welcome)
+### aOa Setup (SPECIAL - Guided Onboarding)
 
-When user says **"Hey aOa"**, **"Tag my code"**, or **"aOa quickstart"**:
+When user says **"Hey aOa"**, **"/aoa-setup"**, or **"set up aoa"**:
 
-1. Run `aoa outline --pending --json` silently to check status
-2. Check the `pending_count` in the response
+1. Run `aoa domains --json` silently to check domain status
+2. Check `domain_count` in the response
 
-**If pending_count > 0** (first time / not yet tagged):
+**If domain_count = 0** (fresh project, needs setup):
 
-```
-⚡ Welcome to aOa — 5 angles. 1 attack.
+Run the `/aoa-setup` skill to guide them through personalized onboarding:
+- Explains what's happening (trust, transparency)
+- Estimates time based on file count
+- Runs parallel Haiku analysis to generate 20-32 project-specific domains
+- Runs semantic tagging for compressed file outlines
+- Shows completion summary with next steps
 
-aOa is now active on this project. Here's what that means:
+The skill file is at `plugin/skills/setup/SKILL.md` - follow its instructions.
 
-**Immediate upgrade**: `aoa grep` replaces Grep/Glob with O(1) indexed search.
-Every search is instant (<5ms) regardless of codebase size. I'm already using it.
-
-**Track your savings**: Run `aoa intent` anytime to see tokens saved in real-time.
-
-**Optional but powerful**: For maximum savings, run this once in your terminal:
-
-  aoa quickstart
-
-This creates semantic compression for your files—letting me find code by
-meaning, not just keywords. Takes ~1 minute, uses zero tokens, and I promise
-it'll save you millions of tokens and hours of time.
-
-Skip it if you want—aOa still learns from how you work. But the uplift is real.
-
-Ready when you are. What are we building?
-```
-
-**If pending_count = 0** (already tagged / returning user):
+**If domain_count > 0** (already set up / returning user):
 
 ```
-⚡ aOa is active. What are we building?
+⚡ aOa is ready. What are we building?
 ```
 
-**DO NOT launch background agents.** Let the user control their experience.
+Show them their current stats:
+- `aoa domains` - semantic domain map
+- `aoa intent` - real-time intent tracking
+
+**DO NOT launch background agents.** Keep the guided experience in the main conversation.
 
 ### ⚠️ Subagents Don't Get Hooks
 
@@ -271,6 +261,8 @@ aOa commands mirror Unix grep/egrep so they feel intuitive:
 | `aoa hot` | Frequently accessed files | <10ms |
 | `aoa health` | Check services | instant |
 | `aoa intent recent` | See what's being worked on | <50ms |
+| `aoa analyze` | Generate project domains | ~30s |
+| `aoa domains` | Show domain stats | <50ms |
 
 ## API Endpoints (localhost:8080)
 
@@ -284,19 +276,21 @@ curl "localhost:8080/intent/recent"                  # Recent intents
 curl "localhost:8080/domains/stats?project=ID"      # Domain learning stats
 ```
 
-## Semantic Domains (GL-053)
+## Semantic Domains (GL-083)
 
-aOa learns semantic domains from your usage patterns. Grep results show `@domain` tags in MAGENTA:
+aOa uses semantic domains to enhance search. Grep results show `@domain` tags in MAGENTA:
 
 ```
 services/auth/handler.py:login()[10-45]:12 def login(user):  @authentication  #api #security
 ```
 
 Domains are:
-- **Seeded** on quickstart (32 universal domains like @authentication, @caching, @api)
-- **Learned** automatically every 10 prompts via Haiku
-- **Rebalanced** daily (merge overlapping, prune unused)
-- **Used** for semantic search enhancement
+- **Generated** via `/aoa-setup` (personalized domains from your codebase structure)
+- **Stored** in `.aoa/project-domains.json` (v2 format with terms and keywords)
+- **Loaded** by `aoa quickstart` into Redis for fast lookup
+- **Rebalanced** every 25 prompts (assigns orphan keywords to terms)
+
+**Setup command**: `/aoa-setup` analyzes your codebase structure and generates 20-32 project-specific domains (no API key required).
 
 ## Efficiency Comparison
 
