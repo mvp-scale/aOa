@@ -1,0 +1,65 @@
+{
+  "domain": "@project_isolation",
+  "terms": {
+    "project": [
+      "project",
+      "workspace",
+      "environment",
+      "scope",
+      "domain",
+      "context",
+      "namespace",
+      "container"
+    ],
+    "isolate": [
+      "isolate",
+      "separate",
+      "partition",
+      "segment",
+      "compartmentalize",
+      "divide",
+      "insulate",
+      "detach"
+    ],
+    "separate": [
+      "separate",
+      "divide",
+      "part",
+      "distinct",
+      "individual",
+      "independent",
+      "isolated",
+      "apart"
+    ],
+    "config": [
+      "config",
+      "configuration",
+      "setting",
+      "preference",
+      "option",
+      "parameter",
+      "adjustment",
+      "customization"
+    ],
+    "scope": [
+      "scope",
+      "extent",
+      "range",
+      "reach",
+      "span",
+      "domain",
+      "namespace",
+      "context"
+    ],
+    "namespace": [
+      "namespace",
+      "scope",
+      "domain",
+      "context",
+      "area",
+      "zone",
+      "realm",
+      "sphere"
+    ]
+  }
+}

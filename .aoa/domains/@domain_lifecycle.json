@@ -1,0 +1,65 @@
+{
+  "domain": "@domain_lifecycle",
+  "terms": {
+    "lifecycle": [
+      "lifecycle",
+      "lifespan",
+      "cycle",
+      "period",
+      "phase",
+      "stage",
+      "sequence",
+      "progression"
+    ],
+    "state": [
+      "state",
+      "condition",
+      "status",
+      "situation",
+      "mode",
+      "state_of_being",
+      "position",
+      "standing"
+    ],
+    "transition": [
+      "transition",
+      "change",
+      "shift",
+      "movement",
+      "conversion",
+      "transformation",
+      "switch",
+      "move"
+    ],
+    "active": [
+      "active",
+      "alive",
+      "working",
+      "running",
+      "operating",
+      "engaged",
+      "functional",
+      "enabled"
+    ],
+    "deprecate": [
+      "deprecate",
+      "retire",
+      "phase_out",
+      "discontinue",
+      "abandon",
+      "dismiss",
+      "remove",
+      "discard"
+    ],
+    "retire": [
+      "retire",
+      "withdraw",
+      "remove",
+      "quit",
+      "stop",
+      "cease",
+      "end",
+      "finish"
+    ]
+  }
+}

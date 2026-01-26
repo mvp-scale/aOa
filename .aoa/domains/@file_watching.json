@@ -1,0 +1,65 @@
+{
+  "domain": "@file_watching",
+  "terms": {
+    "watch": [
+      "watch",
+      "observe",
+      "monitor",
+      "track",
+      "supervise",
+      "oversee",
+      "check",
+      "inspect"
+    ],
+    "monitor": [
+      "monitor",
+      "watch",
+      "observe",
+      "track",
+      "supervise",
+      "oversee",
+      "check",
+      "inspect"
+    ],
+    "file": [
+      "file",
+      "document",
+      "data",
+      "code",
+      "script",
+      "artifact",
+      "resource",
+      "object"
+    ],
+    "change": [
+      "change",
+      "modification",
+      "update",
+      "alteration",
+      "revision",
+      "edit",
+      "transform",
+      "variation"
+    ],
+    "update": [
+      "update",
+      "modify",
+      "change",
+      "refresh",
+      "revise",
+      "improve",
+      "upgrade",
+      "correct"
+    ],
+    "observe": [
+      "observe",
+      "watch",
+      "see",
+      "notice",
+      "detect",
+      "perceive",
+      "witness",
+      "behold"
+    ]
+  }
+}

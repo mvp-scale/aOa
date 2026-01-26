@@ -1,0 +1,11 @@
+{
+  "domain": "@symbol_indexing",
+  "terms": {
+    "index": ["index", "indexer", "indexed", "inverted", "hash", "lookup", "cache", "hash_map"],
+    "symbol": ["symbol", "identifier", "name", "function", "class", "method", "variable", "constant"],
+    "grep": ["grep", "search", "query", "term", "pattern", "match", "regex", "find"],
+    "lookup": ["lookup", "find", "fetch", "retrieve", "get", "access", "resolve", "locate"],
+    "pattern": ["pattern", "regex", "egrep", "expression", "syntax", "format", "rule", "mask"],
+    "tokenize": ["token", "tokenize", "split", "parse", "fragment", "segment", "break", "divide"]
+  }
+}

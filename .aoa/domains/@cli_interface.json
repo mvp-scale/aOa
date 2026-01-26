@@ -1,0 +1,65 @@
+{
+  "domain": "@cli_interface",
+  "terms": {
+    "command": [
+      "command",
+      "cmd",
+      "instruction",
+      "directive",
+      "action",
+      "operation",
+      "task",
+      "request"
+    ],
+    "cli": [
+      "cli",
+      "command_line",
+      "terminal",
+      "shell",
+      "bash",
+      "interface",
+      "tool",
+      "executable"
+    ],
+    "shell": [
+      "shell",
+      "bash",
+      "sh",
+      "script",
+      "process",
+      "interpreter",
+      "executable",
+      "command"
+    ],
+    "flag": [
+      "flag",
+      "option",
+      "switch",
+      "parameter",
+      "argument",
+      "modifier",
+      "control",
+      "setting"
+    ],
+    "argument": [
+      "argument",
+      "arg",
+      "parameter",
+      "input",
+      "value",
+      "data",
+      "item",
+      "element"
+    ],
+    "parse": [
+      "parse",
+      "process",
+      "analyze",
+      "interpret",
+      "read",
+      "decode",
+      "extract",
+      "split"
+    ]
+  }
+}

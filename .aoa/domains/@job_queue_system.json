@@ -1,0 +1,65 @@
+{
+  "domain": "@job_queue_system",
+  "terms": {
+    "job": [
+      "job",
+      "task",
+      "work",
+      "operation",
+      "action",
+      "process",
+      "execution",
+      "run"
+    ],
+    "queue": [
+      "queue",
+      "list",
+      "buffer",
+      "fifo",
+      "lifo",
+      "order",
+      "sequence",
+      "stack"
+    ],
+    "async": [
+      "async",
+      "asynchronous",
+      "background",
+      "parallel",
+      "concurrent",
+      "non_blocking",
+      "threaded",
+      "deferred"
+    ],
+    "worker": [
+      "worker",
+      "thread",
+      "process",
+      "executor",
+      "handler",
+      "processor",
+      "consumer",
+      "listener"
+    ],
+    "pending": [
+      "pending",
+      "waiting",
+      "queued",
+      "scheduled",
+      "deferred",
+      "postponed",
+      "held",
+      "blocked"
+    ],
+    "process": [
+      "process",
+      "execute",
+      "run",
+      "perform",
+      "handle",
+      "work",
+      "act",
+      "operate"
+    ]
+  }
+}

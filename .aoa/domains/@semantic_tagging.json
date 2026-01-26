@@ -1,0 +1,65 @@
+{
+  "domain": "@semantic_tagging",
+  "terms": {
+    "tag": [
+      "tag",
+      "label",
+      "mark",
+      "annotation",
+      "identifier",
+      "marker",
+      "badge",
+      "sticker"
+    ],
+    "semantic": [
+      "semantic",
+      "meaning",
+      "context",
+      "intent",
+      "significance",
+      "relationship",
+      "concept",
+      "signal"
+    ],
+    "label": [
+      "label",
+      "name",
+      "title",
+      "designation",
+      "identifier",
+      "marker",
+      "tag",
+      "caption"
+    ],
+    "classify": [
+      "classify",
+      "categorize",
+      "sort",
+      "group",
+      "organize",
+      "arrange",
+      "assign",
+      "distribute"
+    ],
+    "attribute": [
+      "attribute",
+      "property",
+      "quality",
+      "characteristic",
+      "feature",
+      "trait",
+      "aspect",
+      "element"
+    ],
+    "mark": [
+      "mark",
+      "indicate",
+      "designate",
+      "point",
+      "note",
+      "tag",
+      "label",
+      "highlight"
+    ]
+  }
+}

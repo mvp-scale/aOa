@@ -1,0 +1,65 @@
+{
+  "domain": "@session_context",
+  "terms": {
+    "session": [
+      "session",
+      "context",
+      "state",
+      "memory",
+      "store",
+      "cache",
+      "persist",
+      "maintain"
+    ],
+    "state": [
+      "state",
+      "condition",
+      "status",
+      "mode",
+      "situation",
+      "state_of_being",
+      "position",
+      "stance"
+    ],
+    "context": [
+      "context",
+      "environment",
+      "setting",
+      "state",
+      "history",
+      "background",
+      "scene",
+      "situation"
+    ],
+    "history": [
+      "history",
+      "record",
+      "log",
+      "timeline",
+      "chronicle",
+      "account",
+      "narrative",
+      "story"
+    ],
+    "memory": [
+      "memory",
+      "recall",
+      "storage",
+      "retention",
+      "cache",
+      "recollection",
+      "remembrance",
+      "archive"
+    ],
+    "persist": [
+      "persist",
+      "continue",
+      "endure",
+      "last",
+      "remain",
+      "stay",
+      "survive",
+      "maintain"
+    ]
+  }
+}

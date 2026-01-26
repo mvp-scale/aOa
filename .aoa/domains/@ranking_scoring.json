@@ -1,0 +1,65 @@
+{
+  "domain": "@ranking_scoring",
+  "terms": {
+    "rank": [
+      "rank",
+      "position",
+      "order",
+      "priority",
+      "level",
+      "grade",
+      "standing",
+      "placement"
+    ],
+    "score": [
+      "score",
+      "point",
+      "value",
+      "rating",
+      "number",
+      "mark",
+      "grade",
+      "evaluation"
+    ],
+    "weight": [
+      "weight",
+      "importance",
+      "significance",
+      "emphasis",
+      "influence",
+      "factor",
+      "proportion",
+      "measure"
+    ],
+    "factor": [
+      "factor",
+      "element",
+      "component",
+      "aspect",
+      "feature",
+      "consideration",
+      "variable",
+      "parameter"
+    ],
+    "relevance": [
+      "relevance",
+      "pertinence",
+      "applicability",
+      "connection",
+      "relation",
+      "relation",
+      "fit",
+      "appropriateness"
+    ],
+    "order": [
+      "order",
+      "sequence",
+      "arrangement",
+      "progression",
+      "chain",
+      "line",
+      "rank",
+      "sorting"
+    ]
+  }
+}

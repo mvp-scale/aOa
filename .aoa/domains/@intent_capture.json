@@ -1,0 +1,65 @@
+{
+  "domain": "@intent_capture",
+  "terms": {
+    "hook": [
+      "hook",
+      "plugin",
+      "trigger",
+      "callback",
+      "event",
+      "handler",
+      "listen",
+      "attach"
+    ],
+    "capture": [
+      "capture",
+      "record",
+      "log",
+      "store",
+      "save",
+      "track",
+      "monitor",
+      "collect"
+    ],
+    "event": [
+      "event",
+      "signal",
+      "notification",
+      "message",
+      "alert",
+      "notification",
+      "emit",
+      "fire"
+    ],
+    "track": [
+      "track",
+      "trace",
+      "follow",
+      "monitor",
+      "observe",
+      "watch",
+      "record",
+      "log"
+    ],
+    "telemetry": [
+      "telemetry",
+      "metric",
+      "stat",
+      "measure",
+      "data",
+      "analytics",
+      "report",
+      "insight"
+    ],
+    "session": [
+      "session",
+      "context",
+      "state",
+      "memory",
+      "store",
+      "cache",
+      "persist",
+      "maintain"
+    ]
+  }
+}

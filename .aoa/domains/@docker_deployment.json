@@ -1,0 +1,65 @@
+{
+  "domain": "@docker_deployment",
+  "terms": {
+    "docker": [
+      "docker",
+      "container",
+      "containerization",
+      "virtualization",
+      "isolation",
+      "deployment",
+      "orchestration",
+      "platform"
+    ],
+    "container": [
+      "container",
+      "image",
+      "box",
+      "environment",
+      "sandbox",
+      "process",
+      "bundle",
+      "package"
+    ],
+    "compose": [
+      "compose",
+      "compose",
+      "orchestrate",
+      "arrange",
+      "coordinate",
+      "organize",
+      "build",
+      "create"
+    ],
+    "deploy": [
+      "deploy",
+      "release",
+      "launch",
+      "distribute",
+      "publish",
+      "ship",
+      "install",
+      "start"
+    ],
+    "image": [
+      "image",
+      "template",
+      "snapshot",
+      "baseline",
+      "prototype",
+      "blueprint",
+      "artifact",
+      "package"
+    ],
+    "service": [
+      "service",
+      "component",
+      "module",
+      "application",
+      "system",
+      "process",
+      "daemon",
+      "program"
+    ]
+  }
+}

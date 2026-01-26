@@ -1,0 +1,65 @@
+{
+  "domain": "@status_service",
+  "terms": {
+    "status": [
+      "status",
+      "state",
+      "condition",
+      "situation",
+      "state_of_affairs",
+      "position",
+      "standing",
+      "rank"
+    ],
+    "health": [
+      "health",
+      "fitness",
+      "wellness",
+      "condition",
+      "state",
+      "well_being",
+      "soundness",
+      "stability"
+    ],
+    "metric": [
+      "metric",
+      "measurement",
+      "statistic",
+      "value",
+      "number",
+      "data",
+      "indicator",
+      "measure"
+    ],
+    "monitor": [
+      "monitor",
+      "watch",
+      "observe",
+      "track",
+      "supervise",
+      "oversee",
+      "check",
+      "inspect"
+    ],
+    "report": [
+      "report",
+      "summary",
+      "statement",
+      "account",
+      "presentation",
+      "display",
+      "output",
+      "result"
+    ],
+    "display": [
+      "display",
+      "show",
+      "present",
+      "render",
+      "exhibit",
+      "reveal",
+      "expose",
+      "demonstrate"
+    ]
+  }
+}

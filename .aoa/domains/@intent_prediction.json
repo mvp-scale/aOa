@@ -1,0 +1,65 @@
+{
+  "domain": "@intent_prediction",
+  "terms": {
+    "predict": [
+      "predict",
+      "forecast",
+      "anticipate",
+      "expect",
+      "project",
+      "estimate",
+      "foresee",
+      "guess"
+    ],
+    "prefetch": [
+      "prefetch",
+      "preload",
+      "prepare",
+      "ready",
+      "load",
+      "cache",
+      "buffer",
+      "stage"
+    ],
+    "context": [
+      "context",
+      "environment",
+      "setting",
+      "state",
+      "history",
+      "background",
+      "scene",
+      "situation"
+    ],
+    "ranking": [
+      "rank",
+      "ranking",
+      "order",
+      "sort",
+      "position",
+      "priority",
+      "level",
+      "grade"
+    ],
+    "score": [
+      "score",
+      "weight",
+      "value",
+      "rating",
+      "point",
+      "measure",
+      "count",
+      "metric"
+    ],
+    "behavior": [
+      "behavior",
+      "pattern",
+      "habit",
+      "tendency",
+      "trait",
+      "characteristic",
+      "action",
+      "response"
+    ]
+  }
+}

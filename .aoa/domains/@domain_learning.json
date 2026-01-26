@@ -1,0 +1,65 @@
+{
+  "domain": "@domain_learning",
+  "terms": {
+    "domain": [
+      "domain",
+      "area",
+      "capability",
+      "scope",
+      "namespace",
+      "layer",
+      "module",
+      "component"
+    ],
+    "learn": [
+      "learn",
+      "discover",
+      "infer",
+      "analyze",
+      "detect",
+      "identify",
+      "recognize",
+      "understand"
+    ],
+    "semantic": [
+      "semantic",
+      "meaning",
+      "context",
+      "intent",
+      "significance",
+      "relationship",
+      "concept",
+      "signal"
+    ],
+    "term": [
+      "term",
+      "concept",
+      "entity",
+      "token",
+      "label",
+      "keyword",
+      "tag",
+      "item"
+    ],
+    "keyword": [
+      "keyword",
+      "word",
+      "identifier",
+      "token",
+      "name",
+      "symbol",
+      "entry",
+      "item"
+    ],
+    "enrichment": [
+      "enrich",
+      "enhance",
+      "expand",
+      "extend",
+      "augment",
+      "improve",
+      "strengthen",
+      "deepen"
+    ]
+  }
+}
