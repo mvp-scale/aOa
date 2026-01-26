@@ -99,8 +99,8 @@ cmd_init() {
 }
 EOFHOME
 
-    # structure.txt - pre-staged tree for /aoa-setup skill
-    aoa tree > "$project_root/.aoa/structure.txt" 2>/dev/null || true
+    # domains/ folder - for intelligence angle (domain definitions + enrichment)
+    mkdir -p "$project_root/.aoa/domains"
 
     # whitelist.txt - optional repos/URLs for this project
     if [ ! -f "$project_root/.aoa/whitelist.txt" ]; then
@@ -255,34 +255,19 @@ EOFAOA
     echo -e "${GREEN}✓${NC}"
 
     # Trigger initial index
-    echo -n "  Indexing project.............. "
+    echo -n "  Registering project........... "
     local index_result=$(curl -s -X POST "${INDEX_URL}/project/register" \
         -H "Content-Type: application/json" \
         -d "{\"id\": \"${project_id}\", \"name\": \"${project_name}\", \"path\": \"${project_root}\"}" 2>/dev/null)
 
-    if echo "$index_result" | jq -e '.success' > /dev/null 2>&1; then
-        local file_count=$(echo "$index_result" | jq -r '.files // 0')
-        echo -e "${GREEN}✓${NC} ${DIM}(${file_count} files)${NC}"
+    local file_count=$(echo "$index_result" | jq -r '.files // 0' 2>/dev/null)
+    if [ -n "$file_count" ] && [ "$file_count" != "null" ] && [ "$file_count" -gt 0 ] 2>/dev/null; then
+        echo -e "${GREEN}✓${NC} ${DIM}(${file_count} files indexed)${NC}"
     else
-        echo -e "${YELLOW}pending${NC} ${DIM}(will index on first search)${NC}"
+        echo -e "${GREEN}✓${NC}"
     fi
 
-    echo
-    echo -e "${GREEN}${BOLD}✓ aOa enabled for ${project_name}${NC}"
-    echo
-    echo -e "${DIM}Restart Claude Code to activate hooks.${NC}"
-    echo
-
-    # Auto-cascade to quickstart for first-time setup
-    echo -e "${CYAN}${BOLD}Starting semantic tagging...${NC}"
-    echo
-    cmd_quickstart
-
     # Shell integration - static exports for zero-cost hook lookups
-    echo
-    echo -e "${CYAN}${BOLD}⚡ Shell Integration${NC}"
-    echo
-
     local shell_rc=""
     if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "$(command -v zsh)" ]; then
         shell_rc="$HOME/.zshrc"
@@ -294,7 +279,6 @@ EOFAOA
     if grep -q 'eval "\$(aoa env)"' "$shell_rc" 2>/dev/null; then
         sed -i '/# aOa - O(1) environment/d' "$shell_rc"
         sed -i '/eval "\$(aoa env)"/d' "$shell_rc"
-        echo -e "  ${YELLOW}!${NC} Removed insecure eval-based integration"
     fi
 
     # Remove old aOa block if present
@@ -309,11 +293,18 @@ EOFAOA
         echo '# END aOa'
     } >> "$shell_rc"
 
-    echo -e "  ${GREEN}✓${NC} Added to ${shell_rc}:"
-    echo -e "      ${DIM}export AOA_URL=\"$AOA_URL\"${NC}"
-    echo -e "      ${DIM}export AOA_PROJECT_ID=\"$project_id\"${NC}"
+    # Clean final output with next steps
     echo
-    echo -e "  ${DIM}For this shell: ${NC}${BOLD}source ${shell_rc}${NC}"
+    echo -e "───────────────────────────────────────────────────────"
+    echo -e "${GREEN}${BOLD}✓ aOa initialized${NC}"
+    echo
+    echo -e "  Project: ${BOLD}${project_id}${NC}"
+    echo
+    echo -e "  ${BOLD}Next:${NC}"
+    echo -e "    1. Run: ${CYAN}bash${NC}  ${DIM}(or start new terminal)${NC}"
+    echo -e "    2. Verify: ${CYAN}echo \$AOA_PROJECT_ID${NC}"
+    echo -e "    3. In Claude: ${CYAN}/aoa-start${NC}"
+    echo -e "───────────────────────────────────────────────────────"
 }
 
 cmd_remove() {

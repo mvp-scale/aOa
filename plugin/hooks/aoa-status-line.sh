@@ -12,9 +12,23 @@ set -uo pipefail
 
 MIN_INTENTS=30
 
-# Read from environment - set by shell integration (install.sh)
-AOA_URL="${AOA_URL:-http://localhost:8080}"
-PROJECT_ID="${AOA_PROJECT_ID:-}"
+# Find AOA config from .aoa/home.json
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(dirname "$(dirname "$HOOK_DIR")")"
+AOA_HOME_FILE="$PROJECT_ROOT/.aoa/home.json"
+
+if [ -f "$AOA_HOME_FILE" ]; then
+    AOA_DATA=$(jq -r '.data_dir' "$AOA_HOME_FILE" 2>/dev/null)
+    AOA_URL="${AOA_URL:-$(jq -r '.aoa_url // "http://localhost:8080"' "$AOA_HOME_FILE" 2>/dev/null)}"
+    AOA_PROJECT_ID=$(jq -r '.project_id // ""' "$AOA_HOME_FILE" 2>/dev/null)
+else
+    # Fallback defaults
+    AOA_DATA="${AOA_DATA:-/tmp/aoa}"
+    AOA_URL="${AOA_URL:-http://localhost:8080}"
+    AOA_PROJECT_ID=""
+fi
+
+STATUS_FILE="${AOA_STATUS_FILE:-$AOA_DATA/status.json}"
 
 # ANSI colors
 CYAN='\033[96m'
@@ -39,10 +53,23 @@ CWD=$(echo "$input" | jq -r '.cwd // ""' 2>/dev/null)
 # === LINE 1: Environment Context ===
 USERNAME="${USER:-$(whoami)}"
 
-# Get git branch (Claude Code shows file counts/changes natively, so we skip that)
+# Get git info if in a git repo
 GIT_BRANCH=""
+GIT_CHANGES=""
 if [ -n "$CWD" ] && [ -d "$CWD/.git" ] || git -C "$CWD" rev-parse --git-dir >/dev/null 2>&1; then
     GIT_BRANCH=$(git -C "$CWD" symbolic-ref --short HEAD 2>/dev/null || git -C "$CWD" rev-parse --short HEAD 2>/dev/null)
+
+    # Get insertions/deletions from staged + unstaged changes
+    GIT_STAT=$(git -C "$CWD" diff --shortstat HEAD 2>/dev/null)
+    if [ -n "$GIT_STAT" ]; then
+        INSERTIONS=$(echo "$GIT_STAT" | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "0")
+        DELETIONS=$(echo "$GIT_STAT" | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo "0")
+        [ -z "$INSERTIONS" ] && INSERTIONS=0
+        [ -z "$DELETIONS" ] && DELETIONS=0
+        if [ "$INSERTIONS" -gt 0 ] || [ "$DELETIONS" -gt 0 ]; then
+            GIT_CHANGES="${GREEN}+${INSERTIONS}${RESET}/${RED}-${DELETIONS}${RESET}"
+        fi
+    fi
 fi
 
 # Get Claude Code version from filesystem (instant - no process spawn)
@@ -52,13 +79,16 @@ if [ -n "$CC_VERSION" ]; then
     CC_VER_DISPLAY="${DIM}cc${RESET}${CYAN}${CC_VERSION}${RESET}"
 fi
 
-# Build Line 1 (git changes shown natively by Claude Code)
+# Build Line 1
 LINE1="${MAGENTA}${USERNAME}${RESET}:${CYAN}${CWD}${RESET}"
 if [ -n "$GIT_BRANCH" ]; then
     LINE1="${LINE1} ${DIM}(${RESET}${YELLOW}${GIT_BRANCH}${RESET}${DIM})${RESET}"
 fi
+if [ -n "$GIT_CHANGES" ]; then
+    LINE1="${LINE1} ${GIT_CHANGES}"
+fi
 if [ -n "$CC_VER_DISPLAY" ]; then
-    LINE1="${LINE1} ${CC_VER_DISPLAY}"
+    LINE1="${LINE1} ${DIM}${CC_VER_DISPLAY}${RESET}"
 fi
 
 # Format CWD (show last 2 path components) - for compact display
@@ -134,14 +164,16 @@ elif [ "$PERCENT" -lt 75 ]; then CTX_COLOR=$YELLOW
 else CTX_COLOR=$RED
 fi
 
+# === GET INTENT COUNT ===
+INTENTS=0
+if [ -f "$STATUS_FILE" ]; then
+    INTENTS=$(jq -r '.intents // 0' "$STATUS_FILE" 2>/dev/null)
+fi
+INTENTS=${INTENTS:-0}
+
 # === GET AOA METRICS (with timing) ===
 START_TIME=$(date +%s%N)
-# Include project_id for per-project metrics
-METRICS_URL="${AOA_URL}/metrics"
-if [ -n "$PROJECT_ID" ]; then
-    METRICS_URL="${METRICS_URL}?project_id=${PROJECT_ID}"
-fi
-METRICS=$(curl -s --max-time 0.3 "${METRICS_URL}" 2>/dev/null)
+METRICS=$(curl -s --max-time 0.3 "${AOA_URL}/metrics" 2>/dev/null)
 END_TIME=$(date +%s%N)
 
 # Calculate response time in ms
@@ -162,90 +194,10 @@ fi
 HIT_PCT=$(echo "$METRICS" | jq -r '.rolling.hit_at_5_pct // 0')
 HIT_PCT_INT=$(printf "%.0f" "$HIT_PCT")
 TOKENS_SAVED=$(echo "$METRICS" | jq -r '.savings.tokens // 0')
+TIME_SAVED_SEC=$(echo "$METRICS" | jq -r '.savings.time_sec // 0')
+TIME_SAVED_SEC_INT=$(printf "%.0f" "$TIME_SAVED_SEC")
 ROLLING_HITS=$(echo "$METRICS" | jq -r '.rolling.hits // 0')
 EVALUATED=$(echo "$METRICS" | jq -r '.rolling.evaluated // 0')
-
-# Calculate dynamic time savings using rolling average (same as aoa intent)
-TIME_SAVED_SEC_INT=0
-if [ "$TOKENS_SAVED" -gt 0 ] 2>/dev/null; then
-    RATE_MS=$(python3 -c "
-import json, os
-from pathlib import Path
-from datetime import datetime
-home = os.path.expanduser('~')
-pd = Path(home) / '.claude' / 'projects'
-if not pd.exists(): print('4'); exit()
-sessions = []
-for d in sorted(pd.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)[:2]:
-    sessions.extend(sorted(d.glob('*.jsonl'), key=lambda p: p.stat().st_mtime, reverse=True)[:3])
-now = datetime.now().astimezone()
-rates = []
-for sf in sessions[:5]:
-    try:
-        msgs = []
-        for line in open(sf):
-            try:
-                e = json.loads(line.strip())
-                if e.get('type') == 'assistant' and 'message' in e:
-                    m = e['message']
-                    if 'usage' in m and 'timestamp' in e:
-                        ts = datetime.fromisoformat(e['timestamp'].replace('Z', '+00:00'))
-                        tok = m['usage'].get('input_tokens', 0) + m['usage'].get('output_tokens', 0)
-                        msgs.append((ts, tok))
-            except: pass
-        for i in range(1, len(msgs)):
-            dur = (msgs[i][0] - msgs[i-1][0]).total_seconds() * 1000
-            tok = msgs[i][1]
-            age = (now - msgs[i][0]).total_seconds() / 60
-            if 100 < dur < 15000 and tok > 200 and age <= 30:
-                r = dur / tok
-                if r < 20: rates.append(r)
-    except: pass
-if rates:
-    rates.sort()
-    print(round(rates[len(rates)//4], 1))
-else:
-    print('4')
-" 2>/dev/null)
-    RATE_MS=${RATE_MS:-4}
-    TIME_SAVED_SEC_INT=$(awk "BEGIN {printf \"%.0f\", $TOKENS_SAVED * $RATE_MS / 1000}")
-fi
-
-# Get intent count from API (per-project)
-INTENT_URL="${AOA_URL}/intent/stats"
-if [ -n "$PROJECT_ID" ]; then
-    INTENT_URL="${INTENT_URL}?project_id=${PROJECT_ID}"
-fi
-INTENT_STATS=$(curl -s --max-time 0.2 "${INTENT_URL}" 2>/dev/null)
-INTENTS=$(echo "$INTENT_STATS" | jq -r '.total_records // 0' 2>/dev/null)
-INTENTS=${INTENTS:-0}
-
-# Get domain stats to detect fresh projects and enrichment status
-DOMAIN_URL="${AOA_URL}/domains/stats"
-if [ -n "$PROJECT_ID" ]; then
-    DOMAIN_URL="${DOMAIN_URL}?project_id=${PROJECT_ID}"
-fi
-DOMAIN_STATS=$(curl -s --max-time 0.2 "${DOMAIN_URL}" 2>/dev/null)
-ANALYZED_DOMAINS=$(echo "$DOMAIN_STATS" | jq -r '.learned_count // 0' 2>/dev/null)
-ANALYZED_DOMAINS=${ANALYZED_DOMAINS:-0}
-TOTAL_DOMAINS=$(echo "$DOMAIN_STATS" | jq -r '.domains // 0' 2>/dev/null)
-TOTAL_DOMAINS=${TOTAL_DOMAINS:-0}
-
-# GL-085: Get enrichment status
-ENRICHED_COUNT=$(echo "$DOMAIN_STATS" | jq -r '.enrichment.enriched // 0' 2>/dev/null)
-ENRICHED_COUNT=${ENRICHED_COUNT:-0}
-ENRICHMENT_TOTAL=$(echo "$DOMAIN_STATS" | jq -r '.enrichment.total // 0' 2>/dev/null)
-ENRICHMENT_TOTAL=${ENRICHMENT_TOTAL:-0}
-ENRICHMENT_COMPLETE=$(echo "$DOMAIN_STATS" | jq -r '.enrichment.complete // false' 2>/dev/null)
-
-# Fresh project: initialized but no domains at all
-IS_FRESH=false
-IS_ENRICHING=false
-if [ "$TOTAL_DOMAINS" -eq 0 ]; then
-    IS_FRESH=true
-elif [ "$ENRICHMENT_TOTAL" -gt 0 ] && [ "$ENRICHMENT_COMPLETE" != "true" ]; then
-    IS_ENRICHING=true
-fi
 
 # === BUILD DISPLAY ===
 SEP="${DIM}│${RESET}"
@@ -291,18 +243,38 @@ else
     fi
 fi
 
+# Check enrichment status for intelligence angle display
+ENRICHMENT=$(curl -s --max-time 0.2 "${AOA_URL}/domains/enrichment-status?project_id=${AOA_PROJECT_ID}" 2>/dev/null)
+
+# Handle empty/missing response - default to "no domains" state
+if [ -z "$ENRICHMENT" ] || [ "$ENRICHMENT" = "null" ]; then
+    ENRICHED=0
+    ENRICHMENT_TOTAL=0
+    ENRICHMENT_COMPLETE="false"
+else
+    ENRICHED=$(echo "$ENRICHMENT" | jq -r '.enriched // 0' 2>/dev/null)
+    ENRICHMENT_TOTAL=$(echo "$ENRICHMENT" | jq -r '.total // 0' 2>/dev/null)
+    ENRICHMENT_COMPLETE=$(echo "$ENRICHMENT" | jq -r '.complete // false' 2>/dev/null)
+fi
+
+# Right section: setup prompt OR intelligence progress OR intent
+if [ "$ENRICHMENT_TOTAL" -eq 0 ] 2>/dev/null; then
+    # No domains - prompt to run /aoa-start
+    RIGHT="${YELLOW}run /aoa-start${RESET}"
+elif [ "$ENRICHMENT_COMPLETE" != "true" ]; then
+    # Domains exist but not all enriched - show progress
+    RIGHT="${YELLOW}intelligence ${ENRICHED}/${ENRICHMENT_TOTAL}${RESET}"
+elif [ "$INTENTS" -lt "$MIN_INTENTS" ]; then
+    # Intelligence complete, but still in learning phase - celebrate!
+    RIGHT="${GREEN}✓ intelligence${RESET} ${DIM}→${RESET} ${YELLOW}intent${RESET}"
+else
+    # Fully operational - continuous learning
+    RIGHT="${GREEN}intent${RESET}"
+fi
+
 # === OUTPUT ===
 # Line 1: Environment context
 echo -e "${LINE1}"
 
 # Line 2: aOa status
-if [ "$IS_FRESH" = true ]; then
-    # Fresh project - show setup nudge
-    echo -e "${CYAN}${BOLD}⚡ aOa${RESET} ${DIM}initialized${RESET} ${SEP} ctx:${CTX_COLOR}${TOTAL_FMT}/${CTX_SIZE_FMT}${RESET} ${DIM}(${PERCENT}%)${RESET} ${SEP} ${MODEL} ${SEP} ${YELLOW}run: /aoa-start${RESET}"
-elif [ "$IS_ENRICHING" = true ]; then
-    # GL-085: Domains exist but enrichment in progress
-    echo -e "${CYAN}${BOLD}⚡ aOa${RESET} ${YELLOW}enriching...${RESET} ${SEP} ${ENRICHED_COUNT}/${ENRICHMENT_TOTAL} domains ${SEP} ctx:${CTX_COLOR}${TOTAL_FMT}/${CTX_SIZE_FMT}${RESET} ${DIM}(${PERCENT}%)${RESET} ${SEP} ${MODEL}"
-else
-    # Normal operation - show metrics
-    echo -e "${CYAN}${BOLD}⚡ aOa${RESET} ${LIGHT} ${INTENT_DISPLAY} ${SEP} ${MIDDLE} ${SEP} ctx:${CTX_COLOR}${TOTAL_FMT}/${CTX_SIZE_FMT}${RESET} ${DIM}(${PERCENT}%)${RESET} ${SEP} ${MODEL}"
-fi
+echo -e "${CYAN}${BOLD}⚡ aOa${RESET} ${LIGHT} ${INTENT_DISPLAY} ${SEP} ${MIDDLE} ${SEP} ctx:${CTX_COLOR}${TOTAL_FMT}/${CTX_SIZE_FMT}${RESET} ${DIM}(${PERCENT}%)${RESET} ${SEP} ${MODEL} ${SEP} ${RIGHT}"
