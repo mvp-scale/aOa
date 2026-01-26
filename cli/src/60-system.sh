@@ -1106,6 +1106,7 @@ cmd_domains() {
         build)
             # aoa domains build @name - add terms+keywords to one domain
             # Reads from .aoa/domains/enrichment.json by default
+            # Expects format: {"domain": "@name", "terms": {"term1": ["kw1", ...], ...}}
             shift
             local domain_name="${1:-}"
             if [ -z "$domain_name" ]; then
@@ -1113,7 +1114,10 @@ cmd_domains() {
                 echo "Usage: aoa domains build @search" >&2
                 return 1
             fi
-            local enrichment_file=".aoa/domains/enrichment.json"
+            # Support per-domain files: .aoa/domains/@name.json
+            local enrichment_file=".aoa/domains/${domain_name}.json"
+            # Fallback to shared file for backwards compatibility
+            [ ! -f "$enrichment_file" ] && enrichment_file=".aoa/domains/enrichment.json"
             if [ ! -f "$enrichment_file" ]; then
                 echo -e "${RED}Error: No enrichment file found at ${enrichment_file}${NC}" >&2
                 return 1
@@ -1123,9 +1127,26 @@ cmd_domains() {
                 echo -e "${RED}Error: Enrichment file is empty${NC}" >&2
                 return 1
             fi
+            # Validate domain field matches argument
+            local file_domain=$(echo "$json_input" | jq -r '.domain // empty')
+            if [ -z "$file_domain" ]; then
+                echo -e "${RED}Error: Enrichment file missing 'domain' field${NC}" >&2
+                echo -e "${DIM}Expected: {\"domain\": \"@name\", \"terms\": {...}}${NC}" >&2
+                return 1
+            fi
+            if [ "$file_domain" != "$domain_name" ]; then
+                echo -e "${RED}Error: Domain mismatch: expected ${domain_name}, got ${file_domain}${NC}" >&2
+                return 1
+            fi
+            # Extract terms from the validated JSON
+            local terms_json=$(echo "$json_input" | jq -c '.terms // {}')
+            if [ "$terms_json" = "{}" ] || [ "$terms_json" = "null" ]; then
+                echo -e "${RED}Error: Enrichment file has no terms${NC}" >&2
+                return 1
+            fi
             local result=$(curl -s -X POST "${INDEX_URL}/domains/enrich" \
                 -H "Content-Type: application/json" \
-                -d "{\"project_id\":\"${project_id}\",\"domain\":\"${domain_name}\",\"term_keywords\":${json_input}}")
+                -d "{\"project_id\":\"${project_id}\",\"domain\":\"${domain_name}\",\"term_keywords\":${terms_json}}")
             local error=$(echo "$result" | jq -r '.error // empty')
             if [ -n "$error" ]; then
                 echo -e "${RED}Error: ${error}${NC}" >&2
@@ -1317,7 +1338,7 @@ cmd_domains() {
     local progress_display
     local in_enrichment=false
     if [ "$enrichment_total" -gt 0 ] && [ "$enrichment_complete" != "true" ]; then
-        progress_display="${YELLOW}Building: ${enriched_count}/${enrichment_total}${NC}"
+        progress_display="${YELLOW}intelligence ${enriched_count}/${enrichment_total}${NC}"
         in_enrichment=true
     else
         progress_display="Rebalance: ${YELLOW}${rebalance_progress}/${rebalance_threshold}${NC}"

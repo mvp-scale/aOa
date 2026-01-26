@@ -526,38 +526,9 @@ def handle_prompt(data: dict):
     # GL-083: Removed GL-069.1 per-prompt tag generation (costly, low value)
     # Tags now come from pattern matching in infer_tags() - no LLM needed
 
-    # GL-085: Lazy domain enrichment - check for unenriched domains
-    enrichment_data = api_get(f"/domains/unenriched?project_id={PROJECT_ID}")
-    if enrichment_data and enrichment_data.get('domain'):
-        domain = enrichment_data['domain']
-        status = enrichment_data.get('enrichment', {})
-        enriched = status.get('enriched', 0)
-        total = status.get('total', 0)
-
-        # Get the enrichment prompt
-        prompt_data = api_get(f"/domains/enrichment-prompt?project_id={PROJECT_ID}")
-        if prompt_data and prompt_data.get('prompt'):
-            enrichment_context = f"""## aOa Domain Enrichment ({enriched}/{total})
-
-**Domain to enrich:** {domain['name']}
-**Terms:** {', '.join(domain.get('terms', []))}
-
-Use the Task tool to spawn a Haiku agent with this prompt:
-
-```
-{prompt_data['prompt']}
-```
-
-After Haiku responds with JSON, POST the result to:
-```bash
-curl -X POST "http://localhost:8080/domains/enrich" \\
-  -H "Content-Type: application/json" \\
-  -d '{{"project_id": "{PROJECT_ID}", "domain": "{domain['name']}", "term_keywords": <HAIKU_JSON>}}'
-```
-
-This enriches one domain per prompt. Progress: {enriched}/{total} domains enriched.
-"""
-            output_context(enrichment_context)
+    # GL-085: Domain enrichment now handled by /aoa-start background agent
+    # Status line polls /domains/enrichment-status for progress display
+    # No per-prompt output needed - cleaner UX
 
     # Predict files from prompt keywords
     prompt = data.get("prompt", "")

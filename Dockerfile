@@ -34,13 +34,12 @@ LABEL maintainer="aOa Team"
 LABEL description="5 angles. 1 attack. Fast code search for Claude Code."
 LABEL version="1.0.0"
 
-# Install system dependencies (build-essential needed for tree-sitter compilation)
+# Install system dependencies (pre-built wheels used - no build-essential needed)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     redis-server \
     supervisor \
-    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies (all services)

@@ -292,6 +292,34 @@ Domains are:
 
 **Setup command**: `/aoa-setup` analyzes your codebase structure and generates 20-32 project-specific domains (no API key required).
 
+## Intelligence & Intent Angles
+
+aOa uses two learning angles:
+- **Intelligence**: Analyze codebase → domains → terms → keywords (one-time setup)
+- **Intent**: Track usage → refine domains (continuous)
+
+### `/aoa-start` - Background Intelligence
+
+Run `/aoa-start` to initialize aOa. This spawns a background agent that:
+1. Scans project structure (`aoa tree`)
+2. Generates ~24 semantic domains
+3. Enriches each with terms and keywords
+
+**User experience:**
+- Friendly welcome message explains what's happening
+- Background agent runs silently
+- Status line shows progress: `intelligence 3/24`
+- User continues working uninterrupted
+- When complete, shifts to `intent` phase
+
+**Per-domain files** enable parallel enrichment:
+```
+.aoa/domains/@search.json
+.aoa/domains/@rest_api.json
+```
+
+No hook prompts - the background agent handles everything.
+
 ## Efficiency Comparison
 
 | Approach | Tool Calls | Tokens | Time |

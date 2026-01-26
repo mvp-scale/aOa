@@ -1,7 +1,0 @@
-{
-  "symbol_lookup": ["inverted_index", "symbol_search", "cmd_grep", "search_multi", "QueryCursor", "Query"],
-  "pattern_matching": ["egrep", "cmd_egrep", "tree_sitter", "QueryCursor", "regex", "pattern"],
-  "result_ranking": ["display_ranked_grep_results", "rolling_intent", "intent_score", "mode", "boost", "infer_search_intent"],
-  "multi_term_search": ["multi_search", "operator", "terms", "search_multi", "cmd_multi"],
-  "content_discovery": ["semantic_grep", "file_filter", "working_set", "matches", "files_searched", "case_insensitive"]
-}
