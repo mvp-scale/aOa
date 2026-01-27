@@ -114,6 +114,16 @@ except ImportError:
     DomainLearner = None
     Domain = None
 
+# GL-089: Job queue for background work
+try:
+    from jobs.queue import JobQueue, Job, JobType, create_enrich_job
+    from jobs.worker import JobWorker, push_enrich_jobs
+    JOBS_AVAILABLE = True
+except ImportError:
+    JOBS_AVAILABLE = False
+    JobQueue = None
+    JobWorker = None
+
 # ============================================================================
 # Pattern Library for Intent Inference (RAM-cached at startup)
 # ============================================================================
@@ -627,6 +637,10 @@ def format_search_response(
                         term = tag.lstrip('#@').lower()
                         if term and len(term) >= 3:
                             seen_terms.add(term)
+                    # GL-088: Also track domains from results
+                    domain = r.get('domain', '')
+                    if domain:
+                        seen_domains.add(domain.lstrip('@'))
 
                 # For each term: increment term hits AND all domains containing it
                 for term in seen_terms:
@@ -637,6 +651,14 @@ def format_search_response(
                         if domain_name not in seen_domains:
                             seen_domains.add(domain_name)
                             learner.increment_domain_hits(domain_name)
+
+                # GL-088: Also track in IntentIndex for recent hits ZSET
+                if intent_index:
+                    intent_index.increment_hits(
+                        domains=list(seen_domains),
+                        terms=list(seen_terms),
+                        project_id=project_id
+                    )
             except Exception:
                 pass  # Silent fail - never block search
         # Fire and forget
@@ -2723,6 +2745,99 @@ class IntentIndex:
 
         return file_scores
 
+    # =========================================================================
+    # GL-088: Hit Tracking - Track domain/term hits during grep searches
+    # =========================================================================
+
+    def increment_hits(self, domains: list[str], terms: list[str], project_id: str = None):
+        """
+        Batch increment hit counters for domains and terms found in search results.
+
+        Called at the end of grep/multi searches to track which domains/terms
+        are actually being accessed.
+
+        Redis keys:
+            aoa:{proj}:domain:{name}:hits → INT (total hits)
+            aoa:{proj}:term:{term}:hits → INT (total hits)
+            aoa:{proj}:hits:recent → ZSET (domain:term, score=timestamp)
+        """
+        if not self.redis:
+            return
+
+        proj = self._project_key(project_id)
+        now = int(time.time())
+
+        try:
+            r = self.redis.client
+            pipe = r.pipeline()
+
+            # Increment domain hits
+            for domain in domains:
+                domain_clean = domain.lstrip('@')
+                pipe.hincrby(f"aoa:{proj}:hits:domains", domain_clean, 1)
+                pipe.zadd(f"aoa:{proj}:hits:recent", {f"@{domain_clean}": now})
+
+            # Increment term hits
+            for term in terms:
+                term_clean = term.lstrip('#')
+                pipe.hincrby(f"aoa:{proj}:hits:terms", term_clean, 1)
+                pipe.zadd(f"aoa:{proj}:hits:recent", {f"#{term_clean}": now})
+
+            # Trim recent hits to last 1000
+            pipe.zremrangebyrank(f"aoa:{proj}:hits:recent", 0, -1001)
+
+            pipe.execute()
+        except Exception as e:
+            print(f"[IntentIndex] Hit tracking error: {e}", flush=True)
+
+    def get_top_hits(self, project_id: str = None, limit: int = 10) -> dict:
+        """
+        Get top-hit domains and terms.
+
+        Returns:
+            {
+                'domains': [{'name': '@auth', 'hits': 42}, ...],
+                'terms': [{'name': '#token', 'hits': 15}, ...],
+                'recent': ['@auth', '#token', ...]  # Last N unique hits
+            }
+        """
+        if not self.redis:
+            return {'domains': [], 'terms': [], 'recent': []}
+
+        proj = self._project_key(project_id)
+
+        try:
+            r = self.redis.client
+
+            # Get domain hits
+            domain_hits = r.hgetall(f"aoa:{proj}:hits:domains")
+            domains = [
+                {'name': f"@{k.decode()}", 'hits': int(v)}
+                for k, v in domain_hits.items()
+            ]
+            domains.sort(key=lambda x: x['hits'], reverse=True)
+
+            # Get term hits
+            term_hits = r.hgetall(f"aoa:{proj}:hits:terms")
+            terms = [
+                {'name': f"#{k.decode()}", 'hits': int(v)}
+                for k, v in term_hits.items()
+            ]
+            terms.sort(key=lambda x: x['hits'], reverse=True)
+
+            # Get recent hits (last N unique)
+            recent = r.zrevrange(f"aoa:{proj}:hits:recent", 0, limit - 1)
+            recent = [h.decode() for h in recent]
+
+            return {
+                'domains': domains[:limit],
+                'terms': terms[:limit],
+                'recent': recent
+            }
+        except Exception as e:
+            print(f"[IntentIndex] Get hits error: {e}", flush=True)
+            return {'domains': [], 'terms': [], 'recent': []}
+
 
 # ============================================================================
 # Global Index Manager
@@ -3922,9 +4037,9 @@ def register_project():
     })
 
 
-@app.route('/project_id/<project_id>', methods=['DELETE'])
+@app.route('/project/<project_id>', methods=['DELETE'])
 def unregister_project(project_id):
-    """Unregister a project_id, remove its index, and wipe all stored data."""
+    """Unregister a project, remove its index, and wipe all stored data."""
     # First, wipe all Redis data for this project_id
     redis_deleted = {'domains': 0, 'enrichment': 0, 'total': 0}
     try:
@@ -4223,6 +4338,40 @@ def domains_unenriched():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/domains/pending')
+def domains_pending():
+    """
+    Get list of unenriched domain names.
+
+    GL-088: Used by `aoa domains pending` for batch processing.
+
+    Query params:
+      - project_id: required
+      - limit: max domains to return (default: 10)
+
+    Returns: {"domains": ["@name1", "@name2", ...], "enrichment": {...}}
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    project_id = request.args.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    limit = int(request.args.get('limit', 10))
+
+    try:
+        learner = DomainLearner(project_id)
+        domains = learner.get_unenriched_domains(limit)
+        status = learner.get_enrichment_status()
+        return jsonify({
+            'domains': domains,
+            'enrichment': status
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/domains/enrich', methods=['POST'])
 def domains_enrich():
     """
@@ -4464,6 +4613,10 @@ def domains_list():
                 'state': d.get('state', 'active'),
                 # GL-085: Enrichment status
                 'enriched': enriched,
+                # GL-090: Two-tier curation fields
+                'tier': d.get('tier', 'core'),
+                'total_hits': d.get('total_hits', 0),
+                'last_hit_at': d.get('last_hit_at', 0),
             }
             if include_terms:
                 terms = list(d.get('terms', []))[:10]  # Limit to 10 terms
@@ -4604,6 +4757,183 @@ def domains_trigger_learn():
             'project_id': project_id,
             'learning_pending': True,
             'message': 'Next UserPromptSubmit will trigger hook-side domain learning'
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/domains/self-learn', methods=['POST'])
+def domains_self_learn():
+    """
+    GL-090: Orphan-based domain learning (replaces path-based junk).
+
+    Checks if:
+    1. Context tier has room (< CONTEXT_DOMAINS_MAX)
+    2. Orphan tag count >= ORPHAN_THRESHOLD (30)
+
+    If both true, returns orphan tags for Haiku to generate domains.
+    Actual domain creation happens via hook or subsequent API call.
+
+    POST body: {"project_id": "uuid"}
+
+    Returns:
+    - should_learn: true/false
+    - orphans: list of orphan tags (if should_learn)
+    - reason: why learning is/isn't needed
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id') or request.args.get('project_id')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+
+        # Check 1: Does context tier have room?
+        if not learner.can_add_context_domain():
+            counts = learner.count_domains_by_tier()
+            return jsonify({
+                'should_learn': False,
+                'reason': f"Context tier full ({counts.get('context', 0)}/{learner.CONTEXT_DOMAINS_MAX})",
+                'tier_counts': counts
+            })
+
+        # Check 2: Get orphan tags (tags from recent intents that don't match any domain)
+        orphans = _get_orphan_tags(project_id, limit=50)
+
+        if len(orphans) < learner.ORPHAN_THRESHOLD:
+            return jsonify({
+                'should_learn': False,
+                'reason': f"Not enough orphan tags ({len(orphans)}/{learner.ORPHAN_THRESHOLD})",
+                'orphan_count': len(orphans)
+            })
+
+        # Both conditions met - learning should happen
+        # Increment intent count for tracking
+        learner.increment_intent_count()
+
+        return jsonify({
+            'should_learn': True,
+            'reason': f"Found {len(orphans)} orphan tags, context tier has room",
+            'orphans': orphans[:50],  # Top 50 orphans for Haiku
+            'max_domains': min(2, learner.CONTEXT_DOMAINS_MAX - learner.count_domains_by_tier().get('context', 0)),
+            'tier_counts': learner.count_domains_by_tier()
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def _get_orphan_tags(project_id: str, limit: int = 50) -> list[str]:
+    """
+    Get tags from recent intents that don't match any existing domain term.
+
+    GL-090: Orphan tags indicate semantic gaps - areas users work on
+    that aren't covered by existing domains.
+    """
+    try:
+        learner = DomainLearner(project_id)
+
+        # Get all existing terms across all domains
+        existing_terms = set()
+        for domain_name in learner.get_all_domains():
+            terms = learner.get_domain_terms(domain_name)
+            existing_terms.update(terms)
+            # Also add keywords for each term
+            for term in terms:
+                keywords = learner.get_term_keywords(term)
+                existing_terms.update(keywords)
+
+        # Get recent intent records
+        records = intent_index.recent(None, 50, project_id)
+        if not records:
+            return []
+
+        # Collect tags from intents
+        tag_counts = {}
+        for r in records:
+            tags = r.get('tags', [])
+            for tag in tags:
+                # Skip domain tags (@...) and very short tags
+                if tag.startswith('@') or tag.startswith('#') or len(tag) < 3:
+                    continue
+                # Clean the tag
+                clean_tag = tag.lower().strip()
+                # Skip if it matches an existing term
+                if clean_tag in existing_terms:
+                    continue
+                tag_counts[clean_tag] = tag_counts.get(clean_tag, 0) + 1
+
+        # Sort by frequency and return top N
+        sorted_tags = sorted(tag_counts.items(), key=lambda x: -x[1])
+        return [tag for tag, count in sorted_tags[:limit] if count >= 2]
+
+    except Exception as e:
+        print(f"[OrphanTags] Error: {e}", flush=True)
+        return []
+
+
+@app.route('/domains/add-context', methods=['POST'])
+def domains_add_context():
+    """
+    GL-090: Add a new context-tier domain from Haiku-generated skeleton.
+
+    POST body: {
+        "project_id": "uuid",
+        "name": "@domain_name",
+        "description": "what this domain covers",
+        "terms": ["term1", "term2"]  # optional initial terms
+    }
+
+    Called by hook after Haiku generates domain from orphan tags.
+    """
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+    name = data.get('name', '').strip()
+    description = data.get('description', '')
+    terms = data.get('terms', [])
+
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+    if not name or not name.startswith('@'):
+        return jsonify({'error': 'Invalid domain name (must start with @)'}), 400
+
+    try:
+        learner = DomainLearner(project_id)
+
+        # Check if context tier has room
+        if not learner.can_add_context_domain():
+            counts = learner.count_domains_by_tier()
+            return jsonify({
+                'error': f"Context tier full ({counts.get('context', 0)}/{learner.CONTEXT_DOMAINS_MAX})"
+            }), 400
+
+        # Check if domain already exists
+        if name in learner.get_all_domains():
+            return jsonify({'error': f"Domain {name} already exists"}), 400
+
+        # Create domain in context tier
+        domain = Domain(
+            name=name,
+            description=description,
+            confidence=0.6,
+            terms=terms
+        )
+        learner.add_domain(domain, source="intent", tier="context")
+
+        return jsonify({
+            'success': True,
+            'domain': name,
+            'tier': 'context',
+            'tier_counts': learner.count_domains_by_tier()
         })
 
     except Exception as e:
@@ -5969,23 +6299,50 @@ def record_intent():
                 pass  # Don't block on scorer errors
 
     # GL-060.3: Match intent tags against domain terms, increment hits
+    # GL-090 BUG-002 FIX: Also collect orphan tags for learning cycle
     if DOMAINS_AVAILABLE and project_id and tags:
         try:
             learner = DomainLearner(project_id)
+            orphaned_tags = []
             for tag in tags:
                 # Normalize tag (remove # prefix if present)
                 term = tag.lstrip('#').lower()
+                if len(term) < 2:
+                    continue
                 # Find domains that have this term
                 domains_with_term = learner.get_domains_for_term(term)
-                for domain_name in domains_with_term:
-                    learner.increment_domain_hits(domain_name)
+                if domains_with_term:
+                    for domain_name in domains_with_term:
+                        learner.increment_domain_hits(domain_name)
+                else:
+                    # Tag didn't match any domain - it's an orphan
+                    orphaned_tags.append(term)
+            # Store orphaned tags for learning cycle
+            if orphaned_tags:
+                learner.add_orphan_tags(orphaned_tags)
         except Exception:
             pass  # Don't block intent recording on domain errors
 
     # GL-053 Phase C: Trigger domain learning if threshold reached
     _trigger_domain_learning_if_needed(project_id)
 
-    return jsonify({'success': True})
+    # GL-088: Check if enrichment should be triggered (every 25 prompts)
+    enrichment_ready = False
+    prompt_count = 0
+    if DOMAINS_AVAILABLE and project_id:
+        try:
+            learner = DomainLearner(project_id)
+            prompt_count = learner.get_prompt_count()
+            # Signal enrichment_ready when prompt_count hits 25, 50, 75, etc.
+            enrichment_ready = (prompt_count > 0 and prompt_count % 25 == 0)
+        except Exception:
+            pass
+
+    return jsonify({
+        'success': True,
+        'enrichment_ready': enrichment_ready,
+        'prompt_count': prompt_count
+    })
 
 
 @app.route('/intent/tags')
@@ -6066,6 +6423,52 @@ def intent_stats():
     return jsonify(intent_index.get_stats(project_id))
 
 
+@app.route('/intent/summary')
+def intent_summary():
+    """GL-088: Get work summary for last N prompts (for Haiku enrichment).
+
+    Query params:
+        project_id: Project to query
+        limit: Number of recent intents (default 25)
+
+    Returns:
+        {
+            'prompts': 25,
+            'files': ['file1.py', 'file2.py', ...],  // Unique files touched
+            'file_count': 15,
+            'summary': 'user worked on authentication, search, API endpoints'
+        }
+    """
+    project_id = request.args.get('project_id')
+    limit = int(request.args.get('limit', 25))
+
+    records = intent_index.recent(None, limit, project_id)
+
+    # Collect unique files (excluding patterns and commands)
+    files = set()
+    tools_used = set()
+    for r in records:
+        tools_used.add(r.get('tool', 'unknown'))
+        for f in r.get('files', []):
+            if f.startswith('pattern:') or f.startswith('cmd:'):
+                continue
+            # Strip line references
+            base_path = f.split(':')[0] if ':' in f else f
+            if base_path and '/' in base_path:
+                files.add(base_path)
+
+    # Sort by recency (most recent files first)
+    files_list = list(files)[:50]  # Limit to 50 files
+
+    return jsonify({
+        'prompts': len(records),
+        'files': files_list,
+        'file_count': len(files),
+        'tools_used': list(tools_used),
+        'project_id': project_id
+    })
+
+
 @app.route('/intent/rolling')
 def intent_rolling():
     """GL-045: Get rolling intent window with tag scores.
@@ -6084,6 +6487,34 @@ def intent_rolling():
         'rolling_tags': rolling,
         'file_affinity': affinity,
         'window': window,
+        'project_id': project_id
+    })
+
+
+@app.route('/intent/hits')
+def intent_hits():
+    """GL-088: Get top-hit domains and terms from grep searches.
+
+    Query params:
+        project_id: Project to query
+        limit: Max results per category (default 10)
+
+    Returns:
+        {
+            'domains': [{'name': '@auth', 'hits': 42}, ...],
+            'terms': [{'name': '#token', 'hits': 15}, ...],
+            'recent': ['@auth', '#token', ...]  // Most recent unique hits
+        }
+    """
+    project_id = request.args.get('project_id')
+    limit = int(request.args.get('limit', 10))
+
+    hits = intent_index.get_top_hits(project_id, limit)
+
+    return jsonify({
+        'domains': hits.get('domains', []),
+        'terms': hits.get('terms', []),
+        'recent': hits.get('recent', []),
         'project_id': project_id
     })
 
@@ -7788,6 +8219,186 @@ def get_memory():
             'memory': '',
             'ms': round((time.time() - start) * 1000, 2)
         }), 500
+
+
+# ============================================================================
+# GL-089: Job Queue Endpoints
+# ============================================================================
+
+@app.route('/jobs/status')
+def jobs_status():
+    """Get job queue status for a project."""
+    if not JOBS_AVAILABLE:
+        return jsonify({'error': 'Job queue module not available'}), 500
+
+    project_id = request.args.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    try:
+        q = JobQueue(project_id)
+        return jsonify(q.status())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/jobs/pending')
+def jobs_pending():
+    """Get pending jobs for a project."""
+    if not JOBS_AVAILABLE:
+        return jsonify({'error': 'Job queue module not available'}), 500
+
+    project_id = request.args.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    limit = int(request.args.get('limit', 10))
+
+    try:
+        q = JobQueue(project_id)
+        jobs = q.pending_jobs(limit)
+        return jsonify({
+            'jobs': [{'id': j.id, 'type': j.type.value, 'payload': j.payload} for j in jobs],
+            'count': len(jobs)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/jobs/push', methods=['POST'])
+def jobs_push():
+    """Push jobs to the queue."""
+    if not JOBS_AVAILABLE:
+        return jsonify({'error': 'Job queue module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    jobs_data = data.get('jobs', [])
+    if not jobs_data:
+        return jsonify({'error': 'No jobs provided'}), 400
+
+    try:
+        q = JobQueue(project_id)
+        jobs = []
+        for jd in jobs_data:
+            job = Job(
+                id="",
+                type=JobType(jd.get('type', 'enrich')),
+                project_id=project_id,
+                phase=jd.get('phase', 'intelligence'),
+                payload=jd.get('payload', {})
+            )
+            jobs.append(job)
+
+        count = q.push_many(jobs)
+        return jsonify({'pushed': count, 'status': q.status()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/jobs/push/enrich', methods=['POST'])
+def jobs_push_enrich():
+    """
+    Push enrichment jobs for domains.
+
+    POST body: {"project_id": "xxx", "domains": [{"name": "@x", "description": "..."}]}
+    """
+    if not JOBS_AVAILABLE:
+        return jsonify({'error': 'Job queue module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    domains = data.get('domains', [])
+    if not domains:
+        return jsonify({'error': 'No domains provided'}), 400
+
+    try:
+        count = push_enrich_jobs(project_id, domains)
+        q = JobQueue(project_id)
+        return jsonify({'pushed': count, 'status': q.status()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/jobs/process', methods=['POST'])
+def jobs_process():
+    """
+    Process jobs from the queue.
+
+    POST body: {"project_id": "xxx", "count": 3}
+    """
+    if not JOBS_AVAILABLE:
+        return jsonify({'error': 'Job queue module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    count = int(data.get('count', 1))
+
+    try:
+        worker = JobWorker(project_id)
+        processed = worker.process_batch(count)
+        return jsonify({
+            'processed': len(processed),
+            'jobs': [{'id': j.id, 'type': j.type.value} for j in processed],
+            'status': worker.queue.status()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/jobs/retry', methods=['POST'])
+def jobs_retry():
+    """Move failed jobs back to pending."""
+    if not JOBS_AVAILABLE:
+        return jsonify({'error': 'Job queue module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    try:
+        q = JobQueue(project_id)
+        count = q.retry_failed()
+        return jsonify({'retried': count, 'status': q.status()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/jobs/clear', methods=['POST'])
+def jobs_clear():
+    """Clear job queues."""
+    if not JOBS_AVAILABLE:
+        return jsonify({'error': 'Job queue module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    queue_type = data.get('queue', 'complete')  # complete, failed, all
+
+    try:
+        q = JobQueue(project_id)
+        if queue_type == 'all':
+            result = q.clear_all()
+        elif queue_type == 'complete':
+            result = {'cleared': q.clear_complete()}
+        else:
+            return jsonify({'error': f'Unknown queue type: {queue_type}'}), 400
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ============================================================================

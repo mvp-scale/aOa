@@ -81,6 +81,7 @@ main() {
         analyze|az) cmd_analyze "$@" ;;
         learn)      cmd_learn "$@" ;;
         domains|d)  cmd_domains "$@" ;;
+        jobs|j)     cmd_jobs "$@" ;;
         stats)      cmd_stats ;;
         health)     cmd_health ;;
         metrics)    cmd_metrics ;;

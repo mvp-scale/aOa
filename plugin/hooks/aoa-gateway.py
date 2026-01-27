@@ -64,77 +64,12 @@ STOPWORDS = {
 }
 
 # =============================================================================
-# Intent Capture (ported from aoa-intent-capture.py)
+# Intent Capture - GL-088: Simplified (removed pattern-based tagging)
 # =============================================================================
-
-# Intent patterns: (regex, [tags])
-INTENT_PATTERNS = [
-    (r'auth|login|session|oauth|jwt|password', ['#authentication', '#security']),
-    (r'test[s]?[/_]|_test\.|\bspec[s]?\b|pytest|unittest', ['#testing']),
-    (r'config|settings|\.env|\.yaml|\.yml|\.json', ['#configuration']),
-    (r'api|endpoint|route|handler|controller', ['#api']),
-    (r'index|search|query|grep|find', ['#search']),
-    (r'model|schema|entity|db|database|migration|sql', ['#data']),
-    (r'component|view|template|page|ui|style|css|html', ['#frontend']),
-    (r'deploy|docker|k8s|ci|cd|pipeline|github', ['#devops']),
-    (r'error|exception|catch|throw|raise|fail', ['#errors']),
-    (r'log|debug|trace|print|console', ['#logging']),
-    (r'cache|redis|memory|store', ['#caching']),
-    (r'async|await|promise|thread|concurrent', ['#async']),
-    (r'hook|plugin|extension|middleware', ['#hooks']),
-    (r'doc|readme|comment|docstring', ['#documentation']),
-    (r'util|helper|common|shared|lib', ['#utilities']),
-]
-
-# Tool action tags
-TOOL_TAGS = {
-    'Read': '#reading',
-    'Edit': '#editing',
-    'Write': '#creating',
-    'Bash': '#executing',
-    'Grep': '#searching',
-    'Glob': '#searching',
-    'Task': '#delegating',
-}
+# Tags now come from hit tracking during grep/multi searches, not patterns.
+# This reduces noise and makes intent signals meaningful.
 
 
-def _tokenize(text: str) -> set:
-    """Tokenize a string into matchable parts."""
-    tokens = set()
-    parts = re.split(r'[/_\-.\s]+', text)
-    for part in parts:
-        if not part:
-            continue
-        part_lower = part.lower()
-        tokens.add(part_lower)
-        # Split camelCase
-        camel_parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+', part)
-        for cp in camel_parts:
-            tokens.add(cp.lower())
-    return tokens
-
-
-def infer_tags(files: list, tool: str) -> list:
-    """Infer semantic intent tags from file paths and tool."""
-    tags = set()
-
-    # Add tool action tag
-    if tool in TOOL_TAGS:
-        tags.add(TOOL_TAGS[tool])
-
-    # Collect all tokens from all files
-    combined_text = ""
-    for f in files:
-        if f.startswith('pattern:') or f.startswith('cmd:'):
-            continue
-        combined_text += " " + f
-
-    # Match against intent patterns
-    for pattern, pattern_tags in INTENT_PATTERNS:
-        if re.search(pattern, combined_text, re.IGNORECASE):
-            tags.update(pattern_tags)
-
-    return list(tags)
 
 
 def extract_files(data: dict) -> tuple:
@@ -432,16 +367,13 @@ def log_prediction(session_id: str, files: list, keywords: list):
     }, timeout=1)
 
     # Record as Predict intent for aoa intent display
-    # Tags should reflect what was predicted, not raw search keywords
-    # Use infer_tags on predicted files for semantic meaning
-    predicted_tags = infer_tags(file_paths[:5], 'Predict')
-    # Note: confidence passed as separate field, not as a tag
+    # GL-088: No pattern-based tags - just use the prediction keywords
     api_post("/intent", {
         'session_id': session_id,
         'project_id': PROJECT_ID,
         'tool': 'Predict',
         'files': file_paths[:5],
-        'tags': predicted_tags,
+        'tags': [f'#{k}' for k in keywords[:5]],  # Keywords as tags
         'confidence': avg_confidence
     }, timeout=1)
 
@@ -552,9 +484,11 @@ def handle_prompt(data: dict):
 
 def handle_tool(data: dict):
     """
-    PostToolUse: Capture intent with full file/tag extraction.
+    PostToolUse: Capture intent - files only, no pattern-based tags.
 
-    Ported from: aoa-intent-capture.py
+    GL-088: Tags now come from hit tracking during grep/multi searches.
+    This captures: tool, files, timestamp - that's it.
+    Also triggers self-learning every 25 prompts.
     """
     tool = data.get("tool_name", "unknown")
     session_id = data.get("session_id", "unknown")
@@ -563,28 +497,37 @@ def handle_tool(data: dict):
     # Extract files and search tags from tool data
     files, search_tags = extract_files(data)
 
-    # Infer semantic tags from file paths
-    tags = infer_tags(files, tool)
-    tags.extend(search_tags)
-
     # Get file sizes for baseline token calculation
     file_sizes = get_file_sizes(files)
 
     # Get actual output size
     output_size = get_output_size(data)
 
-    # Record intent (fire-and-forget)
-    if files or tags:
-        api_post("/intent", {
+    # Record intent and check for enrichment trigger
+    # GL-088: Response includes enrichment_ready flag at 25, 50, 75 prompts
+    enrichment_ready = False
+    if files:
+        response = api_post("/intent", {
             "session_id": session_id,
             "project_id": PROJECT_ID,
             "tool": tool,
             "files": files,
-            "tags": tags,
+            "tags": search_tags,  # Only search-derived tags, not pattern-inferred
             "tool_use_id": tool_use_id,
             "file_sizes": file_sizes,
             "output_size": output_size,
         }, timeout=2)
+
+        # Check if self-learning should trigger
+        if response and response.get('enrichment_ready'):
+            enrichment_ready = True
+
+    # GL-088: Trigger self-learning from work history (every 25 prompts)
+    # This runs in background on the server - non-blocking
+    if enrichment_ready:
+        api_post("/domains/self-learn", {
+            "project_id": PROJECT_ID
+        }, timeout=1)
 
     # GL-062: Check if accessed files match predictions (for hit/miss tracking)
     # Only check for file-accessing tools

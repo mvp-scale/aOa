@@ -96,6 +96,12 @@ cmd_intent_recent() {
     local prompt_threshold=$(echo "$domain_stats" | jq -r '.prompt_threshold // 10')
     local seconds_to_autotune=$(echo "$domain_stats" | jq -r '.seconds_to_autotune // 0')
 
+    # GL-088: Get hit-based tags (actual usage, not pattern-matched)
+    local hit_stats=$(curl -s "${INDEX_URL}/intent/hits?project_id=${project_id}&limit=5")
+    local top_domains=$(echo "$hit_stats" | jq -r '.domains[:3] | .[].name' 2>/dev/null | tr '\n' ' ')
+    local top_terms=$(echo "$hit_stats" | jq -r '.terms[:3] | .[].name' 2>/dev/null | tr '\n' ' ')
+    local recent_hits=$(echo "$hit_stats" | jq -r '.recent[:5] | join(" ")' 2>/dev/null)
+
     # Get recent intent records
     # Request 3x limit from API to ensure enough after filtering out records without files
     local api_limit=$((limit * 3))
@@ -647,9 +653,15 @@ PYEOF
         fi
     done
 
-    # Intent Angle footer - matching aoa domains style
+    # Intent Angle footer - GL-088: clean value statement, no counters
     echo ""
     echo -e "${CYAN}${BOLD}⚡ Intent Angle${NC}"
     echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────────────────${NC}"
-    echo -e "${CYAN}${domain_count} domains${NC} ${DIM}│${NC} Learning: ${YELLOW}${prompt_count}/${prompt_threshold}${NC} ${DIM}│${NC} ${CYAN}aOa finds exact locations →${NC} ${BOLD}${YELLOW}Claude reads only what it needs.${NC}"
+
+    # Show domains + top hits (if any) + value statement
+    if [ -n "$recent_hits" ] && [ "$recent_hits" != "null" ] && [ "$recent_hits" != "" ]; then
+        echo -e "${CYAN}${domain_count} domains${NC} ${DIM}│${NC} ${MAGENTA}${recent_hits}${NC} ${DIM}│${NC} ${CYAN}aOa learns your workflow →${NC} ${BOLD}${YELLOW}Claude reads only what it needs.${NC}"
+    else
+        echo -e "${CYAN}${domain_count} domains${NC} ${DIM}│${NC} ${CYAN}aOa learns your workflow →${NC} ${BOLD}${YELLOW}Claude reads only what it needs.${NC}"
+    fi
 }

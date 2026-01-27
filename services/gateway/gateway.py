@@ -64,6 +64,8 @@ ROUTES = {
     "/intent/session": ("index", "/intent/session"),
     "/intent/stats": ("index", "/intent/stats"),
     "/intent/rolling": ("index", "/intent/rolling"),  # GL-045: Rolling intent window
+    "/intent/hits": ("index", "/intent/hits"),  # GL-088: Top-hit domains/terms
+    "/intent/summary": ("index", "/intent/summary"),  # GL-088: Work summary for enrichment
     "/repos": ("index", "/repos"),
     "/ac/test": ("index", "/ac/test"),  # GL-047: Aho-Corasick pattern matcher test
 
@@ -122,16 +124,28 @@ ROUTES = {
     "/domains/unmatched-tags": ("index", "/domains/unmatched-tags"),  # GL-069.6: Get unmatched tags for learning
     "/domains/goal-history": ("index", "/domains/goal-history"),  # GL-078: Get goal history for learning
     "/domains/trigger-learn": ("index", "/domains/trigger-learn"),  # GL-070: Trigger hook-side learning
+    "/domains/self-learn": ("index", "/domains/self-learn"),  # GL-088: Self-learning from work history
     "/analyze/project": ("index", "/analyze/project"),  # GL-083: One-time project analysis
     "/symbol/lookup": ("index", "/symbol/lookup"),  # GL-059.2: Resolve file:line to functions
 
     # GL-085: Lazy domain enrichment routes
     "/domains/init-skeleton": ("index", "/domains/init-skeleton"),  # Initialize skeleton domains
     "/domains/unenriched": ("index", "/domains/unenriched"),  # Get next domain needing enrichment
+    "/domains/pending": ("index", "/domains/pending"),  # GL-088: Get list of unenriched domain names
     "/domains/enrich": ("index", "/domains/enrich"),  # Add keywords to domain
     "/domains/unenrich": ("index", "/domains/unenrich"),  # Mark domain for rebuild
     "/domains/enrichment-status": ("index", "/domains/enrichment-status"),  # Get enrichment progress
     "/domains/enrichment-prompt": ("index", "/domains/enrichment-prompt"),  # Get Haiku prompt for enrichment
+    "/domains/add-context": ("index", "/domains/add-context"),  # GL-090: Add context-tier domain
+
+    # GL-089: Job queue routes
+    "/jobs/status": ("index", "/jobs/status"),      # Get queue status
+    "/jobs/pending": ("index", "/jobs/pending"),    # List pending jobs
+    "/jobs/push": ("index", "/jobs/push"),          # Push jobs to queue
+    "/jobs/push/enrich": ("index", "/jobs/push/enrich"),  # Push enrichment jobs
+    "/jobs/process": ("index", "/jobs/process"),    # Process jobs
+    "/jobs/retry": ("index", "/jobs/retry"),        # Retry failed jobs
+    "/jobs/clear": ("index", "/jobs/clear"),        # Clear queues
 
     # Status service routes
     "/status": ("status", "/status"),

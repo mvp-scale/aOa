@@ -73,6 +73,15 @@ class DomainLearner:
     STARTER_SCORE = 0.5  # Initial term confidence
     PRESERVE_THRESHOLD = 20  # Keep domains with hits >= this during tune
 
+    # GL-090: Two-tier domain curation
+    CORE_DOMAINS_MAX = 24  # Max core tier domains
+    CONTEXT_DOMAINS_MAX = 20  # Max context tier domains
+    DECAY_RATE = 0.80  # 20% decay per tune cycle
+    PROMOTION_THRESHOLD = 150  # Promote context→core after 150 lifetime hits
+    DEMOTION_STALENESS = 500  # Demote core→context after 500 intents with 0 hits
+    ORPHAN_THRESHOLD = 30  # Need 30+ orphans to trigger domain creation
+    PRUNE_FLOOR = 0.5  # Prune context domains with decayed hits below this
+
     def __init__(self, project_id: str, redis_url: Optional[str] = None):
         """Initialize with project identifier."""
         self.project_id = project_id
@@ -287,16 +296,25 @@ class DomainLearner:
         key = self._key("domains")
         return list(self.redis.client.smembers(key))
 
-    def add_domain(self, domain: Domain, source: str = "learned") -> None:
+    def add_domain(self, domain: Domain, source: str = "learned", tier: str = None) -> None:
         """Add a new domain with metadata and terms.
 
         Args:
             domain: Domain object with name, description, confidence, terms
             source: "seeded" for quickstart domains, "learned" for Haiku-discovered
+            tier: "core" or "context" (GL-090). Defaults based on source.
         """
+        # GL-090: Determine tier based on source if not specified
+        if tier is None:
+            # Intelligence phase (skeleton/seeded) → core, intent phase → context
+            tier = "core" if source in ("skeleton", "seeded") else "context"
+
         # Add to domain set
         domains_key = self._key("domains")
         self.redis.client.sadd(domains_key, domain.name)
+
+        # Get current intent count for tracking
+        intent_count = int(self.redis.client.get(self._key("intent_count")) or 0)
 
         # Store metadata with lifecycle fields (GL-059.1) and enrichment (GL-085)
         meta_key = self._domain_key(domain.name, "meta")
@@ -306,12 +324,16 @@ class DomainLearner:
             "hits": self.STARTER_HITS,
             "created": int(time.time()),
             # GL-059.1: Lifecycle fields
-            "source": source,  # "seeded" | "learned" | "skeleton"
+            "source": source,  # "seeded" | "learned" | "skeleton" | "intent"
             "state": "active",  # "active" | "stale" | "deprecated"
             "stale_cycles": 0,
             "hits_last_cycle": 0,
             # GL-085: Lazy enrichment
             "enriched": "false",  # "false" until keywords added
+            # GL-090: Two-tier curation
+            "tier": tier,  # "core" | "context"
+            "total_hits": 0,  # Lifetime hits (never decayed, for promotion)
+            "last_hit_at": intent_count,  # Intent count when last hit (for demotion)
         })
 
         # Update project-level source counters (GL-059.1)
@@ -347,9 +369,21 @@ class DomainLearner:
         return list(self.redis.client.zrange(term_key, 0, -1))
 
     def increment_domain_hits(self, name: str) -> int:
-        """Increment hit counter for a domain."""
+        """Increment hit counter for a domain.
+
+        GL-090: Also tracks total_hits (lifetime) and last_hit_at (for demotion).
+        """
         meta_key = self._domain_key(name, "meta")
-        return self.redis.client.hincrby(meta_key, "hits", 1)
+        # Use prompt_count for last_hit_at tracking (incremented on each intent)
+        prompt_count = self.get_prompt_count()
+
+        # Increment both decayed hits and lifetime total_hits
+        pipe = self.redis.client.pipeline()
+        pipe.hincrby(meta_key, "hits", 1)
+        pipe.hincrby(meta_key, "total_hits", 1)
+        pipe.hset(meta_key, "last_hit_at", prompt_count)
+        results = pipe.execute()
+        return results[0]  # Return current hits count
 
     # =========================================================================
     # GL-085: Lazy Domain Enrichment
@@ -365,6 +399,85 @@ class DomainLearner:
         """Mark domain as enriched (keywords have been added)."""
         meta_key = self._domain_key(name, "meta")
         self.redis.client.hset(meta_key, "enriched", "true" if enriched else "false")
+
+    # =========================================================================
+    # GL-090: Two-Tier Domain Curation
+    # =========================================================================
+
+    def get_domain_tier(self, name: str) -> str:
+        """Get domain tier (core or context)."""
+        meta_key = self._domain_key(name, "meta")
+        tier = self.redis.client.hget(meta_key, "tier")
+        return tier if tier else "core"  # Default to core for legacy domains
+
+    def set_domain_tier(self, name: str, tier: str) -> None:
+        """Set domain tier."""
+        meta_key = self._domain_key(name, "meta")
+        self.redis.client.hset(meta_key, "tier", tier)
+
+    def count_domains_by_tier(self) -> dict:
+        """Count domains in each tier."""
+        counts = {"core": 0, "context": 0}
+        for name in self.get_all_domains():
+            tier = self.get_domain_tier(name)
+            counts[tier] = counts.get(tier, 0) + 1
+        return counts
+
+    def get_domains_by_tier(self, tier: str) -> list[str]:
+        """Get all domain names in a specific tier."""
+        return [name for name in self.get_all_domains() if self.get_domain_tier(name) == tier]
+
+    def promote_domain(self, name: str) -> bool:
+        """Promote domain from context to core tier.
+
+        GL-090: Called when total_hits >= PROMOTION_THRESHOLD.
+        Returns True if promoted, False if already core or doesn't exist.
+        """
+        current_tier = self.get_domain_tier(name)
+        if current_tier == "context":
+            self.set_domain_tier(name, "core")
+            return True
+        return False
+
+    def demote_domain(self, name: str) -> bool:
+        """Demote domain from core to context tier.
+
+        GL-090: Called when domain has 0 hits for DEMOTION_STALENESS intents.
+        Returns True if demoted, False if already context or doesn't exist.
+        """
+        current_tier = self.get_domain_tier(name)
+        if current_tier == "core":
+            self.set_domain_tier(name, "context")
+            return True
+        return False
+
+    def can_add_context_domain(self) -> bool:
+        """Check if we can add another context domain (under max)."""
+        counts = self.count_domains_by_tier()
+        return counts.get("context", 0) < self.CONTEXT_DOMAINS_MAX
+
+    def apply_decay(self) -> int:
+        """Apply decay to all domain hits.
+
+        GL-090: Multiplies hits by DECAY_RATE (0.80).
+        Returns count of domains decayed.
+        """
+        count = 0
+        for name in self.get_all_domains():
+            meta_key = self._domain_key(name, "meta")
+            hits = float(self.redis.client.hget(meta_key, "hits") or 0)
+            new_hits = hits * self.DECAY_RATE
+            self.redis.client.hset(meta_key, "hits", new_hits)
+            count += 1
+        return count
+
+    def get_intent_count(self) -> int:
+        """Get current intent count for this project."""
+        return int(self.redis.client.get(self._key("intent_count")) or 0)
+
+    def increment_intent_count(self) -> int:
+        """Increment and return intent count."""
+        return self.redis.client.incr(self._key("intent_count"))
 
     def get_unenriched_domain(self) -> Optional[dict]:
         """
@@ -382,6 +495,21 @@ class DomainLearner:
                     'terms': terms
                 }
         return None
+
+    def get_unenriched_domains(self, limit: int = 10) -> list[str]:
+        """
+        Get names of all unenriched domains (up to limit).
+
+        GL-088: Used by `aoa domains pending` for batch processing.
+        Returns list of domain names that need enrichment.
+        """
+        unenriched = []
+        for name in self.get_all_domains():
+            if not self.is_domain_enriched(name):
+                unenriched.append(name)
+                if len(unenriched) >= limit:
+                    break
+        return unenriched
 
     def get_enrichment_status(self) -> dict:
         """Get enrichment progress: enriched count, total count."""
@@ -441,6 +569,14 @@ class DomainLearner:
             if count > 0:
                 terms_added += 1
                 keywords_added += count
+
+            # GL-090 BUG-001 FIX: Create keyword→domain reverse index
+            # This allows get_domains_for_term() to find domains by keyword
+            for kw in keywords:
+                clean_kw = kw.lower()
+                if len(clean_kw) >= 3:
+                    kw_key = self._key(f"term:{clean_kw}")
+                    self.redis.client.zadd(kw_key, {name: self.STARTER_SCORE})
 
         # Mark domain as enriched
         self.set_domain_enriched(name, True)
@@ -1132,12 +1268,17 @@ Output valid JSON only:
 
             result.append({
                 'name': name,
-                'hits': int(meta.get('hits', 0)),
-                'confidence': float(meta.get('confidence', 0)),
-                'created': int(meta.get('created', 0)),
+                'description': meta.get('description', ''),
+                'hits': int(float(meta.get('hits', 0) or 0)),
+                'confidence': float(meta.get('confidence', 0) or 0),
+                'created': int(meta.get('created', 0) or 0),
                 'source': meta.get('source', 'seeded'),
                 'state': meta.get('state', 'active'),
                 'terms': terms_sorted,
+                # GL-090: Two-tier curation fields
+                'tier': meta.get('tier', 'core'),
+                'total_hits': int(float(meta.get('total_hits', 0) or 0)),
+                'last_hit_at': int(float(meta.get('last_hit_at', 0) or 0)),
             })
         return result
 
@@ -1432,14 +1573,63 @@ Return JSON:
         # 5. Snapshot hits for next cycle and reset
         self.snapshot_cycle_hits()
 
-        # 5. Update tune tracking
+        # =====================================================================
+        # GL-090: Two-Tier Curation
+        # =====================================================================
+
+        summary['decayed'] = 0
+        summary['promoted'] = 0
+        summary['demoted'] = 0
+        summary['context_pruned'] = 0
+
+        # Use prompt_count for staleness calculation (same as last_hit_at tracking)
+        prompt_count = self.get_prompt_count()
+
+        # 6. Apply decay to all domain hits
+        for domain_name in self.get_all_domains():
+            meta_key = self._domain_key(domain_name, "meta")
+            hits = float(self.redis.client.hget(meta_key, "hits") or 0)
+            new_hits = hits * self.DECAY_RATE
+            self.redis.client.hset(meta_key, "hits", new_hits)
+            summary['decayed'] += 1
+
+        # 7. Check promotions: context → core (high value)
+        for domain_name in self.get_domains_by_tier("context"):
+            meta = self.get_domain_meta(domain_name)
+            total_hits = int(meta.get('total_hits', 0))
+            if total_hits >= self.PROMOTION_THRESHOLD:
+                # Check if core tier has room
+                counts = self.count_domains_by_tier()
+                if counts.get("core", 0) < self.CORE_DOMAINS_MAX:
+                    self.promote_domain(domain_name)
+                    summary['promoted'] += 1
+
+        # 8. Check demotions: core → context (stale)
+        for domain_name in self.get_domains_by_tier("core"):
+            meta = self.get_domain_meta(domain_name)
+            last_hit_at = int(meta.get('last_hit_at', 0))
+            intents_since_hit = prompt_count - last_hit_at
+
+            if intents_since_hit >= self.DEMOTION_STALENESS:
+                self.demote_domain(domain_name)
+                summary['demoted'] += 1
+
+        # 9. Prune low-value context domains
+        for domain_name in self.get_domains_by_tier("context"):
+            meta = self.get_domain_meta(domain_name)
+            hits = float(meta.get('hits', 0))
+            if hits < self.PRUNE_FLOOR:
+                self.remove_domain(domain_name)
+                summary['context_pruned'] += 1
+
+        # 10. Update tune tracking
         self.set_last_tune()
         self.reset_tune_count()
         self.clear_tuning_pending()
         self.set_tune_results(
             kept=summary['domains_active'],
             added=0,
-            removed=summary['terms_pruned']
+            removed=summary['terms_pruned'] + summary['context_pruned']
         )
 
         return summary
@@ -1500,7 +1690,7 @@ Return JSON:
             if domain_name in current_domains:
                 # Check if high-value (extra protection)
                 meta = self.get_domain_meta(domain_name)
-                hits = int(meta.get('hits', 0))
+                hits = int(float(meta.get('hits', 0) or 0))
                 if hits < self.PRESERVE_THRESHOLD:
                     self.remove_domain(domain_name)
                     summary['removed'] += 1
@@ -1785,7 +1975,7 @@ Respond with ONLY valid JSON (no markdown, no explanation):
             terms = self.get_domain_terms(d)
             total_terms += len(terms)
             meta = self.get_domain_meta(d)
-            total_hits += int(meta.get("hits", 0))
+            total_hits += int(float(meta.get("hits", 0) or 0))
 
         tune_results = self.get_tune_results()
         learned_details = self.get_learned_details()

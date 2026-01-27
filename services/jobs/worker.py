@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""
+GL-089: Job Worker for aOa
+
+Processes jobs from the queue. Each job type has a handler.
+Worker is stateless - all state lives in Redis queue.
+
+Run modes:
+1. Single job: process one job and exit (for hooks)
+2. Batch: process N jobs and exit
+3. Drain: process until queue empty
+"""
+
+import json
+import os
+import sys
+import time
+from typing import Callable, Optional
+
+# Add paths for imports
+_services_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _services_dir)
+sys.path.insert(0, '/app/services')
+
+from jobs.queue import Job, JobQueue, JobType
+
+# Import domain learner for enrichment jobs
+try:
+    from domains.learner import DomainLearner, Domain
+    LEARNER_AVAILABLE = True
+except ImportError:
+    LEARNER_AVAILABLE = False
+
+
+class JobWorker:
+    """
+    Processes jobs from the queue.
+
+    Each job type maps to a handler function.
+    Handlers receive (job, context) and return True on success.
+    """
+
+    def __init__(self, project_id: str, redis_url: Optional[str] = None):
+        self.project_id = project_id
+        self.queue = JobQueue(project_id, redis_url)
+        self.redis_url = redis_url
+        self.handlers: dict[JobType, Callable] = {
+            JobType.ENRICH: self._handle_enrich,
+            JobType.MAP_KEYWORDS: self._handle_map_keywords,
+            JobType.ANALYZE_INTENT: self._handle_analyze_intent,
+            JobType.DISCOVER_DOMAIN: self._handle_discover_domain,
+            JobType.CLEANUP: self._handle_cleanup,
+            JobType.TUNE: self._handle_tune,
+            JobType.REINDEX: self._handle_reindex,
+        }
+
+    def process_one(self, timeout: int = 0) -> Optional[Job]:
+        """
+        Process a single job.
+
+        Args:
+            timeout: Seconds to wait for job (0 = no wait)
+
+        Returns:
+            Processed job or None if queue empty
+        """
+        job = self.queue.pop(timeout=timeout)
+        if not job:
+            return None
+
+        handler = self.handlers.get(job.type)
+        if not handler:
+            self.queue.fail(job, f"Unknown job type: {job.type}")
+            return job
+
+        try:
+            handler(job)
+            self.queue.complete(job)
+        except Exception as e:
+            self.queue.fail(job, str(e))
+
+        return job
+
+    def process_batch(self, count: int = 3) -> list[Job]:
+        """Process up to N jobs. Returns list of processed jobs."""
+        processed = []
+        for _ in range(count):
+            job = self.process_one(timeout=0)
+            if not job:
+                break
+            processed.append(job)
+        return processed
+
+    def drain(self, max_jobs: int = 100) -> int:
+        """Process all pending jobs. Returns count processed."""
+        count = 0
+        while count < max_jobs:
+            job = self.process_one(timeout=0)
+            if not job:
+                break
+            count += 1
+        return count
+
+    # =========================================================================
+    # Job Handlers
+    # =========================================================================
+
+    def _handle_enrich(self, job: Job) -> None:
+        """
+        Generate terms and keywords for a domain.
+
+        This is where Haiku would be called to generate terms.
+        For now, we just mark as needing enrichment.
+        """
+        if not LEARNER_AVAILABLE:
+            raise RuntimeError("Domain learner not available")
+
+        domain_name = job.payload.get("domain")
+        description = job.payload.get("description", "")
+
+        if not domain_name:
+            raise ValueError("Missing domain name in job payload")
+
+        # This is a placeholder - actual implementation would:
+        # 1. Call Haiku to generate terms from description
+        # 2. Call Haiku to generate keywords for each term
+        # 3. Store in Redis via learner
+
+        # For now, just log that we need to process this
+        print(f"[Worker] ENRICH: {domain_name} - needs Haiku processing", flush=True)
+
+        # The actual Haiku call would happen via hook or direct API
+        # This job just tracks that work is needed
+
+    def _handle_map_keywords(self, job: Job) -> None:
+        """Map domain keywords to codebase files."""
+        domain_name = job.payload.get("domain")
+        scope = job.payload.get("scope", "all")
+
+        print(f"[Worker] MAP_KEYWORDS: {domain_name} scope={scope}", flush=True)
+        # Implementation would scan files and create keyword->file mappings
+
+    def _handle_analyze_intent(self, job: Job) -> None:
+        """Analyze file access patterns for intent phase."""
+        files = job.payload.get("files", [])
+
+        print(f"[Worker] ANALYZE_INTENT: {len(files)} files", flush=True)
+        # Implementation would analyze file patterns to discover domains
+
+    def _handle_discover_domain(self, job: Job) -> None:
+        """Create new domain from discovered patterns."""
+        patterns = job.payload.get("patterns", [])
+
+        print(f"[Worker] DISCOVER_DOMAIN: patterns={patterns}", flush=True)
+        # Implementation would create new domain skeleton
+
+    def _handle_cleanup(self, job: Job) -> None:
+        """Clean up stale or deprecated domains."""
+        domain_name = job.payload.get("domain")
+        action = job.payload.get("action", "deprecate")
+
+        print(f"[Worker] CLEANUP: {domain_name} action={action}", flush=True)
+        # Implementation would mark domain as deprecated or remove
+
+    def _handle_tune(self, job: Job) -> None:
+        """Run domain tuning/rebalancing."""
+        trigger = job.payload.get("trigger", "manual")
+
+        print(f"[Worker] TUNE: trigger={trigger}", flush=True)
+        # Implementation would rebalance domain terms
+
+    def _handle_reindex(self, job: Job) -> None:
+        """Rebuild keyword mappings."""
+        domain_name = job.payload.get("domain")
+
+        print(f"[Worker] REINDEX: {domain_name or 'all'}", flush=True)
+        # Implementation would rebuild keyword->file mappings
+
+
+def get_queue_status(project_id: str, redis_url: Optional[str] = None) -> dict:
+    """Get queue status for a project."""
+    q = JobQueue(project_id, redis_url)
+    return q.status()
+
+
+def push_enrich_jobs(project_id: str, domains: list[dict], redis_url: Optional[str] = None) -> int:
+    """
+    Push enrichment jobs for domains.
+
+    Args:
+        project_id: Project identifier
+        domains: List of {"name": "@x", "description": "..."}
+
+    Returns:
+        Number of jobs pushed
+    """
+    from jobs.queue import create_enrich_job
+
+    q = JobQueue(project_id, redis_url)
+    jobs = [
+        create_enrich_job(project_id, d["name"], d.get("description", ""))
+        for d in domains
+    ]
+    return q.push_many(jobs)
+
+
+# =============================================================================
+# CLI Entry Point
+# =============================================================================
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="aOa Job Worker")
+    parser.add_argument("project_id", help="Project ID to process")
+    parser.add_argument("--mode", choices=["one", "batch", "drain"], default="one",
+                        help="Processing mode")
+    parser.add_argument("--count", type=int, default=3,
+                        help="Jobs to process in batch mode")
+    parser.add_argument("--redis", help="Redis URL")
+
+    args = parser.parse_args()
+
+    worker = JobWorker(args.project_id, args.redis)
+
+    if args.mode == "one":
+        job = worker.process_one()
+        if job:
+            print(f"Processed: {job.type.value} - {job.id}")
+        else:
+            print("No jobs pending")
+
+    elif args.mode == "batch":
+        jobs = worker.process_batch(args.count)
+        print(f"Processed {len(jobs)} jobs")
+
+    elif args.mode == "drain":
+        count = worker.drain()
+        print(f"Drained {count} jobs")
+
+    # Print final status
+    status = worker.queue.status()
+    print(f"Queue: {status['pending']} pending, {status['active']} active, "
+          f"{status['complete']} complete, {status['failed']} failed")

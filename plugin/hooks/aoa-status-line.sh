@@ -257,18 +257,39 @@ else
     ENRICHMENT_COMPLETE=$(echo "$ENRICHMENT" | jq -r '.complete // false' 2>/dev/null)
 fi
 
-# Right section: setup prompt OR intelligence progress OR intent
+# GL-088: Get prompt count to detect first rebalance (at 25 prompts)
+PROMPT_COUNT=0
+if [ -n "$ENRICHMENT" ] && [ "$ENRICHMENT" != "null" ]; then
+    PROMPT_COUNT=$(echo "$ENRICHMENT" | jq -r '.prompt_count // 0' 2>/dev/null)
+fi
+PROMPT_COUNT=${PROMPT_COUNT:-0}
+FIRST_REBALANCE_DONE=false
+[ "$PROMPT_COUNT" -ge 25 ] 2>/dev/null && FIRST_REBALANCE_DONE=true
+
+# GL-088: Get top hit domains for display (only when in active intent phase)
+TOP_HITS=""
+if [ "$ENRICHMENT_COMPLETE" = "true" ] && [ "$FIRST_REBALANCE_DONE" = "true" ]; then
+    HIT_DATA=$(curl -s --max-time 0.2 "${AOA_URL}/intent/hits?project_id=${AOA_PROJECT_ID}&limit=3" 2>/dev/null)
+    if [ -n "$HIT_DATA" ] && [ "$HIT_DATA" != "null" ]; then
+        TOP_HITS=$(echo "$HIT_DATA" | jq -r '.recent[:3] | join(" ")' 2>/dev/null)
+    fi
+fi
+
+# Right section: setup → intelligence → intent (clean transitions)
 if [ "$ENRICHMENT_TOTAL" -eq 0 ] 2>/dev/null; then
     # No domains - prompt to run /aoa-start
     RIGHT="${YELLOW}run /aoa-start${RESET}"
 elif [ "$ENRICHMENT_COMPLETE" != "true" ]; then
     # Domains exist but not all enriched - show progress
     RIGHT="${YELLOW}intelligence ${ENRICHED}/${ENRICHMENT_TOTAL}${RESET}"
-elif [ "$INTENTS" -lt "$MIN_INTENTS" ]; then
-    # Intelligence complete, but still in learning phase - celebrate!
+elif [ "$FIRST_REBALANCE_DONE" != "true" ]; then
+    # Intelligence complete, waiting for first rebalance (25 prompts)
     RIGHT="${GREEN}✓ intelligence${RESET} ${DIM}→${RESET} ${YELLOW}intent${RESET}"
+elif [ -n "$TOP_HITS" ] && [ "$TOP_HITS" != "null" ] && [ "$TOP_HITS" != "" ]; then
+    # Active intent phase with top hits - show what we're learning
+    RIGHT="${GREEN}intent${RESET} ${MAGENTA}${TOP_HITS}${RESET}"
 else
-    # Fully operational - continuous learning
+    # Active intent phase - self-learning
     RIGHT="${GREEN}intent${RESET}"
 fi
 

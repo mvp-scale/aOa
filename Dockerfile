@@ -67,6 +67,7 @@ COPY services/gateway/gateway.py /app/gateway/
 COPY services/index/indexer.py /app/index/
 COPY services/ranking /app/ranking/
 COPY services/domains /app/domains/
+COPY services/jobs /app/jobs/
 COPY services/session /app/session/
 COPY services/status/status_service.py /app/status/
 COPY services/proxy/git_proxy.py /app/proxy/

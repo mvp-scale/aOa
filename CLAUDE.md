@@ -302,13 +302,13 @@ aOa uses two learning angles:
 
 Run `/aoa-start` to initialize aOa. This spawns a background agent that:
 1. Scans project structure (`aoa tree`)
-2. Generates ~24 semantic domains
-3. Enriches each with terms and keywords
+2. Generates 20-32 semantic domains
+3. Enriches each with terms and keywords (batches of 3)
 
 **User experience:**
 - Friendly welcome message explains what's happening
 - Background agent runs silently
-- Status line shows progress: `intelligence 3/24`
+- Status line shows progress: `intelligence X/N` (dynamic count)
 - User continues working uninterrupted
 - When complete, shifts to `intent` phase
 

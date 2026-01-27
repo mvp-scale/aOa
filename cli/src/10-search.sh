@@ -329,7 +329,7 @@ display_ranked_grep_results() {
     fi
 
     # PERF: Single jq call outputs header info (line 1) then formatted results
-    # Format: file_count<TAB>rolling_intent on first line, then result lines
+    # GL-088: Simplified - just file_count on first line, no rolling_intent
     local output
     output=$(echo "$result" | jq -r '
         # Helper: extract params from signature like "def foo(self, x: int) -> str" -> "(x)"
@@ -345,8 +345,8 @@ display_ranked_grep_results() {
             else "()"
             end;
 
-        # First line: header info (file_count<TAB>rolling_intent)
-        ([.results[].file] | unique | length | tostring) + "\t" + ((.rolling_intent // []) | join(" ")),
+        # First line: file_count only
+        ([.results[].file] | unique | length | tostring),
 
         # Remaining lines: formatted results
         (.results | unique_by(.file + ":" + (.line | tostring)) | .[] |
@@ -369,18 +369,13 @@ display_ranked_grep_results() {
         )
     ')
 
-    # Parse header from first line
+    # Parse header from first line (file_count only, rolling_intent removed for speed)
     local header_line
     header_line=$(echo "$output" | head -1)
     local file_count="${header_line%%	*}"
-    local rolling_intent="${header_line#*	}"
 
-    # Print header
-    printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}" "$count" "$file_count" "$ms"
-    if [ -n "$rolling_intent" ] && [ "$rolling_intent" != "" ]; then
-        printf " ${DIM}│${NC} ${CYAN}%s${NC}" "$rolling_intent"
-    fi
-    printf "\n\n"
+    # Print header - GL-088: simplified, no trailing tags
+    printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}\n\n" "$count" "$file_count" "$ms"
 
     # Print results (skip first line which was header)
     echo "$output" | tail -n +2

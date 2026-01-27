@@ -1198,6 +1198,24 @@ cmd_domains() {
             echo "ok"
             return 0
             ;;
+        pending)
+            # aoa domains pending - show unenriched domains needing work
+            # Returns: one domain name per line, or nothing if all done
+            # Use with: aoa domains pending 3 (get batch of 3)
+            shift
+            local batch_size="${1:-3}"
+
+            # Get pending domains from API
+            local result=$(curl -sf "${INDEX_URL}/domains/pending?project_id=${project_id}&limit=${batch_size}" 2>/dev/null)
+            if [ -z "$result" ]; then
+                echo -e "${RED}Error: Could not fetch pending domains${NC}" >&2
+                return 1
+            fi
+
+            # Output one domain name per line
+            echo "$result" | jq -r '.domains[]?' 2>/dev/null
+            return 0
+            ;;
     esac
 
     # Default: show domain status
@@ -1225,6 +1243,7 @@ cmd_domains() {
                 echo "  build @name       Add terms+keywords to one domain"
                 echo "  add               Add a single new domain from JSON stdin"
                 echo "  refresh @name     Mark domain for re-generation"
+                echo "  pending [N]       List unenriched domains (default: 3)"
                 echo ""
                 echo "Options (for status display):"
                 echo "  --json, -j        Output as JSON"
@@ -1235,6 +1254,8 @@ cmd_domains() {
                 echo "  aoa domains                    # Show domain status"
                 echo "  echo '[...]' | aoa domains init   # Init skeletons"
                 echo "  aoa domains refresh @search    # Mark for rebuild"
+                echo "  aoa domains pending            # Show 3 unenriched domains"
+                echo "  aoa domains pending 5          # Show 5 unenriched domains"
                 return 0
                 ;;
             *)
