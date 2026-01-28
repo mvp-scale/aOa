@@ -532,11 +532,55 @@ def handle_tool(data: dict):
             enrichment_ready = True
 
     # GL-088: Trigger self-learning from work history (every 25 prompts)
-    # This runs in background on the server - non-blocking
+    # P2: Check if we should spawn Haiku for new domain generation
     if enrichment_ready:
-        api_post("/domains/self-learn", {
+        learn_response = api_post("/domains/self-learn", {
             "project_id": PROJECT_ID
-        }, timeout=1)
+        }, timeout=2)
+
+        # P2-2: If should_learn=true, output prompt for Haiku domain generation
+        if learn_response and learn_response.get('should_learn'):
+            orphans = learn_response.get('orphans', [])
+            max_domains = learn_response.get('max_domains', 1)
+
+            # P2-3/P2-4: Output Task spawn prompt via additionalContext
+            # QoL-4: Calculate prompt chars for token tracking
+            orphan_str = ', '.join(orphans[:30])
+            domain_prompt = f"""## aOa Domain Learning Triggered
+
+Found {len(orphans)} orphan tags that don't match existing domains.
+
+**Orphan tags**: {orphan_str}
+
+**Task for Haiku**: Generate 1 new semantic domain from these orphans.
+
+1. Analyze the orphan tags to find a common theme
+2. Create a domain with:
+   - name: @descriptive_name (lowercase, underscores)
+   - description: 2-3 sentences explaining what this domain covers
+   - terms: 5-7 terms with 5-10 keywords each
+
+3. Call the API to create the domain:
+```bash
+curl -X POST "localhost:8081/domains/add-context" \\
+  -H "Content-Type: application/json" \\
+  -d '{{"project_id": "{PROJECT_ID}", "name": "@your_domain", "description": "...", "terms": {{"term1": ["kw1", "kw2"]}}}}'
+```
+
+4. After creating the domain, signal completion for token tracking:
+```bash
+curl -X POST "localhost:8081/domains/learned" \\
+  -H "Content-Type: application/json" \\
+  -d '{{"project_id": "{PROJECT_ID}", "domains": ["@your_domain"], "prompt_chars": {len(domain_prompt)}, "response_chars": 500}}'
+```
+(Adjust response_chars to approximate your actual response length)
+
+**Quality rules**:
+- Domain should cover a coherent concept
+- Keywords should be specific (not generic like "data", "file", "handle")
+- Terms should be distinct aspects of the domain
+"""
+            output_context(domain_prompt, event="PostToolUse")
 
     # GL-062: Check if accessed files match predictions (for hit/miss tracking)
     # Only check for file-accessing tools

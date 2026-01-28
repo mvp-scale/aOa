@@ -17,7 +17,7 @@ Analyzing your codebase to build semantic understanding.
 
 This will:
   • Scan project structure
-  • Generate 20-32 semantic domains
+  • Generate 24 core semantic domains
   • Queue enrichment jobs for background processing
 
 Jobs process automatically via hooks. Check progress: aoa jobs
@@ -48,7 +48,7 @@ You are the aOa Intelligence Agent. Generate domains and queue them for enrichme
 
 **Step 1:** Run `aoa tree` to get project structure.
 
-**Step 2:** Plan your domains (20-32 total). For each domain, think:
+**Step 2:** Plan your domains (24 total). For each domain, think:
 - What unique area of the codebase does this represent?
 - What would someone search for to find this code?
 
@@ -58,7 +58,7 @@ You are the aOa Intelligence Agent. Generate domains and queue them for enrichme
 - Be specific enough to generate good terms later
 
 **Step 4:** Validate before writing:
-- [ ] 20-32 domains total?
+- [ ] 24 domains total?
 - [ ] Each has a unique @name?
 - [ ] Each has a rich description (not generic)?
 - [ ] No overlapping domains?

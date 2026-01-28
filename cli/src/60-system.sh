@@ -1273,8 +1273,9 @@ cmd_domains() {
     local total_terms=$(echo "$stats" | jq -r '.total_terms // 0')
     local total_hits=$(echo "$stats" | jq -r '.total_hits // 0')
     local prompt_count=$(echo "$stats" | jq -r '.prompt_count // 0')
-    # GL-083: Rebalance-based system (every 25 prompts)
-    local rebalance_threshold=25
+    # GL-083: Rebalance-based system - fetch configurable threshold (QoL-2)
+    local thresholds=$(curl -s "${INDEX_URL}/config/thresholds?project_id=${project_id}")
+    local rebalance_threshold=$(echo "$thresholds" | jq -r '.thresholds.rebalance // 25 | floor')
     local rebalance_progress=$((prompt_count % rebalance_threshold))
     # GL-054: Intelligence Angle (legacy - may be removed)
     local tokens_invested=$(echo "$stats" | jq -r '.tokens_invested // 0')

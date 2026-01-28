@@ -81,6 +81,7 @@ class DomainLearner:
     DEMOTION_STALENESS = 500  # Demote core→context after 500 intents with 0 hits
     ORPHAN_THRESHOLD = 30  # Need 30+ orphans to trigger domain creation
     PRUNE_FLOOR = 0.5  # Prune context domains with decayed hits below this
+    AUTOTUNE_INTERVAL = 100  # P2B: Run math tune every 100 prompts (10 in test mode)
 
     def __init__(self, project_id: str, redis_url: Optional[str] = None):
         """Initialize with project identifier."""
@@ -102,7 +103,7 @@ class DomainLearner:
             'promotion': self.PROMOTION_THRESHOLD,
             'demotion': self.DEMOTION_STALENESS,
             'prune_floor': self.PRUNE_FLOOR,
-            'decay_interval': 100,  # Not a class constant yet
+            'autotune': self.AUTOTUNE_INTERVAL,
         }
         return defaults.get(name, 0)
 
@@ -802,6 +803,46 @@ Return JSON only:
             return {term: int(hits) for term, hits in all_hits.items()}
 
     # =========================================================================
+    # P3-1: Keyword Hit Tracking
+    # =========================================================================
+
+    def increment_keyword_hits(self, keywords: list[str], amount: int = 1) -> int:
+        """
+        Increment hit counters for keyword(s).
+
+        P3-1: Finer-grained learning signal - tracks which specific keywords
+        drive search results, not just terms.
+
+        Args:
+            keywords: List of keywords that matched
+            amount: Amount to increment per keyword
+
+        Returns:
+            Number of keywords incremented
+        """
+        if not keywords:
+            return 0
+        keyword_hits_key = self._key("keyword_hits")
+        pipe = self.redis.client.pipeline()
+        for kw in keywords:
+            pipe.hincrby(keyword_hits_key, kw.lower(), amount)
+        pipe.execute()
+        return len(keywords)
+
+    def get_keyword_hits(self, keywords: list[str] = None) -> dict:
+        """Get hit counts for keywords. If keywords=None, returns all."""
+        keyword_hits_key = self._key("keyword_hits")
+        if keywords:
+            pipe = self.redis.client.pipeline()
+            for kw in keywords:
+                pipe.hget(keyword_hits_key, kw.lower())
+            results = pipe.execute()
+            return {kw: int(hits or 0) for kw, hits in zip(keywords, results)}
+        else:
+            all_hits = self.redis.client.hgetall(keyword_hits_key)
+            return {kw: int(hits) for kw, hits in all_hits.items()}
+
+    # =========================================================================
     # GL-069.1: Orphan Tag Storage
     # =========================================================================
 
@@ -865,6 +906,36 @@ Return JSON only:
         """Get count of orphan tags waiting for learning."""
         orphan_key = self._key("orphan_tags")
         return self.redis.client.zcard(orphan_key)
+
+    def increment_orphan_hits(self, tags: list[str]) -> int:
+        """
+        P3-3: Increment hit count for orphan tags.
+
+        Orphan tags that get searched frequently should be prioritized
+        for domain creation. This tracks usage before they're assigned.
+
+        Args:
+            tags: Orphan tags that were searched
+
+        Returns:
+            Number of orphans incremented
+        """
+        if not tags:
+            return 0
+        orphan_hits_key = self._key("orphan_hits")
+        pipe = self.redis.client.pipeline()
+        for tag in tags:
+            clean_tag = tag.lower().lstrip('#')
+            if len(clean_tag) >= 2:
+                pipe.hincrby(orphan_hits_key, clean_tag, 1)
+        pipe.execute()
+        return len(tags)
+
+    def get_orphan_hits(self) -> dict:
+        """P3-3: Get hit counts for orphan tags (for priority sorting)."""
+        orphan_hits_key = self._key("orphan_hits")
+        all_hits = self.redis.client.hgetall(orphan_hits_key)
+        return {tag: int(hits) for tag, hits in all_hits.items()}
 
     def add_prompt_record(self, goal: str, tags: list) -> bool:
         """
@@ -1806,7 +1877,7 @@ Return JSON:
         """
         file_list = "\n".join(f"  - {f}" for f in files[:50])
 
-        return f"""Generate 20-32 semantic domains from this codebase structure.
+        return f"""Generate 24 core semantic domains from this codebase structure.
 
 Directory: {directory}
 Files:
@@ -1829,7 +1900,7 @@ GOOD KEYWORDS: token, jwt, refresh, expire, validate, bearer, decode
 BAD KEYWORDS: token_validation, user_auth (underscores), t (too short)
 
 REQUIREMENTS:
-- Generate 20-32 domains covering the full codebase
+- Generate 24 core domains covering the full codebase
 - Each domain MUST have 5-10 terms
 - Each term MUST have 7-10 keywords
 - Keywords: single words only, 3+ characters, no underscores

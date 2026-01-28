@@ -387,7 +387,7 @@ class KeywordMatcher:
         self.project_id = project_id
         self.redis = redis_client
         self.automaton = None
-        self.keyword_to_domain = {}      # keyword → domain name
+        self.keyword_to_term = {}        # keyword → (term_name, domain_name) tuple
         self.domain_created_at = {}      # domain → created_at timestamp
         self._initialized = False
 
@@ -397,7 +397,7 @@ class KeywordMatcher:
             return
 
         self.automaton = ahocorasick.Automaton()
-        self.keyword_to_domain = {}
+        self.keyword_to_term = {}
         self.domain_created_at = {}
 
         try:
@@ -417,51 +417,46 @@ class KeywordMatcher:
                     else:
                         self.domain_created_at[domain_name] = 0  # Cold start
 
-            # Scan Redis for term:{keyword} → domain mappings (ZSET)
-            term_pattern = f"aoa:{self.project_id}:term:*"
-            for key in r.scan_iter(term_pattern):
+            # Scan Redis for term:{name}:domain → STRING mappings
+            # Term names are also searchable as keywords
+            term_domain_pattern = f"aoa:{self.project_id}:term:*:domain"
+            for key in r.scan_iter(term_domain_pattern):
                 key_str = key.decode() if isinstance(key, bytes) else key
-
-                # Skip :keywords suffix keys (those are SET, not ZSET)
-                if key_str.endswith(':keywords'):
-                    continue
-
-                # Extract keyword from key
                 parts = key_str.split(':')
-                if len(parts) >= 4:
-                    keyword = parts[3]  # The term/keyword
+                if len(parts) >= 5:  # aoa:project:term:name:domain
+                    term_name = parts[3]  # The term name (also searchable as keyword)
 
-                    # Get top domain from ZSET (highest score)
-                    domains = r.zrevrange(key_str, 0, 0)
-                    if domains:
-                        domain = domains[0]
+                    # Get domain from STRING key
+                    domain = r.get(key_str)
+                    if domain:
                         domain_str = domain.decode() if isinstance(domain, bytes) else domain
-                        self.keyword_to_domain[keyword.lower()] = domain_str
-                        self.automaton.add_word(keyword.lower(), keyword.lower())
+                        # Store tuple: (term_name, domain_name) for term-level output
+                        self.keyword_to_term[term_name.lower()] = (term_name, domain_str)
+                        self.automaton.add_word(term_name.lower(), term_name.lower())
 
             # Also add keywords from term:*:keywords SETs
             for key in r.scan_iter(f"aoa:{self.project_id}:term:*:keywords"):
                 key_str = key.decode() if isinstance(key, bytes) else key
                 parts = key_str.split(':')
-                if len(parts) >= 4:
+                if len(parts) >= 5:  # aoa:project:term:name:keywords
                     term_name = parts[3]  # The term name
 
-                    # Get parent term's domain mapping
-                    term_key = f"aoa:{self.project_id}:term:{term_name}"
-                    domains = r.zrevrange(term_key, 0, 0)
-                    if domains:
-                        domain = domains[0]
+                    # Get parent term's domain from STRING key
+                    domain_key = f"aoa:{self.project_id}:term:{term_name}:domain"
+                    domain = r.get(domain_key)
+                    if domain:
                         domain_str = domain.decode() if isinstance(domain, bytes) else domain
 
                         # Add all keywords from this term's keyword set
                         keywords = r.smembers(key_str)
                         for kw in keywords:
                             kw_str = (kw.decode() if isinstance(kw, bytes) else kw).lower()
-                            if len(kw_str) >= 3 and kw_str not in self.keyword_to_domain:
-                                self.keyword_to_domain[kw_str] = domain_str
+                            if len(kw_str) >= 3 and kw_str not in self.keyword_to_term:
+                                # Store tuple: (term_name, domain_name) - keyword maps to its parent term
+                                self.keyword_to_term[kw_str] = (term_name, domain_str)
                                 self.automaton.add_word(kw_str, kw_str)
 
-            if self.keyword_to_domain:
+            if self.keyword_to_term:
                 self.automaton.make_automaton()
                 self._initialized = True
 
@@ -477,29 +472,47 @@ class KeywordMatcher:
                                0 means unknown/never tracked, which allows cold start domains
 
         Returns:
-            List of domain names (e.g., ["@authentication", "@api"])
+            List of term names (e.g., ["#result_ranking", "#token_lifecycle"])
         """
         if not self.automaton or not self._initialized:
             return []
 
         try:
             tags = set()
+            matched_keywords = []  # P3-2: Track matched keywords for hit counting
             content_lower = content.lower()
 
             for _, keyword in self.automaton.iter(content_lower):
-                domain = self.keyword_to_domain.get(keyword)
-                if not domain:
+                mapping = self.keyword_to_term.get(keyword)
+                if not mapping:
                     continue
 
+                term_name, domain_name = mapping
+
                 # Check eligibility: cold start (0) or file accessed after domain created
-                created_at = self.domain_created_at.get(domain, 0)
+                created_at = self.domain_created_at.get(domain_name, 0)
 
                 # Eligibility rules:
                 # 1. Cold start domains (created_at=0) always eligible
                 # 2. Unknown file access (file_last_accessed=0) - show all domains (benefit of doubt)
                 # 3. Known file access after domain created - eligible
                 if created_at == 0 or file_last_accessed == 0 or file_last_accessed > created_at:
-                    tags.add(domain)
+                    tags.add(term_name)  # Return term name, not domain
+                    matched_keywords.append(keyword)  # P3-2: Collect matched keyword
+
+            # P3-2: Track keyword hits asynchronously
+            if matched_keywords and DOMAINS_AVAILABLE:
+                try:
+                    import threading
+                    def _track_keywords():
+                        try:
+                            learner = DomainLearner(self.project_id)
+                            learner.increment_keyword_hits(matched_keywords)
+                        except Exception:
+                            pass
+                    threading.Thread(target=_track_keywords, daemon=True).start()
+                except Exception:
+                    pass
 
             return list(tags)[:3]
 
@@ -510,7 +523,7 @@ class KeywordMatcher:
     @property
     def keyword_count(self) -> int:
         """Number of keywords in the automaton."""
-        return len(self.keyword_to_domain)
+        return len(self.keyword_to_term)
 
     @property
     def is_available(self) -> bool:
@@ -2682,15 +2695,14 @@ class IntentIndex:
             locations=locations or []  # GL-069.5: Rich symbol locations
         )
 
-        # Calculate token savings for this record
+        # Calculate token savings for this record (QoL-3: sum all files)
         tokens_saved = 0
         if output_size and output_size > 0 and file_sizes:
-            for f, size in file_sizes.items():
-                if size > 0:
-                    baseline_tokens = size // 4  # bytes to ~tokens
-                    actual_tokens = output_size // 4
-                    tokens_saved = max(0, baseline_tokens - actual_tokens)
-                    break  # Only count first file
+            total_baseline = sum(size for size in file_sizes.values() if size > 0)
+            if total_baseline > 0:
+                baseline_tokens = total_baseline // 4  # bytes to ~tokens
+                actual_tokens = output_size // 4
+                tokens_saved = max(0, baseline_tokens - actual_tokens)
 
         with self.lock:
             # Add to project_id-specific timeline
@@ -3488,7 +3500,15 @@ def semantic_grep():
             )
             results.append(result)
 
-    # 5. GL-050: Universal Response - format through single function
+    # 5. Record gap keyword if no results found (P1-1: wire learning loop)
+    if not results and q and DomainLearner:
+        try:
+            learner = DomainLearner(project_id)
+            learner.record_gap_keyword(q)
+        except Exception:
+            pass  # Don't fail search on learning errors
+
+    # 6. GL-050: Universal Response - format through single function
     elapsed = (time.time() - start) * 1000
     response = format_search_response(
         results=results,
@@ -4446,6 +4466,16 @@ def _trigger_domain_learning_if_needed(project_id: str):
             if rebalance_result.get('added', 0) > 0:
                 print(f"[Rebalance] {project_id}: +{rebalance_result['added']} keywords assigned", flush=True)
 
+        # P2B: Autotune trigger (every 100 prompts) - full domain lifecycle management
+        # Uses get_threshold('autotune') for test mode support (100 in prod, 10 in test)
+        # See .context/arch/06-autotune.md for full scope (10 operations)
+        autotune_interval = int(learner.get_threshold('autotune'))
+        if prompt_count > 0 and autotune_interval > 0 and prompt_count % autotune_interval == 0:
+            tune_result = learner.run_math_tune()
+            if tune_result.get('promoted') or tune_result.get('demoted') or tune_result.get('context_pruned'):
+                print(f"[Autotune] {project_id}: promoted={tune_result.get('promoted', 0)}, "
+                      f"demoted={tune_result.get('demoted', 0)}, pruned={tune_result.get('context_pruned', 0)}", flush=True)
+
     except Exception as e:
         print(f"[Rebalance] Trigger error: {e}", flush=True)
 
@@ -5165,7 +5195,15 @@ def _get_orphan_tags(project_id: str, limit: int = 50) -> list[str]:
                     continue
                 tag_counts[clean_tag] = tag_counts.get(clean_tag, 0) + 1
 
-        # Sort by frequency and return top N
+        # P3-4: Boost with explicit orphan hit counts (from direct searches)
+        orphan_hits = learner.get_orphan_hits()
+        for tag, hits in orphan_hits.items():
+            if tag in tag_counts:
+                tag_counts[tag] += hits  # Boost existing tags
+            elif tag not in existing_terms and len(tag) >= 3:
+                tag_counts[tag] = hits  # Add new tags from direct searches
+
+        # Sort by frequency (including hits) and return top N
         sorted_tags = sorted(tag_counts.items(), key=lambda x: -x[1])
         return [tag for tag, count in sorted_tags[:limit] if count >= 2]
 
@@ -7562,7 +7600,7 @@ def get_token_metrics():
 
 THRESHOLD_DEFAULTS = {
     'rebalance': 25,
-    'decay_interval': 100,
+    'autotune': 100,  # P2B: Autotune every 100 prompts (full lifecycle management)
     'promotion': 150,
     'demotion': 500,
     'prune_floor': 0.5
@@ -7570,7 +7608,7 @@ THRESHOLD_DEFAULTS = {
 
 THRESHOLD_TEST = {
     'rebalance': 3,
-    'decay_interval': 10,
+    'autotune': 10,  # P2B: Autotune every 10 prompts in test mode
     'promotion': 15,
     'demotion': 50,
     'prune_floor': 0.5

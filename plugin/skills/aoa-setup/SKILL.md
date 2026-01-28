@@ -29,7 +29,7 @@ Then after writing JSON:
 
 1. Read `.aoa/structure.txt`
 2. Count files, display "Analyzing [N] files..."
-3. Generate 20-32 domains from paths/filenames
+3. Generate 24 core domains from paths/filenames
 4. Write JSON to `.aoa/project-domains.json`
 5. Display completion
 
@@ -60,6 +60,6 @@ Then after writing JSON:
 
 | Element | Requirement |
 |---------|-------------|
-| Domains | 20-32 covering full codebase |
+| Domains | 24 core domains |
 | Terms/domain | 5-10, intent-driven, underscores OK |
 | Keywords/term | 7-10, single words, 3+ chars, NO underscores |

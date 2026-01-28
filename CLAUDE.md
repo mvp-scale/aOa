@@ -86,7 +86,7 @@ When user says **"Hey aOa"**, **"/aoa-setup"**, or **"set up aoa"**:
 Run the `/aoa-setup` skill to guide them through personalized onboarding:
 - Explains what's happening (trust, transparency)
 - Estimates time based on file count
-- Runs parallel Haiku analysis to generate 20-32 project-specific domains
+- Runs parallel Haiku analysis to generate 24 core semantic domains
 - Runs semantic tagging for compressed file outlines
 - Shows completion summary with next steps
 
@@ -290,7 +290,7 @@ Domains are:
 - **Loaded** by `aoa quickstart` into Redis for fast lookup
 - **Rebalanced** every 25 prompts (assigns orphan keywords to terms)
 
-**Setup command**: `/aoa-setup` analyzes your codebase structure and generates 20-32 project-specific domains (no API key required).
+**Setup command**: `/aoa-setup` analyzes your codebase structure and generates 24 core semantic domains (no API key required).
 
 ## Intelligence & Intent Angles
 
@@ -302,7 +302,7 @@ aOa uses two learning angles:
 
 Run `/aoa-start` to initialize aOa. This spawns a background agent that:
 1. Scans project structure (`aoa tree`)
-2. Generates 20-32 semantic domains
+2. Generates 24 core semantic domains
 3. Enriches each with terms and keywords (batches of 3)
 
 **User experience:**
