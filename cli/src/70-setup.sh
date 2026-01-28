@@ -284,26 +284,22 @@ EOFAOA
     # Remove old aOa block if present
     sed -i '/# BEGIN aOa/,/# END aOa/d' "$shell_rc" 2>/dev/null
 
-    # Add static exports
+    # Add static exports (only AOA_URL - project ID read from .aoa/home.json)
     {
         echo ''
         echo '# BEGIN aOa'
         echo "export AOA_URL=\"$AOA_URL\""
-        echo "export AOA_PROJECT_ID=\"$project_id\""
         echo '# END aOa'
     } >> "$shell_rc"
 
-    # Clean final output with next steps
+    # Clean final output
     echo
     echo -e "───────────────────────────────────────────────────────"
     echo -e "${GREEN}${BOLD}✓ aOa initialized${NC}"
     echo
     echo -e "  Project: ${BOLD}${project_id}${NC}"
     echo
-    echo -e "  ${BOLD}Next:${NC}"
-    echo -e "    1. Run: ${CYAN}bash${NC}  ${DIM}(or start new terminal)${NC}"
-    echo -e "    2. Verify: ${CYAN}echo \$AOA_PROJECT_ID${NC}"
-    echo -e "    3. In Claude: ${CYAN}/aoa-start${NC}"
+    echo -e "  ${BOLD}Next:${NC} In Claude, run ${CYAN}/aoa-start${NC}"
     echo -e "───────────────────────────────────────────────────────"
 }
 

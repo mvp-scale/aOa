@@ -85,6 +85,7 @@ main() {
         stats)      cmd_stats ;;
         health)     cmd_health ;;
         metrics)    cmd_metrics ;;
+        config)     cmd_config "$@" ;;
         baseline|bl) cmd_baseline ;;
         memory|mem) cmd_memory "$@" ;;
         services|svc|map) cmd_services ;;

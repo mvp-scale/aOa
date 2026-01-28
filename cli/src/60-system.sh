@@ -1307,6 +1307,11 @@ cmd_domains() {
 
     # Get domains with full terms for display
     local domains_data=$(curl -s "${INDEX_URL}/domains/list?project_id=${project_id}&limit=${limit}&include_terms=true&include_created=true" 2>/dev/null)
+
+    # GL-090: Get tier counts from ALL domains (not just display limit) for accurate totals
+    local all_domains=$(curl -s "${INDEX_URL}/domains/list?project_id=${project_id}&limit=100" 2>/dev/null)
+    local core_count=$(echo "$all_domains" | jq '[.domains[]? | select(.tier == "core")] | length')
+    local context_count=$(echo "$all_domains" | jq '[.domains[]? | select(.tier == "context")] | length')
     local now=$(date +%s)
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -1366,11 +1371,17 @@ cmd_domains() {
     fi
 
     # Adjust header based on state
+    # GL-090: Show tier breakdown (core/context) for cap verification
+    local tier_display=""
+    if [ "$core_count" -gt 0 ] || [ "$context_count" -gt 0 ]; then
+        tier_display=" ${DIM}(${core_count} core, ${context_count} context)${NC}"
+    fi
+
     if [ "$in_enrichment" = true ] && [ "$total_terms" -eq 0 ]; then
         # Skeleton phase - no terms yet
-        echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  ${MAGENTA}${domain_count}${NC} skeletons ${DIM}│${NC} ${progress_display}"
+        echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  ${MAGENTA}${domain_count}${NC} skeletons${tier_display} ${DIM}│${NC} ${progress_display}"
     else
-        echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  ${MAGENTA}${domain_count}${NC} domains ${DIM}│${NC} ${CYAN}${total_terms}${NC} terms ${DIM}│${NC} ${GREEN}${hits_display}${NC} hits ${DIM}│${NC} ${progress_display}"
+        echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}  ${MAGENTA}${domain_count}${NC} domains${tier_display} ${DIM}│${NC} ${CYAN}${total_terms}${NC} terms ${DIM}│${NC} ${GREEN}${hits_display}${NC} hits ${DIM}│${NC} ${progress_display}"
     fi
     echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
 
@@ -1580,6 +1591,70 @@ cmd_stats() {
     fi
 
     echo -e "${DIM}Run 'aoa quickstart' to tag pending files${NC}"
+}
+
+# =============================================================================
+# GL-091: Test Mode Configuration
+# =============================================================================
+
+cmd_config() {
+    local project_id=$(get_project_id)
+
+    case "${1:-}" in
+        thresholds)
+            shift
+            local mode="${1:-}"
+
+            if [ -z "$mode" ]; then
+                # Show current thresholds
+                echo -e "${CYAN}${BOLD}⚡ aOa Thresholds${NC}"
+                echo ""
+                local result=$(curl -s "${INDEX_URL}/config/thresholds?project_id=${project_id}")
+                local rebalance=$(echo "$result" | jq -r '.thresholds.rebalance // 25')
+                local promotion=$(echo "$result" | jq -r '.thresholds.promotion // 150')
+                local demotion=$(echo "$result" | jq -r '.thresholds.demotion // 500')
+                local prune=$(echo "$result" | jq -r '.thresholds.prune_floor // 0.5')
+
+                printf "  %-20s %s\n" "Rebalance:" "${rebalance} prompts"
+                printf "  %-20s %s\n" "Promotion:" "${promotion} hits"
+                printf "  %-20s %s\n" "Demotion:" "${demotion} intents"
+                printf "  %-20s %s\n" "Prune floor:" "${prune} hits"
+                return 0
+            fi
+
+            if [ "$mode" = "test" ] || [ "$mode" = "prod" ]; then
+                local result=$(curl -s -X POST "${INDEX_URL}/config/thresholds" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"project_id\":\"${project_id}\",\"mode\":\"${mode}\"}")
+                local success=$(echo "$result" | jq -r '.success // false')
+                if [ "$success" = "true" ]; then
+                    echo -e "${GREEN}✓ Thresholds set to ${mode} mode${NC}"
+                    if [ "$mode" = "test" ]; then
+                        echo -e "${DIM}  Rebalance: 3, Promotion: 15, Demotion: 50${NC}"
+                    else
+                        echo -e "${DIM}  Rebalance: 25, Promotion: 150, Demotion: 500${NC}"
+                    fi
+                else
+                    echo -e "${RED}Failed to set thresholds${NC}"
+                    return 1
+                fi
+            else
+                echo "Usage: aoa config thresholds [test|prod]"
+                echo ""
+                echo "  test    Use compressed thresholds (10x faster)"
+                echo "  prod    Use production thresholds (default)"
+                echo ""
+                echo "Run without argument to show current values."
+                return 1
+            fi
+            ;;
+        *)
+            echo "Usage: aoa config <setting>"
+            echo ""
+            echo "Settings:"
+            echo "  thresholds [test|prod]  Set validation thresholds"
+            ;;
+    esac
 }
 
 cmd_baseline() {

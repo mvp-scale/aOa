@@ -92,6 +92,9 @@ ROUTES = {
     "/metrics": ("index", "/metrics"),
     "/metrics/tokens": ("index", "/metrics/tokens"),
 
+    # GL-091: Test mode thresholds
+    "/config/thresholds": ("index", "/config/thresholds"),
+
     # Transition model routes (Phase 3)
     "/transitions/sync": ("index", "/transitions/sync"),
     "/transitions/predict": ("index", "/transitions/predict"),
@@ -137,6 +140,9 @@ ROUTES = {
     "/domains/enrichment-status": ("index", "/domains/enrichment-status"),  # Get enrichment progress
     "/domains/enrichment-prompt": ("index", "/domains/enrichment-prompt"),  # Get Haiku prompt for enrichment
     "/domains/add-context": ("index", "/domains/add-context"),  # GL-090: Add context-tier domain
+
+    # KeywordMatcher rebuild (called after rebalance)
+    "/keywords/rebuild": ("index", "/keywords/rebuild"),
 
     # GL-089: Job queue routes
     "/jobs/status": ("index", "/jobs/status"),      # Get queue status

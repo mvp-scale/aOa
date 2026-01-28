@@ -88,6 +88,24 @@ class DomainLearner:
         self.redis = RedisClient(url=redis_url)
         self._anthropic = None
 
+    def get_threshold(self, name: str) -> float:
+        """GL-091: Get threshold from Redis config, with fallback to class constant.
+
+        Allows test mode to use lower thresholds for faster validation.
+        """
+        val = self.redis.client.get(f"aoa:config:{name}")
+        if val:
+            return float(val)
+        # Fallback to class constants
+        defaults = {
+            'rebalance': self.REBALANCE_THRESHOLD,
+            'promotion': self.PROMOTION_THRESHOLD,
+            'demotion': self.DEMOTION_STALENESS,
+            'prune_floor': self.PRUNE_FLOOR,
+            'decay_interval': 100,  # Not a class constant yet
+        }
+        return defaults.get(name, 0)
+
     @property
     def anthropic_client(self):
         """Lazy-initialize Anthropic client for direct mode."""
@@ -456,6 +474,11 @@ class DomainLearner:
         counts = self.count_domains_by_tier()
         return counts.get("context", 0) < self.CONTEXT_DOMAINS_MAX
 
+    def can_add_core_domain(self) -> bool:
+        """Check if we can add another core domain (under max)."""
+        counts = self.count_domains_by_tier()
+        return counts.get("core", 0) < self.CORE_DOMAINS_MAX
+
     def apply_decay(self) -> int:
         """Apply decay to all domain hits.
 
@@ -570,13 +593,18 @@ class DomainLearner:
                 terms_added += 1
                 keywords_added += count
 
-            # GL-090 BUG-001 FIX: Create keyword→domain reverse index
-            # This allows get_domains_for_term() to find domains by keyword
+            # Store term → domain mapping (for domain lookup)
+            term_domain_key = self._key(f"term:{term}:domain")
+            self.redis.client.set(term_domain_key, name)
+
+            # Create keyword → term reverse index (for grep tagging)
+            # Keywords map to TERM names, not domain names
+            # e.g., "boost" → "result_ranking" (not "boost" → "@search")
             for kw in keywords:
                 clean_kw = kw.lower()
                 if len(clean_kw) >= 3:
-                    kw_key = self._key(f"term:{clean_kw}")
-                    self.redis.client.zadd(kw_key, {name: self.STARTER_SCORE})
+                    kw_key = self._key(f"keyword:{clean_kw}")
+                    self.redis.client.zadd(kw_key, {term: self.STARTER_SCORE})
 
         # Mark domain as enriched
         self.set_domain_enriched(name, True)
@@ -592,6 +620,7 @@ class DomainLearner:
         Initialize domains from skeleton (names + terms only, no keywords).
 
         GL-085: Called by /aoa-start skill. Sets enriched=false on all.
+        GL-090: Respects CORE_DOMAINS_MAX cap.
 
         Args:
             domains: List of {name, description, terms[]}
@@ -600,10 +629,21 @@ class DomainLearner:
             Summary of domains created
         """
         created = []
+        skipped = 0
         for d in domains:
+            # GL-090: Check core tier cap before adding
+            if not self.can_add_core_domain():
+                skipped += 1
+                continue
+
             name = d.get('name', '')
             if not name.startswith('@'):
                 name = f"@{name}"
+
+            # Skip if domain already exists
+            if name in self.get_all_domains():
+                skipped += 1
+                continue
 
             domain = Domain(
                 name=name,
@@ -616,7 +656,8 @@ class DomainLearner:
 
         return {
             'domains_created': len(created),
-            'domains': created
+            'domains': created,
+            'skipped': skipped
         }
 
     def get_enrichment_prompt(self, domain: dict) -> str:
@@ -680,7 +721,7 @@ Return JSON only:
     def get_hits_last_cycle(self, name: str) -> int:
         """Get hits from last tune cycle."""
         meta_key = self._domain_key(name, "meta")
-        return int(self.redis.client.hget(meta_key, "hits_last_cycle") or 0)
+        return int(float(self.redis.client.hget(meta_key, "hits_last_cycle") or 0))
 
     def snapshot_cycle_hits(self) -> None:
         """Snapshot current hits to hits_last_cycle for all domains, then reset."""
@@ -1188,13 +1229,15 @@ Output valid JSON only:
 
     def should_rebalance(self) -> bool:
         """Check if we should run keyword rebalance."""
-        return self.get_prompt_count() % self.REBALANCE_THRESHOLD == 0
+        threshold = int(self.get_threshold('rebalance'))
+        return self.get_prompt_count() % threshold == 0
 
     def rebalance_keywords(self) -> dict:
         """
         Every-25 rebalance - pure Redis, no LLM needed.
 
         GL-083: Assigns gap keywords to best-fit terms based on co-occurrence.
+        After rebalance, signals indexer to rebuild KeywordMatcher automaton.
         """
         stats = {'added': 0, 'stale_marked': 0, 'gaps_processed': 0}
 
@@ -1212,6 +1255,20 @@ Output valid JSON only:
 
         # 2. Record rebalance timestamp
         self.redis.client.set(self._key("last_rebalance"), int(time.time()))
+
+        # 3. Signal indexer to rebuild KeywordMatcher automaton
+        # Non-blocking - grep will use stale data until rebuild completes
+        if stats['added'] > 0:
+            try:
+                import requests
+                index_url = os.environ.get('INDEX_URL', 'http://localhost:8080')
+                requests.post(
+                    f"{index_url}/keywords/rebuild",
+                    params={'project_id': self.project_id},
+                    timeout=1
+                )
+            except Exception:
+                pass  # Non-blocking, don't fail rebalance if indexer unreachable
 
         return stats
 
@@ -1506,7 +1563,7 @@ Return JSON:
             # Get domain terms and hits
             terms = self.get_domain_terms(domain_name)
             meta = self.get_domain_meta(domain_name)
-            hits_last = int(meta.get('hits_last_cycle', 0))
+            hits_last = int(float(meta.get('hits_last_cycle', 0)))
             state = meta.get('state', 'active')
             stale_cycles = int(meta.get('stale_cycles', 0))
 
@@ -1594,10 +1651,12 @@ Return JSON:
             summary['decayed'] += 1
 
         # 7. Check promotions: context → core (high value)
+        # GL-091: Use configurable threshold
+        promotion_threshold = self.get_threshold('promotion')
         for domain_name in self.get_domains_by_tier("context"):
             meta = self.get_domain_meta(domain_name)
             total_hits = int(meta.get('total_hits', 0))
-            if total_hits >= self.PROMOTION_THRESHOLD:
+            if total_hits >= promotion_threshold:
                 # Check if core tier has room
                 counts = self.count_domains_by_tier()
                 if counts.get("core", 0) < self.CORE_DOMAINS_MAX:
@@ -1605,20 +1664,24 @@ Return JSON:
                     summary['promoted'] += 1
 
         # 8. Check demotions: core → context (stale)
+        # GL-091: Use configurable threshold
+        demotion_threshold = self.get_threshold('demotion')
         for domain_name in self.get_domains_by_tier("core"):
             meta = self.get_domain_meta(domain_name)
             last_hit_at = int(meta.get('last_hit_at', 0))
             intents_since_hit = prompt_count - last_hit_at
 
-            if intents_since_hit >= self.DEMOTION_STALENESS:
+            if intents_since_hit >= demotion_threshold:
                 self.demote_domain(domain_name)
                 summary['demoted'] += 1
 
         # 9. Prune low-value context domains
+        # GL-091: Use configurable threshold
+        prune_floor = self.get_threshold('prune_floor')
         for domain_name in self.get_domains_by_tier("context"):
             meta = self.get_domain_meta(domain_name)
             hits = float(meta.get('hits', 0))
-            if hits < self.PRUNE_FLOOR:
+            if hits < prune_floor:
                 self.remove_domain(domain_name)
                 summary['context_pruned'] += 1
 

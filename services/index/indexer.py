@@ -368,6 +368,188 @@ class AhoCorasickMatcher:
 AC_MATCHER = AhoCorasickMatcher()
 
 
+# ============================================================================
+# GL-XXX: Redis-backed Keyword Matcher for semantic term tagging
+# ============================================================================
+
+class KeywordMatcher:
+    """Build AC automaton from Redis keywords with timestamp-based eligibility.
+
+    This replaces the legacy SEMANTIC_PATTERNS file-based approach.
+    Keywords come from Redis term:* keys, providing real-time updates.
+
+    Eligibility filtering ensures:
+    - Cold start domains (created_at=0) apply everywhere
+    - New domains only tag files accessed AFTER the domain was created
+    """
+
+    def __init__(self, project_id: str, redis_client):
+        self.project_id = project_id
+        self.redis = redis_client
+        self.automaton = None
+        self.keyword_to_domain = {}      # keyword → domain name
+        self.domain_created_at = {}      # domain → created_at timestamp
+        self._initialized = False
+
+    def rebuild(self):
+        """Rebuild AC automaton from Redis term:* keys."""
+        if not AHOCORASICK_AVAILABLE:
+            return
+
+        self.automaton = ahocorasick.Automaton()
+        self.keyword_to_domain = {}
+        self.domain_created_at = {}
+
+        try:
+            r = self.redis.client if hasattr(self.redis, 'client') else self.redis
+
+            # Load domain timestamps first
+            domain_pattern = f"aoa:{self.project_id}:domain:*:meta"
+            for key in r.scan_iter(domain_pattern):
+                key_str = key.decode() if isinstance(key, bytes) else key
+                parts = key_str.split(':')
+                if len(parts) >= 4:
+                    domain_name = parts[3]  # @domain_name
+                    created = r.hget(key_str, 'created')
+                    if created:
+                        created_val = created.decode() if isinstance(created, bytes) else created
+                        self.domain_created_at[domain_name] = int(created_val)
+                    else:
+                        self.domain_created_at[domain_name] = 0  # Cold start
+
+            # Scan Redis for term:{keyword} → domain mappings (ZSET)
+            term_pattern = f"aoa:{self.project_id}:term:*"
+            for key in r.scan_iter(term_pattern):
+                key_str = key.decode() if isinstance(key, bytes) else key
+
+                # Skip :keywords suffix keys (those are SET, not ZSET)
+                if key_str.endswith(':keywords'):
+                    continue
+
+                # Extract keyword from key
+                parts = key_str.split(':')
+                if len(parts) >= 4:
+                    keyword = parts[3]  # The term/keyword
+
+                    # Get top domain from ZSET (highest score)
+                    domains = r.zrevrange(key_str, 0, 0)
+                    if domains:
+                        domain = domains[0]
+                        domain_str = domain.decode() if isinstance(domain, bytes) else domain
+                        self.keyword_to_domain[keyword.lower()] = domain_str
+                        self.automaton.add_word(keyword.lower(), keyword.lower())
+
+            # Also add keywords from term:*:keywords SETs
+            for key in r.scan_iter(f"aoa:{self.project_id}:term:*:keywords"):
+                key_str = key.decode() if isinstance(key, bytes) else key
+                parts = key_str.split(':')
+                if len(parts) >= 4:
+                    term_name = parts[3]  # The term name
+
+                    # Get parent term's domain mapping
+                    term_key = f"aoa:{self.project_id}:term:{term_name}"
+                    domains = r.zrevrange(term_key, 0, 0)
+                    if domains:
+                        domain = domains[0]
+                        domain_str = domain.decode() if isinstance(domain, bytes) else domain
+
+                        # Add all keywords from this term's keyword set
+                        keywords = r.smembers(key_str)
+                        for kw in keywords:
+                            kw_str = (kw.decode() if isinstance(kw, bytes) else kw).lower()
+                            if len(kw_str) >= 3 and kw_str not in self.keyword_to_domain:
+                                self.keyword_to_domain[kw_str] = domain_str
+                                self.automaton.add_word(kw_str, kw_str)
+
+            if self.keyword_to_domain:
+                self.automaton.make_automaton()
+                self._initialized = True
+
+        except Exception as e:
+            print(f"[KeywordMatcher] Rebuild error: {e}", flush=True)
+
+    def find_tags(self, content: str, file_last_accessed: int = 0) -> list[str]:
+        """Find matching terms in content via AC scan with eligibility filter.
+
+        Args:
+            content: Text to scan for keywords
+            file_last_accessed: Timestamp when file was last accessed (from intent tracking)
+                               0 means unknown/never tracked, which allows cold start domains
+
+        Returns:
+            List of domain names (e.g., ["@authentication", "@api"])
+        """
+        if not self.automaton or not self._initialized:
+            return []
+
+        try:
+            tags = set()
+            content_lower = content.lower()
+
+            for _, keyword in self.automaton.iter(content_lower):
+                domain = self.keyword_to_domain.get(keyword)
+                if not domain:
+                    continue
+
+                # Check eligibility: cold start (0) or file accessed after domain created
+                created_at = self.domain_created_at.get(domain, 0)
+
+                # Eligibility rules:
+                # 1. Cold start domains (created_at=0) always eligible
+                # 2. Unknown file access (file_last_accessed=0) - show all domains (benefit of doubt)
+                # 3. Known file access after domain created - eligible
+                if created_at == 0 or file_last_accessed == 0 or file_last_accessed > created_at:
+                    tags.add(domain)
+
+            return list(tags)[:3]
+
+        except Exception as e:
+            print(f"[KeywordMatcher] find_tags error: {e}", flush=True)
+            return []
+
+    @property
+    def keyword_count(self) -> int:
+        """Number of keywords in the automaton."""
+        return len(self.keyword_to_domain)
+
+    @property
+    def is_available(self) -> bool:
+        """Check if keyword matching is available."""
+        return self._initialized and self.automaton is not None
+
+
+# Global KeywordMatcher instance (lazy init)
+KEYWORD_MATCHER: KeywordMatcher | None = None
+
+
+def get_keyword_matcher(project_id: str = None, intent_idx: 'IntentIndex | None' = None) -> KeywordMatcher | None:
+    """Get or create the global KeywordMatcher instance.
+
+    Handles project_id changes by rebuilding if needed.
+
+    Args:
+        project_id: Project ID for Redis key prefix
+        intent_idx: IntentIndex with Redis client (uses global intent_index if not provided)
+    """
+    global KEYWORD_MATCHER
+    proj = project_id or 'local'
+
+    # Use provided intent_idx or fall back to global
+    idx = intent_idx if intent_idx is not None else intent_index
+
+    if idx and idx.redis:
+        if KEYWORD_MATCHER is None:
+            # First initialization
+            KEYWORD_MATCHER = KeywordMatcher(proj, idx.redis)
+            KEYWORD_MATCHER.rebuild()
+        elif KEYWORD_MATCHER.project_id != proj:
+            # Project changed, rebuild with new project
+            KEYWORD_MATCHER = KeywordMatcher(proj, idx.redis)
+            KEYWORD_MATCHER.rebuild()
+
+    return KEYWORD_MATCHER
+
+
 def _tokenize_search(text: str) -> set:
     """Tokenize search term into matchable parts."""
     tokens = set()
@@ -534,19 +716,31 @@ def enrich_result(
             if parent_domains:
                 domain = parent_domains[0]
 
-    # GL-084: Match keywords from project-domains to get #term tags
+    # GL-XXX: Match keywords from Redis to get #term tags (replaces legacy SEMANTIC_PATTERNS)
     # Only for lines INSIDE a symbol (not the definition line)
-    # Uses WORD BOUNDARY matching - "start" won't match inside "quickstart"
-    if not is_definition_line and SEMANTIC_PATTERNS:
-        import re
-        # Tokenize content into words (split on non-alphanumeric, keep underscores)
-        content_tokens = set(re.findall(r'[a-z][a-z0-9_]*', content.lower()))
-        for term_name, term_data in SEMANTIC_PATTERNS.items():
-            patterns = term_data.get('patterns', set())
-            # Check if any keyword is an exact token match
-            if patterns & content_tokens:  # Set intersection
-                term_tags.append(f"#{term_name}")
-        term_tags = term_tags[:3]  # Limit to 3 terms per line
+    # Uses KeywordMatcher with timestamp-based eligibility
+    if not is_definition_line:
+        matcher = get_keyword_matcher(project_id, intent_index)
+        if matcher and matcher.is_available:
+            # Get file's last accessed time for eligibility filtering
+            file_accessed = 0
+            if intent_index and project_id:
+                file_accessed = intent_index.get_file_last_accessed(file_path, project_id)
+
+            # Find matching domain tags with eligibility filter
+            # Returns domain names like "@authentication", "@api"
+            domain_tags = matcher.find_tags(content, file_accessed)
+            # Convert to #term format for display
+            term_tags = [f"#{d.lstrip('@')}" for d in domain_tags]
+        elif SEMANTIC_PATTERNS:
+            # Legacy fallback: file-based patterns
+            import re
+            content_tokens = set(re.findall(r'[a-z][a-z0-9_]*', content.lower()))
+            for term_name, term_data in SEMANTIC_PATTERNS.items():
+                patterns = term_data.get('patterns', set())
+                if patterns & content_tokens:
+                    term_tags.append(f"#{term_name}")
+            term_tags = term_tags[:3]
 
     # GL-053: Fallback to AC matching if no tags
     all_tags = file_tags + symbol_tags + term_tags
@@ -2529,6 +2723,11 @@ class IntentIndex:
                     for f in files:
                         r.sadd(f"aoa:{proj}:tags:{tag}", f)
                         r.sadd(f"aoa:{proj}:file_tags:{f}", tag)
+
+                # Track file access timestamps for KeywordMatcher eligibility
+                now = int(time.time())
+                for f in files:
+                    r.zadd(f"aoa:{proj}:file_accessed", {f: now})
             except Exception as e:
                 print(f"[IntentIndex] Redis persistence error: {e}", flush=True)
 
@@ -2585,6 +2784,42 @@ class IntentIndex:
         except Exception:
             pass
         return []
+
+    def get_file_last_accessed(self, file_path: str, project_id: str = None) -> int:
+        """Get when file was last accessed via intent tracking.
+
+        Used for timestamp-based eligibility in KeywordMatcher.
+        Files accessed after a domain's created_at are eligible for that domain's tags.
+
+        Returns:
+            Unix timestamp of last access, or 0 if never tracked
+        """
+        if not self.redis:
+            return 0
+
+        proj = self._project_key(project_id)
+        try:
+            r = self.redis.client if hasattr(self.redis, 'client') else self.redis
+            accessed = r.zscore(f"aoa:{proj}:file_accessed", file_path)
+            return int(accessed) if accessed else 0
+        except Exception:
+            return 0
+
+    def record_file_access(self, file_path: str, project_id: str = None) -> None:
+        """Record when a file was accessed for timestamp eligibility.
+
+        Called by intent tracking to update file access timestamps.
+        """
+        if not self.redis or not file_path:
+            return
+
+        proj = self._project_key(project_id)
+        now = int(time.time())
+        try:
+            r = self.redis.client if hasattr(self.redis, 'client') else self.redis
+            r.zadd(f"aoa:{proj}:file_accessed", {file_path: now})
+        except Exception:
+            pass
 
     def recent(self, since: int = None, limit: int = 50, project_id: str = None) -> list[dict]:
         """Get recent intent records."""
@@ -2792,7 +3027,9 @@ class IntentIndex:
 
     def get_top_hits(self, project_id: str = None, limit: int = 10) -> dict:
         """
-        Get top-hit domains and terms.
+        Get top-hit domains and terms from domain metadata.
+
+        GL-090: Reads from domain:@name:meta structure used by domain learning.
 
         Returns:
             {
@@ -2809,30 +3046,42 @@ class IntentIndex:
         try:
             r = self.redis.client
 
-            # Get domain hits
-            domain_hits = r.hgetall(f"aoa:{proj}:hits:domains")
-            domains = [
-                {'name': f"@{k.decode()}", 'hits': int(v)}
-                for k, v in domain_hits.items()
-            ]
+            # Get domains from the domains set (GL-090 structure)
+            domain_names = r.smembers(f"aoa:{proj}:domains")
+            domains = []
+            recent = []
+
+            for name_bytes in domain_names:
+                name = name_bytes.decode() if isinstance(name_bytes, bytes) else name_bytes
+                # Get hits from domain metadata
+                meta_key = f"aoa:{proj}:domain:{name}:meta"
+                hits = r.hget(meta_key, "hits")
+                if hits:
+                    hit_count = int(float(hits))
+                    if hit_count > 0:
+                        domains.append({'name': name, 'hits': hit_count})
+                        recent.append(name)
+
             domains.sort(key=lambda x: x['hits'], reverse=True)
 
-            # Get term hits
-            term_hits = r.hgetall(f"aoa:{proj}:hits:terms")
-            terms = [
-                {'name': f"#{k.decode()}", 'hits': int(v)}
-                for k, v in term_hits.items()
-            ]
-            terms.sort(key=lambda x: x['hits'], reverse=True)
+            # Get terms from term keys (GL-090 structure)
+            term_keys = r.keys(f"aoa:{proj}:term:*")
+            terms = []
+            for key in term_keys:
+                key_str = key.decode() if isinstance(key, bytes) else key
+                # Extract term name from key like "aoa:proj:term:search"
+                term_name = key_str.split(":")[-1]
+                # Get score (number of domains using this term)
+                score = r.zcard(key_str)
+                if score and score > 0:
+                    terms.append({'name': f"#{term_name}", 'hits': score})
 
-            # Get recent hits (last N unique)
-            recent = r.zrevrange(f"aoa:{proj}:hits:recent", 0, limit - 1)
-            recent = [h.decode() for h in recent]
+            terms.sort(key=lambda x: x['hits'], reverse=True)
 
             return {
                 'domains': domains[:limit],
                 'terms': terms[:limit],
-                'recent': recent
+                'recent': recent[:limit]
             }
         except Exception as e:
             print(f"[IntentIndex] Get hits error: {e}", flush=True)
@@ -2922,6 +3171,53 @@ def ac_test():
         'pattern_count': AC_MATCHER.pattern_count,
         'elapsed_ms': round(elapsed_ms, 3)
     })
+
+
+@app.route('/keywords/rebuild', methods=['POST'])
+def keywords_rebuild():
+    """
+    Rebuild the KeywordMatcher automaton from Redis.
+
+    Called after rebalance_keywords() in learner.py to refresh
+    the AC automaton with new keyword→domain mappings.
+    """
+    global KEYWORD_MATCHER
+
+    project_id = request.args.get('project_id')
+    start = time.time()
+
+    try:
+        if KEYWORD_MATCHER:
+            KEYWORD_MATCHER.rebuild()
+            elapsed_ms = (time.time() - start) * 1000
+            return jsonify({
+                'status': 'ok',
+                'keywords': KEYWORD_MATCHER.keyword_count,
+                'domains': len(KEYWORD_MATCHER.domain_created_at),
+                'elapsed_ms': round(elapsed_ms, 3)
+            })
+        elif intent_index and intent_index.redis:
+            # Initialize if not yet created
+            proj = project_id or 'local'
+            KEYWORD_MATCHER = KeywordMatcher(proj, intent_index.redis)
+            KEYWORD_MATCHER.rebuild()
+            elapsed_ms = (time.time() - start) * 1000
+            return jsonify({
+                'status': 'initialized',
+                'keywords': KEYWORD_MATCHER.keyword_count,
+                'domains': len(KEYWORD_MATCHER.domain_created_at),
+                'elapsed_ms': round(elapsed_ms, 3)
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'error': 'Redis not available for KeywordMatcher'
+            }), 503
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
 
 
 @app.route('/symbol')
@@ -5047,6 +5343,11 @@ def domains_tune_math():
             'domains_flagged_stale': summary.get('domains_flagged_stale', 0),
             'domains_deprecated': summary.get('domains_deprecated', 0),
             'domains_removed': summary.get('domains_removed', 0),  # GL-059.4
+            # GL-090: Two-tier curation fields
+            'decayed': summary.get('decayed', 0),
+            'promoted': summary.get('promoted', 0),
+            'demoted': summary.get('demoted', 0),
+            'context_pruned': summary.get('context_pruned', 0),
             'domains_before': before_stats['domains'],
             'domains_after': after_stats['domains'],
             'terms_before': before_stats['total_terms'],
@@ -7250,6 +7551,85 @@ def get_token_metrics():
         token_stats = parser.get_token_usage()
 
         return jsonify(token_stats)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# GL-091: Test Mode Thresholds
+# ============================================================================
+
+THRESHOLD_DEFAULTS = {
+    'rebalance': 25,
+    'decay_interval': 100,
+    'promotion': 150,
+    'demotion': 500,
+    'prune_floor': 0.5
+}
+
+THRESHOLD_TEST = {
+    'rebalance': 3,
+    'decay_interval': 10,
+    'promotion': 15,
+    'demotion': 50,
+    'prune_floor': 0.5
+}
+
+
+@app.route('/config/thresholds', methods=['GET', 'POST'])
+def config_thresholds():
+    """
+    GL-091: Get or set threshold configuration for test mode.
+
+    GET: Returns current thresholds
+    POST body: {"mode": "test"} or {"mode": "prod"} or {"thresholds": {...}}
+    """
+    project_id = request.args.get('project_id') or (request.json or {}).get('project_id')
+
+    if not DOMAINS_AVAILABLE:
+        return jsonify({'error': 'Domain learning not available'}), 500
+
+    try:
+        learner = DomainLearner(project_id) if project_id else None
+        r = learner.redis.client if learner else None
+
+        if request.method == 'GET':
+            # Return current thresholds
+            current = {}
+            for key, default in THRESHOLD_DEFAULTS.items():
+                if r:
+                    val = r.get(f"aoa:config:{key}")
+                    current[key] = float(val) if val else default
+                else:
+                    current[key] = default
+            return jsonify({'thresholds': current, 'project_id': project_id})
+
+        # POST - set thresholds
+        data = request.json or {}
+        mode = data.get('mode')
+        custom = data.get('thresholds')
+
+        if mode == 'test':
+            thresholds = THRESHOLD_TEST
+        elif mode == 'prod':
+            thresholds = THRESHOLD_DEFAULTS
+        elif custom:
+            thresholds = custom
+        else:
+            return jsonify({'error': 'Specify mode (test/prod) or thresholds'}), 400
+
+        # Store in Redis
+        if r:
+            for key, val in thresholds.items():
+                r.set(f"aoa:config:{key}", val)
+
+        return jsonify({
+            'success': True,
+            'mode': mode or 'custom',
+            'thresholds': thresholds,
+            'project_id': project_id
+        })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500

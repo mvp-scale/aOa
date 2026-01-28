@@ -24,15 +24,24 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 # =============================================================================
-# Configuration - Pure env vars, no file I/O
+# Configuration
 # =============================================================================
 
 HOOK_DIR = Path(__file__).parent
 PROJECT_ROOT = HOOK_DIR.parent.parent
+AOA_HOME_FILE = PROJECT_ROOT / ".aoa" / "home.json"
 
-# Read from environment - set by shell integration (install.sh)
 AOA_URL = os.environ.get("AOA_URL", "http://localhost:8080")
-PROJECT_ID = os.environ.get("AOA_PROJECT_ID", "")
+
+def get_project_id():
+    """Read project ID from .aoa/home.json - always fresh, no stale env vars."""
+    try:
+        with open(AOA_HOME_FILE) as f:
+            return json.load(f).get("project_id", "")
+    except (FileNotFoundError, json.JSONDecodeError):
+        return ""
+
+PROJECT_ID = get_project_id()
 
 # ANSI colors
 CYAN, GREEN, YELLOW, RED = "\033[96m", "\033[92m", "\033[93m", "\033[91m"
