@@ -77,8 +77,25 @@ cmd_intent_recent() {
 
     local project_id=$(get_project_id)
 
+    # Check if project is initialized
+    if [ -z "$project_id" ]; then
+        echo -e "${CYAN}${BOLD}⚡ aOa Activity${NC}"
+        echo ""
+        echo -e "${DIM}No project initialized. Run 'aoa init' first.${NC}"
+        return 0
+    fi
+
     # Get metrics for header
     local metrics=$(curl -s "${INDEX_URL}/metrics?project_id=${project_id}")
+
+    # Check if API is reachable
+    if [ -z "$metrics" ]; then
+        echo -e "${CYAN}${BOLD}⚡ aOa Activity${NC}"
+        echo ""
+        echo -e "${RED}Cannot connect to aOa services at ${INDEX_URL}${NC}"
+        echo -e "${DIM}Check that Docker is running: docker ps${NC}"
+        return 1
+    fi
     local tokens_saved=$(echo "$metrics" | jq -r '.savings.tokens // 0')
     local time_saved_sec=$(echo "$metrics" | jq -r '.savings.time_sec // 0')
     local hit_pct=$(echo "$metrics" | jq -r '.rolling.hit_at_5_pct // 0')

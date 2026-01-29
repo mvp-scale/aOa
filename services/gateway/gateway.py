@@ -16,6 +16,7 @@ Trust Guarantees:
 
 import os
 import time
+from collections import deque
 from datetime import datetime
 
 import httpx
@@ -174,8 +175,9 @@ ROUTES = {
 }
 
 # Request log for audit
-request_log: list = []
+# T-001: Use deque for thread-safe, auto-bounded logging
 MAX_LOG_SIZE = 1000
+request_log: deque = deque(maxlen=MAX_LOG_SIZE)
 
 # =============================================================================
 # HTTP Client
@@ -246,8 +248,7 @@ async def proxy_request(
 
 def log_request(method: str, path: str, service: str, status: int, ms: float):
     """Log a request for audit purposes."""
-    global request_log
-
+    # T-001: deque handles max size automatically, no manual trim needed
     request_log.append({
         "ts": datetime.utcnow().isoformat(),
         "method": method,
@@ -256,10 +257,6 @@ def log_request(method: str, path: str, service: str, status: int, ms: float):
         "status": status,
         "ms": round(ms, 2),
     })
-
-    # Trim log
-    if len(request_log) > MAX_LOG_SIZE:
-        request_log = request_log[-MAX_LOG_SIZE:]
 
 
 # =============================================================================

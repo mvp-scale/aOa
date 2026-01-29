@@ -88,6 +88,11 @@ cmd_find() {
     [ -n "$lang" ] && url="${url}&lang=${lang}"
 
     local result=$(curl -s "$url")
+    # CLI-001: Check for API failure
+    if [ -z "$result" ]; then
+        echo "Error: API unavailable at ${INDEX_URL}" >&2
+        return 1
+    fi
     local count=$(echo "$result" | jq -r '.results | length')
 
     printf "${CYAN}${BOLD}📁 %s files${NC}\n" "$count"
@@ -107,6 +112,11 @@ cmd_tree() {
 
     # Use /files endpoint and build tree structure
     local result=$(curl -s "${INDEX_URL}/files?mode=alpha&limit=500${project_param}")
+    # CLI-001: Check for API failure
+    if [ -z "$result" ]; then
+        echo "Error: API unavailable at ${INDEX_URL}" >&2
+        return 1
+    fi
 
     # Filter to directory if specified
     if [ "$dir" != "." ]; then
@@ -116,15 +126,93 @@ cmd_tree() {
     local count=$(echo "$result" | jq -r '.results | length')
     local dirs=$(echo "$result" | jq -r '[.results[].path | split("/")[:-1] | join("/")] | unique | length')
 
-    printf "${CYAN}${BOLD}🌳 %s dirs, %s files${NC}\n" "$dirs" "$count"
-    echo ""
+    # Unix tree implementation with proper │ ├── └── characters
+    echo "."
+    echo "$result" | jq -r '.results[].path' | sort | awk '
+    {
+        paths[NR-1] = $0
+        n = NR
 
-    # Simple tree-like output
-    echo "$result" | jq -r '.results[].path' | while read -r path; do
-        local indent=$(echo "$path" | tr -cd '/' | wc -c)
-        local name=$(basename "$path")
-        printf "%*s%s\n" $((indent * 2)) "" "$name"
-    done | head -50
+        # Extract all parent directories
+        path = $0
+        while (match(path, /\/[^\/]*$/)) {
+            path = substr(path, 1, RSTART - 1)
+            if (path != "") dirs[path] = 1
+        }
+    }
+    END {
+        # Combine dirs (D) and files (F)
+        m = 0
+        dir_count = 0
+        for (d in dirs) { items[m++] = d "\tD"; dir_count++ }
+        for (i = 0; i < n; i++) items[m++] = paths[i] "\tF"
+
+        # Sort by path
+        for (i = 0; i < m-1; i++) {
+            for (j = i+1; j < m; j++) {
+                split(items[i], a, "\t")
+                split(items[j], b, "\t")
+                if (a[1] > b[1]) {
+                    tmp = items[i]; items[i] = items[j]; items[j] = tmp
+                }
+            }
+        }
+
+        # Count children per parent
+        for (i = 0; i < m; i++) {
+            split(items[i], parts, "\t")
+            path = parts[1]
+            if (match(path, /\/[^\/]*$/))
+                parent = substr(path, 1, RSTART - 1)
+            else
+                parent = "."
+            children[parent]++
+        }
+
+        # Print tree
+        for (i = 0; i < m; i++) {
+            split(items[i], parts, "\t")
+            path = parts[1]
+            type = parts[2]
+
+            # Get parent and name
+            if (match(path, /\/[^\/]*$/)) {
+                parent = substr(path, 1, RSTART - 1)
+                name = substr(path, RSTART + 1)
+            } else {
+                parent = "."
+                name = path
+            }
+
+            # Is this the last child of parent?
+            seen[parent]++
+            is_last = (seen[parent] == children[parent])
+
+            # Build prefix by walking up ancestors
+            depth = split(path, segs, "/") - 1
+            prefix = ""
+
+            # For each depth level, check if ancestor was last in its parent
+            tmp = ""
+            for (d = 0; d < depth; d++) {
+                tmp = (d == 0) ? segs[1] : tmp "/" segs[d+1]
+                if (was_last[tmp])
+                    prefix = prefix "    "
+                else
+                    prefix = prefix "│   "
+            }
+
+            # Branch character
+            branch = is_last ? "└── " : "├── "
+
+            # Print (no bold, no trailing /)
+            printf "%s%s%s\n", prefix, branch, name
+            if (type == "D") was_last[path] = is_last
+        }
+
+        # Summary at bottom
+        printf "\n%d directories, %d files\n", dir_count, n
+    }'
 }
 
 cmd_locate() {
@@ -148,6 +236,11 @@ cmd_locate() {
     fi
 
     local result=$(curl -s "${INDEX_URL}/files?match=*${name}*&limit=20${project_param}")
+    # CLI-001: Check for API failure
+    if [ -z "$result" ]; then
+        echo "Error: API unavailable at ${INDEX_URL}" >&2
+        return 1
+    fi
     local count=$(echo "$result" | jq -r '.results | length')
 
     printf "${CYAN}${BOLD}🔍 %s matches${NC}\n" "$count"
@@ -176,6 +269,11 @@ cmd_head() {
     fi
 
     local result=$(curl -s "${INDEX_URL}/file?path=${file}&lines=1-${lines}${project_param}")
+    # CLI-001: Check for API failure
+    if [ -z "$result" ]; then
+        echo "Error: API unavailable at ${INDEX_URL}" >&2
+        return 1
+    fi
 
     local err=$(echo "$result" | jq -r '.error // empty')
     if [ -n "$err" ]; then
@@ -208,6 +306,11 @@ cmd_tail() {
     fi
 
     local result=$(curl -s "${INDEX_URL}/file?path=${file}&lines=-${lines}${project_param}")
+    # CLI-001: Check for API failure
+    if [ -z "$result" ]; then
+        echo "Error: API unavailable at ${INDEX_URL}" >&2
+        return 1
+    fi
 
     local err=$(echo "$result" | jq -r '.error // empty')
     if [ -n "$err" ]; then

@@ -346,10 +346,12 @@ cmd_remove() {
     echo -e "${GREEN}✓${NC}"
 
     # Remove from projects.json
+    # Match by id OR path (fallback if .aoa/home.json was already deleted)
     echo -n "  Unregistering project......... "
     local projects_file="$AOA_DATA/projects.json"
     if [ -f "$projects_file" ]; then
-        jq --arg id "$project_id" 'map(select(.id != $id))' "$projects_file" > "$projects_file.tmp"
+        jq --arg id "$project_id" --arg path "$project_root" \
+            'map(select(.id != $id and .path != $path))' "$projects_file" > "$projects_file.tmp"
         mv "$projects_file.tmp" "$projects_file"
     fi
     echo -e "${GREEN}✓${NC}"

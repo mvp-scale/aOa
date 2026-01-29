@@ -249,6 +249,11 @@ cmd_grep() {
         result=$(curl -s -X POST "${INDEX_URL}/multi" \
             -H "Content-Type: application/json" \
             -d "$body")
+        # CLI-001: Check for API failure
+        if [ -z "$result" ]; then
+            echo "Error: API unavailable at ${INDEX_URL}" >&2
+            return 1
+        fi
 
         ms=$(echo "$result" | jq -r '.ms // 0')
         count=$(echo "$result" | jq -r '.results | length')
@@ -282,6 +287,11 @@ cmd_grep() {
             result=$(curl -s -X POST "${INDEX_URL}/multi" \
                 -H "Content-Type: application/json" \
                 -d "$body")
+            # CLI-001: Check for API failure
+            if [ -z "$result" ]; then
+                echo "Error: API unavailable at ${INDEX_URL}" >&2
+                return 1
+            fi
         else
             # GL-050: Content search with /grep endpoint (searches file contents like Unix grep)
             export AOA_SEARCH_TYPE="content"
@@ -296,6 +306,11 @@ cmd_grep() {
             [ -n "$file_filter" ] && params="${params}&filter=$(printf '%s' "$file_filter" | jq -sRr @uri)"
 
             result=$(curl -s "${INDEX_URL}/grep?${params}")
+            # CLI-001: Check for API failure
+            if [ -z "$result" ]; then
+                echo "Error: API unavailable at ${INDEX_URL}" >&2
+                return 1
+            fi
         fi
         ms=$(echo "$result" | jq -r '.ms // 0')
         count=$(echo "$result" | jq -r '.results | length')
@@ -608,6 +623,11 @@ cmd_egrep() {
     # TODO: repo support would need different handling
 
     local result=$(curl -s "$url")
+    # CLI-001: Check for API failure
+    if [ -z "$result" ]; then
+        echo "Error: API unavailable at ${INDEX_URL}" >&2
+        return 1
+    fi
 
     local err=$(echo "$result" | jq -r '.error // empty')
     if [ -n "$err" ]; then

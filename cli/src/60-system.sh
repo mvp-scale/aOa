@@ -1292,8 +1292,25 @@ cmd_domains() {
 
     local project_id=$(get_project_id)
 
+    # Check if project is initialized
+    if [ -z "$project_id" ]; then
+        echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}"
+        echo ""
+        echo -e "${DIM}No project initialized. Run 'aoa init' first.${NC}"
+        return 0
+    fi
+
     # Get domain stats
     local stats=$(curl -s "${INDEX_URL}/domains/stats?project_id=${project_id}")
+
+    # Check if API is reachable
+    if [ -z "$stats" ]; then
+        echo -e "${CYAN}${BOLD}⚡ aOa Domains${NC}"
+        echo ""
+        echo -e "${RED}Cannot connect to aOa services at ${INDEX_URL}${NC}"
+        echo -e "${DIM}Check that Docker is running: docker ps${NC}"
+        return 1
+    fi
 
     local domain_count=$(echo "$stats" | jq -r '.domains // 0')
     local total_terms=$(echo "$stats" | jq -r '.total_terms // 0')
@@ -1302,6 +1319,8 @@ cmd_domains() {
     # GL-083: Rebalance-based system - fetch configurable threshold (QoL-2)
     local thresholds=$(curl -s "${INDEX_URL}/config/thresholds?project_id=${project_id}")
     local rebalance_threshold=$(echo "$thresholds" | jq -r '.thresholds.rebalance // 25 | floor')
+    # Guard against division by zero if API fails
+    [ -z "$rebalance_threshold" ] || [ "$rebalance_threshold" -eq 0 ] 2>/dev/null && rebalance_threshold=25
     local rebalance_progress=$((prompt_count % rebalance_threshold))
     # GL-054: Intelligence Angle (legacy - may be removed)
     local tokens_invested=$(echo "$stats" | jq -r '.tokens_invested // 0')

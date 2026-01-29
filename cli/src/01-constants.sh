@@ -23,14 +23,20 @@ AOA_HOME="$(dirname "$(dirname "$CLI_PATH")")"
 AOA_DATA="${AOA_DATA:-$AOA_HOME/data}"
 
 # AOA_URL: Main API endpoint - single source of truth
-# Priority: 1) Environment variable, 2) home.json, 3) Default
+# Priority: 1) Environment variable, 2) Current project's home.json, 3) AOA_HOME's home.json, 4) Default
 if [ -z "$AOA_URL" ]; then
-    # Try to read from home.json
-    if [ -f "$AOA_HOME/.aoa/home.json" ]; then
+    # Try current project's .aoa/home.json first
+    _project_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ -n "$_project_root" ] && [ -f "$_project_root/.aoa/home.json" ]; then
+        AOA_URL=$(jq -r '.aoa_url // empty' "$_project_root/.aoa/home.json" 2>/dev/null)
+    fi
+    # Fall back to AOA_HOME's home.json
+    if [ -z "$AOA_URL" ] && [ -f "$AOA_HOME/.aoa/home.json" ]; then
         AOA_URL=$(jq -r '.aoa_url // empty' "$AOA_HOME/.aoa/home.json" 2>/dev/null)
     fi
     # Fall back to default if still not set
     AOA_URL="${AOA_URL:-http://localhost:8080}"
+    unset _project_root
 fi
 export AOA_URL
 

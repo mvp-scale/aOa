@@ -478,11 +478,10 @@ class SubagentSyncer:
         """Sync all projects that have agent files, aggregate baseline costs."""
         now = time.time()
 
-        # Rate limit
-        if now - self.last_sync < self.sync_interval:
-            return {'skipped': True, 'reason': 'rate_limited'}
-
+        # T-005: Move rate limit check inside lock to prevent TOCTOU race
         with self.lock:
+            if now - self.last_sync < self.sync_interval:
+                return {'skipped': True, 'reason': 'rate_limited'}
             self.last_sync = now
             results = {}
             total_baseline = {
@@ -681,6 +680,8 @@ class StatusManager:
         })
         pipe.lpush(Keys.HISTORY, event)
         pipe.ltrim(Keys.HISTORY, 0, 999)
+        # R-005: 30-day TTL as fallback safety net if ltrim ever fails
+        pipe.expire(Keys.HISTORY, 2592000)
 
         pipe.execute()
 

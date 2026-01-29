@@ -18,7 +18,7 @@ import re
 import subprocess
 import threading
 import time
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict, deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -390,78 +390,87 @@ class KeywordMatcher:
         self.keyword_to_term = {}        # keyword → (term_name, domain_name) tuple
         self.domain_created_at = {}      # domain → created_at timestamp
         self._initialized = False
+        # T-004: Lock to prevent find_tags() from running during rebuild
+        self.rebuild_lock = threading.RLock()
 
     def rebuild(self):
         """Rebuild AC automaton from Redis term:* keys."""
         if not AHOCORASICK_AVAILABLE:
             return
 
-        self.automaton = ahocorasick.Automaton()
-        self.keyword_to_term = {}
-        self.domain_created_at = {}
+        # T-004: Lock during rebuild to prevent find_tags() NPE
+        with self.rebuild_lock:
+            self.automaton = ahocorasick.Automaton()
+            self.keyword_to_term = {}
+            self.domain_created_at = {}
 
-        try:
-            r = self.redis.client if hasattr(self.redis, 'client') else self.redis
+            try:
+                r = self.redis.client if hasattr(self.redis, 'client') else self.redis
 
-            # Load domain timestamps first
-            domain_pattern = f"aoa:{self.project_id}:domain:*:meta"
-            for key in r.scan_iter(domain_pattern):
-                key_str = key.decode() if isinstance(key, bytes) else key
-                parts = key_str.split(':')
-                if len(parts) >= 4:
-                    domain_name = parts[3]  # @domain_name
-                    created = r.hget(key_str, 'created')
-                    if created:
-                        created_val = created.decode() if isinstance(created, bytes) else created
-                        self.domain_created_at[domain_name] = int(created_val)
-                    else:
-                        self.domain_created_at[domain_name] = 0  # Cold start
+                # Load domain timestamps first
+                domain_pattern = f"aoa:{self.project_id}:domain:*:meta"
+                for key in r.scan_iter(domain_pattern):
+                    key_str = key.decode() if isinstance(key, bytes) else key
+                    parts = key_str.split(':')
+                    if len(parts) >= 4:
+                        domain_name = parts[3]  # @domain_name
+                        created = r.hget(key_str, 'created')
+                        if created:
+                            created_val = created.decode() if isinstance(created, bytes) else created
+                            self.domain_created_at[domain_name] = int(created_val)
+                        else:
+                            self.domain_created_at[domain_name] = 0  # Cold start
 
-            # Scan Redis for term:{name}:domain → STRING mappings
-            # Term names are also searchable as keywords
-            term_domain_pattern = f"aoa:{self.project_id}:term:*:domain"
-            for key in r.scan_iter(term_domain_pattern):
-                key_str = key.decode() if isinstance(key, bytes) else key
-                parts = key_str.split(':')
-                if len(parts) >= 5:  # aoa:project:term:name:domain
-                    term_name = parts[3]  # The term name (also searchable as keyword)
+                # Scan Redis for term:{name}:domain → STRING mappings
+                # Term names are also searchable as keywords
+                term_domain_pattern = f"aoa:{self.project_id}:term:*:domain"
+                for key in r.scan_iter(term_domain_pattern):
+                    key_str = key.decode() if isinstance(key, bytes) else key
+                    parts = key_str.split(':')
+                    if len(parts) >= 5:  # aoa:project:term:name:domain
+                        term_name = parts[3]  # The term name (also searchable as keyword)
 
-                    # Get domain from STRING key
-                    domain = r.get(key_str)
-                    if domain:
-                        domain_str = domain.decode() if isinstance(domain, bytes) else domain
-                        # Store tuple: (term_name, domain_name) for term-level output
-                        self.keyword_to_term[term_name.lower()] = (term_name, domain_str)
-                        self.automaton.add_word(term_name.lower(), term_name.lower())
+                        # Get domain from STRING key
+                        domain = r.get(key_str)
+                        if domain:
+                            domain_str = domain.decode() if isinstance(domain, bytes) else domain
+                            # Store tuple: (term_name, domain_name) for term-level output
+                            self.keyword_to_term[term_name.lower()] = (term_name, domain_str)
+                            self.automaton.add_word(term_name.lower(), term_name.lower())
 
-            # Also add keywords from term:*:keywords SETs
-            for key in r.scan_iter(f"aoa:{self.project_id}:term:*:keywords"):
-                key_str = key.decode() if isinstance(key, bytes) else key
-                parts = key_str.split(':')
-                if len(parts) >= 5:  # aoa:project:term:name:keywords
-                    term_name = parts[3]  # The term name
+                # Also add keywords from term:*:keywords SETs
+                for key in r.scan_iter(f"aoa:{self.project_id}:term:*:keywords"):
+                    key_str = key.decode() if isinstance(key, bytes) else key
+                    parts = key_str.split(':')
+                    if len(parts) >= 5:  # aoa:project:term:name:keywords
+                        term_name = parts[3]  # The term name
 
-                    # Get parent term's domain from STRING key
-                    domain_key = f"aoa:{self.project_id}:term:{term_name}:domain"
-                    domain = r.get(domain_key)
-                    if domain:
-                        domain_str = domain.decode() if isinstance(domain, bytes) else domain
+                        # Get parent term's domain from STRING key
+                        domain_key = f"aoa:{self.project_id}:term:{term_name}:domain"
+                        domain = r.get(domain_key)
+                        if domain:
+                            domain_str = domain.decode() if isinstance(domain, bytes) else domain
 
-                        # Add all keywords from this term's keyword set
-                        keywords = r.smembers(key_str)
-                        for kw in keywords:
-                            kw_str = (kw.decode() if isinstance(kw, bytes) else kw).lower()
-                            if len(kw_str) >= 3 and kw_str not in self.keyword_to_term:
-                                # Store tuple: (term_name, domain_name) - keyword maps to its parent term
-                                self.keyword_to_term[kw_str] = (term_name, domain_str)
-                                self.automaton.add_word(kw_str, kw_str)
+                            # Add all keywords from this term's keyword set
+                            # O1-003: Use sscan instead of smembers for streaming iteration
+                            cursor = 0
+                            while True:
+                                cursor, keywords = r.sscan(key_str, cursor=cursor, count=100)
+                                for kw in keywords:
+                                    kw_str = (kw.decode() if isinstance(kw, bytes) else kw).lower()
+                                    if len(kw_str) >= 3 and kw_str not in self.keyword_to_term:
+                                        # Store tuple: (term_name, domain_name) - keyword maps to its parent term
+                                        self.keyword_to_term[kw_str] = (term_name, domain_str)
+                                        self.automaton.add_word(kw_str, kw_str)
+                                if cursor == 0:
+                                    break
 
-            if self.keyword_to_term:
-                self.automaton.make_automaton()
-                self._initialized = True
+                if self.keyword_to_term:
+                    self.automaton.make_automaton()
+                    self._initialized = True
 
-        except Exception as e:
-            print(f"[KeywordMatcher] Rebuild error: {e}", flush=True)
+            except Exception as e:
+                print(f"[KeywordMatcher] Rebuild error: {e}", flush=True)
 
     def find_tags(self, content: str, file_last_accessed: int = 0) -> dict:
         """Find matching terms and domain in content via AC scan with eligibility filter.
@@ -508,15 +517,17 @@ class KeywordMatcher:
             if matched_keywords and DOMAINS_AVAILABLE:
                 try:
                     import threading
+                    import logging
                     def _track_keywords():
                         try:
                             learner = DomainLearner(self.project_id)
                             learner.increment_keyword_hits(matched_keywords)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            # T-002: Log errors instead of silently swallowing
+                            logging.error(f"[KeywordMatcher] Hit tracking failed: {e}")
                     threading.Thread(target=_track_keywords, daemon=True).start()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.error(f"[KeywordMatcher] Thread spawn failed: {e}")
 
             # Pick domain with most matches
             top_domain = max(domain_counts, key=domain_counts.get) if domain_counts else None
@@ -543,6 +554,8 @@ class KeywordMatcher:
 
 # Global KeywordMatcher instance (lazy init)
 KEYWORD_MATCHER: KeywordMatcher | None = None
+# T-006: Lock for thread-safe initialization
+_KEYWORD_MATCHER_LOCK = threading.Lock()
 
 
 def get_keyword_matcher(project_id: str = None, intent_idx: 'IntentIndex | None' = None) -> KeywordMatcher | None:
@@ -561,14 +574,21 @@ def get_keyword_matcher(project_id: str = None, intent_idx: 'IntentIndex | None'
     idx = intent_idx if intent_idx is not None else intent_index
 
     if idx and idx.redis:
-        if KEYWORD_MATCHER is None:
-            # First initialization
-            KEYWORD_MATCHER = KeywordMatcher(proj, idx.redis)
-            KEYWORD_MATCHER.rebuild()
-        elif KEYWORD_MATCHER.project_id != proj:
-            # Project changed, rebuild with new project
-            KEYWORD_MATCHER = KeywordMatcher(proj, idx.redis)
-            KEYWORD_MATCHER.rebuild()
+        # T-006: Double-check pattern with lock for thread safety
+        needs_init = KEYWORD_MATCHER is None
+        needs_rebuild = KEYWORD_MATCHER is not None and KEYWORD_MATCHER.project_id != proj
+
+        if needs_init or needs_rebuild:
+            with _KEYWORD_MATCHER_LOCK:
+                # Double-check after acquiring lock
+                if KEYWORD_MATCHER is None:
+                    # First initialization
+                    KEYWORD_MATCHER = KeywordMatcher(proj, idx.redis)
+                    KEYWORD_MATCHER.rebuild()
+                elif KEYWORD_MATCHER.project_id != proj:
+                    # Project changed, rebuild with new project
+                    KEYWORD_MATCHER = KeywordMatcher(proj, idx.redis)
+                    KEYWORD_MATCHER.rebuild()
 
     return KEYWORD_MATCHER
 
@@ -3041,7 +3061,8 @@ class IntentIndex:
         # All data structures are nested by project_id
         self.tag_to_files: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
         self.file_to_tags: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
-        self.timeline: dict[str, list[IntentRecord]] = defaultdict(list)
+        # A-002: Use deque with maxlen to cap memory usage (10k intents per project)
+        self.timeline: dict[str, deque] = defaultdict(lambda: deque(maxlen=10000))
         self.session_intents: dict[str, dict[str, list[IntentRecord]]] = defaultdict(lambda: defaultdict(list))
         self.lock = threading.RLock()
         self.redis = redis_client  # Optional Redis for persistence
@@ -3104,15 +3125,24 @@ class IntentIndex:
                 r.hset(redis_key, 'last_active', int(time.time()))
 
                 # Persist tag-file associations
+                # R-012 + A-008: Add TTL to tag sets for auto-cleanup
                 for tag in tags:
                     for f in files:
-                        r.sadd(f"aoa:{proj}:tags:{tag}", f)
-                        r.sadd(f"aoa:{proj}:file_tags:{f}", tag)
+                        tag_key = f"aoa:{proj}:tags:{tag}"
+                        file_tag_key = f"aoa:{proj}:file_tags:{f}"
+                        r.sadd(tag_key, f)
+                        r.sadd(file_tag_key, tag)
+                        # 24-hour TTL on tag sets
+                        r.expire(tag_key, 86400)
+                        r.expire(file_tag_key, 86400)
 
                 # Track file access timestamps for KeywordMatcher eligibility
                 now = int(time.time())
+                file_accessed_key = f"aoa:{proj}:file_accessed"
                 for f in files:
-                    r.zadd(f"aoa:{proj}:file_accessed", {f: now})
+                    r.zadd(file_accessed_key, {f: now})
+                # R-011: 30-day TTL on file access ZSET
+                r.expire(file_accessed_key, 2592000)
             except Exception as e:
                 print(f"[IntentIndex] Redis persistence error: {e}", flush=True)
 
@@ -3326,7 +3356,9 @@ class IntentIndex:
         tag_scores: dict[str, float] = {}
 
         with self.lock:
-            recent = self.timeline[proj][-window:] if self.timeline[proj] else []
+            # Deques don't support slicing - convert to list first
+            timeline = list(self.timeline[proj]) if self.timeline[proj] else []
+            recent = timeline[-window:] if timeline else []
 
             if not recent:
                 return {}
@@ -3404,7 +3436,10 @@ class IntentIndex:
                 pipe.zadd(f"aoa:{proj}:hits:recent", {f"#{term_clean}": now})
 
             # Trim recent hits to last 1000
-            pipe.zremrangebyrank(f"aoa:{proj}:hits:recent", 0, -1001)
+            recent_key = f"aoa:{proj}:hits:recent"
+            pipe.zremrangebyrank(recent_key, 0, -1001)
+            # R-013: 24-hour TTL on recent hits ZSET
+            pipe.expire(recent_key, 86400)
 
             pipe.execute()
         except Exception as e:
@@ -3450,9 +3485,9 @@ class IntentIndex:
             domains.sort(key=lambda x: x['hits'], reverse=True)
 
             # Get terms from term keys (GL-090 structure)
-            term_keys = r.keys(f"aoa:{proj}:term:*")
+            # O1-001: Use scan_iter instead of keys() to avoid blocking Redis
             terms = []
-            for key in term_keys:
+            for key in r.scan_iter(match=f"aoa:{proj}:term:*", count=100):
                 key_str = key.decode() if isinstance(key, bytes) else key
                 # Extract term name from key like "aoa:proj:term:search"
                 term_name = key_str.split(":")[-1]
@@ -4060,8 +4095,9 @@ def get_outline():
         for sym in symbols:
             sym_dict = asdict(sym)
             # Look up tags for this symbol: tag_meta:{project_id}:{file}:{symbol}:{tag}
+            # O1-002: Use scan_iter instead of keys() to avoid blocking Redis
             pattern = f"tag_meta:{project_key}:{file_path}:{sym.name}:*"
-            tag_keys = r.keys(pattern)
+            tag_keys = list(r.scan_iter(match=pattern, count=100))
             sym_dict['tags'] = [k.decode().split(':')[-1] for k in tag_keys] if tag_keys else []
             enriched_symbols.append(sym_dict)
     except Exception as e:
@@ -5980,11 +6016,11 @@ def domains_add():
             # Validation: terms must be a list or dict (v2 format)
             raw_terms = d.get('terms', [])
 
-            # GL-084: v2 format - terms is dict of {term_name: [keywords]}
-            # Store TERM NAMES as the terms (not flattened keywords)
-            # Keywords are used for matching in _load_pattern_library()
+            # A-004: GL-084 v2 format - terms is dict of {term_name: [keywords]}
+            # Preserve the dict to store keywords separately
+            terms_dict = None
             if isinstance(raw_terms, dict):
-                # Extract term names (keys) as the terms to store
+                terms_dict = raw_terms  # A-004: Preserve for keyword storage
                 raw_terms = list(raw_terms.keys())
             elif not isinstance(raw_terms, list):
                 skipped.append(f"terms not a list or dict for {name}")
@@ -6008,6 +6044,20 @@ def domains_add():
                 terms=valid_terms
             )
             learner.add_domain(domain, source=source)  # GL-083: Pass through source
+
+            # A-004: Store keywords for each term if v2 format provided
+            if terms_dict:
+                r = learner.redis.client
+                for term_name, keywords in terms_dict.items():
+                    if term_name.lower() in valid_terms and isinstance(keywords, list):
+                        kw_key = f"aoa:{project_id}:term:{term_name.lower()}:keywords"
+                        valid_kws = [k.lower() for k in keywords if isinstance(k, str) and len(k) >= 3]
+                        if valid_kws:
+                            r.sadd(kw_key, *valid_kws)
+                            # Also map term to domain for KeywordMatcher
+                            domain_key = f"aoa:{project_id}:term:{term_name.lower()}:domain"
+                            r.set(domain_key, name)
+
             added.append(name)
             terms_added.extend(valid_terms)
 
@@ -7413,8 +7463,10 @@ def log_prediction():
         )
 
         # Also add to session's prediction list for quick lookup
+        # R-003: Cap list to 100 items to prevent unbounded growth
         session_predictions_key = f"aoa:predictions:{session_id}"
         scorer.redis.client.lpush(session_predictions_key, prediction_key)
+        scorer.redis.client.ltrim(session_predictions_key, 0, 99)
         scorer.redis.client.expire(session_predictions_key, ROLLING_WINDOW_SECONDS)  # 24h TTL to match rolling window
 
         # Phase 4: Add to rolling predictions ZSET for Hit@5 calculation

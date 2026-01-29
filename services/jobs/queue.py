@@ -190,7 +190,11 @@ class JobQueue:
         # Remove from active
         pipe.hdel(self._key("active"), job.id)
         # Add to failed
-        pipe.lpush(self._key("failed"), job.to_json())
+        # R-004: Cap failed list to 100 items + 7-day TTL to prevent unbounded growth
+        failed_key = self._key("failed")
+        pipe.lpush(failed_key, job.to_json())
+        pipe.ltrim(failed_key, 0, 99)
+        pipe.expire(failed_key, 604800)  # 7 days
         # Update stats
         pipe.hincrby(self._key("stats"), "total_failed", 1)
         pipe.execute()

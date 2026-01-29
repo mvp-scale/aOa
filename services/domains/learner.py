@@ -72,6 +72,7 @@ class DomainLearner:
     STARTER_HITS = 0  # Domains start fresh, accumulate hits from actual usage
     STARTER_SCORE = 0.5  # Initial term confidence
     PRESERVE_THRESHOLD = 20  # Keep domains with hits >= this during tune
+    REBALANCE_THRESHOLD = 25  # A-001: GL-083 - Rebalance every 25 prompts
 
     # GL-090: Two-tier domain curation
     CORE_DOMAINS_MAX = 24  # Max core tier domains
@@ -163,7 +164,9 @@ class DomainLearner:
 
     def set_learning_pending(self) -> None:
         """Signal that learning is ready for hook to process."""
-        self.redis.client.set(self._key("learning_pending"), "1")
+        # R-001 + A-003: Atomic set with TTL and NX (only set if not exists)
+        # Prevents double-run if multiple triggers fire simultaneously
+        self.redis.client.set(self._key("learning_pending"), "1", ex=3600, nx=True)
 
     def clear_learning_pending(self) -> None:
         """Clear pending flag after hook completes learning."""
@@ -218,7 +221,8 @@ class DomainLearner:
 
     def set_tuning_pending(self) -> None:
         """Signal that tuning is ready for hook to process."""
-        self.redis.client.set(self._key("tuning_pending"), "1")
+        # R-002: Add 1-hour TTL so flag auto-clears if tuning fails
+        self.redis.client.setex(self._key("tuning_pending"), 3600, "1")
 
     def clear_tuning_pending(self) -> None:
         """Clear pending flag after hook completes tuning."""
@@ -861,6 +865,10 @@ Return JSON only:
         orphan_key = self._key("orphan_tags")
         # Use sorted set with timestamp as score for ordering
         now = time.time()
+        # R-010: Clean up orphans older than 60 days
+        cutoff = now - (60 * 24 * 3600)  # 60 days ago
+        self.redis.client.zremrangebyscore(orphan_key, '-inf', cutoff)
+
         pipe = self.redis.client.pipeline()
         for tag in tags:
             # Normalize: lowercase, strip #
@@ -1252,6 +1260,8 @@ Output valid JSON only:
         """Record a search keyword that found no domain match."""
         gap_key = self._key("gap_keywords")
         self.redis.client.sadd(gap_key, keyword.lower())
+        # R-009: 30-day TTL to auto-cleanup stale gap keywords
+        self.redis.client.expire(gap_key, 2592000)
 
     def get_gap_keywords(self, limit: int = 50) -> list[str]:
         """Get keywords that had no domain matches."""
@@ -1295,8 +1305,6 @@ Output valid JSON only:
     # =========================================================================
     # Every-25 Rebalance (GL-083)
     # =========================================================================
-
-    REBALANCE_THRESHOLD = 25  # GL-083: Rebalance every 25 prompts
 
     def should_rebalance(self) -> bool:
         """Check if we should run keyword rebalance."""
