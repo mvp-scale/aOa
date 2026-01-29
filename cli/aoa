@@ -3783,7 +3783,10 @@ cmd_domains() {
                 echo -e "${RED}Error: ${error}${NC}" >&2
                 return 1
             fi
-            echo "$result" | jq -r '.keywords_added // 0'
+            local keywords_added=$(echo "$result" | jq -r '.keywords_added // 0')
+            # Auto-rebuild KeywordMatcher to link keywords to files
+            curl -sf -X POST "${INDEX_URL}/keywords/rebuild?project_id=${project_id}" > /dev/null 2>&1
+            echo "$keywords_added"
             return 0
             ;;
         add)
@@ -3847,6 +3850,28 @@ cmd_domains() {
             echo "$result" | jq -r '.domains[]?' 2>/dev/null
             return 0
             ;;
+        link)
+            # aoa domains link - rebuild KeywordMatcher to link domains to files
+            # Called after building domains to enable semantic tags in search results
+            shift
+            local result=$(curl -sf -X POST "${INDEX_URL}/keywords/rebuild?project_id=${project_id}" 2>/dev/null)
+            if [ -z "$result" ]; then
+                echo -e "${RED}Error: Could not rebuild keyword matcher${NC}" >&2
+                return 1
+            fi
+            local status=$(echo "$result" | jq -r '.status // "error"')
+            local keywords=$(echo "$result" | jq -r '.keywords // 0')
+            local domains=$(echo "$result" | jq -r '.domains // 0')
+            local elapsed=$(echo "$result" | jq -r '.elapsed_ms // 0')
+            if [ "$status" = "ok" ] || [ "$status" = "initialized" ]; then
+                echo -e "${GREEN}✓${NC} Linked ${CYAN}${keywords}${NC} keywords across ${MAGENTA}${domains}${NC} domains ${DIM}(${elapsed}ms)${NC}"
+                return 0
+            else
+                local error=$(echo "$result" | jq -r '.error // "Unknown error"')
+                echo -e "${RED}Error: ${error}${NC}" >&2
+                return 1
+            fi
+            ;;
     esac
 
     # Default: show domain status
@@ -3872,6 +3897,7 @@ cmd_domains() {
                 echo "Subcommands:"
                 echo "  init              Initialize skeleton domains from JSON stdin"
                 echo "  build @name       Add terms+keywords to one domain"
+                echo "  link              Link domains to files (rebuild keyword matcher)"
                 echo "  add               Add a single new domain from JSON stdin"
                 echo "  refresh @name     Mark domain for re-generation"
                 echo "  pending [N]       List unenriched domains (default: 3)"

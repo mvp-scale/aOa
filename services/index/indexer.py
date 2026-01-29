@@ -463,8 +463,8 @@ class KeywordMatcher:
         except Exception as e:
             print(f"[KeywordMatcher] Rebuild error: {e}", flush=True)
 
-    def find_tags(self, content: str, file_last_accessed: int = 0) -> list[str]:
-        """Find matching terms in content via AC scan with eligibility filter.
+    def find_tags(self, content: str, file_last_accessed: int = 0) -> dict:
+        """Find matching terms and domain in content via AC scan with eligibility filter.
 
         Args:
             content: Text to scan for keywords
@@ -472,13 +472,15 @@ class KeywordMatcher:
                                0 means unknown/never tracked, which allows cold start domains
 
         Returns:
-            List of term names (e.g., ["#result_ranking", "#token_lifecycle"])
+            Dict with domain (str) and tags (list[str])
+            e.g., {"domain": "@search", "tags": ["#indexing", "#query_processing"]}
         """
         if not self.automaton or not self._initialized:
-            return []
+            return {"domain": None, "tags": []}
 
         try:
             tags = set()
+            domain_counts = {}  # Track which domain has most matches
             matched_keywords = []  # P3-2: Track matched keywords for hit counting
             content_lower = content.lower()
 
@@ -497,8 +499,10 @@ class KeywordMatcher:
                 # 2. Unknown file access (file_last_accessed=0) - show all domains (benefit of doubt)
                 # 3. Known file access after domain created - eligible
                 if created_at == 0 or file_last_accessed == 0 or file_last_accessed > created_at:
-                    tags.add(term_name)  # Return term name, not domain
+                    tags.add(term_name)
                     matched_keywords.append(keyword)  # P3-2: Collect matched keyword
+                    # Track domain match count
+                    domain_counts[domain_name] = domain_counts.get(domain_name, 0) + 1
 
             # P3-2: Track keyword hits asynchronously
             if matched_keywords and DOMAINS_AVAILABLE:
@@ -514,11 +518,17 @@ class KeywordMatcher:
                 except Exception:
                     pass
 
-            return list(tags)[:3]
+            # Pick domain with most matches
+            top_domain = max(domain_counts, key=domain_counts.get) if domain_counts else None
+
+            return {
+                "domain": top_domain,
+                "tags": list(tags)[:3]
+            }
 
         except Exception as e:
             print(f"[KeywordMatcher] find_tags error: {e}", flush=True)
-            return []
+            return {"domain": None, "tags": []}
 
     @property
     def keyword_count(self) -> int:
@@ -909,11 +919,11 @@ def enrich_result(
                 # Fallback: Redis lookup
                 file_accessed = intent_index.get_file_last_accessed(file_path, project_id)
 
-            # Find matching domain tags with eligibility filter
-            # Returns domain names like "@authentication", "@api"
-            domain_tags = matcher.find_tags(content, file_accessed)
-            # Convert to #term format for display
-            term_tags = [f"#{d.lstrip('@')}" for d in domain_tags]
+            # Find matching domain and tags with eligibility filter
+            match_result = matcher.find_tags(content, file_accessed)
+            top_domain = match_result.get("domain")  # e.g., "@search"
+            keyword_tags = match_result.get("tags", [])  # e.g., ["#indexing", "#query"]
+            term_tags = keyword_tags  # Already in #term format
         elif SEMANTIC_PATTERNS:
             # Legacy fallback: file-based patterns
             import re
@@ -944,9 +954,11 @@ def enrich_result(
         'tags': all_tags
     }
 
-    # GL-084: Only show @domain on definition lines
+    # GL-084: Show @domain on definition lines OR from KeywordMatcher
     if domain and is_definition_line:
         result['domain'] = domain
+    elif 'top_domain' in locals() and top_domain:
+        result['domain'] = top_domain
 
     # Add symbol info if found (all or nothing - consistent shape)
     if symbol_name:
