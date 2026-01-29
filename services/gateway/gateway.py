@@ -148,6 +148,7 @@ ROUTES = {
     # GL-089: Job queue routes
     "/jobs/status": ("index", "/jobs/status"),      # Get queue status
     "/jobs/pending": ("index", "/jobs/pending"),    # List pending jobs
+    "/jobs/failed": ("index", "/jobs/failed"),      # List failed jobs with errors
     "/jobs/push": ("index", "/jobs/push"),          # Push jobs to queue
     "/jobs/push/enrich": ("index", "/jobs/push/enrich"),  # Push enrichment jobs
     "/jobs/process": ("index", "/jobs/process"),    # Process jobs

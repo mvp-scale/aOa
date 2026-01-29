@@ -38,6 +38,7 @@ LABEL version="1.0.0"
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
+    jq \
     redis-server \
     supervisor \
     && rm -rf /var/lib/apt/lists/*
@@ -139,6 +140,9 @@ EOF
 
 # Create data directories (matching docker-compose volumes)
 RUN mkdir -p /codebase /repos /config /claude-sessions /indexes /userhome /var/log/aoa
+
+# Fix git "dubious ownership" for mounted volumes
+RUN git config --global --add safe.directory '*'
 
 # Expose only the gateway port
 EXPOSE 8080

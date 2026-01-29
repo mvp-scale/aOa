@@ -1974,7 +1974,11 @@ cmd_wipe() {
         echo -e "  ${DIM}•${NC} Wiped ${deleted} Redis keys"
     fi
 
-    # 3. Clear local domain files
+    # 3. Rebuild keyword matcher to clear in-memory cache
+    curl -sf -X POST "${INDEX_URL}/keywords/rebuild?project_id=${project_id}" > /dev/null 2>&1
+    echo -e "  ${DIM}•${NC} Cleared keyword cache"
+
+    # 4. Clear local domain files
     local domains_dir="$project_root/.aoa/domains"
     if [ -d "$domains_dir" ]; then
         rm -rf "$domains_dir"/*

@@ -33,8 +33,10 @@ cmd_jobs() {
 
             echo -e "${CYAN}${BOLD}⚡ aOa Jobs${NC}  ${pending} pending ${DIM}│${NC} ${active} active ${DIM}│${NC} ${GREEN}${complete} complete${NC} ${DIM}│${NC} ${RED}${failed} failed${NC}"
 
-            # If there's pending work, show hint
-            if [ "$pending" -gt 0 ] && [ "$active" -eq 0 ]; then
+            # Show hints based on state
+            if [ "$failed" -gt 0 ]; then
+                echo -e "${DIM}Run 'aoa jobs failed' to see errors, 'aoa jobs retry' to retry${NC}"
+            elif [ "$pending" -gt 0 ] && [ "$active" -eq 0 ]; then
                 echo -e "${DIM}Run 'aoa jobs process' to process pending jobs${NC}"
             fi
             ;;
@@ -84,6 +86,28 @@ cmd_jobs() {
             if [ "$failed" -gt 0 ]; then
                 echo -e "${RED}${failed} jobs failed${NC}"
             fi
+            ;;
+
+        failed)
+            # List failed jobs with errors
+            shift
+            local limit="${1:-10}"
+            local result=$(curl -sf "${INDEX_URL}/jobs/failed?project_id=${project_id}&limit=${limit}" 2>/dev/null)
+            if [ -z "$result" ]; then
+                echo -e "${RED}Error: Could not fetch failed jobs${NC}" >&2
+                return 1
+            fi
+
+            local count=$(echo "$result" | jq -r '.count // 0')
+            if [ "$count" -eq 0 ]; then
+                echo "No failed jobs"
+                return 0
+            fi
+
+            echo -e "${RED}${BOLD}Failed Jobs${NC} (${count})"
+            echo "$result" | jq -r '.jobs[] | "  \(.payload.domain // .payload.files // "-"): \(.error // "unknown error")"'
+            echo ""
+            echo -e "${DIM}Run 'aoa jobs retry' to move back to pending${NC}"
             ;;
 
         retry)
@@ -149,6 +173,7 @@ cmd_jobs() {
             echo "Subcommands:"
             echo "  status          Show queue status (default)"
             echo "  pending [N]     List N pending jobs (default: 10)"
+            echo "  failed [N]      List N failed jobs with errors (default: 10)"
             echo "  process [N]     Process N jobs (default: 3)"
             echo "  enrich [FILE]   Queue domains for enrichment"
             echo "  retry           Retry all failed jobs"

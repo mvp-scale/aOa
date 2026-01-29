@@ -9179,6 +9179,29 @@ def jobs_pending():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/jobs/failed')
+def jobs_failed():
+    """Get failed jobs for a project with error messages."""
+    if not JOBS_AVAILABLE:
+        return jsonify({'error': 'Job queue module not available'}), 500
+
+    project_id = request.args.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    limit = int(request.args.get('limit', 10))
+
+    try:
+        q = JobQueue(project_id)
+        jobs = q.failed_jobs(limit)
+        return jsonify({
+            'jobs': [{'id': j.id, 'type': j.type.value, 'payload': j.payload, 'error': j.error} for j in jobs],
+            'count': len(jobs)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/jobs/push', methods=['POST'])
 def jobs_push():
     """Push jobs to the queue."""

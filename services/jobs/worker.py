@@ -24,12 +24,18 @@ sys.path.insert(0, '/app/services')
 
 from jobs.queue import Job, JobQueue, JobType
 
-# Import domain learner for enrichment jobs
-try:
-    from domains.learner import DomainLearner, Domain
-    LEARNER_AVAILABLE = True
-except ImportError:
-    LEARNER_AVAILABLE = False
+# Domain learner imported lazily to avoid circular imports
+DomainLearner = None
+Domain = None
+
+def _get_domain_learner():
+    """Lazy import of DomainLearner to avoid circular import."""
+    global DomainLearner, Domain
+    if DomainLearner is None:
+        from domains.learner import DomainLearner as DL, Domain as D
+        DomainLearner = DL
+        Domain = D
+    return DomainLearner
 
 
 class JobWorker:
@@ -120,11 +126,8 @@ class JobWorker:
         if not domain_name:
             raise ValueError("Missing domain name in job payload")
 
-        if not LEARNER_AVAILABLE:
-            raise RuntimeError("Domain learner not available")
-
         # Find project root (where .aoa/domains lives)
-        project_root = os.environ.get("AOA_PROJECT_ROOT", "/home/corey/aOa")
+        project_root = os.environ.get("AOA_PROJECT_ROOT", "/codebase")
         domain_file = os.path.join(project_root, ".aoa", "domains", f"{domain_name}.json")
 
         # 1. Check if domain file exists
@@ -146,7 +149,8 @@ class JobWorker:
 
         # 3. Call learner directly to enrich the domain
         print(f"[Worker] ENRICH: {domain_name} - enriching via learner", flush=True)
-        learner = DomainLearner(self.project_id, self.redis_url)
+        DL = _get_domain_learner()
+        learner = DL(self.project_id, self.redis_url)
         result = learner.enrich_domain(domain_name, term_keywords)
         keywords_added = result.get("keywords_added", 0)
         print(f"[Worker] ENRICH: {domain_name} - added {keywords_added} keywords", flush=True)
