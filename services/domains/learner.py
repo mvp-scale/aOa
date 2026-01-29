@@ -54,6 +54,13 @@ except ImportError:
             except Exception:
                 return False
 
+# Job queue for auto-queuing enrichment jobs
+try:
+    from jobs.queue import JobQueue, create_enrich_job
+    JOBS_AVAILABLE = True
+except ImportError:
+    JOBS_AVAILABLE = False
+
 
 @dataclass
 class Domain:
@@ -626,6 +633,7 @@ class DomainLearner:
 
         GL-085: Called by /aoa-start skill. Sets enriched=false on all.
         GL-090: Respects CORE_DOMAINS_MAX cap.
+        GL-091: Auto-queues ENRICH jobs for each created domain.
 
         Args:
             domains: List of {name, description, terms[]}
@@ -634,6 +642,7 @@ class DomainLearner:
             Summary of domains created
         """
         created = []
+        descriptions = {}  # name -> description for job queue
         skipped = 0
         for d in domains:
             # GL-090: Check core tier cap before adding
@@ -658,11 +667,25 @@ class DomainLearner:
             )
             self.add_domain(domain, source="skeleton")
             created.append(name)
+            descriptions[name] = d.get('description', '')
+
+        # GL-091: Auto-queue ENRICH jobs for created domains
+        jobs_queued = 0
+        if JOBS_AVAILABLE and created:
+            try:
+                q = JobQueue(self.project_id)
+                jobs = [create_enrich_job(self.project_id, name, descriptions.get(name, ''))
+                        for name in created]
+                jobs_queued = q.push_many(jobs)
+            except Exception as e:
+                # Log but don't fail - jobs can be queued manually
+                print(f"[DomainLearner] Warning: Could not auto-queue jobs: {e}")
 
         return {
             'domains_created': len(created),
             'domains': created,
-            'skipped': skipped
+            'skipped': skipped,
+            'jobs_queued': jobs_queued
         }
 
     def get_enrichment_prompt(self, domain: dict) -> str:

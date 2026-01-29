@@ -1105,13 +1105,74 @@ cmd_domains() {
             ;;
         build)
             # aoa domains build @name - add terms+keywords to one domain
-            # Reads from .aoa/domains/enrichment.json by default
-            # Expects format: {"domain": "@name", "terms": {"term1": ["kw1", ...], ...}}
+            # aoa domains build --all - build all @*.json files in .aoa/domains/
             shift
             local domain_name="${1:-}"
+
+            # Handle --all flag
+            if [ "$domain_name" = "--all" ]; then
+                local count=0
+                local total=0
+                local failed=0
+                local missing=0
+                local intelligence_file=".aoa/domains/intelligence.json"
+
+                # Validate against intelligence.json if it exists
+                if [ -f "$intelligence_file" ]; then
+                    local expected_domains=$(jq -r '.[].name' "$intelligence_file" 2>/dev/null)
+                    local missing_domains=""
+                    for domain in $expected_domains; do
+                        local file=".aoa/domains/${domain}.json"
+                        if [ ! -f "$file" ]; then
+                            missing_domains="$missing_domains $domain"
+                            missing=$((missing + 1))
+                        fi
+                    done
+
+                    if [ "$missing" -gt 0 ]; then
+                        echo -e "${RED}${BOLD}⚠ Missing ${missing} domain files:${NC}"
+                        for d in $missing_domains; do
+                            printf "  ${RED}✗${NC} %s.json\n" "$d"
+                        done
+                        echo -e "\n${DIM}Run /aoa-setup to regenerate, or create files manually.${NC}"
+                        return 1
+                    fi
+                fi
+
+                # Count files
+                for f in .aoa/domains/@*.json; do
+                    [ -f "$f" ] && total=$((total + 1))
+                done
+
+                if [ "$total" -eq 0 ]; then
+                    echo -e "${YELLOW}No domain files found${NC}"
+                    return 0
+                fi
+
+                echo -e "${CYAN}${BOLD}⚡ Building ${total} domains${NC}"
+
+                for f in .aoa/domains/@*.json; do
+                    [ ! -f "$f" ] && continue
+                    local name=$(basename "$f" .json)
+                    local result=$(cmd_domains build "$name" 2>/dev/null)
+                    if [ $? -eq 0 ]; then
+                        count=$((count + 1))
+                        printf "  ${GREEN}✓${NC} %s (%s keywords)\n" "$name" "$result"
+                    else
+                        failed=$((failed + 1))
+                        printf "  ${RED}✗${NC} %s\n" "$name"
+                    fi
+                done
+
+                echo -e "\n${GREEN}✓${NC} ${BOLD}${count}${NC} domains enriched"
+                [ "$failed" -gt 0 ] && echo -e "${RED}${failed} failed${NC}"
+                return 0
+            fi
+
             if [ -z "$domain_name" ]; then
                 echo -e "${RED}Error: Domain name required${NC}" >&2
                 echo "Usage: aoa domains build @search" >&2
+                echo "       aoa domains build --all" >&2
                 return 1
             fi
             # Support per-domain files: .aoa/domains/@name.json

@@ -107,30 +107,55 @@ class JobWorker:
 
     def _handle_enrich(self, job: Job) -> None:
         """
-        Generate terms and keywords for a domain.
+        Build a domain from its @domain.json file.
 
-        This is where Haiku would be called to generate terms.
-        For now, we just mark as needing enrichment.
+        Expects the domain file to exist at .aoa/domains/@{name}.json
+        with terms and keywords already generated (by parallel workers).
+
+        Calls learner.enrich_domain() directly (no subprocess).
         """
-        if not LEARNER_AVAILABLE:
-            raise RuntimeError("Domain learner not available")
+        import json
 
         domain_name = job.payload.get("domain")
-        description = job.payload.get("description", "")
-
         if not domain_name:
             raise ValueError("Missing domain name in job payload")
 
-        # This is a placeholder - actual implementation would:
-        # 1. Call Haiku to generate terms from description
-        # 2. Call Haiku to generate keywords for each term
-        # 3. Store in Redis via learner
+        if not LEARNER_AVAILABLE:
+            raise RuntimeError("Domain learner not available")
 
-        # For now, just log that we need to process this
-        print(f"[Worker] ENRICH: {domain_name} - needs Haiku processing", flush=True)
+        # Find project root (where .aoa/domains lives)
+        project_root = os.environ.get("AOA_PROJECT_ROOT", "/home/corey/aOa")
+        domain_file = os.path.join(project_root, ".aoa", "domains", f"{domain_name}.json")
 
-        # The actual Haiku call would happen via hook or direct API
-        # This job just tracks that work is needed
+        # 1. Check if domain file exists
+        if not os.path.exists(domain_file):
+            print(f"[Worker] ENRICH: {domain_name} - waiting for domain file", flush=True)
+            raise RuntimeError(f"Domain file not found: {domain_file}")
+
+        # 2. Read and parse the domain file
+        print(f"[Worker] ENRICH: {domain_name} - reading {domain_file}", flush=True)
+        try:
+            with open(domain_file, 'r') as f:
+                data = json.load(f)
+        except Exception as e:
+            raise RuntimeError(f"Failed to read domain file: {e}")
+
+        term_keywords = data.get("terms", {})
+        if not term_keywords:
+            raise RuntimeError(f"Domain file has no terms: {domain_file}")
+
+        # 3. Call learner directly to enrich the domain
+        print(f"[Worker] ENRICH: {domain_name} - enriching via learner", flush=True)
+        learner = DomainLearner(self.project_id, self.redis_url)
+        result = learner.enrich_domain(domain_name, term_keywords)
+        keywords_added = result.get("keywords_added", 0)
+        print(f"[Worker] ENRICH: {domain_name} - added {keywords_added} keywords", flush=True)
+
+        # 4. Verify domain is enriched
+        if not learner.is_domain_enriched(domain_name):
+            raise RuntimeError(f"Enrichment failed: {domain_name} not marked as enriched")
+
+        print(f"[Worker] ENRICH: {domain_name} - VERIFIED enriched ✓", flush=True)
 
     def _handle_map_keywords(self, job: Job) -> None:
         """Map domain keywords to codebase files."""

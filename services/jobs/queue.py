@@ -130,15 +130,23 @@ class JobQueue:
         return job.id
 
     def push_many(self, jobs: list[Job]) -> int:
-        """Add multiple jobs to pending queue. Returns count."""
+        """Add multiple jobs to pending queue. Returns count. Skips duplicates."""
         if not jobs:
             return 0
+
+        # Skip jobs already in pending (idempotent push)
+        existing = {j.id for j in self.pending_jobs(100)}
+        new_jobs = [j for j in jobs if j.id not in existing]
+
+        if not new_jobs:
+            return 0
+
         pipe = self.redis.client.pipeline()
-        for job in jobs:
+        for job in new_jobs:
             pipe.rpush(self._key("pending"), job.to_json())
-        pipe.hincrby(self._key("stats"), "total_pushed", len(jobs))
+        pipe.hincrby(self._key("stats"), "total_pushed", len(new_jobs))
         pipe.execute()
-        return len(jobs)
+        return len(new_jobs)
 
     def pop(self, timeout: int = 0) -> Optional[Job]:
         """
@@ -298,7 +306,7 @@ class JobQueue:
 def create_enrich_job(project_id: str, domain: str, description: str = "") -> Job:
     """Create a domain enrichment job."""
     return Job(
-        id="",
+        id=domain,  # Domain name IS the job ID - enables idempotent push
         type=JobType.ENRICH,
         project_id=project_id,
         phase="intelligence",
