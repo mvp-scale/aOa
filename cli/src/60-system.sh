@@ -1852,23 +1852,32 @@ cmd_wipe() {
     echo ""
     echo -e "${DIM}Wiping project data...${NC}"
 
-    # Call API endpoint to wipe
-    local result=$(curl -s -X POST "${INDEX_URL}/project/wipe" \
+    # 1. Clear job queue
+    local jobs_result=$(curl -s -X POST "${INDEX_URL}/jobs/clear" \
         -H "Content-Type: application/json" \
-        -d "{\"project\": \"${project_id}\"}" 2>/dev/null)
+        -d "{\"project_id\": \"${project_id}\"}" 2>/dev/null)
+    local jobs_cleared=$(echo "$jobs_result" | jq -r '.cleared // 0' 2>/dev/null || echo "0")
+    echo -e "  ${DIM}•${NC} Cleared ${jobs_cleared} jobs"
 
+    # 2. Wipe Redis data (DELETE /project/<project_id>)
+    local result=$(curl -s -X DELETE "${INDEX_URL}/project/${project_id}" 2>/dev/null)
     local success=$(echo "$result" | jq -r '.success // false')
-    local deleted=$(echo "$result" | jq -r '.deleted // 0')
+    local deleted=$(echo "$result" | jq -r '.redis_deleted.total // 0')
 
     if [[ "$success" == "true" ]]; then
-        echo -e "${GREEN}✓${NC} Wiped ${BOLD}${deleted}${NC} records"
-        echo ""
-        echo -e "${DIM}Run 'aoa quickstart' to reinitialize${NC}"
-    else
-        local error=$(echo "$result" | jq -r '.error // "Unknown error"')
-        echo -e "${RED}✗ Wipe failed: ${error}${NC}"
-        return 1
+        echo -e "  ${DIM}•${NC} Wiped ${deleted} Redis keys"
     fi
+
+    # 3. Clear local domain files
+    local domains_dir="$project_root/.aoa/domains"
+    if [ -d "$domains_dir" ]; then
+        rm -rf "$domains_dir"/*
+        echo -e "  ${DIM}•${NC} Cleared local domain files"
+    fi
+
+    echo ""
+    echo -e "${GREEN}✓${NC} Wipe complete"
+    echo -e "${DIM}Run 'aoa quickstart' to reinitialize${NC}"
 }
 
 cmd_whitelist() {

@@ -625,6 +625,125 @@ def calculate_intent_score(result_tags: list, search_intent: list) -> float:
 
 
 # ============================================================================
+# Phase 3B: Pre-Batch Enrichment - ONE Redis call for ALL results
+# ============================================================================
+
+def batch_fetch_enrichment_data(
+    results: list[dict],
+    intent_index: 'IntentIndex | None',
+    project_id: str | None,
+    idx: 'CodebaseIndex | None' = None
+) -> tuple[dict, dict, dict]:
+    """
+    Pre-batch ALL enrichment data in ONE Redis pipeline call.
+
+    Instead of N Redis calls (one per result), this fetches everything upfront.
+    Benchmark: 130 ops goes from 14.76ms (loop) to 1.22ms (pipeline) = 12x faster.
+
+    Args:
+        results: List of search results with 'file', 'line', and optional '_file_id'
+        intent_index: IntentIndex with Redis connection
+        project_id: Project ID for Redis key prefix
+        idx: CodebaseIndex for looking up symbols from metadata_store
+
+    Returns:
+        (file_tags_lookup, symbol_domains_lookup, file_accessed_lookup) - dicts for O(1) Python lookups
+    """
+    file_tags_lookup = {}
+    symbol_domains_lookup = {}
+    file_accessed_lookup = {}
+
+    if not intent_index or not hasattr(intent_index, 'redis') or not intent_index.redis:
+        return file_tags_lookup, symbol_domains_lookup, file_accessed_lookup
+
+    proj = project_id or 'local'
+    r = intent_index.redis.client if hasattr(intent_index.redis, 'client') else intent_index.redis
+
+    # Collect unique files from results
+    unique_files = list({res.get('file') for res in results if res.get('file')})
+
+    # Collect unique (file, symbol) pairs by looking up metadata_store
+    # This allows pre-batching domain lookups even though results don't have symbols yet
+    unique_symbols = set()
+    for res in results:
+        file_path = res.get('file')
+        line_num = res.get('line')
+        file_id = res.get('_file_id')
+
+        # Get file_id if not provided
+        if file_id is None and idx and file_path in idx.path_to_id:
+            file_id = idx.path_to_id[file_path]
+
+        # Look up symbol from metadata_store
+        if idx and file_id is not None and line_num:
+            meta = idx.metadata_store.get((file_id, line_num))
+            if meta:
+                symbol = meta.get('symbol')
+                if symbol:
+                    unique_symbols.add((file_path, symbol))
+                # Also check parent for fallback domain lookup
+                parent = meta.get('parent_name')
+                if parent:
+                    unique_symbols.add((file_path, parent))
+
+    unique_symbols = list(unique_symbols)
+
+    if not unique_files and not unique_symbols:
+        return file_tags_lookup, symbol_domains_lookup, file_accessed_lookup
+
+    # Build and execute ONE pipeline
+    pipe = r.pipeline()
+
+    # Queue file_tags lookups
+    for f in unique_files:
+        pipe.smembers(f"aoa:{proj}:file_tags:{f}")
+
+    # Queue symbol_domains lookups
+    for f, sym in unique_symbols:
+        pipe.smembers(f"aoa:{proj}:symbol_domains:{f}:{sym}")
+
+    # Queue file_accessed lookups (for keyword matcher eligibility)
+    for f in unique_files:
+        pipe.zscore(f"aoa:{proj}:file_accessed", f)
+
+    # Execute ALL in one network round-trip
+    try:
+        batch_results = pipe.execute()
+    except Exception:
+        return file_tags_lookup, symbol_domains_lookup, file_accessed_lookup
+
+    # Parse file_tags results
+    generic_tags = {'#executing', '#reading', '#editing', '#creating', '#searching',
+                   '#delegating', '#shell', '#python', '#markdown', '#indexing',
+                   '#hooks', '#test', '#grep', '#curl'}
+
+    for i, f in enumerate(unique_files):
+        tags = batch_results[i]
+        if tags:
+            decoded = [t.decode() if isinstance(t, bytes) else t for t in tags]
+            semantic = [t for t in decoded if t not in generic_tags]
+            file_tags_lookup[f] = sorted(semantic)[:3] if semantic else sorted(decoded)[:3]
+        else:
+            file_tags_lookup[f] = []
+
+    # Parse symbol_domains results
+    offset = len(unique_files)
+    for i, (f, sym) in enumerate(unique_symbols):
+        domains = batch_results[offset + i]
+        if domains:
+            domain = list(domains)[0]
+            symbol_domains_lookup[(f, sym)] = domain.decode() if isinstance(domain, bytes) else domain
+
+    # Parse file_accessed results (for keyword matcher eligibility)
+    offset2 = len(unique_files) + len(unique_symbols)
+    for i, f in enumerate(unique_files):
+        accessed = batch_results[offset2 + i]
+        file_accessed_lookup[f] = int(accessed) if accessed else 0
+
+    return file_tags_lookup, symbol_domains_lookup, file_accessed_lookup
+
+
+# ============================================================================
 # GL-050: Universal Output - Single source of truth for all search results
 # ============================================================================
 
@@ -635,7 +754,12 @@ def enrich_result(
     idx: 'CodebaseIndex',
     intent_index: 'IntentIndex | None' = None,
     project_id: str | None = None,
-    file_tags_cache: dict | None = None
+    file_tags_cache: dict | None = None,
+    file_id: int | None = None,  # Task 3.5: Optional file_id for O(1) metadata lookup
+    # Phase 3B: Pre-batched lookups (O(1) Python dict, no Redis at query time)
+    file_tags_lookup: dict | None = None,
+    symbol_domains_lookup: dict | None = None,
+    file_accessed_lookup: dict | None = None
 ) -> dict:
     """
     Universal result enrichment - THE SINGLE SOURCE OF TRUTH.
@@ -649,55 +773,90 @@ def enrich_result(
         idx: CodebaseIndex with file_outlines
         intent_index: Optional IntentIndex for tags
         project_id: Project ID for tag lookup
+        file_id: Optional file_id for O(1) metadata_store lookup
 
     Returns:
         Standardized result dict with consistent keys
     """
-    # Get symbol context from pre-indexed outlines (O(1) lookup)
-    symbols = idx.file_outlines.get(file_path, [])
+    # =================================================================
+    # O(1) OPTIMIZATION: Task 3.5 - Try metadata_store first
+    # =================================================================
 
-    # Find INNERMOST enclosing symbol (smallest range that contains the line)
-    # This ensures we get the method, not the class, when line is inside a method
-    # Also track the PARENT (next smallest enclosing symbol) for hierarchy display
-    enclosing = []  # All symbols that contain this line
-    for sym in symbols:
-        if sym.start_line <= line_num <= sym.end_line:
-            sym_range = sym.end_line - sym.start_line
-            enclosing.append((sym_range, sym))
+    # Task 3.5a: If we have file_id, try O(1) metadata_store lookup
+    metadata = None
+    if file_id is not None:
+        meta_key = (file_id, line_num)
+        metadata = idx.metadata_store.get(meta_key)
 
-    # Sort by range (smallest first = most specific)
-    enclosing.sort(key=lambda x: x[0])
+    # Task 3.5b: If no file_id provided, try to get it from path_to_id
+    if metadata is None and file_path in idx.path_to_id:
+        file_id = idx.path_to_id[file_path]
+        meta_key = (file_id, line_num)
+        metadata = idx.metadata_store.get(meta_key)
 
-    # Extract symbol info
-    symbol_name = None
-    symbol_signature = None
-    symbol_kind = None
-    start_line = None
-    end_line = None
-    parent_name = None
-    symbol_tags = []
+    # Task 3.5c: Use metadata if available (O(1) path)
+    if metadata:
+        symbol_name = metadata.get('symbol')
+        symbol_signature = metadata.get('signature')
+        symbol_kind = metadata.get('symbol_kind')
+        start_line = metadata.get('start_line')
+        end_line = metadata.get('end_line')
+        parent_name = metadata.get('parent_name')
+        symbol_tags = metadata.get('tags') or []
+        # Task 3.5c: Check for cached domain/terms (populated by learning)
+        cached_domain = metadata.get('domain')
+        cached_terms = metadata.get('terms')
+    else:
+        # Fallback: Get symbol context from pre-indexed outlines
+        symbol_name = None
+        symbol_signature = None
+        symbol_kind = None
+        start_line = None
+        end_line = None
+        parent_name = None
+        symbol_tags = []
+        cached_domain = None
+        cached_terms = None
 
-    if enclosing:
-        # Best match is the innermost (smallest range)
-        _, best_match = enclosing[0]
-        symbol_name = best_match.name
-        symbol_signature = best_match.signature
-        symbol_kind = best_match.kind
-        start_line = best_match.start_line
-        end_line = best_match.end_line
-        symbol_tags = best_match.tags or []
+        symbols = idx.file_outlines.get(file_path, [])
 
-        # Check for stored parent_name first
-        parent_name = getattr(best_match, 'parent_name', None)
+        # Find INNERMOST enclosing symbol (smallest range that contains the line)
+        # This ensures we get the method, not the class, when line is inside a method
+        # Also track the PARENT (next smallest enclosing symbol) for hierarchy display
+        enclosing = []  # All symbols that contain this line
+        for sym in symbols:
+            if sym.start_line <= line_num <= sym.end_line:
+                sym_range = sym.end_line - sym.start_line
+                enclosing.append((sym_range, sym))
 
-        # If no stored parent, look for the next enclosing symbol (parent)
-        if not parent_name and len(enclosing) > 1:
-            _, parent_sym = enclosing[1]  # Second smallest = parent
-            parent_name = parent_sym.name
+        # Sort by range (smallest first = most specific)
+        enclosing.sort(key=lambda x: x[0])
 
-    # Get file-level tags from intent index (use cache if provided to avoid N+1 Redis calls)
+        if enclosing:
+            # Best match is the innermost (smallest range)
+            _, best_match = enclosing[0]
+            symbol_name = best_match.name
+            symbol_signature = best_match.signature
+            symbol_kind = best_match.kind
+            start_line = best_match.start_line
+            end_line = best_match.end_line
+            symbol_tags = best_match.tags or []
+
+            # Check for stored parent_name first
+            parent_name = getattr(best_match, 'parent_name', None)
+
+            # If no stored parent, look for the next enclosing symbol (parent)
+            if not parent_name and len(enclosing) > 1:
+                _, parent_sym = enclosing[1]  # Second smallest = parent
+                parent_name = parent_sym.name
+
+    # Get file-level tags - Phase 3B: Use pre-batched lookup (O(1) Python dict)
     file_tags = []
-    if intent_index and project_id:
+    if file_tags_lookup is not None and file_path in file_tags_lookup:
+        # Phase 3B: O(1) Python dict lookup (no Redis)
+        file_tags = file_tags_lookup[file_path]
+    elif intent_index and project_id:
+        # Fallback: Redis lookup (only if pre-batch not provided)
         if file_tags_cache is not None and file_path in file_tags_cache:
             file_tags = file_tags_cache[file_path]
         else:
@@ -717,13 +876,19 @@ def enrich_result(
     term_tags = []
     is_definition_line = start_line is not None and line_num == start_line
 
-    if intent_index and project_id:
-        # Look up domain for the enclosing symbol
+    # Phase 3B: Use pre-batched lookup for domains (O(1) Python dict)
+    if symbol_domains_lookup is not None:
+        # O(1) Python dict lookup (no Redis)
+        if symbol_name:
+            domain = symbol_domains_lookup.get((file_path, symbol_name))
+        if not domain and parent_name:
+            domain = symbol_domains_lookup.get((file_path, parent_name))
+    elif intent_index and project_id:
+        # Fallback: Redis lookup (only if pre-batch not provided)
         if symbol_name:
             symbol_domains = intent_index.domains_for_symbol(file_path, symbol_name, project_id)
             if symbol_domains:
                 domain = symbol_domains[0]
-        # Fallback to parent domain
         if not domain and parent_name:
             parent_domains = intent_index.domains_for_symbol(file_path, parent_name, project_id)
             if parent_domains:
@@ -736,8 +901,12 @@ def enrich_result(
         matcher = get_keyword_matcher(project_id, intent_index)
         if matcher and matcher.is_available:
             # Get file's last accessed time for eligibility filtering
+            # Phase 3B: Use pre-batched lookup (O(1) Python dict)
             file_accessed = 0
-            if intent_index and project_id:
+            if file_accessed_lookup is not None and file_path in file_accessed_lookup:
+                file_accessed = file_accessed_lookup[file_path]
+            elif intent_index and project_id:
+                # Fallback: Redis lookup
                 file_accessed = intent_index.get_file_last_accessed(file_path, project_id)
 
             # Find matching domain tags with eligibility filter
@@ -1961,6 +2130,35 @@ class CodebaseIndex:
         # Thread safety
         self.lock = threading.RLock()
 
+        # =================================================================
+        # O(1) OPTIMIZATION: Three-Store Architecture (Session 41)
+        # See: .context/O1-OPTIMIZATION_ARCH.md
+        # =================================================================
+
+        # Task 1.1: File Registry - bidirectional file_id <-> path mapping
+        # Enables compact integer IDs in token_index instead of full path strings
+        self.id_to_path: dict[int, str] = {}      # file_id -> rel_path
+        self.path_to_id: dict[str, int] = {}      # rel_path -> file_id
+        self.next_file_id: int = 1                # Auto-increment counter
+
+        # Task 1.2: Token Index - O(1) lookup, lean pointers only
+        # CRITICAL: Use (file_id, line) tuples, NOT Location objects
+        # Memory: ~16 bytes/entry vs ~765 bytes for Location objects
+        self.token_index: dict[str, list[tuple[int, int]]] = defaultdict(list)
+
+        # Task 1.3: Content Store - file content stored ONCE per file
+        # Lookup by file_id, then index by line number
+        self.content_store: dict[int, list[str]] = {}  # file_id -> [line0, line1, ...]
+
+        # Task 1.4: Metadata Store - symbol context + enrichment cache
+        # Key: (file_id, line) -> symbol metadata + cached domain/terms
+        self.metadata_store: dict[tuple[int, int], dict] = {}
+
+        # Batch Optimization: In-memory mirrors of Redis data (no Redis at query time)
+        # Populated when Redis is written, queried from Python memory
+        self.file_tags_store: dict[int, list[str]] = {}  # file_id -> [tags]
+        self.symbol_domains_store: dict[tuple[int, str], str] = {}  # (file_id, symbol) -> domain
+
     def get_language(self, path: Path) -> str:
         return self.EXTENSIONS.get(path.suffix.lower(), 'unknown')
 
@@ -2086,6 +2284,22 @@ class CodebaseIndex:
                     content_hash=content_hash
                 )
 
+                # =================================================================
+                # O(1) OPTIMIZATION: Populate Three-Store (Session 41)
+                # =================================================================
+
+                # Task 2.1: Add to file_registry (reuse existing ID or assign new)
+                if rel_path in self.path_to_id:
+                    file_id = self.path_to_id[rel_path]
+                else:
+                    file_id = self.next_file_id
+                    self.next_file_id += 1
+                    self.id_to_path[file_id] = rel_path
+                    self.path_to_id[rel_path] = file_id
+
+                # Task 2.2: Populate content_store (lines stored once per file)
+                self.content_store[file_id] = lines  # 'lines' already split above
+
                 for token, line_num, col in self.tokenize(content):
                     # Get line content (capped at 200 chars for memory efficiency)
                     line_content = lines[line_num - 1][:200] if line_num <= len(lines) else ''
@@ -2128,6 +2342,29 @@ class CodebaseIndex:
                     if lower != token:
                         self.inverted_index[lower].append(loc)
 
+                    # Task 2.3: Populate token_index with lean (file_id, line) tuples
+                    self.token_index[token].append((file_id, line_num))
+                    if lower != token:
+                        self.token_index[lower].append((file_id, line_num))
+
+                    # Task 2.4: Populate metadata_store with symbol context
+                    # Only store if we have enclosing symbol (avoid storing for every token)
+                    meta_key = (file_id, line_num)
+                    if meta_key not in self.metadata_store:
+                        self.metadata_store[meta_key] = {
+                            'symbol': enclosing['name'] if enclosing else None,
+                            'symbol_kind': enclosing['kind'] if enclosing else None,
+                            'start_line': enclosing['start_line'] if enclosing else None,
+                            'end_line': enclosing['end_line'] if enclosing else None,
+                            'signature': enclosing['signature'] if enclosing else None,
+                            'parent_name': enclosing.get('parent_name') if enclosing else None,
+                            'tags': ac_tags,
+                            'mtime': mtime,
+                            # Task 2.4b: domain/terms populated later by learning
+                            'domain': None,
+                            'terms': None
+                        }
+
                 self._extract_deps(path, content, language)
                 self.last_indexed = int(time.time())
 
@@ -2139,12 +2376,42 @@ class CodebaseIndex:
 
     def _remove_file_from_index(self, rel_path: str):
         """Remove all entries for a file from the index."""
+        # Original inverted_index cleanup
         for token, locations in list(self.inverted_index.items()):
             self.inverted_index[token] = [
                 loc for loc in locations if loc.file != rel_path
             ]
             if not self.inverted_index[token]:
                 del self.inverted_index[token]
+
+        # =================================================================
+        # O(1) OPTIMIZATION: Clean up Three-Store (Task 2.5)
+        # =================================================================
+
+        # Task 2.5a: Get file_id from registry
+        file_id = self.path_to_id.get(rel_path)
+
+        if file_id is not None:
+            # Task 2.5b: Remove from token_index (filter by file_id)
+            for token, positions in list(self.token_index.items()):
+                self.token_index[token] = [
+                    (fid, line) for fid, line in positions if fid != file_id
+                ]
+                if not self.token_index[token]:
+                    del self.token_index[token]
+
+            # Task 2.5c: Remove from content_store
+            if file_id in self.content_store:
+                del self.content_store[file_id]
+
+            # Task 2.5d: Remove from metadata_store (filter by file_id)
+            keys_to_remove = [k for k in self.metadata_store if k[0] == file_id]
+            for key in keys_to_remove:
+                del self.metadata_store[key]
+
+            # Task 2.5e: Remove from file_registry (both dicts)
+            del self.id_to_path[file_id]
+            del self.path_to_id[rel_path]
 
         if rel_path in self.deps_outgoing:
             del self.deps_outgoing[rel_path]
@@ -2275,6 +2542,100 @@ class CodebaseIndex:
             unique.sort(key=lambda x: x.file)
 
         return [asdict(loc) for loc in unique[:limit]]
+
+    # =================================================================
+    # O(1) OPTIMIZATION: New search using token_index (Task 3.1)
+    # =================================================================
+
+    def search_o1(self, query: str, limit: int = 100, file_filter: str = None) -> list[dict]:
+        """O(1) search using token_index - returns results for enrichment.
+
+        This is the fast path for literal searches. Returns raw results
+        that will be enriched by enrich_result() before display.
+
+        Args:
+            query: Token to search for
+            limit: Max results to return
+            file_filter: Optional glob pattern to filter files
+
+        Returns:
+            List of result dicts with: file, line, content, mtime
+            (Symbol metadata added later by enrich_result)
+        """
+        results = []
+
+        with self.lock:
+            # Task 3.1a: O(1) lookup from token_index
+            positions = self.token_index.get(query, [])
+
+            # Also check lowercase version
+            lower = query.lower()
+            if lower != query:
+                positions = positions + self.token_index.get(lower, [])
+
+            # Task 3.1b: Build result dicts from three stores
+            seen = set()
+            for file_id, line_num in positions:
+                # Deduplicate by (file_id, line)
+                key = (file_id, line_num)
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                # Task 3.1c: Get file path from registry
+                file_path = self.id_to_path.get(file_id)
+                if not file_path:
+                    continue
+
+                # Apply file filter if specified
+                if file_filter:
+                    if '*' in file_filter:
+                        filter_regex = file_filter.replace('.', r'\.').replace('**', '.*').replace('*', '[^/]*')
+                        if not re.search(filter_regex, file_path):
+                            continue
+                    elif file_filter.endswith('/'):
+                        if not file_path.startswith(file_filter):
+                            continue
+                    else:
+                        if file_filter not in file_path:
+                            continue
+
+                # Get content from content_store
+                lines = self.content_store.get(file_id, [])
+                content = lines[line_num - 1][:200] if 0 < line_num <= len(lines) else ''
+
+                # Get mtime from files metadata
+                file_meta = self.files.get(file_path)
+                mtime = file_meta.mtime if file_meta else 0
+
+                # Task 3.1d: Build result dict (same format as old search)
+                results.append({
+                    'file': file_path,
+                    'line': line_num,
+                    'content': content.strip(),
+                    'mtime': mtime,
+                    # Include file_id for metadata lookup during enrichment
+                    '_file_id': file_id
+                })
+
+                if len(results) >= limit:
+                    break
+
+        # Score by filename boost (same as original search)
+        query_lower = query.lower()
+        def score(r):
+            filename = r['file'].lower().split('/')[-1]
+            filepath = r['file'].lower()
+            if query_lower in filename.replace('-', '').replace('_', ''):
+                return (1000, r['mtime'])
+            elif query_lower in filename:
+                return (500, r['mtime'])
+            elif query_lower in filepath:
+                return (100, r['mtime'])
+            return (0, r['mtime'])
+
+        results.sort(key=score, reverse=True)
+        return results[:limit]
 
     def search_multi(self, terms: list[str], mode: str = 'recent', limit: int = 20,
                      since: int = None, before: int = None, file_filter: str = None) -> list[dict]:
@@ -3419,84 +3780,148 @@ def semantic_grep():
     # 1. Infer intent from search term
     search_intent = infer_search_intent(q)
 
-    # 2. Compile pattern
-    # GL-050: Unix parity - case-sensitive by default (like grep -i)
-    flags = re.MULTILINE | (re.IGNORECASE if case_insensitive else 0)
-    try:
-        if use_regex:
-            pattern = re.compile(q, flags)
-        else:
-            # Literal search (escape regex special chars)
-            pattern = re.compile(re.escape(q), flags)
-    except re.error as e:
-        return jsonify({'error': f'Invalid pattern: {e}', 'results': [], 'ms': 0}), 400
-
-    # 3. Search file contents and collect matches
-    matches = []
-    files_searched = 0
-    files_with_hits = set()
-
-    # GL-050: Use LRU cache for content (same as egrep)
     project_id = project_id or 'local'
 
-    with idx.lock:
-        for rel_path, meta in idx.files.items():
-            # GL-051: File pattern filtering - skip non-matching files BEFORE reading content
-            if file_filter:
-                if file_filter_regex:
-                    if not file_filter_regex.search(rel_path):
-                        continue
-                elif file_filter.endswith('/'):
-                    if not rel_path.startswith(file_filter):
-                        continue
-                else:
-                    if file_filter not in rel_path:
-                        continue
+    # =================================================================
+    # O(1) OPTIMIZATION: Task 3.2 - Dispatch based on search type
+    # =================================================================
 
-            files_searched += 1
+    if not use_regex and not case_insensitive:
+        # Task 3.2b: LITERAL SEARCH - O(1) path via token_index
+        # This is the fast path for exact token matches
+        raw_results = idx.search_o1(q, limit=500, file_filter=file_filter)
 
-            # Use LRU cache instead of disk read
-            lines = content_cache.get(project_id, rel_path, idx.root)
-            if not lines:
-                continue
+        # Phase 3B: Pre-batch ALL enrichment data in ONE Redis pipeline
+        # Benchmark: 130 ops goes from 14.76ms (loop) to 1.22ms (pipeline) = 12x faster
+        file_tags_lookup, symbol_domains_lookup, file_accessed_lookup = batch_fetch_enrichment_data(
+            results=raw_results,
+            intent_index=intent_index,
+            project_id=project_id,
+            idx=idx
+        )
 
-            content = '\n'.join(lines)
-            file_matches = []
+        results = []
+        files_with_hits = set()
 
-            for match in pattern.finditer(content):
-                line_num = content.count('\n', 0, match.start()) + 1
-                line_text = lines[line_num - 1].strip()[:100] if line_num <= len(lines) else ''
-
-                file_matches.append({
-                    'line': line_num,
-                    'text': line_text,
-                    'match': match.group()[:50]
-                })
-                # GL-050: No per-file limit - Unix grep doesn't limit, neither do we
-
-            if file_matches:
-                files_with_hits.add(rel_path)
-                matches.append({
-                    'file': rel_path,
-                    'language': meta.language,
-                    'matches': file_matches
-                })
-                # GL-050: No early break - inverted index is O(1), search all files
-
-    # 4. GL-050: Universal Output - enrich each match through single function
-    results = []
-    file_tags_cache = {}  # PERF: Cache file tags to avoid N+1 Redis calls
-    for file_match in matches:
-        rel_path = file_match['file']
-        for m in file_match['matches']:
+        for r in raw_results:
+            files_with_hits.add(r['file'])
             result = enrich_result(
-                file_path=rel_path,
-                line_num=m['line'],
-                content=m['text'],
+                file_path=r['file'],
+                line_num=r['line'],
+                content=r['content'],
                 idx=idx,
                 intent_index=intent_index,
                 project_id=project_id,
-                file_tags_cache=file_tags_cache
+                file_id=r.get('_file_id'),  # Task 3.5: Pass file_id for O(1) metadata lookup
+                # Phase 3B: Pre-batched lookups (O(1) Python dict, no Redis at query time)
+                file_tags_lookup=file_tags_lookup,
+                symbol_domains_lookup=symbol_domains_lookup,
+                file_accessed_lookup=file_accessed_lookup
+            )
+            results.append(result)
+
+        files_searched = len(idx.files)  # We "searched" the index, not individual files
+
+    else:
+        # Task 3.2c: REGEX SEARCH - O(n) path, scan content_store
+        # Still faster than disk because content is in-memory
+
+        # 2. Compile pattern
+        flags = re.MULTILINE | (re.IGNORECASE if case_insensitive else 0)
+        try:
+            if use_regex:
+                pattern = re.compile(q, flags)
+            else:
+                # Case-insensitive literal search
+                pattern = re.compile(re.escape(q), flags)
+        except re.error as e:
+            return jsonify({'error': f'Invalid pattern: {e}', 'results': [], 'ms': 0}), 400
+
+        # 3. Search using content_store (Task 3.3: in-memory, no disk reads)
+        matches = []
+        files_searched = 0
+        files_with_hits = set()
+
+        with idx.lock:
+            # Task 3.3a: Iterate content_store instead of files + disk read
+            for file_id, lines in idx.content_store.items():
+                file_path = idx.id_to_path.get(file_id)
+                if not file_path:
+                    continue
+
+                # GL-051: File pattern filtering
+                if file_filter:
+                    if file_filter_regex:
+                        if not file_filter_regex.search(file_path):
+                            continue
+                    elif file_filter.endswith('/'):
+                        if not file_path.startswith(file_filter):
+                            continue
+                    else:
+                        if file_filter not in file_path:
+                            continue
+
+                files_searched += 1
+
+                # Phase 3B FIX: Iterate lines directly - we already have line numbers!
+                # Old approach joined lines then counted newlines = O(n) per match
+                # New approach: enumerate gives us line_num for free = O(1)
+                file_matches = []
+
+                for line_num, line in enumerate(lines, 1):
+                    match = pattern.search(line)
+                    if match:
+                        file_matches.append({
+                            'line': line_num,
+                            'text': line.strip()[:100],
+                            'match': match.group()[:50]
+                        })
+
+                if file_matches:
+                    files_with_hits.add(file_path)
+                    meta = idx.files.get(file_path)
+                    matches.append({
+                        'file': file_path,
+                        'file_id': file_id,  # Pass through for O(1) enrichment
+                        'language': meta.language if meta else 'unknown',
+                        'matches': file_matches
+                    })
+
+        # 4. Enrich results
+        # Phase 3B: Flatten matches for pre-batch, then enrich
+        flat_results = []
+        for file_match in matches:
+            rel_path = file_match['file']
+            fid = file_match['file_id']  # Pass through for O(1) enrichment
+            for m in file_match['matches']:
+                flat_results.append({
+                    'file': rel_path,
+                    'line': m['line'],
+                    'content': m['text'],
+                    '_file_id': fid
+                })
+
+        # Pre-batch ALL enrichment data in ONE Redis pipeline
+        file_tags_lookup, symbol_domains_lookup, file_accessed_lookup = batch_fetch_enrichment_data(
+            results=flat_results,
+            intent_index=intent_index,
+            project_id=project_id,
+            idx=idx
+        )
+
+        results = []
+        for r in flat_results:
+            result = enrich_result(
+                file_path=r['file'],
+                line_num=r['line'],
+                content=r['content'],
+                idx=idx,
+                intent_index=intent_index,
+                project_id=project_id,
+                file_id=r.get('_file_id'),  # Same as grep path
+                file_tags_lookup=file_tags_lookup,
+                symbol_domains_lookup=symbol_domains_lookup,
+                file_accessed_lookup=file_accessed_lookup
             )
             results.append(result)
 
@@ -6313,10 +6738,19 @@ def pattern_search():
     files_matched = 0
     file_tags_cache = {}  # PERF: Cache file tags to avoid N+1 Redis calls (210 calls -> 1 per unique file)
 
+    # Task 3.4: Use content_store instead of disk/cache
+    project_id = project_id or 'local'
+
     with idx.lock:
-        for rel_path, meta in idx.files.items():
+        for file_id, lines in idx.content_store.items():
+            rel_path = idx.id_to_path.get(file_id)
+            if not rel_path:
+                continue
+
+            meta = idx.files.get(rel_path)
+
             # Time filter
-            if since_ts and meta.mtime < since_ts:
+            if since_ts and meta and meta.mtime < since_ts:
                 continue
 
             # GL-051: File pattern filtering - skip non-matching files BEFORE reading content
@@ -6333,11 +6767,9 @@ def pattern_search():
 
             files_searched += 1
 
-            # GL-046.1: Use LRU cache instead of disk read
-            project_id = project_id or 'local'
-            lines = content_cache.get(project_id, rel_path, idx.root)
+            # Task 3.4a: Content already in memory from content_store
             if not lines:
-                continue  # File not accessible
+                continue
 
             file_matched = False
             content = '\n'.join(lines)  # Reconstruct for regex matching

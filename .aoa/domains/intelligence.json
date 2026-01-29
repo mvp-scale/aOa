@@ -1,102 +1,26 @@
 [
-  {
-    "name": "@search",
-    "description": "Code search and symbol lookup. Includes grep, egrep, find, locate commands, pattern matching, and O(1) instant indexing. Result ranking and tokenization for fast retrieval."
-  },
-  {
-    "name": "@indexing",
-    "description": "Index management and symbol indexing. Scans codebase for symbols, builds inverted indexes, manages index states, and handles index updates. Redis integration for fast lookups."
-  },
-  {
-    "name": "@api",
-    "description": "REST API endpoints and HTTP handlers. Request routing, response formatting, status codes, and middleware processing. Gateway integration and endpoint definitions."
-  },
-  {
-    "name": "@gateway",
-    "description": "Gateway and request forwarding. Proxies HTTP requests to backend services, handles routing logic, manages service communication, and request/response transformation."
-  },
-  {
-    "name": "@intent",
-    "description": "Intent tracking and usage analytics. Captures user actions, analyzes search patterns, tracks domain usage, and generates predictions. Session-based intent recording."
-  },
-  {
-    "name": "@domains",
-    "description": "Semantic domain management and learning. Domain generation, enrichment with terms and keywords, domain rebalancing, and project-specific domain customization."
-  },
-  {
-    "name": "@hooks",
-    "description": "Claude Code hooks and event capturing. Hook installation, trigger conditions, status line generation, and real-time feedback integration with the IDE."
-  },
-  {
-    "name": "@redis",
-    "description": "Redis data storage and caching. Connection management, key-value operations, domain caching, session storage, and distributed state management."
-  },
-  {
-    "name": "@jobs",
-    "description": "Background job processing and queue management. Job queuing, worker processing, enrichment task scheduling, and async execution of domain enrichment."
-  },
-  {
-    "name": "@cli",
-    "description": "Command-line interface and shell commands. aOa CLI commands, argument parsing, subcommand routing, and user-facing shell interface implementation."
-  },
-  {
-    "name": "@config",
-    "description": "Configuration management and settings. Project configuration, environment variables, settings templates, and runtime configuration loading and validation."
-  },
-  {
-    "name": "@docker",
-    "description": "Docker containerization and deployment. Dockerfile, docker-compose configuration, container orchestration, and multi-service deployment setup."
-  },
-  {
-    "name": "@setup",
-    "description": "Project initialization and onboarding. First-run setup, domain generation, user guidance, and configuration initialization for new projects."
-  },
-  {
-    "name": "@ranking",
-    "description": "Search result ranking and relevance scoring. Scoring algorithms, relevance computation, term weighting, and result ordering based on multiple factors."
-  },
-  {
-    "name": "@learner",
-    "description": "Machine learning and domain enrichment. Term extraction, keyword identification, semantic tagging, and intelligent domain rebalancing logic."
-  },
-  {
-    "name": "@session",
-    "description": "Session management and state tracking. Session storage, user session handling, session parsing, and session-based analytics collection."
-  },
-  {
-    "name": "@git",
-    "description": "Git integration and version control. Repository operations, git proxies, branch tracking, and version control system interaction."
-  },
-  {
-    "name": "@health",
-    "description": "System health monitoring and status checking. Service status verification, health endpoints, dependency checks, and diagnostic information."
-  },
-  {
-    "name": "@testing",
-    "description": "Test suites and quality assurance. Unit tests, end-to-end tests, test frameworks, simulation scripts, and validation routines."
-  },
-  {
-    "name": "@benchmarks",
-    "description": "Performance benchmarking and metrics. Speed measurements, throughput metrics, latency analysis, and comparative performance evaluation."
-  },
-  {
-    "name": "@files",
-    "description": "File discovery and location. File searching by patterns, path resolution, file listing, and efficient file system traversal."
-  },
-  {
-    "name": "@analytics",
-    "description": "Data analytics and metrics collection. Performance statistics, usage analytics, event logging, and statistical analysis of system behavior."
-  },
-  {
-    "name": "@proxy",
-    "description": "HTTP proxying and request interception. Proxy servers, request forwarding, service routing, and transparent protocol bridging."
-  },
-  {
-    "name": "@compression",
-    "description": "Semantic compression and file outlines. Code summarization, structural analysis, and compressed representations of large files for efficient viewing."
-  },
-  {
-    "name": "@utils",
-    "description": "Utility functions and helpers. Common utilities, shell utilities, error handling, and reusable code components across services."
-  }
+  {"name": "@search", "description": "O(1) symbol lookup via inverted index. Powers grep, egrep, multi-term search with ranking. Goal: sub-10ms response for any codebase symbol."},
+  {"name": "@indexer", "description": "Builds and maintains the inverted index from source files. Tokenization, symbol extraction, incremental updates. Foundation for instant search."},
+  {"name": "@cli", "description": "Shell command interface mirroring Unix grep/egrep conventions. Built from modular src/*.sh files via build.sh. Provides aoa grep, find, tree, domains."},
+  {"name": "@gateway", "description": "HTTP API routing requests to backend services. Provides /symbol, /multi, /files endpoints. Centralizes business logic server-side."},
+  {"name": "@redis", "description": "In-memory store for indexes, intent history, session state. Enables instant lookups and persistent learning. Critical for O(1) performance."},
+  {"name": "@intent", "description": "Captures developer behavior via hooks. Tracks exploration, edits, searches. Builds predictive model of needed files."},
+  {"name": "@hooks", "description": "Claude Code integration capturing tool calls without API keys. Enables learning by observing workflow. Zero-config codebase intelligence."},
+  {"name": "@domains", "description": "Semantic categorization by purpose, not location. Generated via analysis, stored as JSON, loaded to Redis. Enables @domain tags in results."},
+  {"name": "@jobs", "description": "Background task queue for long-running operations. Domain enrichment, batch processing. Queue/worker pattern for non-blocking execution."},
+  {"name": "@status", "description": "Real-time status line showing aOa activity. Intent count, tags, response time, focus. Ambient awareness of learning state."},
+  {"name": "@ranking", "description": "Scores and orders results by relevance. Term frequency, file recency, intent patterns. Most relevant result first."},
+  {"name": "@session", "description": "Parses Claude Code conversation history for context. Files mentioned, operations performed. Session-aware predictions."},
+  {"name": "@docker", "description": "Container deployment with docker-compose and monolithic modes. Both must produce identical behavior. Debugging vs simplicity."},
+  {"name": "@proxy", "description": "Git operations handler intercepting repository interactions. Tracks commits, branches, changes for enhanced context."},
+  {"name": "@config", "description": "Settings management via JSON files. Project and user-level configuration. Environment variables, installation parameters."},
+  {"name": "@skills", "description": "Reusable prompt templates for Claude Code. Setup wizards, domain generation, background tasks. Markdown with YAML frontmatter."},
+  {"name": "@analytics", "description": "Usage metrics and file heat maps. Frequently accessed files, search patterns. Informs prediction and ranking."},
+  {"name": "@prefetch", "description": "Proactive file loading based on intent patterns. Reduces latency by anticipating needs. Triggered by behavioral hooks."},
+  {"name": "@outline", "description": "Semantic file tagging for compressed context. Key symbols and structure extraction. Quick understanding without full reads."},
+  {"name": "@testing", "description": "Test infrastructure for aOa functionality. Simulation scripts, intent phase testing. Search and learning reliability."},
+  {"name": "@build", "description": "CLI assembly from modular shell scripts. build.sh concatenates src/*.sh into aoa executable. Organized development."},
+  {"name": "@install", "description": "First-time setup and onboarding. Creates directories, initializes config, starts services. Gets users productive quickly."},
+  {"name": "@health", "description": "Service monitoring and diagnostics. Redis, gateway, indexer availability checks. System status for troubleshooting."},
+  {"name": "@learner", "description": "ML integration improving predictions over time. Analyzes intent patterns to refine domains and recommendations."}
 ]

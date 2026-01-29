@@ -735,23 +735,22 @@ cmd_egrep() {
         patterns="{\"match\": ${escaped}}"
     fi
 
-    # Build request body
+    # Phase 3B: Use optimized /grep endpoint with regex=true (same as grep)
     export AOA_SEARCH_TYPE="regex"
     local project_id=$(get_project_id)
-    local body="{\"patterns\": ${patterns}"
-    [ -n "$repo" ] && body="${body}, \"repo\": \"${repo}\""
-    [ -n "$since_seconds" ] && body="${body}, \"since\": ${since_seconds}"
-    [ -n "$project_id" ] && body="${body}, \"project\": \"${project_id}\""
-    [ "$case_insensitive" = true ] && body="${body}, \"ci\": true"
-    [ -n "$file_filter" ] && body="${body}, \"filter\": \"${file_filter}\""
-    body="${body}}"
+    local encoded_pattern=$(printf '%s' "$pattern" | jq -sRr @uri)
 
-    local url="${INDEX_URL}/pattern"
-    [ -n "$repo" ] && url="${INDEX_URL}/repo/${repo}/pattern"
+    # Build query params - same as grep but with regex=true
+    local params="q=${encoded_pattern}&regex=true"
+    [ -n "$project_id" ] && params="${params}&project_id=${project_id}"
+    [ "$case_insensitive" = true ] && params="${params}&ci=1"
+    [ -n "$since_seconds" ] && params="${params}&since=${since_seconds}"
+    [ -n "$file_filter" ] && params="${params}&filter=$(printf '%s' "$file_filter" | jq -sRr @uri)"
 
-    local result=$(curl -s -X POST "$url" \
-        -H "Content-Type: application/json" \
-        -d "$body")
+    local url="${INDEX_URL}/grep?${params}"
+    # TODO: repo support would need different handling
+
+    local result=$(curl -s "$url")
 
     local err=$(echo "$result" | jq -r '.error // empty')
     if [ -n "$err" ]; then
@@ -4484,23 +4483,32 @@ cmd_wipe() {
     echo ""
     echo -e "${DIM}Wiping project data...${NC}"
 
-    # Call API endpoint to wipe
-    local result=$(curl -s -X POST "${INDEX_URL}/project/wipe" \
+    # 1. Clear job queue
+    local jobs_result=$(curl -s -X POST "${INDEX_URL}/jobs/clear" \
         -H "Content-Type: application/json" \
-        -d "{\"project\": \"${project_id}\"}" 2>/dev/null)
+        -d "{\"project_id\": \"${project_id}\"}" 2>/dev/null)
+    local jobs_cleared=$(echo "$jobs_result" | jq -r '.cleared // 0' 2>/dev/null || echo "0")
+    echo -e "  ${DIM}•${NC} Cleared ${jobs_cleared} jobs"
 
+    # 2. Wipe Redis data (DELETE /project/<project_id>)
+    local result=$(curl -s -X DELETE "${INDEX_URL}/project/${project_id}" 2>/dev/null)
     local success=$(echo "$result" | jq -r '.success // false')
-    local deleted=$(echo "$result" | jq -r '.deleted // 0')
+    local deleted=$(echo "$result" | jq -r '.redis_deleted.total // 0')
 
     if [[ "$success" == "true" ]]; then
-        echo -e "${GREEN}✓${NC} Wiped ${BOLD}${deleted}${NC} records"
-        echo ""
-        echo -e "${DIM}Run 'aoa quickstart' to reinitialize${NC}"
-    else
-        local error=$(echo "$result" | jq -r '.error // "Unknown error"')
-        echo -e "${RED}✗ Wipe failed: ${error}${NC}"
-        return 1
+        echo -e "  ${DIM}•${NC} Wiped ${deleted} Redis keys"
     fi
+
+    # 3. Clear local domain files
+    local domains_dir="$project_root/.aoa/domains"
+    if [ -d "$domains_dir" ]; then
+        rm -rf "$domains_dir"/*
+        echo -e "  ${DIM}•${NC} Cleared local domain files"
+    fi
+
+    echo ""
+    echo -e "${GREEN}✓${NC} Wipe complete"
+    echo -e "${DIM}Run 'aoa quickstart' to reinitialize${NC}"
 }
 
 cmd_whitelist() {
@@ -4651,6 +4659,30 @@ cmd_jobs() {
             echo "Retried ${retried} jobs"
             ;;
 
+        enrich)
+            # Queue domains for enrichment
+            shift
+            local file="${1:-.aoa/domains/intelligence.json}"
+
+            if [ ! -f "$file" ]; then
+                echo -e "${RED}Error: File not found: ${file}${NC}" >&2
+                return 1
+            fi
+
+            local domains=$(cat "$file")
+            local result=$(curl -sf -X POST "${INDEX_URL}/jobs/push/enrich" \
+                -H "Content-Type: application/json" \
+                -d "{\"project_id\":\"${project_id}\",\"domains\":${domains}}" 2>/dev/null)
+
+            if [ -z "$result" ]; then
+                echo -e "${RED}Error: Could not queue jobs${NC}" >&2
+                return 1
+            fi
+
+            local queued=$(echo "$result" | jq -r '.queued // 0')
+            echo -e "${GREEN}✓${NC} Queued ${BOLD}${queued}${NC} domains for enrichment"
+            ;;
+
         clear)
             # Clear queues
             shift
@@ -4676,6 +4708,7 @@ cmd_jobs() {
             echo "  status          Show queue status (default)"
             echo "  pending [N]     List N pending jobs (default: 10)"
             echo "  process [N]     Process N jobs (default: 3)"
+            echo "  enrich [FILE]   Queue domains for enrichment"
             echo "  retry           Retry all failed jobs"
             echo "  clear [TYPE]    Clear queue (complete|failed|all)"
             echo ""
@@ -4683,6 +4716,7 @@ cmd_jobs() {
             echo "  aoa jobs                 # Show status"
             echo "  aoa jobs pending 5       # Show 5 pending jobs"
             echo "  aoa jobs process 3       # Process 3 jobs"
+            echo "  aoa jobs enrich          # Queue from intelligence.json"
             echo "  aoa jobs retry           # Retry failed"
             echo "  aoa jobs clear complete  # Clear completed jobs"
             ;;

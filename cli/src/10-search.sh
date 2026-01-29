@@ -592,23 +592,22 @@ cmd_egrep() {
         patterns="{\"match\": ${escaped}}"
     fi
 
-    # Build request body
+    # Phase 3B: Use optimized /grep endpoint with regex=true (same as grep)
     export AOA_SEARCH_TYPE="regex"
     local project_id=$(get_project_id)
-    local body="{\"patterns\": ${patterns}"
-    [ -n "$repo" ] && body="${body}, \"repo\": \"${repo}\""
-    [ -n "$since_seconds" ] && body="${body}, \"since\": ${since_seconds}"
-    [ -n "$project_id" ] && body="${body}, \"project\": \"${project_id}\""
-    [ "$case_insensitive" = true ] && body="${body}, \"ci\": true"
-    [ -n "$file_filter" ] && body="${body}, \"filter\": \"${file_filter}\""
-    body="${body}}"
+    local encoded_pattern=$(printf '%s' "$pattern" | jq -sRr @uri)
 
-    local url="${INDEX_URL}/pattern"
-    [ -n "$repo" ] && url="${INDEX_URL}/repo/${repo}/pattern"
+    # Build query params - same as grep but with regex=true
+    local params="q=${encoded_pattern}&regex=true"
+    [ -n "$project_id" ] && params="${params}&project_id=${project_id}"
+    [ "$case_insensitive" = true ] && params="${params}&ci=1"
+    [ -n "$since_seconds" ] && params="${params}&since=${since_seconds}"
+    [ -n "$file_filter" ] && params="${params}&filter=$(printf '%s' "$file_filter" | jq -sRr @uri)"
 
-    local result=$(curl -s -X POST "$url" \
-        -H "Content-Type: application/json" \
-        -d "$body")
+    local url="${INDEX_URL}/grep?${params}"
+    # TODO: repo support would need different handling
+
+    local result=$(curl -s "$url")
 
     local err=$(echo "$result" | jq -r '.error // empty')
     if [ -n "$err" ]; then

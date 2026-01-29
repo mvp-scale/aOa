@@ -101,6 +101,30 @@ cmd_jobs() {
             echo "Retried ${retried} jobs"
             ;;
 
+        enrich)
+            # Queue domains for enrichment
+            shift
+            local file="${1:-.aoa/domains/intelligence.json}"
+
+            if [ ! -f "$file" ]; then
+                echo -e "${RED}Error: File not found: ${file}${NC}" >&2
+                return 1
+            fi
+
+            local domains=$(cat "$file")
+            local result=$(curl -sf -X POST "${INDEX_URL}/jobs/push/enrich" \
+                -H "Content-Type: application/json" \
+                -d "{\"project_id\":\"${project_id}\",\"domains\":${domains}}" 2>/dev/null)
+
+            if [ -z "$result" ]; then
+                echo -e "${RED}Error: Could not queue jobs${NC}" >&2
+                return 1
+            fi
+
+            local queued=$(echo "$result" | jq -r '.queued // 0')
+            echo -e "${GREEN}✓${NC} Queued ${BOLD}${queued}${NC} domains for enrichment"
+            ;;
+
         clear)
             # Clear queues
             shift
@@ -126,6 +150,7 @@ cmd_jobs() {
             echo "  status          Show queue status (default)"
             echo "  pending [N]     List N pending jobs (default: 10)"
             echo "  process [N]     Process N jobs (default: 3)"
+            echo "  enrich [FILE]   Queue domains for enrichment"
             echo "  retry           Retry all failed jobs"
             echo "  clear [TYPE]    Clear queue (complete|failed|all)"
             echo ""
@@ -133,6 +158,7 @@ cmd_jobs() {
             echo "  aoa jobs                 # Show status"
             echo "  aoa jobs pending 5       # Show 5 pending jobs"
             echo "  aoa jobs process 3       # Process 3 jobs"
+            echo "  aoa jobs enrich          # Queue from intelligence.json"
             echo "  aoa jobs retry           # Retry failed"
             echo "  aoa jobs clear complete  # Clear completed jobs"
             ;;
