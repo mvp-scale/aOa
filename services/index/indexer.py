@@ -125,6 +125,20 @@ except ImportError:
     JobWorker = None
 
 # ============================================================================
+# O1-013: Pre-compiled Regexes (avoid re.compile per call)
+# ============================================================================
+_TOKENIZE_SPLIT_RE = re.compile(r'[/_\-.\s]+')
+_TOKENIZE_CAMEL_RE = re.compile(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+')
+
+# O1-012: LRU cache for compiled regex patterns
+from functools import lru_cache
+
+@lru_cache(maxsize=128)
+def _compile_pattern(pattern: str, flags: int) -> re.Pattern:
+    """Cache compiled regex patterns to avoid recompilation."""
+    return re.compile(pattern, flags)
+
+# ============================================================================
 # Pattern Library for Intent Inference (RAM-cached at startup)
 # ============================================================================
 
@@ -583,12 +597,13 @@ def get_keyword_matcher(project_id: str = None, intent_idx: 'IntentIndex | None'
 def _tokenize_search(text: str) -> set:
     """Tokenize search term into matchable parts."""
     tokens = set()
-    parts = re.split(r'[/_\-.\s]+', text.lower())
+    # O1-013: Use pre-compiled regex
+    parts = _TOKENIZE_SPLIT_RE.split(text.lower())
     for part in parts:
         if part:
             tokens.add(part)
-            # Split camelCase
-            camel_parts = re.findall(r'[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)|\d+', part)
+            # Split camelCase - O1-013: Use pre-compiled regex
+            camel_parts = _TOKENIZE_CAMEL_RE.findall(part)
             tokens.update(p.lower() for p in camel_parts)
     return tokens
 
@@ -3362,17 +3377,24 @@ class IntentIndex:
 
         return tag_scores
 
-    def get_file_affinity(self, project_id: str = None, window: int = 50) -> dict[str, float]:
+    def get_file_affinity(self, project_id: str = None, window: int = 50, rolling: dict = None) -> tuple[dict[str, float], dict[str, float]]:
         """Get pre-computed affinity scores for files based on rolling intent.
 
         GL-045: Files that match recent intent tags get higher scores.
+        O1-009/O1-010: Returns both affinity and rolling to avoid recomputation.
+
+        Args:
+            project_id: Project to query
+            window: Number of recent intents to consider
+            rolling: Optional pre-computed rolling intent (avoids recomputation)
 
         Returns:
-            Dict[file, affinity_score] - higher = more aligned with recent work
+            Tuple of (file_scores, rolling_intent) - reuse rolling for UI display
         """
-        rolling = self.get_rolling_intent(project_id, window)
+        if rolling is None:
+            rolling = self.get_rolling_intent(project_id, window)
         if not rolling:
-            return {}
+            return {}, {}
 
         proj = self._project_key(project_id)
         file_scores: dict[str, float] = {}
@@ -3382,7 +3404,7 @@ class IntentIndex:
                 for file in self.tag_to_files[proj].get(tag, set()):
                     file_scores[file] = file_scores.get(file, 0) + weight
 
-        return file_scores
+        return file_scores, rolling
 
     # =========================================================================
     # GL-088: Hit Tracking - Track domain/term hits during grep searches
@@ -3670,8 +3692,8 @@ def symbol_search():
         # GL-045: Rank by rolling intent affinity
         rolling_tags = None
         if rank_by_intent and intent_index and results:
-            # Get file affinity from rolling intent window (default 50)
-            file_affinity = intent_index.get_file_affinity(project_id, window=50)
+            # O1-009/O1-010: Get both affinity and rolling in one call (avoids recomputation)
+            file_affinity, rolling_tags = intent_index.get_file_affinity(project_id, window=50)
 
             # Infer query intent from search term
             query_intent = set(infer_search_intent(q)) if q else set()
@@ -3713,13 +3735,13 @@ def symbol_search():
             # Sort by intent score (highest first), then by original order
             results.sort(key=lambda r: r.get('intent_score', 0), reverse=True)
 
-            # Get rolling tags for response (for UI display)
-            rolling_tags = intent_index.get_rolling_intent(project_id, window=50)
+            # O1-009: rolling_tags already set by get_file_affinity() above
 
         # Trim to requested limit
         results = results[:limit]
 
         # GL-046.1: Enrich results with content from LRU cache (O(1) when warm)
+        # O1-008: Use content_store as fallback to avoid disk I/O on cache miss
         # GL-046.3: Batch add tags to results (no per-file curl needed in CLI)
         for r in results:
             file_path = r.get('file', '')
@@ -3731,6 +3753,12 @@ def symbol_search():
                     line_num,
                     idx.root
                 )
+                # O1-008: Fallback to content_store (already in memory) if cache missed
+                if line_content is None and file_path in idx.path_to_id:
+                    file_id = idx.path_to_id[file_path]
+                    lines = idx.content_store.get(file_id, [])
+                    if 0 < line_num <= len(lines):
+                        line_content = lines[line_num - 1]
                 if line_content is not None:
                     # Strip leading whitespace, truncate for display
                     r['content'] = line_content.strip()[:100]
@@ -3860,14 +3888,14 @@ def semantic_grep():
         # Task 3.2c: REGEX SEARCH - O(n) path, scan content_store
         # Still faster than disk because content is in-memory
 
-        # 2. Compile pattern
+        # 2. Compile pattern - O1-012: Use LRU cached compilation
         flags = re.MULTILINE | (re.IGNORECASE if case_insensitive else 0)
         try:
             if use_regex:
-                pattern = re.compile(q, flags)
+                pattern = _compile_pattern(q, flags)
             else:
                 # Case-insensitive literal search
-                pattern = re.compile(re.escape(q), flags)
+                pattern = _compile_pattern(re.escape(q), flags)
         except re.error as e:
             return jsonify({'error': f'Invalid pattern: {e}', 'results': [], 'ms': 0}), 400
 
@@ -4079,13 +4107,24 @@ def get_outline():
         # Use request param or fallback to "local"
         project_key = project_id or "local"
 
+        # O1-011: Single scan for ALL symbols in file, then distribute
+        # Pattern: tag_meta:{project_key}:{file_path}:{symbol}:{tag}
+        all_pattern = f"tag_meta:{project_key}:{file_path}:*"
+        all_keys = list(r.scan_iter(match=all_pattern, count=500))
+
+        # Build symbol -> tags map from scan results
+        symbol_tags = defaultdict(list)
+        for key in all_keys:
+            parts = (key.decode() if isinstance(key, bytes) else key).split(':')
+            if len(parts) >= 5:
+                symbol_name = parts[3]  # tag_meta:proj:file:SYMBOL:tag
+                tag = parts[4]
+                symbol_tags[symbol_name].append(tag)
+
+        # Assign tags to symbols
         for sym in symbols:
             sym_dict = asdict(sym)
-            # Look up tags for this symbol: tag_meta:{project_id}:{file}:{symbol}:{tag}
-            # O1-002: Use scan_iter instead of keys() to avoid blocking Redis
-            pattern = f"tag_meta:{project_key}:{file_path}:{sym.name}:*"
-            tag_keys = list(r.scan_iter(match=pattern, count=100))
-            sym_dict['tags'] = [k.decode().split(':')[-1] for k in tag_keys] if tag_keys else []
+            sym_dict['tags'] = symbol_tags.get(sym.name, [])
             enriched_symbols.append(sym_dict)
     except Exception as e:
         # Fallback: return symbols without tags
@@ -6722,252 +6761,20 @@ def repo_deps(name):
 
 @app.route('/pattern', methods=['POST'])
 def pattern_search():
-    """
-    Agent-driven multi-pattern search with AC.
-
-    Agent defines the patterns - no corpus needed.
-
-    POST body:
-    {
-        "patterns": {
-            "function_def": "def\\s+handleAuth\\s*\\(",
-            "function_call": "handleAuth\\s*\\("
-        },
-        "repo": "flask",        # optional: search specific repo (default: local)
-        "since": 604800,        # optional: only files modified in last N seconds
-        "limit": 50             # optional: max results per pattern
-    }
-    """
-    start = time.time()
-    data = request.json
-
-    patterns = data.get('patterns', {})
-    repo_name = data.get('repo')  # None = local
-    project_id = data.get('project_id')  # Optional project ID for intent tracking
-    since = data.get('since')  # seconds ago
-    # GL-050: Unix parity - case-sensitive by default, ci=true for insensitive
-    case_insensitive = data.get('ci', False)
-    file_filter = data.get('filter')  # GL-051: File pattern filter (Unix grep parity)
-
-    # GL-051: Compile file filter regex if provided
-    file_filter_regex = None
-    if file_filter:
-        if '*' in file_filter:
-            filter_pattern = file_filter.replace('.', r'\.').replace('**', '.*').replace('*', '[^/]*')
-            file_filter_regex = re.compile(filter_pattern)
-
-    if not patterns:
-        return jsonify({'error': 'patterns required'}), 400
-
-    # Get the right index
-    if repo_name:
-        idx = manager.get_repo(repo_name)
-        if not idx:
-            return jsonify({'error': f"Repo '{repo_name}' not found"}), 404
-    else:
-        idx = manager.get_local(project_id)
-
-    # Compile patterns
-    flags = re.MULTILINE | (re.IGNORECASE if case_insensitive else 0)
-    compiled = {}
-    for label, pattern in patterns.items():
-        try:
-            compiled[label] = re.compile(pattern, flags)
-        except re.error as e:
-            return jsonify({'error': f"Invalid pattern '{label}': {e}"}), 400
-
-    # Time filter
-    since_ts = None
-    if since:
-        since_ts = time.time() - int(since)
-
-    # Search files
-    results = {label: [] for label in patterns}
-    files_searched = 0
-    files_matched = 0
-    file_tags_cache = {}  # PERF: Cache file tags to avoid N+1 Redis calls (210 calls -> 1 per unique file)
-
-    # Task 3.4: Use content_store instead of disk/cache
-    project_id = project_id or 'local'
-
-    with idx.lock:
-        for file_id, lines in idx.content_store.items():
-            rel_path = idx.id_to_path.get(file_id)
-            if not rel_path:
-                continue
-
-            meta = idx.files.get(rel_path)
-
-            # Time filter
-            if since_ts and meta and meta.mtime < since_ts:
-                continue
-
-            # GL-051: File pattern filtering - skip non-matching files BEFORE reading content
-            if file_filter:
-                if file_filter_regex:
-                    if not file_filter_regex.search(rel_path):
-                        continue
-                elif file_filter.endswith('/'):
-                    if not rel_path.startswith(file_filter):
-                        continue
-                else:
-                    if file_filter not in rel_path:
-                        continue
-
-            files_searched += 1
-
-            # Task 3.4a: Content already in memory from content_store
-            if not lines:
-                continue
-
-            file_matched = False
-            content = '\n'.join(lines)  # Reconstruct for regex matching
-
-            for label, regex in compiled.items():
-                for match in regex.finditer(content):
-                    # Find line number
-                    line_start = content.count('\n', 0, match.start()) + 1
-                    line_text = lines[line_start - 1].strip()[:80] if line_start <= len(lines) else ''
-
-                    # GL-050: Universal Output - use enrich_result()
-                    result = enrich_result(
-                        file_path=rel_path,
-                        line_num=line_start,
-                        content=line_text,
-                        idx=idx,
-                        intent_index=intent_index,
-                        project_id=project_id,
-                        file_tags_cache=file_tags_cache
-                    )
-                    results[label].append(result)
-                    file_matched = True
-                    # GL-050: No limit - return all matches
-
-            if file_matched:
-                files_matched += 1
-
-    elapsed = (time.time() - start) * 1000
-
-    # GL-050: Universal Response format (consistent with /grep)
-    # Flatten results for single-pattern case, keep labels for multi-pattern
-    if len(patterns) == 1:
-        # Single pattern - flatten to match /grep response exactly
-        label = list(patterns.keys())[0]
-        flat_results = results[label]
-        response = format_search_response(
-            results=flat_results,
-            ms=elapsed,
-            files_searched=files_searched,
-            search_intent=None,  # No intent inference for regex patterns
-            intent_index=intent_index,
-            project_id=project_id
-        )
-    else:
-        # Multi-pattern - keep label grouping but use consistent format
-        rolling_tags = None
-        if intent_index and project_id:
-            rolling_tags = intent_index.get_rolling_intent(project_id, window=50)
-
-        response = {
-            'results': results,
-            'ms': elapsed,
-            'files_searched': files_searched,
-            'files_matched': files_matched,
-            'total_matches': sum(len(r) for r in results.values()),
-            'index': repo_name or 'local'
-        }
-
-        if rolling_tags:
-            top_tags = sorted(rolling_tags.items(), key=lambda x: x[1], reverse=True)[:5]
-            response['rolling_intent'] = [tag for tag, _ in top_tags]  # Tags already have # prefix
-
-    return jsonify(response)
+    """DEPRECATED: Use /grep?regex=true instead. Multi-pattern search is no longer supported."""
+    return jsonify({
+        'error': 'Endpoint deprecated. Use /grep?regex=true for regex search.',
+        'migration': 'aoa egrep "pattern" now uses /grep?regex=true'
+    }), 410
 
 
 @app.route('/repo/<name>/pattern', methods=['POST'])
 def repo_pattern_search(name):
-    """Pattern search in a specific repo."""
-    start = time.time()
-    data = request.json or {}
-    data['repo'] = name
-
-    # Reuse the main pattern search
-    repo = manager.get_repo(name)
-    if not repo:
-        return jsonify({'error': f"Repo '{name}' not found"}), 404
-
-    patterns = data.get('patterns', {})
-    since = data.get('since')
-    limit = data.get('limit', 50)
-
-    if not patterns:
-        return jsonify({'error': 'patterns required'}), 400
-
-    # Compile patterns
-    compiled = {}
-    for label, pattern in patterns.items():
-        try:
-            compiled[label] = re.compile(pattern, re.MULTILINE)
-        except re.error as e:
-            return jsonify({'error': f"Invalid pattern '{label}': {e}"}), 400
-
-    since_ts = None
-    if since:
-        since_ts = time.time() - int(since)
-
-    results = {label: [] for label in patterns}
-    files_searched = 0
-    files_matched = 0
-
-    with repo.lock:
-        for rel_path, meta in repo.files.items():
-            if since_ts and meta.mtime < since_ts:
-                continue
-
-            files_searched += 1
-            full_path = repo.root / rel_path
-
-            try:
-                content = full_path.read_text(encoding='utf-8', errors='ignore')
-            except Exception:
-                continue
-
-            file_matched = False
-            lines = content.split('\n')
-
-            for label, regex in compiled.items():
-                if len(results[label]) >= limit:
-                    continue
-
-                for match in regex.finditer(content):
-                    line_start = content.count('\n', 0, match.start()) + 1
-                    line_text = lines[line_start - 1].strip()[:80]
-
-                    results[label].append({
-                        'file': rel_path,
-                        'line': line_start,
-                        'match': match.group()[:100],
-                        'context': line_text
-                    })
-                    file_matched = True
-
-                    if len(results[label]) >= limit:
-                        break
-
-            if file_matched:
-                files_matched += 1
-
-    elapsed = (time.time() - start) * 1000
-
+    """DEPRECATED: Use /grep?regex=true&repo=name instead."""
     return jsonify({
-        'results': results,
-        'stats': {
-            'files_searched': files_searched,
-            'files_matched': files_matched,
-            'ms': elapsed
-        },
-        'index': name
-    })
+        'error': 'Endpoint deprecated. Use /grep?regex=true for regex search.',
+        'migration': 'aoa egrep "pattern" --repo name now uses /grep?regex=true'
+    }), 410
 
 
 # ============================================================================
@@ -7300,8 +7107,8 @@ def intent_rolling():
     project_id = request.args.get('project_id')
     window = int(request.args.get('window', 50))
 
-    rolling = intent_index.get_rolling_intent(project_id, window)
-    affinity = intent_index.get_file_affinity(project_id, window)
+    # O1-009/O1-010: Get both in one call
+    affinity, rolling = intent_index.get_file_affinity(project_id, window)
 
     return jsonify({
         'rolling_tags': rolling,
