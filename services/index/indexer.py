@@ -3227,7 +3227,7 @@ class IntentIndex:
         """Get recent intent records."""
         proj = self._project_key(project_id)
         with self.lock:
-            records = self.timeline[proj]
+            records = list(self.timeline[proj])  # deque doesn't support slicing
             if since:
                 records = [r for r in records if r.timestamp >= since]
             records = records[-limit:]
