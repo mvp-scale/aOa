@@ -513,21 +513,8 @@ class KeywordMatcher:
                     # Track domain match count
                     domain_counts[domain_name] = domain_counts.get(domain_name, 0) + 1
 
-            # P3-2: Track keyword hits asynchronously
-            if matched_keywords and DOMAINS_AVAILABLE:
-                try:
-                    import threading
-                    import logging
-                    def _track_keywords():
-                        try:
-                            learner = DomainLearner(self.project_id)
-                            learner.increment_keyword_hits(matched_keywords)
-                        except Exception as e:
-                            # T-002: Log errors instead of silently swallowing
-                            logging.error(f"[KeywordMatcher] Hit tracking failed: {e}")
-                    threading.Thread(target=_track_keywords, daemon=True).start()
-                except Exception as e:
-                    logging.error(f"[KeywordMatcher] Thread spawn failed: {e}")
+            # P3-2: Hit tracking removed from hot path
+            # Tracked via intent system at request level, not per-result
 
             # Pick domain with most matches
             top_domain = max(domain_counts, key=domain_counts.get) if domain_counts else None
