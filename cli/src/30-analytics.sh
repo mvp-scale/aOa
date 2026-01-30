@@ -624,7 +624,12 @@ cmd_cc() {
                 esac
             done
 
-            local project_path="${AOA_HOME:-$(pwd)}"
+            local project_path=$(get_project_root)
+            if [ -z "$project_path" ]; then
+                echo -e "${RED}Error: Not in an aOa-initialized project${NC}"
+                return 1
+            fi
+
             local result=$(curl -s "${INDEX_URL}/cc/prompts?limit=${limit}&project_path=${project_path}")
 
             if $json_output; then
@@ -661,7 +666,12 @@ cmd_cc() {
                 esac
             done
 
-            local project_path="${AOA_HOME:-$(pwd)}"
+            local project_path=$(get_project_root)
+            if [ -z "$project_path" ]; then
+                echo -e "${RED}Error: Not in an aOa-initialized project${NC}"
+                return 1
+            fi
+
             local result=$(curl -s "${INDEX_URL}/cc/sessions?limit=${limit}&project_path=${project_path}")
 
             if $json_output; then
@@ -739,7 +749,12 @@ cmd_cc() {
                 esac
             done
 
-            local project_path="${AOA_HOME:-$(pwd)}"
+            local project_path=$(get_project_root)
+            if [ -z "$project_path" ]; then
+                echo -e "${RED}Error: Not in an aOa-initialized project${NC}"
+                return 1
+            fi
+
             local result=$(curl -s "${INDEX_URL}/cc/stats?project_path=${project_path}")
 
             if $json_output; then
