@@ -395,7 +395,8 @@ class SessionMetrics:
         sessions = []
 
         try:
-            for session_path in self._get_session_files(limit=limit):
+            # Fetch more files to account for filtered empties
+            for session_path in self._get_session_files(limit=limit * 3):
                 session = self.parse_session(session_path)
 
                 if session.get("error"):
@@ -421,8 +422,12 @@ class SessionMetrics:
                     except Exception:
                         pass
 
+                # Skip empty sessions (no duration or < 60 seconds)
+                if elapsed_seconds < 60:
+                    continue
+
                 # Duration in minutes
-                duration_min = round(elapsed_seconds / 60, 1) if elapsed_seconds > 0 else 0
+                duration_min = round(elapsed_seconds / 60, 1)
 
                 # Per-model OUTPUT (actual generation) and TPS (effective throughput)
                 output_tps = {"O": 0, "S": 0, "H": 0}
@@ -484,6 +489,10 @@ class SessionMetrics:
                     "velocity": effective_tps.get("O", 0) or effective_tps.get("S", 0) or effective_tps.get("H", 0),  # Fallback
                     "models": model_calls,  # Renamed from model_summary
                 })
+
+                # Stop once we have enough valid sessions
+                if len(sessions) >= limit:
+                    break
 
         except Exception as e:
             logger.warning(f"Error getting sessions summary: {e}")
