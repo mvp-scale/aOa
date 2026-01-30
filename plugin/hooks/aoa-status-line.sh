@@ -164,16 +164,12 @@ elif [ "$PERCENT" -lt 75 ]; then CTX_COLOR=$YELLOW
 else CTX_COLOR=$RED
 fi
 
-# === GET INTENT COUNT ===
+# === INTENT COUNT - will be set from /metrics response below ===
 INTENTS=0
-if [ -f "$STATUS_FILE" ]; then
-    INTENTS=$(jq -r '.intents // 0' "$STATUS_FILE" 2>/dev/null)
-fi
-INTENTS=${INTENTS:-0}
 
 # === GET AOA METRICS (with timing) ===
 START_TIME=$(date +%s%N)
-METRICS=$(curl -s --max-time 0.3 "${AOA_URL}/metrics" 2>/dev/null)
+METRICS=$(curl -s --max-time 0.3 "${AOA_URL}/metrics?project_id=${AOA_PROJECT_ID}" 2>/dev/null)
 END_TIME=$(date +%s%N)
 
 # Calculate response time in ms
@@ -198,6 +194,8 @@ TIME_SAVED_SEC=$(echo "$METRICS" | jq -r '.savings.time_sec // 0')
 TIME_SAVED_SEC_INT=$(printf "%.0f" "$TIME_SAVED_SEC")
 ROLLING_HITS=$(echo "$METRICS" | jq -r '.rolling.hits // 0')
 EVALUATED=$(echo "$METRICS" | jq -r '.rolling.evaluated // 0')
+INTENTS=$(echo "$METRICS" | jq -r '.total_intents // 0')
+INTENTS=${INTENTS:-0}
 
 # === BUILD DISPLAY ===
 SEP="${DIM}│${RESET}"

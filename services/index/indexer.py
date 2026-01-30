@@ -7939,9 +7939,11 @@ def get_metrics():
 
         # Get real savings from intent index (file_size vs output_size measurements)
         intent_savings = {}
+        total_intents = 0
         if intent_index:
             intent_stats = intent_index.get_stats(project_id)
             intent_savings = intent_stats.get('savings', {})
+            total_intents = intent_stats.get('total_records', 0)
 
         # Total savings = Redis + Intent (Intent is the primary/real source)
         total_tokens_saved = tokens_saved + intent_savings.get('tokens', 0)
@@ -7979,7 +7981,10 @@ def get_metrics():
             },
 
             # Savings (cumulative) - include intent index real measurements
-            'savings': savings_data
+            'savings': savings_data,
+
+            # Intent count for status line
+            'total_intents': total_intents,
         })
 
     except Exception as e:
