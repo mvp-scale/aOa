@@ -215,45 +215,54 @@ class SessionMetrics:
         }
 
         turn_durations = {}  # uuid -> duration_ms
+        all_lines = []  # Store all lines for two-pass parsing
 
         try:
+            # First pass: collect all lines and turn durations
             with open(session_path) as f:
                 for line in f:
+                    all_lines.append(line)
                     try:
                         data = json.loads(line)
+                        # Collect turn durations first
+                        if data.get("type") == "system" and data.get("subtype") == "turn_duration":
+                            parent = data.get("parentUuid")
+                            duration = data.get("durationMs", 0)
+                            if parent and duration:
+                                turn_durations[parent] = duration
+                                result["total_duration_ms"] += duration
                     except json.JSONDecodeError:
                         continue
 
-                    msg_type = data.get("type")
-                    timestamp = data.get("timestamp")
+            # Second pass: process all messages with durations available
+            for line in all_lines:
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
 
-                    # Track time bounds
-                    if timestamp:
-                        if result["start_time"] is None or timestamp < result["start_time"]:
-                            result["start_time"] = timestamp
-                        if result["end_time"] is None or timestamp > result["end_time"]:
-                            result["end_time"] = timestamp
+                msg_type = data.get("type")
+                timestamp = data.get("timestamp")
 
-                    # User prompts
-                    if msg_type == "user" and not data.get("isMeta"):
-                        content = safe_get(data, "message", "content", default="")
-                        clean = clean_user_prompt(content)
-                        if clean:
-                            result["prompts"].append({
-                                "text": clean,
-                                "timestamp": timestamp,
-                            })
+                # Track time bounds
+                if timestamp:
+                    if result["start_time"] is None or timestamp < result["start_time"]:
+                        result["start_time"] = timestamp
+                    if result["end_time"] is None or timestamp > result["end_time"]:
+                        result["end_time"] = timestamp
 
-                    # Turn durations
-                    if msg_type == "system" and data.get("subtype") == "turn_duration":
-                        parent = data.get("parentUuid")
-                        duration = data.get("durationMs", 0)
-                        if parent and duration:
-                            turn_durations[parent] = duration
-                            result["total_duration_ms"] += duration
+                # User prompts
+                if msg_type == "user" and not data.get("isMeta"):
+                    content = safe_get(data, "message", "content", default="")
+                    clean = clean_user_prompt(content)
+                    if clean:
+                        result["prompts"].append({
+                            "text": clean,
+                            "timestamp": timestamp,
+                        })
 
-                    # Assistant turns with usage
-                    if msg_type == "assistant":
+                # Assistant turns with usage
+                if msg_type == "assistant":
                         msg = safe_get(data, "message", default={})
                         usage = safe_get(msg, "usage", default={})
                         content = safe_get(msg, "content", default=[])
@@ -280,27 +289,29 @@ class SessionMetrics:
                         for tool, count in turn_tools.items():
                             result["tool_counts"][tool] = result["tool_counts"].get(tool, 0) + count
 
-                        # Build turn record
-                        turn = {
-                            "timestamp": timestamp,
-                            "uuid": uuid,
-                            "model": model,
-                            "input_tokens": input_tokens,
-                            "output_tokens": output_tokens,
-                            "cache_read": cache_read,
-                            "cache_write": cache_write,
-                            "tools": turn_tools,
-                            "duration_ms": turn_durations.get(uuid, 0),
-                        }
+                        # Only include completed turns (those with turn_duration events)
+                        duration_ms = turn_durations.get(uuid, 0)
+                        if duration_ms > 0:
+                            # Build turn record
+                            turn = {
+                                "timestamp": timestamp,
+                                "uuid": uuid,
+                                "model": model,
+                                "input_tokens": input_tokens,
+                                "output_tokens": output_tokens,
+                                "cache_read": cache_read,
+                                "cache_write": cache_write,
+                                "tools": turn_tools,
+                                "duration_ms": duration_ms,
+                            }
 
-                        # Calculate velocity if we have duration
-                        if turn["duration_ms"] > 0:
-                            total_tokens = input_tokens + cache_read + output_tokens
-                            turn["velocity"] = round(total_tokens / (turn["duration_ms"] / 1000), 1)
-                        else:
-                            turn["velocity"] = 0
+                            # Calculate throughput (tokens per second)
+                            duration_sec = duration_ms / 1000
+                            turn["gen_tps"] = round(output_tokens / duration_sec, 1)
+                            turn["read_tps"] = round(input_tokens / duration_sec, 1)
+                            turn["cache_tps"] = round(cache_read / duration_sec, 1)
 
-                        result["turns"].append(turn)
+                            result["turns"].append(turn)
 
         except Exception as e:
             result["error"] = str(e)
@@ -417,6 +428,95 @@ class SessionMetrics:
         except Exception as e:
             logger.warning(f"Error getting prompts: {e}")
             return []
+
+    def get_turns(self, session_id: Optional[str] = None, limit: int = 100) -> dict:
+        """Get per-turn metrics for 'aoa cc turns' view.
+
+        Args:
+            session_id: Specific session to get turns from. If None, uses most recent.
+            limit: Maximum turns to return.
+
+        Returns:
+            Dict with session info and turns array with throughput metrics.
+        """
+        result = {
+            "session_id": None,
+            "session_date": None,
+            "session_time": None,
+            "turn_count": 0,
+            "turns": [],
+        }
+
+        try:
+            # Find the session
+            session_path = None
+            if session_id:
+                # Look for specific session
+                for f in self._get_session_files(limit=100):
+                    if f.stem == session_id:
+                        session_path = f
+                        break
+            else:
+                # Use most recent
+                files = self._get_session_files(limit=1)
+                if files:
+                    session_path = files[0]
+
+            if not session_path:
+                return result
+
+            # Parse the session
+            session = self.parse_session(session_path)
+            result["session_id"] = session["session_id"]
+
+            # Parse start time for display
+            if session["start_time"]:
+                try:
+                    dt = datetime.fromisoformat(session["start_time"].replace("Z", "+00:00"))
+                    result["session_date"] = dt.strftime("%b %d")
+                    result["session_time"] = dt.strftime("%H:%M")
+                except Exception:
+                    pass
+
+            # Process turns with throughput calculations
+            turns = session.get("turns", [])
+            result["turn_count"] = len(turns)
+
+            # Most recent first - take last N, then reverse
+            for turn in reversed(turns[-limit:]):
+                duration_sec = turn.get("duration_ms", 0) / 1000 if turn.get("duration_ms", 0) > 0 else 0
+
+                # Calculate throughput rates
+                gen_rate = round(turn["output_tokens"] / duration_sec, 1) if duration_sec > 0 else 0
+                read_rate = round(turn["input_tokens"] / duration_sec, 1) if duration_sec > 0 else 0
+                cache_rate = round(turn["cache_read"] / duration_sec, 1) if duration_sec > 0 else 0
+
+                # Format timestamp for display (just time portion)
+                turn_time = ""
+                if turn.get("timestamp"):
+                    try:
+                        dt = datetime.fromisoformat(turn["timestamp"].replace("Z", "+00:00"))
+                        turn_time = dt.strftime("%H:%M:%S")
+                    except Exception:
+                        pass
+
+                result["turns"].append({
+                    "time": turn_time,
+                    "model": turn.get("model", "unknown"),
+                    "input_tokens": turn.get("input_tokens", 0),
+                    "output_tokens": turn.get("output_tokens", 0),
+                    "cache_read": turn.get("cache_read", 0),
+                    "cache_write": turn.get("cache_write", 0),
+                    "duration_sec": round(duration_sec, 1),
+                    "gen_rate": gen_rate,      # OUT / DUR
+                    "read_rate": read_rate,    # IN / DUR
+                    "cache_rate": cache_rate,  # C_RD / DUR
+                })
+
+        except Exception as e:
+            logger.warning(f"Error getting turns: {e}")
+
+        return result
 
     def get_stats(self, days: int = 30) -> dict:
         """Get aggregated stats for 'aoa cc stats' view.

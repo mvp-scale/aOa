@@ -159,6 +159,7 @@ ROUTES = {
     "/cc/prompts": ("index", "/cc/prompts"),        # User prompts
     "/cc/sessions": ("index", "/cc/sessions"),      # Per-session metrics
     "/cc/stats": ("index", "/cc/stats"),            # Health dashboard
+    "/cc/turns": ("index", "/cc/turns"),            # Per-turn throughput
 
     # Status service routes
     "/status": ("status", "/status"),

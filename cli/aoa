@@ -1824,14 +1824,16 @@ cmd_cc() {
 
     case "$subcmd" in
         prompts|p)
-            # aoa cc prompts [--limit N] [--json]
+            # aoa cc prompts [--limit N] [--json] [--raw]
             local limit=25
             local json_output=false
+            local raw_output=false
 
             while [[ $# -gt 0 ]]; do
                 case "$1" in
                     --limit|-l) limit="$2"; shift 2 ;;
                     --json|-j) json_output=true; shift ;;
+                    --raw|-r) raw_output=true; shift ;;
                     *) shift ;;
                 esac
             done
@@ -1844,11 +1846,17 @@ cmd_cc() {
                 return 0
             fi
 
+            if $raw_output; then
+                # Raw output for hooks - no header, no numbering
+                echo "$result" | jq -r '.prompts[]' 2>/dev/null | head -"$limit"
+                return 0
+            fi
+
             local count=$(echo "$result" | jq -r '.count // 0')
             echo -e "${CYAN}${BOLD}⚡ CC Prompts${NC} │ Last ${count}"
             echo ""
 
-            # Show full prompts without truncation
+            # Show full prompts with numbering
             echo "$result" | jq -r '.prompts[]' 2>/dev/null | head -"$limit" | nl -w3 -s'. ' | while IFS= read -r line; do
                 echo "  $line"
             done
@@ -1879,33 +1887,57 @@ cmd_cc() {
             echo -e "${CYAN}${BOLD}⚡ CC Sessions${NC} │ Last ${count}"
             echo ""
 
-            # Header
-            printf "${DIM}%-7s %5s %7s %7s %6s %7s %4s %4s %4s %4s %4s %4s %3s${NC}\n" \
-                "DATE" "DUR" "IN" "OUT" "CACHE" "T/S" "O" "S" "H" "B" "R" "W" "T"
-            echo -e "${DIM}$(printf '─%.0s' {1..90})${NC}"
+            # 120 char width layout
+            # Dividers at fixed positions: 32, 59, 77, 95
+            # SESSION=31 │ TOKENS=26 │ PERF=17 │ MODELS=17 │ TOOLS=27
 
-            # Data rows
+            # Headers - using exact character counts
+            echo -e "${DIM}SESSION                        ${DIM}│${DIM} TOKENS                    ${DIM}│${DIM} PERF            ${DIM}│${DIM} MODELS          ${DIM}│${DIM} TOOLS${NC}"
+            echo -e "${DIM}START       DUR     P      T   ${DIM}│${DIM}    IN     OUT        C    ${DIM}│${DIM}   T/S      C%   ${DIM}│${DIM}   O    S    H   ${DIM}│${DIM}  B    R    E    W    T    M${NC}"
+            echo -e "${DIM}───────────────────────────────${DIM}┼${DIM}───────────────────────────${DIM}┼${DIM}─────────────────${DIM}┼${DIM}─────────────────${DIM}┼${DIM}───────────────────────────${NC}"
+
+            # Data rows - build each section to exact width then join
             echo "$result" | jq -r '.sessions[] | [
                 .date,
-                (if .duration_min < 60 then "\(.duration_min)m" else "\((.duration_min / 60) | floor)h" end),
-                (if .input_tokens >= 1000 then "\((.input_tokens / 1000) | floor)k" else "\(.input_tokens)" end),
-                (if .output_tokens >= 1000 then "\((.output_tokens / 1000) | floor)k" else "\(.output_tokens)" end),
-                "\(.cache_hit)%",
-                (if .velocity >= 1000 then "\((.velocity / 1000) | . * 10 | floor / 10)k" else "\(.velocity)" end),
-                .models.O,
-                .models.S,
-                .models.H,
-                .tools.B,
-                .tools.R,
-                .tools.W,
-                .tools.T
-            ] | @tsv' 2>/dev/null | head -"$limit" | while IFS=$'\t' read -r date dur inp out cache vel o s h b r w t; do
-                printf "%-7s %5s %7s %7s %6s %7s %4s %4s %4s %4s %4s %4s %3s\n" \
-                    "$date" "$dur" "$inp" "$out" "$cache" "$vel" "$o" "$s" "$h" "$b" "$r" "$w" "$t"
+                (if (.duration_min // 0) >= 60 then "\(((.duration_min // 0) / 60) | floor)h\(((.duration_min // 0) % 60))m" else "\(.duration_min // 0)m" end),
+                (.prompt_count // 0),
+                (.turn_count // 0),
+                (if (.input_tokens // 0) >= 1000000 then "\(((.input_tokens // 0) / 1000000 * 10 | floor) / 10)M" elif (.input_tokens // 0) >= 1000 then "\(((.input_tokens // 0) / 1000) | floor)k" else "\(.input_tokens // 0)" end),
+                (if (.output_tokens // 0) >= 1000000 then "\(((.output_tokens // 0) / 1000000 * 10 | floor) / 10)M" elif (.output_tokens // 0) >= 1000 then "\(((.output_tokens // 0) / 1000) | floor)k" else "\(.output_tokens // 0)" end),
+                (if ((.cache_hit // 0) * (.input_tokens // 0) / 100) >= 1000000 then "\((((.cache_hit // 0) * (.input_tokens // 0) / 100) / 1000000 * 10 | floor) / 10)M" elif ((.cache_hit // 0) * (.input_tokens // 0) / 100) >= 1000 then "\((((.cache_hit // 0) * (.input_tokens // 0) / 100) / 1000) | floor)k" else "\(((.cache_hit // 0) * (.input_tokens // 0) / 100) | floor)" end),
+                (if (.velocity // 0) >= 1000 then "\(((.velocity // 0) / 1000 * 10 | floor) / 10)k" else "\((.velocity // 0) | floor)" end),
+                "\(.cache_hit // 0)%",
+                (.models.O // 0),
+                (.models.S // 0),
+                (.models.H // 0),
+                (.tools.B // 0),
+                (.tools.R // 0),
+                (.tools.E // 0),
+                (.tools.W // 0),
+                (.tools.T // 0),
+                (.tools.M // 0)
+            ] | @tsv' 2>/dev/null | head -"$limit" | while IFS=$'\t' read -r date dur p t inp out c ts cp o s h bb rr ee ww tt mm; do
+                # Build each section as fixed-width string then pad to exact section width
+                local sec1=$(printf "%-10s %6s %5s %6s" "$date" "$dur" "$p" "$t")
+                local sec2=$(printf "%5s %6s %10s" "$inp" "$out" "$c")
+                local sec3=$(printf "%6s %7s" "$ts" "$cp")
+                local sec4=$(printf "%4s %4s %4s" "$o" "$s" "$h")
+                local sec5=$(printf "%4s %4s %4s %4s %4s %4s" "$bb" "$rr" "$ee" "$ww" "$tt" "$mm")
+
+                # Pad each section to EXACT width: 31 │ 27 │ 17 │ 17 │ rest
+                sec1=$(printf "%-31s" "$sec1")
+                sec2=$(printf "%-27s" "$sec2")
+                sec3=$(printf "%-17s" "$sec3")
+                sec4=$(printf "%-17s" "$sec4")
+
+                printf "%s${DIM}│${NC}%s${DIM}│${NC}%s${DIM}│${NC}%s${DIM}│${NC}%s\n" \
+                    "$sec1" "$sec2" "$sec3" "$sec4" "$sec5"
             done
 
-            echo ""
-            echo -e "${DIM}O=Opus S=Sonnet H=Haiku │ B=Bash R=Read W=Write T=Task${NC}"
+            # Legend
+            echo -e "${DIM}───────────────────────────────${DIM}┼${DIM}───────────────────────────${DIM}┼${DIM}─────────────────${DIM}┼${DIM}─────────────────${DIM}┼${DIM}───────────────────────────${NC}"
+            echo -e "${DIM}P=Prompts  T=Turns             ${DIM}│${DIM} IN=Input  OUT=Output      ${DIM}│${DIM} T/S=Opus tok/s  ${DIM}│${DIM} O=Opus          ${DIM}│${DIM} B=Bash  R=Read  E=Edit${NC}"
+            echo -e "${DIM}                               ${DIM}│${DIM} C=Cached                  ${DIM}│${DIM} C%=Cache hit    ${DIM}│${DIM} S=Son  H=Hai    ${DIM}│${DIM} W=Write T=Task  M=MCP${NC}"
             ;;
 
         stats|st)
@@ -1936,77 +1968,145 @@ cmd_cc() {
             echo ""
 
             # Model Distribution
-            echo -e "${BOLD}MODEL DISTRIBUTION${NC}"
-            printf "${DIM}%-35s %10s %10s %10s${NC}\n" "" "TODAY" "7 DAYS" "30 DAYS"
-            echo -e "${DIM}$(printf '─%.0s' {1..70})${NC}"
+            printf "${DIM}%-40s │ %20s %20s %20s${NC}\n" "MODELS" "TODAY" "7 DAYS" "30 DAYS"
+            echo -e "${DIM}─────────────────────────────────────────┼─────────────────────────────────────────────────────────────────${NC}"
 
             echo "$result" | jq -r '.model_distribution | to_entries[] | [.key, .value.today, .value["7d"], .value["30d"]] | @tsv' 2>/dev/null | while IFS=$'\t' read -r model today d7 d30; do
-                # Calculate percentages based on totals
-                printf "  %-33s %10s %10s %10s\n" "$model" \
-                    "$([ "$today" != "0" ] && echo "$today" || echo "-")" \
-                    "$([ "$d7" != "0" ] && echo "$d7" || echo "-")" \
-                    "$([ "$d30" != "0" ] && echo "$d30" || echo "-")"
+                printf "%-40s │ %20s %20s %20s\n" "$model" \
+                    "$([ "$today" != "0" ] && echo "$today" || echo "")" \
+                    "$([ "$d7" != "0" ] && echo "$d7" || echo "")" \
+                    "$([ "$d30" != "0" ] && echo "$d30" || echo "")"
             done
 
             echo ""
-            printf "${DIM}%-35s %10s %10s %10s${NC}\n" "" "TODAY" "7 DAYS" "30 DAYS"
-            echo -e "${DIM}$(printf '─%.0s' {1..70})${NC}"
+            printf "${DIM}%-40s │ %20s %20s %20s${NC}\n" "PERF" "TODAY" "7 DAYS" "30 DAYS"
+            echo -e "${DIM}─────────────────────────────────────────┼─────────────────────────────────────────────────────────────────${NC}"
 
             # Velocity
             local vel_today=$(echo "$result" | jq -r '.periods.today.velocity // 0')
             local vel_7d=$(echo "$result" | jq -r '.periods["7d"].velocity // 0')
             local vel_30d=$(echo "$result" | jq -r '.periods["30d"].velocity // 0')
-            printf "%-35s %10s %10s %10s\n" "VELOCITY (t/s)" \
-                "$([ "$has_today" = "true" ] && echo "$vel_today" || echo "-")" \
-                "$([ "$has_7d" = "true" ] && echo "$vel_7d" || echo "-")" \
-                "$([ "$has_30d" = "true" ] && echo "$vel_30d" || echo "-")"
+            printf "%-40s │ %20s %20s %20s\n" "Opus tokens/sec" \
+                "$([ "$has_today" = "true" ] && echo "$vel_today" || echo "")" \
+                "$([ "$has_7d" = "true" ] && echo "$vel_7d" || echo "")" \
+                "$([ "$has_30d" = "true" ] && echo "$vel_30d" || echo "")"
 
             # Cache Hit
             local cache_today=$(echo "$result" | jq -r '.periods.today.cache_hit // 0')
             local cache_7d=$(echo "$result" | jq -r '.periods["7d"].cache_hit // 0')
             local cache_30d=$(echo "$result" | jq -r '.periods["30d"].cache_hit // 0')
-            printf "%-35s %10s %10s %10s\n" "CACHE HIT %" \
-                "$([ "$has_today" = "true" ] && echo "${cache_today}%" || echo "-")" \
-                "$([ "$has_7d" = "true" ] && echo "${cache_7d}%" || echo "-")" \
-                "$([ "$has_30d" = "true" ] && echo "${cache_30d}%" || echo "-")"
+            printf "%-40s │ %20s %20s %20s\n" "Cache hit %" \
+                "$([ "$has_today" = "true" ] && echo "${cache_today}%" || echo "")" \
+                "$([ "$has_7d" = "true" ] && echo "${cache_7d}%" || echo "")" \
+                "$([ "$has_30d" = "true" ] && echo "${cache_30d}%" || echo "")"
 
             echo ""
-            echo -e "${BOLD}TOKENS${NC}"
-            printf "${DIM}%-35s %10s %10s %10s${NC}\n" "" "TODAY" "7 DAYS" "30 DAYS"
-            echo -e "${DIM}$(printf '─%.0s' {1..70})${NC}"
+            printf "${DIM}%-40s │ %20s %20s %20s${NC}\n" "TOKENS" "TODAY" "7 DAYS" "30 DAYS"
+            echo -e "${DIM}─────────────────────────────────────────┼─────────────────────────────────────────────────────────────────${NC}"
 
             # Token rows
             local in_today=$(echo "$result" | jq -r '.periods.today.input_tokens // 0')
             local in_7d=$(echo "$result" | jq -r '.periods["7d"].input_tokens // 0')
             local in_30d=$(echo "$result" | jq -r '.periods["30d"].input_tokens // 0')
-            printf "  %-33s %10s %10s %10s\n" "Input" \
-                "$([ "$has_today" = "true" ] && _format_tokens "$in_today" || echo "-")" \
-                "$([ "$has_7d" = "true" ] && _format_tokens "$in_7d" || echo "-")" \
-                "$([ "$has_30d" = "true" ] && _format_tokens "$in_30d" || echo "-")"
+            printf "%-40s │ %20s %20s %20s\n" "Input" \
+                "$([ "$has_today" = "true" ] && _format_tokens "$in_today" || echo "")" \
+                "$([ "$has_7d" = "true" ] && _format_tokens "$in_7d" || echo "")" \
+                "$([ "$has_30d" = "true" ] && _format_tokens "$in_30d" || echo "")"
 
             local out_today=$(echo "$result" | jq -r '.periods.today.output_tokens // 0')
             local out_7d=$(echo "$result" | jq -r '.periods["7d"].output_tokens // 0')
             local out_30d=$(echo "$result" | jq -r '.periods["30d"].output_tokens // 0')
-            printf "  %-33s %10s %10s %10s\n" "Output" \
-                "$([ "$has_today" = "true" ] && _format_tokens "$out_today" || echo "-")" \
-                "$([ "$has_7d" = "true" ] && _format_tokens "$out_7d" || echo "-")" \
-                "$([ "$has_30d" = "true" ] && _format_tokens "$out_30d" || echo "-")"
+            printf "%-40s │ %20s %20s %20s\n" "Output" \
+                "$([ "$has_today" = "true" ] && _format_tokens "$out_today" || echo "")" \
+                "$([ "$has_7d" = "true" ] && _format_tokens "$out_7d" || echo "")" \
+                "$([ "$has_30d" = "true" ] && _format_tokens "$out_30d" || echo "")"
 
             local cr_today=$(echo "$result" | jq -r '.periods.today.cache_read // 0')
             local cr_7d=$(echo "$result" | jq -r '.periods["7d"].cache_read // 0')
             local cr_30d=$(echo "$result" | jq -r '.periods["30d"].cache_read // 0')
-            printf "  %-33s %10s %10s %10s\n" "Cache Read" \
-                "$([ "$has_today" = "true" ] && _format_tokens "$cr_today" || echo "-")" \
-                "$([ "$has_7d" = "true" ] && _format_tokens "$cr_7d" || echo "-")" \
-                "$([ "$has_30d" = "true" ] && _format_tokens "$cr_30d" || echo "-")"
+            printf "%-40s │ %20s %20s %20s\n" "Cache Read" \
+                "$([ "$has_today" = "true" ] && _format_tokens "$cr_today" || echo "")" \
+                "$([ "$has_7d" = "true" ] && _format_tokens "$cr_7d" || echo "")" \
+                "$([ "$has_30d" = "true" ] && _format_tokens "$cr_30d" || echo "")"
 
             local cw_today=$(echo "$result" | jq -r '.periods.today.cache_write // 0')
             local cw_7d=$(echo "$result" | jq -r '.periods["7d"].cache_write // 0')
             local cw_30d=$(echo "$result" | jq -r '.periods["30d"].cache_write // 0')
-            printf "  %-33s %10s %10s %10s\n" "Cache Write" \
-                "$([ "$has_today" = "true" ] && _format_tokens "$cw_today" || echo "-")" \
-                "$([ "$has_7d" = "true" ] && _format_tokens "$cw_7d" || echo "-")" \
-                "$([ "$has_30d" = "true" ] && _format_tokens "$cw_30d" || echo "-")"
+            printf "%-40s │ %20s %20s %20s\n" "Cache Write" \
+                "$([ "$has_today" = "true" ] && _format_tokens "$cw_today" || echo "")" \
+                "$([ "$has_7d" = "true" ] && _format_tokens "$cw_7d" || echo "")" \
+                "$([ "$has_30d" = "true" ] && _format_tokens "$cw_30d" || echo "")"
+
+            echo -e "${DIM}─────────────────────────────────────────┴─────────────────────────────────────────────────────────────────${NC}"
+            echo -e "${DIM}Blank = no data for period${NC}"
+            ;;
+
+        turns|t)
+            # aoa cc turns [--limit N] [--json] [--session ID]
+            local limit=10
+            local json_output=false
+            local session_id=""
+
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --limit|-l) limit="$2"; shift 2 ;;
+                    --json|-j) json_output=true; shift ;;
+                    --session|-s) session_id="$2"; shift 2 ;;
+                    *) shift ;;
+                esac
+            done
+
+            local project_path="${AOA_HOME:-$(pwd)}"
+            local url="${INDEX_URL}/cc/turns?limit=${limit}&project_path=${project_path}"
+            [ -n "$session_id" ] && url="${url}&session_id=${session_id}"
+            local result=$(curl -s "$url")
+
+            if $json_output; then
+                echo "$result" | jq .
+                return 0
+            fi
+
+            local session_date=$(echo "$result" | jq -r '.session_date // ""')
+            local session_time=$(echo "$result" | jq -r '.session_time // ""')
+            local turn_count=$(echo "$result" | jq -r '.turn_count // 0')
+
+            echo -e "${CYAN}${BOLD}⚡ CC Turns${NC} │ Session: ${session_date} ${session_time} │ ${turn_count} turns"
+            echo ""
+
+            # 120 char layout - dividers at positions 52, 89
+            # TURN=51 │ TOKENS=36 │ THROUGHPUT=rest
+            echo -e "${DIM}TURN                                               ${DIM}│${DIM} TOKENS                             ${DIM}│${DIM} THROUGHPUT${NC}"
+            echo -e "${DIM}TIME        MODEL                                  ${DIM}│${DIM}     IN     OUT    C_RD    C_WR     ${DIM}│${DIM}   DUR       GEN        READ       CACHE${NC}"
+            echo -e "${DIM}───────────────────────────────────────────────────${DIM}┼${DIM}────────────────────────────────────${DIM}┼${DIM}────────────────────────────────────────${NC}"
+
+            # Data rows - build fixed-width sections
+            echo "$result" | jq -r '.turns[] | [
+                .time,
+                .model,
+                (if .input_tokens >= 1000 then "\((.input_tokens / 1000) | . * 10 | floor / 10)k" else "\(.input_tokens)" end),
+                (if .output_tokens >= 1000 then "\((.output_tokens / 1000) | . * 10 | floor / 10)k" else "\(.output_tokens)" end),
+                (if .cache_read >= 1000 then "\((.cache_read / 1000) | . * 10 | floor / 10)k" elif .cache_read > 0 then "\(.cache_read)" else "" end),
+                (if .cache_write >= 1000 then "\((.cache_write / 1000) | . * 10 | floor / 10)k" elif .cache_write > 0 then "\(.cache_write)" else "" end),
+                "\(.duration_sec)s",
+                (if .gen_rate >= 1000 then "\((.gen_rate / 1000) | . * 10 | floor / 10)k t/s" elif .gen_rate > 0 then "\(.gen_rate | floor) t/s" else "" end),
+                (if .read_rate >= 1000 then "\((.read_rate / 1000) | . * 10 | floor / 10)k t/s" elif .read_rate > 0 then "\(.read_rate | floor) t/s" else "" end),
+                (if .cache_rate >= 1000 then "\((.cache_rate / 1000) | . * 10 | floor / 10)k t/s" elif .cache_rate > 0 then "\(.cache_rate | floor) t/s" else "" end)
+            ] | @tsv' 2>/dev/null | head -"$limit" | while IFS=$'\t' read -r time model inp out crd cwr dur gen rd cache; do
+                # Build sections: TURN=51 │ TOKENS=36 │ THROUGHPUT
+                local sec1=$(printf "%-10s %-39s" "$time" "$model")
+                local sec2=$(printf "%7s %7s %7s %7s " "$inp" "$out" "$crd" "$cwr")
+                local sec3=$(printf "%7s %10s %10s %10s" "$dur" "$gen" "$rd" "$cache")
+
+                # Pad sections to exact width (51, 36)
+                sec1=$(printf "%-51s" "$sec1")
+                sec2=$(printf "%-36s" "$sec2")
+
+                printf "%s${DIM}│${NC}%s${DIM}│${NC}%s\n" "$sec1" "$sec2" "$sec3"
+            done
+
+            # Legend
+            echo -e "${DIM}───────────────────────────────────────────────────${DIM}┼${DIM}────────────────────────────────────${DIM}┼${DIM}────────────────────────────────────────${NC}"
+            echo -e "${DIM}GEN = OUT ÷ DUR    READ = IN ÷ DUR    CACHE = C_RD ÷ DUR${NC}"
             ;;
 
         history|h)
@@ -2018,15 +2118,18 @@ cmd_cc() {
             echo -e "${CYAN}${BOLD}aoa cc${NC} - Claude Code session insights"
             echo ""
             echo "Usage:"
-            echo "  aoa cc prompts [--limit N]   Recent user prompts"
+            echo "  aoa cc prompts [--limit N]   Recent user prompts (--raw for hooks)"
             echo "  aoa cc sessions [--limit N]  Per-session metrics table"
             echo "  aoa cc stats                 Health dashboard (today/7d/30d)"
+            echo "  aoa cc turns [--limit N]     Per-turn throughput breakdown"
             echo ""
             echo "Examples:"
             echo "  aoa cc prompts               Last 25 prompts"
-            echo "  aoa cc sessions              Last 10 sessions with velocity, models, tools"
+            echo "  aoa cc prompts --raw         Raw prompts for hooks"
+            echo "  aoa cc sessions              Last 10 sessions"
             echo "  aoa cc stats                 Model distribution, velocity, cache, tokens"
-            echo "  aoa cc sessions --json       JSON output"
+            echo "  aoa cc turns                 Per-turn velocity breakdown"
+            echo "  aoa cc turns --session ID    Turns for specific session"
             ;;
     esac
 }
@@ -2041,6 +2144,75 @@ _format_tokens() {
     else
         echo "$n"
     fi
+}
+
+# Fixed-width formatting helpers for table alignment
+# Left-pad string to exact width (right-align)
+_rpad() {
+    local str="$1" width="$2"
+    local len=${#str}
+    if [ $len -ge $width ]; then
+        echo "${str:0:$width}"
+    else
+        printf "%${width}s" "$str"
+    fi
+}
+
+# Right-pad string to exact width (left-align)
+_lpad() {
+    local str="$1" width="$2"
+    local len=${#str}
+    if [ $len -ge $width ]; then
+        echo "${str:0:$width}"
+    else
+        printf "%-${width}s" "$str"
+    fi
+}
+
+# Format number to fixed width with K/M suffix
+_fmt_num() {
+    local n="$1" width="$2"
+    local formatted
+    if [ "$n" -ge 1000000 ] 2>/dev/null; then
+        formatted="$(echo "scale=1; $n / 1000000" | bc)M"
+    elif [ "$n" -ge 1000 ] 2>/dev/null; then
+        formatted="$(echo "scale=1; $n / 1000" | bc)k"
+    else
+        formatted="$n"
+    fi
+    _rpad "$formatted" "$width"
+}
+
+# Format throughput rate with t/s suffix to fixed width
+_fmt_rate() {
+    local n="$1" width="$2"
+    local formatted
+    if [ -z "$n" ] || [ "$n" = "0" ] || [ "$n" = "null" ]; then
+        _rpad "" "$width"
+        return
+    fi
+    if [ "${n%.*}" -ge 1000 ] 2>/dev/null; then
+        formatted="$(echo "scale=1; $n / 1000" | bc)k t/s"
+    else
+        formatted="${n} t/s"
+    fi
+    _rpad "$formatted" "$width"
+}
+
+# Format duration to fixed width
+_fmt_dur() {
+    local mins="$1" width="$2"
+    local formatted
+    if [ -z "$mins" ] || [ "$mins" = "0" ] || [ "$mins" = "null" ]; then
+        _rpad "" "$width"
+        return
+    fi
+    if [ "$mins" -ge 60 ] 2>/dev/null; then
+        formatted="$((mins / 60))h$((mins % 60))m"
+    else
+        formatted="${mins}m"
+    fi
+    _rpad "$formatted" "$width"
 }
 
 # =============================================================================
