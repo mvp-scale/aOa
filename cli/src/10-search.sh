@@ -396,12 +396,9 @@ display_ranked_grep_results() {
     echo "${output#*$'\n'}"
 }
 
-# Keep old function name for backwards compatibility
-display_ranked_grep_results_verbose() {
-    display_ranked_grep_results "$@"
-}
+# CLI-007: Removed display_ranked_grep_results_verbose (dead code)
 
-# GL-045: Display semantic grep results (content search with structural context)
+# GL-045: Display semantic grep results (DEAD CODE - kept for reference, never called)
 display_semantic_grep_results() {
     local result="$1"
     local query="$2"
