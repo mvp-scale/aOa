@@ -721,11 +721,10 @@ cmd_cc() {
 
             # Legend
             echo -e "${DIM}───────────────────────${DIM}┼${DIM}────────────────────${DIM}┼${DIM}──────────────────${DIM}┼${DIM}─────────────────${DIM}┼${DIM}───────────────────────────${NC}"
-            echo -e "${DIM}P=Prompts              ${DIM}│${DIM} O=Opus  S=Sonnet   ${DIM}│${DIM} (effective)      ${DIM}│${DIM} O=Opus          ${DIM}│${DIM} B=Bash  R=Read  E=Edit${NC}"
-            echo -e "${DIM}                       ${DIM}│${DIM} H=Haiku            ${DIM}│${DIM}                  ${DIM}│${DIM} S=Son  H=Hai    ${DIM}│${DIM} W=Write T=Task  M=MCP${NC}"
+            echo -e "${DIM}P=Prompts              ${DIM}│${DIM} thinking+text+tool ${DIM}│${DIM} OUTPUT+cache     ${DIM}│${DIM}                 ${DIM}│${DIM} B=Bash  R=Read  E=Edit${NC}"
+            echo -e "${DIM}                       ${DIM}│${DIM} (generation)       ${DIM}│${DIM} (effective)      ${DIM}│${DIM}                 ${DIM}│${DIM} W=Write T=Task  M=MCP${NC}"
             echo ""
-            echo -e "${YELLOW}Wall-clock gauge, not absolute benchmark${NC}"
-            echo -e "${DIM}OUTPUT = thinking+text+tool │ TPS = OUTPUT+cache${NC}"
+            echo -e "${YELLOW}O=Opus  S=Sonnet  H=Haiku │ Wall-clock gauge (session logs) │ Not absolute benchmarks${NC}"
             echo ""
             ;;
 
@@ -830,74 +829,6 @@ cmd_cc() {
             echo -e "${DIM}Blank = no data for period${NC}"
             ;;
 
-        turns|t)
-            # aoa cc turns [--limit N] [--json] [--session ID]
-            local limit=10
-            local json_output=false
-            local session_id=""
-
-            while [[ $# -gt 0 ]]; do
-                case "$1" in
-                    --limit|-l) limit="$2"; shift 2 ;;
-                    --json|-j) json_output=true; shift ;;
-                    --session|-s) session_id="$2"; shift 2 ;;
-                    *) shift ;;
-                esac
-            done
-
-            local project_path="${AOA_HOME:-$(pwd)}"
-            local url="${INDEX_URL}/cc/turns?limit=${limit}&project_path=${project_path}"
-            [ -n "$session_id" ] && url="${url}&session_id=${session_id}"
-            local result=$(curl -s "$url")
-
-            if $json_output; then
-                echo "$result" | jq .
-                return 0
-            fi
-
-            local session_date=$(echo "$result" | jq -r '.session_date // ""')
-            local session_time=$(echo "$result" | jq -r '.session_time // ""')
-            local turn_count=$(echo "$result" | jq -r '.turn_count // 0')
-
-            echo -e "${CYAN}${BOLD}⚡ CC Turns${NC} │ Session: ${session_date} ${session_time} │ ${turn_count} turns"
-            echo ""
-
-            # 120 char layout - dividers at positions 52, 89
-            # TURN=51 │ TOKENS=36 │ THROUGHPUT=rest
-            echo -e "${DIM}TURN                                               ${DIM}│${DIM} TOKENS                             ${DIM}│${DIM} THROUGHPUT${NC}"
-            echo -e "${DIM}TIME        MODEL                                  ${DIM}│${DIM}     IN     OUT    C_RD    C_WR     ${DIM}│${DIM}   DUR       GEN        READ       CACHE${NC}"
-            echo -e "${DIM}───────────────────────────────────────────────────${DIM}┼${DIM}────────────────────────────────────${DIM}┼${DIM}────────────────────────────────────────${NC}"
-
-            # Data rows - build fixed-width sections
-            echo "$result" | jq -r '.turns[] | [
-                .time,
-                .model,
-                (if .input_tokens >= 1000 then "\((.input_tokens / 1000) | . * 10 | floor / 10)k" else "\(.input_tokens)" end),
-                (if .output_tokens >= 1000 then "\((.output_tokens / 1000) | . * 10 | floor / 10)k" else "\(.output_tokens)" end),
-                (if .cache_read >= 1000 then "\((.cache_read / 1000) | . * 10 | floor / 10)k" elif .cache_read > 0 then "\(.cache_read)" else "" end),
-                (if .cache_write >= 1000 then "\((.cache_write / 1000) | . * 10 | floor / 10)k" elif .cache_write > 0 then "\(.cache_write)" else "" end),
-                "\(.duration_sec)s",
-                (if .gen_rate >= 1000 then "\((.gen_rate / 1000) | . * 10 | floor / 10)k t/s" elif .gen_rate > 0 then "\(.gen_rate | floor) t/s" else "" end),
-                (if .read_rate >= 1000 then "\((.read_rate / 1000) | . * 10 | floor / 10)k t/s" elif .read_rate > 0 then "\(.read_rate | floor) t/s" else "" end),
-                (if .cache_rate >= 1000 then "\((.cache_rate / 1000) | . * 10 | floor / 10)k t/s" elif .cache_rate > 0 then "\(.cache_rate | floor) t/s" else "" end)
-            ] | @tsv' 2>/dev/null | head -"$limit" | while IFS=$'\t' read -r time model inp out crd cwr dur gen rd cache; do
-                # Build sections: TURN=51 │ TOKENS=36 │ THROUGHPUT
-                local sec1=$(printf "%-10s %-39s" "$time" "$model")
-                local sec2=$(printf "%7s %7s %7s %7s " "$inp" "$out" "$crd" "$cwr")
-                local sec3=$(printf "%7s %10s %10s %10s" "$dur" "$gen" "$rd" "$cache")
-
-                # Pad sections to exact width (51, 36)
-                sec1=$(printf "%-51s" "$sec1")
-                sec2=$(printf "%-36s" "$sec2")
-
-                printf "%s${DIM}│${NC}%s${DIM}│${NC}%s\n" "$sec1" "$sec2" "$sec3"
-            done
-
-            # Legend
-            echo -e "${DIM}───────────────────────────────────────────────────${DIM}┼${DIM}────────────────────────────────────${DIM}┼${DIM}────────────────────────────────────────${NC}"
-            echo -e "${DIM}GEN = OUT ÷ DUR    READ = IN ÷ DUR    CACHE = C_RD ÷ DUR${NC}"
-            ;;
-
         history|h)
             # Alias for prompts with more context
             cmd_cc prompts --limit "${1:-50}"
@@ -908,17 +839,14 @@ cmd_cc() {
             echo ""
             echo "Usage:"
             echo "  aoa cc prompts [--limit N]   Recent user prompts (--raw for hooks)"
-            echo "  aoa cc sessions [--limit N]  Per-session metrics table"
+            echo "  aoa cc sessions [--limit N]  Per-session metrics with model throughput"
             echo "  aoa cc stats                 Health dashboard (today/7d/30d)"
-            echo "  aoa cc turns [--limit N]     Per-turn throughput breakdown"
             echo ""
             echo "Examples:"
             echo "  aoa cc prompts               Last 25 prompts"
             echo "  aoa cc prompts --raw         Raw prompts for hooks"
-            echo "  aoa cc sessions              Last 10 sessions"
+            echo "  aoa cc sessions              Last 10 sessions with OUTPUT/TPS per model"
             echo "  aoa cc stats                 Model distribution, velocity, cache, tokens"
-            echo "  aoa cc turns                 Per-turn velocity breakdown"
-            echo "  aoa cc turns --session ID    Turns for specific session"
             ;;
     esac
 }

@@ -7165,38 +7165,6 @@ def cc_stats():
         return jsonify({'error': str(e), 'periods': {}, 'model_distribution': {}})
 
 
-@app.route('/cc/turns')
-def cc_turns():
-    """Get per-turn metrics for 'aoa cc turns' view.
-
-    Query params:
-        project_path: Project directory (default: CODEBASE_ROOT)
-        session_id: Specific session ID (default: most recent)
-        limit: Max turns to return (default: 100)
-
-    Returns per-turn throughput breakdown: GEN, READ, CACHE rates.
-    """
-    try:
-        from metrics import SessionMetrics
-    except ImportError:
-        try:
-            from session.metrics import SessionMetrics
-        except ImportError:
-            return jsonify({'error': 'SessionMetrics not available', 'turns': []})
-
-    try:
-        project_path = request.args.get('project_path', os.environ.get('CODEBASE_ROOT', '/app'))
-        session_id = request.args.get('session_id')
-        limit = int(request.args.get('limit', 100))
-
-        metrics = SessionMetrics(project_path)
-        turns = metrics.get_turns(session_id=session_id, limit=limit)
-
-        return jsonify(turns)
-    except Exception as e:
-        return jsonify({'error': str(e), 'turns': []})
-
-
 @app.route('/intent/summary')
 def intent_summary():
     """GL-088: Get work summary for last N prompts (for Haiku enrichment).

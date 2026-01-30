@@ -8,11 +8,7 @@ Defensive design:
 - Missing/malformed data returns safe defaults
 - Never blocks user workflow
 
-Redis Schema:
-  cc:prompts:{project_id}        -> List of recent prompts (LPUSH, LTRIM)
-  cc:session:{session_id}        -> Hash with session metrics
-  cc:sessions:{project_id}       -> Sorted set of session_ids by timestamp
-  cc:stats:{project_id}:daily    -> Hash with daily aggregates
+Data source: Parses ~/.claude/projects/{project}/*.jsonl files directly (no Redis).
 """
 
 import json
@@ -518,95 +514,6 @@ class SessionMetrics:
         except Exception as e:
             logger.warning(f"Error getting prompts: {e}")
             return []
-
-    def get_turns(self, session_id: Optional[str] = None, limit: int = 100) -> dict:
-        """Get per-turn metrics for 'aoa cc turns' view.
-
-        Args:
-            session_id: Specific session to get turns from. If None, uses most recent.
-            limit: Maximum turns to return.
-
-        Returns:
-            Dict with session info and turns array with throughput metrics.
-        """
-        result = {
-            "session_id": None,
-            "session_date": None,
-            "session_time": None,
-            "turn_count": 0,
-            "turns": [],
-        }
-
-        try:
-            # Find the session
-            session_path = None
-            if session_id:
-                # Look for specific session
-                for f in self._get_session_files(limit=100):
-                    if f.stem == session_id:
-                        session_path = f
-                        break
-            else:
-                # Use most recent
-                files = self._get_session_files(limit=1)
-                if files:
-                    session_path = files[0]
-
-            if not session_path:
-                return result
-
-            # Parse the session
-            session = self.parse_session(session_path)
-            result["session_id"] = session["session_id"]
-
-            # Parse start time for display
-            if session["start_time"]:
-                try:
-                    dt = datetime.fromisoformat(session["start_time"].replace("Z", "+00:00"))
-                    result["session_date"] = dt.strftime("%b %d")
-                    result["session_time"] = dt.strftime("%H:%M")
-                except Exception:
-                    pass
-
-            # Process turns with throughput calculations
-            turns = session.get("turns", [])
-            result["turn_count"] = len(turns)
-
-            # Most recent first - take last N, then reverse
-            for turn in reversed(turns[-limit:]):
-                duration_sec = turn.get("duration_ms", 0) / 1000 if turn.get("duration_ms", 0) > 0 else 0
-
-                # Calculate throughput rates
-                gen_rate = round(turn["output_tokens"] / duration_sec, 1) if duration_sec > 0 else 0
-                read_rate = round(turn["input_tokens"] / duration_sec, 1) if duration_sec > 0 else 0
-                cache_rate = round(turn["cache_read"] / duration_sec, 1) if duration_sec > 0 else 0
-
-                # Format timestamp for display (just time portion)
-                turn_time = ""
-                if turn.get("timestamp"):
-                    try:
-                        dt = datetime.fromisoformat(turn["timestamp"].replace("Z", "+00:00"))
-                        turn_time = dt.strftime("%H:%M:%S")
-                    except Exception:
-                        pass
-
-                result["turns"].append({
-                    "time": turn_time,
-                    "model": turn.get("model", "unknown"),
-                    "input_tokens": turn.get("input_tokens", 0),
-                    "output_tokens": turn.get("output_tokens", 0),
-                    "cache_read": turn.get("cache_read", 0),
-                    "cache_write": turn.get("cache_write", 0),
-                    "duration_sec": round(duration_sec, 1),
-                    "gen_rate": gen_rate,      # OUT / DUR
-                    "read_rate": read_rate,    # IN / DUR
-                    "cache_rate": cache_rate,  # C_RD / DUR
-                })
-
-        except Exception as e:
-            logger.warning(f"Error getting turns: {e}")
-
-        return result
 
     def get_stats(self, days: int = 30) -> dict:
         """Get aggregated stats for 'aoa cc stats' view.
