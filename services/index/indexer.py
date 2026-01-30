@@ -535,7 +535,8 @@ class KeywordMatcher:
 
             return {
                 "domain": top_domain,
-                "tags": list(tags)[:3]
+                "tags": list(tags)[:3],
+                "matched_keywords": matched_keywords  # KW-001: Return for hit tracking
             }
 
         except Exception as e:
@@ -1040,6 +1041,8 @@ def format_search_response(
                 learner = DomainLearner(project_id)
                 seen_terms = set()
                 seen_domains = set()
+                seen_keywords = set()  # KW-002: Collect keywords for hit tracking
+                matcher = get_keyword_matcher(project_id, intent_index) if intent_index else None
 
                 # Collect all unique terms from top results
                 for r in top_results:
@@ -1051,6 +1054,11 @@ def format_search_response(
                     domain = r.get('domain', '')
                     if domain:
                         seen_domains.add(domain.lstrip('@'))
+                    # KW-002: Collect keywords from content
+                    if matcher and matcher.is_available:
+                        match_result = matcher.find_tags(r.get('content', ''))
+                        for kw in match_result.get('matched_keywords', []):
+                            seen_keywords.add(kw)
 
                 # For each term: increment term hits AND all domains containing it
                 for term in seen_terms:
@@ -1061,6 +1069,10 @@ def format_search_response(
                         if domain_name not in seen_domains:
                             seen_domains.add(domain_name)
                             learner.increment_domain_hits(domain_name)
+
+                # KW-003: Increment keyword hits
+                if seen_keywords:
+                    learner.increment_keyword_hits(list(seen_keywords))
 
                 # GL-088: Also track in IntentIndex for recent hits ZSET
                 if intent_index:
@@ -3818,7 +3830,7 @@ def semantic_grep():
     start = time.time()
 
     q = request.args.get('q', '')
-    project_id = request.args.get('project_id')
+    project_id = request.args.get('project_id') or 'local'  # HIT-001: Default early
     # GL-050: Unix parity - case-sensitive by default, -i flag for insensitive
     case_insensitive = request.args.get('ci', '0') == '1'
     use_regex = request.args.get('regex', 'false').lower() == 'true'
