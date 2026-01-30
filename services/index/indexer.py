@@ -3354,6 +3354,7 @@ class IntentIndex:
 
         GL-045: Rolling intent window for smart result ranking.
         Count-based (not time-based) - robust to lunch breaks, sleep, etc.
+        A-007: Merges memory (current session) with Redis (cross-session history).
 
         Args:
             project_id: Project to query
@@ -3370,8 +3371,8 @@ class IntentIndex:
             timeline = list(self.timeline[proj]) if self.timeline[proj] else []
             recent = timeline[-window:] if timeline else []
 
-            if not recent:
-                return {}
+            # A-007: If memory timeline is sparse, supplement with Redis tag data
+            memory_count = len(recent)
 
             for i, record in enumerate(recent):
                 # Position-weighted: oldest = 0.3, newest = 1.0
@@ -3382,6 +3383,31 @@ class IntentIndex:
 
                 for tag in record.tags:
                     tag_scores[tag] = tag_scores.get(tag, 0) + weight
+
+        # A-007: Merge Redis historical data if memory is sparse
+        if self.redis and memory_count < window // 2:
+            try:
+                r = self.redis.client
+                # Get tags from Redis with their file counts as proxy for importance
+                tag_pattern = f"aoa:{proj}:tags:*"
+                redis_tags = {}
+                for key in r.scan_iter(tag_pattern, count=100):
+                    tag = key.split(':')[-1]  # Extract tag from key
+                    count = r.scard(key)  # Number of files with this tag
+                    if count > 0:
+                        redis_tags[tag] = count
+
+                # Add Redis tags with lower weight (historical = 0.1-0.2)
+                if redis_tags:
+                    max_count = max(redis_tags.values())
+                    for tag, count in redis_tags.items():
+                        # Weight by relative frequency, capped at 0.2 (less than memory's 0.3 min)
+                        redis_weight = 0.1 + (0.1 * (count / max_count))
+                        # Only add if not already strong from memory
+                        if tag not in tag_scores or tag_scores[tag] < redis_weight:
+                            tag_scores[tag] = tag_scores.get(tag, 0) + redis_weight
+            except Exception:
+                pass  # Redis failure shouldn't break intent
 
         return tag_scores
 

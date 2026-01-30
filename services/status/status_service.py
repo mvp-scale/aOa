@@ -594,6 +594,8 @@ class StatusLine:
 class StatusManager:
     def __init__(self, redis_url: str):
         self.r = redis.from_url(redis_url, decode_responses=True)
+        # T-007: Thread lock for concurrent access from Flask + daemon threads
+        self.lock = threading.RLock()
         self._ensure_session()
 
     def _ensure_session(self):
@@ -628,64 +630,66 @@ class StatusManager:
         context_used: int = 0,
     ):
         """Record a Claude API request."""
-        now = time.time()
+        # T-007: Lock to prevent race conditions between Flask threads
+        with self.lock:
+            now = time.time()
 
-        # Calculate cost
-        pricing = PRICING.get(model, PRICING['sonnet-4'])
-        cost = (
-            (input_tokens / 1_000_000) * pricing['input'] +
-            (output_tokens / 1_000_000) * pricing['output'] +
-            (cache_read_tokens / 1_000_000) * pricing['cache_read'] +
-            (cache_write_tokens / 1_000_000) * pricing['cache_write']
-        )
+            # Calculate cost
+            pricing = PRICING.get(model, PRICING['sonnet-4'])
+            cost = (
+                (input_tokens / 1_000_000) * pricing['input'] +
+                (output_tokens / 1_000_000) * pricing['output'] +
+                (cache_read_tokens / 1_000_000) * pricing['cache_read'] +
+                (cache_write_tokens / 1_000_000) * pricing['cache_write']
+            )
 
-        # Update session
-        pipe = self.r.pipeline()
-        pipe.hset(Keys.SESSION, 'model', model)
-        pipe.hset(Keys.SESSION, 'context_used', context_used)
-        pipe.hset(Keys.SESSION, 'last_activity', now)
-        pipe.hincrby(Keys.SESSION, 'input_tokens', input_tokens)
-        pipe.hincrby(Keys.SESSION, 'output_tokens', output_tokens)
-        pipe.hincrby(Keys.SESSION, 'cache_read_tokens', cache_read_tokens)
-        pipe.hincrby(Keys.SESSION, 'cache_write_tokens', cache_write_tokens)
-        pipe.hincrbyfloat(Keys.SESSION, 'session_cost', cost)
-        pipe.hincrby(Keys.SESSION, 'request_count', 1)
+            # Update session
+            pipe = self.r.pipeline()
+            pipe.hset(Keys.SESSION, 'model', model)
+            pipe.hset(Keys.SESSION, 'context_used', context_used)
+            pipe.hset(Keys.SESSION, 'last_activity', now)
+            pipe.hincrby(Keys.SESSION, 'input_tokens', input_tokens)
+            pipe.hincrby(Keys.SESSION, 'output_tokens', output_tokens)
+            pipe.hincrby(Keys.SESSION, 'cache_read_tokens', cache_read_tokens)
+            pipe.hincrby(Keys.SESSION, 'cache_write_tokens', cache_write_tokens)
+            pipe.hincrbyfloat(Keys.SESSION, 'session_cost', cost)
+            pipe.hincrby(Keys.SESSION, 'request_count', 1)
 
-        # Update totals
-        pipe.hincrbyfloat(Keys.METRICS, 'total_cost', cost)
-        pipe.hincrby(Keys.METRICS, 'total_requests', 1)
-        pipe.hincrby(Keys.METRICS, 'total_input_tokens', input_tokens)
-        pipe.hincrby(Keys.METRICS, 'total_output_tokens', output_tokens)
+            # Update totals
+            pipe.hincrbyfloat(Keys.METRICS, 'total_cost', cost)
+            pipe.hincrby(Keys.METRICS, 'total_requests', 1)
+            pipe.hincrby(Keys.METRICS, 'total_input_tokens', input_tokens)
+            pipe.hincrby(Keys.METRICS, 'total_output_tokens', output_tokens)
 
-        # Daily tracking
-        today = datetime.now().strftime('%Y-%m-%d')
-        daily_key = Keys.DAILY.format(date=today)
-        pipe.hincrbyfloat(daily_key, 'cost', cost)
-        pipe.hincrby(daily_key, 'requests', 1)
-        pipe.expire(daily_key, 86400 * 30)  # Keep 30 days
+            # Daily tracking
+            today = datetime.now().strftime('%Y-%m-%d')
+            daily_key = Keys.DAILY.format(date=today)
+            pipe.hincrbyfloat(daily_key, 'cost', cost)
+            pipe.hincrby(daily_key, 'requests', 1)
+            pipe.expire(daily_key, 86400 * 30)  # Keep 30 days
 
-        # Weekly tracking
-        pipe.hincrbyfloat(Keys.WEEKLY, 'cost', cost)
-        pipe.hincrby(Keys.WEEKLY, 'requests', 1)
+            # Weekly tracking
+            pipe.hincrbyfloat(Keys.WEEKLY, 'cost', cost)
+            pipe.hincrby(Keys.WEEKLY, 'requests', 1)
 
-        # History
-        event = json.dumps({
-            'type': 'request',
-            'model': model,
-            'input': input_tokens,
-            'output': output_tokens,
-            'cache_read': cache_read_tokens,
-            'cost': round(cost, 4),
-            'ts': now,
-        })
-        pipe.lpush(Keys.HISTORY, event)
-        pipe.ltrim(Keys.HISTORY, 0, 999)
-        # R-005: 30-day TTL as fallback safety net if ltrim ever fails
-        pipe.expire(Keys.HISTORY, 2592000)
+            # History
+            event = json.dumps({
+                'type': 'request',
+                'model': model,
+                'input': input_tokens,
+                'output': output_tokens,
+                'cache_read': cache_read_tokens,
+                'cost': round(cost, 4),
+                'ts': now,
+            })
+            pipe.lpush(Keys.HISTORY, event)
+            pipe.ltrim(Keys.HISTORY, 0, 999)
+            # R-005: 30-day TTL as fallback safety net if ltrim ever fails
+            pipe.expire(Keys.HISTORY, 2592000)
 
-        pipe.execute()
+            pipe.execute()
 
-        return cost
+            return cost
 
     def record_model_switch(self, model: str):
         """Record a model change."""
