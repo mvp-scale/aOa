@@ -17,6 +17,7 @@
 #   cmd_focus      Files related to current focus
 #   cmd_predict    Predict next files based on intent
 #   cmd_outline    Show file structure (functions, classes)
+#   cmd_cc         Claude Code session commands (prompts, history)
 #
 # =============================================================================
 
@@ -600,5 +601,231 @@ cmd_outline_status() {
     echo "    4. Store tags for searchable access"
     echo ""
     echo -e "${DIM}Then search: aoa search \"#validation\" to find by tag${NC}"
+}
+
+cmd_cc() {
+    # aoa cc <subcommand>  - Claude Code session commands
+    local subcmd="${1:-help}"
+    shift 2>/dev/null || true
+
+    case "$subcmd" in
+        prompts|p)
+            # aoa cc prompts [--limit N] [--json]
+            local limit=25
+            local json_output=false
+
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --limit|-l) limit="$2"; shift 2 ;;
+                    --json|-j) json_output=true; shift ;;
+                    *) shift ;;
+                esac
+            done
+
+            local project_path="${AOA_HOME:-$(pwd)}"
+            local result=$(curl -s "${INDEX_URL}/cc/prompts?limit=${limit}&project_path=${project_path}")
+
+            if $json_output; then
+                echo "$result" | jq .
+                return 0
+            fi
+
+            local count=$(echo "$result" | jq -r '.count // 0')
+            echo -e "${CYAN}${BOLD}⚡ CC Prompts${NC} │ Last ${count}"
+            echo ""
+
+            # Show full prompts without truncation
+            echo "$result" | jq -r '.prompts[]' 2>/dev/null | head -"$limit" | nl -w3 -s'. ' | while IFS= read -r line; do
+                echo "  $line"
+            done
+            ;;
+
+        sessions|s)
+            # aoa cc sessions [--limit N] [--json]
+            local limit=10
+            local json_output=false
+
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --limit|-l) limit="$2"; shift 2 ;;
+                    --json|-j) json_output=true; shift ;;
+                    *) shift ;;
+                esac
+            done
+
+            local project_path="${AOA_HOME:-$(pwd)}"
+            local result=$(curl -s "${INDEX_URL}/cc/sessions?limit=${limit}&project_path=${project_path}")
+
+            if $json_output; then
+                echo "$result" | jq .
+                return 0
+            fi
+
+            local count=$(echo "$result" | jq -r '.count // 0')
+            echo -e "${CYAN}${BOLD}⚡ CC Sessions${NC} │ Last ${count}"
+            echo ""
+
+            # Header
+            printf "${DIM}%-7s %5s %7s %7s %6s %7s %4s %4s %4s %4s %4s %4s %3s${NC}\n" \
+                "DATE" "DUR" "IN" "OUT" "CACHE" "T/S" "O" "S" "H" "B" "R" "W" "T"
+            echo -e "${DIM}$(printf '─%.0s' {1..90})${NC}"
+
+            # Data rows
+            echo "$result" | jq -r '.sessions[] | [
+                .date,
+                (if .duration_min < 60 then "\(.duration_min)m" else "\((.duration_min / 60) | floor)h" end),
+                (if .input_tokens >= 1000 then "\((.input_tokens / 1000) | floor)k" else "\(.input_tokens)" end),
+                (if .output_tokens >= 1000 then "\((.output_tokens / 1000) | floor)k" else "\(.output_tokens)" end),
+                "\(.cache_hit)%",
+                (if .velocity >= 1000 then "\((.velocity / 1000) | . * 10 | floor / 10)k" else "\(.velocity)" end),
+                .models.O,
+                .models.S,
+                .models.H,
+                .tools.B,
+                .tools.R,
+                .tools.W,
+                .tools.T
+            ] | @tsv' 2>/dev/null | head -"$limit" | while IFS=$'\t' read -r date dur inp out cache vel o s h b r w t; do
+                printf "%-7s %5s %7s %7s %6s %7s %4s %4s %4s %4s %4s %4s %3s\n" \
+                    "$date" "$dur" "$inp" "$out" "$cache" "$vel" "$o" "$s" "$h" "$b" "$r" "$w" "$t"
+            done
+
+            echo ""
+            echo -e "${DIM}O=Opus S=Sonnet H=Haiku │ B=Bash R=Read W=Write T=Task${NC}"
+            ;;
+
+        stats|st)
+            # aoa cc stats [--json]
+            local json_output=false
+
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --json|-j) json_output=true; shift ;;
+                    *) shift ;;
+                esac
+            done
+
+            local project_path="${AOA_HOME:-$(pwd)}"
+            local result=$(curl -s "${INDEX_URL}/cc/stats?project_path=${project_path}")
+
+            if $json_output; then
+                echo "$result" | jq .
+                return 0
+            fi
+
+            # Extract period data
+            local has_today=$(echo "$result" | jq -r '.has_data.today')
+            local has_7d=$(echo "$result" | jq -r '.has_data["7d"]')
+            local has_30d=$(echo "$result" | jq -r '.has_data["30d"]')
+
+            echo -e "${CYAN}${BOLD}⚡ CC Stats${NC}"
+            echo ""
+
+            # Model Distribution
+            echo -e "${BOLD}MODEL DISTRIBUTION${NC}"
+            printf "${DIM}%-35s %10s %10s %10s${NC}\n" "" "TODAY" "7 DAYS" "30 DAYS"
+            echo -e "${DIM}$(printf '─%.0s' {1..70})${NC}"
+
+            echo "$result" | jq -r '.model_distribution | to_entries[] | [.key, .value.today, .value["7d"], .value["30d"]] | @tsv' 2>/dev/null | while IFS=$'\t' read -r model today d7 d30; do
+                # Calculate percentages based on totals
+                printf "  %-33s %10s %10s %10s\n" "$model" \
+                    "$([ "$today" != "0" ] && echo "$today" || echo "-")" \
+                    "$([ "$d7" != "0" ] && echo "$d7" || echo "-")" \
+                    "$([ "$d30" != "0" ] && echo "$d30" || echo "-")"
+            done
+
+            echo ""
+            printf "${DIM}%-35s %10s %10s %10s${NC}\n" "" "TODAY" "7 DAYS" "30 DAYS"
+            echo -e "${DIM}$(printf '─%.0s' {1..70})${NC}"
+
+            # Velocity
+            local vel_today=$(echo "$result" | jq -r '.periods.today.velocity // 0')
+            local vel_7d=$(echo "$result" | jq -r '.periods["7d"].velocity // 0')
+            local vel_30d=$(echo "$result" | jq -r '.periods["30d"].velocity // 0')
+            printf "%-35s %10s %10s %10s\n" "VELOCITY (t/s)" \
+                "$([ "$has_today" = "true" ] && echo "$vel_today" || echo "-")" \
+                "$([ "$has_7d" = "true" ] && echo "$vel_7d" || echo "-")" \
+                "$([ "$has_30d" = "true" ] && echo "$vel_30d" || echo "-")"
+
+            # Cache Hit
+            local cache_today=$(echo "$result" | jq -r '.periods.today.cache_hit // 0')
+            local cache_7d=$(echo "$result" | jq -r '.periods["7d"].cache_hit // 0')
+            local cache_30d=$(echo "$result" | jq -r '.periods["30d"].cache_hit // 0')
+            printf "%-35s %10s %10s %10s\n" "CACHE HIT %" \
+                "$([ "$has_today" = "true" ] && echo "${cache_today}%" || echo "-")" \
+                "$([ "$has_7d" = "true" ] && echo "${cache_7d}%" || echo "-")" \
+                "$([ "$has_30d" = "true" ] && echo "${cache_30d}%" || echo "-")"
+
+            echo ""
+            echo -e "${BOLD}TOKENS${NC}"
+            printf "${DIM}%-35s %10s %10s %10s${NC}\n" "" "TODAY" "7 DAYS" "30 DAYS"
+            echo -e "${DIM}$(printf '─%.0s' {1..70})${NC}"
+
+            # Token rows
+            local in_today=$(echo "$result" | jq -r '.periods.today.input_tokens // 0')
+            local in_7d=$(echo "$result" | jq -r '.periods["7d"].input_tokens // 0')
+            local in_30d=$(echo "$result" | jq -r '.periods["30d"].input_tokens // 0')
+            printf "  %-33s %10s %10s %10s\n" "Input" \
+                "$([ "$has_today" = "true" ] && _format_tokens "$in_today" || echo "-")" \
+                "$([ "$has_7d" = "true" ] && _format_tokens "$in_7d" || echo "-")" \
+                "$([ "$has_30d" = "true" ] && _format_tokens "$in_30d" || echo "-")"
+
+            local out_today=$(echo "$result" | jq -r '.periods.today.output_tokens // 0')
+            local out_7d=$(echo "$result" | jq -r '.periods["7d"].output_tokens // 0')
+            local out_30d=$(echo "$result" | jq -r '.periods["30d"].output_tokens // 0')
+            printf "  %-33s %10s %10s %10s\n" "Output" \
+                "$([ "$has_today" = "true" ] && _format_tokens "$out_today" || echo "-")" \
+                "$([ "$has_7d" = "true" ] && _format_tokens "$out_7d" || echo "-")" \
+                "$([ "$has_30d" = "true" ] && _format_tokens "$out_30d" || echo "-")"
+
+            local cr_today=$(echo "$result" | jq -r '.periods.today.cache_read // 0')
+            local cr_7d=$(echo "$result" | jq -r '.periods["7d"].cache_read // 0')
+            local cr_30d=$(echo "$result" | jq -r '.periods["30d"].cache_read // 0')
+            printf "  %-33s %10s %10s %10s\n" "Cache Read" \
+                "$([ "$has_today" = "true" ] && _format_tokens "$cr_today" || echo "-")" \
+                "$([ "$has_7d" = "true" ] && _format_tokens "$cr_7d" || echo "-")" \
+                "$([ "$has_30d" = "true" ] && _format_tokens "$cr_30d" || echo "-")"
+
+            local cw_today=$(echo "$result" | jq -r '.periods.today.cache_write // 0')
+            local cw_7d=$(echo "$result" | jq -r '.periods["7d"].cache_write // 0')
+            local cw_30d=$(echo "$result" | jq -r '.periods["30d"].cache_write // 0')
+            printf "  %-33s %10s %10s %10s\n" "Cache Write" \
+                "$([ "$has_today" = "true" ] && _format_tokens "$cw_today" || echo "-")" \
+                "$([ "$has_7d" = "true" ] && _format_tokens "$cw_7d" || echo "-")" \
+                "$([ "$has_30d" = "true" ] && _format_tokens "$cw_30d" || echo "-")"
+            ;;
+
+        history|h)
+            # Alias for prompts with more context
+            cmd_cc prompts --limit "${1:-50}"
+            ;;
+
+        *)
+            echo -e "${CYAN}${BOLD}aoa cc${NC} - Claude Code session insights"
+            echo ""
+            echo "Usage:"
+            echo "  aoa cc prompts [--limit N]   Recent user prompts"
+            echo "  aoa cc sessions [--limit N]  Per-session metrics table"
+            echo "  aoa cc stats                 Health dashboard (today/7d/30d)"
+            echo ""
+            echo "Examples:"
+            echo "  aoa cc prompts               Last 25 prompts"
+            echo "  aoa cc sessions              Last 10 sessions with velocity, models, tools"
+            echo "  aoa cc stats                 Model distribution, velocity, cache, tokens"
+            echo "  aoa cc sessions --json       JSON output"
+            ;;
+    esac
+}
+
+# Helper to format token counts (e.g., 1500 -> 1.5k, 1500000 -> 1.5M)
+_format_tokens() {
+    local n=$1
+    if [ "$n" -ge 1000000 ]; then
+        echo "$(echo "scale=1; $n / 1000000" | bc)M"
+    elif [ "$n" -ge 1000 ]; then
+        echo "$(echo "scale=1; $n / 1000" | bc)k"
+    else
+        echo "$n"
+    fi
 }
 

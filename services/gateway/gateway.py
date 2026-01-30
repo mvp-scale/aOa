@@ -155,6 +155,11 @@ ROUTES = {
     "/jobs/retry": ("index", "/jobs/retry"),        # Retry failed jobs
     "/jobs/clear": ("index", "/jobs/clear"),        # Clear queues
 
+    # Claude Code session routes (aoa cc)
+    "/cc/prompts": ("index", "/cc/prompts"),        # User prompts
+    "/cc/sessions": ("index", "/cc/sessions"),      # Per-session metrics
+    "/cc/stats": ("index", "/cc/stats"),            # Health dashboard
+
     # Status service routes
     "/status": ("status", "/status"),
     "/status/json": ("status", "/status/json"),

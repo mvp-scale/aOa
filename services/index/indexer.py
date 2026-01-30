@@ -7066,6 +7066,105 @@ def intent_stats():
     return jsonify(intent_index.get_stats(project_id))
 
 
+@app.route('/cc/prompts')
+def cc_prompts():
+    """Get recent user prompts from Claude Code session history.
+
+    Query params:
+        project_path: Project directory (default: CODEBASE_ROOT)
+        limit: Number of prompts (default: 25)
+
+    Returns clean user prompts with system-generated content stripped.
+    """
+    try:
+        from metrics import SessionMetrics
+    except ImportError:
+        try:
+            from session.metrics import SessionMetrics
+        except ImportError:
+            return jsonify({'error': 'SessionMetrics not available', 'prompts': []})
+
+    try:
+        limit = int(request.args.get('limit', 25))
+        project_path = request.args.get('project_path', os.environ.get('CODEBASE_ROOT', '/app'))
+
+        metrics = SessionMetrics(project_path)
+        prompts = metrics.get_prompts(limit=limit)
+
+        # Extract just the text for backward compatibility
+        prompt_texts = [p.get('text', '') for p in prompts]
+
+        return jsonify({
+            'prompts': prompt_texts,
+            'count': len(prompt_texts),
+            'project_path': project_path
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'prompts': []})
+
+
+@app.route('/cc/sessions')
+def cc_sessions():
+    """Get per-session metrics for 'aoa cc sessions' view.
+
+    Query params:
+        project_path: Project directory (default: CODEBASE_ROOT)
+        limit: Number of sessions (default: 10)
+
+    Returns session summaries with tokens, velocity, model counts, tool counts.
+    """
+    try:
+        from metrics import SessionMetrics
+    except ImportError:
+        try:
+            from session.metrics import SessionMetrics
+        except ImportError:
+            return jsonify({'error': 'SessionMetrics not available', 'sessions': []})
+
+    try:
+        limit = int(request.args.get('limit', 10))
+        project_path = request.args.get('project_path', os.environ.get('CODEBASE_ROOT', '/app'))
+
+        metrics = SessionMetrics(project_path)
+        sessions = metrics.get_sessions_summary(limit=limit)
+
+        return jsonify({
+            'sessions': sessions,
+            'count': len(sessions),
+            'project_path': project_path
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'sessions': []})
+
+
+@app.route('/cc/stats')
+def cc_stats():
+    """Get aggregated stats for 'aoa cc stats' view.
+
+    Query params:
+        project_path: Project directory (default: CODEBASE_ROOT)
+
+    Returns stats broken down by today, 7d, 30d periods.
+    """
+    try:
+        from metrics import SessionMetrics
+    except ImportError:
+        try:
+            from session.metrics import SessionMetrics
+        except ImportError:
+            return jsonify({'error': 'SessionMetrics not available', 'periods': {}, 'model_distribution': {}})
+
+    try:
+        project_path = request.args.get('project_path', os.environ.get('CODEBASE_ROOT', '/app'))
+
+        metrics = SessionMetrics(project_path)
+        stats = metrics.get_stats()
+
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e), 'periods': {}, 'model_distribution': {}})
+
+
 @app.route('/intent/summary')
 def intent_summary():
     """GL-088: Get work summary for last N prompts (for Haiku enrichment).

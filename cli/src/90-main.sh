@@ -62,6 +62,7 @@ main() {
         touched)    cmd_touched "$@" ;;
         focus)      cmd_focus "$@" ;;
         predict)    cmd_predict "$@" ;;
+        cc)         cmd_cc "$@" ;;
 
         # Intent Tracking
         intent|i)   cmd_intent "$@" ;;
