@@ -1060,29 +1060,23 @@ def format_search_response(
                         for kw in match_result.get('matched_keywords', []):
                             seen_keywords.add(kw)
 
-                # For each term: increment term hits AND all domains containing it
+                # UNIFY-001: Increment term hits and collect their domains
                 for term in seen_terms:
                     learner.increment_term_hits(term)
-                    # Find ALL domains with this term and increment their hits
+                    # Collect domains with this term (don't increment yet)
                     domains_with_term = learner.get_domains_for_term(term)
                     for domain_name in domains_with_term:
-                        if domain_name not in seen_domains:
-                            seen_domains.add(domain_name)
-                            learner.increment_domain_hits(domain_name)
+                        seen_domains.add(domain_name)
 
                 # KW-003: Increment keyword hits
                 if seen_keywords:
                     learner.increment_keyword_hits(list(seen_keywords))
 
-                # GL-088: Also track in IntentIndex for recent hits ZSET
-                if intent_index:
-                    intent_index.increment_hits(
-                        domains=list(seen_domains),
-                        terms=list(seen_terms),
-                        project_id=project_id
-                    )
-            except Exception:
-                pass  # Silent fail - never block search
+                # UNIFY-004: Batch increment ALL seen_domains (from results + terms)
+                for domain in seen_domains:
+                    learner.increment_domain_hits(domain)
+            except Exception as e:
+                print(f"[Enrich] Error: {e}", flush=True)  # HIT-002: observability
         # Fire and forget
         import threading
         threading.Thread(target=_enrich_top_terms, daemon=True).start()
@@ -4974,8 +4968,8 @@ def _trigger_domain_learning_if_needed(project_id: str):
         # GL-083: Rebalance trigger (every 25 prompts) - replaces per-prompt learning
         if learner.should_rebalance() and prompt_count > 0:
             rebalance_result = learner.rebalance_keywords()
-            if rebalance_result.get('added', 0) > 0:
-                print(f"[Rebalance] {project_id}: +{rebalance_result['added']} keywords assigned", flush=True)
+            # INT-003: Log even when added=0 for observability
+            print(f"[Rebalance] {project_id}: +{rebalance_result.get('added', 0)} keywords, {rebalance_result.get('gaps_processed', 0)} gaps processed", flush=True)
 
         # P2B: Autotune trigger (every 100 prompts) - full domain lifecycle management
         # Uses get_threshold('autotune') for test mode support (100 in prod, 10 in test)
@@ -6939,6 +6933,10 @@ def record_intent():
 
     # GL-060.3: Match intent tags against domain terms, increment hits
     # GL-090 BUG-002 FIX: Also collect orphan tags for learning cycle
+    debug_mode = os.environ.get("AOA_DEBUG") == "1"
+    if debug_mode and tags:
+        print(f"[INTENT DEBUG] Processing tags: {tags}, project_id: {project_id}", flush=True)
+
     if DOMAINS_AVAILABLE and project_id and tags:
         try:
             learner = DomainLearner(project_id)
@@ -6950,6 +6948,8 @@ def record_intent():
                     continue
                 # Find domains that have this term
                 domains_with_term = learner.get_domains_for_term(term)
+                if debug_mode:
+                    print(f"[INTENT DEBUG] tag='{tag}' -> term='{term}' -> domains={domains_with_term}", flush=True)
                 if domains_with_term:
                     for domain_name in domains_with_term:
                         learner.increment_domain_hits(domain_name)
@@ -6958,8 +6958,12 @@ def record_intent():
                     orphaned_tags.append(term)
             # Store orphaned tags for learning cycle
             if orphaned_tags:
+                if debug_mode:
+                    print(f"[INTENT DEBUG] Orphaned tags (no domain match): {orphaned_tags}", flush=True)
                 learner.add_orphan_tags(orphaned_tags)
-        except Exception:
+        except Exception as e:
+            if debug_mode:
+                print(f"[INTENT DEBUG] Error in domain matching: {e}", flush=True)
             pass  # Don't block intent recording on domain errors
 
     # GL-053 Phase C: Trigger domain learning if threshold reached

@@ -394,9 +394,15 @@ class DomainLearner:
 
     def get_domains_for_term(self, term: str) -> list[str]:
         """Get domains that have this term (GL-060.3: term -> domain lookup)."""
-        term_key = self._key(f"term:{term}")
-        # Returns list of domain names from sorted set
-        return list(self.redis.client.zrange(term_key, 0, -1))
+        term_key = self._key(f"term:{term}:domain")  # SCHEMA-001: correct key suffix
+        domain = self.redis.client.get(term_key)
+        # DEBUG: Log key lookups when AOA_DEBUG is set
+        if os.environ.get("AOA_DEBUG") == "1":
+            print(f"[LEARNER DEBUG] get_domains_for_term('{term}') -> key='{term_key}' -> domain={domain}", flush=True)
+        if not domain:
+            return []
+        domain_str = domain.decode() if isinstance(domain, bytes) else domain
+        return [domain_str] if domain_str else []
 
     def increment_domain_hits(self, name: str) -> int:
         """Increment hit counter for a domain.
@@ -413,6 +419,11 @@ class DomainLearner:
         pipe.hincrby(meta_key, "total_hits", 1)
         pipe.hset(meta_key, "last_hit_at", prompt_count)
         results = pipe.execute()
+
+        # DEBUG: Log hit increments when AOA_DEBUG is set
+        if os.environ.get("AOA_DEBUG") == "1":
+            print(f"[LEARNER DEBUG] increment_domain_hits('{name}') -> hits={results[0]}, total_hits={results[1]}", flush=True)
+
         return results[0]  # Return current hits count
 
     # =========================================================================
@@ -566,7 +577,8 @@ class DomainLearner:
             'enriched': enriched,
             'total': total,
             'pending': total - enriched,
-            'complete': enriched == total and total > 0
+            'complete': enriched == total and total > 0,
+            'prompt_count': self.get_prompt_count()  # INT-001: for status line
         }
 
     def add_term_keywords(self, term: str, keywords: list[str]) -> int:
@@ -680,6 +692,11 @@ class DomainLearner:
             created.append(name)
             descriptions[name] = d.get('description', '')
 
+            # Create term→domain mappings so hits can be tracked immediately
+            for term in d.get('terms', []):
+                term_domain_key = self._key(f"term:{term}:domain")
+                self.redis.client.set(term_domain_key, name)
+
         # GL-091: Auto-queue ENRICH jobs for created domains
         jobs_queued = 0
         if JOBS_AVAILABLE and created:
@@ -697,6 +714,33 @@ class DomainLearner:
             'domains': created,
             'skipped': skipped,
             'jobs_queued': jobs_queued
+        }
+
+    def rebuild_term_mappings(self) -> dict:
+        """
+        Rebuild term→domain mappings from existing domain data.
+
+        Useful after Redis data loss or when mappings are missing.
+        Creates: aoa:{project}:term:{term}:domain → domain_name
+        """
+        domains = self.get_all_domains()
+        terms_mapped = 0
+        domains_processed = 0
+
+        for domain_name in domains:
+            terms = self.get_domain_terms(domain_name)
+            for term in terms:
+                # Decode bytes if needed
+                if isinstance(term, bytes):
+                    term = term.decode()
+                term_domain_key = self._key(f"term:{term}:domain")
+                self.redis.client.set(term_domain_key, domain_name)
+                terms_mapped += 1
+            domains_processed += 1
+
+        return {
+            'domains_processed': domains_processed,
+            'terms_mapped': terms_mapped
         }
 
     def get_enrichment_prompt(self, domain: dict) -> str:
