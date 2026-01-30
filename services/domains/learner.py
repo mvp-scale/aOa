@@ -496,13 +496,24 @@ class DomainLearner:
 
         GL-090: Multiplies hits by DECAY_RATE (0.80).
         Returns count of domains decayed.
+
+        R-006: Uses Lua script for atomic read-multiply-write to prevent race conditions.
         """
+        # Lua script for atomic decay: read hits, multiply by decay rate, write back
+        decay_script = """
+        local meta_key = KEYS[1]
+        local decay_rate = tonumber(ARGV[1])
+
+        local hits = tonumber(redis.call('HGET', meta_key, 'hits') or 0)
+        local new_hits = hits * decay_rate
+        redis.call('HSET', meta_key, 'hits', new_hits)
+        return 1
+        """
+
         count = 0
         for name in self.get_all_domains():
             meta_key = self._domain_key(name, "meta")
-            hits = float(self.redis.client.hget(meta_key, "hits") or 0)
-            new_hits = hits * self.DECAY_RATE
-            self.redis.client.hset(meta_key, "hits", new_hits)
+            self.redis.client.eval(decay_script, 1, meta_key, self.DECAY_RATE)
             count += 1
         return count
 
@@ -752,16 +763,22 @@ Return JSON only:
         return int(float(self.redis.client.hget(meta_key, "hits_last_cycle") or 0))
 
     def snapshot_cycle_hits(self) -> None:
-        """Snapshot current hits to hits_last_cycle for all domains, then reset."""
-        domains = self.get_all_domains()
-        pipe = self.redis.client.pipeline()
-        for name in domains:
+        """Snapshot current hits to hits_last_cycle for all domains, then reset.
+
+        R-007: Uses Lua script for atomic copy to prevent race conditions.
+        """
+        # Lua script for atomic snapshot: read hits, copy to hits_last_cycle
+        snapshot_script = """
+        local meta_key = KEYS[1]
+
+        local hits = redis.call('HGET', meta_key, 'hits') or '0'
+        redis.call('HSET', meta_key, 'hits_last_cycle', hits)
+        return 1
+        """
+
+        for name in self.get_all_domains():
             meta_key = self._domain_key(name, "meta")
-            # Get current hits
-            hits = self.redis.client.hget(meta_key, "hits") or 0
-            # Store as last cycle hits
-            pipe.hset(meta_key, "hits_last_cycle", hits)
-        pipe.execute()
+            self.redis.client.eval(snapshot_script, 1, meta_key)
 
     def get_source_counts(self) -> dict:
         """Get counts of seeded vs learned domains.
@@ -1055,7 +1072,10 @@ Return JSON only:
         return {'matched': matched, 'orphaned': orphaned}
 
     def remove_domain(self, name: str) -> None:
-        """Remove a domain and all its data."""
+        """Remove a domain and all its data.
+
+        R-008: Includes cascade cleanup of keyword_index entries.
+        """
         # Get terms first for cleanup
         terms = self.get_domain_terms(name)
 
@@ -1071,8 +1091,19 @@ Return JSON only:
         terms_key = self._domain_key(name, "terms")
         self.redis.client.delete(terms_key)
 
-        # Remove domain from term mappings
+        # Remove domain from term mappings and cascade cleanup keywords
+        index_key = self._key("keyword_index")
         for term in terms:
+            # R-008: Clean up keyword_index entries for this term's keywords
+            keywords_key = self._term_key(term, "keywords")
+            keywords = self.redis.client.smembers(keywords_key)
+            if keywords:
+                # Remove keywords from keyword_index (they pointed to this term)
+                self.redis.client.hdel(index_key, *keywords)
+            # Delete the term's keywords set
+            self.redis.client.delete(keywords_key)
+
+            # Remove term->domain mapping
             term_key = self._key(f"term:{term}")
             self.redis.client.zrem(term_key, name)
 
