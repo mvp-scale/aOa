@@ -3542,7 +3542,7 @@ cmd_health() {
     local all_ok=true
     local warnings=0
 
-    echo -e "${BOLD}aOa Health Check${NC}"
+    echo -e "${BOLD}aOa Health${NC}"
     echo -e "────────────────────────────────────────"
     echo ""
 
@@ -3681,13 +3681,52 @@ cmd_health() {
     echo ""
 
     # =========================================================================
+    # YOUR AOA (value summary)
+    # =========================================================================
+    local project_id=$(get_project_id)
+    if [ -n "$project_id" ]; then
+        echo -e "${BOLD}Your aOa${NC}"
+
+        # Get file count from index health
+        local file_count=0
+        local symbol_count=0
+        if [ -n "$idx_health" ]; then
+            file_count=$(echo "$idx_health" | jq -r '.local.files // 0' 2>/dev/null)
+            symbol_count=$(echo "$idx_health" | jq -r '.local.symbols // 0' 2>/dev/null)
+        fi
+
+        # Get domain stats
+        local domain_stats=$(curl -s --max-time 1 "${INDEX_URL}/domains/stats?project_id=${project_id}" 2>/dev/null)
+        local domain_count=0
+        local term_count=0
+        if [ -n "$domain_stats" ]; then
+            domain_count=$(echo "$domain_stats" | jq -r '.domain_count // 0' 2>/dev/null)
+            term_count=$(echo "$domain_stats" | jq -r '.term_count // 0' 2>/dev/null)
+        fi
+
+        # Get savings
+        local metrics=$(curl -s --max-time 1 "${INDEX_URL}/metrics?project_id=${project_id}" 2>/dev/null)
+        local tokens_saved=0
+        if [ -n "$metrics" ]; then
+            tokens_saved=$(echo "$metrics" | jq -r '.savings.tokens // 0' 2>/dev/null)
+        fi
+        local tokens_fmt="$tokens_saved"
+        [ "$tokens_saved" -ge 1000 ] && tokens_fmt="$((tokens_saved / 1000))k"
+
+        echo -e "  Codebase:  ${file_count} files, ${symbol_count} targets"
+        echo -e "  Patterns:  ${domain_count} domains, ${term_count} terms"
+        echo -e "  Savings:   ${GREEN}${tokens_fmt}${NC} tokens saved"
+        echo ""
+    fi
+
+    # =========================================================================
     # SUMMARY
     # =========================================================================
     echo -e "────────────────────────────────────────"
     if $all_ok && [ "$warnings" -eq 0 ]; then
-        echo -e "Status: ${GREEN}✓ All systems operational${NC}"
+        echo -e "${GREEN}Everything working. Claude is getting smarter.${NC}"
     elif $all_ok; then
-        echo -e "Status: ${YELLOW}! Operational with ${warnings} warning(s)${NC}"
+        echo -e "${YELLOW}Operational with ${warnings} warning(s)${NC}"
     else
         echo -e "Status: ${RED}✗ Issues detected${NC}"
         echo -e "${DIM}Run 'aoa init' to configure this project${NC}"
@@ -5648,11 +5687,14 @@ EOFAOA
     # Clean final output
     echo
     echo -e "───────────────────────────────────────────────────────"
-    echo -e "${GREEN}${BOLD}✓ aOa initialized${NC}"
+    echo -e "${GREEN}${BOLD}✓ aOa enabled for ${project_name}${NC}"
     echo
-    echo -e "  Project: ${BOLD}${project_id}${NC}"
+    echo -e "  ${BOLD}What happens now:${NC}"
+    echo -e "    1. Your codebase is indexed ${DIM}(instant search)${NC}"
+    echo -e "    2. Run ${CYAN}/aoa-start${NC} to build understanding"
+    echo -e "    3. aOa learns as you work"
     echo
-    echo -e "  ${BOLD}Next:${NC} In Claude, run ${CYAN}/aoa-start${NC}"
+    echo -e "  ${DIM}Every session, Claude gets smarter about YOUR code.${NC}"
     echo -e "───────────────────────────────────────────────────────"
 }
 
@@ -5763,8 +5805,29 @@ cmd_remove() {
     rmdir "$project_root/.claude" 2>/dev/null || true
     echo -e "${GREEN}✓${NC}"
 
+    # Get savings stats before saying goodbye
+    local tokens_saved=0
+    local time_saved=0
+    local metrics=$(curl -s --max-time 1 "${INDEX_URL}/metrics?project_id=${project_id}" 2>/dev/null)
+    if [ -n "$metrics" ]; then
+        tokens_saved=$(echo "$metrics" | jq -r '.savings.tokens // 0' 2>/dev/null)
+        time_saved=$(echo "$metrics" | jq -r '.savings.time_sec // 0' 2>/dev/null)
+    fi
+
     echo
     echo -e "${GREEN}${BOLD}✓ aOa removed from ${project_name}${NC}"
+    echo
+    if [ "$tokens_saved" -gt 0 ] 2>/dev/null; then
+        local tokens_fmt=$tokens_saved
+        [ "$tokens_saved" -ge 1000 ] && tokens_fmt="$((tokens_saved / 1000))k"
+        local time_fmt="${time_saved}s"
+        [ "$time_saved" -ge 60 ] && time_fmt="$((time_saved / 60))m"
+        echo -e "  ${DIM}While enabled, aOa saved you:${NC}"
+        echo -e "    • ${GREEN}${tokens_fmt}${NC} tokens ${DIM}(less reading)${NC}"
+        echo -e "    • ${GREEN}~${time_fmt}${NC} ${DIM}(faster searches)${NC}"
+        echo
+    fi
+    echo -e "  ${DIM}Re-enable anytime:${NC} ${CYAN}aoa init${NC}"
     echo
     echo -e "${DIM}Restart Claude Code to deactivate hooks.${NC}"
     echo
@@ -5915,8 +5978,10 @@ cmd_analyze() {
 
 cmd_help() {
     cat << 'EOF'
-                              AOA
+                              aOa
                        5 angles. 1 attack.
+
+  O(1) search + pattern learning = Claude reads less, moves faster.
 
 GETTING STARTED
   ./install.sh           Install aOa globally (once)

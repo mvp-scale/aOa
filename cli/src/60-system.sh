@@ -423,7 +423,7 @@ cmd_health() {
     local all_ok=true
     local warnings=0
 
-    echo -e "${BOLD}aOa Health Check${NC}"
+    echo -e "${BOLD}aOa Health${NC}"
     echo -e "────────────────────────────────────────"
     echo ""
 
@@ -562,13 +562,52 @@ cmd_health() {
     echo ""
 
     # =========================================================================
+    # YOUR AOA (value summary)
+    # =========================================================================
+    local project_id=$(get_project_id)
+    if [ -n "$project_id" ]; then
+        echo -e "${BOLD}Your aOa${NC}"
+
+        # Get file count from index health
+        local file_count=0
+        local symbol_count=0
+        if [ -n "$idx_health" ]; then
+            file_count=$(echo "$idx_health" | jq -r '.local.files // 0' 2>/dev/null)
+            symbol_count=$(echo "$idx_health" | jq -r '.local.symbols // 0' 2>/dev/null)
+        fi
+
+        # Get domain stats
+        local domain_stats=$(curl -s --max-time 1 "${INDEX_URL}/domains/stats?project_id=${project_id}" 2>/dev/null)
+        local domain_count=0
+        local term_count=0
+        if [ -n "$domain_stats" ]; then
+            domain_count=$(echo "$domain_stats" | jq -r '.domain_count // 0' 2>/dev/null)
+            term_count=$(echo "$domain_stats" | jq -r '.term_count // 0' 2>/dev/null)
+        fi
+
+        # Get savings
+        local metrics=$(curl -s --max-time 1 "${INDEX_URL}/metrics?project_id=${project_id}" 2>/dev/null)
+        local tokens_saved=0
+        if [ -n "$metrics" ]; then
+            tokens_saved=$(echo "$metrics" | jq -r '.savings.tokens // 0' 2>/dev/null)
+        fi
+        local tokens_fmt="$tokens_saved"
+        [ "$tokens_saved" -ge 1000 ] && tokens_fmt="$((tokens_saved / 1000))k"
+
+        echo -e "  Codebase:  ${file_count} files, ${symbol_count} targets"
+        echo -e "  Patterns:  ${domain_count} domains, ${term_count} terms"
+        echo -e "  Savings:   ${GREEN}${tokens_fmt}${NC} tokens saved"
+        echo ""
+    fi
+
+    # =========================================================================
     # SUMMARY
     # =========================================================================
     echo -e "────────────────────────────────────────"
     if $all_ok && [ "$warnings" -eq 0 ]; then
-        echo -e "Status: ${GREEN}✓ All systems operational${NC}"
+        echo -e "${GREEN}Everything working. Claude is getting smarter.${NC}"
     elif $all_ok; then
-        echo -e "Status: ${YELLOW}! Operational with ${warnings} warning(s)${NC}"
+        echo -e "${YELLOW}Operational with ${warnings} warning(s)${NC}"
     else
         echo -e "Status: ${RED}✗ Issues detected${NC}"
         echo -e "${DIM}Run 'aoa init' to configure this project${NC}"

@@ -275,16 +275,16 @@ if [ "$ENRICHMENT_COMPLETE" = "true" ] && [ "$FIRST_REBALANCE_DONE" = "true" ]; 
     fi
 fi
 
-# Right section: setup → intelligence → intent (clean transitions)
+# Right section: setup → learning → ready → intent (clean transitions)
 if [ "$ENRICHMENT_TOTAL" -eq 0 ] 2>/dev/null; then
     # No domains - prompt to run /aoa-start
-    RIGHT="${YELLOW}run /aoa-start${RESET}"
+    RIGHT="${YELLOW}setup → run /aoa-start${RESET}"
 elif [ "$ENRICHMENT_COMPLETE" != "true" ]; then
     # Domains exist but not all enriched - show progress
-    RIGHT="${YELLOW}intelligence ${ENRICHED}/${ENRICHMENT_TOTAL}${RESET}"
+    RIGHT="${YELLOW}learning (${ENRICHED}/${ENRICHMENT_TOTAL})${RESET}"
 elif [ "$FIRST_REBALANCE_DONE" != "true" ]; then
-    # Intelligence complete, waiting for first rebalance (25 prompts)
-    RIGHT="${GREEN}✓ intelligence${RESET} ${DIM}→${RESET} ${YELLOW}intent${RESET}"
+    # Learning complete, waiting for first rebalance (25 prompts)
+    RIGHT="${GREEN}ready${RESET} ${DIM}→${RESET} ${YELLOW}tracking${RESET}"
 elif [ -n "$TOP_HITS" ] && [ "$TOP_HITS" != "null" ] && [ "$TOP_HITS" != "" ]; then
     # Active intent phase with top hits - show what we're learning
     RIGHT="${GREEN}intent${RESET} ${MAGENTA}${TOP_HITS}${RESET}"

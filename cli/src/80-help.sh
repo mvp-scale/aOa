@@ -16,8 +16,10 @@
 
 cmd_help() {
     cat << 'EOF'
-                              AOA
+                              aOa
                        5 angles. 1 attack.
+
+  O(1) search + pattern learning = Claude reads less, moves faster.
 
 GETTING STARTED
   ./install.sh           Install aOa globally (once)

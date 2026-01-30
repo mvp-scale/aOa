@@ -295,11 +295,14 @@ EOFAOA
     # Clean final output
     echo
     echo -e "───────────────────────────────────────────────────────"
-    echo -e "${GREEN}${BOLD}✓ aOa initialized${NC}"
+    echo -e "${GREEN}${BOLD}✓ aOa enabled for ${project_name}${NC}"
     echo
-    echo -e "  Project: ${BOLD}${project_id}${NC}"
+    echo -e "  ${BOLD}What happens now:${NC}"
+    echo -e "    1. Your codebase is indexed ${DIM}(instant search)${NC}"
+    echo -e "    2. Run ${CYAN}/aoa-start${NC} to build understanding"
+    echo -e "    3. aOa learns as you work"
     echo
-    echo -e "  ${BOLD}Next:${NC} In Claude, run ${CYAN}/aoa-start${NC}"
+    echo -e "  ${DIM}Every session, Claude gets smarter about YOUR code.${NC}"
     echo -e "───────────────────────────────────────────────────────"
 }
 
@@ -410,8 +413,29 @@ cmd_remove() {
     rmdir "$project_root/.claude" 2>/dev/null || true
     echo -e "${GREEN}✓${NC}"
 
+    # Get savings stats before saying goodbye
+    local tokens_saved=0
+    local time_saved=0
+    local metrics=$(curl -s --max-time 1 "${INDEX_URL}/metrics?project_id=${project_id}" 2>/dev/null)
+    if [ -n "$metrics" ]; then
+        tokens_saved=$(echo "$metrics" | jq -r '.savings.tokens // 0' 2>/dev/null)
+        time_saved=$(echo "$metrics" | jq -r '.savings.time_sec // 0' 2>/dev/null)
+    fi
+
     echo
     echo -e "${GREEN}${BOLD}✓ aOa removed from ${project_name}${NC}"
+    echo
+    if [ "$tokens_saved" -gt 0 ] 2>/dev/null; then
+        local tokens_fmt=$tokens_saved
+        [ "$tokens_saved" -ge 1000 ] && tokens_fmt="$((tokens_saved / 1000))k"
+        local time_fmt="${time_saved}s"
+        [ "$time_saved" -ge 60 ] && time_fmt="$((time_saved / 60))m"
+        echo -e "  ${DIM}While enabled, aOa saved you:${NC}"
+        echo -e "    • ${GREEN}${tokens_fmt}${NC} tokens ${DIM}(less reading)${NC}"
+        echo -e "    • ${GREEN}~${time_fmt}${NC} ${DIM}(faster searches)${NC}"
+        echo
+    fi
+    echo -e "  ${DIM}Re-enable anytime:${NC} ${CYAN}aoa init${NC}"
     echo
     echo -e "${DIM}Restart Claude Code to deactivate hooks.${NC}"
     echo

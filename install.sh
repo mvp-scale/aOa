@@ -290,8 +290,36 @@ if [[ "$1" == "--uninstall" ]]; then
         fi
     done
 
+    # Try to get cumulative stats before goodbye
+    local total_tokens=0
+    local total_time=0
+    local project_count=0
+    if curl -s --max-time 1 "http://localhost:${AOA_DOCKER_PORT:-8080}/metrics" > /dev/null 2>&1; then
+        local metrics=$(curl -s --max-time 1 "http://localhost:${AOA_DOCKER_PORT:-8080}/metrics" 2>/dev/null)
+        if [ -n "$metrics" ]; then
+            total_tokens=$(echo "$metrics" | jq -r '.savings.tokens // 0' 2>/dev/null)
+            total_time=$(echo "$metrics" | jq -r '.savings.time_sec // 0' 2>/dev/null)
+        fi
+    fi
+    if [ -f "$AOA_DATA/projects.json" ]; then
+        project_count=$(jq 'length' "$AOA_DATA/projects.json" 2>/dev/null || echo "0")
+    fi
+
     echo
     echo -e "  ${GREEN}${BOLD}✓ aOa uninstalled${NC}"
+    echo
+    if [ "$total_tokens" -gt 0 ] 2>/dev/null; then
+        local tokens_fmt=$total_tokens
+        [ "$total_tokens" -ge 1000 ] && tokens_fmt="$((total_tokens / 1000))k"
+        local time_fmt="${total_time}s"
+        [ "$total_time" -ge 60 ] && time_fmt="$((total_time / 60))m"
+        echo -e "  ${DIM}Total savings across all projects:${NC}"
+        echo -e "    • ${GREEN}${tokens_fmt}${NC} tokens"
+        echo -e "    • ${GREEN}~${time_fmt}${NC} faster"
+        [ "$project_count" -gt 0 ] && echo -e "    • ${project_count} projects enhanced"
+        echo
+    fi
+    echo -e "  ${DIM}Thanks for trying aOa. Reinstall anytime: ./install.sh${NC}"
     echo
 
     exit 0
