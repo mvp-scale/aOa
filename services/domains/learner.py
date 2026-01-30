@@ -256,11 +256,15 @@ class DomainLearner:
         self.redis.client.set(self._key("terms_learned_last"), terms_count)
         # Store actual terms and domains learned (for display)
         if terms_list:
-            self.redis.client.delete(self._key("terms_learned_list"))
-            self.redis.client.rpush(self._key("terms_learned_list"), *terms_list[:20])  # Cap at 20
+            key = self._key("terms_learned_list")
+            self.redis.client.delete(key)
+            self.redis.client.rpush(key, *terms_list[:20])
+            self.redis.client.ltrim(key, 0, 19)  # R-015: Redis-enforced cap at 20
         if domains_list:
-            self.redis.client.delete(self._key("domains_learned_list"))
-            self.redis.client.rpush(self._key("domains_learned_list"), *domains_list[:5])  # Cap at 5
+            key = self._key("domains_learned_list")
+            self.redis.client.delete(key)
+            self.redis.client.rpush(key, *domains_list[:5])
+            self.redis.client.ltrim(key, 0, 4)  # R-015: Redis-enforced cap at 5
 
     def get_terms_learned_last(self) -> int:
         """Get count of terms learned in last learning cycle."""
@@ -959,8 +963,9 @@ Return JSON only:
             clean_tag = tag.lower().lstrip('#')
             if len(clean_tag) >= 2:
                 pipe.zadd(orphan_key, {clean_tag: now})
+        pipe.expire(orphan_key, 604800)  # R-014: 7-day TTL fallback
         results = pipe.execute()
-        return sum(1 for r in results if r)
+        return sum(1 for r in results if r) - 1  # -1 for expire result
 
     def get_orphan_tags(self, limit: int = 50) -> list[str]:
         """

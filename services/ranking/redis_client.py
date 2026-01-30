@@ -34,7 +34,11 @@ class RedisClient:
     def client(self) -> redis.Redis:
         """Lazy-initialize Redis connection."""
         if self._client is None:
-            self._client = redis.from_url(self.url, decode_responses=True)
+            # R-018: Explicit connection pool with max_connections
+            pool = redis.ConnectionPool.from_url(
+                self.url, decode_responses=True, max_connections=10
+            )
+            self._client = redis.Redis(connection_pool=pool)
             if self._db_override is not None:
                 self._client.select(self._db_override)
         return self._client

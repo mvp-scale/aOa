@@ -255,8 +255,8 @@ cmd_grep() {
             return 1
         fi
 
-        ms=$(echo "$result" | jq -r '.ms // 0')
-        count=$(echo "$result" | jq -r '.results | length')
+        # CLI-009: Single jq call for ms and count
+        read -r ms count < <(echo "$result" | jq -r '[.ms // 0, (.results | length)] | @tsv')
 
         # Handle output flags
         if [ "$quiet" = true ]; then
@@ -275,7 +275,8 @@ cmd_grep() {
         if [[ "$query" == *" "* ]]; then
             # Split on spaces and use /multi for OR search
             export AOA_SEARCH_TYPE="multi-or"
-            local json_terms=$(echo "$query" | tr ' ' '\n' | grep -v '^$' | jq -R . | jq -s .)
+            # CLI-010: Single jq instead of tr|grep|jq|jq
+            local json_terms=$(echo "$query" | jq -R 'split(" ") | map(select(length > 0))')
 
             local body="{\"terms\": ${json_terms}, \"mode\": \"${mode}\", \"limit\": ${limit}, \"operator\": \"or\""
             [ -n "$project_id" ] && body="${body}, \"project\": \"${project_id}\""
@@ -312,8 +313,8 @@ cmd_grep() {
                 return 1
             fi
         fi
-        ms=$(echo "$result" | jq -r '.ms // 0')
-        count=$(echo "$result" | jq -r '.results | length')
+        # CLI-009: Single jq call for ms and count
+        read -r ms count < <(echo "$result" | jq -r '[.ms // 0, (.results | length)] | @tsv')
 
         # Handle output flags
         if [ "$quiet" = true ]; then
@@ -384,16 +385,15 @@ display_ranked_grep_results() {
         )
     ')
 
-    # Parse header from first line (file_count only, rolling_intent removed for speed)
-    local header_line
-    header_line=$(echo "$output" | head -1)
+    # CLI-011: Parse header using bash builtins (no head/tail subprocesses)
+    local header_line="${output%%$'\n'*}"
     local file_count="${header_line%%	*}"
 
     # Print header - GL-088: simplified, no trailing tags
     printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}%s${NC} hits ${DIM}│${NC} %s files ${DIM}│${NC} ${GREEN}%.2fms${NC}\n\n" "$count" "$file_count" "$ms"
 
-    # Print results (skip first line which was header)
-    echo "$output" | tail -n +2
+    # CLI-011: Print results skipping header (bash builtin)
+    echo "${output#*$'\n'}"
 }
 
 # Keep old function name for backwards compatibility

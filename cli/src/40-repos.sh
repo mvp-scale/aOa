@@ -85,7 +85,7 @@ cmd_repo_list() {
     local result=$(curl -s "${INDEX_URL}/repos")
     local count=$(echo "$result" | jq '.repos | length')
 
-    if [ "$count" == "0" ]; then
+    if [ "$count" = "0" ]; then
         echo -e "${DIM}No knowledge repos. Add one with:${NC}"
         echo "  aoa repo add <name> <git-url>"
         return

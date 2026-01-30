@@ -3139,7 +3139,9 @@ class IntentIndex:
                         tag_key = f"aoa:{proj}:tags:{tag}"
                         file_tag_key = f"aoa:{proj}:file_tags:{f}"
                         r.sadd(tag_key, f)
-                        r.sadd(file_tag_key, tag)
+                        # R-012: Cap tags per file at 50 (scard check)
+                        if r.scard(file_tag_key) < 50:
+                            r.sadd(file_tag_key, tag)
                         # 24-hour TTL on tag sets
                         r.expire(tag_key, 86400)
                         r.expire(file_tag_key, 86400)
