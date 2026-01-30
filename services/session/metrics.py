@@ -89,6 +89,53 @@ def extract_tool_counts(content: list) -> dict:
     return counts
 
 
+def extract_actual_output_tokens(content: list) -> int:
+    """Extract ACTUAL output tokens from content array.
+
+    The usage.output_tokens field severely undercounts actual generation.
+    This parses the content array to count all generated tokens:
+    - thinking: Claude's reasoning (hidden from user, but generated)
+    - text: Visible response text
+    - tool_use: Tool call inputs (JSON payloads)
+
+    Returns approximate token count (chars / 4).
+    """
+    total_chars = 0
+    try:
+        if not isinstance(content, list):
+            return 0
+
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+
+            item_type = item.get("type", "")
+
+            if item_type == "thinking":
+                # Extended thinking content
+                thinking_text = item.get("thinking", "")
+                if thinking_text:
+                    total_chars += len(thinking_text)
+
+            elif item_type == "text":
+                # Visible response text
+                text = item.get("text", "")
+                if text:
+                    total_chars += len(text)
+
+            elif item_type == "tool_use":
+                # Tool call inputs (JSON)
+                tool_input = item.get("input", {})
+                if tool_input:
+                    total_chars += len(json.dumps(tool_input))
+
+    except Exception as e:
+        logger.debug(f"Error extracting actual tokens: {e}")
+
+    # Approximate: 1 token ≈ 4 characters
+    return total_chars // 4
+
+
 def categorize_tools(tool_counts: dict) -> dict:
     """Categorize tools into our display groups.
 
@@ -211,6 +258,10 @@ class SessionMetrics:
             "total_cache_read": 0,
             "total_cache_write": 0,
             "total_duration_ms": 0,
+            # Per-model actual output tokens (from content: thinking + text + tool_use)
+            "actual_output_by_model": {"opus": 0, "sonnet": 0, "haiku": 0},
+            # Per-model effective tokens (input + cache_read + cache_write + actual_output)
+            "effective_by_model": {"opus": 0, "sonnet": 0, "haiku": 0},
             "error": None,
         }
 
@@ -269,7 +320,7 @@ class SessionMetrics:
                         model = safe_get(msg, "model", default="unknown")
                         uuid = data.get("uuid", "")
 
-                        # Token counts
+                        # Token counts (from usage field)
                         input_tokens = safe_get(usage, "input_tokens", default=0)
                         output_tokens = safe_get(usage, "output_tokens", default=0)
                         cache_read = safe_get(usage, "cache_read_input_tokens", default=0)
@@ -280,9 +331,26 @@ class SessionMetrics:
                         result["total_cache_read"] += cache_read
                         result["total_cache_write"] += cache_write
 
-                        # Model counts
+                        # Actual output tokens from content (thinking + text + tool_use)
+                        actual_output = extract_actual_output_tokens(content)
+
+                        # Track per-model metrics
                         if model and model != "unknown":
                             result["model_counts"][model] = result["model_counts"].get(model, 0) + 1
+
+                            # Determine model type
+                            parsed = parse_model_string(model)
+                            model_type = parsed["name"].lower()
+
+                            if "opus" in model_type:
+                                result["actual_output_by_model"]["opus"] += actual_output
+                                result["effective_by_model"]["opus"] += input_tokens + cache_read + cache_write + actual_output
+                            elif "sonnet" in model_type:
+                                result["actual_output_by_model"]["sonnet"] += actual_output
+                                result["effective_by_model"]["sonnet"] += input_tokens + cache_read + cache_write + actual_output
+                            elif "haiku" in model_type:
+                                result["actual_output_by_model"]["haiku"] += actual_output
+                                result["effective_by_model"]["haiku"] += input_tokens + cache_read + cache_write + actual_output
 
                         # Tool counts
                         turn_tools = extract_tool_counts(content)
@@ -356,24 +424,32 @@ class SessionMetrics:
                 # Duration in minutes
                 duration_min = round(elapsed_seconds / 60, 1) if elapsed_seconds > 0 else 0
 
-                # Velocity: total tokens / elapsed time
-                total_tokens = session["total_input"] + session["total_cache_read"] + session["total_output"]
-                if elapsed_seconds > 0:
-                    avg_velocity = round(total_tokens / elapsed_seconds, 1)
-                else:
-                    avg_velocity = 0
+                # Per-model OUTPUT (actual generation) and TPS (effective throughput)
+                output_tps = {"O": 0, "S": 0, "H": 0}
+                effective_tps = {"O": 0, "S": 0, "H": 0}
 
-                # Model counts (O, S, H)
-                model_summary = {"O": 0, "S": 0, "H": 0}
+                if elapsed_seconds > 0:
+                    # OUTPUT: Actual tokens generated (thinking + text + tool_use) / time
+                    output_tps["O"] = round(session["actual_output_by_model"]["opus"] / elapsed_seconds, 1)
+                    output_tps["S"] = round(session["actual_output_by_model"]["sonnet"] / elapsed_seconds, 1)
+                    output_tps["H"] = round(session["actual_output_by_model"]["haiku"] / elapsed_seconds, 1)
+
+                    # TPS: Effective throughput (includes cache processing)
+                    effective_tps["O"] = round(session["effective_by_model"]["opus"] / elapsed_seconds, 1)
+                    effective_tps["S"] = round(session["effective_by_model"]["sonnet"] / elapsed_seconds, 1)
+                    effective_tps["H"] = round(session["effective_by_model"]["haiku"] / elapsed_seconds, 1)
+
+                # Model counts (O, S, H) - API calls per model
+                model_calls = {"O": 0, "S": 0, "H": 0}
                 for model, count in session["model_counts"].items():
                     parsed = parse_model_string(model)
                     name = parsed["name"].lower()
                     if "opus" in name:
-                        model_summary["O"] += count
+                        model_calls["O"] += count
                     elif "sonnet" in name:
-                        model_summary["S"] += count
+                        model_calls["S"] += count
                     elif "haiku" in name:
-                        model_summary["H"] += count
+                        model_calls["H"] += count
 
                 # Tool categories
                 tool_cats = categorize_tools(session["tool_counts"])
@@ -394,14 +470,19 @@ class SessionMetrics:
                     "date": start_date,
                     "start_time": start_time,
                     "duration_min": duration_min,
+                    "prompt_count": len(session["prompts"]),
+                    "turn_count": len(session["turns"]),
+                    # Per-model throughput
+                    "output_tps": output_tps,      # Actual generation speed
+                    "effective_tps": effective_tps,  # With cache
+                    "calls": model_calls,           # API calls per model
+                    "tools": tool_cats,
+                    # Legacy fields (for backward compat, can remove later)
                     "input_tokens": session["total_input"],
                     "output_tokens": session["total_output"],
                     "cache_hit": cache_hit,
-                    "velocity": avg_velocity,
-                    "models": model_summary,
-                    "tools": tool_cats,
-                    "prompt_count": len(session["prompts"]),
-                    "turn_count": len(session["turns"]),
+                    "velocity": effective_tps.get("O", 0) or effective_tps.get("S", 0) or effective_tps.get("H", 0),  # Fallback
+                    "models": model_calls,  # Renamed from model_summary
                 })
 
         except Exception as e:

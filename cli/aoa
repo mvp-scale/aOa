@@ -1888,46 +1888,45 @@ cmd_cc() {
             echo ""
 
             # 120 char width layout
-            # Dividers at fixed positions: 32, 59, 77, 95
-            # SESSION=31 │ TOKENS=26 │ PERF=17 │ MODELS=17 │ TOOLS=27
+            # SESSION=23 │ OUTPUT=20 │ TPS=18 │ CALLS=17 │ TOOLS=27
 
-            # Headers - using exact character counts
-            echo -e "${DIM}SESSION                        ${DIM}│${DIM} TOKENS                    ${DIM}│${DIM} PERF            ${DIM}│${DIM} MODELS          ${DIM}│${DIM} TOOLS${NC}"
-            echo -e "${DIM}START       DUR     P      T   ${DIM}│${DIM}    IN     OUT        C    ${DIM}│${DIM}   T/S      C%   ${DIM}│${DIM}   O    S    H   ${DIM}│${DIM}  B    R    E    W    T    M${NC}"
-            echo -e "${DIM}───────────────────────────────${DIM}┼${DIM}───────────────────────────${DIM}┼${DIM}─────────────────${DIM}┼${DIM}─────────────────${DIM}┼${DIM}───────────────────────────${NC}"
+            # Headers
+            echo -e "${DIM}SESSION                ${DIM}│${DIM} OUTPUT (tok/s)     ${DIM}│${DIM} TPS              ${DIM}│${DIM} CALLS           ${DIM}│${DIM} TOOLS${NC}"
+            echo -e "${DIM}START       DUR     P  ${DIM}│${DIM}   O      S      H  ${DIM}│${DIM}   O     S     H  ${DIM}│${DIM}   O    S    H   ${DIM}│${DIM}  B    R    E    W    T    M${NC}"
+            echo -e "${DIM}───────────────────────${DIM}┼${DIM}────────────────────${DIM}┼${DIM}──────────────────${DIM}┼${DIM}─────────────────${DIM}┼${DIM}───────────────────────────${NC}"
 
             # Data rows - build each section to exact width then join
             echo "$result" | jq -r '.sessions[] | [
                 .date,
                 (if (.duration_min // 0) >= 60 then "\(((.duration_min // 0) / 60) | floor)h\(((.duration_min // 0) % 60))m" else "\(.duration_min // 0)m" end),
-                (.prompt_count // 0),
-                (.turn_count // 0),
-                (if (.input_tokens // 0) >= 1000000 then "\(((.input_tokens // 0) / 1000000 * 10 | floor) / 10)M" elif (.input_tokens // 0) >= 1000 then "\(((.input_tokens // 0) / 1000) | floor)k" else "\(.input_tokens // 0)" end),
-                (if (.output_tokens // 0) >= 1000000 then "\(((.output_tokens // 0) / 1000000 * 10 | floor) / 10)M" elif (.output_tokens // 0) >= 1000 then "\(((.output_tokens // 0) / 1000) | floor)k" else "\(.output_tokens // 0)" end),
-                (if ((.cache_hit // 0) * (.input_tokens // 0) / 100) >= 1000000 then "\((((.cache_hit // 0) * (.input_tokens // 0) / 100) / 1000000 * 10 | floor) / 10)M" elif ((.cache_hit // 0) * (.input_tokens // 0) / 100) >= 1000 then "\((((.cache_hit // 0) * (.input_tokens // 0) / 100) / 1000) | floor)k" else "\(((.cache_hit // 0) * (.input_tokens // 0) / 100) | floor)" end),
-                (if (.velocity // 0) >= 1000 then "\(((.velocity // 0) / 1000 * 10 | floor) / 10)k" else "\((.velocity // 0) | floor)" end),
-                "\(.cache_hit // 0)%",
-                (.models.O // 0),
-                (.models.S // 0),
-                (.models.H // 0),
-                (.tools.B // 0),
-                (.tools.R // 0),
-                (.tools.E // 0),
-                (.tools.W // 0),
-                (.tools.T // 0),
-                (.tools.M // 0)
-            ] | @tsv' 2>/dev/null | head -"$limit" | while IFS=$'\t' read -r date dur p t inp out c ts cp o s h bb rr ee ww tt mm; do
+                (if (.prompt_count // 0) > 0 then (.prompt_count // 0) else "-" end),
+                (if (.output_tps.O // 0) > 0 then (.output_tps.O // 0) else "-" end),
+                (if (.output_tps.S // 0) > 0 then (.output_tps.S // 0) else "-" end),
+                (if (.output_tps.H // 0) > 0 then (.output_tps.H // 0) else "-" end),
+                (if (.effective_tps.O // 0) > 0 then (if (.effective_tps.O // 0) >= 1000 then "\(((.effective_tps.O // 0) / 1000 * 10 | floor) / 10)k" else "\((.effective_tps.O // 0) | floor)" end) else "-" end),
+                (if (.effective_tps.S // 0) > 0 then (if (.effective_tps.S // 0) >= 1000 then "\(((.effective_tps.S // 0) / 1000 * 10 | floor) / 10)k" else "\((.effective_tps.S // 0) | floor)" end) else "-" end),
+                (if (.effective_tps.H // 0) > 0 then (if (.effective_tps.H // 0) >= 1000 then "\(((.effective_tps.H // 0) / 1000 * 10 | floor) / 10)k" else "\((.effective_tps.H // 0) | floor)" end) else "-" end),
+                (if (.calls.O // 0) > 0 then (.calls.O // 0) else "-" end),
+                (if (.calls.S // 0) > 0 then (.calls.S // 0) else "-" end),
+                (if (.calls.H // 0) > 0 then (.calls.H // 0) else "-" end),
+                (if (.tools.B // 0) > 0 then (.tools.B // 0) else "-" end),
+                (if (.tools.R // 0) > 0 then (.tools.R // 0) else "-" end),
+                (if (.tools.E // 0) > 0 then (.tools.E // 0) else "-" end),
+                (if (.tools.W // 0) > 0 then (.tools.W // 0) else "-" end),
+                (if (.tools.T // 0) > 0 then (.tools.T // 0) else "-" end),
+                (if (.tools.M // 0) > 0 then (.tools.M // 0) else "-" end)
+            ] | @tsv' 2>/dev/null | head -"$limit" | while IFS=$'\t' read -r date dur p out_o out_s out_h tps_o tps_s tps_h call_o call_s call_h bb rr ee ww tt mm; do
                 # Build each section as fixed-width string then pad to exact section width
-                local sec1=$(printf "%-10s %6s %5s %6s" "$date" "$dur" "$p" "$t")
-                local sec2=$(printf "%5s %6s %10s" "$inp" "$out" "$c")
-                local sec3=$(printf "%6s %7s" "$ts" "$cp")
-                local sec4=$(printf "%4s %4s %4s" "$o" "$s" "$h")
+                local sec1=$(printf "%-10s %6s %5s" "$date" "$dur" "$p")
+                local sec2=$(printf "%5s %6s %7s" "$out_o" "$out_s" "$out_h")
+                local sec3=$(printf "%5s %5s %5s" "$tps_o" "$tps_s" "$tps_h")
+                local sec4=$(printf "%4s %4s %4s" "$call_o" "$call_s" "$call_h")
                 local sec5=$(printf "%4s %4s %4s %4s %4s %4s" "$bb" "$rr" "$ee" "$ww" "$tt" "$mm")
 
-                # Pad each section to EXACT width: 31 │ 27 │ 17 │ 17 │ rest
-                sec1=$(printf "%-31s" "$sec1")
-                sec2=$(printf "%-27s" "$sec2")
-                sec3=$(printf "%-17s" "$sec3")
+                # Pad each section to EXACT width: 23 │ 20 │ 18 │ 17 │ rest
+                sec1=$(printf "%-23s" "$sec1")
+                sec2=$(printf "%-20s" "$sec2")
+                sec3=$(printf "%-18s" "$sec3")
                 sec4=$(printf "%-17s" "$sec4")
 
                 printf "%s${DIM}│${NC}%s${DIM}│${NC}%s${DIM}│${NC}%s${DIM}│${NC}%s\n" \
@@ -1935,9 +1934,13 @@ cmd_cc() {
             done
 
             # Legend
-            echo -e "${DIM}───────────────────────────────${DIM}┼${DIM}───────────────────────────${DIM}┼${DIM}─────────────────${DIM}┼${DIM}─────────────────${DIM}┼${DIM}───────────────────────────${NC}"
-            echo -e "${DIM}P=Prompts  T=Turns             ${DIM}│${DIM} IN=Input  OUT=Output      ${DIM}│${DIM} T/S=Opus tok/s  ${DIM}│${DIM} O=Opus          ${DIM}│${DIM} B=Bash  R=Read  E=Edit${NC}"
-            echo -e "${DIM}                               ${DIM}│${DIM} C=Cached                  ${DIM}│${DIM} C%=Cache hit    ${DIM}│${DIM} S=Son  H=Hai    ${DIM}│${DIM} W=Write T=Task  M=MCP${NC}"
+            echo -e "${DIM}───────────────────────${DIM}┼${DIM}────────────────────${DIM}┼${DIM}──────────────────${DIM}┼${DIM}─────────────────${DIM}┼${DIM}───────────────────────────${NC}"
+            echo -e "${DIM}P=Prompts              ${DIM}│${DIM} O=Opus  S=Sonnet   ${DIM}│${DIM} (effective)      ${DIM}│${DIM} O=Opus          ${DIM}│${DIM} B=Bash  R=Read  E=Edit${NC}"
+            echo -e "${DIM}                       ${DIM}│${DIM} H=Haiku            ${DIM}│${DIM}                  ${DIM}│${DIM} S=Son  H=Hai    ${DIM}│${DIM} W=Write T=Task  M=MCP${NC}"
+            echo ""
+            echo -e "${YELLOW}Wall-clock gauge, not absolute benchmark${NC}"
+            echo -e "${DIM}OUTPUT = thinking+text+tool │ TPS = OUTPUT+cache${NC}"
+            echo ""
             ;;
 
         stats|st)
