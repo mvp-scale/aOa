@@ -1351,13 +1351,15 @@ Output valid JSON only:
         """Get which term owns this keyword."""
         index_key = self._key("keyword_index")
         result = self.redis.client.hget(index_key, keyword.lower())
-        return result.decode() if result else None
+        # Redis returns strings with decode_responses=True
+        return result if result else None
 
     def get_all_keywords(self) -> dict:
         """Get all keyword->term mappings."""
         index_key = self._key("keyword_index")
         result = self.redis.client.hgetall(index_key)
-        return {k.decode(): v.decode() for k, v in result.items()} if result else {}
+        # Redis returns strings with decode_responses=True
+        return dict(result) if result else {}
 
     def record_gap_keyword(self, keyword: str) -> None:
         """Record a search keyword that found no domain match."""
@@ -1371,7 +1373,8 @@ Output valid JSON only:
         gap_key = self._key("gap_keywords")
         # Get random sample to avoid always processing same ones
         result = self.redis.client.srandmember(gap_key, limit)
-        return [k.decode() for k in result] if result else []
+        # Redis returns strings with decode_responses=True, no .decode() needed
+        return list(result) if result else []
 
     def clear_gap_keyword(self, keyword: str) -> None:
         """Remove keyword from gaps after assignment."""
