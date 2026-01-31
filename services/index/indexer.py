@@ -7837,6 +7837,107 @@ def tuner_reset():
 # Metrics API - Phase 4 Unified Accuracy Dashboard
 # ============================================================================
 
+def calculate_dynamic_rates() -> dict:
+    """
+    Calculate dynamic token processing rates from Claude session logs.
+
+    Analyzes recent session files to determine actual LLM response rates,
+    returning a range (low/high) based on P25 percentile across time windows.
+
+    Returns:
+        {
+            'rate_low': float,   # ms per token (faster end)
+            'rate_high': float,  # ms per token (slower end)
+            'samples': int       # number of rate samples used
+        }
+    """
+    import json as json_mod
+    from datetime import datetime
+    from pathlib import Path
+
+    home = os.environ.get('HOME', os.path.expanduser('~'))
+    projects_dir = Path(home) / '.claude' / 'projects'
+
+    if not projects_dir.exists():
+        return {'rate_low': 2.0, 'rate_high': 5.0, 'samples': 0}
+
+    # Get recent session files
+    sessions = []
+    try:
+        for project_dir in sorted(projects_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)[:3]:
+            sessions.extend(sorted(project_dir.glob('*.jsonl'), key=lambda p: p.stat().st_mtime, reverse=True)[:5])
+    except Exception:
+        return {'rate_low': 2.0, 'rate_high': 5.0, 'samples': 0}
+
+    now = datetime.now().astimezone()
+    windows = {'5min': [], '15min': [], '30min': []}
+
+    for session_file in sessions[:10]:
+        try:
+            messages = []
+            with open(session_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json_mod.loads(line)
+                        if event.get('type') == 'assistant' and 'message' in event:
+                            msg = event['message']
+                            if 'usage' in msg and 'timestamp' in event:
+                                ts = datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
+                                tokens = msg['usage'].get('input_tokens', 0) + msg['usage'].get('output_tokens', 0)
+                                messages.append({'ts': ts, 'tokens': tokens})
+                    except Exception:
+                        continue
+
+            # Calculate rates between consecutive messages
+            for i in range(1, len(messages)):
+                try:
+                    duration_ms = (messages[i]['ts'] - messages[i-1]['ts']).total_seconds() * 1000
+                    tokens = messages[i]['tokens']
+                    age = (now - messages[i]['ts']).total_seconds() / 60  # minutes ago
+
+                    # Only include fast responses (< 15s) - pure LLM processing without tool delays
+                    if 100 < duration_ms < 15000 and tokens > 200:
+                        rate = duration_ms / tokens
+                        # Cap at 20ms/token - anything higher is tool/network overhead
+                        if rate < 20:
+                            if age <= 5:
+                                windows['5min'].append(rate)
+                            if age <= 15:
+                                windows['15min'].append(rate)
+                            if age <= 30:
+                                windows['30min'].append(rate)
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
+    def percentile(lst, p):
+        if not lst:
+            return None
+        s = sorted(lst)
+        idx = int(len(s) * p / 100)
+        return s[min(idx, len(s)-1)]
+
+    rates = []
+    for w in ['5min', '15min', '30min']:
+        p = percentile(windows[w], 25)
+        if p is not None:
+            rates.append(p)
+
+    if rates:
+        return {
+            'rate_low': round(min(rates), 2),
+            'rate_high': round(max(rates), 2),
+            'samples': sum(len(v) for v in windows.values())
+        }
+    else:
+        # Fallback: documented input processing rate (~2ms/token)
+        return {'rate_low': 1.5, 'rate_high': 3.0, 'samples': 0}
+
+
 @app.route('/metrics')
 def get_metrics():
     """
@@ -7947,14 +8048,27 @@ def get_metrics():
 
         # Total savings = Redis + Intent (Intent is the primary/real source)
         total_tokens_saved = tokens_saved + intent_savings.get('tokens', 0)
-        # Get time_sec from intent_savings (calculated at 7.5ms per token)
-        intent_time_sec = intent_savings.get('time_sec', 0)
+
+        # Calculate dynamic rates from session logs
+        dynamic_rates = calculate_dynamic_rates()
+        rate_low = dynamic_rates.get('rate_low', 2.0)
+        rate_high = dynamic_rates.get('rate_high', 5.0)
+
+        # Calculate time range using dynamic rates (ms/token -> seconds)
+        time_sec_low = total_tokens_saved * rate_low / 1000
+        time_sec_high = total_tokens_saved * rate_high / 1000
+
         savings_data = {
             'tokens': total_tokens_saved,
             'baseline': intent_savings.get('baseline', 0),
             'actual': intent_savings.get('actual', 0),
             'measured_records': intent_savings.get('measured_records', 0),
-            'time_sec': intent_time_sec,  # Estimated from token savings
+            'time_sec_low': round(time_sec_low, 1),
+            'time_sec_high': round(time_sec_high, 1),
+            'time_sec': round(time_sec_high, 1),  # Backward compat: use high estimate
+            'rate_low': rate_low,
+            'rate_high': rate_high,
+            'rate_samples': dynamic_rates.get('samples', 0),
         }
 
         return jsonify({

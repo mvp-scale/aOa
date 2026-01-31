@@ -125,108 +125,25 @@ cmd_intent_recent() {
     local result=$(curl -s "${INDEX_URL}/intent/recent?limit=${api_limit}&project_id=${project_id}")
     local total=$(echo "$result" | jq -r '.stats.total_records // 0')
 
-    # Format tokens with k suffix
-    local tokens_k=$(awk "BEGIN {printf \"%.0f\", $tokens_saved/1000}")
+    # Format tokens with 2 decimals (standard format)
+    format_tokens() {
+        local n=$1
+        if [ "$n" -ge 1000000000 ]; then
+            awk "BEGIN {printf \"%.2fB\", $n/1000000000}"
+        elif [ "$n" -ge 1000000 ]; then
+            awk "BEGIN {printf \"%.2fM\", $n/1000000}"
+        elif [ "$n" -ge 1000 ]; then
+            awk "BEGIN {printf \"%.2fk\", $n/1000}"
+        else
+            echo "$n"
+        fi
+    }
+    local tokens_fmt=$(format_tokens $tokens_saved)
     local hit_pct_int=$(printf "%.0f" "$hit_pct")
 
-    # Calculate dynamic rate from rolling windows (5, 15, 30 min)
-    local rate_data=$(python3 << 'PYEOF'
-import json
-import os
-from pathlib import Path
-from datetime import datetime, timedelta
-
-home = os.path.expanduser('~')
-projects_dir = Path(home) / '.claude' / 'projects'
-
-if not projects_dir.exists():
-    print(json.dumps({'rate_low': 2.0, 'rate_high': 5.0, 'samples': 0}))
-    exit()
-
-# Get recent session files
-sessions = []
-for project_dir in sorted(projects_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)[:3]:
-    sessions.extend(sorted(project_dir.glob('*.jsonl'), key=lambda p: p.stat().st_mtime, reverse=True)[:5])
-
-now = datetime.now().astimezone()
-windows = {'5min': [], '15min': [], '30min': []}
-
-for session_file in sessions[:10]:
-    try:
-        messages = []
-        with open(session_file, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    event = json.loads(line)
-                    if event.get('type') == 'assistant' and 'message' in event:
-                        msg = event['message']
-                        if 'usage' in msg and 'timestamp' in event:
-                            ts = datetime.fromisoformat(event['timestamp'].replace('Z', '+00:00'))
-                            tokens = msg['usage'].get('input_tokens', 0) + msg['usage'].get('output_tokens', 0)
-                            messages.append({'ts': ts, 'tokens': tokens})
-                except:
-                    continue
-
-        # Calculate rates between consecutive messages
-        for i in range(1, len(messages)):
-            try:
-                duration_ms = (messages[i]['ts'] - messages[i-1]['ts']).total_seconds() * 1000
-                tokens = messages[i]['tokens']
-                age = (now - messages[i]['ts']).total_seconds() / 60  # minutes ago
-
-                # Only include fast responses (< 15s) - pure LLM processing without tool delays
-                # Filter: 100ms-15s duration, significant tokens, rate < 20ms/token
-                if 100 < duration_ms < 15000 and tokens > 200:
-                    rate = duration_ms / tokens
-                    # Cap at 20ms/token - anything higher is tool/network overhead
-                    if rate < 20:
-                        if age <= 5:
-                            windows['5min'].append(rate)
-                        if age <= 15:
-                            windows['15min'].append(rate)
-                        if age <= 30:
-                            windows['30min'].append(rate)
-            except:
-                continue
-    except:
-        continue
-
-# Use P25 (faster end) since we're saving INPUT tokens which process faster
-def percentile(lst, p):
-    if not lst:
-        return None
-    s = sorted(lst)
-    idx = int(len(s) * p / 100)
-    return s[min(idx, len(s)-1)]
-
-rates = []
-for w in ['5min', '15min', '30min']:
-    # P25 gives us the faster, cleaner samples
-    p = percentile(windows[w], 25)
-    if p is not None:
-        rates.append(p)
-
-if rates:
-    rate_low = min(rates)
-    rate_high = max(rates)
-    samples = sum(len(v) for v in windows.values())
-    print(json.dumps({'rate_low': round(rate_low, 2), 'rate_high': round(rate_high, 2), 'samples': samples}))
-else:
-    # Fallback: documented input processing rate (~2ms/token)
-    print(json.dumps({'rate_low': 1.5, 'rate_high': 3.0, 'samples': 0}))
-PYEOF
-)
-
-    local rate_low=$(echo "$rate_data" | jq -r '.rate_low')
-    local rate_high=$(echo "$rate_data" | jq -r '.rate_high')
-    local rate_samples=$(echo "$rate_data" | jq -r '.samples')
-
-    # Calculate time range from dynamic rates
-    local time_low=$(awk "BEGIN {printf \"%.0f\", $tokens_saved * $rate_low / 1000}")
-    local time_high=$(awk "BEGIN {printf \"%.0f\", $tokens_saved * $rate_high / 1000}")
+    # Get time range from metrics endpoint (calculated server-side with dynamic rates)
+    local time_low=$(echo "$metrics" | jq -r '.savings.time_sec_low // 0' | awk '{printf "%.0f", $1}')
+    local time_high=$(echo "$metrics" | jq -r '.savings.time_sec_high // 0' | awk '{printf "%.0f", $1}')
 
     # Format time range compactly
     format_time_compact() {
@@ -265,7 +182,7 @@ PYEOF
     if [ "$tokens_saved" -gt 0 ] 2>/dev/null; then
         local date_suffix=""
         [ -n "$since_date" ] && date_suffix=" (${since_date})"
-        savings_display="Savings ${GREEN}↓${tokens_k}k${NC}${date_suffix}"
+        savings_display="Savings ${GREEN}↓${tokens_fmt}${NC}${date_suffix}"
     else
         savings_display="Savings ${DIM}(none yet)${NC}"
     fi
@@ -280,8 +197,13 @@ PYEOF
         pred_display="Predictions: ${YELLOW}${hit_pct_int}%${NC}"
     fi
 
-    # Assemble header line
-    echo -e "${CYAN}${BOLD}⚡ aOa Activity${NC}  ${savings_display} ${DIM}│${NC} ${CYAN}${time_display}${NC} ${DIM}│${NC} ${pred_display}"
+    # Assemble header line (only include time section if populated)
+    local header="${CYAN}${BOLD}⚡ aOa Activity${NC}  ${savings_display}"
+    if [ -n "$time_display" ]; then
+        header="${header} ${DIM}│${NC} ${CYAN}${time_display}${NC}"
+    fi
+    header="${header} ${DIM}│${NC} ${pred_display}"
+    echo -e "$header"
     echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────────────────${NC}"
     echo ""
     echo -e "ACTION     SOURCE   ATTRIB       aOa IMPACT                TAGS                                                    TARGET"

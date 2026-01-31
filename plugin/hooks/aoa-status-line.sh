@@ -122,18 +122,28 @@ fi
 
 # Format tokens (e.g., 51k, 1.2M)
 format_tokens() {
+    # Always 2 decimals for consistent movement visibility
     local n=$1
-    if [ "$n" -ge 1000000 ]; then
-        local m=$((n / 1000000))
-        local k=$(( (n % 1000000) / 100000 ))
-        if [ "$k" -gt 0 ]; then
-            echo "${m}.${k}M"
-        else
-            echo "${m}M"
-        fi
+    if [ "$n" -ge 1000000000 ]; then
+        awk "BEGIN {printf \"%.2fB\", $n/1000000000}"
+    elif [ "$n" -ge 1000000 ]; then
+        awk "BEGIN {printf \"%.2fM\", $n/1000000}"
     elif [ "$n" -ge 1000 ]; then
-        local k=$((n / 1000))
-        echo "${k}k"
+        awk "BEGIN {printf \"%.2fk\", $n/1000}"
+    else
+        echo "$n"
+    fi
+}
+
+format_tokens_fixed() {
+    # No decimals for fixed values (context size, etc.)
+    local n=$1
+    if [ "$n" -ge 1000000000 ]; then
+        awk "BEGIN {printf \"%.0fB\", $n/1000000000}"
+    elif [ "$n" -ge 1000000 ]; then
+        awk "BEGIN {printf \"%.0fM\", $n/1000000}"
+    elif [ "$n" -ge 1000 ]; then
+        awk "BEGIN {printf \"%.0fk\", $n/1000}"
     else
         echo "$n"
     fi
@@ -141,26 +151,23 @@ format_tokens() {
 
 # Format time (seconds to human readable)
 format_time() {
+    # Simple format for estimated ranges - just primary unit
     local sec=$1
     if [ "$sec" -ge 3600 ]; then
-        local h=$((sec / 3600))
-        local m=$(( (sec % 3600) / 60 ))
-        echo "${h}h${m}m"
+        awk "BEGIN {printf \"%.0fh\", $sec / 3600}"
     elif [ "$sec" -ge 60 ]; then
-        local m=$((sec / 60))
-        local s=$((sec % 60))
-        echo "${m}m${s}s"
+        awk "BEGIN {printf \"%.0fm\", $sec / 60}"
     else
         echo "${sec}s"
     fi
 }
 
 TOTAL_FMT=$(format_tokens $TOTAL_TOKENS)
-CTX_SIZE_FMT=$(format_tokens $CONTEXT_SIZE)
+CTX_SIZE_FMT=$(format_tokens_fixed $CONTEXT_SIZE)
 
 # Context color
-if [ "$PERCENT" -lt 50 ]; then CTX_COLOR=$GREEN
-elif [ "$PERCENT" -lt 75 ]; then CTX_COLOR=$YELLOW
+if [ "$PERCENT" -le 70 ]; then CTX_COLOR=$GREEN
+elif [ "$PERCENT" -lt 85 ]; then CTX_COLOR=$YELLOW
 else CTX_COLOR=$RED
 fi
 
@@ -190,8 +197,10 @@ fi
 HIT_PCT=$(echo "$METRICS" | jq -r '.rolling.hit_at_5_pct // 0')
 HIT_PCT_INT=$(printf "%.0f" "$HIT_PCT")
 TOKENS_SAVED=$(echo "$METRICS" | jq -r '.savings.tokens // 0')
-TIME_SAVED_SEC=$(echo "$METRICS" | jq -r '.savings.time_sec // 0')
-TIME_SAVED_SEC_INT=$(printf "%.0f" "$TIME_SAVED_SEC")
+TIME_SEC_LOW=$(echo "$METRICS" | jq -r '.savings.time_sec_low // 0')
+TIME_SEC_HIGH=$(echo "$METRICS" | jq -r '.savings.time_sec_high // 0')
+TIME_SEC_LOW_INT=$(printf "%.0f" "$TIME_SEC_LOW")
+TIME_SEC_HIGH_INT=$(printf "%.0f" "$TIME_SEC_HIGH")
 ROLLING_HITS=$(echo "$METRICS" | jq -r '.rolling.hits // 0')
 EVALUATED=$(echo "$METRICS" | jq -r '.rolling.evaluated // 0')
 INTENTS=$(echo "$METRICS" | jq -r '.total_intents // 0')
@@ -227,10 +236,16 @@ fi
 
 # Middle section: savings OR speed+hits
 if [ "$TOKENS_SAVED" -gt 0 ] 2>/dev/null; then
-    # Have savings - show them
+    # Have savings - show them with time range
     TOKENS_SAVED_FMT=$(format_tokens $TOKENS_SAVED)
-    TIME_SAVED_FMT=$(format_time $TIME_SAVED_SEC_INT)
-    MIDDLE="${GREEN}↓${TOKENS_SAVED_FMT}${RESET} ${GREEN}⚡${TIME_SAVED_FMT}${RESET} saved"
+    TIME_LOW_FMT=$(format_time $TIME_SEC_LOW_INT)
+    TIME_HIGH_FMT=$(format_time $TIME_SEC_HIGH_INT)
+    if [ "$TIME_LOW_FMT" = "$TIME_HIGH_FMT" ]; then
+        TIME_RANGE="~${TIME_LOW_FMT}"
+    else
+        TIME_RANGE="${TIME_LOW_FMT}-${TIME_HIGH_FMT}"
+    fi
+    MIDDLE="${GREEN}↓${TOKENS_SAVED_FMT}${RESET} ${CYAN}⚡${TIME_RANGE}${RESET} saved"
 else
     # No savings yet - show speed and prediction hits
     HITS=${ROLLING_HITS:-0}

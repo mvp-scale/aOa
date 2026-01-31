@@ -85,7 +85,7 @@ main() {
         jobs|j)     cmd_jobs "$@" ;;
         stats)      cmd_stats ;;
         health)     cmd_health ;;
-        metrics)    cmd_metrics ;;
+        metrics)    cmd_metrics "$@" ;;
         config)     cmd_config "$@" ;;
         baseline|bl) cmd_baseline ;;
         memory|mem) cmd_memory "$@" ;;

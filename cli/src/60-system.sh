@@ -1871,16 +1871,60 @@ cmd_metrics() {
         return 1
     fi
 
+    # Handle --json flag first
+    if [[ "${1:-}" == "--json" ]] || [[ "${1:-}" == "-j" ]]; then
+        echo "$metrics" | jq .
+        return 0
+    fi
+
     # Parse metrics
     local hit_pct=$(echo "$metrics" | jq -r '.rolling.hit_at_5_pct // 0')
     local evaluated=$(echo "$metrics" | jq -r '.rolling.evaluated // 0')
     local hits=$(echo "$metrics" | jq -r '.rolling.hits // 0')
     local tokens_saved=$(echo "$metrics" | jq -r '.savings.tokens // 0')
-    local time_saved=$(echo "$metrics" | jq -r '.savings.time_sec // 0')
+    local time_sec_low=$(echo "$metrics" | jq -r '.savings.time_sec_low // 0')
+    local time_sec_high=$(echo "$metrics" | jq -r '.savings.time_sec_high // 0')
     local trend=$(echo "$metrics" | jq -r '.trend // "unknown"')
+
+    # Format tokens with 2 decimals (standard format)
+    format_tokens() {
+        local n=$1
+        if [ "$n" -ge 1000000000 ]; then
+            awk "BEGIN {printf \"%.2fB\", $n/1000000000}"
+        elif [ "$n" -ge 1000000 ]; then
+            awk "BEGIN {printf \"%.2fM\", $n/1000000}"
+        elif [ "$n" -ge 1000 ]; then
+            awk "BEGIN {printf \"%.2fk\", $n/1000}"
+        else
+            echo "$n"
+        fi
+    }
+    local tokens_fmt=$(format_tokens $tokens_saved)
 
     # Format hit percentage
     local hit_int=$(printf "%.0f" "$hit_pct")
+
+    # Format time (simple: just primary unit)
+    format_time_simple() {
+        local sec=$1
+        if [ "$sec" -ge 3600 ]; then
+            awk "BEGIN {printf \"%.0fh\", $sec / 3600}"
+        elif [ "$sec" -ge 60 ]; then
+            awk "BEGIN {printf \"%.0fm\", $sec / 60}"
+        else
+            echo "${sec}s"
+        fi
+    }
+    local time_low_int=$(printf "%.0f" "$time_sec_low")
+    local time_high_int=$(printf "%.0f" "$time_sec_high")
+    local t_low=$(format_time_simple $time_low_int)
+    local t_high=$(format_time_simple $time_high_int)
+    local time_display
+    if [ "$t_low" = "$t_high" ]; then
+        time_display="~${t_low}"
+    else
+        time_display="${t_low}-${t_high}"
+    fi
 
     # Traffic light
     local color=$GREEN
@@ -1900,16 +1944,10 @@ cmd_metrics() {
     echo -e "  Trend:        ${trend}"
     echo ""
     echo -e "${BOLD}Savings${NC}"
-    echo -e "  Tokens:       ${GREEN}↓${tokens_saved}${NC}"
-    echo -e "  Time:         ${GREEN}⚡${time_saved}s${NC}"
+    echo -e "  Tokens:       ${GREEN}↓${tokens_fmt}${NC}"
+    echo -e "  Time:         ${GREEN}⚡${time_display}${NC}"
     echo ""
     echo -e "${DIM}Full JSON: aoa metrics --json${NC}"
-
-    # Handle --json flag
-    if [[ "${1:-}" == "--json" ]] || [[ "${1:-}" == "-j" ]]; then
-        echo ""
-        echo "$metrics" | jq .
-    fi
 }
 
 cmd_history() {
