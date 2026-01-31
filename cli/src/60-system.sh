@@ -1756,15 +1756,20 @@ cmd_config() {
                 echo -e "${CYAN}${BOLD}⚡ aOa Thresholds${NC}"
                 echo ""
                 local result=$(curl -s "${INDEX_URL}/config/thresholds?project_id=${project_id}")
-                local rebalance=$(echo "$result" | jq -r '.thresholds.rebalance // 25')
-                local promotion=$(echo "$result" | jq -r '.thresholds.promotion // 150')
-                local demotion=$(echo "$result" | jq -r '.thresholds.demotion // 500')
+                local rebalance=$(echo "$result" | jq -r '.thresholds.rebalance // 25 | floor')
+                local autotune=$(echo "$result" | jq -r '.thresholds.autotune // 100 | floor')
+                local promotion=$(echo "$result" | jq -r '.thresholds.promotion // 150 | floor')
+                local demotion=$(echo "$result" | jq -r '.thresholds.demotion // 500 | floor')
                 local prune=$(echo "$result" | jq -r '.thresholds.prune_floor // 0.5')
 
-                printf "  %-20s %s\n" "Rebalance:" "${rebalance} prompts"
-                printf "  %-20s %s\n" "Promotion:" "${promotion} hits"
-                printf "  %-20s %s\n" "Demotion:" "${demotion} intents"
-                printf "  %-20s %s\n" "Prune floor:" "${prune} hits"
+                echo -e "${DIM}Triggers (tool calls to run):${NC}"
+                printf "  %-20s every %s\n" "Rebalance:" "${rebalance}"
+                printf "  %-20s every %s\n" "Autotune:" "${autotune}"
+                echo ""
+                echo -e "${DIM}Qualification (checked during autotune):${NC}"
+                printf "  %-20s %s\n" "Promotion:" "≥${promotion} hits → context→core"
+                printf "  %-20s %s\n" "Demotion:" "${demotion} intents without hit → core→context"
+                printf "  %-20s %s\n" "Prune:" "<${prune} hits → removed"
                 return 0
             fi
 
@@ -1776,9 +1781,11 @@ cmd_config() {
                 if [ "$success" = "true" ]; then
                     echo -e "${GREEN}✓ Thresholds set to ${mode} mode${NC}"
                     if [ "$mode" = "test" ]; then
-                        echo -e "${DIM}  Rebalance: 3, Promotion: 15, Demotion: 50${NC}"
+                        echo -e "${DIM}  Triggers: Rebalance every 3, Autotune every 10${NC}"
+                        echo -e "${DIM}  Qualify:  Promote ≥15 hits, Demote 50 intents, Prune <0.5${NC}"
                     else
-                        echo -e "${DIM}  Rebalance: 25, Promotion: 150, Demotion: 500${NC}"
+                        echo -e "${DIM}  Triggers: Rebalance every 25, Autotune every 100${NC}"
+                        echo -e "${DIM}  Qualify:  Promote ≥150 hits, Demote 500 intents, Prune <0.5${NC}"
                     fi
                 else
                     echo -e "${RED}Failed to set thresholds${NC}"

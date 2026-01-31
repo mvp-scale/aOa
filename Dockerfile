@@ -66,6 +66,8 @@ ENV AOA_CONTENT_CACHE_MB=500
 # Copy all services
 COPY services/gateway/gateway.py /app/gateway/
 COPY services/index/indexer.py /app/index/
+COPY services/index/domains_api.py /app/index/
+COPY services/index/matchers.py /app/index/
 COPY services/ranking /app/ranking/
 COPY services/domains /app/domains/
 COPY services/jobs /app/jobs/

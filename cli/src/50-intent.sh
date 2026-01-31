@@ -209,27 +209,39 @@ cmd_intent_recent() {
     echo -e "ACTION     SOURCE   ATTRIB       aOa IMPACT                TAGS                                                    TARGET"
 
     # Process records - extract file_size (baseline) and output_size (actual)
-    # Skip records with no files (noise) - require at least one real file
+    # Skip records with no files (noise) - EXCEPT system events (@-prefixed tools)
     echo "$result" | jq -r --arg project_root "$(get_project_root)" '.records[] |
-        select(.files | length > 0) |
-        select(.files[0] != null and .files[0] != "") |
+        select((.files | length > 0) or (.tool | startswith("@"))) |
+        select((.files[0] != null and .files[0] != "") or (.tool | startswith("@"))) |
         {
             tool: .tool,
-            files: (.files[0] // "unknown"),
+            files: (.files[0] // ""),
             file_count: (.files | length),
             tags: (.tags[0:6] | join(" ")),
             file_size: (if (.file_sizes and .files[0]) then .file_sizes[.files[0]] else null end),
             output_size: .output_size,
-            confidence: .confidence
+            confidence: .confidence,
+            session_id: .session_id
         } |
         # Use ASCII Unit Separator (0x1F) - designed for field separation, never in user input
-        "\(.tool)\u001f\(.files)\u001f\(.tags)\u001f\(.file_size // 0)\u001f\(.output_size // 0)\u001f\(.file_count)\u001f\(.confidence // 0)"
-    ' 2>/dev/null | head -n "$limit" | while IFS=$'\x1f' read -r tool file tags file_size output_size file_count confidence; do
+        "\(.tool)\u001f\(.files)\u001f\(.tags)\u001f\(.file_size // 0)\u001f\(.output_size // 0)\u001f\(.file_count)\u001f\(.confidence // 0)\u001f\(.session_id // "")"
+    ' 2>/dev/null | head -n "$limit" | while IFS=$'\x1f' read -r tool file tags file_size output_size file_count confidence session_id; do
         # Map tool to action and determine source
         local action="$tool"
         local source="Claude"
 
+        # CT-06: Handle system events from aOa (branded display)
         case "$tool" in
+            @rebalance)
+                action="Rebalance"
+                source="${CYAN}${BOLD}aOa${NC}"
+                file="⚡ keywords assigned to domains"
+                ;;
+            @autotune)
+                action="Autotune"
+                source="${CYAN}${BOLD}aOa${NC}"
+                file="⚡ domain lifecycle optimization"
+                ;;
             Bash)
                 # Check for aOa commands - format: cmd:aoa:type:term:hits:time
                 # Term may contain escaped colons (\:), so parse carefully
