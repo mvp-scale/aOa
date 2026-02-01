@@ -1850,8 +1850,14 @@ Return JSON:
 
         # 8. Check demotions: core → context (stale)
         # GL-091: Use configurable threshold
+        # RB-01: Never demote below 24 core domains (floor protection)
         demotion_threshold = self.get_threshold('demotion')
-        for domain_name in self.get_domains_by_tier("core"):
+        core_domains = list(self.get_domains_by_tier("core"))
+        core_count = len(core_domains)
+        for domain_name in core_domains:
+            # RB-01: Protect the floor - never go below 24 core domains
+            if core_count <= self.CORE_DOMAINS_MAX:
+                break
             meta = self.get_domain_meta(domain_name)
             last_hit_at = int(meta.get('last_hit_at', 0))
             intents_since_hit = prompt_count - last_hit_at
@@ -1859,16 +1865,23 @@ Return JSON:
             if intents_since_hit >= demotion_threshold:
                 self.demote_domain(domain_name)
                 summary['demoted'] += 1
+                core_count -= 1  # Track remaining core domains
 
         # 9. Prune low-value context domains
         # GL-091: Use configurable threshold
+        # RB-01: Never prune if it would drop total domains below 24
         prune_floor = self.get_threshold('prune_floor')
+        total_domains = len(self.get_all_domains())
         for domain_name in self.get_domains_by_tier("context"):
+            # RB-01: Protect total domain floor
+            if total_domains <= self.CORE_DOMAINS_MAX:
+                break
             meta = self.get_domain_meta(domain_name)
             hits = float(meta.get('hits', 0))
             if hits < prune_floor:
                 self.remove_domain(domain_name)
                 summary['context_pruned'] += 1
+                total_domains -= 1  # Track remaining domains
 
         # 10. Update tune tracking
         self.set_last_tune()
