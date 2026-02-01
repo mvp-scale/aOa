@@ -287,13 +287,46 @@ def output_deny(reason: str):
 # Prediction System (ported from aoa-predict-context.py)
 # =============================================================================
 
+# Vowels for junk detection (words without vowels are usually garbage)
+VOWELS = set('aeiou')
+
+# Known junk prefixes (API keys, secrets, etc.)
+JUNK_PREFIXES = ('sk_', 'pk_', 'api_', 'key_', '0x', 'base64_', 'token_')
+
+
+def is_junk_keyword(word: str) -> bool:
+    """Filter out garbage keywords (API keys, hashes, version strings, etc.)."""
+    # Too many digits (>40% = likely garbage like abc123xyz)
+    digit_ratio = sum(c.isdigit() for c in word) / len(word)
+    if digit_ratio > 0.4:
+        return True
+
+    # Too long (real keywords rarely >20 chars, API keys are longer)
+    if len(word) > 20:
+        return True
+
+    # Known junk prefixes
+    if word.startswith(JUNK_PREFIXES):
+        return True
+
+    # Less than 3 unique characters (keyboard mash like aaaa, abab)
+    if len(set(word)) < 3:
+        return True
+
+    # No vowels (keyboard mash, but allow common acronyms)
+    if len(word) > 4 and not any(c in VOWELS for c in word):
+        return True
+
+    return False
+
+
 def extract_keywords(prompt: str) -> list:
     """Extract likely file/symbol keywords from user's prompt."""
     # Find potential identifiers (camelCase, snake_case, etc.)
     words = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', prompt.lower())
 
-    # Filter stopwords and very short words
-    keywords = [w for w in words if w not in STOPWORDS and len(w) > 2]
+    # Filter stopwords, short words, and junk
+    keywords = [w for w in words if w not in STOPWORDS and len(w) > 2 and not is_junk_keyword(w)]
 
     # Also extract file-like patterns
     file_patterns = re.findall(r'[\w\-]+\.(py|js|ts|tsx|md|json|yaml|yml)', prompt.lower())

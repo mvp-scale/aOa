@@ -42,3 +42,4 @@ __pycache__/
 Thumbs.db
 .venv/
 .aoa/domains
+.aoa/domains copy
