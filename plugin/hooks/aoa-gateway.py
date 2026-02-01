@@ -31,17 +31,27 @@ HOOK_DIR = Path(__file__).parent
 PROJECT_ROOT = HOOK_DIR.parent.parent
 AOA_HOME_FILE = PROJECT_ROOT / ".aoa" / "home.json"
 
-AOA_URL = os.environ.get("AOA_URL", "http://localhost:8080")
-
-def get_project_id():
-    """Read project ID from .aoa/home.json - always fresh, no stale env vars."""
+def get_project_config():
+    """Read project config from .aoa/home.json - always fresh, no stale env vars."""
     try:
         with open(AOA_HOME_FILE) as f:
-            return json.load(f).get("project_id", "")
+            data = json.load(f)
+            return {
+                "project_id": data.get("project_id", ""),
+                "project_path": data.get("project_root", str(PROJECT_ROOT)),
+                "aoa_url": data.get("aoa_url", os.environ.get("AOA_URL", "http://localhost:8080"))
+            }
     except (FileNotFoundError, json.JSONDecodeError):
-        return ""
+        return {
+            "project_id": "",
+            "project_path": str(PROJECT_ROOT),
+            "aoa_url": os.environ.get("AOA_URL", "http://localhost:8080")
+        }
 
-PROJECT_ID = get_project_id()
+_PROJECT_CONFIG = get_project_config()
+PROJECT_ID = _PROJECT_CONFIG["project_id"]
+PROJECT_PATH = _PROJECT_CONFIG["project_path"]
+AOA_URL = _PROJECT_CONFIG["aoa_url"]
 
 # ANSI colors
 CYAN, GREEN, YELLOW, RED = "\033[96m", "\033[92m", "\033[93m", "\033[91m"
@@ -504,10 +514,60 @@ def handle_prompt(data: dict):
     # Status line polls /domains/enrichment-status for progress display
     # No per-prompt output needed - cleaner UX
 
+    # ONE-TIME SILENT TEST: Prove hook can create domains without UI
+    test_flag = PROJECT_ROOT / ".aoa" / ".silent_test_done"
+    if not test_flag.exists():
+        try:
+            # Stage a test domain
+            api_post("/domains/stage", {
+                "project_id": PROJECT_ID,
+                "proposals": [{
+                    "domain": "@intent_silent_proof",
+                    "terms": {"silent": ["hook", "api", "redis", "invisible"]}
+                }]
+            })
+            # Promote it to active domains
+            api_post("/domains/promote", {
+                "project_id": PROJECT_ID,
+                "domain": "@intent_silent_proof"
+            })
+            # Mark test as done
+            test_flag.parent.mkdir(parents=True, exist_ok=True)
+            test_flag.write_text("done")
+        except Exception:
+            pass  # Silent failure
+
+    # RB-14: Check if Haiku learning was triggered by rebalance
+    # Silent: output JSON flag, Claude spawns background task with no user output
+    haiku_pending = api_get(f"/domains/haiku-pending?project_id={PROJECT_ID}")
+    if haiku_pending and haiku_pending.get("pending"):
+        # JSON flag - Claude acts on this silently (no user message)
+        output_context('{"aoa_rebalance": true}')
+
+        # Clear the pending flag
+        api_post("/domains/haiku-pending", {
+            "project_id": PROJECT_ID,
+            "clear": True
+        })
+
     # Predict files from prompt keywords
     prompt = data.get("prompt", "")
     session_id = data.get("session_id", "unknown")
 
+    # RB-05: Check keywords against staged proposals for cohit tracking
+    # Runs on EVERY prompt (no MIN_INTENTS gate - need immediate tracking)
+    if prompt:
+        keywords = extract_keywords(prompt)
+        if keywords:
+            try:
+                api_post("/domains/check-staged", {
+                    "project_id": PROJECT_ID,
+                    "keywords": keywords
+                })
+            except Exception:
+                pass  # Don't block on staging checks
+
+    # Predictions need history, so keep MIN_INTENTS gate
     if prompt and total >= MIN_INTENTS:
         keywords = extract_keywords(prompt)
         if keywords:
@@ -564,56 +624,14 @@ def handle_tool(data: dict):
         if response and response.get('enrichment_ready'):
             enrichment_ready = True
 
-    # GL-088: Trigger self-learning from work history (every 25 prompts)
-    # P2: Check if we should spawn Haiku for new domain generation
+    # RB-14: Trigger Haiku-based intent generation from prompt history
+    # Set a simple flag - UserPromptSubmit will fetch prompts and output Task spawn
     if enrichment_ready:
-        learn_response = api_post("/domains/self-learn", {
-            "project_id": PROJECT_ID
-        }, timeout=2)
-
-        # P2-2: If should_learn=true, output prompt for Haiku domain generation
-        if learn_response and learn_response.get('should_learn'):
-            orphans = learn_response.get('orphans', [])
-            max_domains = learn_response.get('max_domains', 1)
-
-            # P2-3/P2-4: Output Task spawn prompt via additionalContext
-            # QoL-4: Calculate prompt chars for token tracking
-            orphan_str = ', '.join(orphans[:30])
-            domain_prompt = f"""## aOa Domain Learning Triggered
-
-Found {len(orphans)} orphan tags that don't match existing domains.
-
-**Orphan tags**: {orphan_str}
-
-**Task for Haiku**: Generate 1 new semantic domain from these orphans.
-
-1. Analyze the orphan tags to find a common theme
-2. Create a domain with:
-   - name: @descriptive_name (lowercase, underscores)
-   - description: 2-3 sentences explaining what this domain covers
-   - terms: 5-7 terms with 5-10 keywords each
-
-3. Call the API to create the domain:
-```bash
-curl -X POST "localhost:8081/domains/add-context" \\
-  -H "Content-Type: application/json" \\
-  -d '{{"project_id": "{PROJECT_ID}", "name": "@your_domain", "description": "...", "terms": {{"term1": ["kw1", "kw2"]}}}}'
-```
-
-4. After creating the domain, signal completion for token tracking:
-```bash
-curl -X POST "localhost:8081/domains/learned" \\
-  -H "Content-Type: application/json" \\
-  -d '{{"project_id": "{PROJECT_ID}", "domains": ["@your_domain"], "prompt_chars": {len(domain_prompt)}, "response_chars": 500}}'
-```
-(Adjust response_chars to approximate your actual response length)
-
-**Quality rules**:
-- Domain should cover a coherent concept
-- Keywords should be specific (not generic like "data", "file", "handle")
-- Terms should be distinct aspects of the domain
-"""
-            output_context(domain_prompt, event="PostToolUse")
+        # Just set the pending flag - prompt building happens in UserPromptSubmit
+        api_post("/domains/haiku-pending", {
+            "project_id": PROJECT_ID,
+            "pending": True
+        })
 
     # GL-062: Check if accessed files match predictions (for hit/miss tracking)
     # Only check for file-accessing tools

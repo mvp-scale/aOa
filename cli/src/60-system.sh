@@ -731,15 +731,18 @@ cmd_quickstart() {
     # aoa quickstart           - Initial tagging (only pending files)
     # aoa quickstart --force   - Re-tag ALL files (refresh patterns)
     # aoa quickstart --reset   - Clear enrichment data and re-tag
+    # aoa quickstart --yes     - Skip confirmation (for automation)
 
     local force=false
     local reset=false
+    local auto_yes=false
 
     # Parse flags
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --force|-f) force=true; shift ;;
             --reset|-r) reset=true; force=true; shift ;;
+            --yes|-y) auto_yes=true; shift ;;
             *) shift ;;
         esac
     done
@@ -798,9 +801,32 @@ cmd_quickstart() {
             if [ "$proj_domains" -gt 0 ] || [ "$proj_terms" -gt 0 ]; then
                 echo -e "${GREEN}✓${NC} Loaded ${BOLD}${proj_domains}${NC} project domains (${proj_terms} terms)"
                 echo -e "  ${DIM}from: .aoa/project-domains.json${NC}"
+                # Cleanup: delete file after successful load (Redis is now source of truth)
+                rm -f "$project_domains_file"
                 echo ""
             fi
         fi
+    fi
+
+    # Also load and cleanup individual domain files (.aoa/domains/@*.json)
+    local domains_dir="${project_root}/.aoa/domains"
+    if [ -d "$domains_dir" ]; then
+        for domain_file in "$domains_dir"/@*.json; do
+            [ -f "$domain_file" ] || continue
+            local domain_data=$(cat "$domain_file" 2>/dev/null)
+            if [ -n "$domain_data" ] && echo "$domain_data" | jq -e '.' > /dev/null 2>&1; then
+                local domain_result=$(curl -s -X POST "${INDEX_URL}/domains/add" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"project_id\": \"${project_id:-default}\", \"domains\": [${domain_data}], \"source\": \"analyzed\"}" 2>/dev/null)
+                local added=$(echo "$domain_result" | jq -r '.domains_added | length // 0')
+                if [ "$added" -gt 0 ]; then
+                    local domain_name=$(basename "$domain_file" .json)
+                    echo -e "${GREEN}✓${NC} Loaded ${domain_name}"
+                    # Cleanup after successful load
+                    rm -f "$domain_file"
+                fi
+            fi
+        done
     fi
 
     # Get pending files for semantic compression
@@ -832,25 +858,27 @@ cmd_quickstart() {
         return 0
     fi
 
-    # Trust-building intro
-    echo -e "  Found ${BOLD}${pending_count} files${NC} in your project."
-    echo ""
-    echo -e "  ${DIM}•${NC} ${BOLD}Read-only${NC} — no files modified"
-    echo -e "  ${DIM}•${NC} ${BOLD}Local only${NC} — nothing leaves your machine"
-    echo -e "  ${DIM}•${NC} ${BOLD}Respects .gitignore${NC} — only your source code"
-    echo ""
-    echo -e "  ${DIM}~1 minute for most projects.${NC}"
-    echo ""
+    # Trust-building intro (skip if auto-yes)
+    if ! $auto_yes; then
+        echo -e "  Found ${BOLD}${pending_count} files${NC} in your project."
+        echo ""
+        echo -e "  ${DIM}•${NC} ${BOLD}Read-only${NC} — no files modified"
+        echo -e "  ${DIM}•${NC} ${BOLD}Local only${NC} — nothing leaves your machine"
+        echo -e "  ${DIM}•${NC} ${BOLD}Respects .gitignore${NC} — only your source code"
+        echo ""
+        echo -e "  ${DIM}~1 minute for most projects.${NC}"
+        echo ""
 
-    # Prompt for confirmation
-    echo -n -e "  Press ${BOLD}Y${NC} to continue, or ${DIM}N${NC} to skip: "
-    read -r -n 1 response
-    echo ""
-    echo ""
+        # Prompt for confirmation
+        echo -n -e "  Press ${BOLD}Y${NC} to continue, or ${DIM}N${NC} to skip: "
+        read -r -n 1 response
+        echo ""
+        echo ""
 
-    if [[ ! "$response" =~ ^[Yy]$ ]]; then
-        echo -e "${DIM}Skipped. Run 'aoa quickstart' anytime to compress your files.${NC}"
-        return 0
+        if [[ ! "$response" =~ ^[Yy]$ ]]; then
+            echo -e "${DIM}Skipped. Run 'aoa quickstart' anytime to compress your files.${NC}"
+            return 0
+        fi
     fi
 
     echo -e "  Processing ${BOLD}${pending_count}${NC} files (${workers} workers)"
@@ -1103,6 +1131,7 @@ cmd_domains() {
 
     local MAGENTA='\033[0;35m'
     local project_id=$(get_project_id)
+    local project_root=$(get_project_root)
 
     # Check for subcommands first
     case "${1:-}" in
@@ -1255,6 +1284,12 @@ cmd_domains() {
             local keywords_added=$(echo "$result" | jq -r '.keywords_added // 0')
             # Auto-rebuild KeywordMatcher to link keywords to files
             curl -sf -X POST "${INDEX_URL}/keywords/rebuild?project_id=${project_id}" > /dev/null 2>&1
+
+            # Cleanup: delete domain file after successful load (Redis is source of truth)
+            if [ -f "$enrichment_file" ] && [ "$enrichment_file" != ".aoa/domains/enrichment.json" ]; then
+                rm -f "$enrichment_file"
+            fi
+
             echo "$keywords_added"
             return 0
             ;;
@@ -1341,6 +1376,122 @@ cmd_domains() {
                 return 1
             fi
             ;;
+        clean)
+            # aoa domains clean - delete @*.json files for domains already in Redis
+            # Called after intelligence completes to clean up processed domain files
+            shift
+            local domains_dir="${project_root}/.aoa/domains"
+            if [ ! -d "$domains_dir" ]; then
+                echo "No domains directory"
+                return 0
+            fi
+
+            # Get list of enriched domains from Redis
+            local enriched=$(curl -sf "${INDEX_URL}/domains/list?project_id=${project_id}" 2>/dev/null \
+                | jq -r '.domains[] | select(.enriched == true) | .name' 2>/dev/null)
+
+            if [ -z "$enriched" ]; then
+                echo "No enriched domains in Redis"
+                return 0
+            fi
+
+            local cleaned=0
+            local skipped=0
+            for domain_file in "$domains_dir"/@*.json; do
+                [ -f "$domain_file" ] || continue
+                local domain_name=$(basename "$domain_file" .json)
+                # Check if this domain is enriched in Redis
+                if echo "$enriched" | grep -qx "$domain_name"; then
+                    rm -f "$domain_file" && ((cleaned++)) || true
+                else
+                    ((skipped++)) || true
+                fi
+            done
+
+            if [ "$cleaned" -gt 0 ]; then
+                echo -e "${GREEN}✓${NC} Cleaned ${cleaned} domain files"
+            fi
+            if [ "$skipped" -gt 0 ]; then
+                echo -e "  ${DIM}${skipped} files skipped (not yet in Redis)${NC}"
+            fi
+            if [ "$cleaned" -eq 0 ] && [ "$skipped" -eq 0 ]; then
+                echo "No domain files to clean"
+            fi
+            ;;
+        stage)
+            # aoa domains stage - load intent.json to Redis staging (RB-11)
+            # Staged domains accumulate hits before promotion
+            shift
+            local action="${1:-load}"
+
+            case "$action" in
+                load)
+                    # Load from intent.json
+                    local result=$(curl -sf -X POST "${INDEX_URL}/domains/stage" \
+                        -H "Content-Type: application/json" \
+                        -d "{\"project_id\":\"${project_id}\",\"load_intent\":true}" 2>/dev/null)
+
+                    if [ -z "$result" ]; then
+                        echo -e "${RED}Error: Could not stage proposals${NC}" >&2
+                        return 1
+                    fi
+
+                    local success=$(echo "$result" | jq -r '.success // false')
+                    local error=$(echo "$result" | jq -r '.error // empty')
+
+                    if [ "$success" != "true" ]; then
+                        echo -e "${RED}Error: ${error:-Staging failed}${NC}" >&2
+                        return 1
+                    fi
+
+                    local domains=$(echo "$result" | jq -r '.staged_domains // 0')
+                    local terms=$(echo "$result" | jq -r '.staged_terms // 0')
+                    local keywords=$(echo "$result" | jq -r '.staged_keywords // 0')
+                    local file=$(echo "$result" | jq -r '.file // "intent.json"')
+
+                    echo -e "${GREEN}✓${NC} Staged ${CYAN}${domains}${NC} domains (${terms} terms, ${keywords} keywords)"
+                    echo -e "  ${DIM}from: ${file}${NC}"
+
+                    # Cleanup: delete intent.json after successful staging (Redis is now source of truth)
+                    local intent_file="${project_root}/.aoa/domains/intent.json"
+                    if [ -f "$intent_file" ]; then
+                        rm -f "$intent_file"
+                    fi
+                    return 0
+                    ;;
+                list|show)
+                    # Show staged proposals
+                    local result=$(curl -sf "${INDEX_URL}/domains/staged?project_id=${project_id}" 2>/dev/null)
+
+                    if [ -z "$result" ]; then
+                        echo -e "${RED}Error: Could not fetch staged domains${NC}" >&2
+                        return 1
+                    fi
+
+                    local count=$(echo "$result" | jq -r '.staged_domains // 0')
+
+                    if [ "$count" = "0" ]; then
+                        echo -e "${DIM}No staged proposals${NC}"
+                        echo -e "${DIM}Run: aoa domains stage load${NC}"
+                        return 0
+                    fi
+
+                    echo -e "${CYAN}${BOLD}⚡ Staged Proposals${NC}"
+                    echo ""
+                    echo "$result" | jq -r '.domains[] | "  \(.domain)  \(.terms | keys | length) terms"'
+                    echo ""
+                    echo -e "${DIM}$(echo "$result" | jq -r '.staged_terms') terms, $(echo "$result" | jq -r '.staged_keywords') keywords${NC}"
+                    return 0
+                    ;;
+                *)
+                    echo "Usage: aoa domains stage [load|list]"
+                    echo ""
+                    echo "  load    Load intent.json to Redis staging (default)"
+                    echo "  list    Show staged proposals and stats"
+                    return 0
+                    ;;
+            esac
+            ;;
     esac
 
     # Default: show domain status
@@ -1370,6 +1521,7 @@ cmd_domains() {
                 echo "  add               Add a single new domain from JSON stdin"
                 echo "  refresh @name     Mark domain for re-generation"
                 echo "  pending [N]       List unenriched domains (default: 3)"
+                echo "  stage [load|list] Stage proposals from intent.json"
                 echo ""
                 echo "Options (for status display):"
                 echo "  --json, -j        Output as JSON"
@@ -1553,6 +1705,29 @@ cmd_domains() {
     if [ "$domain_count" -gt "$limit" ] 2>/dev/null; then
         local remaining=$((domain_count - limit))
         echo -e "${DIM}+${remaining} more domains${NC}"
+    fi
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # RB-08: Staged Proposals Section
+    # ─────────────────────────────────────────────────────────────────────────
+    local staged_data=$(curl -s "${INDEX_URL}/domains/staged?project_id=${project_id}" 2>/dev/null)
+    local staged_count=$(echo "$staged_data" | jq -r '.staged_domains // 0')
+
+    if [ "$staged_count" -gt 0 ] 2>/dev/null; then
+        local staged_terms=$(echo "$staged_data" | jq -r '.staged_terms // 0')
+        local staged_keywords=$(echo "$staged_data" | jq -r '.staged_keywords // 0')
+
+        echo ""
+        echo -e "${YELLOW}${BOLD}⏳ Staged Proposals${NC}  ${staged_count} domains ${DIM}│${NC} ${staged_terms} terms ${DIM}│${NC} ${staged_keywords} keywords"
+        echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
+        printf "${DIM}%-30s %5s  %s${NC}\n" "DOMAIN" "TERMS" "STATUS"
+
+        echo "$staged_data" | jq -r '.domains[]? | "\(.domain)|\(.terms | keys | length)"' 2>/dev/null | while IFS='|' read -r name term_count; do
+            local name_trunc="${name:0:28}"
+            printf "  ${YELLOW}%-28s${NC} ${DIM}%5s${NC}  ${DIM}awaiting hits${NC}\n" "$name_trunc" "$term_count"
+        done
+
+        echo -e "${DIM}Run 'aoa domains stage list' for details${NC}"
     fi
 
     # ─────────────────────────────────────────────────────────────────────────

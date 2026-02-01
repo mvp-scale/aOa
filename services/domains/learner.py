@@ -1276,6 +1276,58 @@ Output valid JSON only:
   "reassign": {{"term": "@new_domain"}}
 }}"""
 
+    def get_intent_prompt(self, prompts: list[str], existing_domains: list[str]) -> str:
+        """
+        Generate the intent proposal prompt for Haiku.
+
+        Used every 25 prompts to generate new domain proposals based on
+        user intent patterns. Output goes to .aoa/domains/intent.json.
+        """
+        # Format existing domains for context
+        existing_text = ", ".join(existing_domains[:24]) if existing_domains else "(none yet)"
+
+        # Build prompts section (max 25, truncate long ones)
+        prompts_text = "\n".join(f"{i+1}. {p[:300]}" for i, p in enumerate(prompts[:25]))
+
+        return f"""Analyze these developer prompts and generate 3 domain proposals.
+
+## Recent Prompts (last {len(prompts[:25])}):
+{prompts_text}
+
+## Existing Domains (don't duplicate):
+{existing_text}
+
+## Your Task:
+Generate 3 NEW domains that capture what this developer is DOING (not generic programming concepts).
+
+## Output Format (valid JSON array only):
+[
+  {{
+    "domain": "@domain_name",
+    "terms": {{
+      "term_name": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+      "another_term": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+    }}
+  }}
+]
+
+## Rules:
+1. Each domain should have 5-7 terms
+2. Each term should have 5-7 keywords
+3. Domain names: lowercase with underscores, start with @
+4. Terms: SINGLE WORDS only (e.g., "tracking", "validation", "generation")
+5. Keywords: SINGLE WORDS only, NO underscores, NO phrases (e.g., "threshold", "cohit", "staged")
+6. Focus on SPECIFIC user activities, not generic concepts
+7. Keywords should be words likely to appear in prompts about this activity
+
+## Good Example:
+{{"domain": "@learning", "terms": {{"patterns": ["sequences", "frequencies", "clusters"], "feedback": ["reinforcement", "correction", "signals"]}}}}
+
+## Bad Example (DO NOT DO THIS):
+{{"domain": "@foo", "terms": {{"threshold_management": ["rebalance_threshold", "batch_triggers"]}}}}
+
+Output ONLY the JSON array, no explanation."""
+
     # =========================================================================
     # Direct API Mode (for testing)
     # =========================================================================
@@ -1337,6 +1389,624 @@ Output valid JSON only:
                 terms=[]
             ))
         return domains
+
+    # =========================================================================
+    # Intent Proposals (RB-10: Haiku-generated domain staging)
+    # =========================================================================
+
+    def get_intent_file_path(self) -> str:
+        """Get path to intent.json file."""
+        # .aoa/domains/intent.json in project root
+        project_id = self.project_id or "default"
+        # Get project path from Redis if available
+        project_path = self.redis.client.hget("aoa:projects", project_id)
+        if project_path:
+            return os.path.join(project_path, ".aoa", "domains", "intent.json")
+        # Docker: codebase mounted at /codebase
+        codebase_root = os.environ.get('CODEBASE_ROOT', '/codebase')
+        if os.path.exists(os.path.join(codebase_root, ".aoa", "domains")):
+            return os.path.join(codebase_root, ".aoa", "domains", "intent.json")
+        # Fallback to current directory
+        return os.path.join(os.getcwd(), ".aoa", "domains", "intent.json")
+
+    def save_intent_proposals(self, proposals: list[dict]) -> str:
+        """
+        Save intent proposals to .aoa/domains/intent.json.
+
+        Args:
+            proposals: List of domain proposals in format:
+                [{domain, terms: {term: [keywords]}}]
+
+        Returns:
+            Path to saved file
+        """
+        intent_path = self.get_intent_file_path()
+
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(intent_path), exist_ok=True)
+
+        # Write proposals
+        with open(intent_path, 'w') as f:
+            json.dump(proposals, f, indent=2)
+
+        return intent_path
+
+    def generate_intent_proposals_direct(self, prompts: list[str]) -> dict:
+        """
+        Generate intent proposals using direct Haiku API call.
+
+        Only works when ANTHROPIC_API_KEY is set.
+        Returns: {success: bool, proposals: list, file: str}
+        """
+        existing = self.get_all_domains()
+        prompt = self.get_intent_prompt(prompts, existing)
+        result = self._call_haiku(prompt)
+
+        if not result:
+            return {"success": False, "error": "Haiku call failed"}
+
+        # Result should be a list of proposals
+        proposals = result if isinstance(result, list) else [result]
+
+        # Validate structure
+        valid_proposals = []
+        for p in proposals:
+            if "domain" in p and "terms" in p:
+                valid_proposals.append(p)
+
+        if not valid_proposals:
+            return {"success": False, "error": "No valid proposals generated"}
+
+        # Save to file
+        file_path = self.save_intent_proposals(valid_proposals)
+
+        return {
+            "success": True,
+            "proposals": valid_proposals,
+            "file": file_path,
+            "count": len(valid_proposals)
+        }
+
+    def get_intent_context_for_hook(self) -> dict:
+        """
+        Prepare context for hook-based intent generation.
+
+        Returns context dict that hook can use to call Task agent.
+        """
+        existing = self.get_all_domains()
+        return {
+            "existing_domains": existing,
+            "prompt_template": "get_intent_prompt",  # Hook knows to call this
+            "output_file": self.get_intent_file_path()
+        }
+
+    # =========================================================================
+    # Staging (RB-03, RB-11: Stage proposals before promotion)
+    # =========================================================================
+
+    def stage_proposals(self, proposals: list[dict]) -> dict:
+        """
+        Stage domain proposals to Redis for hit tracking.
+
+        Staged domains don't go into the active automaton.
+        They accumulate hits and get promoted when math validates.
+
+        Args:
+            proposals: List from intent.json format:
+                [{domain, terms: {term: [keywords]}}]
+
+        Returns:
+            {staged_domains: N, staged_terms: N, staged_keywords: N}
+        """
+        staged_domains = 0
+        staged_terms = 0
+        staged_keywords = 0
+
+        # Redis keys for staging
+        domains_key = self._key("staged:domains")
+        terms_key = self._key("staged:terms")
+        keywords_key = self._key("staged:keywords")
+
+        pipe = self.redis.client.pipeline()
+
+        for proposal in proposals:
+            domain_name = proposal.get("domain", "")
+            terms = proposal.get("terms", {})
+
+            if not domain_name or not terms:
+                continue
+
+            # Stage the domain (store full JSON)
+            pipe.hset(domains_key, domain_name, json.dumps(proposal))
+            # RB-07: Track when domain was staged for stale cleanup
+            created_at_key = self._key("staged:created_at")
+            pipe.hset(created_at_key, domain_name, self.get_prompt_count())
+            staged_domains += 1
+
+            # Stage terms and keywords
+            for term_name, keywords in terms.items():
+                # Map term -> domain
+                pipe.hset(terms_key, term_name, domain_name)
+                staged_terms += 1
+
+                # Add keywords to set with term prefix for tracking
+                for kw in keywords:
+                    # Store as "keyword:term" to track which term it belongs to
+                    pipe.sadd(keywords_key, f"{kw}:{term_name}")
+                    staged_keywords += 1
+
+        # Execute pipeline
+        pipe.execute()
+
+        # Set 7-day TTL on staging keys (cleanup if not promoted)
+        self.redis.client.expire(domains_key, 604800)
+        self.redis.client.expire(terms_key, 604800)
+        self.redis.client.expire(keywords_key, 604800)
+
+        return {
+            "staged_domains": staged_domains,
+            "staged_terms": staged_terms,
+            "staged_keywords": staged_keywords
+        }
+
+    def get_staged_domains(self) -> list[dict]:
+        """Get all staged domain proposals."""
+        domains_key = self._key("staged:domains")
+        result = self.redis.client.hgetall(domains_key)
+
+        domains = []
+        for name, data in result.items():
+            try:
+                domain = json.loads(data)
+                domains.append(domain)
+            except json.JSONDecodeError:
+                continue
+
+        return domains
+
+    def get_staged_stats(self) -> dict:
+        """Get staging statistics."""
+        domains_key = self._key("staged:domains")
+        terms_key = self._key("staged:terms")
+        keywords_key = self._key("staged:keywords")
+
+        return {
+            "staged_domains": self.redis.client.hlen(domains_key),
+            "staged_terms": self.redis.client.hlen(terms_key),
+            "staged_keywords": self.redis.client.scard(keywords_key)
+        }
+
+    def load_intent_file(self) -> dict:
+        """
+        Load intent.json and stage proposals to Redis.
+
+        Returns: {success: bool, ...stats}
+        """
+        intent_path = self.get_intent_file_path()
+
+        if not os.path.exists(intent_path):
+            return {"success": False, "error": f"File not found: {intent_path}"}
+
+        try:
+            with open(intent_path) as f:
+                proposals = json.load(f)
+
+            if not isinstance(proposals, list):
+                proposals = [proposals]
+
+            result = self.stage_proposals(proposals)
+            return {"success": True, "file": intent_path, **result}
+
+        except json.JSONDecodeError as e:
+            return {"success": False, "error": f"Invalid JSON: {e}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # =========================================================================
+    # Cohit Tracking (RB-02: Co-occurrence for promotion math)
+    # =========================================================================
+
+    def increment_cohit(self, keyword: str, term: str, domain: str) -> None:
+        """
+        Increment co-occurrence counters when keyword, term, domain fire together.
+
+        Called when a search matches a keyword that maps to a term in a domain.
+        """
+        pipe = self.redis.client.pipeline()
+
+        # keyword:term co-occurrence
+        kw_term_key = self._key("cohit:kw_term")
+        pipe.hincrby(kw_term_key, f"{keyword}:{term}", 1)
+
+        # term:domain co-occurrence
+        term_domain_key = self._key("cohit:term_domain")
+        pipe.hincrby(term_domain_key, f"{term}:{domain}", 1)
+
+        pipe.execute()
+
+    def get_cohit_kw_term(self, keyword: str, term: str) -> int:
+        """Get co-occurrence count for keyword:term pair."""
+        key = self._key("cohit:kw_term")
+        result = self.redis.client.hget(key, f"{keyword}:{term}")
+        return int(result) if result else 0
+
+    def get_cohit_term_domain(self, term: str, domain: str) -> int:
+        """Get co-occurrence count for term:domain pair."""
+        key = self._key("cohit:term_domain")
+        result = self.redis.client.hget(key, f"{term}:{domain}")
+        return int(result) if result else 0
+
+    def get_all_cohits_for_keyword(self, keyword: str) -> dict[str, int]:
+        """Get all term co-occurrences for a keyword."""
+        key = self._key("cohit:kw_term")
+        all_cohits = self.redis.client.hgetall(key)
+
+        # Filter to this keyword
+        result = {}
+        prefix = f"{keyword}:"
+        for pair, count in all_cohits.items():
+            if pair.startswith(prefix):
+                term = pair[len(prefix):]
+                result[term] = int(count)
+
+        return result
+
+    def get_keyword_hits(self, keyword: str) -> int:
+        """Get total hits for a keyword (from orphan tracking)."""
+        hits_key = self._key("orphan_hits")
+        result = self.redis.client.hget(hits_key, keyword)
+        return int(result) if result else 0
+
+    def calculate_promotion_ratio(self, keyword: str, term: str) -> float:
+        """
+        Calculate P(term|keyword) = cohit(keyword,term) / hits(keyword).
+
+        Returns 0.0-1.0 ratio indicating how often this keyword
+        co-occurs with this term.
+        """
+        cohit = self.get_cohit_kw_term(keyword, term)
+        hits = self.get_keyword_hits(keyword)
+
+        if hits == 0:
+            return 0.0
+
+        return cohit / hits
+
+    def get_best_term_for_keyword(self, keyword: str) -> tuple[str, float] | None:
+        """
+        Find the term with highest cohit ratio for a keyword.
+
+        Returns (term, ratio) or None if no cohits.
+        """
+        cohits = self.get_all_cohits_for_keyword(keyword)
+        hits = self.get_keyword_hits(keyword)
+
+        if not cohits or hits == 0:
+            return None
+
+        best_term = max(cohits.items(), key=lambda x: x[1])
+        ratio = best_term[1] / hits
+
+        return (best_term[0], ratio)
+
+    def get_cohit_stats(self) -> dict:
+        """Get overall cohit tracking statistics."""
+        kw_term_key = self._key("cohit:kw_term")
+        term_domain_key = self._key("cohit:term_domain")
+
+        return {
+            "kw_term_pairs": self.redis.client.hlen(kw_term_key),
+            "term_domain_pairs": self.redis.client.hlen(term_domain_key)
+        }
+
+    # =========================================================================
+    # Promotion Math (RB-06: Staged → Active promotion)
+    # =========================================================================
+
+    # Promotion thresholds
+    PROMOTION_MIN_HITS = 10      # Minimum keyword hits to consider
+    PROMOTION_MIN_RATIO = 0.5    # Minimum cohit ratio (50%)
+
+    def get_staged_domain_hits(self, domain_name: str) -> int:
+        """
+        Get total hits for a staged domain's keywords.
+
+        Counts hits across all keywords in all terms of the domain.
+        """
+        domains_key = self._key("staged:domains")
+        domain_json = self.redis.client.hget(domains_key, domain_name)
+
+        if not domain_json:
+            return 0
+
+        try:
+            domain = json.loads(domain_json)
+        except json.JSONDecodeError:
+            return 0
+
+        total_hits = 0
+        terms = domain.get("terms", {})
+
+        for term_name, keywords in terms.items():
+            for kw in keywords:
+                hits = self.get_keyword_hits(kw)
+                total_hits += hits
+
+        return total_hits
+
+    def check_promotion_candidate(self, domain_name: str) -> dict:
+        """
+        Check if a staged domain is ready for promotion.
+
+        Returns: {ready: bool, hits: int, avg_ratio: float, reason: str}
+        """
+        domains_key = self._key("staged:domains")
+        domain_json = self.redis.client.hget(domains_key, domain_name)
+
+        if not domain_json:
+            return {"ready": False, "reason": "Domain not found in staging"}
+
+        try:
+            domain = json.loads(domain_json)
+        except json.JSONDecodeError:
+            return {"ready": False, "reason": "Invalid domain JSON"}
+
+        terms = domain.get("terms", {})
+        if not terms:
+            return {"ready": False, "reason": "No terms in domain"}
+
+        total_hits = 0
+        total_ratio = 0.0
+        keyword_count = 0
+
+        for term_name, keywords in terms.items():
+            for kw in keywords:
+                hits = self.get_keyword_hits(kw)
+                total_hits += hits
+
+                if hits > 0:
+                    ratio = self.calculate_promotion_ratio(kw, term_name)
+                    total_ratio += ratio
+                    keyword_count += 1
+
+        avg_ratio = total_ratio / keyword_count if keyword_count > 0 else 0.0
+
+        # Check thresholds
+        if total_hits < self.PROMOTION_MIN_HITS:
+            return {
+                "ready": False,
+                "hits": total_hits,
+                "avg_ratio": avg_ratio,
+                "reason": f"Hits ({total_hits}) < threshold ({self.PROMOTION_MIN_HITS})"
+            }
+
+        if avg_ratio < self.PROMOTION_MIN_RATIO:
+            return {
+                "ready": False,
+                "hits": total_hits,
+                "avg_ratio": avg_ratio,
+                "reason": f"Ratio ({avg_ratio:.2f}) < threshold ({self.PROMOTION_MIN_RATIO})"
+            }
+
+        return {
+            "ready": True,
+            "hits": total_hits,
+            "avg_ratio": avg_ratio,
+            "reason": "Promotion thresholds met"
+        }
+
+    def promote_staged_domain(self, domain_name: str) -> dict:
+        """
+        Promote a staged domain to active.
+
+        1. Create domain in active set
+        2. Add terms and keywords
+        3. Remove from staging
+        4. Trigger automaton rebuild
+        """
+        domains_key = self._key("staged:domains")
+        terms_key = self._key("staged:terms")
+        keywords_key = self._key("staged:keywords")
+
+        domain_json = self.redis.client.hget(domains_key, domain_name)
+        if not domain_json:
+            return {"success": False, "error": "Domain not found in staging"}
+
+        try:
+            domain = json.loads(domain_json)
+        except json.JSONDecodeError:
+            return {"success": False, "error": "Invalid domain JSON"}
+
+        # Add domain to active set
+        result = self.add_domain({
+            "name": domain_name,
+            "description": f"Promoted from intent: {domain_name}",
+            "source": "promoted"
+        }, source="intent")
+
+        # Add terms and keywords
+        terms = domain.get("terms", {})
+        terms_added = 0
+        keywords_added = 0
+
+        for term_name, keywords in terms.items():
+            self.add_term_to_domain(domain_name, term_name)
+            terms_added += 1
+
+            for kw in keywords:
+                self.add_keyword_to_term(kw, term_name)
+                keywords_added += 1
+
+        # Remove from staging
+        pipe = self.redis.client.pipeline()
+        pipe.hdel(domains_key, domain_name)
+
+        # Remove terms for this domain
+        for term_name in terms.keys():
+            pipe.hdel(terms_key, term_name)
+            # Remove keywords for this term
+            for kw in terms[term_name]:
+                pipe.srem(keywords_key, f"{kw}:{term_name}")
+
+        pipe.execute()
+
+        return {
+            "success": True,
+            "domain": domain_name,
+            "terms_added": terms_added,
+            "keywords_added": keywords_added
+        }
+
+    def run_promotion_check(self) -> dict:
+        """
+        Check all staged domains for promotion and promote eligible ones.
+
+        Called during autotune cycle.
+        """
+        staged = self.get_staged_domains()
+        promoted = []
+        not_ready = []
+
+        for domain in staged:
+            domain_name = domain.get("domain", "")
+            if not domain_name:
+                continue
+
+            check = self.check_promotion_candidate(domain_name)
+
+            if check.get("ready"):
+                result = self.promote_staged_domain(domain_name)
+                if result.get("success"):
+                    promoted.append({
+                        "domain": domain_name,
+                        "hits": check.get("hits"),
+                        "ratio": check.get("avg_ratio")
+                    })
+            else:
+                not_ready.append({
+                    "domain": domain_name,
+                    "reason": check.get("reason"),
+                    "hits": check.get("hits", 0),
+                    "ratio": check.get("avg_ratio", 0)
+                })
+
+        return {
+            "promoted": promoted,
+            "promoted_count": len(promoted),
+            "not_ready": not_ready,
+            "not_ready_count": len(not_ready)
+        }
+
+    # =========================================================================
+    # Stale Proposal Cleanup (RB-07)
+    # =========================================================================
+
+    STALE_PROPOSAL_PROMPTS = 50  # Remove proposals with 0 hits after N prompts
+
+    def get_staged_domain_age(self, domain_name: str) -> int:
+        """Get how many prompts since domain was staged."""
+        staged_at_key = self._key("staged:created_at")
+        created_at = self.redis.client.hget(staged_at_key, domain_name)
+        if not created_at:
+            return 0
+        return self.get_prompt_count() - int(created_at)
+
+    def set_staged_domain_created(self, domain_name: str) -> None:
+        """Record when a domain was staged."""
+        staged_at_key = self._key("staged:created_at")
+        self.redis.client.hset(staged_at_key, domain_name, self.get_prompt_count())
+
+    def cleanup_stale_proposals(self) -> dict:
+        """
+        Remove staged proposals with 0 hits after STALE_PROPOSAL_PROMPTS.
+
+        Called during autotune to prevent noise accumulation.
+        """
+        staged = self.get_staged_domains()
+        removed = []
+
+        domains_key = self._key("staged:domains")
+        terms_key = self._key("staged:terms")
+        keywords_key = self._key("staged:keywords")
+        created_at_key = self._key("staged:created_at")
+
+        for domain in staged:
+            domain_name = domain.get("domain", "")
+            if not domain_name:
+                continue
+
+            age = self.get_staged_domain_age(domain_name)
+            hits = self.get_staged_domain_hits(domain_name)
+
+            # Remove if old enough and no hits
+            if age >= self.STALE_PROPOSAL_PROMPTS and hits == 0:
+                terms = domain.get("terms", {})
+
+                pipe = self.redis.client.pipeline()
+
+                # Remove domain
+                pipe.hdel(domains_key, domain_name)
+                pipe.hdel(created_at_key, domain_name)
+
+                # Remove terms and keywords
+                for term_name, keywords in terms.items():
+                    pipe.hdel(terms_key, term_name)
+                    for kw in keywords:
+                        pipe.srem(keywords_key, f"{kw}:{term_name}")
+
+                pipe.execute()
+
+                removed.append({
+                    "domain": domain_name,
+                    "age": age,
+                    "reason": "No hits after 50 prompts"
+                })
+
+        return {
+            "removed": removed,
+            "removed_count": len(removed)
+        }
+
+    def check_staged_keyword_match(self, keyword: str) -> dict | None:
+        """
+        Check if keyword matches a staged keyword and track cohit.
+
+        Returns {term, domain} if matched, None otherwise.
+        """
+        keywords_key = self._key("staged:keywords")
+        terms_key = self._key("staged:terms")
+
+        # Staged keywords are stored as "keyword:term"
+        all_staged = self.redis.client.smembers(keywords_key)
+
+        for entry in all_staged:
+            if ':' not in entry:
+                continue
+            staged_kw, term = entry.rsplit(':', 1)
+            if staged_kw.lower() == keyword.lower():
+                # Found match - get the domain for this term
+                domain = self.redis.client.hget(terms_key, term)
+                if domain:
+                    # Track the cohit
+                    self.increment_cohit(keyword, term, domain)
+                    # Also increment orphan hits for promotion math
+                    self.increment_orphan_hits(keyword)
+                    return {"keyword": keyword, "term": term, "domain": domain}
+
+        return None
+
+    def check_staged_keywords_batch(self, keywords: list[str]) -> list[dict]:
+        """
+        Check multiple keywords against staged and track cohits.
+
+        Returns list of matches.
+        """
+        matches = []
+        for kw in keywords:
+            match = self.check_staged_keyword_match(kw)
+            if match:
+                matches.append(match)
+        return matches
 
     # =========================================================================
     # Keyword Tracking (GL-083 - Every-25 Rebalance)
@@ -1892,6 +2562,15 @@ Return JSON:
             added=0,
             removed=summary['terms_pruned'] + summary['context_pruned']
         )
+
+        # 11. RB-06: Check staged domains for promotion
+        promotion_result = self.run_promotion_check()
+        summary['staged_promoted'] = promotion_result.get('promoted_count', 0)
+        summary['staged_not_ready'] = promotion_result.get('not_ready_count', 0)
+
+        # 12. RB-07: Cleanup stale proposals (0 hits after 50 prompts)
+        cleanup_result = self.cleanup_stale_proposals()
+        summary['stale_proposals_removed'] = cleanup_result.get('removed_count', 0)
 
         return summary
 

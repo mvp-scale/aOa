@@ -606,9 +606,10 @@ def format_search_response(
                         if term and len(term) >= 3:
                             seen_terms.add(term)
                     # GL-088: Also track domains from results
+                    # FIX SL-02: Keep @ prefix - Redis keys include it
                     domain = r.get('domain', '')
                     if domain:
-                        seen_domains.add(domain.lstrip('@'))
+                        seen_domains.add(domain if domain.startswith('@') else f"@{domain}")
                     # KW-002: Collect keywords from content
                     if matcher and matcher.is_available:
                         match_result = matcher.find_tags(r.get('content', ''))
@@ -5244,6 +5245,8 @@ def record_intent():
                 if domains_with_term:
                     for domain_name in domains_with_term:
                         learner.increment_domain_hits(domain_name)
+                        # RB-02: Track term:domain co-occurrence
+                        learner.increment_cohit(term, term, domain_name)
                 else:
                     # Tag didn't match any domain - it's an orphan
                     orphaned_tags.append(term)
@@ -5260,15 +5263,17 @@ def record_intent():
     # GL-053 Phase C: Trigger domain learning if threshold reached
     _trigger_domain_learning_if_needed(project_id, intent_index)
 
-    # GL-088: Check if enrichment should be triggered (every 25 prompts)
+    # GL-088: Check if enrichment should be triggered (every N prompts based on threshold)
     enrichment_ready = False
     prompt_count = 0
     if DOMAINS_AVAILABLE and project_id:
         try:
             learner = DomainLearner(project_id)
             prompt_count = learner.get_prompt_count()
-            # Signal enrichment_ready when prompt_count hits 25, 50, 75, etc.
-            enrichment_ready = (prompt_count > 0 and prompt_count % 25 == 0)
+            # RB-14: Use configurable threshold (3 in test mode, 25 in prod)
+            rebalance_threshold = int(learner.get_threshold('rebalance'))
+            # Signal enrichment_ready when prompt_count hits threshold, 2x, 3x, etc.
+            enrichment_ready = (prompt_count > 0 and prompt_count % rebalance_threshold == 0)
         except Exception:
             pass
 
@@ -7604,7 +7609,7 @@ def jobs_process():
         processed = worker.process_batch(count)
         return jsonify({
             'processed': len(processed),
-            'jobs': [{'id': j.id, 'type': j.type.value} for j in processed],
+            'jobs': [{'id': j.id, 'type': j.type.value, 'domain': j.payload.get('domain')} for j in processed],
             'status': worker.queue.status()
         })
     except Exception as e:

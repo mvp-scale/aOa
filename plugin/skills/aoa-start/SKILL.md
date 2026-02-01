@@ -60,8 +60,9 @@ LOOP while `aoa jobs pending 3` returns domains:
   4. Run: aoa domains link
   5. Continue until no pending jobs
 
-## Step 3: Link and Verify
+## Step 3: Link, Clean, and Verify
 Run: aoa domains link
+Run: aoa domains clean
 Run: aoa jobs
 Run: aoa domains | head -5
 

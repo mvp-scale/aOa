@@ -644,6 +644,153 @@ def domains_self_learn():
         return jsonify({'error': str(e)}), 500
 
 
+@domains_bp.route('/domains/get-haiku-prompt', methods=['POST'])
+def domains_get_haiku_prompt():
+    """
+    RB-14: Get the full Haiku prompt for intent generation.
+
+    Gets recent prompts via /cc/prompts, combines with existing domains,
+    and returns the complete prompt for a Task agent to run Haiku.
+
+    POST body: {
+        "project_id": "uuid",
+        "project_path": "/path/to/project",
+        "limit": 25  # optional, defaults to 25
+    }
+
+    Returns: {
+        "prompt": "the full haiku prompt...",
+        "output_file": "/path/to/.aoa/domains/intent.json",
+        "prompt_count": 25,
+        "existing_domains": ["@cli", "@search", ...]
+    }
+    """
+    if not _domains_available:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+    project_path = data.get('project_path', '/codebase')
+    limit = data.get('limit', 25)
+
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    try:
+        import requests
+
+        # Get recent prompts via internal call to /cc/prompts
+        # Use localhost since we're in the same container
+        index_url = os.environ.get('INDEX_URL', 'http://localhost:8080')
+        prompts_response = requests.get(
+            f"{index_url}/cc/prompts",
+            params={'limit': limit, 'project_path': project_path},
+            timeout=5
+        )
+        prompts_data = prompts_response.json()
+        prompts = prompts_data.get('prompts', [])
+
+        if not prompts:
+            return jsonify({
+                'error': 'No prompts found',
+                'project_path': project_path
+            }), 400
+
+        # Get existing domains and build the Haiku prompt
+        learner = _DomainLearner(project_id)
+        existing_domains = list(learner.get_all_domains())
+        haiku_prompt = learner.get_intent_prompt(prompts, existing_domains)
+        output_file = learner.get_intent_file_path()
+
+        return jsonify({
+            'prompt': haiku_prompt,
+            'output_file': output_file,
+            'prompt_count': len(prompts),
+            'existing_domains': existing_domains,
+            'project_id': project_id
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@domains_bp.route('/domains/haiku-pending', methods=['GET', 'POST'])
+def domains_haiku_pending():
+    """
+    RB-14: Get/set Haiku learning pending flag.
+
+    GET: Returns pending status and prompt data
+    POST: Set pending data or clear flag
+
+    POST body to set:
+    {
+        "project_id": "xxx",
+        "prompt": "the haiku prompt...",
+        "output_file": "/path/to/intent.json",
+        "prompt_count": 25
+    }
+
+    POST body to clear:
+    {
+        "project_id": "xxx",
+        "clear": true
+    }
+    """
+    if not _domains_available:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    if request.method == 'GET':
+        project_id = request.args.get('project_id')
+        if not project_id:
+            return jsonify({'error': 'Missing project_id parameter'}), 400
+
+        try:
+            learner = _DomainLearner(project_id)
+            # Check Redis for pending flag
+            pending_data = learner.redis.client.get(f"aoa:{project_id}:haiku_pending")
+            if pending_data:
+                import json
+                data = json.loads(pending_data)
+                return jsonify({
+                    'pending': True,
+                    'prompt': data.get('prompt', ''),
+                    'output_file': data.get('output_file', ''),
+                    'prompt_count': data.get('prompt_count', 0)
+                })
+            return jsonify({'pending': False})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    # POST - set or clear
+    data = request.json or {}
+    project_id = data.get('project_id')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    try:
+        learner = _DomainLearner(project_id)
+        key = f"aoa:{project_id}:haiku_pending"
+
+        if data.get('clear'):
+            learner.redis.client.delete(key)
+            return jsonify({'success': True, 'cleared': True})
+
+        # Set pending data with 5-minute TTL (cleared on next prompt or expires)
+        import json
+        pending_data = json.dumps({
+            'prompt': data.get('prompt', ''),
+            'output_file': data.get('output_file', ''),
+            'prompt_count': data.get('prompt_count', 0)
+        })
+        learner.redis.client.setex(key, 300, pending_data)
+
+        return jsonify({'success': True, 'set': True})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @domains_bp.route('/domains/add-context', methods=['POST'])
 def domains_add_context():
     """
@@ -899,6 +1046,163 @@ def domains_add():
             'terms_added': len(terms),
             **result
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@domains_bp.route('/domains/stage', methods=['POST'])
+def domains_stage():
+    """
+    Stage domain proposals for hit tracking (RB-11).
+
+    Staged domains don't go into the active automaton.
+    They accumulate hits and get promoted when math validates.
+
+    POST body: {
+        "project_id": "xxx",
+        "proposals": [
+            {
+                "domain": "@domain_name",
+                "terms": {
+                    "term1": ["kw1", "kw2"],
+                    "term2": ["kw3", "kw4"]
+                }
+            }
+        ]
+    }
+
+    Or load from intent.json:
+    POST body: {
+        "project_id": "xxx",
+        "load_intent": true
+    }
+    """
+    if not _domains_available:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    try:
+        learner = _DomainLearner(project_id)
+
+        # Option 1: Load from intent.json
+        if data.get('load_intent'):
+            result = learner.load_intent_file()
+            return jsonify(result)
+
+        # Option 2: Stage proposals from request body
+        proposals = data.get('proposals', [])
+        if not proposals:
+            return jsonify({'error': 'Missing proposals or load_intent flag'}), 400
+
+        result = learner.stage_proposals(proposals)
+        return jsonify({
+            'success': True,
+            'project_id': project_id,
+            **result
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@domains_bp.route('/domains/staged', methods=['GET'])
+def domains_staged():
+    """
+    Get staged domain proposals and their stats.
+
+    GET /domains/staged?project_id=xxx
+    """
+    if not _domains_available:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    project_id = request.args.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    try:
+        learner = _DomainLearner(project_id)
+        domains = learner.get_staged_domains()
+        stats = learner.get_staged_stats()
+
+        return jsonify({
+            'project_id': project_id,
+            'domains': domains,
+            **stats
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@domains_bp.route('/domains/promote', methods=['POST'])
+def domains_promote():
+    """
+    Promote a staged domain to active domains (silent API for hooks).
+
+    POST body: {
+        "project_id": "xxx",
+        "domain": "@domain_name"
+    }
+    """
+    if not _domains_available:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.get_json() or {}
+    project_id = data.get('project_id')
+    domain_name = data.get('domain')
+
+    if not project_id or not domain_name:
+        return jsonify({'error': 'Missing project_id or domain'}), 400
+
+    try:
+        learner = _DomainLearner(project_id)
+        result = learner.promote_staged_domain(domain_name)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@domains_bp.route('/domains/check-staged', methods=['POST'])
+def domains_check_staged():
+    """
+    Check keywords against staged proposals and track cohits (RB-05).
+
+    POST body: {
+        "project_id": "xxx",
+        "keywords": ["keyword1", "keyword2", ...]
+    }
+
+    Returns matches and updates cohit counters.
+    """
+    if not _domains_available:
+        return jsonify({'error': 'Domain learning module not available'}), 500
+
+    data = request.json or {}
+    project_id = data.get('project_id')
+    keywords = data.get('keywords', [])
+
+    if not project_id:
+        return jsonify({'error': 'Missing project_id parameter'}), 400
+
+    if not keywords:
+        return jsonify({'matches': [], 'checked': 0})
+
+    try:
+        learner = _DomainLearner(project_id)
+        matches = learner.check_staged_keywords_batch(keywords)
+
+        return jsonify({
+            'project_id': project_id,
+            'checked': len(keywords),
+            'matches': matches,
+            'match_count': len(matches)
+        })
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

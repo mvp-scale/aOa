@@ -141,6 +141,11 @@ ROUTES = {
     "/domains/enrichment-status": ("index", "/domains/enrichment-status"),  # Get enrichment progress
     "/domains/enrichment-prompt": ("index", "/domains/enrichment-prompt"),  # Get Haiku prompt for enrichment
     "/domains/add-context": ("index", "/domains/add-context"),  # GL-090: Add context-tier domain
+    "/domains/stage": ("index", "/domains/stage"),  # RB-11: Stage proposals from intent.json
+    "/domains/staged": ("index", "/domains/staged"),  # RB-11: Get staged proposals
+    "/domains/check-staged": ("index", "/domains/check-staged"),  # RB-05: Check keywords against staged
+    "/domains/get-haiku-prompt": ("index", "/domains/get-haiku-prompt"),  # RB-14: Get full Haiku prompt
+    "/domains/haiku-pending": ("index", "/domains/haiku-pending"),  # RB-14: Get/set Haiku pending flag
 
     # KeywordMatcher rebuild (called after rebalance)
     "/keywords/rebuild": ("index", "/keywords/rebuild"),

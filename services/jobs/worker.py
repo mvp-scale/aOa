@@ -160,6 +160,8 @@ class JobWorker:
             raise RuntimeError(f"Enrichment failed: {domain_name} not marked as enriched")
 
         print(f"[Worker] ENRICH: {domain_name} - VERIFIED enriched ✓", flush=True)
+        # Note: File cleanup happens in CLI (aoa domains link) after successful link
+        # Worker runs in Docker and can't reliably delete host files
 
     def _handle_map_keywords(self, job: Job) -> None:
         """Map domain keywords to codebase files."""

@@ -39,11 +39,18 @@ INSTANCE_NAME="aoa-${USER}"
 echo -e "${CYAN}${BOLD}⚡ aOa Docker Build${NC}"
 echo -e "${DIM}───────────────────────────────────────${NC}"
 echo ""
-echo "  1) Compose mode (multi-container)"
-echo "  2) Unified mode (single container)"
-echo "  3) Both"
-echo ""
-read -p "Which to build? [1/2/3]: " choice
+
+# Accept choice as argument or prompt interactively
+if [ -n "$1" ]; then
+    choice="$1"
+    echo "  Building mode: $choice"
+else
+    echo "  1) Compose mode (multi-container)"
+    echo "  2) Unified mode (single container)"
+    echo "  3) Both"
+    echo ""
+    read -p "Which to build? [1/2/3]: " choice
+fi
 
 build_compose() {
     echo ""
