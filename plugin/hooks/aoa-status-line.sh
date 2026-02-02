@@ -288,7 +288,15 @@ if [ "$ENRICHMENT_COMPLETE" = "true" ] && [ "$FIRST_REBALANCE_DONE" = "true" ]; 
     fi
 fi
 
-# Right section: setup → learning → ready → intent (clean transitions)
+# Check if intent learning is pending (haiku-pending flag)
+LEARNING_PENDING=false
+PENDING_DATA=$(curl -s --max-time 0.2 "${AOA_URL}/domains/haiku-pending?project_id=${AOA_PROJECT_ID}" 2>/dev/null)
+if [ -n "$PENDING_DATA" ] && [ "$PENDING_DATA" != "null" ]; then
+    PENDING_FLAG=$(echo "$PENDING_DATA" | jq -r '.pending // false' 2>/dev/null)
+    [ "$PENDING_FLAG" = "true" ] && LEARNING_PENDING=true
+fi
+
+# Right section: setup → learning → ready → intent learning → intent (clean transitions)
 if [ "$ENRICHMENT_TOTAL" -eq 0 ] 2>/dev/null; then
     # No domains - prompt to run /aoa-start
     RIGHT="${YELLOW}setup → run /aoa-start${RESET}"
@@ -298,6 +306,9 @@ elif [ "$ENRICHMENT_COMPLETE" != "true" ]; then
 elif [ "$FIRST_REBALANCE_DONE" != "true" ]; then
     # Learning complete, waiting for first rebalance (25 prompts)
     RIGHT="${GREEN}ready${RESET} ${DIM}→${RESET} ${YELLOW}tracking${RESET}"
+elif [ "$LEARNING_PENDING" = "true" ]; then
+    # Intent learning triggered - show learning state
+    RIGHT="${YELLOW}intent learning${RESET}"
 elif [ -n "$TOP_HITS" ] && [ "$TOP_HITS" != "null" ] && [ "$TOP_HITS" != "" ]; then
     # Active intent phase with top hits - show what we're learning
     RIGHT="${GREEN}intent${RESET} ${MAGENTA}${TOP_HITS}${RESET}"
