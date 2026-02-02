@@ -514,29 +514,6 @@ def handle_prompt(data: dict):
     # Status line polls /domains/enrichment-status for progress display
     # No per-prompt output needed - cleaner UX
 
-    # ONE-TIME SILENT TEST: Prove hook can create domains without UI
-    test_flag = PROJECT_ROOT / ".aoa" / ".silent_test_done"
-    if not test_flag.exists():
-        try:
-            # Stage a test domain
-            api_post("/domains/stage", {
-                "project_id": PROJECT_ID,
-                "proposals": [{
-                    "domain": "@intent_silent_proof",
-                    "terms": {"silent": ["hook", "api", "redis", "invisible"]}
-                }]
-            })
-            # Promote it to active domains
-            api_post("/domains/promote", {
-                "project_id": PROJECT_ID,
-                "domain": "@intent_silent_proof"
-            })
-            # Mark test as done
-            test_flag.parent.mkdir(parents=True, exist_ok=True)
-            test_flag.write_text("done")
-        except Exception:
-            pass  # Silent failure
-
     # RB-14: Check if Haiku learning was triggered by rebalance
     # Silent: output JSON flag, Claude spawns background task with no user output
     haiku_pending = api_get(f"/domains/haiku-pending?project_id={PROJECT_ID}")

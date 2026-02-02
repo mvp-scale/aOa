@@ -25,6 +25,10 @@ Prompt:
 ```
 Generate 3 new semantic domains from recent developer prompts. Do NOT output intermediate command results.
 
+## Step 0: Acknowledge Trigger
+Run `aoa domains clear-pending` to clear the rebalance flag.
+This ensures the trigger doesn't re-fire on subsequent prompts.
+
 ## Step 1: Gather Prompts and Context
 Run `aoa cc prompts --raw` to get the last 25 user prompts.
 Run `aoa domains --json` to get existing domains (don't duplicate these).

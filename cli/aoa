@@ -4407,6 +4407,26 @@ cmd_domains() {
             echo "$result" | jq -r '.domains[]?' 2>/dev/null
             return 0
             ;;
+        clear-pending)
+            # aoa domains clear-pending - clear the haiku learning pending flag
+            # Called by /aoa-rebalance skill when it starts (reliable trigger pattern)
+            shift
+            local result=$(curl -sf -X POST "${INDEX_URL}/domains/haiku-pending" \
+                -H "Content-Type: application/json" \
+                -d "{\"project_id\": \"${project_id}\", \"clear\": true}" 2>/dev/null)
+            if [ -z "$result" ]; then
+                echo -e "${RED}Error: Could not clear pending flag${NC}" >&2
+                return 1
+            fi
+            local cleared=$(echo "$result" | jq -r '.cleared // false')
+            if [ "$cleared" = "true" ]; then
+                echo -e "${GREEN}✓${NC} Cleared pending flag"
+                return 0
+            else
+                echo -e "${YELLOW}No pending flag set${NC}"
+                return 0
+            fi
+            ;;
         link)
             # aoa domains link - rebuild KeywordMatcher to link domains to files
             # Called after building domains to enable semantic tags in search results
