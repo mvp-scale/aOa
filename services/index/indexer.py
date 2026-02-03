@@ -116,7 +116,10 @@ except ImportError:
 
 # GL-089: Job queue for background work
 try:
-    from jobs.queue import JobQueue, Job, JobType, create_enrich_job
+    from jobs.queue import (
+        JobQueue, Job, JobType,
+        create_enrich_job, create_scrape_job, create_autotune_job
+    )
     from jobs.worker import JobWorker, push_enrich_jobs
     JOBS_AVAILABLE = True
 except ImportError:
@@ -5399,6 +5402,114 @@ def cc_prompts():
         return jsonify({'error': str(e), 'prompts': []})
 
 
+@app.route('/cc/conversation')
+def cc_conversation():
+    """Get conversation text since last scrape: prompts + thinking + output.
+
+    Query params:
+        project_path: Project directory (default: CODEBASE_ROOT)
+        since: ISO timestamp - only return content after this time (default: all)
+        limit: Max items to return (default: 100)
+
+    Returns all text for bigram extraction:
+    - User prompts
+    - Assistant thinking (reasoning)
+    - Assistant text (visible output)
+    - latest_timestamp: Use as 'since' for next call to avoid duplicates
+    """
+    try:
+        from metrics import SessionMetrics
+    except ImportError:
+        try:
+            from session.metrics import SessionMetrics
+        except ImportError:
+            return jsonify({'error': 'SessionMetrics not available', 'texts': []})
+
+    try:
+        limit = int(request.args.get('limit', 100))
+        since = request.args.get('since', '')  # ISO timestamp filter
+
+        # Get HOST project path from /config/home.json (for session path encoding)
+        project_path = request.args.get('project_path')
+        if not project_path:
+            try:
+                with open('/codebase/.aoa/home.json') as f:
+                    home_data = json.load(f)
+                    project_path = home_data.get('project_root', os.environ.get('CODEBASE_ROOT', '/app'))
+            except (FileNotFoundError, json.JSONDecodeError):
+                project_path = os.environ.get('CODEBASE_ROOT', '/app')
+
+        metrics = SessionMetrics(project_path)
+        texts = []
+        latest_timestamp = since  # Track newest timestamp seen
+
+        # Parse recent sessions for full conversation
+        for session_file in metrics._get_session_files(limit=5):
+            try:
+                with open(session_file) as f:
+                    for line in f:
+                        try:
+                            data = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+
+                        # Filter by timestamp if 'since' provided
+                        timestamp = data.get("timestamp", "")
+                        if since and timestamp and timestamp <= since:
+                            continue  # Skip already-processed content
+
+                        # Track latest timestamp
+                        if timestamp and timestamp > latest_timestamp:
+                            latest_timestamp = timestamp
+
+                        msg_type = data.get("type")
+                        msg = data.get("message", {})
+
+                        # User prompts
+                        if msg_type == "user" and not data.get("isMeta"):
+                            content = msg.get("content", "")
+                            if isinstance(content, str) and len(content) > 5:
+                                # Strip system-generated blocks
+                                import re
+                                clean = re.sub(r"<system-reminder>.*?</system-reminder>", "", content, flags=re.DOTALL)
+                                clean = re.sub(r"<[^>]+>", "", clean)
+                                clean = re.sub(r"\s+", " ", clean).strip()
+                                if clean:
+                                    texts.append({"type": "prompt", "text": clean, "ts": timestamp})
+
+                        # Assistant thinking + text
+                        elif msg_type == "assistant":
+                            content = msg.get("content", [])
+                            if isinstance(content, list):
+                                for item in content:
+                                    if isinstance(item, dict):
+                                        item_type = item.get("type")
+                                        if item_type == "thinking":
+                                            thinking = item.get("thinking", "")
+                                            if thinking and len(thinking) > 10:
+                                                texts.append({"type": "thinking", "text": thinking, "ts": timestamp})
+                                        elif item_type == "text":
+                                            text = item.get("text", "")
+                                            if text and len(text) > 10:
+                                                texts.append({"type": "output", "text": text, "ts": timestamp})
+
+                        if len(texts) >= limit:
+                            break
+            except (IOError, OSError):
+                continue
+            if len(texts) >= limit:
+                break
+
+        return jsonify({
+            'texts': texts[:limit],
+            'count': len(texts[:limit]),
+            'latest_timestamp': latest_timestamp,  # Use as 'since' next time
+            'project_path': project_path
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'texts': [], 'latest_timestamp': since})
+
+
 @app.route('/cc/sessions')
 def cc_sessions():
     """Get per-session metrics for 'aoa cc sessions' view.
@@ -5611,337 +5722,6 @@ def metrics_token_rate():
 # ============================================================================
 
 # Rolling window constants for Hit@5 calculation
-ROLLING_WINDOW_HOURS = 24
-ROLLING_WINDOW_SECONDS = ROLLING_WINDOW_HOURS * 3600
-
-@app.route('/predict/log', methods=['POST'])
-def log_prediction():
-    """
-    Log a prediction for later hit/miss comparison.
-
-    POST body:
-    {
-        "session_id": "uuid-xxx",
-        "predicted_files": ["/src/file1.py", "/src/file2.py"],
-        "tags": ["python", "api"],
-        "trigger_file": "/src/current.py",
-        "confidence": 0.85
-    }
-
-    Phase 4: Also logs to rolling ZSET for Hit@5 calculation over 24h window.
-    """
-    if not RANKING_AVAILABLE or scorer is None:
-        return jsonify({'error': 'Redis not available'}), 503
-
-    data = request.json
-    session_id = data.get('session_id', 'unknown')
-    predicted_files = data.get('predicted_files', [])
-    tags = data.get('tags', [])
-    trigger_file = data.get('trigger_file', '')
-    confidence = data.get('confidence', 0.0)
-
-    if not predicted_files:
-        return jsonify({'success': True, 'logged': 0})
-
-    try:
-        # Store prediction in Redis with TTL (60 seconds - predictions expire)
-        import time as time_module
-        timestamp = time_module.time()
-        timestamp_ms = int(timestamp * 1000)
-        prediction_key = f"aoa:prediction:{session_id}:{timestamp_ms}"
-
-        prediction_data = {
-            'session_id': session_id,
-            'timestamp_ms': timestamp_ms,
-            'predicted_files': predicted_files,
-            'tags': tags,
-            'trigger_file': trigger_file,
-            'confidence': confidence,
-            'hit': None  # Will be set by /predict/check
-        }
-
-        # Store prediction with 24h TTL (matches rolling window for proper hit tracking)
-        scorer.redis.client.setex(
-            prediction_key,
-            ROLLING_WINDOW_SECONDS,  # 24 hour TTL - predictions persist for rolling analysis
-            json.dumps(prediction_data)
-        )
-
-        # Also add to session's prediction list for quick lookup
-        # R-003: Cap list to 100 items to prevent unbounded growth
-        session_predictions_key = f"aoa:predictions:{session_id}"
-        scorer.redis.client.lpush(session_predictions_key, prediction_key)
-        scorer.redis.client.ltrim(session_predictions_key, 0, 99)
-        scorer.redis.client.expire(session_predictions_key, ROLLING_WINDOW_SECONDS)  # 24h TTL to match rolling window
-
-        # Phase 4: Add to rolling predictions ZSET for Hit@5 calculation
-        # Score = timestamp, Member = prediction_id
-        # This persists beyond the 60s TTL for rolling metrics
-        rolling_key = "aoa:rolling:predictions"
-        scorer.redis.client.zadd(rolling_key, {prediction_key: timestamp})
-
-        # Store prediction data in a hash that persists for rolling window
-        rolling_data_key = f"aoa:rolling:data:{prediction_key}"
-        scorer.redis.client.hset(rolling_data_key, mapping={
-            'session_id': session_id,
-            'timestamp': str(timestamp),
-            'predicted_files': json.dumps(predicted_files[:5]),  # Top 5 for Hit@5
-            'hit': '',  # Empty = not yet evaluated
-        })
-        scorer.redis.client.expire(rolling_data_key, ROLLING_WINDOW_SECONDS + 3600)  # 25h TTL
-
-        # Cleanup: Remove predictions older than rolling window
-        cutoff = timestamp - ROLLING_WINDOW_SECONDS
-        scorer.redis.client.zremrangebyscore(rolling_key, 0, cutoff)
-
-        return jsonify({
-            'success': True,
-            'logged': len(predicted_files),
-            'prediction_key': prediction_key
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/predict/check', methods=['POST'])
-def check_prediction_hit():
-    """
-    Check if a file access was predicted (called by intent-capture after Read).
-
-    POST body:
-    {
-        "session_id": "uuid-xxx",
-        "file": "/src/file.py"
-    }
-
-    Returns whether this file was in recent predictions.
-
-    Phase 4: Also updates rolling data for Hit@5 calculation.
-    A prediction batch is a "hit" if ANY of the top 5 files were read.
-    """
-    if not RANKING_AVAILABLE or scorer is None:
-        return jsonify({'hit': False, 'error': 'Redis not available'}), 503
-
-    data = request.json
-    session_id = data.get('session_id', 'unknown')
-    file_path = data.get('file', '')
-    project_id = data.get('project_id', '')  # UUID for per-project_id metrics
-
-    if not file_path:
-        return jsonify({'hit': False})
-
-    try:
-        # Get recent predictions for this session
-        session_predictions_key = f"aoa:predictions:{session_id}"
-        prediction_keys = scorer.redis.client.lrange(session_predictions_key, 0, 10)
-
-        for pred_key in prediction_keys:
-            pred_key_str = pred_key.decode() if isinstance(pred_key, bytes) else pred_key
-            pred_data = scorer.redis.client.get(pred_key_str)
-            if pred_data:
-                prediction = json.loads(pred_data)
-                if file_path in prediction.get('predicted_files', []):
-                    # Record the hit - global (system monitoring)
-                    scorer.redis.client.incr('aoa:metrics:hits')
-
-                    # Record per-project_id hit count (NOT fabricated savings)
-                    # Real savings are calculated when we have both baseline + actual output
-                    if project_id:
-                        scorer.redis.client.incr(f'aoa:{project_id}:metrics:hits')
-
-                    # Phase 4: Mark the prediction batch as a hit in rolling data
-                    rolling_data_key = f"aoa:rolling:data:{pred_key_str}"
-                    current_hit = scorer.redis.client.hget(rolling_data_key, 'hit')
-                    if current_hit is not None:
-                        # Only mark as hit if not already evaluated
-                        current_hit_str = current_hit.decode() if isinstance(current_hit, bytes) else current_hit
-                        if current_hit_str == '':
-                            scorer.redis.client.hset(rolling_data_key, 'hit', '1')
-
-                    return jsonify({
-                        'hit': True,
-                        'prediction_key': pred_key_str,
-                        'confidence': prediction.get('confidence', 0)
-                    })
-
-        # No hit - record miss (global)
-        scorer.redis.client.incr('aoa:metrics:misses')
-        if project_id:
-            scorer.redis.client.incr(f'aoa:{project_id}:metrics:misses')
-
-        # Phase 4: Mark any unevaluated predictions as misses after a file read
-        # (This is conservative - we only mark miss if we checked and didn't find a hit)
-        # Note: We don't mark as miss here because the user might still read a predicted file later
-
-        return jsonify({'hit': False})
-
-    except Exception as e:
-        return jsonify({'hit': False, 'error': str(e)}), 500
-
-
-@app.route('/predict/stats')
-def prediction_stats():
-    """
-    Get prediction hit/miss statistics.
-
-    Phase 4: Includes rolling Hit@5 over 24h window.
-    """
-    if not RANKING_AVAILABLE or scorer is None:
-        return jsonify({'error': 'Redis not available'}), 503
-
-    project_id = request.args.get('project_id')
-
-    try:
-        # Legacy cumulative counters (per-project_id if project_id provided)
-        if project_id:
-            hits = int(scorer.redis.client.get(f'aoa:{project_id}:metrics:hits') or 0)
-            misses = int(scorer.redis.client.get(f'aoa:{project_id}:metrics:misses') or 0)
-        else:
-            hits = int(scorer.redis.client.get('aoa:metrics:hits') or 0)
-            misses = int(scorer.redis.client.get('aoa:metrics:misses') or 0)
-
-        total = hits + misses
-        hit_rate = (hits / total * 100) if total > 0 else 0
-
-        # Phase 4: Calculate rolling Hit@5 over 24h window
-        rolling_stats = calculate_rolling_hit_rate()
-
-        return jsonify({
-            # Legacy stats
-            'hits': hits,
-            'misses': misses,
-            'total': total,
-            'hit_rate': round(hit_rate, 1),
-            # Phase 4 rolling stats
-            'rolling': rolling_stats,
-            'project_id': project_id
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-def calculate_rolling_hit_rate(window_hours: int = 24) -> dict:
-    """
-    Calculate Hit@5 over a rolling time window.
-
-    Hit@5 = (prediction batches with at least 1 hit) / (total evaluated batches)
-
-    Returns:
-        dict with:
-        - window_hours: The time window
-        - total_predictions: Number of predictions in window
-        - evaluated: Number of predictions that have been evaluated
-        - hits: Number of prediction batches with at least 1 hit
-        - hit_at_5: Hit@5 rate (0.0 to 1.0)
-        - hit_at_5_pct: Hit@5 as percentage (0 to 100)
-    """
-    import time as time_module
-
-    if not RANKING_AVAILABLE or scorer is None:
-        return {'error': 'Redis not available'}
-
-    try:
-        now = time_module.time()
-        window_start = now - (window_hours * 3600)
-
-        # Get all predictions in the rolling window
-        rolling_key = "aoa:rolling:predictions"
-        prediction_keys = scorer.redis.client.zrangebyscore(
-            rolling_key, window_start, now
-        )
-
-        total_predictions = len(prediction_keys)
-        evaluated = 0
-        hits = 0
-        misses = 0
-
-        for pred_key in prediction_keys:
-            pred_key_str = pred_key.decode() if isinstance(pred_key, bytes) else pred_key
-            rolling_data_key = f"aoa:rolling:data:{pred_key_str}"
-
-            hit_value = scorer.redis.client.hget(rolling_data_key, 'hit')
-            if hit_value is not None:
-                hit_str = hit_value.decode() if isinstance(hit_value, bytes) else hit_value
-                if hit_str == '1':
-                    hits += 1
-                    evaluated += 1
-                elif hit_str == '0':
-                    misses += 1
-                    evaluated += 1
-                # Empty string means not yet evaluated
-
-        hit_at_5 = hits / evaluated if evaluated > 0 else 0.0
-
-        return {
-            'window_hours': window_hours,
-            'total_predictions': total_predictions,
-            'evaluated': evaluated,
-            'pending': total_predictions - evaluated,
-            'hits': hits,
-            'misses': misses,
-            'hit_at_5': round(hit_at_5, 4),
-            'hit_at_5_pct': round(hit_at_5 * 100, 1),
-        }
-
-    except Exception as e:
-        return {'error': str(e)}
-
-
-@app.route('/predict/finalize', methods=['POST'])
-def finalize_predictions():
-    """
-    Finalize stale predictions as misses.
-
-    Predictions older than `max_age_seconds` (default 300 = 5 minutes) that
-    haven't been marked as hits are marked as misses.
-
-    POST body (optional):
-    {
-        "max_age_seconds": 300
-    }
-
-    Returns count of predictions finalized.
-    """
-    if not RANKING_AVAILABLE or scorer is None:
-        return jsonify({'error': 'Redis not available'}), 503
-
-    import time as time_module
-
-    data = request.json or {}
-    max_age_seconds = data.get('max_age_seconds', 300)  # 5 minutes default
-
-    try:
-        now = time_module.time()
-        cutoff = now - max_age_seconds
-
-        # Get predictions older than max_age that haven't been evaluated
-        rolling_key = "aoa:rolling:predictions"
-        stale_keys = scorer.redis.client.zrangebyscore(
-            rolling_key, 0, cutoff
-        )
-
-        finalized = 0
-        for pred_key in stale_keys:
-            pred_key_str = pred_key.decode() if isinstance(pred_key, bytes) else pred_key
-            rolling_data_key = f"aoa:rolling:data:{pred_key_str}"
-
-            hit_value = scorer.redis.client.hget(rolling_data_key, 'hit')
-            if hit_value is not None:
-                hit_str = hit_value.decode() if isinstance(hit_value, bytes) else hit_value
-                if hit_str == '':
-                    # Not yet evaluated - mark as miss
-                    scorer.redis.client.hset(rolling_data_key, 'hit', '0')
-                    finalized += 1
-
-        return jsonify({
-            'finalized': finalized,
-            'checked': len(stale_keys),
-            'max_age_seconds': max_age_seconds
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 
 # ============================================================================
@@ -6209,104 +5989,38 @@ def calculate_dynamic_rates() -> dict:
 @app.route('/metrics')
 def get_metrics():
     """
-    Unified metrics endpoint showing accuracy, tuner performance, and trends.
+    Simplified metrics endpoint for status line.
+
+    SH-04: Prediction system sunset - now based on stop_count.
 
     Query params:
-        project_id: UUID for per-project_id metrics (optional, for future per-project_id support)
+        project_id: UUID for per-project metrics
 
     Returns:
         {
-            "hit_at_5": 0.72,
-            "hit_at_5_pct": 72.0,
-            "target": 0.90,
-            "gap": 0.18,
-            "trend": "improving",
-
-            "rolling": {
-                "window_hours": 24,
-                "total_predictions": 150,
-                "evaluated": 120,
-                "hits": 86,
-                "hit_at_5": 0.72
-            },
-
-            "tuner": {
-                "best_arm": "recency-heavy",
-                "best_weights": {"recency": 0.5, ...},
-                "best_mean": 0.78,
-                "total_samples": 150
-            },
-
-            "legacy": {
-                "hits": 200,
-                "misses": 100,
-                "hit_rate": 66.7
-            }
+            "stop_count": 125,      # Total stops for this project
+            "total_intents": 450,   # Total intent records
+            "savings": {...},       # Token/time savings
+            "rolling": {...}        # Stub for backward compat
         }
+
+    Status line thresholds:
+        <50 stops: gray (learning)
+        50-250: yellow
+        250+: green
     """
-    # Accept project_id for future per-project_id metrics support
-    # TODO: Implement per-project_id Redis key prefixing for metrics
     project_id = request.args.get('project_id')
 
     if not RANKING_AVAILABLE or scorer is None:
         return jsonify({'error': 'Ranking not available'}), 503
 
     try:
-        # Get rolling stats
-        rolling = calculate_rolling_hit_rate()
-
-        # Get tuner stats
-        tuner_stats = {}
-        if tuner is not None:
-            best = tuner.get_best_weights()
-            arm_idx = best.pop('_arm_idx', 0)
-            mean = best.pop('_mean', 0.5)
-            arm = tuner.ARMS[arm_idx]
-            all_stats = tuner.get_stats()
-
-            tuner_stats = {
-                'best_arm': arm.get('name', f'arm-{arm_idx}'),
-                'best_arm_idx': arm_idx,
-                'best_weights': best,
-                'best_mean': round(mean, 4),
-                'total_samples': sum(a['samples'] for a in all_stats),
-            }
-
-        # Legacy cumulative stats (per-project_id if project_id provided, else global)
-        # Note: tokens_saved and time_saved_ms are DEPRECATED - they were fabricated estimates
-        # Real savings require capturing actual output tokens (Phase 2)
+        # Get stop count (the new primary metric)
+        stop_count = 0
         if project_id:
-            hits = int(scorer.redis.client.get(f'aoa:{project_id}:metrics:hits') or 0)
-            misses = int(scorer.redis.client.get(f'aoa:{project_id}:metrics:misses') or 0)
-            # DEPRECATED: These were fake hardcoded estimates (1500 tokens/hit, 50ms/hit)
-            # Real savings will be tracked via intent records with baseline + actual output
-            tokens_saved = int(scorer.redis.client.get(f'aoa:{project_id}:savings:tokens:real') or 0)
-        else:
-            hits = int(scorer.redis.client.get('aoa:metrics:hits') or 0)
-            misses = int(scorer.redis.client.get('aoa:metrics:misses') or 0)
-            # DEPRECATED: These were fake hardcoded estimates
-            tokens_saved = int(scorer.redis.client.get('aoa:savings:tokens:real') or 0)
+            stop_count = int(scorer.redis.client.get(f'aoa:{project_id}:session:stop_count') or 0)
 
-        total = hits + misses
-        legacy_rate = (hits / total * 100) if total > 0 else 0
-
-        # Calculate main metrics
-        hit_at_5 = rolling.get('hit_at_5', 0.0)
-        target = 0.90
-
-        # Determine trend (would need historical data for real trend)
-        # For now, compare to legacy rate
-        if rolling.get('evaluated', 0) > 10:
-            if hit_at_5 > (legacy_rate / 100) + 0.05:
-                trend = 'improving'
-            elif hit_at_5 < (legacy_rate / 100) - 0.05:
-                trend = 'declining'
-            else:
-                trend = 'stable'
-        else:
-            trend = 'insufficient_data'
-
-        # Get real savings from intent index (file_size vs output_size measurements)
+        # Get savings from intent index
         intent_savings = {}
         total_intents = 0
         if intent_index:
@@ -6314,8 +6028,7 @@ def get_metrics():
             intent_savings = intent_stats.get('savings', {})
             total_intents = intent_stats.get('total_records', 0)
 
-        # Total savings = Redis + Intent (Intent is the primary/real source)
-        total_tokens_saved = tokens_saved + intent_savings.get('tokens', 0)
+        tokens_saved = intent_savings.get('tokens', 0)
 
         # Calculate dynamic rates from session logs
         dynamic_rates = calculate_dynamic_rates()
@@ -6323,50 +6036,46 @@ def get_metrics():
         rate_high = dynamic_rates.get('rate_high', 5.0)
 
         # Calculate time range using dynamic rates (ms/token -> seconds)
-        time_sec_low = total_tokens_saved * rate_low / 1000
-        time_sec_high = total_tokens_saved * rate_high / 1000
+        time_sec_low = tokens_saved * rate_low / 1000
+        time_sec_high = tokens_saved * rate_high / 1000
 
         savings_data = {
-            'tokens': total_tokens_saved,
+            'tokens': tokens_saved,
             'baseline': intent_savings.get('baseline', 0),
             'actual': intent_savings.get('actual', 0),
             'measured_records': intent_savings.get('measured_records', 0),
             'time_sec_low': round(time_sec_low, 1),
             'time_sec_high': round(time_sec_high, 1),
-            'time_sec': round(time_sec_high, 1),  # Backward compat: use high estimate
+            'time_sec': round(time_sec_high, 1),
             'rate_low': rate_low,
             'rate_high': rate_high,
             'rate_samples': dynamic_rates.get('samples', 0),
         }
 
+        # Stub rolling stats for backward compatibility with status line
+        rolling = {
+            'window_hours': 24,
+            'total_predictions': 0,
+            'evaluated': 0,
+            'pending': 0,
+            'hits': 0,
+            'misses': 0,
+            'hit_at_5': 0.0,
+            'hit_at_5_pct': 0.0,
+        }
+
         return jsonify({
-            # Primary metrics
-            'hit_at_5': hit_at_5,
-            'hit_at_5_pct': rolling.get('hit_at_5_pct', 0.0),
-            'target': target,
-            'target_pct': target * 100,
-            'gap': round(target - hit_at_5, 4),
-            'trend': trend,
+            # Primary metric: stop count
+            'stop_count': stop_count,
 
-            # Detailed rolling stats
-            'rolling': rolling,
+            # Intent count
+            'total_intents': total_intents,
 
-            # Tuner stats
-            'tuner': tuner_stats,
-
-            # Legacy stats (cumulative)
-            'legacy': {
-                'hits': hits,
-                'misses': misses,
-                'total': total,
-                'hit_rate': round(legacy_rate, 1),
-            },
-
-            # Savings (cumulative) - include intent index real measurements
+            # Savings
             'savings': savings_data,
 
-            # Intent count for status line
-            'total_intents': total_intents,
+            # Stub for backward compat
+            'rolling': rolling,
         })
 
     except Exception as e:
@@ -6493,212 +6202,96 @@ def config_thresholds():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/predict')
-def predict_files():
+# ============================================================================
+# Session Stop Hook (SH-02)
+# ============================================================================
+
+@app.route('/session/stop', methods=['POST'])
+def session_stop():
     """
-    Get predicted files with optional snippet prefetch.
+    Stop hook handler: increment counter, trigger async actions at thresholds.
 
-    This is the main prediction endpoint for P2-005.
-    Returns ranked files with first N lines of each file for context injection.
-
-    Query params:
-        tags: Comma-separated tags to filter/boost by (optional)
-        keywords: Comma-separated keywords from prompt (optional, treated as tags)
-        limit: Maximum files to return (default: 5)
-        snippet_lines: Number of lines to prefetch per file (default: 20, 0 to disable)
-        file: Trigger file for co-occurrence lookup (optional)
+    POST body:
+    {
+        "session_id": "abc123",
+        "project_id": "uuid-here"
+    }
 
     Returns:
-        {
-            "files": [
-                {
-                    "path": "/src/api/routes.py",
-                    "confidence": 0.85,
-                    "snippet": "first 20 lines..."
-                }
-            ],
-            "predictions": ["/src/api/routes.py", ...],  # Simple list for backward compat
-            "ms": 4.2
-        }
+    {
+        "stop_count": 5,
+        "triggered": ["scrape"],  # Actions triggered at this stop
+        "thresholds": {"scrape": 5, "rebalance": 25, "autotune": 100}
+    }
+
+    Thresholds:
+    - Every 5 stops: Session scrape (bigrams + file hits) - async
+    - Every 25 stops: Rebalance keywords - async
+    - Every 100 stops: Autotune (decay, promote, demote, prune) - async
     """
-    start = time.time()
+    data = request.json or {}
+    session_id = data.get('session_id', 'unknown')
+    project_id = data.get('project_id')
+
+    if not project_id:
+        return jsonify({'error': 'project_id required'}), 400
 
     if not RANKING_AVAILABLE or scorer is None:
-        return jsonify({
-            'error': 'Ranking module not available',
-            'files': [],
-            'predictions': [],
-            'ms': (time.time() - start) * 1000
-        }), 503
-
-    # Parse parameters
-    tag_param = request.args.get('tags', request.args.get('tag', ''))
-    keyword_param = request.args.get('keywords', '')
-    file_param = request.args.get('file', '')
-
-    # Combine tags and keywords
-    tags = [t.strip().lstrip('#') for t in tag_param.split(',') if t.strip()]
-    keywords = [k.strip() for k in keyword_param.split(',') if k.strip()]
-    all_tags = list(set(tags + keywords))
-
-    limit = int(request.args.get('limit', 5))
-    snippet_lines = int(request.args.get('snippet_lines', 20))
+        return jsonify({'error': 'Redis not available'}), 503
 
     try:
-        # Get ranked files from scorer
-        results = scorer.get_ranked_files(tags=all_tags if all_tags else None, limit=limit * 2)
+        r = scorer.redis.client
 
-        # Get transition predictions if trigger file provided
-        transition_preds = {}
-        transition_boost = 0.0
-        project_root = os.environ.get('CODEBASE_ROOT', '/codebase')
-        host_root = '/home/corey/aOa'
+        # Increment stop count (atomic)
+        stop_key = f'aoa:{project_id}:session:stop_count'
+        stop_count = r.incr(stop_key)
 
-        if file_param and SESSION_PARSER_AVAILABLE:
-            try:
-                # Try with the file param as-is first
-                trans_results = SessionLogParser.predict_next(scorer.redis, file_param, limit=10)
+        # Set TTL on stop counter (24 hour session window)
+        if stop_count == 1:
+            r.expire(stop_key, 86400)
 
-                # If no results, try normalizing the path
-                if not trans_results and file_param.startswith(host_root):
-                    normalized = file_param[len(host_root) + 1:]  # Remove /home/corey/aOa/
-                    trans_results = SessionLogParser.predict_next(scorer.redis, normalized, limit=10)
-                elif not trans_results and file_param.startswith(project_root):
-                    normalized = file_param[len(project_root) + 1:]  # Remove /codebase/
-                    trans_results = SessionLogParser.predict_next(scorer.redis, normalized, limit=10)
+        # Check thresholds and queue actions
+        triggered = []
+        thresholds = {
+            'scrape': 5,
+            'rebalance': 25,
+            'autotune': 100
+        }
 
-                # Store predictions with both absolute and relative paths for matching
-                for f, prob in trans_results:
-                    transition_preds[f] = prob
-                    # Also store absolute path variant
-                    if not f.startswith('/'):
-                        transition_preds[os.path.join(host_root, f)] = prob
+        # Every 5 stops: Session scrape (bigrams + file hits)
+        if stop_count % thresholds['scrape'] == 0:
+            triggered.append('scrape')
+            # Queue via JobQueue (SH-02c)
+            if JOBS_AVAILABLE:
+                queue = JobQueue(project_id)
+                job = create_scrape_job(project_id, session_id, stop_count)
+                queue.push(job)
 
-                transition_boost = 0.3  # Boost factor for transition matches
-            except Exception:
-                pass  # Transitions are optional enhancement
+        # Every 25 stops: Rebalance
+        if stop_count % thresholds['rebalance'] == 0:
+            triggered.append('rebalance')
+            # Set haiku pending flag for next prompt
+            r.set(f'aoa:{project_id}:haiku_pending', '1')
 
-        # Build response with snippets
-        files = []
-        seen_paths = set()
-
-        for r in results:
-            file_path = r['file']
-            # Use calibrated confidence from scorer (P2-001)
-            # Falls back to normalized score for backward compatibility
-            confidence = r.get('confidence', min(r.get('score', 0.0) / 100.0, 1.0))
-
-            # Boost confidence if file is also predicted by transitions
-            if file_path in transition_preds:
-                trans_prob = transition_preds[file_path]
-                confidence = min(1.0, confidence + trans_prob * transition_boost)
-
-            file_data = {
-                'path': file_path,
-                'confidence': round(confidence, 3)
-            }
-
-            # Read snippet if requested
-            if snippet_lines > 0:
-                snippet = read_file_snippet(file_path, snippet_lines)
-                if snippet:
-                    file_data['snippet'] = snippet
-
-            files.append(file_data)
-            seen_paths.add(file_path)
-
-            if len(files) >= limit:
-                break
-
-        # Add high-probability transition predictions not in scorer results
-        if transition_preds and len(files) < limit:
-            for trans_file, trans_prob in sorted(transition_preds.items(),
-                                                  key=lambda x: x[1], reverse=True):
-                if trans_file not in seen_paths and trans_prob >= 0.1:
-                    file_data = {
-                        'path': trans_file,
-                        'confidence': round(trans_prob * 0.8, 3),  # Scale down since not in scorer
-                        'source': 'transition'
-                    }
-                    if snippet_lines > 0:
-                        snippet = read_file_snippet(trans_file, snippet_lines)
-                        if snippet:
-                            file_data['snippet'] = snippet
-                    files.append(file_data)
-                    if len(files) >= limit:
-                        break
-
-        # Re-sort by confidence
-        files.sort(key=lambda x: x['confidence'], reverse=True)
-        files = files[:limit]
+        # Every 100 stops: Autotune
+        if stop_count % thresholds['autotune'] == 0:
+            triggered.append('autotune')
+            # Queue via JobQueue (SH-02c)
+            if JOBS_AVAILABLE:
+                queue = JobQueue(project_id)
+                job = create_autotune_job(project_id, stop_count)
+                queue.push(job)
 
         return jsonify({
-            'files': files,
-            'predictions': [f['path'] for f in files],  # Backward compat
-            'tags_used': all_tags,
-            'trigger_file': file_param if file_param else None,
-            'transition_matches': len([f for f in files if f['path'] in transition_preds]),
-            'ms': round((time.time() - start) * 1000, 2)
+            'success': True,
+            'stop_count': stop_count,
+            'triggered': triggered,
+            'thresholds': thresholds
         })
 
     except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'files': [],
-            'predictions': [],
-            'ms': (time.time() - start) * 1000
-        }), 500
+        return jsonify({'error': str(e)}), 500
 
-
-def read_file_snippet(file_path: str, max_lines: int = 20) -> str:
-    """
-    Read first N lines of a file for snippet prefetch.
-
-    Returns empty string if file doesn't exist or can't be read.
-    Handles common text files, skips binary files.
-    """
-    import os
-
-    # Translate host paths to container paths
-    # File paths in Redis are stored as /home/corey/aOa/... but in container they're at /codebase/...
-    CODEBASE_ROOT = os.environ.get('CODEBASE_ROOT', '/codebase')
-    HOST_PATH_PREFIX = '/home/corey/aOa'
-
-    if file_path.startswith(HOST_PATH_PREFIX):
-        file_path = file_path.replace(HOST_PATH_PREFIX, CODEBASE_ROOT, 1)
-
-    # Resolve to absolute path if needed
-    if not os.path.isabs(file_path):
-        # Try common base paths
-        for base in [CODEBASE_ROOT, os.getcwd()]:
-            full_path = os.path.join(base, file_path)
-            if os.path.exists(full_path):
-                file_path = full_path
-                break
-
-    if not os.path.exists(file_path):
-        return ''
-
-    # Skip binary files by extension
-    binary_exts = {'.pyc', '.so', '.o', '.a', '.exe', '.dll', '.bin', '.dat',
-                   '.png', '.jpg', '.jpeg', '.gif', '.ico', '.pdf', '.zip', '.tar', '.gz'}
-    _, ext = os.path.splitext(file_path)
-    if ext.lower() in binary_exts:
-        return ''
-
-    try:
-        with open(file_path, encoding='utf-8', errors='ignore') as f:
-            lines = []
-            for i, line in enumerate(f):
-                if i >= max_lines:
-                    break
-                # Truncate very long lines
-                if len(line) > 500:
-                    line = line[:500] + '...\n'
-                lines.append(line)
-            return ''.join(lines)
-    except OSError:
-        return ''
 
 
 # ============================================================================

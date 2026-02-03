@@ -75,12 +75,8 @@ ROUTES = {
     "/rank/stats": ("index", "/rank/stats"),
     "/rank/record": ("index", "/rank/record"),
 
-    # Prediction tracking routes (Phase 2)
-    "/predict": ("index", "/predict"),
-    "/predict/log": ("index", "/predict/log"),
-    "/predict/check": ("index", "/predict/check"),
-    "/predict/stats": ("index", "/predict/stats"),
-    "/predict/finalize": ("index", "/predict/finalize"),
+    # Session routes (SH-04: Stop hook)
+    "/session/stop": ("index", "/session/stop"),
 
     # Weight tuner routes (Phase 4)
     "/tuner/weights": ("index", "/tuner/weights"),
@@ -164,6 +160,7 @@ ROUTES = {
     "/cc/prompts": ("index", "/cc/prompts"),        # User prompts
     "/cc/sessions": ("index", "/cc/sessions"),      # Per-session metrics
     "/cc/stats": ("index", "/cc/stats"),            # Health dashboard
+    "/cc/conversation": ("index", "/cc/conversation"),  # Full text for bigrams
 
     # Status service routes
     "/status": ("status", "/status"),

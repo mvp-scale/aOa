@@ -194,47 +194,40 @@ if [ -z "$METRICS" ]; then
 fi
 
 # Parse metrics
-HIT_PCT=$(echo "$METRICS" | jq -r '.rolling.hit_at_5_pct // 0')
-HIT_PCT_INT=$(printf "%.0f" "$HIT_PCT")
+STOP_COUNT=$(echo "$METRICS" | jq -r '.stop_count // 0')
+STOP_COUNT=${STOP_COUNT:-0}
 TOKENS_SAVED=$(echo "$METRICS" | jq -r '.savings.tokens // 0')
 TIME_SEC_LOW=$(echo "$METRICS" | jq -r '.savings.time_sec_low // 0')
 TIME_SEC_HIGH=$(echo "$METRICS" | jq -r '.savings.time_sec_high // 0')
 TIME_SEC_LOW_INT=$(printf "%.0f" "$TIME_SEC_LOW")
 TIME_SEC_HIGH_INT=$(printf "%.0f" "$TIME_SEC_HIGH")
-ROLLING_HITS=$(echo "$METRICS" | jq -r '.rolling.hits // 0')
-EVALUATED=$(echo "$METRICS" | jq -r '.rolling.evaluated // 0')
 INTENTS=$(echo "$METRICS" | jq -r '.total_intents // 0')
 INTENTS=${INTENTS:-0}
 
 # === BUILD DISPLAY ===
 SEP="${DIM}│${RESET}"
 
-# Traffic light + intents
-if [ "$INTENTS" -lt "$MIN_INTENTS" ]; then
-    # Learning phase: gray light, X/30
+# Traffic light based on stop_count (learning progress)
+# <50: learning (gray), 50-250: active (yellow), 250+: trained (green)
+if [ "$STOP_COUNT" -lt 50 ] 2>/dev/null; then
     LIGHT="${GRAY}⚪${RESET}"
-    INTENT_DISPLAY="${INTENTS}/${MIN_INTENTS}"
-elif [ "$HIT_PCT_INT" -ge 80 ] 2>/dev/null; then
-    # Good predictions: green light
-    LIGHT="${GREEN}🟢${RESET}"
+    INTENT_DISPLAY="learning"
+elif [ "$STOP_COUNT" -lt 250 ] 2>/dev/null; then
+    LIGHT="${YELLOW}🟡${RESET}"
     INTENT_DISPLAY="${INTENTS}"
 else
-    # Predicting but room to improve: yellow light
-    LIGHT="${YELLOW}🟡${RESET}"
+    LIGHT="${GREEN}🟢${RESET}"
     INTENT_DISPLAY="${INTENTS}"
 fi
 
 # Format intents for display (1.2k for large numbers)
-if [ "$INTENTS" -ge 1000 ]; then
+# Skip if still in "learning" mode (stop_count < 50)
+if [ "$STOP_COUNT" -ge 50 ] && [ "$INTENTS" -ge 1000 ]; then
     INTENT_FMT=$(format_tokens $INTENTS)
-    if [ "$INTENTS" -lt "$MIN_INTENTS" ]; then
-        INTENT_DISPLAY="${INTENT_FMT}/${MIN_INTENTS}"
-    else
-        INTENT_DISPLAY="${INTENT_FMT}"
-    fi
+    INTENT_DISPLAY="${INTENT_FMT}"
 fi
 
-# Middle section: savings OR speed+hits
+# Middle section: savings OR learning
 if [ "$TOKENS_SAVED" -gt 0 ] 2>/dev/null; then
     # Have savings - show them with time range
     TOKENS_SAVED_FMT=$(format_tokens $TOKENS_SAVED)
@@ -247,13 +240,8 @@ if [ "$TOKENS_SAVED" -gt 0 ] 2>/dev/null; then
     fi
     MIDDLE="${GREEN}↓${TOKENS_SAVED_FMT}${RESET} ${CYAN}⚡${TIME_RANGE}${RESET} saved"
 else
-    # No savings yet - show speed and prediction hits
-    HITS=${ROLLING_HITS:-0}
-    if [ "$HITS" -gt 0 ]; then
-        MIDDLE="${GREEN}${RESPONSE_MS}ms${RESET} ${DIM}•${RESET} ${HITS} hits"
-    else
-        MIDDLE="${GREEN}${RESPONSE_MS}ms${RESET} ${DIM}•${RESET} ready"
-    fi
+    # No savings yet - show learning
+    MIDDLE="${DIM}learning${RESET}"
 fi
 
 # Check enrichment status for intelligence angle display

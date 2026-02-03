@@ -13,8 +13,11 @@ Run modes:
 
 import json
 import os
+import re
 import sys
 import time
+import urllib.parse
+import urllib.request
 from typing import Callable, Optional
 
 # Add paths for imports
@@ -58,6 +61,8 @@ class JobWorker:
             JobType.CLEANUP: self._handle_cleanup,
             JobType.TUNE: self._handle_tune,
             JobType.REINDEX: self._handle_reindex,
+            JobType.SCRAPE: self._handle_scrape,
+            JobType.AUTOTUNE: self._handle_autotune,
         }
 
     def process_one(self, timeout: int = 0) -> Optional[Job]:
@@ -206,6 +211,145 @@ class JobWorker:
 
         print(f"[Worker] REINDEX: {domain_name or 'all'}", flush=True)
         # Implementation would rebuild keyword->file mappings
+
+    def _handle_scrape(self, job: Job) -> None:
+        """
+        SH-03: Session scrape - extract bigrams + track file hits.
+
+        Runs every 5 stops. Extracts:
+        1. Bigrams from user prompts (word pairs → Redis HINCRBY)
+        2. File hits from intent records (file:range → keyword lookups)
+        """
+        import re
+        import urllib.request
+        import urllib.error
+
+        session_id = job.payload.get("session_id", "")
+        stop_count = job.payload.get("stop_count", 0)
+
+        print(f"[Worker] SCRAPE: session={session_id[:8]}... stop={stop_count}", flush=True)
+
+        # Get Redis client
+        from ranking.redis_client import RedisClient
+        redis = RedisClient(self.redis_url)
+        r = redis.client
+
+        # SH-07: Extract bigrams from conversation via /cc/conversation API
+        # Uses cursor to only get NEW content since last scrape
+        try:
+            aoa_url = os.environ.get("AOA_URL", "http://localhost:8080")
+
+            # Get cursor: last scrape timestamp
+            cursor_key = f"aoa:{self.project_id}:scrape_cursor"
+            since = r.get(cursor_key) or ""
+
+            # Fetch conversation since last scrape
+            url = f"{aoa_url}/cc/conversation?limit=100"
+            if since:
+                url += f"&since={urllib.parse.quote(since)}"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+
+            texts = data.get("texts", [])
+            latest_ts = data.get("latest_timestamp", "")
+
+            bigram_count = 0
+            for item in texts:
+                text = item.get("text", "")
+                if not isinstance(text, str) or len(text) < 10:
+                    continue
+                # Tokenize: lowercase, split on non-word chars
+                words = re.findall(r'\b[a-z][a-z0-9_]+\b', text.lower())
+                # Extract bigrams (consecutive word pairs)
+                for i in range(len(words) - 1):
+                    bigram = f"{words[i]}:{words[i+1]}"
+                    r.hincrby(f"aoa:{self.project_id}:bigrams", bigram, 1)
+                    bigram_count += 1
+
+            # Update cursor for next scrape
+            if latest_ts:
+                r.set(cursor_key, latest_ts)
+
+            print(f"[Worker] SCRAPE: extracted {bigram_count} bigrams from {len(texts)} texts (since={since[:20] if since else 'start'})", flush=True)
+
+        except Exception as e:
+            print(f"[Worker] SCRAPE: bigram extraction failed: {e}", flush=True)
+
+        # SH-09: Track file hits from intent records
+        try:
+            aoa_url = os.environ.get("AOA_URL", "http://localhost:8080")
+            url = f"{aoa_url}/intent/recent?limit=20&project_id={self.project_id}"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode())
+
+            hit_count = 0
+            for record in data.get("records", []):
+                files = record.get("files", [])
+                for file_entry in files:
+                    # Skip command entries
+                    if file_entry.startswith("cmd:") or file_entry.startswith("pattern:"):
+                        continue
+                    # Extract file path (remove :line-range if present)
+                    file_path = file_entry.split(":")[0] if ":" in file_entry else file_entry
+                    if file_path:
+                        r.hincrby(f"aoa:{self.project_id}:file_hits", file_path, 1)
+                        hit_count += 1
+
+            print(f"[Worker] SCRAPE: tracked {hit_count} file hits", flush=True)
+
+        except Exception as e:
+            print(f"[Worker] SCRAPE: file hit tracking failed: {e}", flush=True)
+
+    def _handle_autotune(self, job: Job) -> None:
+        """
+        SH-12: Autotune - decay, prune, promote.
+
+        Runs every 100 stops. Operations:
+        1. Decay: Reduce hit counts by factor (recency weighting)
+        2. Prune: Remove keywords below threshold
+        3. Promote: Move high-hit context keywords to core
+        """
+        stop_count = job.payload.get("stop_count", 0)
+
+        print(f"[Worker] AUTOTUNE: stop={stop_count}", flush=True)
+
+        # Get Redis client
+        from ranking.redis_client import RedisClient
+        redis = RedisClient(self.redis_url)
+        r = redis.client
+
+        # Decay factor (0.9 = lose 10% per autotune cycle)
+        DECAY_FACTOR = 0.9
+
+        # Decay bigram counts
+        bigrams = r.hgetall(f"aoa:{self.project_id}:bigrams")
+        decayed = 0
+        pruned = 0
+        for bigram, count in bigrams.items():
+            new_count = int(float(count) * DECAY_FACTOR)
+            if new_count <= 0:
+                r.hdel(f"aoa:{self.project_id}:bigrams", bigram)
+                pruned += 1
+            else:
+                r.hset(f"aoa:{self.project_id}:bigrams", bigram, new_count)
+                decayed += 1
+
+        # Decay file hits
+        file_hits = r.hgetall(f"aoa:{self.project_id}:file_hits")
+        file_decayed = 0
+        file_pruned = 0
+        for file_path, count in file_hits.items():
+            new_count = int(float(count) * DECAY_FACTOR)
+            if new_count <= 0:
+                r.hdel(f"aoa:{self.project_id}:file_hits", file_path)
+                file_pruned += 1
+            else:
+                r.hset(f"aoa:{self.project_id}:file_hits", file_path, new_count)
+                file_decayed += 1
+
+        print(f"[Worker] AUTOTUNE: bigrams decayed={decayed} pruned={pruned}, files decayed={file_decayed} pruned={file_pruned}", flush=True)
 
 
 def get_queue_status(project_id: str, redis_url: Optional[str] = None) -> dict:

@@ -3,12 +3,12 @@
 aOa Gateway - Single entry point for all Claude Code hooks.
 
 Events:
-  --event=prompt   UserPromptSubmit: status line, predictions
+  --event=prompt   UserPromptSubmit: status line, domain learning checks
   --event=tool     PostToolUse: intent capture
   --event=enforce  PostToolUse: soft guidance for Grep/Glob
-  --event=prefetch PreToolUse: prefetch related files (TODO)
+  --event=stop     Stop: session heartbeat, triggers learning at thresholds
 
-GL-083: Simplified - removed per-prompt learning/tagging (now via `aoa analyze`)
+SH-04: Prediction system sunset - predictions removed, stop_count is the metric.
 
 Usage: python3 aoa-gateway.py --event=<event> < stdin_json
 """
@@ -57,10 +57,8 @@ AOA_URL = _PROJECT_CONFIG["aoa_url"]
 CYAN, GREEN, YELLOW, RED = "\033[96m", "\033[92m", "\033[93m", "\033[91m"
 BOLD, DIM, NC = "\033[1m", "\033[2m", "\033[0m"
 
-# Prediction settings
+# Minimum intents before certain features activate
 MIN_INTENTS = 5
-MAX_SNIPPET_LINES = 15
-MAX_FILES = 3
 
 # Stopwords for keyword extraction
 STOPWORDS = {
@@ -356,80 +354,6 @@ def extract_keywords(prompt: str) -> list:
     return unique[:10]
 
 
-def get_predictions(keywords: list) -> dict:
-    """Call aOa /predict endpoint with extracted keywords."""
-    if not keywords:
-        return {'files': []}
-
-    keyword_str = ','.join(keywords)
-    return api_get(f"/predict?keywords={keyword_str}&limit={MAX_FILES}&snippet_lines={MAX_SNIPPET_LINES}") or {'files': []}
-
-
-def format_prediction_context(files: list, keywords: list) -> str:
-    """Format predicted files as additionalContext for Claude."""
-    if not files:
-        return ""
-
-    project_root = str(PROJECT_ROOT)
-
-    def rel_path(path):
-        if path.startswith(project_root):
-            return path[len(project_root):].lstrip('/')
-        return path
-
-    parts = ["## aOa Predicted Files", ""]
-    parts.append(f"Based on keywords: {', '.join(keywords[:5])}")
-    parts.append("")
-
-    for f in files:
-        path = rel_path(f.get('path', ''))
-        confidence = f.get('confidence', 0)
-        snippet = f.get('snippet', '')
-
-        parts.append(f"### `{path}` ({confidence:.0%} confidence)")
-        parts.append("")
-
-        if snippet:
-            ext = path.rsplit('.', 1)[-1] if '.' in path else ''
-            lang = ext if ext in ['py', 'js', 'ts', 'tsx', 'json', 'yaml', 'md', 'sh'] else ''
-            parts.append(f"```{lang}")
-            parts.append(snippet.rstrip())
-            parts.append("```")
-            parts.append("")
-
-    parts.append("*Consider these files if relevant to your task.*")
-    return "\n".join(parts)
-
-
-def log_prediction(session_id: str, files: list, keywords: list):
-    """Log prediction for hit/miss tracking and intent display."""
-    if not files:
-        return
-
-    file_paths = [f.get('path', '') for f in files]
-    avg_confidence = sum(f.get('confidence', 0) for f in files) / len(files) if files else 0
-
-    # Log to /predict/log for hit/miss tracking
-    api_post("/predict/log", {
-        'session_id': session_id,
-        'predicted_files': file_paths,
-        'tags': keywords[:5],
-        'trigger_file': 'UserPromptSubmit',
-        'confidence': avg_confidence
-    }, timeout=1)
-
-    # Record as Predict intent for aoa intent display
-    # GL-088: No pattern-based tags - just use the prediction keywords
-    api_post("/intent", {
-        'session_id': session_id,
-        'project_id': PROJECT_ID,
-        'tool': 'Predict',
-        'files': file_paths[:5],
-        'tags': [f'#{k}' for k in keywords[:5]],  # Keywords as tags
-        'confidence': avg_confidence
-    }, timeout=1)
-
-
 # =============================================================================
 # Event Handlers
 # =============================================================================
@@ -539,23 +463,6 @@ def handle_prompt(data: dict):
             except Exception:
                 pass  # Don't block on staging checks
 
-    # Predictions need history, so keep MIN_INTENTS gate
-    if prompt and total >= MIN_INTENTS:
-        keywords = extract_keywords(prompt)
-        if keywords:
-            predictions = get_predictions(keywords)
-            files = predictions.get('files', [])
-
-            if files:
-                # Log prediction for hit/miss tracking
-                log_prediction(session_id, files, keywords)
-
-                # Format and output context for Claude
-                context = format_prediction_context(files, keywords)
-                if context:
-                    output_context(context)
-
-
 def handle_tool(data: dict):
     """
     PostToolUse: Capture intent - files only, no pattern-based tags.
@@ -604,19 +511,6 @@ def handle_tool(data: dict):
             "project_id": PROJECT_ID,
             "pending": True
         })
-
-    # GL-062: Check if accessed files match predictions (for hit/miss tracking)
-    # Only check for file-accessing tools
-    if tool in ('Read', 'Edit', 'Write') and files:
-        for file_path in files:
-            if file_path.startswith('pattern:') or file_path.startswith('cmd:'):
-                continue
-            base_path = file_path.split(':')[0] if ':' in file_path else file_path
-            api_post("/predict/check", {
-                "session_id": session_id,
-                "project_id": PROJECT_ID,
-                "file": base_path
-            }, timeout=1)
 
 
 def handle_enforce(data: dict):
@@ -671,6 +565,45 @@ def handle_prefetch(data: dict):
     # TODO: Migrate prefetch logic
     pass
 
+
+def handle_stop(data: dict):
+    """
+    Stop: Session heartbeat - increment counter, trigger async actions.
+
+    This is the main learning trigger:
+    - Every 5 stops: Session scrape (bigrams + file hits)
+    - Every 25 stops: Rebalance keywords
+    - Every 100 stops: Autotune (decay, promote, demote, prune)
+
+    All actions are async - this handler returns immediately.
+    """
+    session_id = data.get("session_id", "unknown")
+
+    # Increment stop count and get current value + triggered actions
+    response = api_post("/session/stop", {
+        "session_id": session_id,
+        "project_id": PROJECT_ID,
+    }, timeout=2)
+
+    if not response:
+        return
+
+    stop_count = response.get("stop_count", 0)
+    triggered = response.get("triggered", [])
+
+    # Log triggered actions (for debugging via aoa intent)
+    if triggered:
+        actions_str = ", ".join(triggered)
+        # Silent - just record for intent history
+        api_post("/intent", {
+            "session_id": session_id,
+            "project_id": PROJECT_ID,
+            "tool": "Stop",
+            "files": [],
+            "tags": [f"@{action}" for action in triggered],
+        }, timeout=1)
+
+
 # =============================================================================
 # Main Entry Point
 # =============================================================================
@@ -678,7 +611,7 @@ def handle_prefetch(data: dict):
 def main():
     parser = argparse.ArgumentParser(description="aOa Gateway Hook")
     parser.add_argument("--event", required=True,
-                        choices=["prompt", "tool", "enforce", "prefetch"],
+                        choices=["prompt", "tool", "enforce", "prefetch", "stop"],
                         help="Hook event type")
     args = parser.parse_args()
 
@@ -694,6 +627,7 @@ def main():
         "tool": handle_tool,
         "enforce": handle_enforce,
         "prefetch": handle_prefetch,
+        "stop": handle_stop,
     }
 
     handler = handlers.get(args.event)

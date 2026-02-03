@@ -57,6 +57,10 @@ class JobType(str, Enum):
     TUNE = "tune"          # Rebalance/optimize domains
     REINDEX = "reindex"    # Rebuild keyword mappings
 
+    # Stop hook triggered (SH-02c)
+    SCRAPE = "scrape"      # Session scrape: bigrams + file hits (every 5 stops)
+    AUTOTUNE = "autotune"  # Decay, prune, promote (every 100 stops)
+
 
 class JobStatus(str, Enum):
     """Job lifecycle states."""
@@ -353,6 +357,33 @@ def create_discover_job(project_id: str, patterns: list[str]) -> Job:
         phase="intent",
         payload={
             "patterns": patterns
+        }
+    )
+
+
+def create_scrape_job(project_id: str, session_id: str, stop_count: int) -> Job:
+    """Create a session scrape job (bigrams + file hits)."""
+    return Job(
+        id=f"scrape-{stop_count}",  # Idempotent: one scrape per stop_count
+        type=JobType.SCRAPE,
+        project_id=project_id,
+        phase="intent",
+        payload={
+            "session_id": session_id,
+            "stop_count": stop_count
+        }
+    )
+
+
+def create_autotune_job(project_id: str, stop_count: int) -> Job:
+    """Create an autotune job (decay, prune, promote)."""
+    return Job(
+        id=f"autotune-{stop_count}",  # Idempotent: one autotune per stop_count
+        type=JobType.AUTOTUNE,
+        project_id=project_id,
+        phase="intent",
+        payload={
+            "stop_count": stop_count
         }
     )
 
