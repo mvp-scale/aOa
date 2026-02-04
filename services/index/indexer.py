@@ -6221,7 +6221,7 @@ def get_token_metrics():
 # Set via: aoa config thresholds test|prod
 
 THRESHOLD_PROD = {
-    'scrape': 5,
+    'scrape': 1,
     'rebalance': 50,
     'autotune': 100,
     'promotion': 100,
@@ -6231,7 +6231,7 @@ THRESHOLD_PROD = {
 }
 
 THRESHOLD_TEST = {
-    'scrape': 5,
+    'scrape': 1,
     'rebalance': 10,
     'autotune': 25,
     'promotion': 25,
@@ -6326,11 +6326,11 @@ def session_stop():
     {
         "stop_count": 5,
         "triggered": ["scrape"],  # Actions triggered at this stop
-        "thresholds": {"scrape": 5, "rebalance": 25, "autotune": 100}
+        "thresholds": {"scrape": 1, "rebalance": 25, "autotune": 100}
     }
 
     Thresholds:
-    - Every 5 stops: Session scrape (bigrams + file hits) - async
+    - Every stop: Session scrape (bigrams + file hits) - async
     - Every 25 stops: Rebalance keywords - async
     - Every 100 stops: Autotune (decay, promote, demote, prune) - async
     """

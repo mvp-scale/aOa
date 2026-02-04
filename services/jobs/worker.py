@@ -216,7 +216,7 @@ class JobWorker:
         """
         SH-03: Session scrape - extract bigrams + track file hits.
 
-        Runs every 5 stops. Extracts:
+        Runs every stop. Extracts:
         1. Bigrams from user prompts (word pairs → Redis HINCRBY)
         2. File hits from intent records (file:range → keyword lookups)
         """

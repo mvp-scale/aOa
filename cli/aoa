@@ -4881,8 +4881,9 @@ cmd_domains() {
     fi
     echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
 
-    # Column header - competitive ranking format
-    printf "${DIM} #  %-26s %5s  %s${NC}\n" "DOMAIN" "HITS" "TERMS"
+    # Column header - competitive ranking format (fixed widths for alignment)
+    # Format: rank(2) + gap(2) + domain(24) + gap(1) + hits(6) + gap(2) + terms
+    printf "${DIM}%2s  %-24s %6s  %s${NC}\n" "#" "DOMAIN" "HITS" "TERMS"
 
     # Display each domain - sorted by hits (competitive ranking)
     local rank=1
@@ -4898,9 +4899,9 @@ cmd_domains() {
         if [ "$enriched" = "true" ] && [ -n "$terms" ]; then
             local hits_fmt
             [ "$hits" -ge 1000 ] && hits_fmt=$(awk "BEGIN {printf \"%.1fk\", $hits/1000}") || hits_fmt="$hits"
-            printf "${tier_color}%2d${NC}  ${MAGENTA}%-24s${NC} ${DIM}%5s${NC}  ${CYAN}%s${NC}\n" "$rank" "$name_trunc" "$hits_fmt" "$terms"
+            printf "${tier_color}%2d${NC}  ${MAGENTA}%-24s${NC} %6s  ${CYAN}%s${NC}\n" "$rank" "$name_trunc" "$hits_fmt" "$terms"
         else
-            printf "${tier_color}%2d${NC}  ${MAGENTA}%-24s${NC} ${DIM}%5s${NC}  ${DIM}-- enrichment required${NC}\n" "$rank" "$name_trunc" "--"
+            printf "${tier_color}%2d${NC}  ${MAGENTA}%-24s${NC} %6s  ${DIM}-- enrichment required${NC}\n" "$rank" "$name_trunc" "--"
         fi
         ((rank++))
     done

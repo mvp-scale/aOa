@@ -571,7 +571,7 @@ def handle_stop(data: dict):
     Stop: Session heartbeat - increment counter, trigger async actions.
 
     This is the main learning trigger:
-    - Every 5 stops: Session scrape (bigrams + file hits)
+    - Every stop: Session scrape (bigrams + file hits)
     - Every 25 stops: Rebalance keywords
     - Every 100 stops: Autotune (decay, promote, demote, prune)
 

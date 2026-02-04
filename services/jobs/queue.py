@@ -58,7 +58,7 @@ class JobType(str, Enum):
     REINDEX = "reindex"    # Rebuild keyword mappings
 
     # Stop hook triggered (SH-02c)
-    SCRAPE = "scrape"      # Session scrape: bigrams + file hits (every 5 stops)
+    SCRAPE = "scrape"      # Session scrape: bigrams + file hits (every stop)
     AUTOTUNE = "autotune"  # Decay, prune, promote (every 100 stops)
 
 
