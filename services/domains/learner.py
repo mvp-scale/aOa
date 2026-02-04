@@ -485,17 +485,39 @@ class DomainLearner:
             return True
         return False
 
-    def demote_domain(self, name: str) -> bool:
+    def demote_domain(self, name: str, trim_keywords: bool = True) -> bool:
         """Demote domain from core to context tier.
 
         GL-090: Called when domain has 0 hits for DEMOTION_STALENESS intents.
+        CD-02: Optionally trim to top 5 keywords per term on demotion.
         Returns True if demoted, False if already context or doesn't exist.
         """
         current_tier = self.get_domain_tier(name)
         if current_tier == "core":
             self.set_domain_tier(name, "context")
+            # CD-02: Trim keywords to prevent explosion
+            if trim_keywords:
+                self.trim_domain_keywords(name, max_per_term=5)
             return True
         return False
+
+    def trim_domain_keywords(self, name: str, max_per_term: int = 5) -> int:
+        """CD-02: Trim each term's keywords to top N by score.
+
+        Keeps highest-scoring keywords, removes the rest.
+        Returns total keywords removed.
+        """
+        removed = 0
+        for term in self.get_domain_terms(name):
+            keywords_key = self._term_key(term, "keywords")
+            # ZREMRANGEBYRANK removes by rank (0 = lowest score)
+            # To keep top N, remove from rank 0 to (count - N - 1)
+            count = self.redis.client.zcard(keywords_key)
+            if count > max_per_term:
+                to_remove = count - max_per_term
+                result = self.redis.client.zremrangebyrank(keywords_key, 0, to_remove - 1)
+                removed += result
+        return removed
 
     def can_add_context_domain(self) -> bool:
         """Check if we can add another context domain (under max)."""
@@ -2494,9 +2516,7 @@ Return JSON:
         summary['promoted'] = 0
         summary['demoted'] = 0
         summary['context_pruned'] = 0
-
-        # Use prompt_count for staleness calculation (same as last_hit_at tracking)
-        prompt_count = self.get_prompt_count()
+        summary['keywords_trimmed'] = 0  # CD-02
 
         # 6. Apply decay to all domain hits
         for domain_name in self.get_all_domains():
@@ -2506,53 +2526,45 @@ Return JSON:
             self.redis.client.hset(meta_key, "hits", new_hits)
             summary['decayed'] += 1
 
-        # 7. Check promotions: context → core (high value)
-        # GL-091: Use configurable threshold
-        promotion_threshold = self.get_threshold('promotion')
-        for domain_name in self.get_domains_by_tier("context"):
-            meta = self.get_domain_meta(domain_name)
-            total_hits = int(meta.get('total_hits', 0))
-            if total_hits >= promotion_threshold:
-                # Check if core tier has room
-                counts = self.count_domains_by_tier()
-                if counts.get("core", 0) < self.CORE_DOMAINS_MAX:
-                    self.promote_domain(domain_name)
-                    summary['promoted'] += 1
+        # =====================================================================
+        # CD-01: Competitive Displacement (Session 69)
+        # Replace threshold-based promotion/demotion with ranking
+        # Top 24 by hits = core, rest = context or removed
+        # =====================================================================
 
-        # 8. Check demotions: core → context (stale)
-        # GL-091: Use configurable threshold
-        # RB-01: Never demote below 24 core domains (floor protection)
-        demotion_threshold = self.get_threshold('demotion')
-        core_domains = list(self.get_domains_by_tier("core"))
-        core_count = len(core_domains)
-        for domain_name in core_domains:
-            # RB-01: Protect the floor - never go below 24 core domains
-            if core_count <= self.CORE_DOMAINS_MAX:
-                break
-            meta = self.get_domain_meta(domain_name)
-            last_hit_at = int(meta.get('last_hit_at', 0))
-            intents_since_hit = prompt_count - last_hit_at
-
-            if intents_since_hit >= demotion_threshold:
-                self.demote_domain(domain_name)
-                summary['demoted'] += 1
-                core_count -= 1  # Track remaining core domains
-
-        # 9. Prune low-value context domains
-        # GL-091: Use configurable threshold
-        # RB-01: Never prune if it would drop total domains below 24
+        # 7. Gather all domains with hits for ranking
         prune_floor = self.get_threshold('prune_floor')
-        total_domains = len(self.get_all_domains())
-        for domain_name in self.get_domains_by_tier("context"):
-            # RB-01: Protect total domain floor
-            if total_domains <= self.CORE_DOMAINS_MAX:
-                break
+        all_domains = []
+        for domain_name in self.get_all_domains():
             meta = self.get_domain_meta(domain_name)
             hits = float(meta.get('hits', 0))
-            if hits < prune_floor:
-                self.remove_domain(domain_name)
-                summary['context_pruned'] += 1
-                total_domains -= 1  # Track remaining domains
+            all_domains.append((domain_name, hits))
+
+        # Sort by hits descending (highest first)
+        all_domains.sort(key=lambda x: x[1], reverse=True)
+
+        # 8. Apply competitive tiers
+        for rank, (domain_name, hits) in enumerate(all_domains):
+            current_tier = self.get_domain_tier(domain_name)
+
+            if rank < self.CORE_DOMAINS_MAX:
+                # Top 24 = core
+                if current_tier != "core":
+                    self.promote_domain(domain_name)
+                    summary['promoted'] += 1
+            else:
+                # Below top 24
+                if hits < prune_floor:
+                    # Too low - remove entirely (cascade cleans keywords)
+                    self.remove_domain(domain_name)
+                    summary['context_pruned'] += 1
+                else:
+                    # Demote to context (trims keywords via CD-02)
+                    if current_tier == "core":
+                        self.demote_domain(domain_name, trim_keywords=True)
+                        summary['demoted'] += 1
+                    elif current_tier != "context":
+                        self.set_domain_tier(domain_name, "context")
 
         # 10. Update tune tracking
         self.set_last_tune()

@@ -560,7 +560,8 @@ def format_search_response(
     files_searched: int,
     search_intent: list | None = None,
     intent_index: 'IntentIndex | None' = None,
-    project_id: str | None = None
+    project_id: str | None = None,
+    query_terms: list[str] | None = None  # CO-01: For cohit tracking
 ) -> dict:
     """
     Universal response format - THE SINGLE SOURCE OF TRUTH.
@@ -634,6 +635,21 @@ def format_search_response(
                     pipe.hset(meta_key, "last_hit_at", prompt_count)
 
                 pipe.execute()  # ONE round-trip
+
+                # CO-01: Track cohit - query terms × result domains
+                # This enables learned keywords to be assigned to correct domains
+                if query_terms and seen_domains:
+                    for term in query_terms:
+                        term_clean = term.lower().strip()
+                        if len(term_clean) >= 3:  # Skip short terms
+                            for domain in seen_domains:
+                                # Find best term for this domain to complete the triple
+                                domain_terms = learner.get_domain_terms(domain)
+                                if domain_terms:
+                                    # Use first term as representative
+                                    best_term = next(iter(domain_terms))
+                                    learner.increment_cohit(term_clean, best_term, domain)
+
         except Exception as e:
             print(f"[HitTracking] Error: {e}", flush=True)
 
@@ -3595,13 +3611,17 @@ def semantic_grep():
 
     # 6. GL-050: Universal Response - format through single function
     elapsed = (time.time() - start) * 1000
+    # CO-01: Extract query terms for cohit tracking
+    query_terms = [t.strip() for t in q.split() if len(t.strip()) >= 3]
+
     response = format_search_response(
         results=results,
         ms=elapsed,
         files_searched=files_searched,
         search_intent=search_intent,
         intent_index=intent_index,
-        project_id=project_id
+        project_id=project_id,
+        query_terms=query_terms  # CO-01: For cohit tracking
     )
 
     return jsonify(response)

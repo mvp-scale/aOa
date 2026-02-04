@@ -4881,22 +4881,28 @@ cmd_domains() {
     fi
     echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
 
-    # Column header - always same format
-    printf "${DIM}%-30s %5s  %s${NC}\n" "DOMAIN" "HITS" "TERMS"
+    # Column header - competitive ranking format
+    printf "${DIM} #  %-26s %5s  %s${NC}\n" "DOMAIN" "HITS" "TERMS"
 
-    # Display each domain
-    echo "$domains_data" | jq -r '.domains[]? | "\(.name)|\(.hits // 0)|\(.enriched // false)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null | while IFS='|' read -r name hits enriched terms; do
-        # Truncate domain name if too long (28 chars to fit column)
-        local name_trunc="${name:0:28}"
+    # Display each domain - sorted by hits (competitive ranking)
+    local rank=1
+    echo "$domains_data" | jq -r '.domains | sort_by(-.hits) | .[]? | "\(.name)|\(.hits // 0)|\(.enriched // false)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null | while IFS='|' read -r name hits enriched terms; do
+        # Truncate domain name if too long (24 chars to fit column)
+        local name_trunc="${name:0:24}"
+
+        # Tier indicator: top 24 = core (green), rest = context (yellow)
+        local tier_color="${GREEN}"
+        [ "$rank" -gt 24 ] && tier_color="${YELLOW}"
 
         # Show hits and terms - use "--" when not enriched
         if [ "$enriched" = "true" ] && [ -n "$terms" ]; then
             local hits_fmt
             [ "$hits" -ge 1000 ] && hits_fmt=$(awk "BEGIN {printf \"%.1fk\", $hits/1000}") || hits_fmt="$hits"
-            printf "  ${MAGENTA}%-28s${NC} ${DIM}%5s${NC}  ${CYAN}%s${NC}\n" "$name_trunc" "$hits_fmt" "$terms"
+            printf "${tier_color}%2d${NC}  ${MAGENTA}%-24s${NC} ${DIM}%5s${NC}  ${CYAN}%s${NC}\n" "$rank" "$name_trunc" "$hits_fmt" "$terms"
         else
-            printf "  ${MAGENTA}%-28s${NC} ${DIM}%5s${NC}  ${DIM}-- enrichment required${NC}\n" "$name_trunc" "--"
+            printf "${tier_color}%2d${NC}  ${MAGENTA}%-24s${NC} ${DIM}%5s${NC}  ${DIM}-- enrichment required${NC}\n" "$rank" "$name_trunc" "--"
         fi
+        ((rank++))
     done
 
     # Show remaining count if more than displayed

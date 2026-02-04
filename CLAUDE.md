@@ -320,6 +320,24 @@ Run `/aoa-start` to initialize aOa. This spawns a background agent that:
 
 No hook prompts - the background agent handles everything.
 
+## Domain Lifecycle (Competitive Displacement)
+
+Domains compete for the top 24 core slots based on hits. Every 100 stops (autotune):
+
+```
+1. Decay all domain hits by 5%
+2. Sort all domains by hits (descending)
+3. Top 24 = core tier
+4. Rest = context tier (or removed if hits < 0.3)
+5. On demotion: trim to top 5 keywords per term
+```
+
+**Why competitive?** Bad domains (stuffed keywords, no real usage) naturally lose ranking and get replaced by domains that reflect actual work patterns.
+
+**Keyword cleanup**: Keywords don't need separate pruning - they cascade-clean when their domain is removed, and trim to top 5 when demoted. Bigrams rebuild relevant keywords naturally.
+
+**No staging needed**: New domains from bigrams enter directly as context tier and compete immediately. Competition IS the validation.
+
 ## Efficiency Comparison
 
 | Approach | Tool Calls | Tokens | Time |
