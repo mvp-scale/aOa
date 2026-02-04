@@ -5569,6 +5569,80 @@ def cc_stats():
         return jsonify({'error': str(e), 'periods': {}, 'model_distribution': {}})
 
 
+@app.route('/cc/bigrams')
+def cc_bigrams():
+    """BG-04: Get bigrams for rebalance with noise filtering.
+
+    Query params:
+        project_id: Project to query
+        min_count: Minimum hit count (default 6)
+        limit: Max bigrams to return (default 100)
+
+    Returns:
+        {
+            'bigrams': [{'bigram': 'hit:tracking', 'count': 55}, ...],
+            'total': 9439,
+            'filtered': 85
+        }
+    """
+    project_id = request.args.get('project_id')
+    min_count = int(request.args.get('min_count', 6))
+    limit = int(request.args.get('limit', 100))
+
+    if not project_id:
+        return jsonify({'error': 'project_id required'}), 400
+
+    if not RANKING_AVAILABLE or scorer is None:
+        return jsonify({'error': 'Redis not available'}), 503
+
+    # Noise filter: common filler phrases and stopword pairs
+    NOISE_PATTERNS = {
+        'let:me', 'me:check', 'the:user', 'in:the', 'of:the', 'to:the',
+        'with:the', 'from:the', 'at:the', 'on:the', 'for:the', 'and:the',
+        'is:the', 'it:the', 'that:the', 'this:the', 'but:the', 'now:let',
+        'me:to', 'i:will', 'i:need', 'you:can', 'we:need', 'we:can',
+        'let:s', 'let:us', 'going:to', 'want:to', 'need:to', 'have:to',
+        'looking:at', 'look:at', 'check:if', 'check:the', 'see:if', 'see:the',
+        'home:corey', 'corey:aoa',  # Path artifacts
+    }
+
+    try:
+        r = scorer.redis.client
+        bigram_key = f'aoa:{project_id}:bigrams'
+
+        # Get all bigrams
+        raw = r.hgetall(bigram_key)
+        total = len(raw)
+
+        # Filter and sort
+        filtered = []
+        for bigram, count_bytes in raw.items():
+            bigram_str = bigram.decode() if isinstance(bigram, bytes) else bigram
+            count = int(count_bytes.decode() if isinstance(count_bytes, bytes) else count_bytes)
+
+            # Skip if below threshold or noise
+            if count < min_count:
+                continue
+            if bigram_str in NOISE_PATTERNS:
+                continue
+
+            filtered.append({'bigram': bigram_str, 'count': count})
+
+        # Sort by count descending, take limit
+        filtered.sort(key=lambda x: x['count'], reverse=True)
+        result = filtered[:limit]
+
+        return jsonify({
+            'bigrams': result,
+            'total': total,
+            'filtered': len(result),
+            'min_count': min_count
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/intent/summary')
 def intent_summary():
     """GL-088: Get work summary for last N prompts (for Haiku enrichment).

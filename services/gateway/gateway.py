@@ -161,6 +161,7 @@ ROUTES = {
     "/cc/sessions": ("index", "/cc/sessions"),      # Per-session metrics
     "/cc/stats": ("index", "/cc/stats"),            # Health dashboard
     "/cc/conversation": ("index", "/cc/conversation"),  # Full text for bigrams
+    "/cc/bigrams": ("index", "/cc/bigrams"),          # BG-04: Bigrams for rebalance
 
     # Status service routes
     "/status": ("status", "/status"),
