@@ -589,56 +589,53 @@ def format_search_response(
             r['score'] = calculate_intent_score(r.get('tags', []), search_intent)
         results.sort(key=lambda r: r['score'], reverse=True)
 
-    # GL-071: Enrich terms from top search results (100% non-blocking)
-    # Top results validate term relevance - fire and forget
+    # S65-01 FIX: Sync hit tracking (no daemon thread)
+    # Redis pipeline is fast (~2-5ms), no need for async complexity.
+    # Data already in memory from search - just count before returning.
     if DOMAINS_AVAILABLE and project_id and results:
-        # Snapshot top 10 for background processing
-        top_results = results[:10]
-        def _enrich_top_terms():
-            try:
-                learner = DomainLearner(project_id)
-                seen_terms = set()
-                seen_domains = set()
-                seen_keywords = set()  # KW-002: Collect keywords for hit tracking
-                matcher = get_keyword_matcher(project_id, intent_index) if intent_index else None
+        try:
+            learner = DomainLearner(project_id)
+            seen_terms = set()
+            seen_domains = set()
 
-                # Collect all unique terms from top results
-                for r in top_results:
-                    for tag in r.get('tags', []):
-                        term = tag.lstrip('#@').lower()
-                        if term and len(term) >= 3:
-                            seen_terms.add(term)
-                    # GL-088: Also track domains from results
-                    # FIX SL-02: Keep @ prefix - Redis keys include it
-                    domain = r.get('domain', '')
-                    if domain:
-                        seen_domains.add(domain if domain.startswith('@') else f"@{domain}")
-                    # KW-002: Collect keywords from content
-                    if matcher and matcher.is_available:
-                        match_result = matcher.find_tags(r.get('content', ''))
-                        for kw in match_result.get('matched_keywords', []):
-                            seen_keywords.add(kw)
+            # Collect terms and domains from top 10 results
+            for r in results[:10]:
+                for tag in r.get('tags', []):
+                    term = tag.lstrip('#@').lower()
+                    if term and len(term) >= 3:
+                        seen_terms.add(term)
+                # GL-088: Track domains from results
+                # FIX SL-02: Keep @ prefix - Redis keys include it
+                domain = r.get('domain', '')
+                if domain:
+                    seen_domains.add(domain if domain.startswith('@') else f"@{domain}")
 
-                # UNIFY-001: Increment term hits and collect their domains
+            # Collect domains for each term
+            for term in seen_terms:
+                domains_with_term = learner.get_domains_for_term(term)
+                for domain_name in domains_with_term:
+                    seen_domains.add(domain_name)
+
+            # Single pipeline for all increments (~2-5ms total)
+            if seen_terms or seen_domains:
+                pipe = learner.redis.client.pipeline()
+                prompt_count = learner.get_prompt_count()
+
+                # Term hits
+                term_hits_key = f"aoa:{project_id}:term_hits"
                 for term in seen_terms:
-                    learner.increment_term_hits(term)
-                    # Collect domains with this term (don't increment yet)
-                    domains_with_term = learner.get_domains_for_term(term)
-                    for domain_name in domains_with_term:
-                        seen_domains.add(domain_name)
+                    pipe.hincrby(term_hits_key, term, 1)
 
-                # KW-003: Increment keyword hits
-                if seen_keywords:
-                    learner.increment_keyword_hits(list(seen_keywords))
-
-                # UNIFY-004: Batch increment ALL seen_domains (from results + terms)
+                # Domain hits (hits + total_hits + last_hit_at)
                 for domain in seen_domains:
-                    learner.increment_domain_hits(domain)
-            except Exception as e:
-                print(f"[Enrich] Error: {e}", flush=True)  # HIT-002: observability
-        # Fire and forget
-        import threading
-        threading.Thread(target=_enrich_top_terms, daemon=True).start()
+                    meta_key = f"aoa:{project_id}:domain:{domain}:meta"
+                    pipe.hincrby(meta_key, "hits", 1)
+                    pipe.hincrby(meta_key, "total_hits", 1)
+                    pipe.hset(meta_key, "last_hit_at", prompt_count)
+
+                pipe.execute()  # ONE round-trip
+        except Exception as e:
+            print(f"[HitTracking] Error: {e}", flush=True)
 
     # Build response - return ALL results, display layer limits
     response = {
