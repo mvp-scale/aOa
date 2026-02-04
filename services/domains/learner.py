@@ -84,7 +84,7 @@ class DomainLearner:
     # GL-090: Two-tier domain curation
     CORE_DOMAINS_MAX = 24  # Max core tier domains
     CONTEXT_DOMAINS_MAX = 20  # Max context tier domains
-    DECAY_RATE = 0.80  # 20% decay per tune cycle
+    DECAY_RATE = 0.95  # TC-03: 5% decay per cycle (prod default, read from Redis)
     PROMOTION_THRESHOLD = 150  # Promote context→core after 150 lifetime hits
     DEMOTION_STALENESS = 500  # Demote core→context after 500 intents with 0 hits
     ORPHAN_THRESHOLD = 30  # Need 30+ orphans to trigger domain creation
@@ -112,6 +112,7 @@ class DomainLearner:
             'demotion': self.DEMOTION_STALENESS,
             'prune_floor': self.PRUNE_FLOOR,
             'autotune': self.AUTOTUNE_INTERVAL,
+            'decay_rate': self.DECAY_RATE,  # TC-03: unified decay rate
         }
         return defaults.get(name, 0)
 

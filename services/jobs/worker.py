@@ -320,8 +320,9 @@ class JobWorker:
         redis = RedisClient(self.redis_url)
         r = redis.client
 
-        # Decay factor (0.9 = lose 10% per autotune cycle)
-        DECAY_FACTOR = 0.9
+        # TC-03: Read decay rate from Redis config (0.90 test, 0.95 prod)
+        decay_val = r.get("aoa:config:decay_rate")
+        DECAY_FACTOR = float(decay_val) if decay_val else 0.95
 
         # Decay bigram counts
         bigrams = r.hgetall(f"aoa:{self.project_id}:bigrams")

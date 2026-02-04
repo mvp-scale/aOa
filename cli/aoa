@@ -5000,17 +5000,20 @@ cmd_config() {
             local mode="${1:-}"
 
             if [ -z "$mode" ]; then
-                # Show current thresholds
+                # Show current thresholds (TC-04: updated for Session 64)
                 echo -e "${CYAN}${BOLD}⚡ aOa Thresholds${NC}"
                 echo ""
                 local result=$(curl -s "${INDEX_URL}/config/thresholds?project_id=${project_id}")
-                local rebalance=$(echo "$result" | jq -r '.thresholds.rebalance // 25 | floor')
+                local scrape=$(echo "$result" | jq -r '.thresholds.scrape // 5 | floor')
+                local rebalance=$(echo "$result" | jq -r '.thresholds.rebalance // 50 | floor')
                 local autotune=$(echo "$result" | jq -r '.thresholds.autotune // 100 | floor')
-                local promotion=$(echo "$result" | jq -r '.thresholds.promotion // 150 | floor')
+                local promotion=$(echo "$result" | jq -r '.thresholds.promotion // 100 | floor')
                 local demotion=$(echo "$result" | jq -r '.thresholds.demotion // 500 | floor')
-                local prune=$(echo "$result" | jq -r '.thresholds.prune_floor // 0.5')
+                local prune=$(echo "$result" | jq -r '.thresholds.prune_floor // 0.3')
+                local decay=$(echo "$result" | jq -r '.thresholds.decay_rate // 0.95')
 
-                echo -e "${DIM}Triggers (tool calls to run):${NC}"
+                echo -e "${DIM}Triggers (stops):${NC}"
+                printf "  %-20s every %s\n" "Scrape:" "${scrape}"
                 printf "  %-20s every %s\n" "Rebalance:" "${rebalance}"
                 printf "  %-20s every %s\n" "Autotune:" "${autotune}"
                 echo ""
@@ -5018,6 +5021,7 @@ cmd_config() {
                 printf "  %-20s %s\n" "Promotion:" "≥${promotion} hits → context→core"
                 printf "  %-20s %s\n" "Demotion:" "${demotion} intents without hit → core→context"
                 printf "  %-20s %s\n" "Prune:" "<${prune} hits → removed"
+                printf "  %-20s %s\n" "Decay:" "${decay} per cycle"
                 return 0
             fi
 
@@ -5029,11 +5033,11 @@ cmd_config() {
                 if [ "$success" = "true" ]; then
                     echo -e "${GREEN}✓ Thresholds set to ${mode} mode${NC}"
                     if [ "$mode" = "test" ]; then
-                        echo -e "${DIM}  Triggers: Rebalance every 3, Autotune every 10${NC}"
-                        echo -e "${DIM}  Qualify:  Promote ≥15 hits, Demote 50 intents, Prune <0.5${NC}"
+                        echo -e "${DIM}  Triggers: Scrape 5, Rebalance 10, Autotune 25${NC}"
+                        echo -e "${DIM}  Qualify:  Promote ≥25, Demote 100, Prune <0.3, Decay 0.90${NC}"
                     else
-                        echo -e "${DIM}  Triggers: Rebalance every 25, Autotune every 100${NC}"
-                        echo -e "${DIM}  Qualify:  Promote ≥150 hits, Demote 500 intents, Prune <0.5${NC}"
+                        echo -e "${DIM}  Triggers: Scrape 5, Rebalance 50, Autotune 100${NC}"
+                        echo -e "${DIM}  Qualify:  Promote ≥100, Demote 500, Prune <0.3, Decay 0.95${NC}"
                     fi
                 else
                     echo -e "${RED}Failed to set thresholds${NC}"

@@ -6124,24 +6124,44 @@ def get_token_metrics():
 
 
 # ============================================================================
-# GL-091: Test Mode Thresholds
+# TC-01: Unified Threshold Configuration (Session 64)
 # ============================================================================
+# Single source of truth: Redis keys aoa:config:{setting}
+# Set via: aoa config thresholds test|prod
 
-THRESHOLD_DEFAULTS = {
-    'rebalance': 25,
-    'autotune': 100,  # P2B: Autotune every 100 prompts (full lifecycle management)
-    'promotion': 150,
+THRESHOLD_PROD = {
+    'scrape': 5,
+    'rebalance': 50,
+    'autotune': 100,
+    'promotion': 100,
     'demotion': 500,
-    'prune_floor': 0.5
+    'prune_floor': 0.3,
+    'decay_rate': 0.95
 }
 
 THRESHOLD_TEST = {
-    'rebalance': 3,
-    'autotune': 10,  # P2B: Autotune every 10 prompts in test mode
-    'promotion': 15,
-    'demotion': 50,
-    'prune_floor': 0.5
+    'scrape': 5,
+    'rebalance': 10,
+    'autotune': 25,
+    'promotion': 25,
+    'demotion': 100,
+    'prune_floor': 0.3,
+    'decay_rate': 0.90
 }
+
+def get_thresholds(project_id: str = None) -> dict:
+    """Get thresholds from Redis, falling back to prod defaults."""
+    thresholds = THRESHOLD_PROD.copy()
+    try:
+        if RANKING_AVAILABLE and scorer is not None:
+            r = scorer.redis.client
+            for key in thresholds:
+                val = r.get(f"aoa:config:{key}")
+                if val is not None:
+                    thresholds[key] = float(val)
+    except Exception:
+        pass
+    return thresholds
 
 
 @app.route('/config/thresholds', methods=['GET', 'POST'])
@@ -6162,14 +6182,8 @@ def config_thresholds():
         r = learner.redis.client if learner else None
 
         if request.method == 'GET':
-            # Return current thresholds
-            current = {}
-            for key, default in THRESHOLD_DEFAULTS.items():
-                if r:
-                    val = r.get(f"aoa:config:{key}")
-                    current[key] = float(val) if val else default
-                else:
-                    current[key] = default
+            # Return current thresholds (TC-01: use get_thresholds)
+            current = get_thresholds(project_id)
             return jsonify({'thresholds': current, 'project_id': project_id})
 
         # POST - set thresholds
@@ -6180,7 +6194,7 @@ def config_thresholds():
         if mode == 'test':
             thresholds = THRESHOLD_TEST
         elif mode == 'prod':
-            thresholds = THRESHOLD_DEFAULTS
+            thresholds = THRESHOLD_PROD
         elif custom:
             thresholds = custom
         else:
@@ -6250,16 +6264,12 @@ def session_stop():
         if stop_count == 1:
             r.expire(stop_key, 86400)
 
-        # Check thresholds and queue actions
+        # Check thresholds and queue actions (TC-01: read from Redis)
         triggered = []
-        thresholds = {
-            'scrape': 5,
-            'rebalance': 25,
-            'autotune': 100
-        }
+        thresholds = get_thresholds(project_id)
 
-        # Every 5 stops: Session scrape (bigrams + file hits)
-        if stop_count % thresholds['scrape'] == 0:
+        # Every N stops: Session scrape (bigrams + file hits)
+        if stop_count % int(thresholds['scrape']) == 0:
             triggered.append('scrape')
             # Queue via JobQueue (SH-02c)
             if JOBS_AVAILABLE:
@@ -6267,14 +6277,14 @@ def session_stop():
                 job = create_scrape_job(project_id, session_id, stop_count)
                 queue.push(job)
 
-        # Every 25 stops: Rebalance
-        if stop_count % thresholds['rebalance'] == 0:
+        # Every N stops: Rebalance (10 test, 50 prod)
+        if stop_count % int(thresholds['rebalance']) == 0:
             triggered.append('rebalance')
             # Set haiku pending flag for next prompt
             r.set(f'aoa:{project_id}:haiku_pending', '1')
 
-        # Every 100 stops: Autotune
-        if stop_count % thresholds['autotune'] == 0:
+        # Every N stops: Autotune (25 test, 100 prod)
+        if stop_count % int(thresholds['autotune']) == 0:
             triggered.append('autotune')
             # Queue via JobQueue (SH-02c)
             if JOBS_AVAILABLE:
