@@ -929,6 +929,7 @@ else
         -v "${AOA_DATA}:/config:rw" \
         -v "${AOA_HOME}/config:/app/config:ro" \
         -v "${CLAUDE_SESSIONS}:/claude-sessions:ro" \
+        -e "CLAUDE_SESSIONS=/claude-sessions" \
         -e "USER_HOME=${PROJECTS_ROOT}" \
         -e "CODEBASE_ROOT=/codebase" \
         -e "AOA_CONTENT_CACHE_MB=${AOA_CONTENT_CACHE_MB:-500}" \

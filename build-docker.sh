@@ -92,6 +92,7 @@ build_unified() {
     # Add Claude sessions mount if available
     if [ -n "$CLAUDE_SESSIONS" ] && [ -d "$CLAUDE_SESSIONS" ]; then
         run_cmd+=" -v ${CLAUDE_SESSIONS}:/claude-sessions:ro"
+        run_cmd+=" -e CLAUDE_SESSIONS=/claude-sessions"
     fi
 
     run_cmd+=" -e USER_HOME=${PROJECTS_ROOT}"

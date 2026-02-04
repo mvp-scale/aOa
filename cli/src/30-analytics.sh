@@ -845,14 +845,16 @@ cmd_cc() {
             ;;
 
         conversation|conv|c)
-            # aoa cc conversation [--limit N] - Show prompt→thinking→output flow
+            # aoa cc conversation [--limit N] [--watch] - Show conversation flow
             local limit=5
             local json_output=false
+            local watch_mode=false
 
             while [[ $# -gt 0 ]]; do
                 case "$1" in
                     --limit|-l) limit="$2"; shift 2 ;;
                     --json|-j) json_output=true; shift ;;
+                    --watch|-w) watch_mode=true; shift ;;
                     *) shift ;;
                 esac
             done
@@ -863,76 +865,107 @@ cmd_cc() {
                 return 1
             fi
 
-            # Get recent conversation (last 2 hours) to ensure we get current content
-            local since=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%S.000Z' 2>/dev/null || date -u -v-2H '+%Y-%m-%dT%H:%M:%S.000Z' 2>/dev/null || echo "")
-            local url="${INDEX_URL}/cc/conversation?limit=200&project_path=${project_path}"
-            [ -n "$since" ] && url="${url}&since=${since}"
-            local result=$(curl -s "$url")
+            _show_conversation() {
+                local limit="$1"
+                local project_path="$2"
+
+                # Get recent conversation (last 2 hours)
+                local since=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%S.000Z' 2>/dev/null || date -u -v-2H '+%Y-%m-%dT%H:%M:%S.000Z' 2>/dev/null || echo "")
+                local url="${INDEX_URL}/cc/conversation?limit=500&project_path=${project_path}"
+                [ -n "$since" ] && url="${url}&since=${since}"
+                local result=$(curl -s "$url")
+
+                # Group and format turns (oldest first, newest at bottom)
+                # Sort by timestamp first (API returns mixed order from multiple files)
+                local turn_count=0
+                echo "$result" | jq -r '
+                  # Sort by timestamp to ensure chronological order
+                  .texts | sort_by(.ts) |
+                  # Group into turns - prompt STARTS each turn (user speaks, claude responds)
+                  reduce .[] as $item (
+                    {turns: [], current: []};
+                    if $item.type == "prompt" then
+                      # Prompt starts new turn - save previous turn if non-empty
+                      (if .current | length > 0 then
+                        {turns: (.turns + [.current]), current: [$item]}
+                      else
+                        {turns: .turns, current: [$item]}
+                      end)
+                    else
+                      # Add thinking/output to current turn
+                      {turns: .turns, current: (.current + [$item])}
+                    end
+                  ) |
+                  # Add final turn (current conversation)
+                  (if .current | length > 0 then .turns + [.current] else .turns end) |
+                  # Take newest N turns, display oldest first (newest at bottom)
+                  (.[-'"$limit"':]) |
+                  length as $total |
+                  to_entries[] |
+                  # Mark the last turn as NOW
+                  (if .key == ($total - 1) then "---NOW---" else "---TURN \(.key + 1)---" end),
+                  # Prompt first (user speaks)
+                  (.value | map(select(.type == "prompt")) | .[0] | "PROMPT\t\(.text // "")"),
+                  # Then Claude responds (outputs)
+                  (.value | map(select(.type == "output")) | .[] | "OUTPUT\t\(.text)"),
+                  # Then thinking (nested under outputs)
+                  (.value | map(select(.type == "thinking")) | .[] | "THINK\t\(.text)")
+                ' 2>/dev/null | while IFS=$'\t' read -r type text; do
+                    if [[ "$type" == "---NOW---" ]]; then
+                        echo -e "${CYAN}${BOLD}─── ▶ NOW ────────────────────────────────────────────────────────────────────────${NC}"
+                        continue
+                    elif [[ "$type" == ---TURN* ]]; then
+                        local turn_num="${type#---TURN }"
+                        turn_num="${turn_num%---}"
+                        echo -e "${DIM}─── ${turn_num} ─────────────────────────────────────────────────────────────────────────${NC}"
+                        continue
+                    fi
+
+                    local short_text="${text:0:120}"
+                    [ ${#text} -gt 120 ] && short_text="${short_text}..."
+
+                    case "$type" in
+                        PROMPT)
+                            echo -e "${YELLOW}You ▸${NC} ${short_text}"
+                            echo ""
+                            ;;
+                        OUTPUT)
+                            echo -e "${GREEN}Claude ▸${NC} ${short_text}"
+                            ;;
+                        THINK)
+                            echo -e "${DIM}    └─ ${short_text}${NC}"
+                            ;;
+                    esac
+                done
+            }
 
             if $json_output; then
-                echo "$result" | jq .
+                local since=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%S.000Z' 2>/dev/null || date -u -v-2H '+%Y-%m-%dT%H:%M:%S.000Z' 2>/dev/null || echo "")
+                local url="${INDEX_URL}/cc/conversation?limit=500&project_path=${project_path}"
+                [ -n "$since" ] && url="${url}&since=${since}"
+                curl -s "$url" | jq .
                 return 0
             fi
 
-            echo -e "${CYAN}${BOLD}⚡ CC Conversation${NC} │ Last ${limit} turns (newest first)"
-            echo ""
-
-            # Group texts into turns, format as chat (Variation B)
-            # Structure: You ▸ prompt, Claude ▸ output, └─ thinking (nested)
-            # IMPORTANT: Reverse FIRST to process newest data, then group
-            echo "$result" | jq -r '
-              # Reverse to get newest first, THEN group into turns
-              .texts | reverse |
-              # Group texts into turns (each turn starts with a prompt when going backwards)
-              # Going backwards: we see thinking/output first, then prompt marks end of turn
-              reduce .[] as $item (
-                {turns: [], current: []};
-                if $item.type == "prompt" then
-                  # Prompt marks the START of a turn (end when reversed)
-                  {turns: (.turns + [(.current + [$item])]), current: []}
-                else
-                  {turns: .turns, current: (.current + [$item])}
-                end
-              ) |
-              # Take only the requested number of turns
-              .turns[:'"$limit"'] |
-              # Format each turn as chat structure
-              to_entries[] |
-              "---TURN \(.key + 1)---",
-              # Prompt first (last item in reversed turn)
-              (.value | map(select(.type == "prompt")) | .[0] | "PROMPT\t\(.text // "")"),
-              # Outputs (reverse back to chronological within turn)
-              (.value | reverse | map(select(.type == "output")) | .[] | "OUTPUT\t\(.text)"),
-              # Thinking nested last
-              (.value | reverse | map(select(.type == "thinking")) | .[] | "THINK\t\(.text)")
-            ' 2>/dev/null | while IFS=$'\t' read -r type text; do
-                if [[ "$type" == ---TURN* ]]; then
-                    local turn_num="${type#---TURN }"
-                    turn_num="${turn_num%---}"
-                    echo -e "${DIM}─── ${turn_num} ─────────────────────────────────────────────────────────────────────────${NC}"
-                    continue
-                fi
-
-                # Truncate text for display (first 120 chars)
-                local short_text="${text:0:120}"
-                [ ${#text} -gt 120 ] && short_text="${short_text}..."
-
-                case "$type" in
-                    PROMPT)
-                        echo -e "${YELLOW}You ▸${NC} ${short_text}"
-                        echo ""
-                        ;;
-                    OUTPUT)
-                        echo -e "${GREEN}Claude ▸${NC} ${short_text}"
-                        ;;
-                    THINK)
-                        echo -e "${DIM}    └─ ${short_text}${NC}"
-                        ;;
-                esac
-            done
-
-            echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────${NC}"
-            echo -e "${DIM}Bigram source: prompt + thinking + output (scraped every 5 stops)${NC}"
+            if $watch_mode; then
+                echo -e "${CYAN}${BOLD}⚡ CC Conversation${NC} │ Watching (Ctrl+C to stop)"
+                echo ""
+                while true; do
+                    clear
+                    echo -e "${CYAN}${BOLD}⚡ CC Conversation${NC} │ Last ${limit} turns │ $(date '+%H:%M:%S')"
+                    echo ""
+                    _show_conversation "$limit" "$project_path"
+                    echo ""
+                    echo -e "${DIM}Watching... (Ctrl+C to stop)${NC}"
+                    sleep 2
+                done
+            else
+                echo -e "${CYAN}${BOLD}⚡ CC Conversation${NC} │ Last ${limit} turns"
+                echo ""
+                _show_conversation "$limit" "$project_path"
+                echo ""
+                echo -e "${DIM}Use --watch to auto-refresh${NC}"
+            fi
             ;;
 
         history|h)
