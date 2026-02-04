@@ -844,6 +844,97 @@ cmd_cc() {
             echo -e "${DIM}Blank = no data for period${NC}"
             ;;
 
+        conversation|conv|c)
+            # aoa cc conversation [--limit N] - Show prompt→thinking→output flow
+            local limit=5
+            local json_output=false
+
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --limit|-l) limit="$2"; shift 2 ;;
+                    --json|-j) json_output=true; shift ;;
+                    *) shift ;;
+                esac
+            done
+
+            local project_path=$(get_project_root)
+            if [ -z "$project_path" ]; then
+                echo -e "${RED}Error: Not in an aOa-initialized project${NC}"
+                return 1
+            fi
+
+            # Get recent conversation (last 2 hours) to ensure we get current content
+            local since=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%S.000Z' 2>/dev/null || date -u -v-2H '+%Y-%m-%dT%H:%M:%S.000Z' 2>/dev/null || echo "")
+            local url="${INDEX_URL}/cc/conversation?limit=200&project_path=${project_path}"
+            [ -n "$since" ] && url="${url}&since=${since}"
+            local result=$(curl -s "$url")
+
+            if $json_output; then
+                echo "$result" | jq .
+                return 0
+            fi
+
+            echo -e "${CYAN}${BOLD}⚡ CC Conversation${NC} │ Last ${limit} turns (newest first)"
+            echo ""
+
+            # Group texts into turns, format as chat (Variation B)
+            # Structure: You ▸ prompt, Claude ▸ output, └─ thinking (nested)
+            # IMPORTANT: Reverse FIRST to process newest data, then group
+            echo "$result" | jq -r '
+              # Reverse to get newest first, THEN group into turns
+              .texts | reverse |
+              # Group texts into turns (each turn starts with a prompt when going backwards)
+              # Going backwards: we see thinking/output first, then prompt marks end of turn
+              reduce .[] as $item (
+                {turns: [], current: []};
+                if $item.type == "prompt" then
+                  # Prompt marks the START of a turn (end when reversed)
+                  {turns: (.turns + [(.current + [$item])]), current: []}
+                else
+                  {turns: .turns, current: (.current + [$item])}
+                end
+              ) |
+              # Take only the requested number of turns
+              .turns[:'"$limit"'] |
+              # Format each turn as chat structure
+              to_entries[] |
+              "---TURN \(.key + 1)---",
+              # Prompt first (last item in reversed turn)
+              (.value | map(select(.type == "prompt")) | .[0] | "PROMPT\t\(.text // "")"),
+              # Outputs (reverse back to chronological within turn)
+              (.value | reverse | map(select(.type == "output")) | .[] | "OUTPUT\t\(.text)"),
+              # Thinking nested last
+              (.value | reverse | map(select(.type == "thinking")) | .[] | "THINK\t\(.text)")
+            ' 2>/dev/null | while IFS=$'\t' read -r type text; do
+                if [[ "$type" == ---TURN* ]]; then
+                    local turn_num="${type#---TURN }"
+                    turn_num="${turn_num%---}"
+                    echo -e "${DIM}─── ${turn_num} ─────────────────────────────────────────────────────────────────────────${NC}"
+                    continue
+                fi
+
+                # Truncate text for display (first 120 chars)
+                local short_text="${text:0:120}"
+                [ ${#text} -gt 120 ] && short_text="${short_text}..."
+
+                case "$type" in
+                    PROMPT)
+                        echo -e "${YELLOW}You ▸${NC} ${short_text}"
+                        echo ""
+                        ;;
+                    OUTPUT)
+                        echo -e "${GREEN}Claude ▸${NC} ${short_text}"
+                        ;;
+                    THINK)
+                        echo -e "${DIM}    └─ ${short_text}${NC}"
+                        ;;
+                esac
+            done
+
+            echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────${NC}"
+            echo -e "${DIM}Bigram source: prompt + thinking + output (scraped every 5 stops)${NC}"
+            ;;
+
         history|h)
             # Alias for prompts with more context
             cmd_cc prompts --limit "${1:-50}"
@@ -853,15 +944,16 @@ cmd_cc() {
             echo -e "${CYAN}${BOLD}aoa cc${NC} - Claude Code session insights"
             echo ""
             echo "Usage:"
-            echo "  aoa cc prompts [--limit N]   Recent user prompts (--raw for hooks)"
-            echo "  aoa cc sessions [--limit N]  Per-session metrics with model throughput"
-            echo "  aoa cc stats                 Health dashboard (today/7d/30d)"
+            echo "  aoa cc prompts [--limit N]       Recent user prompts (--raw for hooks)"
+            echo "  aoa cc conversation [--limit N]  Prompt→thinking→output flow (bigram source)"
+            echo "  aoa cc sessions [--limit N]      Per-session metrics with model throughput"
+            echo "  aoa cc stats                     Health dashboard (today/7d/30d)"
             echo ""
             echo "Examples:"
-            echo "  aoa cc prompts               Last 25 prompts"
-            echo "  aoa cc prompts --raw         Raw prompts for hooks"
-            echo "  aoa cc sessions              Last 10 sessions with OUTPUT/TPS per model"
-            echo "  aoa cc stats                 Model distribution, velocity, cache, tokens"
+            echo "  aoa cc prompts                   Last 25 prompts"
+            echo "  aoa cc conversation              Last 5 conversation turns (prompt+think+output)"
+            echo "  aoa cc sessions                  Last 10 sessions with OUTPUT/TPS per model"
+            echo "  aoa cc stats                     Model distribution, velocity, cache, tokens"
             ;;
     esac
 }
