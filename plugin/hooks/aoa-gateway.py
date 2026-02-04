@@ -603,6 +603,12 @@ def handle_stop(data: dict):
             "tags": [f"@{action}" for action in triggered],
         }, timeout=1)
 
+        # Process queued jobs immediately (event-driven, no polling)
+        api_post("/jobs/process", {
+            "project_id": PROJECT_ID,
+            "count": len(triggered)
+        }, timeout=5)
+
 
 # =============================================================================
 # Main Entry Point
