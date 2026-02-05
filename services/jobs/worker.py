@@ -53,6 +53,7 @@ class JobWorker:
         self.project_id = project_id
         self.queue = JobQueue(project_id, redis_url)
         self.redis_url = redis_url
+        self.project_root = self._resolve_project_root()
         self.handlers: dict[JobType, Callable] = {
             JobType.ENRICH: self._handle_enrich,
             JobType.MAP_KEYWORDS: self._handle_map_keywords,
@@ -64,6 +65,21 @@ class JobWorker:
             JobType.SCRAPE: self._handle_scrape,
             JobType.AUTOTUNE: self._handle_autotune,
         }
+
+    def _resolve_project_root(self) -> str:
+        """Resolve the container path for this project from the registry."""
+        config_dir = os.environ.get('CONFIG_DIR', '/config')
+        projects_file = os.path.join(config_dir, 'projects.json')
+        try:
+            with open(projects_file) as f:
+                projects = json.load(f)
+            for p in projects:
+                if p.get('id') == self.project_id:
+                    user_home = os.environ.get('USER_HOME', '/home')
+                    return p['path'].replace(user_home, '/userhome')
+        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+            print(f"[Worker] Could not resolve project root: {e}", flush=True)
+        return '/userhome'  # Safe fallback, never /codebase
 
     def process_one(self, timeout: int = 0) -> Optional[Job]:
         """
@@ -132,8 +148,7 @@ class JobWorker:
             raise ValueError("Missing domain name in job payload")
 
         # Find project root (where .aoa/domains lives)
-        project_root = os.environ.get("AOA_PROJECT_ROOT", "/codebase")
-        domain_file = os.path.join(project_root, ".aoa", "domains", f"{domain_name}.json")
+        domain_file = os.path.join(self.project_root, ".aoa", "domains", f"{domain_name}.json")
 
         # 1. Check if domain file exists
         if not os.path.exists(domain_file):

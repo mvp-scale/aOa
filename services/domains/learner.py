@@ -1344,10 +1344,19 @@ Output ONLY the JSON array, no explanation."""
         project_path = self.redis.client.hget("aoa:projects", project_id)
         if project_path:
             return os.path.join(project_path, ".aoa", "domains", "intent.json")
-        # Docker: codebase mounted at /codebase
-        codebase_root = os.environ.get('CODEBASE_ROOT', '/codebase')
-        if os.path.exists(os.path.join(codebase_root, ".aoa", "domains")):
-            return os.path.join(codebase_root, ".aoa", "domains", "intent.json")
+        # Resolve from project registry
+        config_dir = os.environ.get('CONFIG_DIR', '/config')
+        projects_file = os.path.join(config_dir, 'projects.json')
+        try:
+            with open(projects_file) as f:
+                projects = json.load(f)
+            for p in projects:
+                if p.get('id') == project_id:
+                    user_home = os.environ.get('USER_HOME', '/home')
+                    container_path = p['path'].replace(user_home, '/userhome')
+                    return os.path.join(container_path, ".aoa", "domains", "intent.json")
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            pass
         # Fallback to current directory
         return os.path.join(os.getcwd(), ".aoa", "domains", "intent.json")
 
