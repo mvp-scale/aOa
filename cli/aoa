@@ -1655,45 +1655,7 @@ cmd_outline() {
     fi
 }
 
-cmd_outline_status() {
-    # Show outline tagging status
-    local project_id=$(get_project_id)
-    local project_param=""
-    if [ -n "$project_id" ]; then
-        project_param="?project_id=${project_id}"
-    fi
-
-    local result=$(curl -s "${INDEX_URL}/outline/pending${project_param}")
-    local pending_count=$(echo "$result" | jq -r '.pending_count // 0')
-    local up_to_date=$(echo "$result" | jq -r '.up_to_date_count // 0')
-    local total=$(echo "$result" | jq -r '.total_files // 0')
-
-    echo -e "${CYAN}${BOLD}⚡ aOa Outline${NC}"
-    echo ""
-    echo -e "  Pending:  ${YELLOW}${pending_count}${NC} files need semantic tags"
-    echo -e "  Tagged:   ${GREEN}${up_to_date}${NC} files"
-    echo -e "  Total:    ${total} files"
-    echo ""
-
-    if [ "$pending_count" -eq 0 ]; then
-        echo -e "${GREEN}All files are tagged!${NC}"
-        echo ""
-        echo "Try: aoa search \"#authentication\" to find auth code"
-        return 0
-    fi
-
-    echo -e "${BOLD}How to tag:${NC}"
-    echo ""
-    echo "  In Claude Code, say: \"tag the codebase\""
-    echo ""
-    echo "  Claude will:"
-    echo "    1. Get pending files from /outline/pending"
-    echo "    2. Batch files into groups of 15"
-    echo "    3. Generate semantic tags per symbol via Haiku"
-    echo "    4. Store tags for searchable access"
-    echo ""
-    echo -e "${DIM}Then search: aoa search \"#validation\" to find by tag${NC}"
-}
+# NOTE: cmd_outline_status() removed - never called, replaced by /aoa-start flow
 
 cmd_cc() {
     # aoa cc <subcommand>  - Claude Code session commands
@@ -3634,7 +3596,7 @@ cmd_health() {
         [ "$tokens_saved" -ge 1000 ] && tokens_fmt="$((tokens_saved / 1000))k"
 
         echo -e "  Codebase:  ${file_count} files, ${symbol_count} targets"
-        echo -e "  Patterns:  ${domain_count} domains, ${term_count} terms"
+        echo -e "  Domains:   ${domain_count} domains, ${term_count} terms"
         echo -e "  Savings:   ${GREEN}${tokens_fmt}${NC} tokens saved"
         echo ""
     fi
@@ -5676,17 +5638,17 @@ GETTING STARTED
   aoa projects           List all enabled projects
 
 SEARCH (Unix parity)
-  grep <term>            O(1) symbol lookup (indexed, full codebase)
-  grep "a b c"           Multi-term OR search (ranked)
-  grep -a t1,t2          Multi-term AND search (all terms required)
+  grep <term>            O(1) symbol lookup (<5ms, full codebase)
+  grep "a b c"           Multi-term OR search (<10ms, ranked)
+  grep -a t1,t2          Multi-term AND search (<10ms, all terms)
   grep -i <term>         Case insensitive search
-  egrep <regex>          Extended regex search (working set only)
+  egrep <regex>          Regex search (~20ms, working set only)
 
 FILE DISCOVERY (Unix parity)
-  find <pattern>         Find files by glob pattern (e.g., '*.py')
+  find <pattern>         Find files by glob (<10ms)
   find -type py          Find files by language
-  tree [dir]             Directory tree structure
-  locate <name>          Fast filename search
+  tree [dir]             Directory tree (<50ms)
+  locate <name>          Fast filename search (<5ms)
   head <file> [n]        Show first n lines (default: 20)
   tail <file> [n]        Show last n lines (default: 20)
   lines <file> M-N       Show specific line range

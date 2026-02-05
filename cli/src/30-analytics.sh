@@ -444,45 +444,7 @@ cmd_outline() {
     fi
 }
 
-cmd_outline_status() {
-    # Show outline tagging status
-    local project_id=$(get_project_id)
-    local project_param=""
-    if [ -n "$project_id" ]; then
-        project_param="?project_id=${project_id}"
-    fi
-
-    local result=$(curl -s "${INDEX_URL}/outline/pending${project_param}")
-    local pending_count=$(echo "$result" | jq -r '.pending_count // 0')
-    local up_to_date=$(echo "$result" | jq -r '.up_to_date_count // 0')
-    local total=$(echo "$result" | jq -r '.total_files // 0')
-
-    echo -e "${CYAN}${BOLD}⚡ aOa Outline${NC}"
-    echo ""
-    echo -e "  Pending:  ${YELLOW}${pending_count}${NC} files need semantic tags"
-    echo -e "  Tagged:   ${GREEN}${up_to_date}${NC} files"
-    echo -e "  Total:    ${total} files"
-    echo ""
-
-    if [ "$pending_count" -eq 0 ]; then
-        echo -e "${GREEN}All files are tagged!${NC}"
-        echo ""
-        echo "Try: aoa search \"#authentication\" to find auth code"
-        return 0
-    fi
-
-    echo -e "${BOLD}How to tag:${NC}"
-    echo ""
-    echo "  In Claude Code, say: \"tag the codebase\""
-    echo ""
-    echo "  Claude will:"
-    echo "    1. Get pending files from /outline/pending"
-    echo "    2. Batch files into groups of 15"
-    echo "    3. Generate semantic tags per symbol via Haiku"
-    echo "    4. Store tags for searchable access"
-    echo ""
-    echo -e "${DIM}Then search: aoa search \"#validation\" to find by tag${NC}"
-}
+# NOTE: cmd_outline_status() removed - never called, replaced by /aoa-start flow
 
 cmd_cc() {
     # aoa cc <subcommand>  - Claude Code session commands

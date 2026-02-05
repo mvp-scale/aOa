@@ -480,16 +480,6 @@ aoa tree [dir]               # Directory structure
 ```""", "PostToolUse")
 
 
-def handle_prefetch(data: dict):
-    """
-    PreToolUse (Read|Edit|Write): Prefetch related files.
-
-    From: aoa-intent-prefetch.py
-    """
-    # TODO: Migrate prefetch logic
-    pass
-
-
 def handle_stop(data: dict):
     """
     Stop: Session heartbeat - increment counter, trigger async actions.
@@ -541,7 +531,7 @@ def handle_stop(data: dict):
 def main():
     parser = argparse.ArgumentParser(description="aOa Gateway Hook")
     parser.add_argument("--event", required=True,
-                        choices=["prompt", "tool", "enforce", "prefetch", "stop"],
+                        choices=["prompt", "tool", "enforce", "stop"],
                         help="Hook event type")
     args = parser.parse_args()
 
@@ -556,7 +546,6 @@ def main():
         "prompt": handle_prompt,
         "tool": handle_tool,
         "enforce": handle_enforce,
-        "prefetch": handle_prefetch,
         "stop": handle_stop,
     }
 

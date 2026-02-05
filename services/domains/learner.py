@@ -1350,41 +1350,8 @@ Output ONLY the JSON array, no explanation."""
         # Fallback to current directory
         return os.path.join(os.getcwd(), ".aoa", "domains", "intent.json")
 
-    def save_intent_proposals(self, proposals: list[dict]) -> str:
-        """
-        Save intent proposals to .aoa/domains/intent.json.
-
-        Args:
-            proposals: List of domain proposals in format:
-                [{domain, terms: {term: [keywords]}}]
-
-        Returns:
-            Path to saved file
-        """
-        intent_path = self.get_intent_file_path()
-
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(intent_path), exist_ok=True)
-
-        # Write proposals
-        with open(intent_path, 'w') as f:
-            json.dump(proposals, f, indent=2)
-
-        return intent_path
-
-    def get_intent_context_for_hook(self) -> dict:
-        """
-        Prepare context for hook-based intent generation.
-
-        Returns context dict that hook can use to call Task agent.
-        """
-        existing = self.get_all_domains()
-        return {
-            "existing_domains": existing,
-            "prompt_template": "get_intent_prompt",  # Hook knows to call this
-            "output_file": self.get_intent_file_path()
-        }
-
+    # NOTE: save_intent_proposals() and get_intent_context_for_hook() removed
+    # These were never called - replaced by /aoa-rebalance skill flow
 
     # =========================================================================
     # Cohit Tracking (RB-02: Co-occurrence for promotion math)

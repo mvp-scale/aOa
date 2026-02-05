@@ -261,6 +261,11 @@ aOa commands mirror Unix grep/egrep so they feel intuitive:
 | `aoa health` | Check services | instant |
 | `aoa intent recent` | See what's being worked on | <50ms |
 | `aoa domains` | Show domain stats | <50ms |
+| `aoa bigrams` | Show usage signal bigrams | <50ms |
+| `aoa jobs` | Domain enrichment job queue | <50ms |
+| `aoa config` | Show/set configuration | instant |
+| `aoa stats` | Session statistics | <50ms |
+| `aoa wipe` | Clear all aOa data for project | instant |
 
 ## API Endpoints (localhost:8080)
 
@@ -271,7 +276,7 @@ curl "localhost:8080/symbol?q=handleAuth"           # Instant search
 curl "localhost:8080/multi?q=auth+login+handler"    # Multi-term ranked
 curl "localhost:8080/files"                          # List indexed files
 curl "localhost:8080/intent/recent"                  # Recent intents
-curl "localhost:8080/domains/stats?project=ID"      # Domain learning stats
+curl "localhost:8080/domains/stats?project_id=ID"   # Domain learning stats
 ```
 
 ## Semantic Domains (GL-083)

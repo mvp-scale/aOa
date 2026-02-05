@@ -28,17 +28,17 @@ GETTING STARTED
   aoa projects           List all enabled projects
 
 SEARCH (Unix parity)
-  grep <term>            O(1) symbol lookup (indexed, full codebase)
-  grep "a b c"           Multi-term OR search (ranked)
-  grep -a t1,t2          Multi-term AND search (all terms required)
+  grep <term>            O(1) symbol lookup (<5ms, full codebase)
+  grep "a b c"           Multi-term OR search (<10ms, ranked)
+  grep -a t1,t2          Multi-term AND search (<10ms, all terms)
   grep -i <term>         Case insensitive search
-  egrep <regex>          Extended regex search (working set only)
+  egrep <regex>          Regex search (~20ms, working set only)
 
 FILE DISCOVERY (Unix parity)
-  find <pattern>         Find files by glob pattern (e.g., '*.py')
+  find <pattern>         Find files by glob (<10ms)
   find -type py          Find files by language
-  tree [dir]             Directory tree structure
-  locate <name>          Fast filename search
+  tree [dir]             Directory tree (<50ms)
+  locate <name>          Fast filename search (<5ms)
   head <file> [n]        Show first n lines (default: 20)
   tail <file> [n]        Show last n lines (default: 20)
   lines <file> M-N       Show specific line range

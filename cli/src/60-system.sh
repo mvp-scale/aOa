@@ -595,7 +595,7 @@ cmd_health() {
         [ "$tokens_saved" -ge 1000 ] && tokens_fmt="$((tokens_saved / 1000))k"
 
         echo -e "  Codebase:  ${file_count} files, ${symbol_count} targets"
-        echo -e "  Patterns:  ${domain_count} domains, ${term_count} terms"
+        echo -e "  Domains:   ${domain_count} domains, ${term_count} terms"
         echo -e "  Savings:   ${GREEN}${tokens_fmt}${NC} tokens saved"
         echo ""
     fi
