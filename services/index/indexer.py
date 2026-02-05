@@ -4567,103 +4567,6 @@ def _do_domain_learning(project_id: str):
     print(f"[DomainLearning] Ready for hook - {project_id}", flush=True)
 
 
-def _extract_bigrams_and_file_hits(project_id: str, learner: 'DomainLearner'):
-    """
-    ED-01 + ED-02: Extract bigrams and track file hits on every prompt.
-
-    Moved from worker._handle_scrape() to event-driven flow (Session 70).
-    Uses local API calls (same service) for conversation and intent data.
-    """
-    import re
-    import urllib.request
-    import urllib.parse
-
-    try:
-        r = learner.redis.client
-
-        # ED-01: Extract bigrams from conversation
-        # Get cursor: last extraction timestamp
-        cursor_key = f"aoa:{project_id}:scrape_cursor"
-        since = r.get(cursor_key)
-        if isinstance(since, bytes):
-            since = since.decode()
-
-        # Fetch conversation since last extraction (local API)
-        index_port = os.environ.get("PORT", "9999")
-        url = f"http://localhost:{index_port}/cc/conversation?limit=50"
-        if since:
-            url += f"&since={urllib.parse.quote(since)}"
-
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode())
-
-        texts = data.get("texts", [])
-        latest_ts = data.get("latest_timestamp", "")
-
-        bigram_count = 0
-        current_bigrams = {}  # Track this extraction's bigrams
-        for item in texts:
-            text = item.get("text", "")
-            if not isinstance(text, str) or len(text) < 10:
-                continue
-            # Tokenize: lowercase, split on non-word chars
-            words = re.findall(r'\b[a-z][a-z0-9_]+\b', text.lower())
-            # Extract bigrams (consecutive word pairs)
-            for i in range(len(words) - 1):
-                bigram = f"{words[i]}:{words[i+1]}"
-                r.hincrby(f"aoa:{project_id}:bigrams", bigram, 1)
-                current_bigrams[bigram] = current_bigrams.get(bigram, 0) + 1
-                bigram_count += 1
-
-        # Store recent bigrams separately for intent learning (TTL 5 min)
-        if current_bigrams:
-            recent_key = f"aoa:{project_id}:recent_bigrams"
-            r.delete(recent_key)
-            for bigram, count in current_bigrams.items():
-                r.hincrby(recent_key, bigram, count)
-            r.expire(recent_key, 300)
-
-        # Update cursor for next extraction
-        if latest_ts:
-            r.set(cursor_key, latest_ts)
-
-        if bigram_count > 0:
-            print(f"[ED-01] {project_id}: +{bigram_count} bigrams ({len(current_bigrams)} unique)", flush=True)
-
-    except Exception as e:
-        print(f"[ED-01] Bigram extraction error: {e}", flush=True)
-
-    # ED-02: Track file hits from recent intent records
-    try:
-        r = learner.redis.client
-
-        # Get recent intent records via local API (we're in index service)
-        index_port = os.environ.get("PORT", "9999")
-        url = f"http://localhost:{index_port}/intent/recent?limit=10&project_id={project_id}"
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            recent = json.loads(resp.read().decode()).get("records", [])
-
-        hit_count = 0
-        for record in recent:
-            files = record.get("files", [])
-            for file_entry in files:
-                # Skip command/pattern entries
-                if file_entry.startswith("cmd:") or file_entry.startswith("pattern:"):
-                    continue
-                # Extract file path (remove :line-range if present)
-                file_path = file_entry.split(":")[0] if ":" in file_entry else file_entry
-                if file_path:
-                    r.hincrby(f"aoa:{project_id}:file_hits", file_path, 1)
-                    hit_count += 1
-
-        if hit_count > 0:
-            print(f"[ED-02] {project_id}: +{hit_count} file hits", flush=True)
-
-    except Exception as e:
-        print(f"[ED-02] File hit tracking error: {e}", flush=True)
-
 
 def _trigger_domain_learning_if_needed(project_id: str, intent_index: 'IntentIndex' = None):
     """
@@ -4690,9 +4593,8 @@ def _trigger_domain_learning_if_needed(project_id: str, intent_index: 'IntentInd
         # GL-083: Simplified - just track prompt count for rebalance
         prompt_count = learner.increment_prompt_count()
 
-        # ED-01: Extract bigrams from conversation (every prompt)
-        # ED-02: Track file hits (every prompt)
-        _extract_bigrams_and_file_hits(project_id, learner)
+        # Bigrams + file hits handled by stop hook scrape (worker._handle_scrape)
+        # Removed inline _extract_bigrams_and_file_hits() — redundant, blocked 200ms/call
 
         # GL-083: Rebalance trigger (every 25 prompts) - replaces per-prompt learning
         if learner.should_rebalance() and prompt_count > 0:

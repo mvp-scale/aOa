@@ -267,6 +267,7 @@ class JobWorker:
             latest_ts = data.get("latest_timestamp", "")
 
             bigram_count = 0
+            current_bigrams = {}
             for item in texts:
                 text = item.get("text", "")
                 if not isinstance(text, str) or len(text) < 10:
@@ -277,7 +278,16 @@ class JobWorker:
                 for i in range(len(words) - 1):
                     bigram = f"{words[i]}:{words[i+1]}"
                     r.hincrby(f"aoa:{self.project_id}:bigrams", bigram, 1)
+                    current_bigrams[bigram] = current_bigrams.get(bigram, 0) + 1
                     bigram_count += 1
+
+            # Store recent bigrams for /aoa-rebalance Haiku skill (TTL 5 min)
+            if current_bigrams:
+                recent_key = f"aoa:{self.project_id}:recent_bigrams"
+                r.delete(recent_key)
+                for bigram, count in current_bigrams.items():
+                    r.hincrby(recent_key, bigram, count)
+                r.expire(recent_key, 300)
 
             # Update cursor for next scrape
             if latest_ts:
