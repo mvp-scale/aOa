@@ -23,10 +23,11 @@ Spawn ONE background Task:
 
 Prompt:
 ```
-You are generating intent domains. Complete ONLY these 3 steps. Do NOT explore the codebase, read files, or run any commands not listed below.
+You are generating intent domains. Complete ONLY these 3 steps.
+
+CRITICAL: Do NOT explore the codebase. Do NOT read files. Do NOT run any commands not listed below. If a command fails, return "✗ failed" and STOP. Do NOT retry, debug, or investigate.
 
 ## Step 1: Gather Data
-Run: aoa domains clear-pending
 Run: aoa bigrams --recent
 Run: aoa domains --names
 
@@ -56,7 +57,7 @@ Rules:
 - Extract keywords from BOTH sides of bigrams
 
 ## Step 3: Load Domains
-Run: aoa domains load-intent
+Run: aoa domains rebalance
 
 Return ONLY: "✓ 3 domains added"
 ```

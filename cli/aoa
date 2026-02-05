@@ -4132,6 +4132,60 @@ cmd_domains() {
             echo -e "${GREEN}✓${NC} Added ${CYAN}${count}${NC} domains to context tier"
             return 0
             ;;
+        rebalance)
+            # aoa domains rebalance - clear pending, load intent.json, report
+            # Single command for the /aoa-rebalance skill
+            shift
+
+            # 1. Clear pending flag
+            curl -sf -X POST "${INDEX_URL}/domains/haiku-pending" \
+                -H "Content-Type: application/json" \
+                -d "{\"project_id\": \"${project_id}\", \"clear\": true}" > /dev/null 2>&1
+
+            # 2. Check for intent.json
+            local intent_file="${project_root}/.aoa/domains/intent.json"
+            if [ ! -f "$intent_file" ]; then
+                echo -e "${RED}Error: No intent.json found${NC}" >&2
+                return 1
+            fi
+
+            # 3. Validate JSON
+            if ! jq empty "$intent_file" 2>/dev/null; then
+                echo -e "${RED}Error: intent.json is not valid JSON${NC}" >&2
+                return 1
+            fi
+
+            # 4. Load each domain
+            local count=0
+            local failed=0
+            local domains=$(cat "$intent_file")
+            local total=$(echo "$domains" | jq 'length')
+
+            for i in $(seq 0 $((total - 1))); do
+                local domain=$(echo "$domains" | jq ".[$i]")
+                local name=$(echo "$domain" | jq -r '.domain')
+                local desc=$(echo "$domain" | jq -r '.description // "Intent-generated domain"')
+                local terms=$(echo "$domain" | jq -c '.terms | keys')
+                local keywords=$(echo "$domain" | jq -c '.terms')
+
+                local result=$(curl -sf -X POST "${INDEX_URL}/domains/add-context" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"project_id\":\"${project_id}\",\"name\":\"${name}\",\"description\":\"${desc}\",\"terms\":${terms},\"keywords\":${keywords}}" 2>/dev/null)
+
+                if echo "$result" | jq -e '.success' > /dev/null 2>&1; then
+                    ((count++))
+                else
+                    ((failed++))
+                fi
+            done
+
+            # 5. Cleanup
+            rm -f "$intent_file"
+
+            echo -e "${GREEN}✓${NC} ${count} domains added"
+            [ "$failed" -gt 0 ] && echo -e "${RED}${failed} failed${NC}"
+            return 0
+            ;;
     esac
 
     # Default: show domain status
