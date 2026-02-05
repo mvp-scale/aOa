@@ -2700,10 +2700,10 @@ cmd_intent_recent() {
                         tree)               action="Tree" ;;
                         locate)             action="Locate" ;;
                         head|tail|lines)    action="Read" ;;
-                        hot)                action="Predict" ;;
+                        hot)                action="Search" ;;  # Legacy, no longer used
                         touched)            action="Intent" ;;
                         focus)              action="Memory" ;;
-                        predict)            action="Predict" ;;
+                        # predict removed - deprecated
                         outline)            action="Outline" ;;
                         *)                  action="Search" ;;
                     esac
@@ -2742,9 +2742,7 @@ cmd_intent_recent() {
                 action="Intent"
                 source="aOa"
                 ;;
-            Predict)
-                source="aOa"
-                ;;
+            # Predict removed - deprecated
             Learn)
                 # Domain learning event - format: learn:domains_added:tokens_invested
                 action="Learn"
@@ -2863,25 +2861,7 @@ cmd_intent_recent() {
         local impact attribution
 
         # Special handling for aOa native operations - tell meaningful stories
-        if [ "$action" = "Predict" ]; then
-            # Use confidence field (0-1 float) if available
-            if [ -n "$confidence" ] && [ "$confidence" != "0" ] && [ "$confidence" != "null" ]; then
-                # Convert float to percentage (e.g., 0.45 -> 45%)
-                local conf_pct=$(awk "BEGIN {printf \"%.0f\", $confidence * 100}")
-                attribution="${CYAN}${conf_pct}%${NC} conf"
-            else
-                attribution="${CYAN}predicted${NC}"
-            fi
-            # Show predicted file count
-            if [ "$file_count" -gt 1 ] 2>/dev/null; then
-                impact="${CYAN}${file_count} files${NC} suggested"
-            else
-                impact="${CYAN}1 file${NC} suggested"
-            fi
-            # TARGET: show keywords (tags without #) instead of first file
-            local keywords=$(echo "$tags" | sed 's/#//g' | xargs)
-            target="keywords: ${keywords}"
-        elif [ "$action" = "Intent" ]; then
+        if [ "$action" = "Intent" ]; then
             # Haiku semantic tagging
             attribution="${CYAN}semantic${NC}"
             local tag_count=$(echo "$tags" | wc -w)
@@ -2910,10 +2890,8 @@ cmd_intent_recent() {
                 tree)         attribution="${CYAN}structure${NC}" ;;
                 locate)       attribution="${CYAN}filename${NC}" ;;
                 head|tail|lines) attribution="${CYAN}content${NC}" ;;
-                hot)          attribution="${CYAN}frequency${NC}" ;;
                 touched)      attribution="${CYAN}session${NC}" ;;
                 focus)        attribution="${CYAN}context${NC}" ;;
-                predict)      attribution="${CYAN}predicted${NC}" ;;
                 *)            attribution="${CYAN}indexed${NC}" ;;
             esac
             # Truncate time to 2 decimal places
@@ -2944,7 +2922,7 @@ cmd_intent_recent() {
             impact="${DIM}${AOA_TUNE_STALE} stale, ${AOA_TUNE_PRUNED} pruned${NC}"
             tags="${CYAN}#tuning${NC}"
             target="${BOLD}${YELLOW}This is the way.${NC}"
-        elif [ "$action" = "Predict" ] || [ "$action" = "Intent" ] || [ "$action" = "Outline" ] || [ "$action" = "Search" ] || [ "$action" = "Find" ] || [ "$action" = "Locate" ] || [ "$action" = "Tree" ] || [ "$action" = "Memory" ]; then
+        elif [ "$action" = "Intent" ] || [ "$action" = "Outline" ] || [ "$action" = "Search" ] || [ "$action" = "Find" ] || [ "$action" = "Locate" ] || [ "$action" = "Tree" ] || [ "$action" = "Memory" ]; then
             : # Impact already set above for aOa native operations
         elif [ "$saved" = "-" ]; then
             impact="-"
