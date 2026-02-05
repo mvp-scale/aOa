@@ -1,7 +1,7 @@
 ---
 name: aoa-rebalance
-description: Generate intent domains from recent activity
-allowed-tools: Task, Bash, Read, Write
+description: Generate intent domains from accumulated usage signals
+allowed-tools: Task, Bash, Write
 ---
 
 # aOa Rebalance
@@ -10,7 +10,7 @@ Display:
 ```
 ⚡ aOa Intent Learning
 
-Analyzing last 25 prompts for new domains...
+Analyzing usage signals for new domains...
 This runs in the background. Continue working.
 ```
 
@@ -23,47 +23,56 @@ Spawn ONE background Task:
 
 Prompt:
 ```
-Generate 3 new semantic domains from recent developer prompts. Do NOT output intermediate command results.
+Generate 3 new semantic domains from bigram usage signals.
 
-## Step 0: Acknowledge Trigger
-Run `aoa domains clear-pending` to clear the rebalance flag.
-This ensures the trigger doesn't re-fire on subsequent prompts.
+## Step 1: Clear trigger and gather data
+Run these commands (do NOT show output):
+```bash
+aoa domains clear-pending
+aoa bigrams --limit 50
+aoa domains --names
+```
 
-## Step 1: Gather Prompts and Context
-Run `aoa cc prompts --raw` to get the last 25 user prompts.
-Run `aoa domains --json` to get existing domains (don't duplicate these).
+## Step 2: Generate domains
+The bigrams show what the developer is ACTUALLY working on based on accumulated usage patterns.
 
-## Step 2: Analyze Prompts and Generate Domains
-Analyze the prompts to understand what the developer is DOING (not generic concepts).
+Example bigrams and what they suggest:
+- "hit:tracking" → @metrics domain with terms: tracking, hits, counting
+- "domain:hits" → @domains domain with terms: hits, learning, promotion
+- "gap:analysis" → @analysis domain with terms: gap, research, investigation
 
-Write .aoa/domains/intent.json as a flat JSON array with 3 NEW domains:
+Write to /home/corey/aOa/.aoa/domains/intent.json:
+```json
 [
   {
     "domain": "@domain_name",
+    "description": "brief description",
     "terms": {
-      "term_name": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-      "another_term": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+      "term1": ["kw1", "kw2", "kw3", "kw4", "kw5"],
+      "term2": ["kw1", "kw2", "kw3", "kw4", "kw5"]
     }
   }
 ]
+```
 
 Rules:
-- Generate exactly 3 NEW domains based on prompt activity
+- Generate exactly 3 NEW domains based on bigram signals
 - Each domain should have 5-7 terms
-- Each term should have 5-7 keywords
+- Each term should have 5-7 keywords (derived from bigram words)
 - Domain names: lowercase with underscores, start with @
 - Terms: SINGLE WORDS only (e.g., "tracking", "validation", "generation")
 - Keywords: SINGLE WORDS only, NO underscores, NO phrases
-- Focus on SPECIFIC user activities from the prompts
-- DO NOT duplicate existing domains
+- Extract keywords from BOTH sides of the bigram (e.g., "hit:tracking" → hit, tracking)
+- DO NOT duplicate existing domain names
 
-## Step 3: Stage Proposals
-Run: aoa domains stage
-Run: aoa domains | head -10
+## Step 3: Load domains
+```bash
+aoa domains load-intent
+```
 
-The staged domains will accumulate hits. When they get enough hits through usage, they promote to core domains.
+New domains enter at context tier and compete for top 24 by hits. Bad domains naturally fall off.
 
-Return ONLY: "✓ 3 domains staged"
+Return ONLY: "✓ 3 domains added"
 ```
 
 ## Complete
@@ -71,7 +80,7 @@ Return ONLY: "✓ 3 domains staged"
 When done, display:
 ```
 ───────────────────────────────────────
-⚡ Intent staged
+⚡ Intent added
 
-3 domains │ Promotes with usage
+3 domains │ Competes by hits
 ```
