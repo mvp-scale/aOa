@@ -2152,10 +2152,20 @@ Output ONLY the JSON array, no explanation."""
 
     def _find_best_term_for_keyword(self, keyword: str) -> str | None:
         """
-        Find best existing term to assign keyword to.
+        ED-03: Find best existing term to assign keyword to.
 
-        Simple heuristic: find term with most character overlap.
+        Uses cohit-based assignment first (search co-occurrence),
+        falls back to character overlap if no cohit data.
         """
+        # First try cohit-based assignment (Session 70)
+        cohit_result = self.get_best_term_for_keyword(keyword)
+        if cohit_result:
+            term, ratio = cohit_result
+            # Require minimum ratio (50%) for cohit assignment
+            if ratio >= self.PROMOTION_MIN_RATIO:
+                return term
+
+        # Fallback: character overlap heuristic
         keyword_lower = keyword.lower()
         best_term = None
         best_score = 0
@@ -2585,6 +2595,45 @@ Return JSON:
         cleanup_result = self.cleanup_stale_proposals()
         summary['stale_proposals_removed'] = cleanup_result.get('removed_count', 0)
 
+        # =====================================================================
+        # ED-04: Bigram and file hit decay (Session 70)
+        # Moved from worker._handle_autotune() to event-driven flow
+        # =====================================================================
+
+        summary['bigrams_decayed'] = 0
+        summary['bigrams_pruned'] = 0
+        summary['files_decayed'] = 0
+        summary['files_pruned'] = 0
+
+        # 13. Decay bigram counts
+        bigrams = self.redis.client.hgetall(self._key("bigrams"))
+        for bigram, count in bigrams.items():
+            count_val = float(count.decode() if isinstance(count, bytes) else count)
+            new_count = int(count_val * self.DECAY_RATE)
+            bigram_key = bigram.decode() if isinstance(bigram, bytes) else bigram
+            if new_count <= 0:
+                self.redis.client.hdel(self._key("bigrams"), bigram_key)
+                summary['bigrams_pruned'] += 1
+            else:
+                self.redis.client.hset(self._key("bigrams"), bigram_key, new_count)
+                summary['bigrams_decayed'] += 1
+
+        # 14. Decay file hit counts
+        file_hits = self.redis.client.hgetall(self._key("file_hits"))
+        for file_path, count in file_hits.items():
+            count_val = float(count.decode() if isinstance(count, bytes) else count)
+            new_count = int(count_val * self.DECAY_RATE)
+            path_key = file_path.decode() if isinstance(file_path, bytes) else file_path
+            if new_count <= 0:
+                self.redis.client.hdel(self._key("file_hits"), path_key)
+                summary['files_pruned'] += 1
+            else:
+                self.redis.client.hset(self._key("file_hits"), path_key, new_count)
+                summary['files_decayed'] += 1
+
+        if summary['bigrams_decayed'] > 0 or summary['files_decayed'] > 0:
+            print(f"[ED-04] Decay: bigrams={summary['bigrams_decayed']}/{summary['bigrams_pruned']}, files={summary['files_decayed']}/{summary['files_pruned']}", flush=True)
+
         return summary
 
     def apply_tune(self, result: dict) -> dict:
@@ -2922,13 +2971,13 @@ Respond with ONLY valid JSON (no markdown, no explanation):
         """Get domain learning statistics."""
         domains = self.get_all_domains()
         total_terms = 0
-        total_hits = 0
+        total_hits = 0.0  # Sum as float first, round at end
 
         for d in domains:
             terms = self.get_domain_terms(d)
             total_terms += len(terms)
             meta = self.get_domain_meta(d)
-            total_hits += int(float(meta.get("hits", 0) or 0))
+            total_hits += float(meta.get("hits", 0) or 0)  # Keep as float
 
         tune_results = self.get_tune_results()
         learned_details = self.get_learned_details()
@@ -2940,7 +2989,7 @@ Respond with ONLY valid JSON (no markdown, no explanation):
             "project": self.project_id,
             "domains": len(domains),
             "total_terms": total_terms,
-            "total_hits": total_hits,
+            "total_hits": round(total_hits),  # Round after summing floats
             # GL-059.1: Domain sources
             "seeded_count": source_counts["seeded"],
             "learned_count": source_counts["learned"],
