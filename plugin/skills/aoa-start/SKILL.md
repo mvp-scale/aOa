@@ -1,7 +1,7 @@
 ---
 name: aoa-start
 description: Initialize aOa with semantic domain analysis
-allowed-tools: Task, Bash, Read, Write
+allowed-tools: Task, Bash, Write
 ---
 
 # aOa Start
@@ -23,14 +23,14 @@ Spawn ONE background Task:
 
 Prompt:
 ```
-Set up aOa semantic intelligence. Do NOT output intermediate command results.
+You are setting up aOa intelligence. Complete ONLY these 3 steps. Do NOT explore the codebase, read files, or run any commands not listed below.
 
-## Step 1: Analyze Codebase
-Run `aoa tree` silently to understand structure.
-Run `mkdir -p .aoa/domains`
+## Step 1: Generate Intelligence
+Run: aoa tree
+Run: mkdir -p .aoa/domains
 
-Generate 24 semantic domains based on the codebase.
-Write .aoa/domains/intelligence.json as flat JSON array:
+Using ONLY the aoa tree output, generate 24 semantic domains.
+Write to .aoa/domains/intelligence.json as a flat JSON array:
 [{"name": "@cli", "description": "3-4 sentences of what it does, why developers work here, what problems it solves"}, ...24 total]
 
 Rules:
@@ -41,17 +41,16 @@ Rules:
 Run: aoa domains init --file .aoa/domains/intelligence.json
 
 ## Step 2: Generate Domain Files
-For EACH domain in intelligence.json, write:
-  .aoa/domains/@{name}.json with readable format (one term per line):
-  {
-    "domain": "@name",
-    "terms": {
-      "term1": ["kw1", "kw2", "kw3", "kw4", "kw5", "kw6", "kw7"],
-      "term2": ["kw1", "kw2", "kw3", "kw4", "kw5", "kw6", "kw7"],
-      ...
-    }
+For EACH of the 24 domains in intelligence.json, Write the file .aoa/domains/@{name}.json:
+{
+  "domain": "@name",
+  "terms": {
+    "term1": ["kw1", "kw2", "kw3", "kw4", "kw5", "kw6", "kw7"],
+    "term2": ["kw1", "kw2", "kw3", "kw4", "kw5", "kw6", "kw7"],
+    ...5-7 terms
   }
-  Generate 5-7 meaningful terms with 7 keywords each.
+}
+Generate terms and keywords based on the domain description from intelligence.json.
 
 ## Step 3: Build and Verify
 Run: aoa domains build --all
