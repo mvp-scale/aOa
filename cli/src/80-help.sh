@@ -44,7 +44,6 @@ FILE DISCOVERY (Unix parity)
   lines <file> M-N       Show specific line range
 
 BEHAVIORAL (aOa unique)
-  hot [limit]            Frequently accessed "hot" files
   touched [since]        Files touched in session/time period
   focus                  Current working set from memory
 

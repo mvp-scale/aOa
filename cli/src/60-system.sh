@@ -781,7 +781,7 @@ cmd_quickstart() {
         echo ""
     fi
 
-    # GL-084: Universal domain seeding removed - use /aoa setup skill for personalized domains
+    # GL-084: Universal domain seeding removed - use /aoa-start skill for personalized domains
     # Projects start with 0 domains until setup skill runs Haiku analysis
 
     # GL-083: Load project-specific domains if available (from aoa analyze)
@@ -1202,7 +1202,7 @@ cmd_domains() {
                         for d in $missing_domains; do
                             printf "  ${RED}✗${NC} %s.json\n" "$d"
                         done
-                        echo -e "\n${DIM}Run /aoa-setup to regenerate, or create files manually.${NC}"
+                        echo -e "\n${DIM}Run /aoa-start to regenerate, or create files manually.${NC}"
                         return 1
                     fi
                 fi

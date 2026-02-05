@@ -58,7 +58,6 @@ main() {
         lines)      cmd_lines "$@" ;;
 
         # Behavioral (aOa unique)
-        hot)        cmd_hot "$@" ;;
         touched)    cmd_touched "$@" ;;
         focus)      cmd_focus "$@" ;;
         bigrams)    cmd_bigrams "$@" ;;

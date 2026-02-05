@@ -128,10 +128,10 @@ def seed_domains():
     """
     DEPRECATED: Universal domain seeding removed in GL-084.
 
-    Use /aoa-setup skill to generate project-specific domains instead.
+    Use /aoa-start skill to generate project-specific domains instead.
     """
     return jsonify({
-        'error': 'Universal domain seeding removed. Use /aoa-setup to generate project-specific domains.',
+        'error': 'Universal domain seeding removed. Use /aoa-start to generate project-specific domains.',
         'success': False,
         'deprecated': True
     }), 410  # 410 Gone

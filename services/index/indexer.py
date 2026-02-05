@@ -4531,7 +4531,7 @@ def list_projects():
 # Domain Learning Endpoints (GL-053)
 # ============================================================================
 
-# GL-084: _load_universal_domains() removed - use project-domains.json via /aoa-setup
+# GL-084: _load_universal_domains() removed - use project-domains.json via /aoa-start
 
 
 # GL-053 Phase C: Continuous domain learning

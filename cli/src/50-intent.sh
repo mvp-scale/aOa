@@ -187,22 +187,11 @@ cmd_intent_recent() {
         savings_display="Savings ${DIM}(none yet)${NC}"
     fi
 
-    # Build predictions display
-    local pred_display=""
-    if [ "$total" -lt "$min_intents" ] 2>/dev/null; then
-        pred_display="Predictions: ${YELLOW}learning${NC}"
-    elif [ "$hit_pct_int" -ge 80 ] 2>/dev/null; then
-        pred_display="Predictions: ${GREEN}${hit_pct_int}%${NC}"
-    else
-        pred_display="Predictions: ${YELLOW}${hit_pct_int}%${NC}"
-    fi
-
     # Assemble header line (only include time section if populated)
     local header="${CYAN}${BOLD}⚡ aOa Activity${NC}  ${savings_display}"
     if [ -n "$time_display" ]; then
         header="${header} ${DIM}│${NC} ${CYAN}${time_display}${NC}"
     fi
-    header="${header} ${DIM}│${NC} ${pred_display}"
     echo -e "$header"
     echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────────────────${NC}"
     echo ""

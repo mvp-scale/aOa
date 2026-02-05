@@ -11,7 +11,6 @@
 #   - 02-utils.sh: get_project_id()
 #
 # COMMANDS PROVIDED
-#   cmd_hot        Show frequently accessed files
 #   cmd_enrich     Add/update tags for a file
 #   cmd_touched    Recently touched files
 #   cmd_focus      Files related to current focus
@@ -20,27 +19,6 @@
 #   cmd_cc         Claude Code session commands (prompts, history)
 #
 # =============================================================================
-
-cmd_hot() {
-    # aoa hot [limit]     - Show frequently accessed "hot" files
-    local limit="${1:-10}"
-
-    local project_id=$(get_project_id)
-    local project_param=""
-    if [ -n "$project_id" ]; then
-        project_param="&project_id=${project_id}"
-    fi
-
-    local result=$(curl -s "${INDEX_URL}/hot?limit=${limit}${project_param}")
-    local count=$(echo "$result" | jq -r '.files | length // 0' 2>/dev/null || echo "0")
-
-    printf "${CYAN}${BOLD}🔥 %s hot files${NC}\n" "$count"
-
-    if [ "$count" -gt 0 ] 2>/dev/null; then
-        echo "$result" | jq -r '.files[] | "  \(.path) (\(.hits // 0) hits)"' 2>/dev/null || true
-    fi
-    return 0
-}
 
 cmd_bigrams() {
     # aoa bigrams [--recent] [--min N] [--limit N]  - Show bigrams (usage signals)

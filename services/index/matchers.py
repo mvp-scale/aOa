@@ -42,7 +42,7 @@ def _load_pattern_library():
     """Load semantic and domain pattern configs from project-domains.json.
 
     GL-084: Universal domains removed. Only project-specific domains are used.
-    Generated via /aoa-setup skill.
+    Generated via /aoa-start skill.
 
     v2 Structure: @domain -> semantic_term -> matches[]
 

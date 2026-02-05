@@ -76,14 +76,14 @@ When the user addresses an agent by name using "Hey [AgentName]", spawn that age
 
 ### aOa Setup (SPECIAL - Guided Onboarding)
 
-When user says **"Hey aOa"**, **"/aoa-setup"**, or **"set up aoa"**:
+When user says **"Hey aOa"**, **"/aoa-start"**, or **"set up aoa"**:
 
 1. Run `aoa domains --json` silently to check domain status
 2. Check `domain_count` in the response
 
 **If domain_count = 0** (fresh project, needs setup):
 
-Run the `/aoa-setup` skill to guide them through personalized onboarding:
+Run the `/aoa-start` skill to guide them through personalized onboarding:
 - Explains what's happening (trust, transparency)
 - Estimates time based on file count
 - Runs parallel Haiku analysis to generate 24 core semantic domains
@@ -285,12 +285,12 @@ services/auth/handler.py:login()[10-45]:12 def login(user):  @authentication  #a
 ```
 
 Domains are:
-- **Generated** via `/aoa-setup` (personalized domains from your codebase structure)
+- **Generated** via `/aoa-start` (personalized domains from your codebase structure)
 - **Stored** in `.aoa/project-domains.json` (v2 format with terms and keywords)
 - **Loaded** by `aoa quickstart` into Redis for fast lookup
 - **Rebalanced** every 25 prompts (assigns orphan keywords to terms)
 
-**Setup command**: `/aoa-setup` analyzes your codebase structure and generates 24 core semantic domains (no API key required).
+**Setup command**: `/aoa-start` analyzes your codebase structure and generates 24 core semantic domains (no API key required).
 
 ## Intelligence & Intent Angles
 

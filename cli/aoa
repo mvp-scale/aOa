@@ -1222,7 +1222,6 @@ cmd_files() {
 #   - 02-utils.sh: get_project_id()
 #
 # COMMANDS PROVIDED
-#   cmd_hot        Show frequently accessed files
 #   cmd_enrich     Add/update tags for a file
 #   cmd_touched    Recently touched files
 #   cmd_focus      Files related to current focus
@@ -1231,27 +1230,6 @@ cmd_files() {
 #   cmd_cc         Claude Code session commands (prompts, history)
 #
 # =============================================================================
-
-cmd_hot() {
-    # aoa hot [limit]     - Show frequently accessed "hot" files
-    local limit="${1:-10}"
-
-    local project_id=$(get_project_id)
-    local project_param=""
-    if [ -n "$project_id" ]; then
-        project_param="&project_id=${project_id}"
-    fi
-
-    local result=$(curl -s "${INDEX_URL}/hot?limit=${limit}${project_param}")
-    local count=$(echo "$result" | jq -r '.files | length // 0' 2>/dev/null || echo "0")
-
-    printf "${CYAN}${BOLD}🔥 %s hot files${NC}\n" "$count"
-
-    if [ "$count" -gt 0 ] 2>/dev/null; then
-        echo "$result" | jq -r '.files[] | "  \(.path) (\(.hits // 0) hits)"' 2>/dev/null || true
-    fi
-    return 0
-}
 
 cmd_bigrams() {
     # aoa bigrams [--recent] [--min N] [--limit N]  - Show bigrams (usage signals)
@@ -2765,22 +2743,11 @@ cmd_intent_recent() {
         savings_display="Savings ${DIM}(none yet)${NC}"
     fi
 
-    # Build predictions display
-    local pred_display=""
-    if [ "$total" -lt "$min_intents" ] 2>/dev/null; then
-        pred_display="Predictions: ${YELLOW}learning${NC}"
-    elif [ "$hit_pct_int" -ge 80 ] 2>/dev/null; then
-        pred_display="Predictions: ${GREEN}${hit_pct_int}%${NC}"
-    else
-        pred_display="Predictions: ${YELLOW}${hit_pct_int}%${NC}"
-    fi
-
     # Assemble header line (only include time section if populated)
     local header="${CYAN}${BOLD}⚡ aOa Activity${NC}  ${savings_display}"
     if [ -n "$time_display" ]; then
         header="${header} ${DIM}│${NC} ${CYAN}${time_display}${NC}"
     fi
-    header="${header} ${DIM}│${NC} ${pred_display}"
     echo -e "$header"
     echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────────────────${NC}"
     echo ""
@@ -3977,7 +3944,7 @@ cmd_quickstart() {
         echo ""
     fi
 
-    # GL-084: Universal domain seeding removed - use /aoa setup skill for personalized domains
+    # GL-084: Universal domain seeding removed - use /aoa-start skill for personalized domains
     # Projects start with 0 domains until setup skill runs Haiku analysis
 
     # GL-083: Load project-specific domains if available (from aoa analyze)
@@ -4398,7 +4365,7 @@ cmd_domains() {
                         for d in $missing_domains; do
                             printf "  ${RED}✗${NC} %s.json\n" "$d"
                         done
-                        echo -e "\n${DIM}Run /aoa-setup to regenerate, or create files manually.${NC}"
+                        echo -e "\n${DIM}Run /aoa-start to regenerate, or create files manually.${NC}"
                         return 1
                     fi
                 fi
@@ -6285,7 +6252,6 @@ FILE DISCOVERY (Unix parity)
   lines <file> M-N       Show specific line range
 
 BEHAVIORAL (aOa unique)
-  hot [limit]            Frequently accessed "hot" files
   touched [since]        Files touched in session/time period
   focus                  Current working set from memory
 
@@ -6416,7 +6382,6 @@ main() {
         lines)      cmd_lines "$@" ;;
 
         # Behavioral (aOa unique)
-        hot)        cmd_hot "$@" ;;
         touched)    cmd_touched "$@" ;;
         focus)      cmd_focus "$@" ;;
         bigrams)    cmd_bigrams "$@" ;;
