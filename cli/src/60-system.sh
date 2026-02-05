@@ -882,7 +882,12 @@ cmd_domains() {
                     fi
                 done
 
-                echo -e "\n${GREEN}✓${NC} ${BOLD}${count}${NC} domains enriched"
+                # Link domains to index after enrichment
+                if [ "$count" -gt 0 ]; then
+                    cmd_domains link > /dev/null 2>&1
+                fi
+
+                echo -e "\n${GREEN}✓${NC} ${BOLD}${count}${NC} domains enriched and linked"
                 [ "$failed" -gt 0 ] && echo -e "${RED}${failed} failed${NC}"
                 return 0
             fi
