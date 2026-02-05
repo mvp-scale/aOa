@@ -92,11 +92,6 @@ ROUTES = {
     # GL-091: Test mode thresholds
     "/config/thresholds": ("index", "/config/thresholds"),
 
-    # Transition model routes (Phase 3)
-    "/transitions/sync": ("index", "/transitions/sync"),
-    "/transitions/predict": ("index", "/transitions/predict"),
-    "/transitions/stats": ("index", "/transitions/stats"),
-
     # Context API (Phase 3)
     "/context": ("index", "/context"),
 

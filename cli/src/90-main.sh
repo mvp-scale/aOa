@@ -61,7 +61,7 @@ main() {
         hot)        cmd_hot "$@" ;;
         touched)    cmd_touched "$@" ;;
         focus)      cmd_focus "$@" ;;
-        predict)    cmd_predict "$@" ;;
+        bigrams)    cmd_bigrams "$@" ;;
         cc)         cmd_cc "$@" ;;
 
         # Intent Tracking

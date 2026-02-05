@@ -47,7 +47,6 @@ BEHAVIORAL (aOa unique)
   hot [limit]            Frequently accessed "hot" files
   touched [since]        Files touched in session/time period
   focus                  Current working set from memory
-  predict [file]         Predict next files based on patterns
 
 TIME-BASED
   changes [time]         Recent file changes (e.g., 5m, 1h)

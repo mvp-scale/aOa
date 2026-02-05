@@ -31,14 +31,48 @@ cmd_hot() {
         project_param="&project_id=${project_id}"
     fi
 
-    local result=$(curl -s "${INDEX_URL}/predict?limit=${limit}${project_param}")
+    local result=$(curl -s "${INDEX_URL}/hot?limit=${limit}${project_param}")
     local count=$(echo "$result" | jq -r '.files | length // 0' 2>/dev/null || echo "0")
 
     printf "${CYAN}${BOLD}🔥 %s hot files${NC}\n" "$count"
 
     if [ "$count" -gt 0 ] 2>/dev/null; then
-        echo "$result" | jq -r '.files[] | "  \(.path) (\(.confidence * 100 | floor)%)"' 2>/dev/null || true
+        echo "$result" | jq -r '.files[] | "  \(.path) (\(.hits // 0) hits)"' 2>/dev/null || true
     fi
+    return 0
+}
+
+cmd_bigrams() {
+    # aoa bigrams [--min N] [--limit N]  - Show accumulated bigrams (usage signals)
+    local min_count=6
+    local limit=50
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --min|-m)
+                min_count="${2:-6}"
+                shift 2
+                ;;
+            --limit|-n)
+                limit="${2:-50}"
+                shift 2
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
+    local project_id=$(get_project_id)
+    if [ -z "$project_id" ]; then
+        echo -e "${RED}No project initialized${NC}" >&2
+        return 1
+    fi
+
+    local result=$(curl -s "${INDEX_URL}/cc/bigrams?project_id=${project_id}&min_count=${min_count}&limit=${limit}")
+
+    # Output format: bigram (count)
+    echo "$result" | jq -r '.bigrams[]? | "\(.bigram) (\(.count))"' 2>/dev/null
     return 0
 }
 
@@ -191,36 +225,6 @@ cmd_focus() {
         echo "$result" | jq -r '.working_set[]' 2>/dev/null | while read -r file; do
             echo "  $file"
         done
-    fi
-    return 0
-}
-
-cmd_predict() {
-    # aoa predict [file]   - Predict next files based on current context
-    local file="$1"
-
-    local project_id=$(get_project_id)
-    local project_param=""
-    if [ -n "$project_id" ]; then
-        project_param="&project_id=${project_id}"
-    fi
-
-    local url="${INDEX_URL}/transitions/predict?limit=5${project_param}"
-    if [ -n "$file" ]; then
-        url="${url}&file=${file}"
-    fi
-
-    local result=$(curl -s "$url")
-    local count=$(echo "$result" | jq -r '.predictions | length // 0' 2>/dev/null || echo "0")
-
-    if [ -n "$file" ]; then
-        printf "${CYAN}${BOLD}🔮 %s predictions for %s${NC}\n" "$count" "$file"
-    else
-        printf "${CYAN}${BOLD}🔮 %s predictions${NC}\n" "$count"
-    fi
-
-    if [ "$count" -gt 0 ] 2>/dev/null; then
-        echo "$result" | jq -r '.predictions[] | "  \(.file) (\(.confidence | . * 100 | floor)% confidence)"' 2>/dev/null || true
     fi
     return 0
 }

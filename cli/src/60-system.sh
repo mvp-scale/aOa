@@ -1438,10 +1438,48 @@ cmd_domains() {
                 echo "No domain files to clean"
             fi
             ;;
+        load-intent)
+            # aoa domains load-intent - load domains from intent.json and add to context tier
+            shift
+            local intent_file="${project_root}/.aoa/domains/intent.json"
+            if [ ! -f "$intent_file" ]; then
+                echo -e "${RED}Error: No intent.json found at ${intent_file}${NC}" >&2
+                return 1
+            fi
+
+            # Read and process each domain
+            local count=0
+            local domains=$(cat "$intent_file")
+            local total=$(echo "$domains" | jq 'length')
+
+            for i in $(seq 0 $((total - 1))); do
+                local domain=$(echo "$domains" | jq ".[$i]")
+                local name=$(echo "$domain" | jq -r '.domain')
+                local desc=$(echo "$domain" | jq -r '.description // "Intent-generated domain"')
+                local terms=$(echo "$domain" | jq -c '.terms | keys')
+                local keywords=$(echo "$domain" | jq -c '.terms')
+
+                # Call add-context API
+                local result=$(curl -sf -X POST "${INDEX_URL}/domains/add-context" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"project_id\":\"${project_id}\",\"name\":\"${name}\",\"description\":\"${desc}\",\"terms\":${terms},\"keywords\":${keywords}}" 2>/dev/null)
+
+                if echo "$result" | jq -e '.success' > /dev/null 2>&1; then
+                    ((count++))
+                fi
+            done
+
+            # Cleanup intent.json after successful load
+            rm -f "$intent_file"
+
+            echo -e "${GREEN}✓${NC} Added ${CYAN}${count}${NC} domains to context tier"
+            return 0
+            ;;
     esac
 
     # Default: show domain status
     local json_output=false
+    local names_only=false
     local limit=20
 
     # Parse arguments
@@ -1449,6 +1487,10 @@ cmd_domains() {
         case "$1" in
             --json|-j)
                 json_output=true
+                shift
+                ;;
+            --names)
+                names_only=true
                 shift
                 ;;
             -n|--limit)
@@ -1467,15 +1509,17 @@ cmd_domains() {
                 echo "  add               Add a single new domain from JSON stdin"
                 echo "  refresh @name     Mark domain for re-generation"
                 echo "  pending [N]       List unenriched domains (default: 3)"
-                echo "  stage [load|list] Stage proposals from intent.json"
+                echo "  load-intent       Load domains from .aoa/domains/intent.json"
                 echo ""
                 echo "Options (for status display):"
                 echo "  --json, -j        Output as JSON"
+                echo "  --names           Output domain names only (one per line)"
                 echo "  -n, --limit N     Show top N domains (default: 20)"
                 echo "  --help, -h        Show this help message"
                 echo ""
                 echo "Examples:"
                 echo "  aoa domains                    # Show domain status"
+                echo "  aoa domains --names            # Just domain names"
                 echo "  echo '[...]' | aoa domains init   # Init skeletons"
                 echo "  aoa domains refresh @search    # Mark for rebuild"
                 echo "  aoa domains pending            # Show 3 unenriched domains"
@@ -1557,6 +1601,14 @@ cmd_domains() {
     local core_count=$(echo "$all_domains" | jq '[.domains[]? | select(.tier == "core")] | length')
     local context_count=$(echo "$all_domains" | jq '[.domains[]? | select(.tier == "context")] | length')
     local now=$(date +%s)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Names Only Output Mode (for Haiku prompts)
+    # ─────────────────────────────────────────────────────────────────────────
+    if [ "$names_only" = true ]; then
+        echo "$all_domains" | jq -r '.domains[]?.name' | sort
+        return 0
+    fi
 
     # ─────────────────────────────────────────────────────────────────────────
     # JSON Output Mode
