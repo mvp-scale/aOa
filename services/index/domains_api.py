@@ -419,6 +419,9 @@ def domains_list():
     if not project_id:
         return jsonify({'error': 'Missing project_id parameter'}), 400
 
+    # Parse limit parameter (default: return all)
+    limit = request.args.get('limit', type=int)
+
     try:
         learner = _DomainLearner(project_id)
         domain_names = learner.get_all_domains()
@@ -448,10 +451,15 @@ def domains_list():
         # Sort by keyword count (most populated first)
         domains.sort(key=lambda d: -d['keyword_count'])
 
+        # Apply limit if specified (after sorting)
+        total_domains = len(domains)
+        if limit and limit > 0:
+            domains = domains[:limit]
+
         return jsonify({
             'project_id': project_id,
             'domains': domains,
-            'total_domains': len(domains),
+            'total_domains': total_domains,  # Total before limiting
             'total_terms': sum(d['term_count'] for d in domains),
             'total_keywords': sum(d['keyword_count'] for d in domains)
         })
