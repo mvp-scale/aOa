@@ -69,64 +69,10 @@ cmd_bigrams() {
 }
 
 cmd_enrich() {
-    # aoa enrich --hot    - AI-enrich hot files that lack semantic tags
     # aoa enrich <file>   - AI-enrich a specific file
-    local hot_mode=false
-    local file=""
+    local file="$1"
 
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --hot|-h)
-                hot_mode=true
-                shift
-                ;;
-            *)
-                file="$1"
-                shift
-                ;;
-        esac
-    done
-
-    local project_id=$(get_project_id)
-
-    if $hot_mode; then
-        # Get hot files and check which need AI enrichment
-        printf "${CYAN}${BOLD}⚡ aOa Enrich${NC} ${DIM}│${NC} Checking hot files for AI tags...\n"
-        echo ""
-
-        local predictions=$(curl -s "${INDEX_URL}/predict?limit=10" 2>/dev/null)
-        local needs_tags=""
-        local count=0
-
-        while IFS= read -r filepath; do
-            [ -z "$filepath" ] && continue
-
-            # Check if file has AI-stored tags
-            local tags_json=$(curl -s "${INDEX_URL}/outline/tags?file=${filepath}" 2>/dev/null)
-            local tag_count=$(echo "$tags_json" | jq -r '.tags | keys | length // 0' 2>/dev/null)
-
-            if [ "$tag_count" -eq 0 ] || [ -z "$tag_count" ]; then
-                count=$((count + 1))
-                needs_tags+="$filepath\n"
-                printf "  ${YELLOW}○${NC} %s ${DIM}(needs AI tags)${NC}\n" "$filepath"
-            else
-                printf "  ${GREEN}✓${NC} %s ${DIM}(%s tags)${NC}\n" "$filepath" "$tag_count"
-            fi
-        done < <(echo "$predictions" | jq -r '.files[].path' 2>/dev/null)
-
-        echo ""
-        if [ $count -gt 0 ]; then
-            printf "${BOLD}%d file(s) need AI enrichment.${NC}\n" "$count"
-            echo ""
-            printf "${DIM}To enrich, say in Claude: \"enrich these hot files\"${NC}\n"
-            printf "${DIM}Or enrich one: aoa enrich <filepath>${NC}\n"
-            echo ""
-            echo "FILES_NEEDING_ENRICHMENT:"
-            echo -e "$needs_tags" | head -10
-        else
-            printf "${GREEN}All hot files have AI tags!${NC}\n"
-        fi
-    elif [ -n "$file" ]; then
+    if [ -n "$file" ]; then
         # Enrich a specific file - show outline for Claude to tag
         printf "${CYAN}${BOLD}⚡ aOa Enrich${NC} ${DIM}│${NC} %s\n" "$file"
         echo ""
@@ -144,11 +90,9 @@ cmd_enrich() {
             printf "${YELLOW}No targets found in file.${NC}\n"
         fi
     else
-        echo "Usage: aoa enrich --hot       # Check hot files for AI tags"
-        echo "       aoa enrich <file>      # Prepare file for AI tagging"
+        echo "Usage: aoa enrich <file>      # Prepare file for AI tagging"
         echo ""
-        echo "Examples:"
-        echo "  aoa enrich --hot"
+        echo "Example:"
         echo "  aoa enrich src/auth/handler.py"
     fi
 }
@@ -226,7 +170,6 @@ cmd_outline() {
     local enrich=false
     local enrich_all=false
     local pending=false
-    local hot_mode=false
     local json_output=false
     local store=false
     local show_tags=false
@@ -244,10 +187,6 @@ cmd_outline() {
                 ;;
             --pending)
                 pending=true
-                shift
-                ;;
-            --hot)
-                hot_mode=true
                 shift
                 ;;
             --json|-j)
@@ -309,60 +248,6 @@ cmd_outline() {
                 echo -e "${RED}✗${NC} ${err}"
                 return 1
             fi
-        fi
-        return 0
-    fi
-
-    # Handle --hot (hot files that need AI tags - prioritized list for lazy enricher)
-    if $hot_mode; then
-        local project_id=$(get_project_id)
-
-        # Get a larger pool of hot files (50), filter to those needing tags
-        local predictions=$(curl -s "${INDEX_URL}/predict?limit=50" 2>/dev/null)
-        local needs_tags=""
-        local tagged_count=0
-        local needs_count=0
-
-        while IFS= read -r filepath; do
-            [ -z "$filepath" ] && continue
-            # Skip line-range references (file.py:100-200)
-            [[ "$filepath" == *:*-* ]] && continue
-
-            # Check if file has AI-stored tags
-            local tags_json=$(curl -s "${INDEX_URL}/outline/tags?file=${filepath}" 2>/dev/null)
-            local tag_count=$(echo "$tags_json" | jq -r '.tags | keys | length // 0' 2>/dev/null)
-
-            if [ "$tag_count" -eq 0 ] || [ -z "$tag_count" ]; then
-                needs_count=$((needs_count + 1))
-                needs_tags+="$filepath\n"
-            else
-                tagged_count=$((tagged_count + 1))
-            fi
-        done < <(echo "$predictions" | jq -r '.files[].path' 2>/dev/null)
-
-        # JSON output for agents
-        if $json_output; then
-            echo -e "$needs_tags" | head -20 | jq -R -s 'split("\n") | map(select(length > 0)) | {hot_pending: ., count: length}'
-            return 0
-        fi
-
-        echo -e "${CYAN}${BOLD}⚡ aOa Outline - Hot Files${NC}"
-        echo ""
-        echo -e "  Need tags:  ${YELLOW}${needs_count}${NC}"
-        echo -e "  Already:    ${GREEN}${tagged_count}${NC}"
-        echo ""
-
-        if [ "$needs_count" -gt 0 ]; then
-            echo -e "${BOLD}Hot files needing AI tags:${NC}"
-            echo -e "$needs_tags" | head -10 | while read -r f; do
-                [ -n "$f" ] && echo "  $f"
-            done
-            [ "$needs_count" -gt 10 ] && echo -e "  ${DIM}... and $((needs_count - 10)) more${NC}"
-            echo ""
-            echo "HOT_PENDING:"
-            echo -e "$needs_tags" | head -10
-        else
-            echo -e "${GREEN}All hot files have AI tags!${NC}"
         fi
         return 0
     fi
