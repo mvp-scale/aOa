@@ -2542,6 +2542,7 @@ cmd_intent_recent() {
     local hit_pct=$(echo "$metrics" | jq -r '.rolling.hit_at_5_pct // 0')
     local evaluated=$(echo "$metrics" | jq -r '.rolling.evaluated // 0')
     local hits=$(echo "$metrics" | jq -r '.rolling.hits // 0')
+    local stop_count=$(echo "$metrics" | jq -r '.stop_count // 0')
 
     # Get intent stats (includes first_seen for date display)
     local intent_stats=$(curl -s "${INDEX_URL}/intent/stats?project_id=${project_id}")
@@ -2616,7 +2617,17 @@ cmd_intent_recent() {
     fi
 
     # Header - horizontal format matching aoa domains style
-    local min_intents=30
+
+    # Build learning tier display (mirrors status line, with more detail)
+    # < 30: learning, 30-99: adapting, 100+: trained
+    local tier_display=""
+    if [ "$stop_count" -lt 30 ] 2>/dev/null; then
+        tier_display="${DIM}⚪ learning (${stop_count}/30)${NC}"
+    elif [ "$stop_count" -lt 100 ] 2>/dev/null; then
+        tier_display="${YELLOW}🟡 ${stop_count} intents${NC} ${DIM}│${NC} ${YELLOW}adapting${NC}"
+    else
+        tier_display="${GREEN}🟢 ${stop_count} intents${NC} ${DIM}│${NC} ${GREEN}trained${NC}"
+    fi
 
     # Build savings display
     local savings_display=""
@@ -2633,6 +2644,8 @@ cmd_intent_recent() {
     if [ -n "$time_display" ]; then
         header="${header} ${DIM}│${NC} ${CYAN}${time_display}${NC}"
     fi
+    # Add tier display on the right
+    header="${header}  ${DIM}│${NC}  ${tier_display}"
     echo -e "$header"
     echo -e "${DIM}─────────────────────────────────────────────────────────────────────────────────────────────${NC}"
     echo ""
@@ -6006,92 +6019,6 @@ cmd_projects() {
 }
 
 # =============================================================================
-# cmd_analyze - Generate project-specific domains via parallel Haiku analysis
-# GL-083: Replaces per-prompt learning with one-time semantic analysis
-# =============================================================================
-
-cmd_analyze() {
-    echo -e "${CYAN}${BOLD}⚡ aOa Analyze${NC}"
-    echo
-
-    # Check services first
-    if ! curl -s --connect-timeout 2 "${INDEX_URL}/health" > /dev/null 2>&1; then
-        echo -e "${RED}✗ aOa services not running${NC}"
-        echo -e "${DIM}Start with: docker start aoa${NC}"
-        return 1
-    fi
-
-    # Get project info
-    local project_root=$(get_project_root)
-    if [ -z "$project_root" ]; then
-        echo -e "${RED}Not in a git repository.${NC}"
-        return 1
-    fi
-
-    local project_id=$(get_project_id)
-    local project_name=$(get_project_name)
-
-    echo -e "  Project: ${BOLD}${project_name}${NC}"
-    echo -e "  Path:    ${DIM}${project_root}${NC}"
-    echo
-
-    # Phase 1, Task 2: Directory scanning
-    echo -e "  ${DIM}Scanning directories...${NC}"
-
-    # Get top-level directories (excluding hidden, node_modules, etc.)
-    local directories=$(find "$project_root" -maxdepth 2 -type d \
-        ! -path '*/\.*' \
-        ! -path '*/node_modules*' \
-        ! -path '*/__pycache__*' \
-        ! -path '*/venv*' \
-        ! -path '*/.git*' \
-        ! -path '*/dist*' \
-        ! -path '*/build*' \
-        2>/dev/null | head -20)
-
-    local dir_count=$(echo "$directories" | wc -l)
-    echo -e "  Found ${BOLD}${dir_count}${NC} directory clusters"
-    echo
-
-    # Phase 1, Task 3-4: Call analyze API (parallel Haiku happens server-side)
-    echo -e "  ${DIM}Generating project domains via Haiku...${NC}"
-
-    local analyze_result=$(curl -s -X POST "${INDEX_URL}/analyze/project" \
-        -H "Content-Type: application/json" \
-        -d "{\"project_id\": \"${project_id}\", \"project_root\": \"${project_root}\"}" \
-        --max-time 120 2>/dev/null)
-
-    if [ -z "$analyze_result" ]; then
-        echo -e "${RED}✗ Analysis failed (timeout or service error)${NC}"
-        return 1
-    fi
-
-    local success=$(echo "$analyze_result" | jq -r '.success // false')
-
-    if [ "$success" != "true" ]; then
-        local error=$(echo "$analyze_result" | jq -r '.error // "Unknown error"')
-        echo -e "${RED}✗ Analysis failed: ${error}${NC}"
-        return 1
-    fi
-
-    # Phase 1, Task 5-6: Results
-    local domains_count=$(echo "$analyze_result" | jq -r '.domains_count // 0')
-    local terms_count=$(echo "$analyze_result" | jq -r '.terms_count // 0')
-    local output_file=$(echo "$analyze_result" | jq -r '.output_file // ""')
-
-    echo -e "${GREEN}✓${NC} Generated ${BOLD}${domains_count}${NC} domains (${terms_count} terms)"
-
-    if [ -n "$output_file" ]; then
-        echo -e "  ${DIM}Saved to: ${output_file}${NC}"
-    fi
-
-    echo
-    echo -e "${GREEN}${BOLD}✓ Analysis complete${NC}"
-    echo
-    echo -e "${DIM}Run 'aoa quickstart' to seed these domains.${NC}"
-}
-
-# =============================================================================
 # SECTION 80: Help & Documentation
 # =============================================================================
 #
@@ -6287,7 +6214,6 @@ main() {
         env)        cmd_env ;;
         port)       cmd_port "$@" ;;
         quickstart|qs) cmd_quickstart "$@" ;;
-        analyze|az) cmd_analyze "$@" ;;
         learn)      cmd_learn "$@" ;;
         domains|d)  cmd_domains "$@" ;;
         jobs|j)     cmd_jobs "$@" ;;

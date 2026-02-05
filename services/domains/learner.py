@@ -8,9 +8,7 @@ This service manages dynamic domain learning:
 3. Generates terms for domain matching
 4. Stores everything in Redis for O(1) lookup
 
-Two usage modes:
-- Hook mode: Prepares context for Claude Task agents (zero API keys)
-- Direct mode: Calls Anthropic API directly (requires ANTHROPIC_API_KEY)
+Uses hook mode: Prepares context for Claude Task agents (zero API keys).
 """
 
 import json
@@ -18,13 +16,6 @@ import os
 import time
 from dataclasses import dataclass
 from typing import Optional
-
-# For direct API mode
-try:
-    import anthropic
-    ANTHROPIC_AVAILABLE = True
-except ImportError:
-    ANTHROPIC_AVAILABLE = False
 
 # Redis client - handle both Docker and local imports
 import sys
@@ -95,7 +86,6 @@ class DomainLearner:
         """Initialize with project identifier."""
         self.project_id = project_id
         self.redis = RedisClient(url=redis_url)
-        self._anthropic = None
 
     def get_threshold(self, name: str) -> float:
         """GL-091: Get threshold from Redis config, with fallback to class constant.
@@ -115,16 +105,6 @@ class DomainLearner:
             'decay_rate': self.DECAY_RATE,  # TC-03: unified decay rate
         }
         return defaults.get(name, 0)
-
-    @property
-    def anthropic_client(self):
-        """Lazy-initialize Anthropic client for direct mode."""
-        if self._anthropic is None and ANTHROPIC_AVAILABLE:
-            # GL-083: Support AOA_ANTHROPIC_KEY (preferred) and ANTHROPIC_API_KEY (fallback)
-            api_key = os.environ.get('AOA_ANTHROPIC_KEY') or os.environ.get('ANTHROPIC_API_KEY')
-            if api_key:
-                self._anthropic = anthropic.Anthropic(api_key=api_key)
-        return self._anthropic
 
     # =========================================================================
     # Redis Key Helpers
@@ -1352,68 +1332,6 @@ Generate 3 NEW domains that capture what this developer is DOING (not generic pr
 Output ONLY the JSON array, no explanation."""
 
     # =========================================================================
-    # Direct API Mode (for testing)
-    # =========================================================================
-
-    def _call_haiku(self, prompt: str) -> Optional[dict]:
-        """
-        Call Haiku directly via Anthropic API.
-
-        Only available when ANTHROPIC_API_KEY is set.
-        Returns parsed JSON or None.
-        Tracks token investment for transparency.
-        """
-        if not self.anthropic_client:
-            return None
-
-        try:
-            response = self.anthropic_client.messages.create(
-                model="claude-3-5-haiku-latest",
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            # Track tokens invested (GL-054: Intelligence Angle)
-            if hasattr(response, 'usage'):
-                self.add_tokens_invested(
-                    response.usage.input_tokens,
-                    response.usage.output_tokens
-                )
-
-            text = response.content[0].text
-            # Extract JSON from response
-            import re
-            json_match = re.search(r'\{.*\}', text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-        except Exception as e:
-            print(f"Haiku call failed: {e}")
-        return None
-
-    def discover_domains_direct(self, prompts: list[str], files: list[str]) -> list[Domain]:
-        """
-        Discover domains using direct Haiku API call.
-
-        Only works when ANTHROPIC_API_KEY is set.
-        """
-        existing = self.get_all_domains()
-        prompt = self.get_discovery_prompt(prompts, files, existing)
-        result = self._call_haiku(prompt)
-
-        if not result or "domains" not in result:
-            return []
-
-        domains = []
-        for d in result["domains"]:
-            domains.append(Domain(
-                name=d.get("name", "").strip(),
-                description=d.get("description", ""),
-                confidence=float(d.get("confidence", 0.5)),
-                terms=[]
-            ))
-        return domains
-
-    # =========================================================================
     # Intent Proposals (RB-10: Haiku-generated domain staging)
     # =========================================================================
 
@@ -1453,42 +1371,6 @@ Output ONLY the JSON array, no explanation."""
             json.dump(proposals, f, indent=2)
 
         return intent_path
-
-    def generate_intent_proposals_direct(self, prompts: list[str]) -> dict:
-        """
-        Generate intent proposals using direct Haiku API call.
-
-        Only works when ANTHROPIC_API_KEY is set.
-        Returns: {success: bool, proposals: list, file: str}
-        """
-        existing = self.get_all_domains()
-        prompt = self.get_intent_prompt(prompts, existing)
-        result = self._call_haiku(prompt)
-
-        if not result:
-            return {"success": False, "error": "Haiku call failed"}
-
-        # Result should be a list of proposals
-        proposals = result if isinstance(result, list) else [result]
-
-        # Validate structure
-        valid_proposals = []
-        for p in proposals:
-            if "domain" in p and "terms" in p:
-                valid_proposals.append(p)
-
-        if not valid_proposals:
-            return {"success": False, "error": "No valid proposals generated"}
-
-        # Save to file
-        file_path = self.save_intent_proposals(valid_proposals)
-
-        return {
-            "success": True,
-            "proposals": valid_proposals,
-            "file": file_path,
-            "count": len(valid_proposals)
-        }
 
     def get_intent_context_for_hook(self) -> dict:
         """
@@ -1866,27 +1748,6 @@ Output ONLY the JSON array, no explanation."""
         self.set_autotune_results(merged=summary['merged'], pruned=summary['pruned'])
 
         return summary
-
-    def autotune_direct(self) -> dict:
-        """
-        Run auto-tune using direct Haiku API call.
-
-        Returns summary of actions taken.
-        """
-        if not self.anthropic_client:
-            return {'error': 'ANTHROPIC_API_KEY not set'}
-
-        domains_with_meta = self.get_domains_with_meta()
-        if not domains_with_meta:
-            return {'error': 'No domains to auto-tune'}
-
-        prompt = self.get_autotune_prompt(domains_with_meta)
-        result = self._call_haiku(prompt)
-
-        if not result:
-            return {'error': 'Haiku call failed'}
-
-        return self.apply_autotune(result)
 
     # =========================================================================
     # Regenerative Tune (GL-055: Intent-based tuning)
@@ -2301,241 +2162,6 @@ Return JSON:
     # =========================================================================
     # Stats
     # =========================================================================
-
-    # =========================================================================
-    # Project Analysis (GL-083)
-    # =========================================================================
-
-    def get_cluster_analysis_prompt(self, directory: str, files: list[str]) -> str:
-        """
-        Generate Haiku prompt for analyzing a directory cluster.
-
-        GL-083: One-time project analysis replaces per-prompt learning.
-        GL-084: Returns v2 format with 5-10 terms per domain, 7-10 keywords per term.
-        """
-        file_list = "\n".join(f"  - {f}" for f in files[:50])
-
-        return f"""Generate 24 core semantic domains from this codebase structure.
-
-Directory: {directory}
-Files:
-{file_list}
-
-STRUCTURE:
-- Domain (@name): A high-level capability area
-- Terms: 5-10 intent labels per domain (underscores OK: #token_lifecycle)
-- Keywords: 7-10 single-word identifiers per term (NO underscores - these are matched)
-
-PURPOSE:
-Terms are semantic handles for AI agents. When grep returns scattered results,
-terms provide instant context. A term answers: "What is the developer trying
-to accomplish?"
-
-GOOD TERMS: #token_lifecycle, #stock_sync, #cart_checkout, #webhook_ingestion
-BAD TERMS: #process_payment (too generic), #handle_user_auth (just a function name)
-
-GOOD KEYWORDS: token, jwt, refresh, expire, validate, bearer, decode
-BAD KEYWORDS: token_validation, user_auth (underscores), t (too short)
-
-REQUIREMENTS:
-- Generate 24 core domains covering the full codebase
-- Each domain MUST have 5-10 terms
-- Each term MUST have 7-10 keywords
-- Keywords: single words only, 3+ characters, no underscores
-- Terms: intent-driven, not function-name derivatives
-- Keywords: actual identifiers, filenames, or tokens from the codebase
-
-Respond with ONLY valid JSON (no markdown, no explanation):
-{{
-  "domains": [
-    {{
-      "name": "@domain_name",
-      "description": "Capability this provides",
-      "terms": {{
-        "intent_label": ["keyword", "another", "single", "words", "only", "here", "matched"]
-      }}
-    }}
-  ]
-}}"""
-
-    def analyze_cluster(self, directory: str, files: list[str]) -> list[dict]:
-        """
-        Analyze a single directory cluster via Haiku.
-
-        Returns list of domain dicts or empty list on failure.
-        """
-        if not files:
-            return []
-
-        prompt = self.get_cluster_analysis_prompt(directory, files)
-        result = self._call_haiku(prompt)
-
-        if result and "domains" in result:
-            return result["domains"]
-        return []
-
-    def analyze_project(self, project_root: str, file_list: list[str] = None) -> dict:
-        """
-        Analyze entire project via parallel Haiku calls.
-
-        GL-083: One-time semantic analysis to generate project-domains.json.
-
-        Args:
-            project_root: Path to project
-            file_list: Optional pre-computed file list
-
-        Returns:
-            {
-                "success": bool,
-                "domains": [...],
-                "domains_count": int,
-                "terms_count": int,
-                "clusters_analyzed": int
-            }
-        """
-        import concurrent.futures
-        from pathlib import Path
-        from collections import defaultdict
-
-        # Group files by top-level directory
-        clusters = defaultdict(list)
-
-        if file_list:
-            files = file_list
-        else:
-            # Get files from index
-            files = self.get_recent_files_from_intents(limit=500)
-
-        # Group by two-level directory for better granularity
-        # e.g., "services/gateway" instead of just "services"
-        for f in files:
-            # Get relative path
-            if f.startswith(project_root):
-                rel = f[len(project_root):].lstrip("/")
-            else:
-                rel = f
-
-            # Get directory grouping (two levels if available)
-            parts = rel.split("/")
-            if len(parts) > 2:
-                # Use two-level: "services/gateway"
-                dir_key = f"{parts[0]}/{parts[1]}"
-            elif len(parts) > 1:
-                # Single level: "cli"
-                dir_key = parts[0]
-            else:
-                dir_key = "_root"
-
-            clusters[dir_key].append(rel)
-
-        # Filter to clusters with enough files
-        valid_clusters = {k: v for k, v in clusters.items()
-                        if len(v) >= 2 and not k.startswith(".")}
-
-        if not valid_clusters:
-            return {
-                "success": False,
-                "error": "No valid file clusters found",
-                "domains": [],
-                "domains_count": 0,
-                "terms_count": 0
-            }
-
-        # Parallel Haiku analysis (max 5 concurrent)
-        all_domains = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            futures = {
-                executor.submit(self.analyze_cluster, dir_name, files): dir_name
-                for dir_name, files in list(valid_clusters.items())[:15]
-            }
-
-            for future in concurrent.futures.as_completed(futures):
-                dir_name = futures[future]
-                try:
-                    domains = future.result()
-                    all_domains.extend(domains)
-                except Exception as e:
-                    print(f"Cluster {dir_name} failed: {e}")
-
-        # Dedupe and merge domains
-        merged = self._merge_domains(all_domains)
-
-        # Count terms (term clusters) and keywords
-        total_terms = 0
-        total_keywords = 0
-        for d in merged:
-            terms = d.get("terms", {})
-            if isinstance(terms, dict):
-                total_terms += len(terms)  # Number of term clusters
-                total_keywords += sum(len(kws) for kws in terms.values())
-            else:
-                # Legacy flat array
-                total_keywords += len(terms)
-
-        return {
-            "success": True,
-            "domains": merged,
-            "domains_count": len(merged),
-            "terms_count": total_terms,
-            "keywords_count": total_keywords,
-            "clusters_analyzed": len(valid_clusters)
-        }
-
-    def _merge_domains(self, domains: list[dict]) -> list[dict]:
-        """
-        Merge and dedupe domains from multiple clusters.
-
-        Combines domains with similar names, merges their term hierarchies.
-        Supports both v2 format (terms as dict) and legacy (terms as list).
-        """
-        merged = {}
-
-        for d in domains:
-            name = d.get("name", "").lower().strip()
-            if not name.startswith("@"):
-                name = f"@{name}"
-
-            terms_data = d.get("terms", {})
-
-            # Handle legacy flat array format - convert to dict
-            if isinstance(terms_data, list):
-                terms_data = {"keywords": terms_data}
-
-            if name in merged:
-                # Merge term clusters
-                existing_terms = merged[name].get("terms", {})
-                for cluster_name, keywords in terms_data.items():
-                    if cluster_name in existing_terms:
-                        # Union keywords, limit to 20 per cluster
-                        combined = list(set(existing_terms[cluster_name]) | set(keywords))
-                        existing_terms[cluster_name] = combined[:20]
-                    else:
-                        existing_terms[cluster_name] = keywords[:20]
-                merged[name]["terms"] = existing_terms
-            else:
-                # Limit clusters to 10 per domain, keywords to 20 per cluster
-                limited_terms = {}
-                for cluster_name, keywords in list(terms_data.items())[:10]:
-                    limited_terms[cluster_name] = keywords[:20] if isinstance(keywords, list) else []
-
-                merged[name] = {
-                    "name": name,
-                    "description": d.get("description", ""),
-                    "terms": limited_terms
-                }
-
-        return list(merged.values())
-
-    def save_project_domains(self, domains: list[dict], output_path: str) -> bool:
-        """Save analyzed domains to project-domains.json."""
-        try:
-            import json
-            with open(output_path, "w") as f:
-                json.dump(domains, f, indent=2)
-            return True
-        except Exception as e:
-            print(f"Failed to save domains: {e}")
-            return False
 
     def get_stats(self) -> dict:
         """Get domain learning statistics."""

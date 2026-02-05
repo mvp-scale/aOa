@@ -120,7 +120,6 @@ ROUTES = {
     "/domains/goal-history": ("index", "/domains/goal-history"),  # GL-078: Get goal history for learning
     "/domains/trigger-learn": ("index", "/domains/trigger-learn"),  # GL-070: Trigger hook-side learning
     "/domains/self-learn": ("index", "/domains/self-learn"),  # GL-088: Self-learning from work history
-    "/analyze/project": ("index", "/analyze/project"),  # GL-083: One-time project analysis
     "/symbol/lookup": ("index", "/symbol/lookup"),  # GL-059.2: Resolve file:line to functions
 
     # GL-085: Lazy domain enrichment routes

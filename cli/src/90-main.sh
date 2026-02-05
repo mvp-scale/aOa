@@ -78,7 +78,6 @@ main() {
         env)        cmd_env ;;
         port)       cmd_port "$@" ;;
         quickstart|qs) cmd_quickstart "$@" ;;
-        analyze|az) cmd_analyze "$@" ;;
         learn)      cmd_learn "$@" ;;
         domains|d)  cmd_domains "$@" ;;
         jobs|j)     cmd_jobs "$@" ;;

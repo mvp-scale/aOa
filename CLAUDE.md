@@ -90,7 +90,7 @@ Run the `/aoa-start` skill to guide them through personalized onboarding:
 - Runs semantic tagging for compressed file outlines
 - Shows completion summary with next steps
 
-The skill file is at `plugin/skills/setup/SKILL.md` - follow its instructions.
+The skill file is at `plugin/skills/aoa-start/SKILL.md` - follow its instructions.
 
 **If domain_count > 0** (already set up / returning user):
 
@@ -258,10 +258,8 @@ aOa commands mirror Unix grep/egrep so they feel intuitive:
 | `aoa find "*.py"` | File discovery | <10ms |
 | `aoa locate name` | Fast filename search | <5ms |
 | `aoa tree [dir]` | Directory structure | <50ms |
-| `aoa hot` | Frequently accessed files | <10ms |
 | `aoa health` | Check services | instant |
 | `aoa intent recent` | See what's being worked on | <50ms |
-| `aoa analyze` | Generate project domains | ~30s |
 | `aoa domains` | Show domain stats | <50ms |
 
 ## API Endpoints (localhost:8080)
