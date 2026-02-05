@@ -257,14 +257,14 @@ else
     ENRICHMENT_COMPLETE=$(echo "$ENRICHMENT" | jq -r '.complete // false' 2>/dev/null)
 fi
 
-# GL-088: Get prompt count to detect first rebalance (at 25 prompts)
+# TU-09: Get prompt count to detect first rebalance (at 100 intents prod, 20 test)
 PROMPT_COUNT=0
 if [ -n "$ENRICHMENT" ] && [ "$ENRICHMENT" != "null" ]; then
     PROMPT_COUNT=$(echo "$ENRICHMENT" | jq -r '.prompt_count // 0' 2>/dev/null)
 fi
 PROMPT_COUNT=${PROMPT_COUNT:-0}
 FIRST_REBALANCE_DONE=false
-[ "$PROMPT_COUNT" -ge 25 ] 2>/dev/null && FIRST_REBALANCE_DONE=true
+[ "$PROMPT_COUNT" -gt 0 ] 2>/dev/null && FIRST_REBALANCE_DONE=true
 
 # GL-088: Get top hit domains for display (only when in active intent phase)
 TOP_HITS=""

@@ -65,23 +65,20 @@ class Domain:
 class DomainLearner:
     """Manages domain discovery and learning via Haiku."""
 
-    BATCH_SIZE = 10  # Prompts per learning batch
-    TUNE_THRESHOLD = 100  # Intents per regenerative tune
-    STARTER_HITS = 0  # Domains start fresh, accumulate hits from actual usage
-    STARTER_SCORE = 0.5  # Initial term confidence
-    PRESERVE_THRESHOLD = 20  # Keep domains with hits >= this during tune
-    REBALANCE_THRESHOLD = 25  # A-001: GL-083 - Rebalance every 25 prompts
+    # TU-01: Unified threshold constants (Session 75)
+    # Single source of truth. Override via Redis: aoa config thresholds [test|prod]
+    REBALANCE_THRESHOLD = 100  # Generate 2-3 new domains, assign gap keywords
+    AUTOTUNE_INTERVAL = 50    # Decay, rank, promote, demote, prune (2:1 ratio with rebalance)
+    DECAY_RATE = 0.90         # 10% decay per autotune cycle
+    PRUNE_FLOOR = 0.3         # Remove context-tier domains with hits below this
+    PROMOTION_MIN_RATIO = 0.5 # Minimum cohit ratio (50%) for keyword→term assignment
 
-    # GL-090: Two-tier domain curation
-    CORE_DOMAINS_MAX = 24  # Max core tier domains
+    # Domain structure
+    CORE_DOMAINS_MAX = 24     # Max core tier domains
     CONTEXT_DOMAINS_MAX = 20  # Max context tier domains
-    DECAY_RATE = 0.95  # TC-03: 5% decay per cycle (prod default, read from Redis)
-    PROMOTION_THRESHOLD = 150  # Promote context→core after 150 lifetime hits
-    DEMOTION_STALENESS = 500  # Demote core→context after 500 intents with 0 hits
-    ORPHAN_THRESHOLD = 30  # Need 30+ orphans to trigger domain creation
-    PRUNE_FLOOR = 0.5  # Prune context domains with decayed hits below this
-    AUTOTUNE_INTERVAL = 100  # P2B: Run math tune every 100 prompts (10 in test mode)
-    PROMOTION_MIN_RATIO = 0.5  # A72-21: Minimum cohit ratio (50%) for keyword→term assignment
+    ORPHAN_THRESHOLD = 30     # Need 30+ orphans to trigger domain creation
+    STARTER_HITS = 0          # Domains start fresh, accumulate hits from actual usage
+    STARTER_SCORE = 0.5       # Initial term confidence
 
     def __init__(self, project_id: str, redis_url: Optional[str] = None):
         """Initialize with project identifier."""
@@ -89,21 +86,19 @@ class DomainLearner:
         self.redis = RedisClient(url=redis_url)
 
     def get_threshold(self, name: str) -> float:
-        """GL-091: Get threshold from Redis config, with fallback to class constant.
+        """TU-01: Get threshold from Redis config, with fallback to class constant.
 
-        Allows test mode to use lower thresholds for faster validation.
+        Override via: aoa config thresholds [test|prod]
         """
         val = self.redis.client.get(f"aoa:config:{name}")
         if val:
             return float(val)
-        # Fallback to class constants
+        # Fallback to class constants (single source of truth)
         defaults = {
             'rebalance': self.REBALANCE_THRESHOLD,
-            'promotion': self.PROMOTION_THRESHOLD,
-            'demotion': self.DEMOTION_STALENESS,
-            'prune_floor': self.PRUNE_FLOOR,
             'autotune': self.AUTOTUNE_INTERVAL,
-            'decay_rate': self.DECAY_RATE,  # TC-03: unified decay rate
+            'decay_rate': self.DECAY_RATE,
+            'prune_floor': self.PRUNE_FLOOR,
         }
         return defaults.get(name, 0)
 

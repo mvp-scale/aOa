@@ -1269,9 +1269,9 @@ cmd_domains() {
     local prompt_count=$(echo "$stats" | jq -r '.prompt_count // 0')
     # GL-083: Rebalance-based system - fetch configurable threshold (QoL-2)
     local thresholds=$(curl -s "${INDEX_URL}/config/thresholds?project_id=${project_id}")
-    local rebalance_threshold=$(echo "$thresholds" | jq -r '.thresholds.rebalance // 25 | floor')
+    local rebalance_threshold=$(echo "$thresholds" | jq -r '.thresholds.rebalance // 100 | floor')
     # Guard against division by zero if API fails
-    [ -z "$rebalance_threshold" ] || [ "$rebalance_threshold" -eq 0 ] 2>/dev/null && rebalance_threshold=25
+    [ -z "$rebalance_threshold" ] || [ "$rebalance_threshold" -eq 0 ] 2>/dev/null && rebalance_threshold=100
     local rebalance_progress=$((prompt_count % rebalance_threshold))
     # GL-054: Intelligence Angle (legacy - may be removed)
     local tokens_invested=$(echo "$stats" | jq -r '.tokens_invested // 0')
@@ -1618,24 +1618,18 @@ cmd_config() {
                 echo -e "${CYAN}${BOLD}⚡ aOa Thresholds${NC}"
                 echo ""
                 local result=$(curl -s "${INDEX_URL}/config/thresholds?project_id=${project_id}")
-                local scrape=$(echo "$result" | jq -r '.thresholds.scrape // 5 | floor')
-                local rebalance=$(echo "$result" | jq -r '.thresholds.rebalance // 50 | floor')
-                local autotune=$(echo "$result" | jq -r '.thresholds.autotune // 100 | floor')
-                local promotion=$(echo "$result" | jq -r '.thresholds.promotion // 100 | floor')
-                local demotion=$(echo "$result" | jq -r '.thresholds.demotion // 500 | floor')
+                local rebalance=$(echo "$result" | jq -r '.thresholds.rebalance // 100 | floor')
+                local autotune=$(echo "$result" | jq -r '.thresholds.autotune // 50 | floor')
                 local prune=$(echo "$result" | jq -r '.thresholds.prune_floor // 0.3')
-                local decay=$(echo "$result" | jq -r '.thresholds.decay_rate // 0.95')
+                local decay=$(echo "$result" | jq -r '.thresholds.decay_rate // 0.90')
 
-                echo -e "${DIM}Triggers (stops):${NC}"
-                printf "  %-20s every %s\n" "Scrape:" "${scrape}"
-                printf "  %-20s every %s\n" "Rebalance:" "${rebalance}"
-                printf "  %-20s every %s\n" "Autotune:" "${autotune}"
+                echo -e "${DIM}Event Triggers (intents):${NC}"
+                printf "  %-20s every %s intents\n" "Rebalance:" "${rebalance}"
+                printf "  %-20s every %s intents\n" "Autotune:" "${autotune}"
                 echo ""
-                echo -e "${DIM}Qualification (checked during autotune):${NC}"
-                printf "  %-20s %s\n" "Promotion:" "≥${promotion} hits → context→core"
-                printf "  %-20s %s\n" "Demotion:" "${demotion} intents without hit → core→context"
-                printf "  %-20s %s\n" "Prune:" "<${prune} hits → removed"
+                echo -e "${DIM}Parameters (used by autotune):${NC}"
                 printf "  %-20s %s\n" "Decay:" "${decay} per cycle"
+                printf "  %-20s %s\n" "Prune:" "<${prune} hits → removed"
                 return 0
             fi
 
@@ -1647,11 +1641,11 @@ cmd_config() {
                 if [ "$success" = "true" ]; then
                     echo -e "${GREEN}✓ Thresholds set to ${mode} mode${NC}"
                     if [ "$mode" = "test" ]; then
-                        echo -e "${DIM}  Triggers: Scrape 5, Rebalance 10, Autotune 25${NC}"
-                        echo -e "${DIM}  Qualify:  Promote ≥25, Demote 100, Prune <0.3, Decay 0.90${NC}"
+                        echo -e "${DIM}  Triggers: Rebalance 20, Autotune 10${NC}"
+                        echo -e "${DIM}  Params:   Decay 0.80, Prune <0.3${NC}"
                     else
-                        echo -e "${DIM}  Triggers: Scrape 5, Rebalance 50, Autotune 100${NC}"
-                        echo -e "${DIM}  Qualify:  Promote ≥100, Demote 500, Prune <0.3, Decay 0.95${NC}"
+                        echo -e "${DIM}  Triggers: Rebalance 100, Autotune 50${NC}"
+                        echo -e "${DIM}  Params:   Decay 0.90, Prune <0.3${NC}"
                     fi
                 else
                     echo -e "${RED}Failed to set thresholds${NC}"

@@ -118,7 +118,7 @@ except ImportError:
 try:
     from jobs.queue import (
         JobQueue, Job, JobType,
-        create_enrich_job, create_scrape_job, create_autotune_job
+        create_enrich_job, create_scrape_job
     )
     from jobs.worker import JobWorker, push_enrich_jobs
     JOBS_AVAILABLE = True
@@ -6149,53 +6149,31 @@ def get_token_metrics():
 
 
 # ============================================================================
-# TC-01: Unified Threshold Configuration (Session 64)
+# TU-01: Unified Threshold Configuration (Session 75)
 # ============================================================================
-# Single source of truth: Redis keys aoa:config:{setting}
-# Set via: aoa config thresholds test|prod
+# Single source of truth: DomainLearner class constants (learner.py)
+# Override via Redis: aoa config thresholds [test|prod]
+# Read via: learner.get_threshold(name)
 
-THRESHOLD_PROD = {
-    'scrape': 1,
-    'rebalance': 50,
-    'autotune': 100,
-    'promotion': 100,
-    'demotion': 500,
-    'prune_floor': 0.3,
-    'decay_rate': 0.95
-}
+THRESHOLD_KEYS = ['rebalance', 'autotune', 'decay_rate', 'prune_floor']
 
 THRESHOLD_TEST = {
-    'scrape': 1,
-    'rebalance': 10,
-    'autotune': 25,
-    'promotion': 25,
-    'demotion': 100,
+    'rebalance': 20,
+    'autotune': 10,
+    'decay_rate': 0.80,
     'prune_floor': 0.3,
-    'decay_rate': 0.90
 }
-
-def get_thresholds(project_id: str = None) -> dict:
-    """Get thresholds from Redis, falling back to prod defaults."""
-    thresholds = THRESHOLD_PROD.copy()
-    try:
-        if RANKING_AVAILABLE and scorer is not None:
-            r = scorer.redis.client
-            for key in thresholds:
-                val = r.get(f"aoa:config:{key}")
-                if val is not None:
-                    thresholds[key] = float(val)
-    except Exception:
-        pass
-    return thresholds
-
 
 @app.route('/config/thresholds', methods=['GET', 'POST'])
 def config_thresholds():
     """
-    GL-091: Get or set threshold configuration for test mode.
+    TU-04: Get or set threshold configuration.
 
-    GET: Returns current thresholds
+    GET: Returns current thresholds (reads via learner.get_threshold)
     POST body: {"mode": "test"} or {"mode": "prod"} or {"thresholds": {...}}
+
+    Prod mode clears Redis overrides (falls back to learner class constants).
+    Test mode writes lower values to Redis for fast validation.
     """
     project_id = request.args.get('project_id') or (request.json or {}).get('project_id')
 
@@ -6207,8 +6185,10 @@ def config_thresholds():
         r = learner.redis.client if learner else None
 
         if request.method == 'GET':
-            # Return current thresholds (TC-01: use get_thresholds)
-            current = get_thresholds(project_id)
+            current = {}
+            if learner:
+                for key in THRESHOLD_KEYS:
+                    current[key] = learner.get_threshold(key)
             return jsonify({'thresholds': current, 'project_id': project_id})
 
         # POST - set thresholds
@@ -6217,25 +6197,37 @@ def config_thresholds():
         custom = data.get('thresholds')
 
         if mode == 'test':
-            thresholds = THRESHOLD_TEST
+            if r:
+                for key, val in THRESHOLD_TEST.items():
+                    r.set(f"aoa:config:{key}", val)
+            return jsonify({
+                'success': True, 'mode': 'test',
+                'thresholds': THRESHOLD_TEST, 'project_id': project_id
+            })
         elif mode == 'prod':
-            thresholds = THRESHOLD_PROD
+            # Clear Redis overrides — fall back to learner class constants
+            if r:
+                for key in THRESHOLD_KEYS:
+                    r.delete(f"aoa:config:{key}")
+            current = {}
+            if learner:
+                for key in THRESHOLD_KEYS:
+                    current[key] = learner.get_threshold(key)
+            return jsonify({
+                'success': True, 'mode': 'prod',
+                'thresholds': current, 'project_id': project_id
+            })
         elif custom:
-            thresholds = custom
+            if r:
+                for key, val in custom.items():
+                    if key in THRESHOLD_KEYS:
+                        r.set(f"aoa:config:{key}", val)
+            return jsonify({
+                'success': True, 'mode': 'custom',
+                'thresholds': custom, 'project_id': project_id
+            })
         else:
             return jsonify({'error': 'Specify mode (test/prod) or thresholds'}), 400
-
-        # Store in Redis
-        if r:
-            for key, val in thresholds.items():
-                r.set(f"aoa:config:{key}", val)
-
-        return jsonify({
-            'success': True,
-            'mode': mode or 'custom',
-            'thresholds': thresholds,
-            'project_id': project_id
-        })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -6248,25 +6240,12 @@ def config_thresholds():
 @app.route('/session/stop', methods=['POST'])
 def session_stop():
     """
-    Stop hook handler: increment counter, trigger async actions at thresholds.
+    TU-05: Stop hook handler — scrape only.
 
-    POST body:
-    {
-        "session_id": "abc123",
-        "project_id": "uuid-here"
-    }
+    Queues a scrape job on every stop to extract bigrams and file hits
+    from the completed conversation turn. No threshold checks.
 
-    Returns:
-    {
-        "stop_count": 5,
-        "triggered": ["scrape"],  # Actions triggered at this stop
-        "thresholds": {"scrape": 1, "rebalance": 25, "autotune": 100}
-    }
-
-    Thresholds:
-    - Every stop: Session scrape (bigrams + file hits) - async
-    - Every 25 stops: Rebalance keywords - async
-    - Every 100 stops: Autotune (decay, promote, demote, prune) - async
+    Thresholds (rebalance, autotune) are handled by the intent path.
     """
     data = request.json or {}
     session_id = data.get('session_id', 'unknown')
@@ -6289,39 +6268,17 @@ def session_stop():
         if stop_count == 1:
             r.expire(stop_key, 86400)
 
-        # Check thresholds and queue actions (TC-01: read from Redis)
-        triggered = []
-        thresholds = get_thresholds(project_id)
-
-        # Every N stops: Session scrape (bigrams + file hits)
-        if stop_count % int(thresholds['scrape']) == 0:
-            triggered.append('scrape')
-            # Queue via JobQueue (SH-02c)
-            if JOBS_AVAILABLE:
-                queue = JobQueue(project_id)
-                job = create_scrape_job(project_id, session_id, stop_count)
-                queue.push(job)
-
-        # Every N stops: Rebalance (10 test, 50 prod)
-        if stop_count % int(thresholds['rebalance']) == 0:
-            triggered.append('rebalance')
-            # Set haiku pending flag for next prompt
-            r.set(f'aoa:{project_id}:haiku_pending', '1')
-
-        # Every N stops: Autotune (25 test, 100 prod)
-        if stop_count % int(thresholds['autotune']) == 0:
-            triggered.append('autotune')
-            # Queue via JobQueue (SH-02c)
-            if JOBS_AVAILABLE:
-                queue = JobQueue(project_id)
-                job = create_autotune_job(project_id, stop_count)
-                queue.push(job)
+        # Queue scrape job (bigrams + recent_bigrams + file hits)
+        triggered = ['scrape']
+        if JOBS_AVAILABLE:
+            queue = JobQueue(project_id)
+            job = create_scrape_job(project_id, session_id, stop_count)
+            queue.push(job)
 
         return jsonify({
             'success': True,
             'stop_count': stop_count,
-            'triggered': triggered,
-            'thresholds': thresholds
+            'triggered': triggered
         })
 
     except Exception as e:

@@ -63,7 +63,6 @@ class JobWorker:
             JobType.TUNE: self._handle_tune,
             JobType.REINDEX: self._handle_reindex,
             JobType.SCRAPE: self._handle_scrape,
-            JobType.AUTOTUNE: self._handle_autotune,
         }
 
     def _resolve_project_root(self) -> str:
@@ -323,56 +322,6 @@ class JobWorker:
 
         except Exception as e:
             print(f"[Worker] SCRAPE: file hit tracking failed: {e}", flush=True)
-
-    def _handle_autotune(self, job: Job) -> None:
-        """
-        SH-12: Autotune - decay, prune, promote.
-
-        Runs every 100 stops. Operations:
-        1. Decay: Reduce hit counts by factor (recency weighting)
-        2. Prune: Remove keywords below threshold
-        3. Promote: Move high-hit context keywords to core
-        """
-        stop_count = job.payload.get("stop_count", 0)
-
-        print(f"[Worker] AUTOTUNE: stop={stop_count}", flush=True)
-
-        # Get Redis client
-        from ranking.redis_client import RedisClient
-        redis = RedisClient(self.redis_url)
-        r = redis.client
-
-        # TC-03: Read decay rate from Redis config (0.90 test, 0.95 prod)
-        decay_val = r.get("aoa:config:decay_rate")
-        DECAY_FACTOR = float(decay_val) if decay_val else 0.95
-
-        # Decay bigram counts
-        bigrams = r.hgetall(f"aoa:{self.project_id}:bigrams")
-        decayed = 0
-        pruned = 0
-        for bigram, count in bigrams.items():
-            new_count = int(float(count) * DECAY_FACTOR)
-            if new_count <= 0:
-                r.hdel(f"aoa:{self.project_id}:bigrams", bigram)
-                pruned += 1
-            else:
-                r.hset(f"aoa:{self.project_id}:bigrams", bigram, new_count)
-                decayed += 1
-
-        # Decay file hits
-        file_hits = r.hgetall(f"aoa:{self.project_id}:file_hits")
-        file_decayed = 0
-        file_pruned = 0
-        for file_path, count in file_hits.items():
-            new_count = int(float(count) * DECAY_FACTOR)
-            if new_count <= 0:
-                r.hdel(f"aoa:{self.project_id}:file_hits", file_path)
-                file_pruned += 1
-            else:
-                r.hset(f"aoa:{self.project_id}:file_hits", file_path, new_count)
-                file_decayed += 1
-
-        print(f"[Worker] AUTOTUNE: bigrams decayed={decayed} pruned={pruned}, files decayed={file_decayed} pruned={file_pruned}", flush=True)
 
 
 def get_queue_status(project_id: str, redis_url: Optional[str] = None) -> dict:
