@@ -173,15 +173,15 @@ aoa grep handleAuth
 
 Instant results. O(1) lookup.
 
-### 4. Optional: Semantic Compression
+### 4. Optional: Semantic Domains
 
-Run `aoa quickstart` to enable semantic search (~1 minute):
+Run `/aoa-start` in Claude Code to generate semantic domains:
 
-```bash
-aoa quickstart
+```
+/aoa-start
 ```
 
-This adds semantic domains and intent tracking to your search results. You'll see enriched output:
+This adds 24 semantic domains that enrich your search results. You'll see:
 
 ```
 file:Class.method[range]:line <grep output> @domain #tags

@@ -284,8 +284,7 @@ services/auth/handler.py:login()[10-45]:12 def login(user):  @authentication  #a
 
 Domains are:
 - **Generated** via `/aoa-start` (personalized domains from your codebase structure)
-- **Stored** in `.aoa/project-domains.json` (v2 format with terms and keywords)
-- **Loaded** by `aoa quickstart` into Redis for fast lookup
+- **Stored** in Redis (terms and keywords for fast matching)
 - **Rebalanced** every 25 prompts (assigns orphan keywords to terms)
 
 **Setup command**: `/aoa-start` analyzes your codebase structure and generates 24 core semantic domains (no API key required).

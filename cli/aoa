@@ -3062,7 +3062,7 @@ cmd_intent_recent() {
 #   cmd_history     Command history
 #   cmd_reset       Reset index state
 #   cmd_whitelist   Manage file whitelist
-#   cmd_quickstart  Interactive setup wizard
+#   (cmd_quickstart removed - use /aoa-start skill instead)
 #   cmd_learn       Discover new patterns
 #
 # =============================================================================
@@ -3710,358 +3710,8 @@ infer_tags_from_name() {
     fi
 }
 
-# Helper function for parallel quickstart processing (must be top-level for export -f)
-_quickstart_process_file() {
-    local file="$1"
-    local loop_param=""
-    [ -n "$project_id" ] && loop_param="&project_id=${project_id}"
-
-    # Get outline
-    local result=$(curl -s "${INDEX_URL}/outline?file=${file}${loop_param}")
-    local err=$(echo "$result" | jq -r '.error // empty')
-
-    if [ -n "$err" ]; then
-        touch "${progress_dir}/error_$(echo "$file" | md5sum | cut -c1-8)"
-        return 1
-    fi
-
-    local symbols_json=$(echo "$result" | jq -c '[.symbols[] | {name: .name, kind: .kind, start_line: .start_line, end_line: .end_line}]')
-
-    # Infer tags and domains from project-domains.json (v2 format)
-    # Returns: {tags: [[...], ...], domains: [[...], ...]}
-    local infer_payload=$(echo "$symbols_json" | jq '{symbols: [.[] | {name: .name, kind: .kind}]}')
-    local infer_result=$(curl -s -X POST "${INDEX_URL}/patterns/infer" \
-        -H "Content-Type: application/json" \
-        -d "$infer_payload")
-    local inferred_tags=$(echo "$infer_result" | jq -c '.tags // []')
-    local inferred_domains=$(echo "$infer_result" | jq -c '.domains // []')
-
-    # GL-084: Build enriched payload with both tags and domains
-    # - tags: #term tags for specific symbols
-    # - domains: @domain tags for symbol_domains storage
-    local enriched_symbols=$(echo "$result" | jq -c --argjson tags "$inferred_tags" --argjson domains "$inferred_domains" '
-        [.symbols | to_entries | .[] | {
-            name: .value.name,
-            kind: .value.kind,
-            line: .value.start_line,
-            end_line: .value.end_line,
-            tags: ($tags[.key] // []),
-            domains: ($domains[.key] // [])
-        }]')
-
-    local mark_payload=$(jq -n \
-        --arg file "$file" \
-        --arg project "$project_id" \
-        --argjson symbols "$enriched_symbols" \
-        '{file: $file, project_id: $project, symbols: $symbols}')
-
-    local http_code=$(curl -s -w "%{http_code}" -o /dev/null -X POST "${INDEX_URL}/outline/enriched" \
-        -H "Content-Type: application/json" \
-        -d "$mark_payload")
-
-    if [ "$http_code" = "200" ]; then
-        touch "${progress_dir}/done_$(echo "$file" | md5sum | cut -c1-8)"
-    else
-        touch "${progress_dir}/error_$(echo "$file" | md5sum | cut -c1-8)"
-    fi
-}
-
-cmd_quickstart() {
-    # aoa quickstart           - Initial tagging (only pending files)
-    # aoa quickstart --force   - Re-tag ALL files (refresh patterns)
-    # aoa quickstart --reset   - Clear enrichment data and re-tag
-    # aoa quickstart --yes     - Skip confirmation (for automation)
-
-    local force=false
-    local reset=false
-    local auto_yes=false
-
-    # Parse flags
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --force|-f) force=true; shift ;;
-            --reset|-r) reset=true; force=true; shift ;;
-            --yes|-y) auto_yes=true; shift ;;
-            *) shift ;;
-        esac
-    done
-
-    # Check services first
-    if ! curl -s --connect-timeout 2 "${INDEX_URL}/health" > /dev/null 2>&1; then
-        echo -e "${RED}✗ aOa services not running${NC}"
-        echo -e "${DIM}Start with: docker start aoa${NC}"
-        return 1
-    fi
-
-    # Get project info
-    local project_id=$(get_project_id)
-    local project_param=""
-    if [ -n "$project_id" ]; then
-        project_param="?project_id=${project_id}"
-    fi
-
-    # Handle --reset: Clear all enrichment data for this project
-    if $reset; then
-        echo -e "${YELLOW}Clearing enrichment data...${NC}"
-        local redis_container=$(docker ps --format "{{.Names}}" | grep -E "redis" | head -1)
-        if [ -n "$redis_container" ]; then
-            local pattern="enriched:${project_id:-default}:*"
-            local keys=$(docker exec "$redis_container" redis-cli KEYS "$pattern" 2>/dev/null)
-            if [ -n "$keys" ]; then
-                echo "$keys" | while read key; do
-                    docker exec "$redis_container" redis-cli DEL "$key" > /dev/null 2>&1
-                done
-                local count=$(echo "$keys" | wc -l)
-                echo -e "${GREEN}✓${NC} Cleared $count enrichment records"
-            else
-                echo -e "${DIM}No enrichment data found${NC}"
-            fi
-        fi
-        echo ""
-    fi
-
-    # GL-084: Universal domain seeding removed - use /aoa-start skill for personalized domains
-    # Projects start with 0 domains until setup skill runs Haiku analysis
-
-    # GL-083: Load project-specific domains if available (from aoa analyze)
-    local project_root=$(get_project_root)
-    local project_domains_file="${project_root}/.aoa/project-domains.json"
-
-    if [ -f "$project_domains_file" ]; then
-        local project_domains=$(cat "$project_domains_file" 2>/dev/null)
-        if [ -n "$project_domains" ] && echo "$project_domains" | jq -e '.' > /dev/null 2>&1; then
-            local proj_seed_result=$(curl -s -X POST "${INDEX_URL}/domains/add" \
-                -H "Content-Type: application/json" \
-                -d "{\"project_id\": \"${project_id:-default}\", \"domains\": ${project_domains}, \"source\": \"analyzed\"}" 2>/dev/null)
-            # GL-084: domains_added is an array of names, terms_added is a count
-            local proj_domains=$(echo "$proj_seed_result" | jq -r '.domains_added | length // 0')
-            local proj_terms=$(echo "$proj_seed_result" | jq -r '.terms_added // 0')
-
-            if [ "$proj_domains" -gt 0 ] || [ "$proj_terms" -gt 0 ]; then
-                echo -e "${GREEN}✓${NC} Loaded ${BOLD}${proj_domains}${NC} project domains (${proj_terms} terms)"
-                echo -e "  ${DIM}from: .aoa/project-domains.json${NC}"
-                # Cleanup: delete file after successful load (Redis is now source of truth)
-                rm -f "$project_domains_file"
-                echo ""
-            fi
-        fi
-    fi
-
-    # Also load and cleanup individual domain files (.aoa/domains/@*.json)
-    local domains_dir="${project_root}/.aoa/domains"
-    if [ -d "$domains_dir" ]; then
-        for domain_file in "$domains_dir"/@*.json; do
-            [ -f "$domain_file" ] || continue
-            local domain_data=$(cat "$domain_file" 2>/dev/null)
-            if [ -n "$domain_data" ] && echo "$domain_data" | jq -e '.' > /dev/null 2>&1; then
-                local domain_result=$(curl -s -X POST "${INDEX_URL}/domains/add" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"project_id\": \"${project_id:-default}\", \"domains\": [${domain_data}], \"source\": \"analyzed\"}" 2>/dev/null)
-                local added=$(echo "$domain_result" | jq -r '.domains_added | length // 0')
-                if [ "$added" -gt 0 ]; then
-                    local domain_name=$(basename "$domain_file" .json)
-                    echo -e "${GREEN}✓${NC} Loaded ${domain_name}"
-                    # Cleanup after successful load
-                    rm -f "$domain_file"
-                fi
-            fi
-        done
-    fi
-
-    # Get pending files for semantic compression
-    local pending_result
-    if $force; then
-        pending_result=$(curl -s "${INDEX_URL}/files${project_param}")
-        local all_files=$(echo "$pending_result" | jq -r '.files // []')
-        pending_result=$(echo "$all_files" | jq '{pending: [.[] | {file: .}], pending_count: length, up_to_date_count: 0}')
-    else
-        pending_result=$(curl -s "${INDEX_URL}/outline/pending${project_param}")
-    fi
-
-    local pending_count=$(echo "$pending_result" | jq -r '.pending_count // 0')
-    local up_to_date=$(echo "$pending_result" | jq -r '.up_to_date_count // 0')
-
-    # Calculate workers: 1 per 50 files, min 4, max 10
-    local workers=$((pending_count / 50))
-    [ $workers -lt 4 ] && workers=4
-    [ $workers -gt 10 ] && workers=10
-
-    echo -e "${CYAN}${BOLD}⚡ aOa Quickstart${NC}"
-    $force && echo -e "${YELLOW}(force mode)${NC}"
-    echo ""
-
-    if [ "$pending_count" -eq 0 ]; then
-        echo -e "${GREEN}✓${NC} All ${up_to_date} files are compressed"
-        echo ""
-        echo -e "${DIM}To refresh: aoa quickstart --force${NC}"
-        return 0
-    fi
-
-    # Trust-building intro (skip if auto-yes)
-    if ! $auto_yes; then
-        echo -e "  Found ${BOLD}${pending_count} files${NC} in your project."
-        echo ""
-        echo -e "  ${DIM}•${NC} ${BOLD}Read-only${NC} — no files modified"
-        echo -e "  ${DIM}•${NC} ${BOLD}Local only${NC} — nothing leaves your machine"
-        echo -e "  ${DIM}•${NC} ${BOLD}Respects .gitignore${NC} — only your source code"
-        echo ""
-        echo -e "  ${DIM}~1 minute for most projects.${NC}"
-        echo ""
-
-        # Prompt for confirmation
-        echo -n -e "  Press ${BOLD}Y${NC} to continue, or ${DIM}N${NC} to skip: "
-        read -r -n 1 response
-        echo ""
-        echo ""
-
-        if [[ ! "$response" =~ ^[Yy]$ ]]; then
-            echo -e "${DIM}Skipped. Run 'aoa quickstart' anytime to compress your files.${NC}"
-            return 0
-        fi
-    fi
-
-    echo -e "  Processing ${BOLD}${pending_count}${NC} files (${workers} workers)"
-    echo ""
-
-    # Create temp directory to track progress
-    local progress_dir=$(mktemp -d)
-    local files_list="${progress_dir}/files.txt"
-    echo "$pending_result" | jq -r '.pending[].file' > "$files_list"
-
-    # Export variables for parallel processing
-    export INDEX_URL
-    export project_id
-    export progress_dir
-    export -f _quickstart_process_file
-
-    # Start parallel processing in background
-    cat "$files_list" | xargs -P "$workers" -I {} bash -c '_quickstart_process_file "$@"' _ {} &
-    local xargs_pid=$!
-
-    # Progress bar settings
-    local bar_width=40
-
-    # Worker stage tracking
-    local -a tasks=("Parsing" "Extracting" "Indexing" "Mapping" "Compressing")
-    local -a thresholds=()
-    for ((w=1; w<=workers; w++)); do
-        thresholds+=($((w * 100 / workers)))
-    done
-    local printed_stages=0
-    local need_fresh_line=false
-
-    # Show progress while processing
-    while kill -0 $xargs_pid 2>/dev/null; do
-        local done_count=$(ls -1 "${progress_dir}"/done_* 2>/dev/null | wc -l)
-        local error_count=$(ls -1 "${progress_dir}"/error_* 2>/dev/null | wc -l)
-        local processed=$((done_count + error_count))
-
-        if [ $pending_count -gt 0 ]; then
-            local pct=$((processed * 100 / pending_count))
-            local filled=$((pct * bar_width / 100))
-            local empty=$((bar_width - filled))
-
-            local bar=""
-            for ((i=0; i<filled; i++)); do bar+="█"; done
-            for ((i=0; i<empty; i++)); do bar+="░"; done
-
-            # Update progress bar
-            if $need_fresh_line; then
-                printf "  [${GREEN}%s${NC}] %3d%% │ %d/%d" "$bar" "$pct" "$processed" "$pending_count"
-                need_fresh_line=false
-            else
-                printf "\r  [${GREEN}%s${NC}] %3d%% │ %d/%d" "$bar" "$pct" "$processed" "$pending_count"
-            fi
-
-            # Check if any new worker stages completed
-            while [ $printed_stages -lt $workers ] && [ $pct -ge ${thresholds[$printed_stages]} ]; do
-                local task_idx=$((printed_stages % 5))
-                echo ""
-                echo -e "    ${GREEN}✓${NC} Worker $((printed_stages + 1)): ${tasks[$task_idx]}"
-                printed_stages=$((printed_stages + 1))
-                need_fresh_line=true
-            done
-        fi
-
-        sleep 0.1
-    done
-
-    # Wait for completion and get final counts
-    wait $xargs_pid 2>/dev/null
-    local done_count=$(ls -1 "${progress_dir}"/done_* 2>/dev/null | wc -l)
-    local error_count=$(ls -1 "${progress_dir}"/error_* 2>/dev/null | wc -l)
-
-    # Final progress update
-    if $need_fresh_line; then
-        printf "  [${GREEN}"
-    else
-        printf "\r  [${GREEN}"
-    fi
-    for ((i=0; i<bar_width; i++)); do printf "█"; done
-    printf "${NC}] 100%% │ %d/%d\n" "$pending_count" "$pending_count"
-
-    # Print any remaining worker stages
-    while [ $printed_stages -lt $workers ]; do
-        local task_idx=$((printed_stages % 5))
-        echo -e "    ${GREEN}✓${NC} Worker $((printed_stages + 1)): ${tasks[$task_idx]}"
-        printed_stages=$((printed_stages + 1))
-    done
-
-    # Cleanup
-    rm -rf "$progress_dir"
-
-    echo ""
-    echo ""
-
-    # =========================================================================
-    # VALUE PROPOSITION
-    # =========================================================================
-
-    echo -e "${GREEN}✓${NC} ${BOLD}${done_count} files${NC} semantically compressed"
-    echo ""
-    echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
-    echo ""
-
-    if [ "$error_count" -gt 0 ]; then
-        echo -e "  ${YELLOW}!${NC} ${error_count} files had errors"
-        echo ""
-    fi
-
-    echo -e "  ${BOLD}What is semantic compression?${NC}"
-    echo ""
-    echo -e "  Semantic compression changes how search results are processed to deliver"
-    echo -e "  faster, targeted responses that AI can read with minimal context."
-    echo ""
-
-    echo -e "  ${DIM}Without aOa:${NC}"
-    echo ""
-    echo -e "    grep 'auth' → 12 matches → read 8 files → find method"
-    echo -e "    Cost: ${RED}${BOLD}50,000 tokens, 30 seconds${NC}"
-    echo ""
-
-    echo -e "  ${CYAN}With aOa:${NC}"
-    echo ""
-    echo -e "    ${DIM}\$${NC} aoa grep auth"
-    echo -e "        ${DIM}↓${NC}"
-    echo -e "    ${CYAN}⚡ aOa${NC} ${DIM}│${NC} ${BOLD}13${NC} hits ${DIM}│${NC} 6 files ${DIM}│${NC} ${GREEN}2.1ms${NC}"
-    echo ""
-    echo -e "    ${GREEN}auth/service.py${NC}:${BOLD}AuthService${NC}().${GREEN}handleAuth${NC}(request)[${CYAN}47-89${NC}]:${YELLOW}52${NC} ${DIM}<${NC}def login():${DIM}>${NC}  ${MAGENTA}@authentication${NC}  ${DIM}#auth #validation${NC}"
-    echo ""
-    echo -e "    ${DIM}What does this line mean?${NC}"
-    echo ""
-    echo -e "    ${GREEN}auth/service.py${NC}  :  ${BOLD}AuthService${NC}()  .  ${GREEN}handleAuth${NC}(req)  [${CYAN}47-89${NC}]  :${YELLOW}52${NC}  ${DIM}<${NC}def login()${DIM}>${NC}  ${MAGENTA}@authentication${NC}  ${DIM}#auth #validation${NC}"
-    echo -e "    ${DIM}│                   │                 │                │        │    │              │                │${NC}"
-    echo -e "    ${DIM}│                   │                 │                │        │    │              │                │${NC}"
-    echo -e "    ${DIM}└─file              └─class           └─method         └─range  └─ln └─grep         └─domain         └─tags${NC}"
-    echo ""
-    echo -e "    AI reads ${CYAN}${BOLD}42 lines${NC}, ${RED}not 8 files${NC}. ${BOLD}Less data. More meaning.${NC} ${CYAN}That's semantic compression.${NC}"
-    echo ""
-
-    echo -e "  ${CYAN}${BOLD}⚡ Signal Angle${NC}"
-    echo -e "  ${DIM}──────────────────────────────────────────────────────────────────${NC}"
-    echo -e "  ${BOLD}O(1) indexed search${NC} ${DIM}│${NC} ${GREEN}Results ranked by your intent${NC} ${DIM}│${NC} ${CYAN}aOa enriches${NC} → ${BOLD}Claude decides faster.${NC}"
-    echo ""
-}
+# NOTE: cmd_quickstart removed - no longer needed
+# KeywordMatcher handles domain tagging in real-time from Redis
 
 cmd_learn() {
     # aoa learn          - Show domain candidates and prompt for tag generation
@@ -4105,7 +3755,7 @@ cmd_learn() {
 
             if [ "$count" -eq 0 ]; then
                 echo -e "${DIM}No learned patterns stored yet.${NC}"
-                echo -e "${DIM}Run 'aoa quickstart' then 'aoa learn' to generate.${NC}"
+                echo -e "${DIM}Run /aoa-start skill to generate domains.${NC}"
             else
                 echo -e "${BOLD}${count}${NC} patterns:"
                 echo ""
@@ -4129,7 +3779,7 @@ cmd_learn() {
     if [ "$count" -eq 0 ] || [ "$candidates" = "{}" ]; then
         echo -e "${DIM}No domain candidates found.${NC}"
         echo ""
-        echo -e "Run ${CYAN}aoa quickstart${NC} first to scan your codebase."
+        echo -e "Run ${CYAN}/aoa-start${NC} skill first to set up domains."
         return 0
     fi
 
@@ -4928,7 +4578,7 @@ cmd_stats() {
         echo ""
     fi
 
-    echo -e "${DIM}Run 'aoa quickstart' to tag pending files${NC}"
+    echo -e "${DIM}Run /aoa-start skill to set up domains${NC}"
 }
 
 # =============================================================================
@@ -5267,7 +4917,7 @@ cmd_wipe() {
 
     echo ""
     echo -e "${GREEN}✓${NC} Wipe complete"
-    echo -e "${DIM}Run 'aoa quickstart' to reinitialize${NC}"
+    echo -e "${DIM}Run /aoa-start skill to reinitialize${NC}"
 }
 
 cmd_whitelist() {
@@ -6191,7 +5841,6 @@ main() {
         stop)       cmd_stop ;;
         env)        cmd_env ;;
         port)       cmd_port "$@" ;;
-        quickstart|qs) cmd_quickstart "$@" ;;
         learn)      cmd_learn "$@" ;;
         domains|d)  cmd_domains "$@" ;;
         jobs|j)     cmd_jobs "$@" ;;

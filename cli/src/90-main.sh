@@ -77,7 +77,6 @@ main() {
         stop)       cmd_stop ;;
         env)        cmd_env ;;
         port)       cmd_port "$@" ;;
-        quickstart|qs) cmd_quickstart "$@" ;;
         learn)      cmd_learn "$@" ;;
         domains|d)  cmd_domains "$@" ;;
         jobs|j)     cmd_jobs "$@" ;;

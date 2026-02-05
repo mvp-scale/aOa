@@ -75,7 +75,6 @@ aoa changes 1h                # Recently modified
 aoa outline <file>            # See structure without reading all
 aoa outline --pending         # Files needing tags
 aoa outline --json            # Machine-readable output
-aoa quickstart                # Tag your codebase (~1 min)
 ```
 
 ---
