@@ -102,6 +102,7 @@ cmd_intent_recent() {
     local evaluated=$(echo "$metrics" | jq -r '.rolling.evaluated // 0')
     local hits=$(echo "$metrics" | jq -r '.rolling.hits // 0')
     local stop_count=$(echo "$metrics" | jq -r '.stop_count // 0')
+    local total_intents=$(echo "$metrics" | jq -r '.total_intents // 0')
 
     # Get intent stats (includes first_seen for date display)
     local intent_stats=$(curl -s "${INDEX_URL}/intent/stats?project_id=${project_id}")
@@ -177,15 +178,15 @@ cmd_intent_recent() {
 
     # Header - horizontal format matching aoa domains style
 
-    # Build learning tier display (mirrors status line, with more detail)
+    # Build learning tier display (mirrors status line, same counter: total_intents)
     # < 30: learning, 30-99: adapting, 100+: trained
     local tier_display=""
-    if [ "$stop_count" -lt 30 ] 2>/dev/null; then
-        tier_display="${DIM}⚪ learning (${stop_count}/30)${NC}"
-    elif [ "$stop_count" -lt 100 ] 2>/dev/null; then
-        tier_display="${YELLOW}🟡 ${stop_count} intents${NC} ${DIM}│${NC} ${YELLOW}adapting${NC}"
+    if [ "$total_intents" -lt 30 ] 2>/dev/null; then
+        tier_display="${DIM}⚪ learning (${total_intents}/30)${NC}"
+    elif [ "$total_intents" -lt 100 ] 2>/dev/null; then
+        tier_display="${YELLOW}🟡 ${total_intents} intents${NC} ${DIM}│${NC} ${YELLOW}adapting${NC}"
     else
-        tier_display="${GREEN}🟢 ${stop_count} intents${NC} ${DIM}│${NC} ${GREEN}trained${NC}"
+        tier_display="${GREEN}🟢 ${total_intents} intents${NC} ${DIM}│${NC} ${GREEN}trained${NC}"
     fi
 
     # Build savings display

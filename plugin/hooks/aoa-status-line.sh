@@ -207,12 +207,12 @@ INTENTS=${INTENTS:-0}
 # === BUILD DISPLAY ===
 SEP="${DIM}│${RESET}"
 
-# Traffic light based on stop_count (learning progress)
-# <50: learning (gray), 50-250: active (yellow), 250+: trained (green)
-if [ "$STOP_COUNT" -lt 50 ] 2>/dev/null; then
+# Traffic light based on total_intents (learning progress)
+# Synced with aoa intent thresholds: <30 learning, 30-100 adapting, 100+ trained
+if [ "$INTENTS" -lt 30 ] 2>/dev/null; then
     LIGHT="${GRAY}⚪${RESET}"
     INTENT_DISPLAY="learning"
-elif [ "$STOP_COUNT" -lt 250 ] 2>/dev/null; then
+elif [ "$INTENTS" -lt 100 ] 2>/dev/null; then
     LIGHT="${YELLOW}🟡${RESET}"
     INTENT_DISPLAY="${INTENTS}"
 else
@@ -221,8 +221,7 @@ else
 fi
 
 # Format intents for display (1.2k for large numbers)
-# Skip if still in "learning" mode (stop_count < 50)
-if [ "$STOP_COUNT" -ge 50 ] && [ "$INTENTS" -ge 1000 ]; then
+if [ "$INTENTS" -ge 100 ] && [ "$INTENTS" -ge 1000 ]; then
     INTENT_FMT=$(format_tokens $INTENTS)
     INTENT_DISPLAY="${INTENT_FMT}"
 fi
