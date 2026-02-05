@@ -2445,6 +2445,15 @@ class IndexManager:
         try:
             idx = self._load_project(project_id, name, path)
             if idx:
+                # Persist paths to Redis for worker/learner lookups
+                container_path = path.replace(self.user_home, '/userhome')
+                try:
+                    import redis as redis_lib
+                    r = redis_lib.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+                    r.set(f"aoa:{project_id}:host_path", path)
+                    r.set(f"aoa:{project_id}:container_path", container_path)
+                except Exception as e:
+                    print(f"  Warning: Could not persist project paths to Redis: {e}")
                 return True, f"Project '{name}' registered", len(idx.files)
             else:
                 return False, f"Could not access project_id path: {path}", 0

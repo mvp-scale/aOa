@@ -67,19 +67,16 @@ class JobWorker:
         }
 
     def _resolve_project_root(self) -> str:
-        """Resolve the container path for this project from the registry."""
-        config_dir = os.environ.get('CONFIG_DIR', '/config')
-        projects_file = os.path.join(config_dir, 'projects.json')
+        """Resolve the container path for this project from Redis."""
         try:
-            with open(projects_file) as f:
-                projects = json.load(f)
-            for p in projects:
-                if p.get('id') == self.project_id:
-                    user_home = os.environ.get('USER_HOME', '/home')
-                    return p['path'].replace(user_home, '/userhome')
-        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-            print(f"[Worker] Could not resolve project root: {e}", flush=True)
-        return '/userhome'  # Safe fallback, never /codebase
+            import redis
+            r = redis.from_url(self.redis_url or os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+            container_path = r.get(f"aoa:{self.project_id}:container_path")
+            if container_path:
+                return container_path
+        except Exception as e:
+            print(f"[Worker] Could not resolve project root from Redis: {e}", flush=True)
+        return '/userhome'
 
     def process_one(self, timeout: int = 0) -> Optional[Job]:
         """
