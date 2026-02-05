@@ -81,6 +81,7 @@ class DomainLearner:
     ORPHAN_THRESHOLD = 30  # Need 30+ orphans to trigger domain creation
     PRUNE_FLOOR = 0.5  # Prune context domains with decayed hits below this
     AUTOTUNE_INTERVAL = 100  # P2B: Run math tune every 100 prompts (10 in test mode)
+    PROMOTION_MIN_RATIO = 0.5  # A72-21: Minimum cohit ratio (50%) for keyword→term assignment
 
     def __init__(self, project_id: str, redis_url: Optional[str] = None):
         """Initialize with project identifier."""

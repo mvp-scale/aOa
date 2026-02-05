@@ -41,7 +41,7 @@ Example bigrams and what they suggest:
 - "domain:hits" → @domains domain with terms: hits, learning, promotion
 - "gap:analysis" → @analysis domain with terms: gap, research, investigation
 
-Write to /home/corey/aOa/.aoa/domains/intent.json:
+Write to .aoa/domains/intent.json:
 ```json
 [
   {
