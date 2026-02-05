@@ -40,30 +40,22 @@ Rules:
 
 Run: aoa domains init --file .aoa/domains/intelligence.json
 
-## Step 2: Process Jobs Loop
-The init command queued 24 ENRICH jobs. Process them in batches:
+## Step 2: Generate Domain Files
+For EACH domain in intelligence.json, write:
+  .aoa/domains/@{name}.json with readable format (one term per line):
+  {
+    "domain": "@name",
+    "terms": {
+      "term1": ["kw1", "kw2", "kw3", "kw4", "kw5", "kw6", "kw7"],
+      "term2": ["kw1", "kw2", "kw3", "kw4", "kw5", "kw6", "kw7"],
+      ...
+    }
+  }
+  Generate 5-7 meaningful terms with 7 keywords each.
 
-LOOP while `aoa jobs pending 3` returns domains:
-  1. Get up to 3 pending domain names
-  2. For EACH domain, read its description from intelligence.json, then write:
-     .aoa/domains/@{name}.json with readable format (one term per line):
-     {
-       "domain": "@name",
-       "terms": {
-         "term1": ["kw1", "kw2", "kw3", "kw4", "kw5", "kw6", "kw7"],
-         "term2": ["kw1", "kw2", "kw3", "kw4", "kw5", "kw6", "kw7"],
-         ...
-       }
-     }
-     Generate 5-7 meaningful terms with 7 keywords each.
-  3. Run: aoa jobs process 3
-  4. Run: aoa domains link
-  5. Continue until no pending jobs
-
-## Step 3: Link, Clean, and Verify
-Run: aoa domains link
+## Step 3: Build and Verify
+Run: aoa domains build --all
 Run: aoa domains clean
-Run: aoa jobs
 Run: aoa domains | head -5
 
 Return ONLY: "✓ 24 domains ready"
