@@ -49,15 +49,17 @@ _manager = None
 _intent_index = None
 _domains_available = False
 _DomainLearner = None
+_Domain = None
 
 
-def init_domains_api(manager, intent_index, domains_available, domain_learner_class):
+def init_domains_api(manager, intent_index, domains_available, domain_learner_class, domain_class=None):
     """Initialize the domains API with dependencies from the main indexer."""
-    global _manager, _intent_index, _domains_available, _DomainLearner
+    global _manager, _intent_index, _domains_available, _DomainLearner, _Domain
     _manager = manager
     _intent_index = intent_index
     _domains_available = domains_available
     _DomainLearner = domain_learner_class
+    _Domain = domain_class
 
 
 def _get_orphan_tags(project_id: str, limit: int = 50) -> list[str]:
@@ -824,19 +826,22 @@ def domains_add_context():
     try:
         learner = _DomainLearner(project_id)
 
+        # Create Domain object
+        domain = _Domain(
+            name=name,
+            description=description,
+            confidence=0.8,  # High confidence for user-provided domains
+            terms=terms
+        )
+
         # Add domain with context tier
-        result = learner.add_domain({
-            'name': name,
-            'description': description,
-            'terms': terms,
-            'tier': 'context'
-        }, source='haiku')
+        learner.add_domain(domain, source='haiku', tier='context')
 
         # Add keywords for terms
         keyword_count = 0
         for term, kws in keywords.items():
             for kw in kws:
-                learner.add_keyword_to_term(term, kw)
+                learner.add_keyword_to_term(kw, term)  # keyword first, then term
                 keyword_count += 1
 
         return jsonify({
@@ -844,8 +849,7 @@ def domains_add_context():
             'project_id': project_id,
             'domain': name,
             'terms_added': len(terms),
-            'keywords_added': keyword_count,
-            **result
+            'keywords_added': keyword_count
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1030,8 +1034,17 @@ def domains_add():
         existing_terms = learner.get_domain_terms(domain_data['name'])
         is_update = len(existing_terms) > 0
 
+        # Create Domain object
+        from services.domains.learner import Domain
+        domain = Domain(
+            name=domain_data['name'],
+            description=domain_data.get('description', ''),
+            confidence=0.8,
+            terms=domain_data.get('terms', [])
+        )
+
         # Add domain
-        result = learner.add_domain(domain_data, source='api')
+        result = learner.add_domain(domain, source='api')
 
         # Add terms if provided
         terms = domain_data.get('terms', [])
@@ -1099,11 +1112,14 @@ def domains_learned():
                 added += 1
             else:
                 # Domain doesn't exist - create it with tag as term
-                learner.add_domain({
-                    'name': domain,
-                    'description': f'Auto-created for tag: {tag}',
-                    'terms': [tag]
-                }, source='learned')
+                from services.domains.learner import Domain
+                new_domain = Domain(
+                    name=domain,
+                    description=f'Auto-created for tag: {tag}',
+                    confidence=0.7,
+                    terms=[tag]
+                )
+                learner.add_domain(new_domain, source='learned')
                 added += 1
 
         return jsonify({

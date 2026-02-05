@@ -7532,7 +7532,7 @@ def main():
     print()
 
     # Initialize domains API with runtime dependencies (CH-01)
-    init_domains_api(manager, intent_index, DOMAINS_AVAILABLE, DomainLearner)
+    init_domains_api(manager, intent_index, DOMAINS_AVAILABLE, DomainLearner, Domain)
 
     try:
         print(f"Listening on http://0.0.0.0:{port}")

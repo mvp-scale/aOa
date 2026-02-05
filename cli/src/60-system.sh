@@ -1643,14 +1643,10 @@ cmd_domains() {
         local tier_color="${GREEN}"
         [ "$rank" -gt 24 ] && tier_color="${YELLOW}"
 
-        # Show hits and terms - use "--" when not enriched
-        if [ "$enriched" = "true" ] && [ -n "$terms" ]; then
-            local hits_fmt
-            [ "$hits" -ge 1000 ] && hits_fmt=$(awk "BEGIN {printf \"%.1fk\", $hits/1000}") || hits_fmt="$hits"
-            printf "${tier_color}%2d${NC}  ${MAGENTA}%-24s${NC} %6s  ${CYAN}%s${NC}\n" "$rank" "$name_trunc" "$hits_fmt" "$terms"
-        else
-            printf "${tier_color}%2d${NC}  ${MAGENTA}%-24s${NC} %6s  ${DIM}-- enrichment required${NC}\n" "$rank" "$name_trunc" "--"
-        fi
+        # Show hits and terms
+        local hits_fmt
+        [ "$hits" -ge 1000 ] && hits_fmt=$(awk "BEGIN {printf \"%.1fk\", $hits/1000}") || hits_fmt="$hits"
+        printf "${tier_color}%2d${NC}  ${MAGENTA}%-24s${NC} %6s  ${CYAN}%s${NC}\n" "$rank" "$name_trunc" "$hits_fmt" "$terms"
         ((rank++))
     done
 
