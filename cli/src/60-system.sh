@@ -1438,80 +1438,6 @@ cmd_domains() {
                 echo "No domain files to clean"
             fi
             ;;
-        stage)
-            # aoa domains stage - load intent.json to Redis staging (RB-11)
-            # Staged domains accumulate hits before promotion
-            shift
-            local action="${1:-load}"
-
-            case "$action" in
-                load)
-                    # Load from intent.json
-                    local result=$(curl -sf -X POST "${INDEX_URL}/domains/stage" \
-                        -H "Content-Type: application/json" \
-                        -d "{\"project_id\":\"${project_id}\",\"load_intent\":true}" 2>/dev/null)
-
-                    if [ -z "$result" ]; then
-                        echo -e "${RED}Error: Could not stage proposals${NC}" >&2
-                        return 1
-                    fi
-
-                    local success=$(echo "$result" | jq -r '.success // false')
-                    local error=$(echo "$result" | jq -r '.error // empty')
-
-                    if [ "$success" != "true" ]; then
-                        echo -e "${RED}Error: ${error:-Staging failed}${NC}" >&2
-                        return 1
-                    fi
-
-                    local domains=$(echo "$result" | jq -r '.staged_domains // 0')
-                    local terms=$(echo "$result" | jq -r '.staged_terms // 0')
-                    local keywords=$(echo "$result" | jq -r '.staged_keywords // 0')
-                    local file=$(echo "$result" | jq -r '.file // "intent.json"')
-
-                    echo -e "${GREEN}✓${NC} Staged ${CYAN}${domains}${NC} domains (${terms} terms, ${keywords} keywords)"
-                    echo -e "  ${DIM}from: ${file}${NC}"
-
-                    # Cleanup: delete intent.json after successful staging (Redis is now source of truth)
-                    local intent_file="${project_root}/.aoa/domains/intent.json"
-                    if [ -f "$intent_file" ]; then
-                        rm -f "$intent_file"
-                    fi
-                    return 0
-                    ;;
-                list|show)
-                    # Show staged proposals
-                    local result=$(curl -sf "${INDEX_URL}/domains/staged?project_id=${project_id}" 2>/dev/null)
-
-                    if [ -z "$result" ]; then
-                        echo -e "${RED}Error: Could not fetch staged domains${NC}" >&2
-                        return 1
-                    fi
-
-                    local count=$(echo "$result" | jq -r '.staged_domains // 0')
-
-                    if [ "$count" = "0" ]; then
-                        echo -e "${DIM}No staged proposals${NC}"
-                        echo -e "${DIM}Run: aoa domains stage load${NC}"
-                        return 0
-                    fi
-
-                    echo -e "${CYAN}${BOLD}⚡ Staged Proposals${NC}"
-                    echo ""
-                    echo "$result" | jq -r '.domains[] | "  \(.domain)  \(.terms | keys | length) terms"'
-                    echo ""
-                    echo -e "${DIM}$(echo "$result" | jq -r '.staged_terms') terms, $(echo "$result" | jq -r '.staged_keywords') keywords${NC}"
-                    return 0
-                    ;;
-                *)
-                    echo "Usage: aoa domains stage [load|list]"
-                    echo ""
-                    echo "  load    Load intent.json to Redis staging (default)"
-                    echo "  list    Show staged proposals and stats"
-                    return 0
-                    ;;
-            esac
-            ;;
     esac
 
     # Default: show domain status
@@ -1732,29 +1658,6 @@ cmd_domains() {
     if [ "$domain_count" -gt "$limit" ] 2>/dev/null; then
         local remaining=$((domain_count - limit))
         echo -e "${DIM}+${remaining} more domains${NC}"
-    fi
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # RB-08: Staged Proposals Section
-    # ─────────────────────────────────────────────────────────────────────────
-    local staged_data=$(curl -s "${INDEX_URL}/domains/staged?project_id=${project_id}" 2>/dev/null)
-    local staged_count=$(echo "$staged_data" | jq -r '.staged_domains // 0')
-
-    if [ "$staged_count" -gt 0 ] 2>/dev/null; then
-        local staged_terms=$(echo "$staged_data" | jq -r '.staged_terms // 0')
-        local staged_keywords=$(echo "$staged_data" | jq -r '.staged_keywords // 0')
-
-        echo ""
-        echo -e "${YELLOW}${BOLD}⏳ Staged Proposals${NC}  ${staged_count} domains ${DIM}│${NC} ${staged_terms} terms ${DIM}│${NC} ${staged_keywords} keywords"
-        echo -e "${DIM}───────────────────────────────────────────────────────────────────────────────────────${NC}"
-        printf "${DIM}%-30s %5s  %s${NC}\n" "DOMAIN" "TERMS" "STATUS"
-
-        echo "$staged_data" | jq -r '.domains[]? | "\(.domain)|\(.terms | keys | length)"' 2>/dev/null | while IFS='|' read -r name term_count; do
-            local name_trunc="${name:0:28}"
-            printf "  ${YELLOW}%-28s${NC} ${DIM}%5s${NC}  ${DIM}awaiting hits${NC}\n" "$name_trunc" "$term_count"
-        done
-
-        echo -e "${DIM}Run 'aoa domains stage list' for details${NC}"
     fi
 
     # ─────────────────────────────────────────────────────────────────────────

@@ -450,19 +450,6 @@ def handle_prompt(data: dict):
     prompt = data.get("prompt", "")
     session_id = data.get("session_id", "unknown")
 
-    # RB-05: Check keywords against staged proposals for cohit tracking
-    # Runs on EVERY prompt (no MIN_INTENTS gate - need immediate tracking)
-    if prompt:
-        keywords = extract_keywords(prompt)
-        if keywords:
-            try:
-                api_post("/domains/check-staged", {
-                    "project_id": PROJECT_ID,
-                    "keywords": keywords
-                })
-            except Exception:
-                pass  # Don't block on staging checks
-
 def handle_tool(data: dict):
     """
     PostToolUse: Capture intent - files only, no pattern-based tags.
