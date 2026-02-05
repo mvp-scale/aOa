@@ -8,7 +8,7 @@ allowed-tools: Task, Bash, Write
 
 Display:
 ```
-⚡ aOa Intent Learning
+⚡ aOa Rebalancing Domains
 
 Analyzing usage signals for new domains...
 This runs in the background. Continue working.
@@ -17,7 +17,7 @@ This runs in the background. Continue working.
 ## Execute
 
 Spawn ONE background Task:
-- description: `⚡ Intent learning`
+- description: `⚡ aOa Rebalancing domains`
 - run_in_background: true
 - model: haiku
 
