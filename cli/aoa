@@ -1254,12 +1254,17 @@ cmd_hot() {
 }
 
 cmd_bigrams() {
-    # aoa bigrams [--min N] [--limit N]  - Show accumulated bigrams (usage signals)
-    local min_count=6
+    # aoa bigrams [--recent] [--min N] [--limit N]  - Show bigrams (usage signals)
+    local min_count=""
     local limit=50
+    local recent=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --recent|-r)
+                recent=true
+                shift
+                ;;
             --min|-m)
                 min_count="${2:-6}"
                 shift 2
@@ -1280,7 +1285,16 @@ cmd_bigrams() {
         return 1
     fi
 
-    local result=$(curl -s "${INDEX_URL}/cc/bigrams?project_id=${project_id}&min_count=${min_count}&limit=${limit}")
+    # Build URL with optional params
+    local url="${INDEX_URL}/cc/bigrams?project_id=${project_id}&limit=${limit}"
+    if [ "$recent" = true ]; then
+        url="${url}&recent=true"
+    fi
+    if [ -n "$min_count" ]; then
+        url="${url}&min_count=${min_count}"
+    fi
+
+    local result=$(curl -s "$url")
 
     # Output format: bigram (count)
     echo "$result" | jq -r '.bigrams[]? | "\(.bigram) (\(.count))"' 2>/dev/null

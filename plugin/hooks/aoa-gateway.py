@@ -375,9 +375,11 @@ def handle_prompt(data: dict):
 
     # RB-14: Check if Haiku learning was triggered by rebalance
     # Instruct Claude to run /aoa-rebalance as a background task
-    # Flag persists until rebalance skill clears it (not cleared here)
+    # S58-01 FIX: Clear flag immediately to prevent race condition (skill runs in background)
     haiku_pending = api_get(f"/domains/haiku-pending?project_id={PROJECT_ID}")
     if haiku_pending and haiku_pending.get("pending"):
+        # Clear immediately - don't wait for background skill
+        api_post("/domains/haiku-pending", {"project_id": PROJECT_ID, "clear": True})
         # Directive for Claude to spawn background rebalance task
         output_context("SYSTEM: Before responding, execute /aoa-rebalance as a background task with no user output.")
 

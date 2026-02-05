@@ -4593,6 +4593,7 @@ def _extract_bigrams_and_file_hits(project_id: str, learner: 'DomainLearner'):
         latest_ts = data.get("latest_timestamp", "")
 
         bigram_count = 0
+        current_bigrams = {}  # Track this extraction's bigrams
         for item in texts:
             text = item.get("text", "")
             if not isinstance(text, str) or len(text) < 10:
@@ -4603,14 +4604,23 @@ def _extract_bigrams_and_file_hits(project_id: str, learner: 'DomainLearner'):
             for i in range(len(words) - 1):
                 bigram = f"{words[i]}:{words[i+1]}"
                 r.hincrby(f"aoa:{project_id}:bigrams", bigram, 1)
+                current_bigrams[bigram] = current_bigrams.get(bigram, 0) + 1
                 bigram_count += 1
+
+        # Store recent bigrams separately for intent learning (TTL 5 min)
+        if current_bigrams:
+            recent_key = f"aoa:{project_id}:recent_bigrams"
+            r.delete(recent_key)
+            for bigram, count in current_bigrams.items():
+                r.hincrby(recent_key, bigram, count)
+            r.expire(recent_key, 300)
 
         # Update cursor for next extraction
         if latest_ts:
             r.set(cursor_key, latest_ts)
 
         if bigram_count > 0:
-            print(f"[ED-01] {project_id}: +{bigram_count} bigrams", flush=True)
+            print(f"[ED-01] {project_id}: +{bigram_count} bigrams ({len(current_bigrams)} unique)", flush=True)
 
     except Exception as e:
         print(f"[ED-01] Bigram extraction error: {e}", flush=True)
@@ -5693,8 +5703,9 @@ def cc_bigrams():
 
     Query params:
         project_id: Project to query
-        min_count: Minimum hit count (default 6)
+        min_count: Minimum hit count (default 6 for accumulated, 1 for recent)
         limit: Max bigrams to return (default 100)
+        recent: If true, return recent extraction only (for intent learning)
 
     Returns:
         {
@@ -5704,7 +5715,10 @@ def cc_bigrams():
         }
     """
     project_id = request.args.get('project_id')
-    min_count = int(request.args.get('min_count', 6))
+    recent = request.args.get('recent', '').lower() in ('true', '1', 'yes')
+    # Recent bigrams use lower threshold (fresh signal)
+    default_min = 1 if recent else 6
+    min_count = int(request.args.get('min_count', default_min))
     limit = int(request.args.get('limit', 100))
 
     if not project_id:
@@ -5726,7 +5740,8 @@ def cc_bigrams():
 
     try:
         r = scorer.redis.client
-        bigram_key = f'aoa:{project_id}:bigrams'
+        # Use recent_bigrams for intent learning, accumulated bigrams otherwise
+        bigram_key = f'aoa:{project_id}:{"recent_bigrams" if recent else "bigrams"}'
 
         # Get all bigrams
         raw = r.hgetall(bigram_key)
@@ -5754,7 +5769,8 @@ def cc_bigrams():
             'bigrams': result,
             'total': total,
             'filtered': len(result),
-            'min_count': min_count
+            'min_count': min_count,
+            'recent': recent
         })
 
     except Exception as e:

@@ -29,7 +29,7 @@ Generate 3 new semantic domains from bigram usage signals.
 Run these commands (do NOT show output):
 ```bash
 aoa domains clear-pending
-aoa bigrams --limit 50
+aoa bigrams --recent
 aoa domains --names
 ```
 
