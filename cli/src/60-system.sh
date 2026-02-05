@@ -1480,7 +1480,7 @@ cmd_domains() {
     # Default: show domain status
     local json_output=false
     local names_only=false
-    local limit=20
+    local limit=24
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
