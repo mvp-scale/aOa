@@ -823,15 +823,40 @@ def domains_add_context():
     if not terms:
         return jsonify({'error': 'Missing terms parameter'}), 400
 
+    # A72-22: Validate domain data - no null/empty/invalid values
+    if name in ('null', 'None', '', None) or not isinstance(name, str):
+        return jsonify({'error': f'Invalid domain name: {name}'}), 400
+    if not name.startswith('@'):
+        return jsonify({'error': f'Domain name must start with @: {name}'}), 400
+
+    # Validate terms are meaningful strings
+    valid_terms = [t for t in terms if isinstance(t, str) and len(t) >= 2 and t not in ('null', 'None', '')]
+    if not valid_terms:
+        return jsonify({'error': 'No valid terms provided (must be strings with length >= 2)'}), 400
+
+    # Validate keywords if provided
+    if keywords:
+        valid_keywords = {}
+        for term, kws in keywords.items():
+            if isinstance(term, str) and len(term) >= 2 and term not in ('null', 'None', ''):
+                valid_kws = [kw for kw in kws if isinstance(kw, str) and len(kw) >= 2 and kw not in ('null', 'None', '')]
+                if valid_kws:
+                    valid_keywords[term] = valid_kws
+        keywords = valid_keywords
+
     try:
         learner = _DomainLearner(project_id)
 
-        # Create Domain object
+        # A72-CAP: Enforce context tier cap before adding
+        if not learner.can_add_context_domain():
+            return jsonify({'error': f'Context tier full (max {learner.CONTEXT_DOMAINS_MAX})'}), 400
+
+        # Create Domain object (use validated terms)
         domain = _Domain(
             name=name,
             description=description,
             confidence=0.8,  # High confidence for user-provided domains
-            terms=terms
+            terms=valid_terms
         )
 
         # Add domain with context tier
