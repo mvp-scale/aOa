@@ -2261,13 +2261,27 @@ Return JSON:
         """Get domain learning statistics."""
         domains = self.get_all_domains()
         total_terms = 0
-        total_hits = 0.0  # Sum as float first, round at end
+        total_hits = 0  # Composite: sum of term_hits + keyword_hits across all domains
+
+        term_hits_key = self._key("term_hits")
+        keyword_hits_key = self._key("keyword_hits")
 
         for d in domains:
-            terms = self.get_domain_terms(d)
+            terms = list(self.get_domain_terms(d))
             total_terms += len(terms)
-            meta = self.get_domain_meta(d)
-            total_hits += float(meta.get("total_hits", 0) or 0)  # Lifetime (matches row display)
+            # Composite: sum term_hits + keyword_hits for this domain's terms/keywords
+            if terms:
+                pipe = self.redis.client.pipeline()
+                keywords = []
+                for term in terms:
+                    pipe.hget(term_hits_key, term)
+                    keywords.extend(list(self.get_term_keywords(term)))
+                for kw in keywords:
+                    pipe.hget(keyword_hits_key, kw)
+                results = pipe.execute()
+                for val in results:
+                    if val:
+                        total_hits += int(float(val))
 
         tune_results = self.get_tune_results()
         learned_details = self.get_learned_details()

@@ -4410,7 +4410,7 @@ cmd_domains() {
 
     # Display each domain - sorted by hits (competitive ranking)
     local rank=1
-    echo "$domains_data" | jq -r '.domains | sort_by(-.total_hits) | .[]? | "\(.name)|\(.total_hits // .hits // 0)|\(.enriched // false)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null | while IFS='|' read -r name hits enriched terms; do
+    echo "$domains_data" | jq -r '.domains | sort_by(-.hits) | .[]? | "\(.name)|\(.hits // 0)|\(.enriched // false)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null | while IFS='|' read -r name hits enriched terms; do
         # Truncate domain name if too long (24 chars to fit column)
         local name_trunc="${name:0:24}"
 

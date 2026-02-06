@@ -436,9 +436,23 @@ def domains_list():
             # Get domain metadata for hits and enriched status
             meta = learner.get_domain_meta(name)
             enriched = learner.is_domain_enriched(name)
-            hits = int(float(meta.get('hits', 0) or 0))
+            domain_hits = int(float(meta.get('hits', 0) or 0))
 
-            total_hits = int(float(meta.get('total_hits', 0) or 0))
+            # Composite hits: sum term_hits + keyword_hits for all terms/keywords in this domain
+            # This captures ALL signal paths: search (W1), file reads (W2), conversation (W3)
+            term_hits_key = learner._key("term_hits")
+            keyword_hits_key = learner._key("keyword_hits")
+            composite_hits = 0
+            if terms:
+                pipe = learner.redis.client.pipeline()
+                for term in terms:
+                    pipe.hget(term_hits_key, term)
+                for kw in keywords:
+                    pipe.hget(keyword_hits_key, kw)
+                results = pipe.execute()
+                for val in results:
+                    if val:
+                        composite_hits += int(float(val))
 
             domains.append({
                 'name': name,
@@ -447,12 +461,12 @@ def domains_list():
                 'term_count': len(terms),
                 'keyword_count': len(keywords),
                 'enriched': enriched,
-                'hits': hits,
-                'total_hits': total_hits,
+                'hits': composite_hits,
+                'domain_hits': domain_hits,
             })
 
-        # Sort by keyword count (most populated first)
-        domains.sort(key=lambda d: -d['keyword_count'])
+        # Sort by composite hits (most active first), then keyword count as tiebreaker
+        domains.sort(key=lambda d: (-d['hits'], -d['keyword_count']))
 
         # Apply limit if specified (after sorting)
         total_domains = len(domains)
