@@ -140,7 +140,7 @@ class DomainLearner:
 
     def should_learn(self) -> bool:
         """Check if we've accumulated enough prompts for a batch."""
-        return self.get_prompt_count() >= self.BATCH_SIZE
+        return self.get_prompt_count() >= self.REBALANCE_THRESHOLD
 
     # =========================================================================
     # Learning Pending Flag (Hook Signal)
@@ -186,7 +186,7 @@ class DomainLearner:
         # Must have at least some domains to tune
         if not self.get_all_domains():
             return False
-        return self.get_tune_count() >= self.TUNE_THRESHOLD
+        return self.get_tune_count() >= self.AUTOTUNE_INTERVAL
 
     def get_last_tune(self) -> int:
         """Get timestamp of last regenerative tune."""
@@ -2149,7 +2149,7 @@ Return JSON:
             "learned_count": source_counts["learned"],
             # Learning (every 10 prompts)
             "prompt_count": self.get_prompt_count(),
-            "prompt_threshold": self.BATCH_SIZE,
+            "prompt_threshold": self.REBALANCE_THRESHOLD,
             "should_learn": self.should_learn(),
             "learning_pending": self.is_learning_pending(),
             "last_learn": self.get_last_learn(),
@@ -2158,7 +2158,7 @@ Return JSON:
             "domains_learned_list": learned_details['domains'],
             # Tuning (every 100 intents)
             "tune_count": self.get_tune_count(),
-            "tune_threshold": self.TUNE_THRESHOLD,
+            "tune_threshold": self.AUTOTUNE_INTERVAL,
             "should_tune": self.should_tune(),
             "tuning_pending": self.is_tuning_pending(),
             "last_tune": self.get_last_tune(),

@@ -3815,12 +3815,19 @@ cmd_domains() {
                 -H "Content-Type: application/json" \
                 -d "{\"project_id\":\"${project_id}\",\"domains\":${json_input}}")
             local count=$(echo "$result" | jq -r '.domains_created // 0')
+            local skipped=$(echo "$result" | jq -r '.skipped // 0')
             local error=$(echo "$result" | jq -r '.error // empty')
             if [ -n "$error" ]; then
                 echo -e "${RED}Error: ${error}${NC}" >&2
                 return 1
             fi
-            echo "$count"
+            if [ "$count" -eq 0 ] && [ "$skipped" -gt 0 ] 2>/dev/null; then
+                echo -e "${YELLOW}0 created, ${skipped} skipped (already exist)${NC}"
+            elif [ "$skipped" -gt 0 ] 2>/dev/null; then
+                echo -e "${GREEN}${count} created${NC}, ${skipped} skipped"
+            else
+                echo "$count"
+            fi
             return 0
             ;;
         build)

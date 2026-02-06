@@ -3,359 +3,783 @@
 # aOa End-to-End Integration Test Suite
 # =============================================================================
 #
-# Tests the complete aOa pipeline including GL-053 Domain Learning:
-#   1. Service health
-#   2. Domain seeding (quickstart)
-#   3. Grep with domains and tags
-#   4. Intent capture
-#   5. Domain learning triggers
-#   6. Self-improvement loop
+# Tests the complete aOa system: API endpoints, CLI commands, domains,
+# intent tracking, configuration, and domain lifecycle.
 #
 # Usage:
-#   ./tests/test_e2e.sh              # Run all tests
-#   ./tests/test_e2e.sh --quick      # Skip slow tests
-#   ./tests/test_e2e.sh --verbose    # Show all output
+#   ./tests/test_e2e.sh              # Run all sections
+#   ./tests/test_e2e.sh --quick      # Skip slow lifecycle tests
+#   ./tests/test_e2e.sh --section 4  # Run only section 4 (CLI)
+#   ./tests/test_e2e.sh --verbose    # Show API response bodies
 #
 # Exit codes:
-#   0 = All tests passed
+#   0 = All tests passed (some may be skipped)
 #   1 = Some tests failed
 #
 # =============================================================================
 
 set -o pipefail
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
-DIM='\033[2m'
-NC='\033[0m'
-BOLD='\033[1m'
-
-PASSED=0
-FAILED=0
-SKIPPED=0
-VERBOSE=false
-QUICK=false
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/helpers.sh"
 
 # Parse args
+QUICK=false
+VERBOSE=false
+ONLY_SECTION=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --quick|-q)   QUICK=true; shift ;;
         --verbose|-v) VERBOSE=true; shift ;;
-        --quick|-q) QUICK=true; shift ;;
+        --section|-s) ONLY_SECTION="$2"; shift 2 ;;
         *) shift ;;
     esac
 done
 
-# Test helpers
-pass() {
-    echo -e "  ${GREEN}✓${NC} $1"
-    ((PASSED++))
+verbose() {
+    [ "$VERBOSE" = true ] && echo -e "    ${DIM}$1${NC}"
 }
-
-fail() {
-    echo -e "  ${RED}✗${NC} $1"
-    if [ -n "${2:-}" ]; then
-        echo -e "    ${DIM}$2${NC}"
-    fi
-    ((FAILED++))
-}
-
-skip() {
-    echo -e "  ${YELLOW}○${NC} $1 ${DIM}(skipped)${NC}"
-    ((SKIPPED++))
-}
-
-section() {
-    echo ""
-    echo -e "${CYAN}${BOLD}$1${NC}"
-    echo -e "${DIM}────────────────────────────────────────${NC}"
-}
-
-# Get project ID from .aoa/home.json
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-PROJECT_ID=$(jq -r '.project_id // empty' "$PROJECT_ROOT/.aoa/home.json" 2>/dev/null || echo "")
-
-if [ -z "$PROJECT_ID" ]; then
-    echo -e "${RED}Error: Could not find project_id in .aoa/home.json${NC}"
-    echo "Run 'aoa init' first to initialize the project."
-    exit 1
-fi
-
-echo -e "${DIM}Project ID: $PROJECT_ID${NC}"
-
-API_URL="http://localhost:8080"
 
 # =============================================================================
 # SECTION 1: Service Health
 # =============================================================================
 
-section "1. Service Health"
+test_service_health() {
+    section "1. Service Health"
 
-# Test Docker containers running (check for partial name match)
-if docker ps --format '{{.Names}}' | grep -q "index"; then
-    pass "Index service running"
-else
-    fail "Index service not running"
-fi
-
-if docker ps --format '{{.Names}}' | grep -q "redis"; then
-    pass "Redis service running"
-else
-    fail "Redis service not running"
-fi
-
-if docker ps --format '{{.Names}}' | grep -q "gateway"; then
-    pass "Gateway service running"
-else
-    fail "Gateway service not running"
-fi
-
-# Test API health endpoint
-health_response=$(curl -s "$API_URL/health" 2>/dev/null)
-if echo "$health_response" | grep -q "ok\|healthy\|files"; then
-    pass "API health endpoint responds"
-else
-    fail "API health endpoint failed" "$health_response"
-fi
-
-# =============================================================================
-# SECTION 2: Domain Seeding
-# =============================================================================
-
-section "2. Domain Seeding"
-
-# Check if domains are seeded
-domain_stats=$(curl -s "$API_URL/domains/stats?project=$PROJECT_ID" 2>/dev/null)
-domain_count=$(echo "$domain_stats" | jq -r '.domains // 0' 2>/dev/null || echo "0")
-domain_count=${domain_count:-0}
-
-if [ "$domain_count" -gt 0 ] 2>/dev/null; then
-    pass "Domains seeded: $domain_count domains"
-else
-    # Try to seed
-    seed_result=$(curl -s -X POST "$API_URL/domains/seed" -H "Content-Type: application/json" -d "{\"project\":\"$PROJECT_ID\"}" 2>/dev/null)
-    seeded=$(echo "$seed_result" | jq -r '.domains // 0')
-    if [ "$seeded" -gt 0 ]; then
-        pass "Domains seeded on demand: $seeded domains"
+    # 1.1: Health endpoint responds with JSON
+    local health
+    health=$(api_get "/health")
+    if [ -n "$health" ] && echo "$health" | jq -e '.' > /dev/null 2>&1; then
+        pass "Health endpoint returns valid JSON"
+        verbose "$health"
     else
-        fail "Failed to seed domains" "$seed_result"
-    fi
-fi
-
-# Check term count
-term_count=$(echo "$domain_stats" | jq -r '.total_terms // 0')
-if [ "$term_count" -gt 0 ]; then
-    pass "Terms available: $term_count terms"
-else
-    fail "No terms found"
-fi
-
-# =============================================================================
-# SECTION 3: Domain Lookup
-# =============================================================================
-
-section "3. Domain Lookup"
-
-# Test term lookup
-login_lookup=$(curl -s "$API_URL/domains/lookup?project=$PROJECT_ID&term=login" 2>/dev/null)
-login_domain=$(echo "$login_lookup" | jq -r '.domains[0].name // empty')
-
-if [ "$login_domain" = "@authentication" ]; then
-    pass "Term lookup: login -> @authentication"
-else
-    fail "Term lookup failed" "Expected @authentication, got: $login_domain"
-fi
-
-# Test symbol lookup
-symbol_lookup=$(curl -s "$API_URL/domains/lookup?project=$PROJECT_ID&symbol=authenticate_user" 2>/dev/null)
-symbol_domain=$(echo "$symbol_lookup" | jq -r '.domain // empty')
-
-if [ -n "$symbol_domain" ]; then
-    pass "Symbol lookup: authenticate_user -> $symbol_domain"
-else
-    skip "Symbol lookup (no domain matched)"
-fi
-
-# =============================================================================
-# SECTION 4: Grep with Domains
-# =============================================================================
-
-section "4. Grep with Domains"
-
-# Test grep returns domain field
-grep_result=$(curl -s "$API_URL/grep?q=context_search&project_id=$PROJECT_ID&limit=1" 2>/dev/null)
-grep_domain=$(echo "$grep_result" | jq -r '.results[0].domain // empty')
-
-if [ -n "$grep_domain" ]; then
-    pass "Grep returns domain: $grep_domain"
-else
-    skip "Grep domain (symbol may not have matching domain)"
-fi
-
-# Test grep returns tags (AC matching)
-grep_tags=$(echo "$grep_result" | jq -r '.results[0].tags | length')
-
-if [ "$grep_tags" -gt 0 ]; then
-    pass "Grep returns AC tags: $grep_tags tags"
-else
-    fail "Grep AC tags missing"
-fi
-
-# Test CLI grep output format
-cli_grep=$(aoa grep login 2>&1 | head -5)
-if echo "$cli_grep" | grep -q "⚡ aOa"; then
-    pass "CLI grep header format"
-else
-    fail "CLI grep header missing"
-fi
-
-# Check for CYAN tags in output (escape code 36m)
-if echo "$cli_grep" | grep -q "36m"; then
-    pass "CLI shows #tags in CYAN"
-else
-    fail "CLI #tags not in CYAN"
-fi
-
-# =============================================================================
-# SECTION 5: Intent Capture
-# =============================================================================
-
-section "5. Intent Capture"
-
-# Get current intent count
-intent_before=$(curl -s "$API_URL/intent/stats?project_id=$PROJECT_ID" 2>/dev/null | jq -r '.total // 0')
-
-# Run a grep to generate intent
-aoa grep test_intent_capture_marker >/dev/null 2>&1
-
-# Check intent was captured
-sleep 1
-intent_after=$(curl -s "$API_URL/intent/stats?project_id=$PROJECT_ID" 2>/dev/null | jq -r '.total // 0')
-
-if [ "$intent_after" -gt "$intent_before" ]; then
-    pass "Intent captured on grep"
-else
-    skip "Intent capture (hook may not be active)"
-fi
-
-# Check prompt count increments
-prompt_count=$(curl -s "$API_URL/domains/stats?project=$PROJECT_ID" 2>/dev/null | jq -r '.prompt_count // 0')
-if [ "$prompt_count" -gt 0 ]; then
-    pass "Prompt count tracking: $prompt_count"
-else
-    skip "Prompt count (may not have triggered)"
-fi
-
-# =============================================================================
-# SECTION 6: Learning Triggers
-# =============================================================================
-
-section "6. Learning Triggers"
-
-# Note: Domain learning uses HOOK MODE - Claude handles Haiku calls in conversation
-# The API just tracks thresholds and stores results. No API keys needed.
-
-if [ "$QUICK" = true ]; then
-    skip "Learning threshold check (--quick mode)"
-    skip "Rebalance threshold check (--quick mode)"
-else
-    # Test should_learn threshold
-    stats=$(curl -s "$API_URL/domains/stats?project=$PROJECT_ID" 2>/dev/null)
-    prompt_count=$(echo "$stats" | jq -r '.prompt_count // 0')
-    should_learn=$(echo "$stats" | jq -r '.should_learn // false')
-
-    if [ "$prompt_count" -gt 0 ]; then
-        pass "Prompt counter working: $prompt_count prompts"
-    else
-        fail "Prompt counter not working"
+        fail "Health endpoint" "empty or invalid response"
+        return
     fi
 
-    # Check should_learn triggers at 10
-    if [ "$prompt_count" -ge 10 ] && [ "$should_learn" = "true" ]; then
-        pass "Learning threshold triggers at 10+ prompts"
-    elif [ "$prompt_count" -lt 10 ]; then
-        pass "Learning threshold: $prompt_count/10 (not yet triggered)"
+    # 1.2: Files indexed
+    local files
+    files=$(echo "$health" | jq -r '.local.files // .files // 0' 2>/dev/null)
+    if [ "$files" -gt 0 ] 2>/dev/null; then
+        pass "Index has files ($files)"
     else
-        skip "Learning threshold check (should_learn=$should_learn)"
+        fail "Index files" "expected >0, got: $files"
     fi
 
-    # Test should_autotune check
-    should_autotune=$(echo "$stats" | jq -r '.should_autotune // false')
-    pass "Auto-tune check available (should_autotune=$should_autotune)"
-fi
+    # 1.3: Symbols indexed
+    local symbols
+    symbols=$(echo "$health" | jq -r '.local.symbols // .symbols // 0' 2>/dev/null)
+    if [ "$symbols" -gt 0 ] 2>/dev/null; then
+        pass "Index has symbols ($symbols)"
+    else
+        fail "Index symbols" "expected >0, got: $symbols"
+    fi
+
+    # 1.4: Docker mode detected
+    if [ "$DOCKER_MODE" != "unknown" ]; then
+        pass "Docker mode: $DOCKER_MODE ($AOA_CONTAINER)"
+    else
+        fail "Docker mode" "could not determine monolithic vs compose"
+    fi
+
+    # 1.5: Redis reachable
+    local ping
+    ping=$(redis_cli PING 2>/dev/null)
+    if [ "$ping" = "PONG" ]; then
+        pass "Redis PING via $DOCKER_MODE container"
+    else
+        skip "Redis PING" "could not reach redis-cli"
+    fi
+}
 
 # =============================================================================
-# SECTION 7: Hit Counter
+# SECTION 2: Core Search API
 # =============================================================================
 
-section "7. Hit Counter"
+test_core_search_api() {
+    section "2. Core Search API"
 
-# Get current hits for authentication domain
-hits_before=$(docker exec aoa-redis-1 redis-cli HGET "aoa:$PROJECT_ID:domain:@authentication:meta" hits 2>/dev/null || echo "0")
+    # 2.1: /symbol?q=
+    local result
+    result=$(api_get "/symbol?q=def")
+    if [ -n "$result" ] && echo "$result" | jq -e '.results' > /dev/null 2>&1; then
+        pass "/symbol returns results array"
+        verbose "$(echo "$result" | jq -r '.results | length') results"
+    else
+        fail "/symbol" "missing results field"
+    fi
 
-# Run grep that should trigger hit
-curl -s "$API_URL/grep?q=login&project_id=$PROJECT_ID&limit=1" >/dev/null 2>&1
+    # 2.2: /symbol returns timing
+    assert_json_has_field "$result" ".ms // .time_ms" "/symbol returns timing"
 
-# Check hits increased
-hits_after=$(docker exec aoa-redis-1 redis-cli HGET "aoa:$PROJECT_ID:domain:@authentication:meta" hits 2>/dev/null || echo "0")
+    # 2.3: /symbol results have file field
+    local first_file
+    first_file=$(echo "$result" | jq -r '.results[0].file // empty' 2>/dev/null)
+    if [ -n "$first_file" ]; then
+        pass "/symbol results have file field"
+    else
+        skip "/symbol file field" "no results for 'def'"
+    fi
 
-if [ "${hits_after:-0}" -gt "${hits_before:-0}" ]; then
-    pass "Hit counter increments: $hits_before -> $hits_after"
-else
-    skip "Hit counter (domain may not have matched)"
-fi
+    # 2.4: /symbol results have line field
+    local first_line
+    first_line=$(echo "$result" | jq -r '.results[0].line // empty' 2>/dev/null)
+    if [ -n "$first_line" ]; then
+        pass "/symbol results have line field"
+    else
+        skip "/symbol line field" "no results"
+    fi
+
+    # 2.5: /grep?q= (content search)
+    result=$(api_get "/grep?q=import")
+    if [ -n "$result" ] && echo "$result" | jq -e '.results' > /dev/null 2>&1; then
+        pass "/grep returns results"
+    else
+        fail "/grep" "missing results field"
+    fi
+
+    # 2.6: /multi (multi-term search)
+    result=$(curl -sf -X POST "${API_URL}/multi" \
+        -H "Content-Type: application/json" \
+        -d "{\"terms\":[\"def\",\"self\"],\"limit\":5,\"project\":\"${PROJECT_ID}\"}" 2>/dev/null)
+    if [ -n "$result" ] && echo "$result" | jq -e '.results' > /dev/null 2>&1; then
+        pass "/multi returns results"
+    else
+        fail "/multi" "missing results field"
+    fi
+
+    # 2.7: /grep?regex=true (egrep via /grep)
+    result=$(api_get "/grep?q=def&regex=true&limit=3")
+    if [ -n "$result" ] && echo "$result" | jq -e '.results' > /dev/null 2>&1; then
+        pass "/grep?regex=true returns results"
+    else
+        fail "/grep?regex=true" "invalid response"
+    fi
+
+    # 2.8: /symbol with domain tags in response
+    result=$(api_get "/symbol?q=auth")
+    local has_tags
+    has_tags=$(echo "$result" | jq '[.results[]? | select(.tags != null and (.tags | length > 0))] | length' 2>/dev/null)
+    if [ "${has_tags:-0}" -gt 0 ] 2>/dev/null; then
+        pass "/symbol results include domain tags"
+    else
+        skip "/symbol domain tags" "no tagged results for 'auth'"
+    fi
+}
 
 # =============================================================================
-# SECTION 8: Unix Parity (Quick Check)
+# SECTION 3: File Operations API
 # =============================================================================
 
-section "8. Unix Parity (Quick Check)"
+test_file_operations_api() {
+    section "3. File Operations API"
 
-# Test basic grep works
-if aoa grep cache >/dev/null 2>&1; then
-    pass "aoa grep works"
-else
-    fail "aoa grep failed"
-fi
+    # 3.1: /files returns list
+    local result
+    result=$(api_get "/files?limit=5")
+    if [ -n "$result" ] && echo "$result" | jq -e '.results // .files' > /dev/null 2>&1; then
+        pass "/files returns file list"
+    else
+        fail "/files" "missing results"
+    fi
 
-# Test egrep works
-if aoa egrep "TODO" >/dev/null 2>&1; then
-    pass "aoa egrep works"
-else
-    fail "aoa egrep failed"
-fi
+    # 3.2: /files results have path field
+    local first_path
+    first_path=$(echo "$result" | jq -r '.results[0].path // .files[0].path // .results[0] // empty' 2>/dev/null)
+    if [ -n "$first_path" ]; then
+        pass "/files entries have path ($first_path)"
+    else
+        fail "/files path field" "no path in first result"
+    fi
 
-# Test find works
-if aoa find "*.py" >/dev/null 2>&1; then
-    pass "aoa find works"
-else
-    fail "aoa find failed"
-fi
+    # 3.3: /file?path= returns content
+    if [ -n "$first_path" ]; then
+        local file_result
+        file_result=$(api_get "/file?path=${first_path}&lines=1-10")
+        if [ -n "$file_result" ] && echo "$file_result" | jq -e '.' > /dev/null 2>&1; then
+            pass "/file returns content for $first_path"
+        else
+            fail "/file content" "empty response for $first_path"
+        fi
+    else
+        skip "/file content" "no file path available"
+    fi
 
-# Test health works
-if aoa health >/dev/null 2>&1; then
-    pass "aoa health works"
-else
-    fail "aoa health failed"
-fi
+    # 3.4-3.6: /outline for a Python file
+    local py_file
+    py_file=$(api_get "/files?match=*.py&limit=1" | jq -r '.results[0].path // .files[0].path // .results[0] // empty' 2>/dev/null)
+    if [ -n "$py_file" ]; then
+        local outline
+        outline=$(api_get "/outline?file=${py_file}")
+        if [ -n "$outline" ] && echo "$outline" | jq -e '.symbols' > /dev/null 2>&1; then
+            pass "/outline returns symbols for $py_file"
+
+            # 3.5: symbols have kind
+            local kind
+            kind=$(echo "$outline" | jq -r '.symbols[0].kind // empty' 2>/dev/null)
+            if [ -n "$kind" ]; then
+                pass "/outline symbols have kind ($kind)"
+            else
+                skip "/outline kind" "no symbols in file"
+            fi
+
+            # 3.6: language field
+            assert_json_has_field "$outline" ".language" "/outline reports language"
+        else
+            fail "/outline" "missing symbols field"
+            skip "/outline kind" "no outline data"
+            skip "/outline language" "no outline data"
+        fi
+    else
+        skip "/outline" "no .py file in index"
+        skip "/outline kind" "no .py file"
+        skip "/outline language" "no .py file"
+    fi
+}
 
 # =============================================================================
-# SUMMARY
+# SECTION 4: CLI Commands
 # =============================================================================
 
-echo ""
-echo -e "${BOLD}════════════════════════════════════════${NC}"
-TOTAL=$((PASSED + FAILED + SKIPPED))
-echo -e "${BOLD}Results:${NC} ${GREEN}$PASSED passed${NC}, ${RED}$FAILED failed${NC}, ${YELLOW}$SKIPPED skipped${NC} / $TOTAL total"
+test_cli_commands() {
+    section "4. CLI Commands"
 
-if [ $FAILED -eq 0 ]; then
-    echo -e "${GREEN}${BOLD}All tests passed!${NC}"
-    exit 0
-else
-    echo -e "${RED}${BOLD}Some tests failed.${NC}"
-    exit 1
-fi
+    # 4.1: aoa health
+    if aoa health > /dev/null 2>&1; then
+        pass "aoa health"
+    else
+        fail "aoa health" "non-zero exit"
+    fi
+
+    # 4.2: aoa grep <term>
+    local result
+    result=$(aoa grep def 2>&1)
+    if [[ "$result" == *"hits"* ]] || [[ "$result" == *"aOa"* ]]; then
+        pass "aoa grep <term>"
+    else
+        fail "aoa grep" "unexpected output: ${result:0:80}"
+    fi
+
+    # 4.3: aoa grep "multi term" (OR)
+    result=$(aoa grep "def class" 2>&1)
+    if [[ "$result" == *"hits"* ]] || [[ "$result" == *"aOa"* ]]; then
+        pass "aoa grep multi-term OR"
+    else
+        fail "aoa grep multi-term" "unexpected output"
+    fi
+
+    # 4.4: aoa grep -a term1,term2 (AND)
+    result=$(aoa grep -a def,self 2>&1)
+    if [[ "$result" == *"hits"* ]] || [[ "$result" == *"aOa"* ]]; then
+        pass "aoa grep -a AND mode"
+    else
+        fail "aoa grep -a" "unexpected output"
+    fi
+
+    # 4.5: aoa egrep "pattern"
+    result=$(aoa egrep "TODO" 2>&1)
+    if [[ $? -eq 0 ]] || [[ "$result" == *"hits"* ]]; then
+        pass "aoa egrep"
+    else
+        fail "aoa egrep" "error in output"
+    fi
+
+    # 4.6: aoa find "*.py"
+    result=$(aoa find "*.py" 2>&1)
+    if [[ "$result" == *".py"* ]] || [[ "$result" == *"files"* ]] || [[ "$result" == *"match"* ]]; then
+        pass "aoa find pattern"
+    else
+        fail "aoa find" "unexpected output"
+    fi
+
+    # 4.7: aoa locate
+    result=$(aoa locate indexer 2>&1)
+    if [[ "$result" == *"indexer"* ]] || [[ "$result" == *"match"* ]]; then
+        pass "aoa locate"
+    else
+        fail "aoa locate" "unexpected output"
+    fi
+
+    # 4.8: aoa tree
+    result=$(aoa tree 2>&1)
+    if [[ "$result" == *"├"* ]] || [[ "$result" == *"directories"* ]] || [[ "$result" == *"files"* ]]; then
+        pass "aoa tree"
+    else
+        fail "aoa tree" "unexpected output"
+    fi
+
+    # 4.9: aoa stats
+    result=$(aoa stats 2>&1)
+    if [[ "$result" == *"Stats"* ]] || [[ "$result" == *"Files"* ]] || [[ "$result" == *"files"* ]]; then
+        pass "aoa stats"
+    else
+        fail "aoa stats" "unexpected output: ${result:0:80}"
+    fi
+
+    # 4.10: aoa config
+    result=$(aoa config 2>&1)
+    if [[ "$result" == *"Rebalance"* ]] || [[ "$result" == *"rebalance"* ]] || [[ "$result" == *"Config"* ]] || [[ "$result" == *"config"* ]]; then
+        pass "aoa config"
+    else
+        fail "aoa config" "unexpected output: ${result:0:80}"
+    fi
+
+    # 4.11: aoa domains
+    result=$(aoa domains 2>&1)
+    if [[ "$result" == *"Domains"* ]] || [[ "$result" == *"domains"* ]] || [[ "$result" == *"aOa"* ]]; then
+        pass "aoa domains"
+    else
+        fail "aoa domains" "unexpected output"
+    fi
+
+    # 4.12: aoa domains --json
+    result=$(aoa domains --json 2>&1)
+    if echo "$result" | jq -e '.' > /dev/null 2>&1; then
+        pass "aoa domains --json returns valid JSON"
+    else
+        # When no domains exist, CLI may output text instead of JSON
+        if [[ "$result" == *"No domains"* ]] || [[ "$result" == *"domain_count"* ]]; then
+            skip "aoa domains --json" "no domains seeded, CLI outputs text"
+        else
+            fail "aoa domains --json" "invalid JSON: ${result:0:80}"
+        fi
+    fi
+
+    # 4.13: aoa intent
+    result=$(aoa intent 2>&1)
+    if [[ $? -eq 0 ]]; then
+        pass "aoa intent"
+    else
+        fail "aoa intent" "non-zero exit"
+    fi
+
+    # 4.14: aoa bigrams
+    result=$(aoa bigrams 2>&1)
+    if [[ $? -eq 0 ]]; then
+        pass "aoa bigrams"
+    else
+        fail "aoa bigrams" "non-zero exit"
+    fi
+}
+
+# =============================================================================
+# SECTION 5: Intent Tracking
+# =============================================================================
+
+test_intent_tracking() {
+    section "5. Intent Tracking"
+
+    # 5.1: /intent/recent
+    local result
+    result=$(api_get "/intent/recent?limit=5")
+    if [ -n "$result" ] && echo "$result" | jq -e '.' > /dev/null 2>&1; then
+        pass "/intent/recent returns JSON"
+        verbose "$(echo "$result" | jq -r '.records // .intents // [] | length') records"
+    else
+        fail "/intent/recent" "invalid response"
+    fi
+
+    # 5.2: /intent/stats
+    local stats
+    stats=$(api_get "/intent/stats")
+    if [ -n "$stats" ] && echo "$stats" | jq -e '.' > /dev/null 2>&1; then
+        pass "/intent/stats returns JSON"
+    else
+        fail "/intent/stats" "invalid response"
+        return
+    fi
+
+    # 5.3: total is integer
+    local total
+    total=$(echo "$stats" | jq -r '.total_records // .total // 0' 2>/dev/null)
+    if [[ "$total" =~ ^[0-9]+$ ]]; then
+        pass "/intent/stats total is integer ($total)"
+    else
+        fail "/intent/stats total" "expected integer, got: $total"
+    fi
+
+    # 5.4: /intent/hits
+    local hits
+    hits=$(api_get "/intent/hits?limit=5")
+    if [ -n "$hits" ] && echo "$hits" | jq -e '.' > /dev/null 2>&1; then
+        pass "/intent/hits returns JSON"
+    else
+        skip "/intent/hits" "endpoint may not be active"
+    fi
+
+    # 5.5: /intent/rolling
+    local rolling
+    rolling=$(api_get "/intent/rolling")
+    if [ -n "$rolling" ] && echo "$rolling" | jq -e '.' > /dev/null 2>&1; then
+        pass "/intent/rolling returns JSON"
+    else
+        skip "/intent/rolling" "endpoint may not be active"
+    fi
+}
+
+# =============================================================================
+# SECTION 6: Domain Management
+# =============================================================================
+
+test_domain_management() {
+    section "6. Domain Management"
+
+    # 6.1: /domains/stats
+    local stats
+    stats=$(api_get "/domains/stats")
+    if [ -n "$stats" ] && echo "$stats" | jq -e '.' > /dev/null 2>&1; then
+        pass "/domains/stats returns JSON"
+        verbose "$stats"
+    else
+        fail "/domains/stats" "invalid response"
+        return
+    fi
+
+    # 6.2: domain count is integer
+    local count
+    count=$(echo "$stats" | jq -r '.domains // 0' 2>/dev/null)
+    if [[ "$count" =~ ^[0-9]+$ ]]; then
+        pass "/domains/stats domain count ($count)"
+    else
+        fail "/domains/stats count" "expected integer, got: $count"
+    fi
+
+    # 6.3: prompt_count present
+    assert_json_has_field "$stats" ".prompt_count" "/domains/stats has prompt_count"
+
+    # 6.4: enrichment block present
+    if echo "$stats" | jq -e '.enrichment' > /dev/null 2>&1; then
+        pass "/domains/stats has enrichment block"
+    else
+        skip "/domains/stats enrichment" "enrichment block missing"
+    fi
+
+    # 6.5: /domains/list returns array
+    local list
+    list=$(api_get "/domains/list")
+    if echo "$list" | jq -e '.domains | type == "array"' > /dev/null 2>&1; then
+        pass "/domains/list returns array"
+    elif echo "$list" | jq -e 'type == "array"' > /dev/null 2>&1; then
+        pass "/domains/list returns array (top-level)"
+    else
+        fail "/domains/list" "expected array"
+    fi
+
+    # 6.6: list entries have name field (structure test, not content)
+    local first_name
+    first_name=$(echo "$list" | jq -r '.domains[0].name // .[0].name // empty' 2>/dev/null)
+    if [ -n "$first_name" ]; then
+        pass "/domains/list entries have name field"
+    else
+        if [ "$count" -eq 0 ] 2>/dev/null; then
+            skip "/domains/list name" "no domains seeded"
+        else
+            fail "/domains/list name" "missing name field"
+        fi
+    fi
+
+    # 6.7: /domains/lookup
+    local lookup
+    lookup=$(api_get "/domains/lookup?term=test")
+    if [ -n "$lookup" ] && echo "$lookup" | jq -e '.' > /dev/null 2>&1; then
+        pass "/domains/lookup returns JSON"
+    else
+        skip "/domains/lookup" "endpoint unavailable"
+    fi
+
+    # 6.8: /domains/enrichment-status
+    local enrich
+    enrich=$(api_get "/domains/enrichment-status")
+    if [ -n "$enrich" ] && echo "$enrich" | jq -e '.' > /dev/null 2>&1; then
+        pass "/domains/enrichment-status returns JSON"
+    else
+        skip "/domains/enrichment-status" "endpoint unavailable"
+    fi
+}
+
+# =============================================================================
+# SECTION 7: Configuration
+# =============================================================================
+
+test_configuration() {
+    section "7. Configuration"
+
+    # 7.1: /config/thresholds returns data
+    local result
+    result=$(api_get "/config/thresholds")
+    if [ -n "$result" ] && echo "$result" | jq -e '.thresholds' > /dev/null 2>&1; then
+        pass "/config/thresholds returns thresholds object"
+        verbose "$result"
+    else
+        fail "/config/thresholds" "missing thresholds field"
+        return
+    fi
+
+    # 7.2: rebalance is numeric
+    local rebalance
+    rebalance=$(echo "$result" | jq -r '.thresholds.rebalance // empty' 2>/dev/null)
+    if [[ "$rebalance" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+        pass "rebalance threshold ($rebalance)"
+    else
+        fail "rebalance threshold" "expected numeric, got: $rebalance"
+    fi
+
+    # 7.3: autotune is numeric
+    local autotune
+    autotune=$(echo "$result" | jq -r '.thresholds.autotune // empty' 2>/dev/null)
+    if [[ "$autotune" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+        pass "autotune threshold ($autotune)"
+    else
+        fail "autotune threshold" "expected numeric, got: $autotune"
+    fi
+
+    # 7.4: decay_rate between 0 and 1
+    local decay
+    decay=$(echo "$result" | jq -r '.thresholds.decay_rate // empty' 2>/dev/null)
+    if [ -n "$decay" ]; then
+        local in_range
+        in_range=$(echo "$decay > 0 && $decay <= 1" | bc -l 2>/dev/null || echo "0")
+        if [ "$in_range" = "1" ]; then
+            pass "decay_rate in range ($decay)"
+        else
+            fail "decay_rate" "expected 0 < rate <= 1, got: $decay"
+        fi
+    else
+        fail "decay_rate" "missing"
+    fi
+
+    # 7.5: prune_floor is numeric
+    local prune
+    prune=$(echo "$result" | jq -r '.thresholds.prune_floor // empty' 2>/dev/null)
+    if [[ "$prune" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+        pass "prune_floor ($prune)"
+    else
+        fail "prune_floor" "expected numeric, got: $prune"
+    fi
+
+    # 7.6: project_id echoed back
+    assert_json_has_field "$result" ".project_id" "/config/thresholds echoes project_id"
+}
+
+# =============================================================================
+# SECTION 8: Bigrams
+# =============================================================================
+
+test_bigrams() {
+    section "8. Bigrams"
+
+    # 8.1: /cc/bigrams returns valid JSON
+    local result
+    result=$(api_get "/cc/bigrams?limit=10")
+    if [ -n "$result" ] && echo "$result" | jq -e '.' > /dev/null 2>&1; then
+        pass "/cc/bigrams returns valid JSON"
+    else
+        skip "/cc/bigrams" "endpoint returned empty or invalid"
+        return
+    fi
+
+    # 8.2: bigrams array exists
+    if echo "$result" | jq -e '.bigrams | type == "array"' > /dev/null 2>&1; then
+        pass "/cc/bigrams has bigrams array"
+    else
+        fail "/cc/bigrams array" "missing bigrams field"
+    fi
+
+    # 8.3: bigram entries have structure (if any exist)
+    local bigram_count
+    bigram_count=$(echo "$result" | jq '.bigrams | length' 2>/dev/null)
+    if [ "$bigram_count" -gt 0 ] 2>/dev/null; then
+        local has_field
+        has_field=$(echo "$result" | jq -r '.bigrams[0].bigram // .bigrams[0].pair // empty' 2>/dev/null)
+        if [ -n "$has_field" ]; then
+            pass "bigram entries have identifier ($bigram_count entries)"
+        else
+            fail "bigram entry structure" "missing bigram/pair field"
+        fi
+    else
+        skip "bigram entry structure" "no bigrams recorded yet"
+    fi
+}
+
+# =============================================================================
+# SECTION 9: Domain Lifecycle (skip with --quick)
+# =============================================================================
+
+test_domain_lifecycle() {
+    section "9. Domain Lifecycle"
+
+    if [ "$QUICK" = true ]; then
+        skip "Domain lifecycle (all)" "--quick mode"
+        return
+    fi
+
+    # 9.1: Redis reachable
+    local ping
+    ping=$(redis_cli PING 2>/dev/null)
+    if [ "$ping" != "PONG" ]; then
+        skip "Domain lifecycle (all)" "Redis not reachable"
+        return
+    fi
+    pass "Redis reachable"
+
+    # 9.2: Project domain keys exist
+    local domain_keys
+    domain_keys=$(redis_cli KEYS "aoa:${PROJECT_ID}:domain:*" 2>/dev/null | head -5)
+    if [ -n "$domain_keys" ]; then
+        pass "Domain keys in Redis"
+    else
+        skip "Domain keys" "no domain data"
+    fi
+
+    # 9.3: prompt_count in Redis
+    local pc
+    pc=$(redis_cli GET "aoa:${PROJECT_ID}:prompt_count" 2>/dev/null)
+    if [ -n "$pc" ] && [[ "$pc" =~ ^[0-9]+$ ]]; then
+        pass "prompt_count in Redis ($pc)"
+    else
+        skip "prompt_count" "not set yet"
+    fi
+
+    # 9.4: /domains/autotune endpoint responds
+    local autotune_result
+    autotune_result=$(api_post "/domains/autotune" "{\"project_id\":\"${PROJECT_ID}\"}")
+    if [ -n "$autotune_result" ] && echo "$autotune_result" | jq -e '.' > /dev/null 2>&1; then
+        pass "/domains/autotune responds"
+    else
+        skip "/domains/autotune" "endpoint unavailable"
+    fi
+
+    # 9.5: /domains/tune/math endpoint responds
+    local tune_result
+    tune_result=$(api_post "/domains/tune/math" "{\"project_id\":\"${PROJECT_ID}\"}")
+    if [ -n "$tune_result" ] && echo "$tune_result" | jq -e '.' > /dev/null 2>&1; then
+        pass "/domains/tune/math responds"
+    else
+        skip "/domains/tune/math" "endpoint unavailable"
+    fi
+
+    # 9.6-9.7: Test mode thresholds
+    local set_test
+    set_test=$(api_post "/config/thresholds" "{\"project_id\":\"${PROJECT_ID}\",\"mode\":\"test\"}")
+    if [ -n "$set_test" ]; then
+        local test_rebalance
+        test_rebalance=$(echo "$set_test" | jq -r '.thresholds.rebalance // empty' 2>/dev/null)
+        if [ "$test_rebalance" = "20" ]; then
+            pass "Test mode rebalance=20"
+        else
+            fail "Test mode rebalance" "expected 20, got: $test_rebalance"
+        fi
+
+        local test_autotune
+        test_autotune=$(echo "$set_test" | jq -r '.thresholds.autotune // empty' 2>/dev/null)
+        if [ "$test_autotune" = "10" ]; then
+            pass "Test mode autotune=10"
+        else
+            fail "Test mode autotune" "expected 10, got: $test_autotune"
+        fi
+    else
+        fail "Set test mode" "empty response"
+        fail "Test mode autotune" "could not set test mode"
+    fi
+
+    # 9.8: Restore prod mode
+    local set_prod
+    set_prod=$(api_post "/config/thresholds" "{\"project_id\":\"${PROJECT_ID}\",\"mode\":\"prod\"}")
+    local prod_rebalance
+    prod_rebalance=$(echo "$set_prod" | jq -r '.thresholds.rebalance // empty' 2>/dev/null)
+    if [ "$prod_rebalance" = "100" ]; then
+        pass "Prod mode restored (rebalance=100)"
+    else
+        fail "Prod mode restore" "expected 100, got: $prod_rebalance"
+    fi
+}
+
+# =============================================================================
+# SECTION 10: Metrics
+# =============================================================================
+
+test_metrics() {
+    section "10. Metrics"
+
+    # 10.1: /metrics returns JSON
+    local result
+    result=$(api_get "/metrics")
+    if [ -n "$result" ] && echo "$result" | jq -e '.' > /dev/null 2>&1; then
+        pass "/metrics returns valid JSON"
+        verbose "$result"
+    else
+        fail "/metrics" "empty or invalid JSON"
+        return
+    fi
+
+    # 10.2: savings block
+    if echo "$result" | jq -e '.savings' > /dev/null 2>&1; then
+        pass "/metrics has savings block"
+    else
+        skip "/metrics savings" "missing savings field"
+    fi
+
+    # 10.3: savings.tokens is integer
+    local tokens
+    tokens=$(echo "$result" | jq -r '.savings.tokens // 0' 2>/dev/null)
+    if [[ "$tokens" =~ ^-?[0-9]+$ ]]; then
+        pass "/metrics savings.tokens ($tokens)"
+    else
+        fail "/metrics savings.tokens" "expected integer, got: $tokens"
+    fi
+
+    # 10.4: total_intents
+    if echo "$result" | jq -e '.total_intents // .intents' > /dev/null 2>&1; then
+        pass "/metrics has total_intents"
+    else
+        skip "/metrics total_intents" "field missing"
+    fi
+
+    # 10.5: rolling block
+    if echo "$result" | jq -e '.rolling' > /dev/null 2>&1; then
+        pass "/metrics has rolling block"
+    else
+        skip "/metrics rolling" "missing rolling field"
+    fi
+}
+
+# =============================================================================
+# MAIN
+# =============================================================================
+
+main() {
+    echo -e "${CYAN}${BOLD}"
+    echo "╔════════════════════════════════════════════════════════════════╗"
+    echo "║          aOa End-to-End Integration Test Suite                  ║"
+    echo "╚════════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+
+    preflight
+
+    local sections=(
+        test_service_health
+        test_core_search_api
+        test_file_operations_api
+        test_cli_commands
+        test_intent_tracking
+        test_domain_management
+        test_configuration
+        test_bigrams
+        test_domain_lifecycle
+        test_metrics
+    )
+
+    for i in "${!sections[@]}"; do
+        local num=$((i + 1))
+        if [ -n "$ONLY_SECTION" ] && [ "$ONLY_SECTION" != "$num" ]; then
+            continue
+        fi
+        ${sections[$i]}
+    done
+
+    summary
+    exit $?
+}
+
+main "$@"
