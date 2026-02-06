@@ -27,7 +27,7 @@ PREFIX_TRANSITION = "aoa:transition"
 class SessionLogParser:
     """Parse Claude session logs to extract file access patterns."""
 
-    def __init__(self, project_path: str = "/home/corey/aOa"):
+    def __init__(self, project_path: str = None):
         """
         Initialize parser for a project.
 
@@ -36,7 +36,10 @@ class SessionLogParser:
         """
         import os
 
-        # Convert path to slug: /home/corey/aOa -> -home-corey-aOa
+        if not project_path:
+            project_path = os.environ.get('AOA_PROJECT_PATH', '/app')
+
+        # Convert path to slug: /home/user/project -> -home-user-project
         self.project_slug = project_path.replace('/', '-')
         self.project_path = project_path
 
@@ -166,7 +169,7 @@ class SessionLogParser:
                     writes.append(file_path)
         return writes
 
-    def normalize_path(self, file_path: str, project_root: str = "/home/corey/aOa") -> str:
+    def normalize_path(self, file_path: str, project_root: str = None) -> str:
         """
         Normalize file path to relative project path.
 
@@ -177,6 +180,8 @@ class SessionLogParser:
         Returns:
             Relative path from project root, or original if outside project
         """
+        if not project_root:
+            project_root = self.project_path
         if file_path.startswith(project_root):
             rel = file_path[len(project_root):]
             if rel.startswith('/'):
@@ -572,7 +577,7 @@ def main():
     import os
 
     parser = argparse.ArgumentParser(description='Parse Claude session logs')
-    parser.add_argument('--project', default='/home/corey/aOa',
+    parser.add_argument('--project', default=None,
                         help='Project path to analyze')
     parser.add_argument('--stats', action='store_true',
                         help='Show statistics')

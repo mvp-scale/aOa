@@ -20,7 +20,6 @@ COPY jobs /app/jobs
 COPY session /app/session
 # Config is mounted via docker-compose: ./config:/app/config
 
-ENV CODEBASE_ROOT=/codebase
 ENV PORT=9999
 
 EXPOSE 9999

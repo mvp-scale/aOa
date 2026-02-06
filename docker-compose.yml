@@ -61,7 +61,6 @@ services:
       - ./config:/app/config:ro           # Pattern library for intent inference
       - ${PROJECTS_ROOT}:/userhome:ro     # User projects (from .env)
     environment:
-      - CODEBASE_ROOT=/codebase
       - REPOS_ROOT=/repos
       - CONFIG_DIR=/config
       - REDIS_URL=redis://redis:6379/0

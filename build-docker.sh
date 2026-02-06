@@ -96,7 +96,7 @@ build_unified() {
     fi
 
     run_cmd+=" -e USER_HOME=${PROJECTS_ROOT}"
-    run_cmd+=" -e CODEBASE_ROOT=/codebase"
+    run_cmd+=" -e CONFIG_DIR=/config"
     run_cmd+=" -e AOA_CONTENT_CACHE_MB=${AOA_CONTENT_CACHE_MB:-500}"
     run_cmd+=" --restart unless-stopped"
     run_cmd+=" aoa"

@@ -8,7 +8,7 @@ Architecture:
   - REPO indexes: Knowledge repos (only queried explicitly)
 
 Usage:
-    CODEBASE_ROOT=/path/to/code REPOS_ROOT=/path/to/repos python indexer.py
+    CONFIG_DIR=/config REPOS_ROOT=/repos python indexer.py
 """
 
 import hashlib
@@ -2314,15 +2314,12 @@ class CodebaseIndex:
 # ============================================================================
 
 class IndexManager:
-    """Manages multiple isolated indexes: local project_id + knowledge repos.
+    """Manages multiple isolated indexes: registered projects + knowledge repos.
 
-    Supports two modes:
-    - Legacy mode: Single local index from CODEBASE_ROOT
-    - Global mode: Multiple project_id indexes from /config/projects.json
+    Projects are registered via /config/projects.json and indexed from /userhome mounts.
     """
 
-    def __init__(self, local_root: str, repos_root: str, config_dir: str = None, indexes_dir: str = None):
-        self.local_root = Path(local_root).resolve() if local_root else None
+    def __init__(self, repos_root: str, config_dir: str, indexes_dir: str = None):
         self.repos_root = Path(repos_root).resolve()
         self.config_dir = Path(config_dir) if config_dir else None
         self.indexes_dir = Path(indexes_dir) if indexes_dir else None
@@ -2331,16 +2328,11 @@ class IndexManager:
         # Create repos directory if needed
         self.repos_root.mkdir(parents=True, exist_ok=True)
 
-        # Determine mode
-        self.global_mode = self.config_dir is not None and (self.config_dir / 'projects.json').exists()
-
-        # Local index (legacy mode - your project_id)
-        self.local: CodebaseIndex | None = None
-        if self.local_root and self.local_root.exists():
-            self.local = CodebaseIndex(str(self.local_root), name='local')
-
-        # Project indexes (global mode - multiple projects)
+        # Project indexes (registered projects from projects.json)
         self.projects: dict[str, CodebaseIndex] = {}
+
+        # Project metadata: project_id -> {host_path, container_path, name}
+        self.project_meta: dict[str, dict] = {}
 
         # Repo indexes (knowledge repos)
         self.repos: dict[str, CodebaseIndex] = {}
@@ -2353,41 +2345,39 @@ class IndexManager:
     def get_local(self, project_id: str = None) -> CodebaseIndex | None:
         """Get the appropriate index for a query.
 
-        In global mode, returns the project_id index if project_id is provided.
-        In legacy mode, returns the single local index.
-
-        IMPORTANT: In global mode, if project_id is provided but not found,
-        returns None to prevent cross-project_id data leakage.
-        In legacy mode, always falls back to the single local index.
+        Returns the project index matching project_id, or the first registered
+        project if no project_id is specified.
         """
         if project_id:
-            # Project ID provided - check registered projects first
             if project_id in self.projects:
                 return self.projects[project_id]
-            # In legacy mode (single index), fall back to local
-            # This is safe because there's only one index anyway
-            if self.local:
-                return self.local
-            # In global mode, don't fall back to wrong index
             return None
 
-        # No project_id ID - legacy mode fallback
-        if self.local:
-            return self.local
-        # Return first project_id if available (legacy compatibility)
+        # No project_id - return first registered project
         if self.projects:
             return next(iter(self.projects.values()))
         return None
 
-    def init_local(self):
-        """Initialize and scan local index (legacy mode)."""
-        if self.local:
-            print(f"Initializing local index: {self.local_root}")
-            self.local.full_scan()
-            self._start_watcher('local', self.local)
-        elif self.global_mode:
-            print("Global mode: No single local index, using project_id indexes")
-            self._load_projects()
+    def get_project_path(self, project_id: str = None, kind: str = 'host') -> str | None:
+        """Get a project's path from in-memory metadata.
+
+        Args:
+            project_id: Specific project, or None for first registered.
+            kind: 'host' for host filesystem path, 'container' for container path.
+        """
+        meta = None
+        if project_id and project_id in self.project_meta:
+            meta = self.project_meta[project_id]
+        elif self.project_meta:
+            meta = next(iter(self.project_meta.values()))
+
+        if meta:
+            return meta['host_path'] if kind == 'host' else meta['container_path']
+        return None
+
+    def init_projects(self):
+        """Initialize indexes for all registered projects."""
+        self._load_projects()
 
     def _load_projects(self):
         """Load all registered projects from config."""
@@ -2425,6 +2415,11 @@ class IndexManager:
             idx = CodebaseIndex(container_path, name=name)
             idx.full_scan()
             self.projects[project_id] = idx
+            self.project_meta[project_id] = {
+                'host_path': path,
+                'container_path': container_path,
+                'name': name,
+            }
             self._start_watcher(f"project_id:{project_id}", idx)
             print(f"    -> {len(idx.files)} files indexed")
             return idx
@@ -2458,6 +2453,7 @@ class IndexManager:
             # Remove from index
             if project_id in self.projects:
                 del self.projects[project_id]
+                self.project_meta.pop(project_id, None)
                 return True, "Project unregistered"
             else:
                 return False, "Project not found"
@@ -4344,9 +4340,13 @@ def infer_patterns():
     # Load project-domains.json (v2 format)
     # GL-084: Keywords in terms enable semantic matching
     project_paths = [
-        Path(os.environ.get('CODEBASE_ROOT', '.')) / '.aoa' / 'project-domains.json',
         Path('/app/.aoa/project-domains.json'),  # Docker mounted
     ]
+    # Use IndexManager's in-memory metadata for container path
+    if manager:
+        container_path = manager.get_project_path(kind='container')
+        if container_path:
+            project_paths.insert(0, Path(container_path) / '.aoa' / 'project-domains.json')
 
     # Build lookup tables from v2 format:
     # keyword -> term_name (for #term tagging)
@@ -5316,12 +5316,33 @@ def intent_stats():
     return jsonify(intent_index.get_stats(project_id))
 
 
+def _resolve_project_path(request_path: str = None, project_id: str = None) -> str:
+    """Resolve the HOST project path for session file lookups.
+
+    In-memory lookup from IndexManager, no disk I/O.
+
+    Args:
+        request_path: Explicit path from request param (wins if set).
+        project_id: Look up a specific project, or first registered.
+    """
+    if request_path:
+        return request_path
+
+    # In-memory lookup from IndexManager
+    if manager:
+        path = manager.get_project_path(project_id, kind='host')
+        if path:
+            return path
+
+    return '/app'
+
+
 @app.route('/cc/prompts')
 def cc_prompts():
     """Get recent user prompts from Claude Code session history.
 
     Query params:
-        project_path: Project directory (default: CODEBASE_ROOT)
+        project_path: Project directory
         limit: Number of prompts (default: 25)
 
     Returns clean user prompts with system-generated content stripped.
@@ -5336,7 +5357,7 @@ def cc_prompts():
 
     try:
         limit = int(request.args.get('limit', 25))
-        project_path = request.args.get('project_path', os.environ.get('CODEBASE_ROOT', '/app'))
+        project_path = _resolve_project_path(request.args.get('project_path'))
 
         metrics = SessionMetrics(project_path)
         prompts = metrics.get_prompts(limit=limit)
@@ -5358,7 +5379,7 @@ def cc_conversation():
     """Get conversation text since last scrape: prompts + thinking + output.
 
     Query params:
-        project_path: Project directory (default: CODEBASE_ROOT)
+        project_path: Project directory (from projects.json)
         since: ISO timestamp - only return content after this time (default: all)
         limit: Max items to return (default: 100)
 
@@ -5380,15 +5401,8 @@ def cc_conversation():
         limit = int(request.args.get('limit', 100))
         since = request.args.get('since', '')  # ISO timestamp filter
 
-        # Get HOST project path from /config/home.json (for session path encoding)
-        project_path = request.args.get('project_path')
-        if not project_path:
-            try:
-                with open('/codebase/.aoa/home.json') as f:
-                    home_data = json.load(f)
-                    project_path = home_data.get('project_root', os.environ.get('CODEBASE_ROOT', '/app'))
-            except (FileNotFoundError, json.JSONDecodeError):
-                project_path = os.environ.get('CODEBASE_ROOT', '/app')
+        # Get HOST project path for session path encoding
+        project_path = _resolve_project_path(request.args.get('project_path'))
 
         metrics = SessionMetrics(project_path)
         texts = []
@@ -5466,7 +5480,7 @@ def cc_sessions():
     """Get per-session metrics for 'aoa cc sessions' view.
 
     Query params:
-        project_path: Project directory (default: CODEBASE_ROOT)
+        project_path: Project directory (from projects.json)
         limit: Number of sessions (default: 10)
 
     Returns session summaries with tokens, velocity, model counts, tool counts.
@@ -5481,7 +5495,7 @@ def cc_sessions():
 
     try:
         limit = int(request.args.get('limit', 10))
-        project_path = request.args.get('project_path', os.environ.get('CODEBASE_ROOT', '/app'))
+        project_path = _resolve_project_path(request.args.get('project_path'))
 
         metrics = SessionMetrics(project_path)
         sessions = metrics.get_sessions_summary(limit=limit)
@@ -5500,7 +5514,7 @@ def cc_stats():
     """Get aggregated stats for 'aoa cc stats' view.
 
     Query params:
-        project_path: Project directory (default: CODEBASE_ROOT)
+        project_path: Project directory (from projects.json)
 
     Returns stats broken down by today, 7d, 30d periods.
     """
@@ -5513,7 +5527,7 @@ def cc_stats():
             return jsonify({'error': 'SessionMetrics not available', 'periods': {}, 'model_distribution': {}})
 
     try:
-        project_path = request.args.get('project_path', os.environ.get('CODEBASE_ROOT', '/app'))
+        project_path = _resolve_project_path(request.args.get('project_path'))
 
         metrics = SessionMetrics(project_path)
         stats = metrics.get_stats()
@@ -6160,7 +6174,7 @@ def get_token_metrics():
         import os
 
         from ranking.session_parser import SessionLogParser
-        project_path = os.environ.get('CODEBASE_ROOT', '/home/corey/aOa')
+        project_path = _resolve_project_path()
 
         parser = SessionLogParser(project_path)
         token_stats = parser.get_token_usage()
@@ -6568,7 +6582,7 @@ def context_search():
 
     # Step 4: Get transition predictions if trigger file provided
     transition_preds = {}
-    host_root = '/home/corey/aOa'
+    host_root = _resolve_project_path()
     if trigger_file and SESSION_PARSER_AVAILABLE:
         try:
             trans_results = SessionLogParser.predict_next(scorer.redis, trigger_file, limit=10)
@@ -6806,8 +6820,9 @@ def get_memory():
             try:
                 # Get relative path for transition lookup
                 rel_path = focus_file
-                if rel_path.startswith('/home/corey/aOa/'):
-                    rel_path = rel_path[len('/home/corey/aOa/'):]
+                _proj_root = _resolve_project_path()
+                if _proj_root and rel_path.startswith(_proj_root + '/'):
+                    rel_path = rel_path[len(_proj_root) + 1:]
 
                 preds = SessionLogParser.predict_next(scorer.redis, rel_path, limit=3)
                 for pred_file, prob in preds:
@@ -7137,21 +7152,14 @@ def jobs_clear():
 def main():
     global manager, intent_index, scorer, tuner
 
-    codebase_root = os.environ.get('CODEBASE_ROOT', '')
     repos_root = os.environ.get('REPOS_ROOT', './repos')
     config_dir = os.environ.get('CONFIG_DIR', '/config')
     indexes_dir = os.environ.get('INDEXES_DIR', '/indexes')
     port = int(os.environ.get('PORT', 9999))
 
-    # Detect global mode
-    global_mode = not codebase_root and Path(config_dir).exists()
-
     print("=" * 60)
-    print("aOa Index Service - Multi-Index Architecture")
-    if global_mode:
-        print("Mode: GLOBAL (multi-project_id)")
-    else:
-        print("Mode: LEGACY (single project_id)")
+    print("aOa Index Service")
+    print(f"Config: {config_dir}")
     print("=" * 60)
 
     # Initialize ranking scorer and weight tuner FIRST (need Redis for intent index)
@@ -7179,31 +7187,26 @@ def main():
     else:
         print("Intent index initialized (in-memory only)")
 
-    if global_mode:
-        print(f"Config directory: {config_dir}")
-        print(f"Indexes directory: {indexes_dir}")
-    else:
-        print(f"Local codebase: {codebase_root}")
     print(f"Repos directory: {repos_root}")
     print()
 
     # Create index manager
     manager = IndexManager(
-        codebase_root if codebase_root else None,
         repos_root,
-        config_dir if global_mode else None,
-        indexes_dir if global_mode else None
+        config_dir,
+        indexes_dir
     )
 
-    # Initialize indexes
-    manager.init_local()
+    # Initialize project indexes from projects.json
+    manager.init_projects()
     manager.init_repos()
 
     print()
-    if manager.local:
-        print(f"Local: {len(manager.local.files)} files, {len(manager.local.inverted_index)} symbols")
     if manager.projects:
-        print(f"Projects: {len(manager.projects)} project_id indexes loaded")
+        for pid, idx in manager.projects.items():
+            print(f"Project {idx.name}: {len(idx.files)} files, {len(idx.inverted_index)} symbols")
+    else:
+        print("No projects registered (run 'aoa init' in your project)")
     print(f"Repos: {len(manager.repos)} knowledge repos loaded")
     print()
 

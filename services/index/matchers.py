@@ -55,9 +55,19 @@ def _load_pattern_library():
 
     # GL-084: Only project-domains.json - no universal fallback
     project_paths = [
-        Path(os.environ.get('CODEBASE_ROOT', '.')) / '.aoa' / 'project-domains.json',
         Path('/app/.aoa/project-domains.json'),  # Docker mounted
     ]
+    # Add paths from registered projects (container paths via /userhome)
+    try:
+        config_dir = os.environ.get('CONFIG_DIR', '/config')
+        pf = Path(config_dir) / 'projects.json'
+        if pf.exists():
+            user_home = os.environ.get('USER_HOME', '/home')
+            for proj in json.loads(pf.read_text()):
+                container_path = proj['path'].replace(user_home, '/userhome')
+                project_paths.insert(0, Path(container_path) / '.aoa' / 'project-domains.json')
+    except Exception:
+        pass
 
     domains_file = None
     for path in project_paths:

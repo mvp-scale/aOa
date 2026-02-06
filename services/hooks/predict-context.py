@@ -103,7 +103,7 @@ def format_context(files: list, keywords: list) -> str:
         return ""
 
     # Get project root for relative paths
-    project_root = os.environ.get('CLAUDE_PROJECT_DIR', '/home/corey/aOa')
+    project_root = os.environ.get('CLAUDE_PROJECT_DIR', os.getcwd())
 
     def rel_path(path):
         if path.startswith(project_root):

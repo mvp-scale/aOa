@@ -931,7 +931,7 @@ else
         -v "${CLAUDE_SESSIONS}:/claude-sessions:ro" \
         -e "CLAUDE_SESSIONS=/claude-sessions" \
         -e "USER_HOME=${PROJECTS_ROOT}" \
-        -e "CODEBASE_ROOT=/codebase" \
+        -e "CONFIG_DIR=/config" \
         -e "AOA_CONTENT_CACHE_MB=${AOA_CONTENT_CACHE_MB:-500}" \
         --restart unless-stopped \
         aoa > /dev/null
