@@ -610,10 +610,12 @@ def format_search_response(
                 if domain:
                     seen_domains.add(domain if domain.startswith('@') else f"@{domain}")
 
-            # Collect domains for each term
+            # Collect domains for each term (and capture term→domain pairs)
+            term_domains = []
             for term in seen_terms:
                 for domain_name in learner.get_domains_for_term(term):
                     seen_domains.add(domain_name)
+                    term_domains.append((term, domain_name))
 
             # Build keyword_terms pairs: query terms × matched result terms
             keyword_terms = []
@@ -629,6 +631,7 @@ def format_search_response(
                 keyword_terms=keyword_terms if keyword_terms else None,
                 terms=list(seen_terms) if seen_terms and not keyword_terms else None,
                 domains=list(seen_domains) if seen_domains else None,
+                term_domains=term_domains if term_domains else None,
             )
 
         except Exception as e:
@@ -5178,6 +5181,7 @@ def record_intent():
                 # Map resolved symbol names to domain terms
                 keyword_terms = []
                 observe_domains = set()
+                term_domains = []
 
                 for loc in locations:
                     symbol_name = loc.get('symbol', '').lower()
@@ -5189,6 +5193,7 @@ def record_intent():
                         for domain in domains_for_sym:
                             keyword_terms.append((symbol_name, symbol_name))
                             observe_domains.add(domain)
+                            term_domains.append((symbol_name, domain))
                     # Also check parent (class name)
                     parent = loc.get('parent', '')
                     if parent and len(parent) >= 2:
@@ -5196,12 +5201,15 @@ def record_intent():
                         parent_domains = learner.get_domains_for_term(parent_lower)
                         if parent_domains:
                             keyword_terms.append((parent_lower, parent_lower))
-                            observe_domains.update(parent_domains)
+                            for domain in parent_domains:
+                                observe_domains.add(domain)
+                                term_domains.append((parent_lower, domain))
 
                 if keyword_terms or observe_domains:
                     learner.observe(
                         keyword_terms=keyword_terms if keyword_terms else None,
                         domains=list(observe_domains) if observe_domains else None,
+                        term_domains=term_domains if term_domains else None,
                     )
         except Exception:
             pass  # Don't block intent recording

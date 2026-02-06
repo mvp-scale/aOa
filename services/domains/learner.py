@@ -72,6 +72,7 @@ class DomainLearner:
     DECAY_RATE = 0.90         # 10% decay per autotune cycle
     PRUNE_FLOOR = 0.3         # Remove context-tier domains with hits below this
     PROMOTION_MIN_RATIO = 0.5 # Minimum cohit ratio (50%) for keyword→term assignment
+    DEDUP_MIN_TOTAL = 100     # Minimum total cohits before dedup acts on a duplicate
 
     # Domain structure
     CORE_DOMAINS_MAX = 24     # Max core tier domains
@@ -905,7 +906,7 @@ Return JSON only:
     # S78-O1: Unified Observer Pattern
     # =========================================================================
 
-    def observe(self, keywords=None, terms=None, domains=None, keyword_terms=None) -> dict:
+    def observe(self, keywords=None, terms=None, domains=None, keyword_terms=None, term_domains=None) -> dict:
         """
         Unified observer for all signal paths. Single Redis pipeline.
 
@@ -915,16 +916,19 @@ Return JSON only:
             domains: List of domain names to increment domain hits/total_hits.
             keyword_terms: List of (keyword, term) pairs. Each pair increments
                           keyword_hits, term_hits, AND cohit:kw_term together.
+            term_domains: List of (term, domain) pairs. Each pair increments
+                          cohit:term_domain for competitive dedup.
 
         Returns:
-            Dict with counts: {keywords: N, terms: N, domains: N, cohits: N}
+            Dict with counts: {keywords: N, terms: N, domains: N, cohits: N, term_domain_cohits: N}
         """
-        result = {'keywords': 0, 'terms': 0, 'domains': 0, 'cohits': 0}
+        result = {'keywords': 0, 'terms': 0, 'domains': 0, 'cohits': 0, 'term_domain_cohits': 0}
         pipe = self.redis.client.pipeline()
 
         keyword_hits_key = self._key("keyword_hits")
         term_hits_key = self._key("term_hits")
         kw_term_key = self._key("cohit:kw_term")
+        term_domain_key = self._key("cohit:term_domain")
         prompt_count = self.get_prompt_count()
 
         # Keyword-term pairs: increment keyword_hits + term_hits + cohit
@@ -970,12 +974,23 @@ Return JSON only:
                 pipe.hset(meta_key, "last_hit_at", prompt_count)
                 result['domains'] += 1
 
+        # Term-domain cohit pairs: for competitive dedup (DD-01)
+        if term_domains:
+            for term, domain in term_domains:
+                if not term or not domain or len(term) < 2:
+                    continue
+                term_lower = term.lower()
+                name = domain if domain.startswith("@") else f"@{domain}"
+                pipe.hincrby(term_domain_key, f"{term_lower}:{name}", 1)
+                result['term_domain_cohits'] += 1
+
         if any(result.values()):
             pipe.execute()
 
         if os.environ.get("AOA_DEBUG") == "1":
             print(f"[OBSERVE] kw={result['keywords']} terms={result['terms']} "
-                  f"domains={result['domains']} cohits={result['cohits']}", flush=True)
+                  f"domains={result['domains']} cohits={result['cohits']} "
+                  f"td_cohits={result['term_domain_cohits']}", flush=True)
 
         return result
 
@@ -1495,6 +1510,99 @@ Output ONLY the JSON array, no explanation."""
             "term_domain_pairs": self.redis.client.hlen(term_domain_key)
         }
 
+    # DD-02: Competitive dedup via Lua script
+    # One script, works on both cohit:kw_term and cohit:term_domain.
+    # Format: hash entries are "entity:container" -> count
+    # Returns only dupes with total >= threshold, winner + losers.
+    DEDUP_LUA = """
+    local hash_key = KEYS[1]
+    local min_total = tonumber(ARGV[1])
+
+    local entries = redis.call('HGETALL', hash_key)
+    if #entries == 0 then return '[]' end
+
+    -- Group by entity (left side of colon)
+    local by_entity = {}
+    for i = 1, #entries, 2 do
+        local pair = entries[i]
+        local count = tonumber(entries[i+1])
+        local sep = string.find(pair, ':', 1, true)
+        if sep then
+            local entity = string.sub(pair, 1, sep - 1)
+            local container = string.sub(pair, sep + 1)
+            if not by_entity[entity] then
+                by_entity[entity] = {}
+            end
+            table.insert(by_entity[entity], {container, count})
+        end
+    end
+
+    -- Filter to dupes with total >= threshold, pick winner
+    local results = {}
+    for entity, containers in pairs(by_entity) do
+        if #containers >= 2 then
+            local total = 0
+            for _, c in ipairs(containers) do
+                total = total + c[2]
+            end
+            if total >= min_total then
+                -- Sort descending by count, first = winner
+                table.sort(containers, function(a, b) return a[2] > b[2] end)
+                local winner = containers[1][1]
+                local losers = {}
+                for j = 2, #containers do
+                    table.insert(losers, containers[j][1] .. '=' .. containers[j][2])
+                end
+                table.insert(results, entity .. '|' .. winner .. '=' .. containers[1][2] .. '|' .. table.concat(losers, ','))
+            end
+        end
+    end
+
+    return table.concat(results, '\\n')
+    """
+
+    def find_cohit_dupes(self, cohit_type: str) -> list[dict]:
+        """
+        DD-02: Find duplicate entities in a cohit hash using Lua.
+
+        Args:
+            cohit_type: "kw_term" or "term_domain"
+
+        Returns:
+            List of {entity, winner, losers: [{container, count}...], winner_count}
+        """
+        cohit_key = self._key(f"cohit:{cohit_type}")
+        raw = self.redis.client.eval(self.DEDUP_LUA, 1, cohit_key, self.DEDUP_MIN_TOTAL)
+
+        if not raw:
+            return []
+
+        raw_str = raw.decode() if isinstance(raw, bytes) else raw
+        if not raw_str or raw_str == '[]':
+            return []
+
+        results = []
+        for line in raw_str.strip().split('\n'):
+            parts = line.split('|')
+            if len(parts) < 3:
+                continue
+            entity = parts[0]
+            winner_part = parts[1].split('=')
+            winner = winner_part[0]
+            winner_count = int(winner_part[1])
+            losers = []
+            for loser_str in parts[2].split(','):
+                if '=' in loser_str:
+                    name, count = loser_str.rsplit('=', 1)
+                    losers.append({'container': name, 'count': int(count)})
+            results.append({
+                'entity': entity,
+                'winner': winner,
+                'winner_count': winner_count,
+                'losers': losers,
+            })
+        return results
+
     # =========================================================================
     # Keyword Tracking (GL-083 - Every-25 Rebalance)
     # =========================================================================
@@ -1980,6 +2088,42 @@ Return JSON:
             summary['decayed'] += 1
 
         # =====================================================================
+        # DD-03: Competitive Cohit Dedup (Session 82)
+        # Remove duplicate keywords/terms using cohit signal.
+        # Runs after decay so counts are fresh, before displacement.
+        # =====================================================================
+
+        summary['kw_deduped'] = 0
+        summary['term_deduped'] = 0
+
+        # 6b. Keyword-level dedup: keyword in multiple terms → winner keeps it
+        kw_dupes = self.find_cohit_dupes("kw_term")
+        for dupe in kw_dupes:
+            keyword = dupe['entity']
+            for loser in dupe['losers']:
+                loser_term = loser['container']
+                keywords_key = self._term_key(loser_term, "keywords")
+                self.redis.client.srem(keywords_key, keyword)
+                summary['kw_deduped'] += 1
+
+        # 6c. Term-level dedup: term in multiple domains → winner keeps it
+        td_dupes = self.find_cohit_dupes("term_domain")
+        for dupe in td_dupes:
+            term = dupe['entity']
+            winner_domain = dupe['winner']
+            for loser in dupe['losers']:
+                loser_domain = loser['container']
+                terms_key = self._domain_key(loser_domain, "terms")
+                self.redis.client.srem(terms_key, term)
+                summary['term_deduped'] += 1
+            # Update pointer to winner
+            term_ptr_key = self._key(f"term:{term}:domain")
+            self.redis.client.set(term_ptr_key, winner_domain)
+
+        if summary['kw_deduped'] > 0 or summary['term_deduped'] > 0:
+            print(f"[DD-03] Dedup: keywords={summary['kw_deduped']}, terms={summary['term_deduped']}", flush=True)
+
+        # =====================================================================
         # CD-01: Competitive Displacement (Session 69)
         # Replace threshold-based promotion/demotion with ranking
         # Top 24 by hits = core, rest = context or removed
@@ -2097,6 +2241,23 @@ Return JSON:
                 self.redis.client.hset(cohit_key, pair_key, new_count)
                 summary['cohits_decayed'] += 1
 
+        # DD-01: Cohit term_domain decay (mirrors kw_term decay above)
+        summary['td_cohits_decayed'] = 0
+        summary['td_cohits_pruned'] = 0
+
+        td_cohit_key = self._key("cohit:term_domain")
+        td_cohits = self.redis.client.hgetall(td_cohit_key)
+        for pair, count in td_cohits.items():
+            pair_key = pair.decode() if isinstance(pair, bytes) else pair
+            count_val = float(count.decode() if isinstance(count, bytes) else count)
+            new_count = int(count_val * self.DECAY_RATE)
+            if new_count <= 0:
+                self.redis.client.hdel(td_cohit_key, pair_key)
+                summary['td_cohits_pruned'] += 1
+            else:
+                self.redis.client.hset(td_cohit_key, pair_key, new_count)
+                summary['td_cohits_decayed'] += 1
+
         # =====================================================================
         # S79-F6: Keyword noise filter (blocklist keywords > threshold)
         # Must run BEFORE decay so it sees raw hit counts
@@ -2155,6 +2316,7 @@ Return JSON:
 
         if summary['cohits_decayed'] > 0 or summary['keywords_decayed'] > 0 or summary['keywords_blocklisted'] > 0:
             print(f"[S78] Decay: cohits={summary['cohits_decayed']}/{summary['cohits_pruned']}, "
+                  f"td_cohits={summary['td_cohits_decayed']}/{summary['td_cohits_pruned']}, "
                   f"kw={summary['keywords_decayed']}/{summary['keywords_pruned']}, "
                   f"terms={summary['terms_decayed']}/{summary['terms_pruned']}, "
                   f"blocklisted={summary['keywords_blocklisted']}", flush=True)
