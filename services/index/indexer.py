@@ -503,8 +503,8 @@ def enrich_result(
             # Find matching domain and tags with eligibility filter
             match_result = matcher.find_tags(content, file_accessed)
             top_domain = match_result.get("domain")  # e.g., "@search"
-            keyword_tags = match_result.get("tags", [])  # e.g., ["#indexing", "#query"]
-            term_tags = keyword_tags  # Already in #term format
+            keyword_tags = match_result.get("tags", [])  # e.g., ["indexing", "query"]
+            term_tags = keyword_tags  # Raw terms; CLI adds # prefix at display time
         elif SEMANTIC_PATTERNS:
             # Legacy fallback: file-based patterns
             import re

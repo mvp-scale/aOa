@@ -44,11 +44,13 @@ run_suite() {
 
     echo "$output"
 
-    # Parse results from output (look for "Passed:  N" pattern)
+    # Parse results from output (strip ANSI codes first)
+    local clean
+    clean=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')
     local p f s
-    p=$(echo "$output" | grep -oE 'Passed:\s+[0-9]+' | grep -oE '[0-9]+' || echo "0")
-    f=$(echo "$output" | grep -oE 'Failed:\s+[0-9]+' | grep -oE '[0-9]+' || echo "0")
-    s=$(echo "$output" | grep -oE 'Skipped:\s+[0-9]+' | grep -oE '[0-9]+' || echo "0")
+    p=$(echo "$clean" | grep -oE 'Passed:\s+[0-9]+' | grep -oE '[0-9]+' || echo "0")
+    f=$(echo "$clean" | grep -oE 'Failed:\s+[0-9]+' | grep -oE '[0-9]+' || echo "0")
+    s=$(echo "$clean" | grep -oE 'Skipped:\s+[0-9]+' | grep -oE '[0-9]+' || echo "0")
 
     TOTAL_PASS=$((TOTAL_PASS + p))
     TOTAL_FAIL=$((TOTAL_FAIL + f))

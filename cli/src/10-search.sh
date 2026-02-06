@@ -377,7 +377,7 @@ display_ranked_grep_results() {
                 end
             ) as $scope |
             (if .domain then .domain else "" end) as $domain |
-            ((.tags // []) | .[0:3] | join(" ")) as $tags |
+            ((.tags // []) | .[0:3] | map(if startswith("@") then . else "#" + . end) | join(" ")) as $tags |
             "\u001b[1m\(.file)\u001b[0m:\u001b[33m\($scope)\u001b[0m:\u001b[2m\(.line)\u001b[0m" +
             (if .content then " \(.content)" else "" end) +
             (if ($domain | length) > 0 then "  \u001b[35m\($domain)\u001b[0m" else "" end) +

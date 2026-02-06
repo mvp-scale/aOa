@@ -67,9 +67,13 @@ section() {
 
 # Check if aOa services are running
 check_services() {
-    if ! curl -s localhost:8080/health > /dev/null 2>&1; then
+    local _script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local _root="$(dirname "$_script_dir")"
+    local _url=$(jq -r '.aoa_url // empty' "$_root/.aoa/home.json" 2>/dev/null)
+    local health_url="${AOA_URL:-${_url:-http://localhost:8080}}/health"
+    if ! curl -s "$health_url" > /dev/null 2>&1; then
         echo -e "${RED}Error: aOa services not running${NC}"
-        echo "Run 'docker-compose up -d' first"
+        echo "Start services first: aoa start"
         exit 1
     fi
 }

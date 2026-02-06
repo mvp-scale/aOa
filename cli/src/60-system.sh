@@ -1403,7 +1403,7 @@ cmd_domains() {
 
     # Display each domain - sorted by hits (competitive ranking)
     local rank=1
-    echo "$domains_data" | jq -r '.domains | sort_by(-.hits) | .[]? | "\(.name)|\(.hits // 0)|\(.enriched // false)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null | while IFS='|' read -r name hits enriched terms; do
+    echo "$domains_data" | jq -r '.domains | sort_by(-.total_hits) | .[]? | "\(.name)|\(.total_hits // .hits // 0)|\(.enriched // false)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null | while IFS='|' read -r name hits enriched terms; do
         # Truncate domain name if too long (24 chars to fit column)
         local name_trunc="${name:0:24}"
 
@@ -1453,7 +1453,7 @@ cmd_domains() {
             # Display each domain with its ACTUAL terms and hits (fetch from API)
             for domain in $domains_learned; do
                 # Get this domain's terms and hits from the full domains list
-                local domain_info=$(echo "$domains_data" | jq -r --arg d "$domain" '.domains[]? | select(.name == $d) | "\(.hits // 0)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null)
+                local domain_info=$(echo "$domains_data" | jq -r --arg d "$domain" '.domains[]? | select(.name == $d) | "\(.total_hits // .hits // 0)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null)
                 if [ -z "$domain_info" ] || [ "$domain_info" = "|" ]; then
                     # Fallback: fetch directly if not in top 20
                     domain_info=$(curl -s "${INDEX_URL}/domains/list?project_id=${project_id}&limit=50&include_terms=true" 2>/dev/null | jq -r --arg d "$domain" '.domains[]? | select(.name == $d) | "\(.hits // 0)|\(.terms // [] | .[0:5] | join(" "))"' 2>/dev/null)

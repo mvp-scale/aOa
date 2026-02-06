@@ -438,6 +438,8 @@ def domains_list():
             enriched = learner.is_domain_enriched(name)
             hits = int(float(meta.get('hits', 0) or 0))
 
+            total_hits = int(float(meta.get('total_hits', 0) or 0))
+
             domains.append({
                 'name': name,
                 'terms': terms,
@@ -446,6 +448,7 @@ def domains_list():
                 'keyword_count': len(keywords),
                 'enriched': enriched,
                 'hits': hits,
+                'total_hits': total_hits,
             })
 
         # Sort by keyword count (most populated first)
