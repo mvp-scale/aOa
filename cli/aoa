@@ -4173,9 +4173,9 @@ cmd_domains() {
                     -d "{\"project_id\":\"${project_id}\",\"name\":\"${name}\",\"description\":\"${desc}\",\"terms\":${terms},\"keywords\":${keywords}}" 2>/dev/null)
 
                 if echo "$result" | jq -e '.success' > /dev/null 2>&1; then
-                    ((count++))
+                    count=$((count + 1))
                 else
-                    ((failed++))
+                    failed=$((failed + 1))
                 fi
             done
 

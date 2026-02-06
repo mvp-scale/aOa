@@ -290,7 +290,7 @@ services/auth/handler.py:login()[10-45]:12 def login(user):  @authentication  #a
 Domains are:
 - **Generated** via `/aoa-start` (personalized domains from your codebase structure)
 - **Stored** in Redis (terms and keywords for fast matching)
-- **Rebalanced** every 25 prompts (assigns orphan keywords to terms)
+- **Rebalanced** every 100 intents (assigns orphan keywords to terms)
 
 **Setup command**: `/aoa-start` analyzes your codebase structure and generates 24 core semantic domains (no API key required).
 
@@ -324,10 +324,10 @@ No hook prompts - the background agent handles everything.
 
 ## Domain Lifecycle (Competitive Displacement)
 
-Domains compete for the top 24 core slots based on hits. Every 100 stops (autotune):
+Domains compete for the top 24 core slots based on hits. Every 50 intents (autotune):
 
 ```
-1. Decay all domain hits by 5%
+1. Decay all domain hits by 10%
 2. Sort all domains by hits (descending)
 3. Top 24 = core tier
 4. Rest = context tier (or removed if hits < 0.3)
