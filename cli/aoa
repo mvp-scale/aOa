@@ -4606,6 +4606,18 @@ cmd_stats() {
     echo ""
 
     if [ "$tokens_saved" -gt 0 ]; then
+        format_tokens() {
+            local n=$1
+            if [ "$n" -ge 1000000000 ]; then
+                awk "BEGIN {printf \"%.2fB\", $n/1000000000}"
+            elif [ "$n" -ge 1000000 ]; then
+                awk "BEGIN {printf \"%.2fM\", $n/1000000}"
+            elif [ "$n" -ge 1000 ]; then
+                awk "BEGIN {printf \"%.2fk\", $n/1000}"
+            else
+                echo "$n"
+            fi
+        }
         local tokens_fmt=$(format_tokens $tokens_saved)
         echo -e "${BOLD}Savings${NC}"
         echo -e "  Tokens:    ${GREEN}↓${tokens_fmt}${NC}"
