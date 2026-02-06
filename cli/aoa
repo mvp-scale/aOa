@@ -4189,6 +4189,11 @@ cmd_domains() {
             # 5. Cleanup
             rm -f "$intent_file"
 
+            # 6. Clear recent bigrams (signal consumed)
+            if [ "$count" -gt 0 ]; then
+                curl -sf -X POST "${INDEX_URL}/cc/bigrams/clear?project_id=${project_id}" > /dev/null 2>&1
+            fi
+
             echo -e "${GREEN}✓${NC} ${count} domains added"
             [ "$failed" -gt 0 ] && echo -e "${RED}${failed} failed${NC}"
             return 0

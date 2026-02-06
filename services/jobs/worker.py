@@ -280,13 +280,11 @@ class JobWorker:
                     current_bigrams[bigram] = current_bigrams.get(bigram, 0) + 1
                     bigram_count += 1
 
-            # Store recent bigrams for /aoa-rebalance Haiku skill (TTL 5 min)
+            # Accumulate recent bigrams for /aoa-rebalance (cleared after rebalance consumes them)
             if current_bigrams:
                 recent_key = f"aoa:{self.project_id}:recent_bigrams"
-                r.delete(recent_key)
                 for bigram, count in current_bigrams.items():
                     r.hincrby(recent_key, bigram, count)
-                r.expire(recent_key, 300)
 
             # Update cursor for next scrape
             if latest_ts:

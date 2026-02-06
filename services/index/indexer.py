@@ -5597,6 +5597,23 @@ def cc_bigrams():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/cc/bigrams/clear', methods=['POST'])
+def cc_bigrams_clear():
+    """Clear recent bigrams after rebalance consumes them."""
+    project_id = request.args.get('project_id') or request.json.get('project_id') if request.is_json else request.args.get('project_id')
+    if not project_id:
+        return jsonify({'error': 'project_id required'}), 400
+
+    try:
+        r = scorer.redis.client
+        recent_key = f'aoa:{project_id}:recent_bigrams'
+        count = r.hlen(recent_key)
+        r.delete(recent_key)
+        return jsonify({'cleared': count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/intent/summary')
 def intent_summary():
     """GL-088: Get work summary for last N prompts (for Haiku enrichment).
