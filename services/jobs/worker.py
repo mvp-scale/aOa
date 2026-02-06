@@ -286,6 +286,40 @@ class JobWorker:
                 for bigram, count in current_bigrams.items():
                     r.hincrby(recent_key, bigram, count)
 
+            # S78-W3: Conversation path -- keyword_hits only via observe()
+            # Bigram words with count >= 6 that are known keywords get incremented.
+            # No term/domain/cohit -- conversation feeds domain *creation* (rebalance),
+            # not domain *hits*. This is the keyword-only signal path.
+            if current_bigrams:
+                try:
+                    _get_domain_learner()
+                    learner = DomainLearner(self.project_id)
+                    blocklist_key = f"aoa:{self.project_id}:keyword_blocklist"
+                    keyword_hits_key = f"aoa:{self.project_id}:keyword_hits"
+
+                    # Collect candidate words from qualifying bigrams
+                    candidate_words = set()
+                    for bigram, count in current_bigrams.items():
+                        if count >= 6:
+                            parts = bigram.split(":")
+                            for word in parts:
+                                if len(word) >= 2:
+                                    candidate_words.add(word)
+
+                    # Filter: not blocklisted + is a known keyword
+                    keywords_to_observe = []
+                    for word in candidate_words:
+                        if r.sismember(blocklist_key, word):
+                            continue
+                        if r.hexists(keyword_hits_key, word):
+                            keywords_to_observe.append(word)
+
+                    if keywords_to_observe:
+                        learner.observe(keywords=keywords_to_observe)
+                        print(f"[Worker] W3: observe({len(keywords_to_observe)} keywords from conversation)", flush=True)
+                except Exception as e:
+                    print(f"[Worker] W3: keyword observe failed: {e}", flush=True)
+
             # Update cursor for next scrape
             if latest_ts:
                 r.set(cursor_key, latest_ts)

@@ -5189,6 +5189,60 @@ def record_intent():
                 print(f"[INTENT DEBUG] Error in domain matching: {e}", flush=True)
             pass  # Don't block intent recording on domain errors
 
+    # S78-W2: File read path -- range-gated observe() for symbol-level signal
+    # Only fires for reads with explicit range < max_read_range lines.
+    # Uses already-resolved locations (no extra I/O).
+    if DOMAINS_AVAILABLE and project_id and locations:
+        try:
+            learner = DomainLearner(project_id)
+            max_read_range = int(learner.get_threshold('max_read_range') or 500)
+
+            # Check if any file ref has a qualifying range
+            has_range = False
+            for file_ref in files:
+                if ':' in file_ref:
+                    range_part = file_ref.rsplit(':', 1)[1]
+                    if '-' in range_part:
+                        try:
+                            start, end = range_part.split('-', 1)
+                            if int(end) - int(start) < max_read_range:
+                                has_range = True
+                                break
+                        except ValueError:
+                            pass
+
+            if has_range and locations:
+                # Map resolved symbol names to domain terms
+                keyword_terms = []
+                observe_domains = set()
+
+                for loc in locations:
+                    symbol_name = loc.get('symbol', '').lower()
+                    if not symbol_name or len(symbol_name) < 2:
+                        continue
+                    # Check if symbol name is a domain term
+                    domains_for_sym = learner.get_domains_for_term(symbol_name)
+                    if domains_for_sym:
+                        for domain in domains_for_sym:
+                            keyword_terms.append((symbol_name, symbol_name))
+                            observe_domains.add(domain)
+                    # Also check parent (class name)
+                    parent = loc.get('parent', '')
+                    if parent and len(parent) >= 2:
+                        parent_lower = parent.lower()
+                        parent_domains = learner.get_domains_for_term(parent_lower)
+                        if parent_domains:
+                            keyword_terms.append((parent_lower, parent_lower))
+                            observe_domains.update(parent_domains)
+
+                if keyword_terms or observe_domains:
+                    learner.observe(
+                        keyword_terms=keyword_terms if keyword_terms else None,
+                        domains=list(observe_domains) if observe_domains else None,
+                    )
+        except Exception:
+            pass  # Don't block intent recording
+
     # GL-053 Phase C: Trigger domain learning if threshold reached
     _trigger_domain_learning_if_needed(project_id, intent_index)
 

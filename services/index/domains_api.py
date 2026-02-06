@@ -1195,18 +1195,20 @@ def domains_submit_tags():
 
         matched = {}
         orphans = []
+        matched_domains = set()
 
         for tag in tags:
             domains = learner.get_domains_for_term(tag)
             if domains:
                 matched[tag] = domains
-                # Increment hit counter for matched domains
-                for d in domains:
-                    learner.increment_domain_hits(d)
+                matched_domains.update(domains)
             else:
                 orphans.append(tag)
-                # Record orphan hit for learning
                 learner.record_orphan_hit(tag)
+
+        # S78-W4: Domain-only path through observe()
+        if matched_domains:
+            learner.observe(domains=list(matched_domains))
 
         return jsonify({
             'project_id': project_id,
