@@ -517,10 +517,12 @@ def handle_stop(data: dict):
             "tags": [f"@{action}" for action in triggered],
         }, timeout=1)
 
-        # Process queued jobs immediately (event-driven, no polling)
+        # Process scrape jobs immediately (event-driven, no polling)
+        # Use job_type filter so scrape isn't blocked by unrelated enrich jobs
         api_post("/jobs/process", {
             "project_id": PROJECT_ID,
-            "count": len(triggered)
+            "count": len(triggered),
+            "job_type": "scrape"
         }, timeout=5)
 
 

@@ -5152,43 +5152,6 @@ def record_intent():
             except Exception:
                 pass  # Don't block on scorer errors
 
-    # GL-060.3: Match intent tags against domain terms, increment hits
-    # GL-090 BUG-002 FIX: Also collect orphan tags for learning cycle
-    debug_mode = os.environ.get("AOA_DEBUG") == "1"
-    if debug_mode and tags:
-        print(f"[INTENT DEBUG] Processing tags: {tags}, project_id: {project_id}", flush=True)
-
-    if DOMAINS_AVAILABLE and project_id and tags:
-        try:
-            learner = DomainLearner(project_id)
-            orphaned_tags = []
-            for tag in tags:
-                # Normalize tag (remove # prefix if present)
-                term = tag.lstrip('#').lower()
-                if len(term) < 2:
-                    continue
-                # Find domains that have this term
-                domains_with_term = learner.get_domains_for_term(term)
-                if debug_mode:
-                    print(f"[INTENT DEBUG] tag='{tag}' -> term='{term}' -> domains={domains_with_term}", flush=True)
-                if domains_with_term:
-                    for domain_name in domains_with_term:
-                        learner.increment_domain_hits(domain_name)
-                        # RB-02: Track term:domain co-occurrence
-                        learner.increment_cohit(term, term, domain_name)
-                else:
-                    # Tag didn't match any domain - it's an orphan
-                    orphaned_tags.append(term)
-            # Store orphaned tags for learning cycle
-            if orphaned_tags:
-                if debug_mode:
-                    print(f"[INTENT DEBUG] Orphaned tags (no domain match): {orphaned_tags}", flush=True)
-                learner.add_orphan_tags(orphaned_tags)
-        except Exception as e:
-            if debug_mode:
-                print(f"[INTENT DEBUG] Error in domain matching: {e}", flush=True)
-            pass  # Don't block intent recording on domain errors
-
     # S78-W2: File read path -- range-gated observe() for symbol-level signal
     # Only fires for reads with explicit range < max_read_range lines.
     # Uses already-resolved locations (no extra I/O).
@@ -7099,10 +7062,11 @@ def jobs_process():
         return jsonify({'error': 'Missing project_id parameter'}), 400
 
     count = int(data.get('count', 1))
+    job_type = data.get('job_type')  # Optional: filter by type (e.g., "scrape")
 
     try:
         worker = JobWorker(project_id)
-        processed = worker.process_batch(count)
+        processed = worker.process_batch(count, job_type=job_type)
         return jsonify({
             'processed': len(processed),
             'jobs': [{'id': j.id, 'type': j.type.value, 'domain': j.payload.get('domain')} for j in processed],

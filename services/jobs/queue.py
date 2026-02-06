@@ -151,16 +151,35 @@ class JobQueue:
         pipe.execute()
         return len(new_jobs)
 
-    def pop(self, timeout: int = 0) -> Optional[Job]:
+    def pop(self, timeout: int = 0, job_type: Optional[str] = None) -> Optional[Job]:
         """
         Get next job from pending queue and move to active.
 
         Args:
             timeout: Seconds to wait for job (0 = no wait, None = block forever)
+            job_type: If set, skip jobs that don't match this type.
+                      Skipped jobs are re-appended to the end of the queue.
 
         Returns:
             Job if available, None if queue empty
         """
+        if job_type:
+            # Scan pending list for matching job type, skip non-matching
+            pending_key = self._key("pending")
+            max_scan = self.redis.client.llen(pending_key)
+            for _ in range(max_scan):
+                job_json = self.redis.client.lpop(pending_key)
+                if not job_json:
+                    return None
+                job = Job.from_json(job_json)
+                if job.type.value == job_type:
+                    job.started_at = time.time()
+                    self.redis.client.hset(self._key("active"), job.id, job.to_json())
+                    return job
+                # Not the right type -- put it back at the end
+                self.redis.client.rpush(pending_key, job_json)
+            return None
+
         if timeout:
             result = self.redis.client.blpop(self._key("pending"), timeout=timeout)
             if not result:
@@ -201,11 +220,11 @@ class JobQueue:
         # Remove from active
         pipe.hdel(self._key("active"), job.id)
         # Add to failed
-        # R-004: Cap failed list to 100 items + 7-day TTL to prevent unbounded growth
+        # R-004: Cap failed list to 100 items + 1-hour TTL for visibility then cleanup
         failed_key = self._key("failed")
         pipe.lpush(failed_key, job.to_json())
         pipe.ltrim(failed_key, 0, 99)
-        pipe.expire(failed_key, 604800)  # 7 days
+        pipe.expire(failed_key, 3600)  # 1 hour
         # Update stats
         pipe.hincrby(self._key("stats"), "total_failed", 1)
         pipe.execute()

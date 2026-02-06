@@ -77,17 +77,18 @@ class JobWorker:
             print(f"[Worker] Could not resolve project root from Redis: {e}", flush=True)
         return '/userhome'
 
-    def process_one(self, timeout: int = 0) -> Optional[Job]:
+    def process_one(self, timeout: int = 0, job_type: Optional[str] = None) -> Optional[Job]:
         """
         Process a single job.
 
         Args:
             timeout: Seconds to wait for job (0 = no wait)
+            job_type: If set, only process jobs of this type (e.g., "scrape")
 
         Returns:
             Processed job or None if queue empty
         """
-        job = self.queue.pop(timeout=timeout)
+        job = self.queue.pop(timeout=timeout, job_type=job_type)
         if not job:
             return None
 
@@ -104,11 +105,11 @@ class JobWorker:
 
         return job
 
-    def process_batch(self, count: int = 3) -> list[Job]:
+    def process_batch(self, count: int = 3, job_type: Optional[str] = None) -> list[Job]:
         """Process up to N jobs. Returns list of processed jobs."""
         processed = []
         for _ in range(count):
-            job = self.process_one(timeout=0)
+            job = self.process_one(timeout=0, job_type=job_type)
             if not job:
                 break
             processed.append(job)
@@ -273,18 +274,21 @@ class JobWorker:
                     continue
                 # Tokenize: lowercase, split on non-word chars
                 words = re.findall(r'\b[a-z][a-z0-9_]+\b', text.lower())
-                # Extract bigrams (consecutive word pairs)
+                # Extract bigrams (consecutive word pairs) -- accumulate locally
                 for i in range(len(words) - 1):
                     bigram = f"{words[i]}:{words[i+1]}"
-                    r.hincrby(f"aoa:{self.project_id}:bigrams", bigram, 1)
                     current_bigrams[bigram] = current_bigrams.get(bigram, 0) + 1
                     bigram_count += 1
 
-            # Accumulate recent bigrams for /aoa-rebalance (cleared after rebalance consumes them)
+            # Batch write all bigrams + recent in one pipeline
             if current_bigrams:
+                bigrams_key = f"aoa:{self.project_id}:bigrams"
                 recent_key = f"aoa:{self.project_id}:recent_bigrams"
+                pipe = r.pipeline()
                 for bigram, count in current_bigrams.items():
-                    r.hincrby(recent_key, bigram, count)
+                    pipe.hincrby(bigrams_key, bigram, count)
+                    pipe.hincrby(recent_key, bigram, count)
+                pipe.execute()
 
             # S78-W3: Conversation path -- keyword_hits only via observe()
             # Bigram words with count >= 6 that are known keywords get incremented.
