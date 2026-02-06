@@ -610,10 +610,17 @@ def format_search_response(
                 if domain:
                     seen_domains.add(domain if domain.startswith('@') else f"@{domain}")
 
-            # Collect domains for each term
+            # Collect domains for each term + build term_domain pairs from claimants
+            term_domains = []
             for term in seen_terms:
+                # Pointer for domain hits (existing behavior)
                 for domain_name in learner.get_domains_for_term(term):
                     seen_domains.add(domain_name)
+                # Claimants for cohit:term_domain (all claiming domains)
+                claimants = learner.get_term_claimants(term)
+                for domain_name in claimants:
+                    seen_domains.add(domain_name)
+                    term_domains.append((term, domain_name))
 
             # Build keyword_terms pairs: query terms × matched result terms
             keyword_terms = []
@@ -629,6 +636,7 @@ def format_search_response(
                 keyword_terms=keyword_terms if keyword_terms else None,
                 terms=list(seen_terms) if seen_terms and not keyword_terms else None,
                 domains=list(seen_domains) if seen_domains else None,
+                term_domains=term_domains if term_domains else None,
             )
 
         except Exception as e:

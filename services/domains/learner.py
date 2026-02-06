@@ -354,10 +354,12 @@ class DomainLearner:
         else:
             self.redis.client.incr(self._key("learned_count"))
 
-        # Store terms
+        # Store terms + claimants reverse index
         terms_key = self._domain_key(domain.name, "terms")
         if domain.terms:
             self.redis.client.sadd(terms_key, *domain.terms)
+            for term in domain.terms:
+                self.redis.client.sadd(self._key(f"term:{term}:claimants"), domain.name)
 
         # Create term->domain mappings with starter scores
         for term in domain.terms:
@@ -385,6 +387,10 @@ class DomainLearner:
             return []
         domain_str = domain.decode() if isinstance(domain, bytes) else domain
         return [domain_str] if domain_str else []
+
+    def get_term_claimants(self, term: str) -> set[str]:
+        """Get ALL domains that claim this term via claimants reverse index."""
+        return self.redis.client.smembers(self._key(f"term:{term}:claimants"))
 
     def increment_domain_hits(self, name: str) -> int:
         """Increment hit counter for a domain.
@@ -620,11 +626,13 @@ class DomainLearner:
         terms_added = 0
         keywords_added = 0
 
-        # Add terms to domain's term set
+        # Add terms to domain's term set + claimants reverse index
         terms_key = self._domain_key(name, "terms")
         term_names = list(term_keywords.keys())
         if term_names:
             self.redis.client.sadd(terms_key, *term_names)
+            for term in term_names:
+                self.redis.client.sadd(self._key(f"term:{term}:claimants"), name)
 
         for term, keywords in term_keywords.items():
             count = self.add_term_keywords(term, keywords)
@@ -906,7 +914,7 @@ Return JSON only:
     # S78-O1: Unified Observer Pattern
     # =========================================================================
 
-    def observe(self, keywords=None, terms=None, domains=None, keyword_terms=None) -> dict:
+    def observe(self, keywords=None, terms=None, domains=None, keyword_terms=None, term_domains=None) -> dict:
         """
         Unified observer for all signal paths. Single Redis pipeline.
 
@@ -916,16 +924,19 @@ Return JSON only:
             domains: List of domain names to increment domain hits/total_hits.
             keyword_terms: List of (keyword, term) pairs. Each pair increments
                           keyword_hits, term_hits, AND cohit:kw_term together.
+            term_domains: List of (term, domain) pairs. Each pair increments
+                          cohit:term_domain for competitive dedup.
 
         Returns:
-            Dict with counts: {keywords: N, terms: N, domains: N, cohits: N}
+            Dict with counts: {keywords: N, terms: N, domains: N, cohits: N, td_cohits: N}
         """
-        result = {'keywords': 0, 'terms': 0, 'domains': 0, 'cohits': 0}
+        result = {'keywords': 0, 'terms': 0, 'domains': 0, 'cohits': 0, 'td_cohits': 0}
         pipe = self.redis.client.pipeline()
 
         keyword_hits_key = self._key("keyword_hits")
         term_hits_key = self._key("term_hits")
         kw_term_key = self._key("cohit:kw_term")
+        term_domain_key = self._key("cohit:term_domain")
         prompt_count = self.get_prompt_count()
 
         # Keyword-term pairs: increment keyword_hits + term_hits + cohit
@@ -971,12 +982,23 @@ Return JSON only:
                 pipe.hset(meta_key, "last_hit_at", prompt_count)
                 result['domains'] += 1
 
+        # Term-domain cohit pairs: for competitive dedup via claimants SET
+        if term_domains:
+            for term, domain in term_domains:
+                if not term or not domain or len(term) < 2:
+                    continue
+                term_lower = term.lower()
+                name = domain if domain.startswith("@") else f"@{domain}"
+                pipe.hincrby(term_domain_key, f"{term_lower}:{name}", 1)
+                result['td_cohits'] += 1
+
         if any(result.values()):
             pipe.execute()
 
         if os.environ.get("AOA_DEBUG") == "1":
             print(f"[OBSERVE] kw={result['keywords']} terms={result['terms']} "
-                  f"domains={result['domains']} cohits={result['cohits']}", flush=True)
+                  f"domains={result['domains']} cohits={result['cohits']} "
+                  f"td_cohits={result['td_cohits']}", flush=True)
 
         return result
 
@@ -1201,6 +1223,9 @@ Return JSON only:
             # Remove term->domain mapping
             term_key = self._key(f"term:{term}")
             self.redis.client.zrem(term_key, name)
+
+            # Clean claimants reverse index
+            self.redis.client.srem(self._key(f"term:{term}:claimants"), name)
 
     # =========================================================================
     # Term Lookup
@@ -2092,48 +2117,18 @@ Return JSON:
                 self.redis.client.srem(keywords_key, keyword)
                 summary['kw_deduped'] += 1
 
-        # 6c. Term-level dedup: reverse index from domain term sets
-        # Build term → [domains] map from membership sets (not pointers)
-        term_to_domains = {}
-        for domain_name in self.get_all_domains():
-            for term in self.get_domain_terms(domain_name):
-                if term not in term_to_domains:
-                    term_to_domains[term] = []
-                term_to_domains[term].append(domain_name)
-
-        # Filter to terms in 2+ domains
-        kw_term_key = self._key("cohit:kw_term")
-        all_cohits = self.redis.client.hgetall(kw_term_key)
-
-        for term, claiming_domains in term_to_domains.items():
-            if len(claiming_domains) < 2:
-                continue
-
-            # Score each domain: sum cohit:kw_term for its keywords paired with this term
-            domain_scores = {}
-            for domain_name in claiming_domains:
-                score = 0
-                domain_keywords = self.get_term_keywords(term)
-                for kw in domain_keywords:
-                    cohit_key = f"{kw}:{term}"
-                    val = all_cohits.get(cohit_key, None)
-                    if val is not None:
-                        score += int(val)
-                domain_scores[domain_name] = score
-
-            total_signal = sum(domain_scores.values())
-            if total_signal < self.DEDUP_MIN_TOTAL:
-                continue
-
-            # Winner = highest score. On tie, defer to existing pointer (status quo)
-            current_ptr = self.redis.client.get(self._key(f"term:{term}:domain")) or ""
-            ranked = sorted(domain_scores.items(),
-                            key=lambda x: (x[1], 1 if x[0] == current_ptr else 0),
-                            reverse=True)
-            winner_domain = ranked[0][0]
-            for loser_domain, _ in ranked[1:]:
+        # 6c. Term-level dedup: same Lua script on cohit:term_domain
+        td_dupes = self.find_cohit_dupes("term_domain")
+        for dupe in td_dupes:
+            term = dupe['entity']
+            winner_domain = dupe['winner']
+            for loser in dupe['losers']:
+                loser_domain = loser['container']
                 terms_key = self._domain_key(loser_domain, "terms")
                 self.redis.client.srem(terms_key, term)
+                # Clean claimants SET
+                claimants_key = self._key(f"term:{term}:claimants")
+                self.redis.client.srem(claimants_key, loser_domain)
                 summary['term_deduped'] += 1
             # Update pointer to winner
             term_ptr_key = self._key(f"term:{term}:domain")
@@ -2259,6 +2254,22 @@ Return JSON:
             else:
                 self.redis.client.hset(cohit_key, pair_key, new_count)
                 summary['cohits_decayed'] += 1
+
+        # Cohit term_domain decay (mirrors kw_term decay above)
+        summary['td_cohits_decayed'] = 0
+        summary['td_cohits_pruned'] = 0
+        td_cohit_key = self._key("cohit:term_domain")
+        td_cohits = self.redis.client.hgetall(td_cohit_key)
+        for pair, count in td_cohits.items():
+            pair_key = pair.decode() if isinstance(pair, bytes) else pair
+            count_val = float(count.decode() if isinstance(count, bytes) else count)
+            new_count = int(count_val * self.DECAY_RATE)
+            if new_count <= 0:
+                self.redis.client.hdel(td_cohit_key, pair_key)
+                summary['td_cohits_pruned'] += 1
+            else:
+                self.redis.client.hset(td_cohit_key, pair_key, new_count)
+                summary['td_cohits_decayed'] += 1
 
         # =====================================================================
         # S79-F6: Keyword noise filter (blocklist keywords > threshold)
