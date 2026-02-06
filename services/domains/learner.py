@@ -827,6 +827,14 @@ Return JSON only:
             meta_key = self._domain_key(name, "meta")
             self.redis.client.eval(snapshot_script, 1, meta_key)
 
+    def run_promotion_check(self) -> dict:
+        """RB-06: Check staged domains for promotion. Stub for future implementation."""
+        return {'promoted_count': 0, 'not_ready_count': 0}
+
+    def cleanup_stale_proposals(self) -> dict:
+        """RB-07: Cleanup stale proposals. Stub for future implementation."""
+        return {'removed_count': 0}
+
     def get_source_counts(self) -> dict:
         """Get counts of seeded vs learned domains.
 
@@ -894,44 +902,82 @@ Return JSON only:
             return {term: int(hits) for term, hits in all_hits.items()}
 
     # =========================================================================
-    # P3-1: Keyword Hit Tracking
+    # S78-O1: Unified Observer Pattern
     # =========================================================================
 
-    def increment_keyword_hits(self, keywords: list[str], amount: int = 1) -> int:
+    def observe(self, keywords=None, terms=None, domains=None, keyword_terms=None) -> dict:
         """
-        Increment hit counters for keyword(s).
-
-        P3-1: Finer-grained learning signal - tracks which specific keywords
-        drive search results, not just terms.
+        Unified observer for all signal paths. Single Redis pipeline.
 
         Args:
-            keywords: List of keywords that matched
-            amount: Amount to increment per keyword
+            keywords: List of raw keywords to increment keyword_hits only.
+            terms: List of raw terms to increment term_hits only.
+            domains: List of domain names to increment domain hits/total_hits.
+            keyword_terms: List of (keyword, term) pairs. Each pair increments
+                          keyword_hits, term_hits, AND cohit:kw_term together.
 
         Returns:
-            Number of keywords incremented
+            Dict with counts: {keywords: N, terms: N, domains: N, cohits: N}
         """
-        if not keywords:
-            return 0
-        keyword_hits_key = self._key("keyword_hits")
+        result = {'keywords': 0, 'terms': 0, 'domains': 0, 'cohits': 0}
         pipe = self.redis.client.pipeline()
-        for kw in keywords:
-            pipe.hincrby(keyword_hits_key, kw.lower(), amount)
-        pipe.execute()
-        return len(keywords)
 
-    def get_keyword_hits(self, keywords: list[str] = None) -> dict:
-        """Get hit counts for keywords. If keywords=None, returns all."""
         keyword_hits_key = self._key("keyword_hits")
+        term_hits_key = self._key("term_hits")
+        kw_term_key = self._key("cohit:kw_term")
+        prompt_count = self.get_prompt_count()
+
+        # Keyword-term pairs: increment keyword_hits + term_hits + cohit
+        if keyword_terms:
+            for kw, term in keyword_terms:
+                if not kw or not term or len(kw) < 2 or len(term) < 2:
+                    continue
+                kw_lower = kw.lower()
+                term_lower = term.lower()
+                pipe.hincrby(keyword_hits_key, kw_lower, 1)
+                pipe.hincrby(term_hits_key, term_lower, 1)
+                pipe.hincrby(kw_term_key, f"{kw_lower}:{term_lower}", 1)
+                result['keywords'] += 1
+                result['terms'] += 1
+                result['cohits'] += 1
+
+        # Raw keywords: keyword_hits only (e.g., conversation path)
         if keywords:
-            pipe = self.redis.client.pipeline()
             for kw in keywords:
-                pipe.hget(keyword_hits_key, kw.lower())
-            results = pipe.execute()
-            return {kw: int(hits or 0) for kw, hits in zip(keywords, results)}
-        else:
-            all_hits = self.redis.client.hgetall(keyword_hits_key)
-            return {kw: int(hits) for kw, hits in all_hits.items()}
+                if not kw or len(kw) < 2:
+                    continue
+                pipe.hincrby(keyword_hits_key, kw.lower(), 1)
+                result['keywords'] += 1
+
+        # Raw terms: term_hits only
+        if terms:
+            for term in terms:
+                if not term or len(term) < 2:
+                    continue
+                pipe.hincrby(term_hits_key, term.lower(), 1)
+                result['terms'] += 1
+
+        # Domains: hits + total_hits + last_hit_at
+        if domains:
+            for domain in domains:
+                if not domain:
+                    continue
+                # Normalize: ensure @ prefix
+                name = domain if domain.startswith("@") else f"@{domain}"
+                meta_key = self._domain_key(name, "meta")
+                pipe.hincrby(meta_key, "hits", 1)
+                pipe.hincrby(meta_key, "total_hits", 1)
+                pipe.hset(meta_key, "last_hit_at", prompt_count)
+                result['domains'] += 1
+
+        if any(result.values()):
+            pipe.execute()
+
+        if os.environ.get("AOA_DEBUG") == "1":
+            print(f"[OBSERVE] kw={result['keywords']} terms={result['terms']} "
+                  f"domains={result['domains']} cohits={result['cohits']}", flush=True)
+
+        return result
 
     # =========================================================================
     # GL-069.1: Orphan Tag Storage
@@ -1393,41 +1439,49 @@ Output ONLY the JSON array, no explanation."""
 
         return result
 
-    def get_keyword_hits(self, keyword: str) -> int:
-        """Get total hits for a keyword (from orphan tracking)."""
+    def get_orphan_hit_count(self, keyword: str) -> int:
+        """Get total orphan hits for a keyword (from orphan tracking)."""
         hits_key = self._key("orphan_hits")
         result = self.redis.client.hget(hits_key, keyword)
         return int(result) if result else 0
 
+    # S78-F3: Min observations gate for promotion confidence
+    MIN_PROMOTION_OBSERVATIONS = 3
+
     def calculate_promotion_ratio(self, keyword: str, term: str) -> float:
         """
-        Calculate P(term|keyword) = cohit(keyword,term) / hits(keyword).
+        Calculate P(term|keyword) = cohit(keyword,term) / sum(all_cohits(keyword)).
+
+        S78-F3: Uses sum-of-cohits as denominator instead of orphan_hits.
+        This prevents conversation-path dilution of the ratio.
 
         Returns 0.0-1.0 ratio indicating how often this keyword
-        co-occurs with this term.
+        co-occurs with this term relative to all its co-occurrences.
         """
-        cohit = self.get_cohit_kw_term(keyword, term)
-        hits = self.get_keyword_hits(keyword)
+        cohits = self.get_all_cohits_for_keyword(keyword)
+        total_contextual = sum(cohits.values())
 
-        if hits == 0:
+        if total_contextual < self.MIN_PROMOTION_OBSERVATIONS:
             return 0.0
 
-        return cohit / hits
+        cohit = cohits.get(term, 0)
+        return cohit / total_contextual
 
     def get_best_term_for_keyword(self, keyword: str) -> tuple[str, float] | None:
         """
         Find the term with highest cohit ratio for a keyword.
 
-        Returns (term, ratio) or None if no cohits.
+        S78-F3: Uses sum-of-cohits denominator + min observations gate.
+        Returns (term, ratio) or None if insufficient data.
         """
         cohits = self.get_all_cohits_for_keyword(keyword)
-        hits = self.get_keyword_hits(keyword)
+        total_contextual = sum(cohits.values())
 
-        if not cohits or hits == 0:
+        if not cohits or total_contextual < self.MIN_PROMOTION_OBSERVATIONS:
             return None
 
         best_term = max(cohits.items(), key=lambda x: x[1])
-        ratio = best_term[1] / hits
+        ratio = best_term[1] / total_contextual
 
         return (best_term[0], ratio)
 
@@ -2023,6 +2077,88 @@ Return JSON:
         if summary['bigrams_decayed'] > 0 or summary['files_decayed'] > 0:
             print(f"[ED-04] Decay: bigrams={summary['bigrams_decayed']}/{summary['bigrams_pruned']}, files={summary['files_decayed']}/{summary['files_pruned']}", flush=True)
 
+        # =====================================================================
+        # S78-F4: Cohit kw_term decay (G7 CRITICAL - bounds ~200MB/year to ~15MB)
+        # =====================================================================
+
+        summary['cohits_decayed'] = 0
+        summary['cohits_pruned'] = 0
+
+        cohit_key = self._key("cohit:kw_term")
+        cohits = self.redis.client.hgetall(cohit_key)
+        for pair, count in cohits.items():
+            pair_key = pair.decode() if isinstance(pair, bytes) else pair
+            count_val = float(count.decode() if isinstance(count, bytes) else count)
+            new_count = int(count_val * self.DECAY_RATE)
+            if new_count <= 0:
+                self.redis.client.hdel(cohit_key, pair_key)
+                summary['cohits_pruned'] += 1
+            else:
+                self.redis.client.hset(cohit_key, pair_key, new_count)
+                summary['cohits_decayed'] += 1
+
+        # =====================================================================
+        # S79-F6: Keyword noise filter (blocklist keywords > threshold)
+        # Must run BEFORE decay so it sees raw hit counts
+        # =====================================================================
+
+        summary['keywords_blocklisted'] = 0
+
+        keyword_hits_key = self._key("keyword_hits")
+        noise_threshold = int(self.get_threshold('keyword_noise_threshold') or 1000)
+        blocklist_key = self._key("keyword_blocklist")
+
+        kw_hits_raw = self.redis.client.hgetall(keyword_hits_key)
+        for kw, count in kw_hits_raw.items():
+            kw_name = kw.decode() if isinstance(kw, bytes) else kw
+            count_val = int(float(count.decode() if isinstance(count, bytes) else count))
+            if count_val > noise_threshold:
+                self.redis.client.sadd(blocklist_key, kw_name)
+                self.redis.client.hdel(keyword_hits_key, kw_name)
+                summary['keywords_blocklisted'] += 1
+
+        # =====================================================================
+        # S78-F5: Keyword hits + term hits decay (signal freshness)
+        # =====================================================================
+
+        summary['keywords_decayed'] = 0
+        summary['keywords_pruned'] = 0
+        summary['terms_decayed'] = 0
+        summary['terms_pruned'] = 0
+
+        # 15. Decay keyword_hits (noise already filtered above)
+        kw_hits = self.redis.client.hgetall(keyword_hits_key)
+        for kw, count in kw_hits.items():
+            kw_name = kw.decode() if isinstance(kw, bytes) else kw
+            count_val = float(count.decode() if isinstance(count, bytes) else count)
+            new_count = int(count_val * self.DECAY_RATE)
+            if new_count <= 0:
+                self.redis.client.hdel(keyword_hits_key, kw_name)
+                summary['keywords_pruned'] += 1
+            else:
+                self.redis.client.hset(keyword_hits_key, kw_name, new_count)
+                summary['keywords_decayed'] += 1
+
+        # 16. Decay term_hits
+        term_hits_key = self._key("term_hits")
+        term_hits = self.redis.client.hgetall(term_hits_key)
+        for term, count in term_hits.items():
+            term_name = term.decode() if isinstance(term, bytes) else term
+            count_val = float(count.decode() if isinstance(count, bytes) else count)
+            new_count = int(count_val * self.DECAY_RATE)
+            if new_count <= 0:
+                self.redis.client.hdel(term_hits_key, term_name)
+                summary['terms_pruned'] += 1
+            else:
+                self.redis.client.hset(term_hits_key, term_name, new_count)
+                summary['terms_decayed'] += 1
+
+        if summary['cohits_decayed'] > 0 or summary['keywords_decayed'] > 0 or summary['keywords_blocklisted'] > 0:
+            print(f"[S78] Decay: cohits={summary['cohits_decayed']}/{summary['cohits_pruned']}, "
+                  f"kw={summary['keywords_decayed']}/{summary['keywords_pruned']}, "
+                  f"terms={summary['terms_decayed']}/{summary['terms_pruned']}, "
+                  f"blocklisted={summary['keywords_blocklisted']}", flush=True)
+
         return summary
 
     def apply_tune(self, result: dict) -> dict:
@@ -2131,7 +2267,7 @@ Return JSON:
             terms = self.get_domain_terms(d)
             total_terms += len(terms)
             meta = self.get_domain_meta(d)
-            total_hits += float(meta.get("hits", 0) or 0)  # Keep as float
+            total_hits += float(meta.get("total_hits", 0) or 0)  # Lifetime (matches row display)
 
         tune_results = self.get_tune_results()
         learned_details = self.get_learned_details()

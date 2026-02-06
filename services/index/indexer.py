@@ -593,6 +593,7 @@ def format_search_response(
     # S65-01 FIX: Sync hit tracking (no daemon thread)
     # Redis pipeline is fast (~2-5ms), no need for async complexity.
     # Data already in memory from search - just count before returning.
+    # S78-W1: Search path wired through observe()
     if DOMAINS_AVAILABLE and project_id and results:
         try:
             learner = DomainLearner(project_id)
@@ -605,50 +606,30 @@ def format_search_response(
                     term = tag.lstrip('#@').lower()
                     if term and len(term) >= 3:
                         seen_terms.add(term)
-                # GL-088: Track domains from results
-                # FIX SL-02: Keep @ prefix - Redis keys include it
                 domain = r.get('domain', '')
                 if domain:
                     seen_domains.add(domain if domain.startswith('@') else f"@{domain}")
 
             # Collect domains for each term
             for term in seen_terms:
-                domains_with_term = learner.get_domains_for_term(term)
-                for domain_name in domains_with_term:
+                for domain_name in learner.get_domains_for_term(term):
                     seen_domains.add(domain_name)
 
-            # Single pipeline for all increments (~2-5ms total)
-            if seen_terms or seen_domains:
-                pipe = learner.redis.client.pipeline()
-                prompt_count = learner.get_prompt_count()
+            # Build keyword_terms pairs: query terms × matched result terms
+            keyword_terms = []
+            if query_terms and seen_terms:
+                for qt in query_terms:
+                    qt_clean = qt.lower().strip()
+                    if len(qt_clean) >= 2:
+                        for term in seen_terms:
+                            keyword_terms.append((qt_clean, term))
 
-                # Term hits
-                term_hits_key = f"aoa:{project_id}:term_hits"
-                for term in seen_terms:
-                    pipe.hincrby(term_hits_key, term, 1)
-
-                # Domain hits (hits + total_hits + last_hit_at)
-                for domain in seen_domains:
-                    meta_key = f"aoa:{project_id}:domain:{domain}:meta"
-                    pipe.hincrby(meta_key, "hits", 1)
-                    pipe.hincrby(meta_key, "total_hits", 1)
-                    pipe.hset(meta_key, "last_hit_at", prompt_count)
-
-                pipe.execute()  # ONE round-trip
-
-                # CO-01: Track cohit - query terms × result domains
-                # This enables learned keywords to be assigned to correct domains
-                if query_terms and seen_domains:
-                    for term in query_terms:
-                        term_clean = term.lower().strip()
-                        if len(term_clean) >= 3:  # Skip short terms
-                            for domain in seen_domains:
-                                # Find best term for this domain to complete the triple
-                                domain_terms = learner.get_domain_terms(domain)
-                                if domain_terms:
-                                    # Use first term as representative
-                                    best_term = next(iter(domain_terms))
-                                    learner.increment_cohit(term_clean, best_term, domain)
+            # One observe() call replaces inline pipeline + separate cohit calls
+            learner.observe(
+                keyword_terms=keyword_terms if keyword_terms else None,
+                terms=list(seen_terms) if seen_terms and not keyword_terms else None,
+                domains=list(seen_domains) if seen_domains else None,
+            )
 
         except Exception as e:
             print(f"[HitTracking] Error: {e}", flush=True)

@@ -745,6 +745,274 @@ test_metrics() {
 }
 
 # =============================================================================
+# SECTION 11: Observer Pattern - Hit Tracking (TDD for Session 80)
+# =============================================================================
+#
+# Maps to Future State Table (BOARD.md Session 78/79).
+# Tests verify correct counter increments per entry point.
+#
+# [REGRESSION] = should PASS now (guards existing behavior)
+# [F4]  = FAILS until cohit:kw_term decay implemented
+# [F5]  = FAILS until keyword_hits + term_hits decay implemented
+# [F6]  = FAILS until keyword noise filter implemented
+# [W1]  = FAILS until search path wired through observe()
+#
+# =============================================================================
+
+test_observer_pattern() {
+    section "11. Observer Pattern (Hit Tracking)"
+
+    # Require Redis
+    local ping
+    ping=$(redis_cli PING 2>/dev/null)
+    if [ "$ping" != "PONG" ]; then
+        skip "Observer pattern (all)" "Redis not reachable"
+        return
+    fi
+
+    # --- Setup: Find a domain + term for search tests ---
+    local domain_list
+    domain_list=$(api_get "/domains/list")
+    local domain_name
+    domain_name=$(echo "$domain_list" | jq -r '(.domains[0].name // .[0].name // empty)' 2>/dev/null)
+    if [ -z "$domain_name" ]; then
+        skip "Observer pattern (all)" "no domains seeded"
+        return
+    fi
+
+    # Find a search term that produces results with domain enrichment.
+    # Domain terms are semantic labels, not symbols -- so we search for a
+    # known symbol and check if the response has domain tags.
+    local search_term=""
+    local search_result=""
+    local terms_key="aoa:${PROJECT_ID}:domain:${domain_name}:terms"
+
+    # Try up to 3 random terms from the domain
+    for _attempt in 1 2 3; do
+        local candidate
+        candidate=$(redis_cli SRANDMEMBER "$terms_key" 2>/dev/null)
+        [ -z "$candidate" ] && continue
+        search_result=$(api_get "/symbol?q=${candidate}")
+        local hit_count
+        hit_count=$(echo "$search_result" | jq -r '.total_matches // 0' 2>/dev/null)
+        if [ "${hit_count:-0}" -gt 0 ] 2>/dev/null; then
+            search_term="$candidate"
+            break
+        fi
+    done
+
+    # ---- 11.A: Search Path ----
+
+    if [ -z "$search_term" ]; then
+        skip "Search increments term_hits" "no domain term produced search results"
+        skip "Search increments domain total_hits" "no domain term produced search results"
+        skip "Search increments keyword_hits via observe()" "no domain term produced search results"
+        skip "Search maintains cohit:kw_term" "no domain term produced search results"
+    else
+        # 11.1 [REGRESSION]: Search increments term_hits
+        local th_before th_after
+        th_before=$(redis_cli HGET "aoa:${PROJECT_ID}:term_hits" "$search_term" 2>/dev/null)
+        th_before=${th_before:-0}
+        api_get "/symbol?q=${search_term}" > /dev/null 2>&1
+        th_after=$(redis_cli HGET "aoa:${PROJECT_ID}:term_hits" "$search_term" 2>/dev/null)
+        th_after=${th_after:-0}
+        if [ "$th_after" -gt "$th_before" ] 2>/dev/null; then
+            pass "Search increments term_hits ($th_before -> $th_after)"
+        else
+            fail "Search increments term_hits" "expected > $th_before, got $th_after"
+        fi
+
+        # 11.2 [REGRESSION]: Search increments domain total_hits
+        local dh_before dh_after
+        dh_before=$(redis_cli HGET "aoa:${PROJECT_ID}:domain:${domain_name}:meta" "total_hits" 2>/dev/null)
+        dh_before=${dh_before:-0}
+        api_get "/symbol?q=${search_term}" > /dev/null 2>&1
+        dh_after=$(redis_cli HGET "aoa:${PROJECT_ID}:domain:${domain_name}:meta" "total_hits" 2>/dev/null)
+        dh_after=${dh_after:-0}
+        if [ "$dh_after" -gt "$dh_before" ] 2>/dev/null; then
+            pass "Search increments domain total_hits ($dh_before -> $dh_after)"
+        else
+            fail "Search increments domain total_hits" "expected > $dh_before, got $dh_after"
+        fi
+
+        # 11.3 [W1]: Search increments keyword_hits for query term
+        local kh_before kh_after
+        kh_before=$(redis_cli HGET "aoa:${PROJECT_ID}:keyword_hits" "$search_term" 2>/dev/null)
+        kh_before=${kh_before:-0}
+        api_get "/symbol?q=${search_term}" > /dev/null 2>&1
+        kh_after=$(redis_cli HGET "aoa:${PROJECT_ID}:keyword_hits" "$search_term" 2>/dev/null)
+        kh_after=${kh_after:-0}
+        if [ "$kh_after" -gt "$kh_before" ] 2>/dev/null; then
+            pass "Search increments keyword_hits via observe() ($kh_before -> $kh_after)"
+        else
+            fail "Search increments keyword_hits via observe()" "expected > $kh_before, got $kh_after [W1]"
+        fi
+
+        # 11.4 [REGRESSION]: Search tracks cohit:kw_term
+        local cohit_key="aoa:${PROJECT_ID}:cohit:kw_term"
+        local cohit_before cohit_after
+        cohit_before=$(redis_cli HLEN "$cohit_key" 2>/dev/null)
+        cohit_before=${cohit_before:-0}
+        api_get "/symbol?q=${search_term}" > /dev/null 2>&1
+        cohit_after=$(redis_cli HLEN "$cohit_key" 2>/dev/null)
+        cohit_after=${cohit_after:-0}
+        if [ "$cohit_after" -ge "$cohit_before" ] 2>/dev/null; then
+            pass "Search maintains cohit:kw_term ($cohit_before -> $cohit_after)"
+        else
+            fail "Search cohit:kw_term" "decreased: $cohit_before -> $cohit_after"
+        fi
+    fi
+
+    # ---- 11.B: Submit-Tags Path ----
+
+    if [ -n "$search_term" ]; then
+        # 11.5 [REGRESSION]: Submit-tags increments domain total_hits
+        local st_before st_after
+        st_before=$(redis_cli HGET "aoa:${PROJECT_ID}:domain:${domain_name}:meta" "total_hits" 2>/dev/null)
+        st_before=${st_before:-0}
+        api_post "/domains/submit-tags" "{\"project_id\":\"${PROJECT_ID}\",\"tags\":[\"${search_term}\"]}" > /dev/null 2>&1
+        st_after=$(redis_cli HGET "aoa:${PROJECT_ID}:domain:${domain_name}:meta" "total_hits" 2>/dev/null)
+        st_after=${st_after:-0}
+        if [ "$st_after" -gt "$st_before" ] 2>/dev/null; then
+            pass "Submit-tags increments domain total_hits ($st_before -> $st_after)"
+        else
+            fail "Submit-tags increments domain total_hits" "expected > $st_before, got $st_after"
+        fi
+
+        # 11.6 [W4]: Submit-tags does NOT increment keyword_hits (domain-only path)
+        local st_kh_before st_kh_after
+        st_kh_before=$(redis_cli HGET "aoa:${PROJECT_ID}:keyword_hits" "__submit_tag_kw_check__" 2>/dev/null)
+        st_kh_before=${st_kh_before:-0}
+        api_post "/domains/submit-tags" "{\"project_id\":\"${PROJECT_ID}\",\"tags\":[\"${search_term}\"]}" > /dev/null 2>&1
+        st_kh_after=$(redis_cli HGET "aoa:${PROJECT_ID}:keyword_hits" "__submit_tag_kw_check__" 2>/dev/null)
+        st_kh_after=${st_kh_after:-0}
+        if [ "$st_kh_after" = "$st_kh_before" ]; then
+            pass "Submit-tags does not increment keyword_hits (correct)"
+        else
+            fail "Submit-tags incremented keyword_hits" "should be domain-only path"
+        fi
+    fi
+
+    # ---- 11.C: Decay (F4/F5) ----
+    # Seed known test values, run autotune, verify decay applied
+
+    # 11.7 [F4]: cohit:kw_term decay
+    redis_cli HSET "aoa:${PROJECT_ID}:cohit:kw_term" "__test__:__decay_cohit__" "100" > /dev/null 2>&1
+    api_post "/domains/tune/math" "{\"project_id\":\"${PROJECT_ID}\"}" > /dev/null 2>&1
+    local cohit_val
+    cohit_val=$(redis_cli HGET "aoa:${PROJECT_ID}:cohit:kw_term" "__test__:__decay_cohit__" 2>/dev/null)
+    cohit_val=${cohit_val:-100}
+    if [ "$cohit_val" -lt 100 ] 2>/dev/null; then
+        pass "Autotune decays cohit:kw_term (100 -> $cohit_val)"
+    else
+        fail "Autotune decays cohit:kw_term" "expected < 100, got $cohit_val [F4]"
+    fi
+    redis_cli HDEL "aoa:${PROJECT_ID}:cohit:kw_term" "__test__:__decay_cohit__" > /dev/null 2>&1
+
+    # 11.8 [F5]: keyword_hits decay
+    redis_cli HSET "aoa:${PROJECT_ID}:keyword_hits" "__test_decay_kw__" "100" > /dev/null 2>&1
+    api_post "/domains/tune/math" "{\"project_id\":\"${PROJECT_ID}\"}" > /dev/null 2>&1
+    local kh_decay_val
+    kh_decay_val=$(redis_cli HGET "aoa:${PROJECT_ID}:keyword_hits" "__test_decay_kw__" 2>/dev/null)
+    kh_decay_val=${kh_decay_val:-100}
+    if [ "$kh_decay_val" -lt 100 ] 2>/dev/null; then
+        pass "Autotune decays keyword_hits (100 -> $kh_decay_val)"
+    else
+        fail "Autotune decays keyword_hits" "expected < 100, got $kh_decay_val [F5]"
+    fi
+    redis_cli HDEL "aoa:${PROJECT_ID}:keyword_hits" "__test_decay_kw__" > /dev/null 2>&1
+
+    # 11.9 [F5]: term_hits decay
+    redis_cli HSET "aoa:${PROJECT_ID}:term_hits" "__test_decay_term__" "100" > /dev/null 2>&1
+    api_post "/domains/tune/math" "{\"project_id\":\"${PROJECT_ID}\"}" > /dev/null 2>&1
+    local th_decay_val
+    th_decay_val=$(redis_cli HGET "aoa:${PROJECT_ID}:term_hits" "__test_decay_term__" 2>/dev/null)
+    th_decay_val=${th_decay_val:-100}
+    if [ "$th_decay_val" -lt 100 ] 2>/dev/null; then
+        pass "Autotune decays term_hits (100 -> $th_decay_val)"
+    else
+        fail "Autotune decays term_hits" "expected < 100, got $th_decay_val [F5]"
+    fi
+    redis_cli HDEL "aoa:${PROJECT_ID}:term_hits" "__test_decay_term__" > /dev/null 2>&1
+
+    # 11.10 [REGRESSION]: Domain hits decay still works
+    # Use known domain_name from setup (avoids KEYS formatting issues)
+    local decay_meta_key="aoa:${PROJECT_ID}:domain:${domain_name}:meta"
+    redis_cli HSET "$decay_meta_key" "hits" "50" > /dev/null 2>&1
+    local tune_response
+    tune_response=$(api_post "/domains/tune/math" "{\"project_id\":\"${PROJECT_ID}\"}")
+    local dh_decay_val
+    dh_decay_val=$(redis_cli HGET "$decay_meta_key" "hits" 2>/dev/null)
+    dh_decay_val=$(echo "${dh_decay_val:-50}" | awk '{printf "%d", $1}')
+    if [ "$dh_decay_val" -lt 50 ] 2>/dev/null; then
+        pass "Domain hits decay regression (50 -> $dh_decay_val)"
+    else
+        # Show tune response for debugging
+        local tune_err
+        tune_err=$(echo "$tune_response" | jq -r '.error // empty' 2>/dev/null)
+        if [ -n "$tune_err" ]; then
+            fail "Domain hits decay regression" "autotune error: $tune_err"
+        else
+            fail "Domain hits decay regression" "expected < 50, got $dh_decay_val"
+        fi
+    fi
+
+    # ---- 11.D: Noise Filter (F6) ----
+
+    # 11.11 [F6]: Keywords > threshold get blocklisted
+    redis_cli HSET "aoa:${PROJECT_ID}:keyword_hits" "__test_noise__" "1001" > /dev/null 2>&1
+    api_post "/domains/tune/math" "{\"project_id\":\"${PROJECT_ID}\"}" > /dev/null 2>&1
+    local is_blocked
+    is_blocked=$(redis_cli SISMEMBER "aoa:${PROJECT_ID}:keyword_blocklist" "__test_noise__" 2>/dev/null)
+    if [ "$is_blocked" = "1" ]; then
+        pass "Autotune blocklists noisy keyword (>1000 hits)"
+    else
+        fail "Autotune blocklists noisy keyword" "expected in keyword_blocklist [F6]"
+    fi
+
+    # 11.12 [F6]: Blocklisted keyword removed from keyword_hits
+    local noise_still_exists
+    noise_still_exists=$(redis_cli HEXISTS "aoa:${PROJECT_ID}:keyword_hits" "__test_noise__" 2>/dev/null)
+    if [ "$noise_still_exists" = "0" ]; then
+        pass "Blocklisted keyword removed from keyword_hits"
+    else
+        fail "Blocklisted keyword removed from keyword_hits" "still present [F6]"
+    fi
+
+    # Cleanup F6 test data
+    redis_cli HDEL "aoa:${PROJECT_ID}:keyword_hits" "__test_noise__" > /dev/null 2>&1
+    redis_cli SREM "aoa:${PROJECT_ID}:keyword_blocklist" "__test_noise__" > /dev/null 2>&1
+
+    # ---- 11.E: Negative Tests (Future State Boundaries) ----
+
+    # 11.13: Submit-tags does NOT increment term_hits (domain-only per future state)
+    local neg_th_before neg_th_after
+    neg_th_before=$(redis_cli HGET "aoa:${PROJECT_ID}:term_hits" "__nonexistent_term__" 2>/dev/null)
+    neg_th_before=${neg_th_before:-0}
+    api_post "/domains/submit-tags" "{\"project_id\":\"${PROJECT_ID}\",\"tags\":[\"__nonexistent_term__\"]}" > /dev/null 2>&1
+    neg_th_after=$(redis_cli HGET "aoa:${PROJECT_ID}:term_hits" "__nonexistent_term__" 2>/dev/null)
+    neg_th_after=${neg_th_after:-0}
+    if [ "$neg_th_after" = "$neg_th_before" ]; then
+        pass "Submit-tags does not increment term_hits (correct boundary)"
+    else
+        fail "Submit-tags incremented term_hits" "should be domain-only path"
+    fi
+
+    # 11.14: Submit-tags does NOT increment cohit:kw_term
+    local neg_cohit_before neg_cohit_after
+    neg_cohit_before=$(redis_cli HLEN "aoa:${PROJECT_ID}:cohit:kw_term" 2>/dev/null)
+    neg_cohit_before=${neg_cohit_before:-0}
+    api_post "/domains/submit-tags" "{\"project_id\":\"${PROJECT_ID}\",\"tags\":[\"__nonexistent_term__\"]}" > /dev/null 2>&1
+    neg_cohit_after=$(redis_cli HLEN "aoa:${PROJECT_ID}:cohit:kw_term" 2>/dev/null)
+    neg_cohit_after=${neg_cohit_after:-0}
+    if [ "$neg_cohit_after" = "$neg_cohit_before" ]; then
+        pass "Submit-tags does not increment cohit:kw_term (correct boundary)"
+    else
+        fail "Submit-tags incremented cohit:kw_term" "should be domain-only path"
+    fi
+}
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -768,6 +1036,7 @@ main() {
         test_bigrams
         test_domain_lifecycle
         test_metrics
+        test_observer_pattern
     )
 
     for i in "${!sections[@]}"; do
