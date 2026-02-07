@@ -3894,6 +3894,10 @@ cmd_domains() {
                 # Link domains to index after enrichment
                 if [ "$count" -gt 0 ]; then
                     cmd_domains link > /dev/null 2>&1
+                    # Clear enrich jobs queued by init-skeleton (build --all did the work)
+                    curl -s -X POST "${INDEX_URL}/jobs/clear" \
+                        -H "Content-Type: application/json" \
+                        -d "{\"project_id\":\"${project_id}\",\"queue\":\"all\"}" > /dev/null 2>&1
                 fi
 
                 echo -e "\n${GREEN}✓${NC} ${BOLD}${count}${NC} domains enriched and linked"
