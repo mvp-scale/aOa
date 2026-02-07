@@ -731,48 +731,33 @@ cmd_egrep() {
         fi
     fi
 
-    # Handle both simple string and JSON pattern formats
-    local patterns
-    if [[ "$pattern" == "{"* ]]; then
-        # Already JSON format
-        patterns="$pattern"
-    else
-        # Simple string - wrap in JSON with "match" key
-        local escaped=$(printf '%s' "$pattern" | jq -Rs .)
-        patterns="{\"match\": ${escaped}}"
-    fi
-
-    # Phase 3B: Use optimized /grep endpoint with regex=true (same as grep)
+    # Phase 3B: Use optimized /grep endpoint with regex=true
     export AOA_SEARCH_TYPE="regex"
     local project_id=$(get_project_id)
     local encoded_pattern=$(printf '%s' "$pattern" | jq -sRr @uri)
 
-    # Build query params - same as grep but with regex=true
+    # Build query params
     local params="q=${encoded_pattern}&regex=true"
     [ -n "$project_id" ] && params="${params}&project_id=${project_id}"
     [ "$case_insensitive" = true ] && params="${params}&ci=1"
     [ -n "$since_seconds" ] && params="${params}&since=${since_seconds}"
     [ -n "$file_filter" ] && params="${params}&filter=$(printf '%s' "$file_filter" | jq -sRr @uri)"
 
-    local url="${INDEX_URL}/grep?${params}"
-    # TODO: repo support would need different handling
-
-    local result=$(curl -s "$url")
+    local result=$(curl -s "${INDEX_URL}/grep?${params}")
     # CLI-001: Check for API failure
     if [ -z "$result" ]; then
         echo "Error: API unavailable at ${INDEX_URL}" >&2
         return 1
     fi
 
-    local err=$(echo "$result" | jq -r '.error // empty')
-    if [ -n "$err" ]; then
+    # Single jq call for error + ms + count
+    local err ms count
+    read -r err ms count < <(echo "$result" | jq -r '[(.error // "-"), (.ms // 0), (.total_matches // (.results | length))] | @tsv')
+    if [ "$err" != "-" ]; then
         echo -e "${RED}${err}${NC}"
         return 1
     fi
 
-    # GL-050: Universal Output - use SAME display function as grep
-    local ms=$(echo "$result" | jq -r '.ms')
-    local count=$(echo "$result" | jq '.total_matches // (.results | length)')
     display_ranked_grep_results "$result" "$pattern" "$ms" "$count"
 }
 
