@@ -21,6 +21,8 @@ Spawn ONE background Task:
 - run_in_background: true
 - model: opus
 
+**NON-BLOCKING: After launching the task, STOP. Do not call TaskOutput. Do not wait. Return control to the user immediately. The completion notification arrives automatically.**
+
 Prompt:
 ```
 You are setting up aOa intelligence. Complete ONLY these 3 steps. Do NOT explore the codebase, read files, or run any commands not listed below.
