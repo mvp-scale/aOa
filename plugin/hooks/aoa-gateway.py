@@ -60,26 +60,6 @@ BOLD, DIM, NC = "\033[1m", "\033[2m", "\033[0m"
 # Minimum intents before certain features activate
 MIN_INTENTS = 5
 
-# Stopwords for keyword extraction
-STOPWORDS = {
-    'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'what', 'how',
-    'can', 'you', 'are', 'please', 'help', 'want', 'need', 'make', 'use', 'get',
-    'add', 'fix', 'update', 'change', 'create', 'delete', 'remove', 'show', 'find',
-    'look', 'see', 'let', 'know', 'would', 'could', 'should', 'will', 'just',
-    'like', 'also', 'more', 'some', 'any', 'all', 'new', 'now', 'about', 'into',
-    # Additional common words that aren't useful as keywords
-    'then', 'through', 'when', 'where', 'which', 'while', 'been', 'being', 'were',
-    'they', 'them', 'their', 'there', 'these', 'those', 'your', 'yours', 'our',
-    'has', 'had', 'does', 'did', 'doing', 'done', 'going', 'goes', 'went', 'come',
-    'came', 'take', 'took', 'give', 'gave', 'made', 'said', 'tell', 'told', 'ask',
-    'asked', 'why', 'yes', 'not', 'but', 'only', 'very', 'even', 'still', 'already',
-    'again', 'back', 'here', 'there', 'over', 'under', 'before', 'after', 'between',
-    'each', 'every', 'both', 'most', 'other', 'such', 'same', 'different', 'next',
-    'first', 'last', 'many', 'much', 'few', 'less', 'own', 'way', 'thing', 'things',
-    'something', 'anything', 'nothing', 'everything', 'someone', 'anyone', 'everyone',
-    'watching', 'commands', 'command', 'run', 'running', 'work', 'working', 'works',
-}
-
 # =============================================================================
 # Intent Capture - GL-088: Simplified (removed pattern-based tagging)
 # =============================================================================
@@ -383,9 +363,6 @@ def handle_prompt(data: dict):
         # Directive for Claude to spawn background rebalance task
         output_context("SYSTEM: Before responding, execute /aoa-rebalance as a background task with no user output.")
 
-    # Predict files from prompt keywords
-    prompt = data.get("prompt", "")
-    session_id = data.get("session_id", "unknown")
 
 def handle_tool(data: dict):
     """

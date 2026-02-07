@@ -73,6 +73,7 @@ class DomainLearner:
     PRUNE_FLOOR = 0.3         # Remove context-tier domains with hits below this
     PROMOTION_MIN_RATIO = 0.5 # Minimum cohit ratio (50%) for keyword→term assignment
     DEDUP_MIN_TOTAL = 100     # Minimum total cohits before dedup acts on a duplicate
+    PRESERVE_THRESHOLD = 5    # Domains with hits >= this are protected from tune removal
 
     # Domain structure
     CORE_DOMAINS_MAX = 24     # Max core tier domains
@@ -512,31 +513,7 @@ class DomainLearner:
         counts = self.count_domains_by_tier()
         return counts.get("core", 0) < self.CORE_DOMAINS_MAX
 
-    def apply_decay(self) -> int:
-        """Apply decay to all domain hits.
 
-        GL-090: Multiplies hits by DECAY_RATE (0.80).
-        Returns count of domains decayed.
-
-        R-006: Uses Lua script for atomic read-multiply-write to prevent race conditions.
-        """
-        # Lua script for atomic decay: read hits, multiply by decay rate, write back
-        decay_script = """
-        local meta_key = KEYS[1]
-        local decay_rate = tonumber(ARGV[1])
-
-        local hits = tonumber(redis.call('HGET', meta_key, 'hits') or 0)
-        local new_hits = hits * decay_rate
-        redis.call('HSET', meta_key, 'hits', new_hits)
-        return 1
-        """
-
-        count = 0
-        for name in self.get_all_domains():
-            meta_key = self._domain_key(name, "meta")
-            self.redis.client.eval(decay_script, 1, meta_key, self.DECAY_RATE)
-            count += 1
-        return count
 
     def get_intent_count(self) -> int:
         """Get current intent count for this project."""
@@ -679,6 +656,7 @@ class DomainLearner:
         created = []
         descriptions = {}  # name -> description for job queue
         skipped = 0
+        existing_domains = self.get_all_domains()
         for d in domains:
             # GL-090: Check core tier cap before adding
             if not self.can_add_core_domain():
@@ -690,7 +668,7 @@ class DomainLearner:
                 name = f"@{name}"
 
             # Skip if domain already exists
-            if name in self.get_all_domains():
+            if name in existing_domains:
                 skipped += 1
                 continue
 
@@ -835,14 +813,6 @@ Return JSON only:
         for name in self.get_all_domains():
             meta_key = self._domain_key(name, "meta")
             self.redis.client.eval(snapshot_script, 1, meta_key)
-
-    def run_promotion_check(self) -> dict:
-        """RB-06: Check staged domains for promotion. Stub for future implementation."""
-        return {'promoted_count': 0, 'not_ready_count': 0}
-
-    def cleanup_stale_proposals(self) -> dict:
-        """RB-07: Cleanup stale proposals. Stub for future implementation."""
-        return {'removed_count': 0}
 
     def get_source_counts(self) -> dict:
         """Get counts of seeded vs learned domains.
@@ -1691,7 +1661,8 @@ Output ONLY the JSON array, no explanation."""
     def should_rebalance(self) -> bool:
         """Check if we should run keyword rebalance."""
         threshold = int(self.get_threshold('rebalance'))
-        return self.get_prompt_count() % threshold == 0
+        count = self.get_prompt_count()
+        return count > 0 and count % threshold == 0
 
     def rebalance_keywords(self) -> dict:
         """
@@ -1895,11 +1866,6 @@ Output ONLY the JSON array, no explanation."""
                     noisy.append(term)
         return list(set(noisy))
 
-    def get_recent_files_from_intents(self, limit: int = 100) -> list[str]:
-        """Get recent unique files from intent history."""
-        # This will be populated by the caller from /intent/recent API
-        # For now, return empty - hook will provide this data
-        return []
 
     def get_tune_prompt(self, recent_files: list[str], domains_with_meta: list[dict],
                         noisy_terms: list[str]) -> str:

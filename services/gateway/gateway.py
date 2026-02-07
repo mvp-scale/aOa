@@ -36,7 +36,7 @@ app = FastAPI(
 SERVICES = {
     "index": os.environ.get("INDEX_URL", "http://index:9999"),
     "status": os.environ.get("STATUS_URL", "http://status:9998"),
-    "git-proxy": os.environ.get("GIT_PROXY_URL", "http://git-proxy:9997"),
+    "git-proxy": os.environ.get("PROXY_URL", os.environ.get("GIT_PROXY_URL", "http://proxy:9997")),
 }
 
 # Routing table - defines what goes where

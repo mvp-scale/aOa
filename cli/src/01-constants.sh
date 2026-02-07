@@ -52,5 +52,6 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 RED='\033[0;31m'
+MAGENTA='\033[0;35m'     # Domain names
 BRIGHT_RED='\033[1;91m'  # Search term highlighting
 NC='\033[0m'             # No color (reset)

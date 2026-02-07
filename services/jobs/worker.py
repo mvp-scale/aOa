@@ -180,50 +180,6 @@ class JobWorker:
         # Note: File cleanup happens in CLI (aoa domains link) after successful link
         # Worker runs in Docker and can't reliably delete host files
 
-    def _handle_map_keywords(self, job: Job) -> None:
-        """Map domain keywords to codebase files."""
-        domain_name = job.payload.get("domain")
-        scope = job.payload.get("scope", "all")
-
-        print(f"[Worker] MAP_KEYWORDS: {domain_name} scope={scope}", flush=True)
-        # Implementation would scan files and create keyword->file mappings
-
-    def _handle_analyze_intent(self, job: Job) -> None:
-        """Analyze file access patterns for intent phase."""
-        files = job.payload.get("files", [])
-
-        print(f"[Worker] ANALYZE_INTENT: {len(files)} files", flush=True)
-        # Implementation would analyze file patterns to discover domains
-
-    def _handle_discover_domain(self, job: Job) -> None:
-        """Create new domain from discovered patterns."""
-        patterns = job.payload.get("patterns", [])
-
-        print(f"[Worker] DISCOVER_DOMAIN: patterns={patterns}", flush=True)
-        # Implementation would create new domain skeleton
-
-    def _handle_cleanup(self, job: Job) -> None:
-        """Clean up stale or deprecated domains."""
-        domain_name = job.payload.get("domain")
-        action = job.payload.get("action", "deprecate")
-
-        print(f"[Worker] CLEANUP: {domain_name} action={action}", flush=True)
-        # Implementation would mark domain as deprecated or remove
-
-    def _handle_tune(self, job: Job) -> None:
-        """Run domain tuning/rebalancing."""
-        trigger = job.payload.get("trigger", "manual")
-
-        print(f"[Worker] TUNE: trigger={trigger}", flush=True)
-        # Implementation would rebalance domain terms
-
-    def _handle_reindex(self, job: Job) -> None:
-        """Rebuild keyword mappings."""
-        domain_name = job.payload.get("domain")
-
-        print(f"[Worker] REINDEX: {domain_name or 'all'}", flush=True)
-        # Implementation would rebuild keyword->file mappings
-
     def _handle_scrape(self, job: Job) -> None:
         """
         SH-03: Session scrape - extract bigrams + track file hits.
@@ -332,6 +288,7 @@ class JobWorker:
 
         except Exception as e:
             print(f"[Worker] SCRAPE: bigram extraction failed: {e}", flush=True)
+            raise  # Let process_one() mark job as failed
 
         # SH-09: Track file hits from intent records
         try:

@@ -326,53 +326,6 @@ class Scorer:
     # Decay (P1-008)
     # =========================================================================
 
-    def apply_decay(self, half_life_seconds: int = None) -> int:
-        """
-        Apply time-based decay to recency scores.
-
-        This reduces scores for files that haven't been accessed recently,
-        allowing frequently-but-not-recently accessed files to fade.
-
-        Args:
-            half_life_seconds: Time for score to decay by half (default: 1 hour)
-
-        Returns:
-            Number of files affected
-        """
-        half_life = half_life_seconds or self.RECENCY_HALF_LIFE
-        now = int(time.time())
-
-        # Lua script for atomic decay
-        decay_script = """
-        local key = KEYS[1]
-        local now = tonumber(ARGV[1])
-        local half_life = tonumber(ARGV[2])
-
-        local members = redis.call('ZRANGE', key, 0, -1, 'WITHSCORES')
-        local count = 0
-
-        for i = 1, #members, 2 do
-            local member = members[i]
-            local old_score = tonumber(members[i + 1])
-            local age = now - old_score
-
-            if age > 0 then
-                -- Exponential decay: new_score = old_score * (0.5 ^ (age / half_life))
-                local decay_factor = math.pow(0.5, age / half_life)
-                local new_score = old_score * decay_factor
-
-                redis.call('ZADD', key, new_score, member)
-                count = count + 1
-            end
-        end
-
-        return count
-        """
-
-        return self.redis.eval(decay_script,
-                               [RedisClient.PREFIX_RECENCY],
-                               [now, half_life])
-
     # =========================================================================
     # Statistics
     # =========================================================================

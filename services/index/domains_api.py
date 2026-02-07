@@ -567,7 +567,7 @@ def domains_learn():
             keywords = domain_data.get('keywords', {})
             for term, kws in keywords.items():
                 for kw in kws:
-                    learner.add_keyword_to_term(term, kw)
+                    learner.add_keyword_to_term(kw, term)
 
         return jsonify({
             'success': True,
@@ -1158,7 +1158,7 @@ def domains_learned():
             # Add tag as keyword to the domain's first term
             terms = list(learner.get_domain_terms(domain))
             if terms:
-                learner.add_keyword_to_term(terms[0], tag)
+                learner.add_keyword_to_term(tag, terms[0])
                 added += 1
             else:
                 # Domain doesn't exist - create it with tag as term

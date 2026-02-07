@@ -299,6 +299,12 @@ class JobQueue:
         self.redis.client.delete(self._key("complete"))
         return count
 
+    def clear_failed(self) -> int:
+        """Clear failed jobs list. Returns count cleared."""
+        count = self.redis.client.llen(self._key("failed"))
+        self.redis.client.delete(self._key("failed"))
+        return count
+
     def clear_all(self) -> dict:
         """Clear all queues. Returns counts."""
         pipe = self.redis.client.pipeline()
@@ -335,46 +341,6 @@ def create_enrich_job(project_id: str, domain: str, description: str = "") -> Jo
         payload={
             "domain": domain,
             "description": description
-        }
-    )
-
-
-def create_map_keywords_job(project_id: str, domain: str, scope: str = "all") -> Job:
-    """Create a keyword mapping job."""
-    return Job(
-        id="",
-        type=JobType.MAP_KEYWORDS,
-        project_id=project_id,
-        phase="intelligence",
-        payload={
-            "domain": domain,
-            "scope": scope  # "all" or "recent"
-        }
-    )
-
-
-def create_intent_job(project_id: str, files: list[str]) -> Job:
-    """Create an intent analysis job."""
-    return Job(
-        id="",
-        type=JobType.ANALYZE_INTENT,
-        project_id=project_id,
-        phase="intent",
-        payload={
-            "files": files
-        }
-    )
-
-
-def create_discover_job(project_id: str, patterns: list[str]) -> Job:
-    """Create a domain discovery job."""
-    return Job(
-        id="",
-        type=JobType.DISCOVER_DOMAIN,
-        project_id=project_id,
-        phase="intent",
-        payload={
-            "patterns": patterns
         }
     )
 

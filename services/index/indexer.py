@@ -92,7 +92,6 @@ except ImportError:
         return None
 
 # Ranking module for predictive file scoring
-import contextlib
 import sys
 
 sys.path.insert(0, '/app')  # For Docker
@@ -113,6 +112,28 @@ except ImportError:
     DOMAINS_AVAILABLE = False
     DomainLearner = None
     Domain = None
+
+# Session log parser for transition predictions
+try:
+    from ranking.session_parser import SessionLogParser
+    SESSION_PARSER_AVAILABLE = True
+except ImportError:
+    SESSION_PARSER_AVAILABLE = False
+
+
+def read_file_snippet(file_path: str, max_lines: int = 10) -> str | None:
+    """Read first N lines of a file for snippet display."""
+    try:
+        with open(file_path, 'r', errors='replace') as f:
+            lines = []
+            for i, line in enumerate(f):
+                if i >= max_lines:
+                    break
+                lines.append(line.rstrip())
+            return '\n'.join(lines) if lines else None
+    except (OSError, IOError):
+        return None
+
 
 # GL-089: Job queue for background work
 try:
@@ -207,7 +228,6 @@ def calculate_intent_score(result_tags: list, search_intent: list) -> float:
     result_set = set(result_tags)
 
     intersection = len(search_set & result_set)
-    len(search_set | result_set)
 
     # Boost for matching search intent (weighted towards search terms)
     match_ratio = intersection / len(search_set) if search_set else 0
@@ -4334,7 +4354,6 @@ def infer_patterns():
     - @domain: Applied to parent containers (class, module, route)
     - #term: Applied to specific symbols where keywords match
     """
-    import re
     from pathlib import Path
 
     data = request.get_json(silent=True) or {}
@@ -4536,31 +4555,6 @@ def list_projects():
 # ============================================================================
 
 # GL-084: _load_universal_domains() removed - use project-domains.json via /aoa-start
-
-
-# GL-053 Phase C: Continuous domain learning
-_learning_lock = threading.Lock()
-_learning_in_progress = set()  # Track which projects are currently learning
-
-
-def _do_domain_learning(project_id: str):
-    """
-    Domain learning threshold reached - signal hook mode.
-
-    aOa uses HOOKS to access Haiku, not direct API calls.
-    This keeps aOa accessible without requiring API keys.
-
-    GL-062: Fire-and-forget - pending flag and count reset happen in trigger,
-    not here. This function just logs that learning was triggered.
-    The hook will output instructions, but we don't wait for completion.
-    Counter keeps going, and if Claude doesn't complete learning, it triggers
-    again in another 10 prompts. This is resilient vs. blocking forever.
-    """
-    if not DOMAINS_AVAILABLE:
-        return
-
-    print(f"[DomainLearning] Ready for hook - {project_id}", flush=True)
-
 
 
 def _trigger_domain_learning_if_needed(project_id: str, intent_index: 'IntentIndex' = None):
@@ -6459,7 +6453,6 @@ def extract_keywords(text: str) -> list:
 
     Simple approach: tokenize, lowercase, filter stopwords.
     """
-    import re
     # Tokenize: extract words
     tokens = re.findall(r'[a-zA-Z][a-zA-Z0-9_]*', text.lower())
 
@@ -6483,7 +6476,6 @@ def map_keywords_to_tags(keywords: list) -> list:
 
     Matches keywords against INTENT_PATTERNS.
     """
-    import re
     matched_tags = set()
     combined = ' '.join(keywords)
 
@@ -7122,6 +7114,8 @@ def jobs_clear():
             result = q.clear_all()
         elif queue_type == 'complete':
             result = {'cleared': q.clear_complete()}
+        elif queue_type == 'failed':
+            result = {'cleared': q.clear_failed()}
         else:
             return jsonify({'error': f'Unknown queue type: {queue_type}'}), 400
 

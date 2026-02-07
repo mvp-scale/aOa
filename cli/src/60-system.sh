@@ -581,8 +581,8 @@ cmd_health() {
         local domain_count=0
         local term_count=0
         if [ -n "$domain_stats" ]; then
-            domain_count=$(echo "$domain_stats" | jq -r '.domain_count // 0' 2>/dev/null)
-            term_count=$(echo "$domain_stats" | jq -r '.term_count // 0' 2>/dev/null)
+            domain_count=$(echo "$domain_stats" | jq -r '.domains // 0' 2>/dev/null)
+            term_count=$(echo "$domain_stats" | jq -r '.total_terms // 0' 2>/dev/null)
         fi
 
         # Get savings
@@ -611,63 +611,6 @@ cmd_health() {
     else
         echo -e "Status: ${RED}✗ Issues detected${NC}"
         echo -e "${DIM}Run 'aoa init' to configure this project${NC}"
-    fi
-}
-
-# Infer tags from symbol name (free pattern-based tagging)
-infer_tags_from_name() {
-    local name="$1"
-    local kind="$2"
-    local tags=()
-
-    # Convert camelCase/PascalCase to words
-    local words=$(echo "$name" | sed 's/\([a-z]\)\([A-Z]\)/\1 \2/g' | sed 's/_/ /g' | tr '[:upper:]' '[:lower:]')
-
-    # Common action verbs → tags
-    [[ "$words" =~ ^(get|fetch|load|read) ]] && tags+=("#read")
-    [[ "$words" =~ ^(set|save|write|store|update|put) ]] && tags+=("#write")
-    [[ "$words" =~ ^(delete|remove|clear) ]] && tags+=("#delete")
-    [[ "$words" =~ ^(create|add|insert|new|make|build) ]] && tags+=("#create")
-    [[ "$words" =~ ^(handle|process|on) ]] && tags+=("#handler")
-    [[ "$words" =~ ^(validate|check|verify|is|has|can) ]] && tags+=("#validation")
-    [[ "$words" =~ ^(parse|extract|convert|transform) ]] && tags+=("#transform")
-    [[ "$words" =~ ^(init|setup|configure|start|boot) ]] && tags+=("#init")
-    [[ "$words" =~ ^test ]] && tags+=("#test")
-
-    # Domain keywords → tags
-    [[ "$words" =~ auth ]] && tags+=("#auth")
-    [[ "$words" =~ user ]] && tags+=("#user")
-    [[ "$words" =~ login|logout|session ]] && tags+=("#session")
-    [[ "$words" =~ token|jwt|oauth ]] && tags+=("#token")
-    [[ "$words" =~ api|endpoint|route ]] && tags+=("#api")
-    [[ "$words" =~ database|db|sql|query ]] && tags+=("#database")
-    [[ "$words" =~ cache|redis ]] && tags+=("#cache")
-    [[ "$words" =~ file|path|dir ]] && tags+=("#filesystem")
-    [[ "$words" =~ config|setting|option ]] && tags+=("#config")
-    [[ "$words" =~ error|exception|fail ]] && tags+=("#error")
-    [[ "$words" =~ log|debug|trace ]] && tags+=("#logging")
-    [[ "$words" =~ http|request|response ]] && tags+=("#http")
-    [[ "$words" =~ json|xml|yaml ]] && tags+=("#serialization")
-    [[ "$words" =~ encrypt|decrypt|hash|secret ]] && tags+=("#security")
-    [[ "$words" =~ search|find|filter|sort ]] && tags+=("#search")
-    [[ "$words" =~ render|display|view|template ]] && tags+=("#render")
-    [[ "$words" =~ email|mail|send|notify ]] && tags+=("#notification")
-    [[ "$words" =~ queue|job|task|worker ]] && tags+=("#async")
-    [[ "$words" =~ metric|stat|count|measure ]] && tags+=("#metrics")
-    [[ "$words" =~ index|symbol|outline ]] && tags+=("#index")
-
-    # Kind-based tags
-    [[ "$kind" == "class" ]] && tags+=("#class")
-    [[ "$kind" == "function" && "$words" =~ service$ ]] && tags+=("#service")
-    [[ "$kind" == "function" && "$words" =~ manager$ ]] && tags+=("#manager")
-    [[ "$kind" == "function" && "$words" =~ helper$ ]] && tags+=("#utility")
-    [[ "$kind" == "function" && "$words" =~ util$ ]] && tags+=("#utility")
-
-    # Return unique tags as JSON array (max 5)
-    if [ ${#tags[@]} -gt 0 ]; then
-        printf '%s\n' "${tags[@]}" | sort -u | head -5 | jq -R . | jq -s .
-    else
-        echo "[]"
     fi
 }
 
@@ -1298,6 +1241,11 @@ cmd_domains() {
     local enriched_count=$(echo "$stats" | jq -r '.enrichment.enriched // 0')
     local enrichment_total=$(echo "$stats" | jq -r '.enrichment.total // 0')
     local enrichment_complete=$(echo "$stats" | jq -r '.enrichment.complete // false')
+    # GL-054: Learning and tune history
+    local last_learn=$(echo "$stats" | jq -r '.last_learn // 0')
+    local tune_kept=$(echo "$stats" | jq -r '.tune_kept_last // 0')
+    local tune_added=$(echo "$stats" | jq -r '.tune_added_last // 0')
+    local tune_removed=$(echo "$stats" | jq -r '.tune_removed_last // 0')
 
     # Get tokens saved from metrics endpoint
     local metrics=$(curl -s "${INDEX_URL}/metrics?project_id=${project_id}")

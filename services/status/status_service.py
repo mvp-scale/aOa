@@ -48,7 +48,11 @@ PRICING = {
     'claude-opus-4': {'input': 15.00, 'output': 75.00, 'cache_read': 1.50, 'cache_write': 18.75},
     'claude-sonnet-4': {'input': 3.00, 'output': 15.00, 'cache_read': 0.30, 'cache_write': 3.75},
 
+    # 4.6 generation
+    'claude-opus-4-6': {'input': 15.00, 'output': 75.00, 'cache_read': 1.50, 'cache_write': 18.75},
+
     # Aliases
+    'opus-4-6': {'input': 15.00, 'output': 75.00, 'cache_read': 1.50, 'cache_write': 18.75},
     'opus-4.5': {'input': 15.00, 'output': 75.00, 'cache_read': 1.50, 'cache_write': 18.75},
     'sonnet-4.5': {'input': 3.00, 'output': 15.00, 'cache_read': 0.30, 'cache_write': 3.75},
     'opus-4': {'input': 15.00, 'output': 75.00, 'cache_read': 1.50, 'cache_write': 18.75},
@@ -58,9 +62,15 @@ PRICING = {
 
 # Context window sizes
 CONTEXT_LIMITS = {
+    'claude-opus-4-6': 200000,
+    'claude-opus-4.5': 200000,
+    'claude-sonnet-4.5': 200000,
     'claude-opus-4': 200000,
     'claude-sonnet-4': 200000,
     'claude-haiku-4': 200000,
+    'opus-4-6': 200000,
+    'opus-4.5': 200000,
+    'sonnet-4.5': 200000,
     'opus-4': 200000,
     'sonnet-4': 200000,
     'haiku-4': 200000,
