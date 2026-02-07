@@ -2346,9 +2346,14 @@ class IndexManager:
         """Get the appropriate index for a query.
 
         Returns the project index matching project_id, or the first registered
-        project if no project_id is specified.
+        project if no project_id is specified. On miss, reloads projects.json
+        in case it was updated after startup.
         """
         if project_id:
+            if project_id in self.projects:
+                return self.projects[project_id]
+            # Miss - try reloading projects.json (may have been updated)
+            self._load_projects()
             if project_id in self.projects:
                 return self.projects[project_id]
             return None
@@ -3097,15 +3102,16 @@ class IntentIndex:
 
             domains.sort(key=lambda x: x['hits'], reverse=True)
 
-            # Get terms from term keys (GL-090 structure)
+            # Get terms from claimants SETs (GL-090 structure)
             # O1-001: Use scan_iter instead of keys() to avoid blocking Redis
             terms = []
-            for key in r.scan_iter(match=f"aoa:{proj}:term:*", count=100):
+            for key in r.scan_iter(match=f"aoa:{proj}:term:*:claimants", count=100):
                 key_str = key.decode() if isinstance(key, bytes) else key
-                # Extract term name from key like "aoa:proj:term:search"
-                term_name = key_str.split(":")[-1]
-                # Get score (number of domains using this term)
-                score = r.zcard(key_str)
+                # Extract term name from key like "aoa:proj:term:search:claimants"
+                parts = key_str.split(":")
+                term_name = parts[-2]
+                # Get score (number of domains claiming this term)
+                score = r.scard(key_str)
                 if score and score > 0:
                     terms.append({'name': f"#{term_name}", 'hits': score})
 
@@ -3148,7 +3154,7 @@ def health():
 
     response = {
         'status': 'ok',
-        'mode': 'global' if manager.global_mode else 'legacy',
+        'mode': 'multi-project',
         'redis': {'connected': redis_connected},
         'repos': [r.get_stats() for r in manager.repos.values()],
         'content_cache': content_cache.stats(),  # GL-046.1: LRU cache stats
@@ -4521,7 +4527,7 @@ def list_projects():
 
     return jsonify({
         'projects': projects,
-        'global_mode': manager.global_mode
+        'project_count': len(manager.projects)
     })
 
 
