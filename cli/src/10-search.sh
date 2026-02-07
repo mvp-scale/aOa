@@ -145,8 +145,12 @@ cmd_grep() {
                 and_mode=true
                 shift
                 ;;
-            -i|--ignore-case|--no-ignore-case)
+            -i|--ignore-case)
                 case_insensitive=true
+                shift
+                ;;
+            --no-ignore-case)
+                # Already case-sensitive by default — no-op for grep compatibility
                 shift
                 ;;
             -w|--word-regexp)

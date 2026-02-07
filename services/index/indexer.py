@@ -4682,49 +4682,6 @@ def changes():
         'ms': (time.time() - start) * 1000
     })
 
-@app.route('/file')
-def file_content():
-    start = time.time()
-    path = request.args.get('path', '')
-    lines = request.args.get('lines')
-    symbol = request.args.get('symbol')
-
-    full_path = manager.get_local().root / path
-    if not full_path.exists():
-        return jsonify({'error': 'File not found'}), 404
-
-    content = full_path.read_text(encoding='utf-8', errors='ignore')
-    all_lines = content.split('\n')
-
-    if lines:
-        parts = lines.split('-')
-        start_l = int(parts[0]) - 1
-        end_l = int(parts[1]) if len(parts) > 1 else len(all_lines)
-        extracted = '\n'.join(all_lines[start_l:end_l])
-        return jsonify({
-            'content': extracted,
-            'lines': (start_l + 1, end_l),
-            'ms': (time.time() - start) * 1000
-        })
-    elif symbol:
-        for i, line in enumerate(all_lines):
-            if symbol in line:
-                start_l = max(0, i - 5)
-                end_l = min(len(all_lines), i + 20)
-                extracted = '\n'.join(all_lines[start_l:end_l])
-                return jsonify({
-                    'content': extracted,
-                    'lines': (start_l + 1, end_l),
-                    'ms': (time.time() - start) * 1000
-                })
-        return jsonify({'error': 'Symbol not found'}), 404
-    else:
-        return jsonify({
-            'content': content,
-            'lines': (1, len(all_lines)),
-            'ms': (time.time() - start) * 1000
-        })
-
 @app.route('/file/meta')
 def file_meta():
     """Get file metadata (size, language, mtime) for baseline calculations."""
