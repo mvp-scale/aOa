@@ -266,15 +266,6 @@ PROMPT_COUNT=${PROMPT_COUNT:-0}
 FIRST_REBALANCE_DONE=false
 [ "$PROMPT_COUNT" -gt 0 ] 2>/dev/null && FIRST_REBALANCE_DONE=true
 
-# GL-088: Get top hit domains for display (only when in active intent phase)
-TOP_HITS=""
-if [ "$ENRICHMENT_COMPLETE" = "true" ] && [ "$FIRST_REBALANCE_DONE" = "true" ]; then
-    HIT_DATA=$(curl -s --max-time 0.2 "${AOA_URL}/intent/hits?project_id=${AOA_PROJECT_ID}&limit=3" 2>/dev/null)
-    if [ -n "$HIT_DATA" ] && [ "$HIT_DATA" != "null" ]; then
-        TOP_HITS=$(echo "$HIT_DATA" | jq -r '.recent[:3] | join(" ")' 2>/dev/null)
-    fi
-fi
-
 # Check if intent learning is pending (haiku-pending flag)
 LEARNING_PENDING=false
 PENDING_DATA=$(curl -s --max-time 0.2 "${AOA_URL}/domains/haiku-pending?project_id=${AOA_PROJECT_ID}" 2>/dev/null)
@@ -294,14 +285,11 @@ elif [ "$FIRST_REBALANCE_DONE" != "true" ]; then
     # Learning complete, waiting for first rebalance (25 prompts)
     RIGHT="${GREEN}ready${RESET} ${DIM}→${RESET} ${YELLOW}tracking${RESET}"
 elif [ "$LEARNING_PENDING" = "true" ]; then
-    # Intent learning triggered - show learning state
-    RIGHT="${YELLOW}intent learning${RESET}"
-elif [ -n "$TOP_HITS" ] && [ "$TOP_HITS" != "null" ] && [ "$TOP_HITS" != "" ]; then
-    # Active intent phase with top hits - show what we're learning
-    RIGHT="${GREEN}intent${RESET} ${MAGENTA}${TOP_HITS}${RESET}"
+    # Intent learning triggered - show rebalance state
+    RIGHT="${YELLOW}rebalancing${RESET}"
 else
-    # Active intent phase - self-learning
-    RIGHT="${GREEN}intent${RESET}"
+    # Active - clean, no tags
+    RIGHT=""
 fi
 
 # === OUTPUT ===
@@ -309,4 +297,7 @@ fi
 echo -e "${LINE1}"
 
 # Line 2: aOa status
-echo -e "${CYAN}${BOLD}⚡ aOa${RESET} ${LIGHT} ${INTENT_DISPLAY} ${SEP} ${MIDDLE} ${SEP} ctx:${CTX_COLOR}${TOTAL_FMT}/${CTX_SIZE_FMT}${RESET} ${DIM}(${PERCENT}%)${RESET} ${SEP} ${MODEL} ${SEP} ${RIGHT}"
+# Build line 2 - only append RIGHT section if non-empty
+LINE2="${CYAN}${BOLD}⚡ aOa${RESET} ${LIGHT} ${INTENT_DISPLAY} ${SEP} ${MIDDLE} ${SEP} ctx:${CTX_COLOR}${TOTAL_FMT}/${CTX_SIZE_FMT}${RESET} ${DIM}(${PERCENT}%)${RESET} ${SEP} ${MODEL}"
+[ -n "$RIGHT" ] && LINE2="${LINE2} ${SEP} ${RIGHT}"
+echo -e "${LINE2}"
