@@ -697,7 +697,7 @@ def domains_get_haiku_prompt():
 
     data = request.json or {}
     project_id = data.get('project_id')
-    project_path = data.get('project_path')
+    project_path = data.get('project_path') or (_manager.get_project_path(project_id) if _manager else None)
     limit = data.get('limit', 25)
 
     if not project_id:

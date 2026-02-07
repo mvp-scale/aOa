@@ -5316,27 +5316,6 @@ def intent_stats():
     return jsonify(intent_index.get_stats(project_id))
 
 
-def _resolve_project_path(request_path: str = None, project_id: str = None) -> str:
-    """Resolve the HOST project path for session file lookups.
-
-    In-memory lookup from IndexManager, no disk I/O.
-
-    Args:
-        request_path: Explicit path from request param (wins if set).
-        project_id: Look up a specific project, or first registered.
-    """
-    if request_path:
-        return request_path
-
-    # In-memory lookup from IndexManager
-    if manager:
-        path = manager.get_project_path(project_id, kind='host')
-        if path:
-            return path
-
-    return '/app'
-
-
 @app.route('/cc/prompts')
 def cc_prompts():
     """Get recent user prompts from Claude Code session history.
@@ -5357,7 +5336,7 @@ def cc_prompts():
 
     try:
         limit = int(request.args.get('limit', 25))
-        project_path = _resolve_project_path(request.args.get('project_path'))
+        project_path = request.args.get('project_path') or manager.get_project_path()
 
         metrics = SessionMetrics(project_path)
         prompts = metrics.get_prompts(limit=limit)
@@ -5402,7 +5381,7 @@ def cc_conversation():
         since = request.args.get('since', '')  # ISO timestamp filter
 
         # Get HOST project path for session path encoding
-        project_path = _resolve_project_path(request.args.get('project_path'))
+        project_path = request.args.get('project_path') or manager.get_project_path()
 
         metrics = SessionMetrics(project_path)
         texts = []
@@ -5495,7 +5474,7 @@ def cc_sessions():
 
     try:
         limit = int(request.args.get('limit', 10))
-        project_path = _resolve_project_path(request.args.get('project_path'))
+        project_path = request.args.get('project_path') or manager.get_project_path()
 
         metrics = SessionMetrics(project_path)
         sessions = metrics.get_sessions_summary(limit=limit)
@@ -5527,7 +5506,7 @@ def cc_stats():
             return jsonify({'error': 'SessionMetrics not available', 'periods': {}, 'model_distribution': {}})
 
     try:
-        project_path = _resolve_project_path(request.args.get('project_path'))
+        project_path = request.args.get('project_path') or manager.get_project_path()
 
         metrics = SessionMetrics(project_path)
         stats = metrics.get_stats()
@@ -6174,7 +6153,7 @@ def get_token_metrics():
         import os
 
         from ranking.session_parser import SessionLogParser
-        project_path = _resolve_project_path()
+        project_path = manager.get_project_path()
 
         parser = SessionLogParser(project_path)
         token_stats = parser.get_token_usage()
@@ -6582,7 +6561,7 @@ def context_search():
 
     # Step 4: Get transition predictions if trigger file provided
     transition_preds = {}
-    host_root = _resolve_project_path()
+    host_root = manager.get_project_path()
     if trigger_file and SESSION_PARSER_AVAILABLE:
         try:
             trans_results = SessionLogParser.predict_next(scorer.redis, trigger_file, limit=10)
@@ -6820,7 +6799,7 @@ def get_memory():
             try:
                 # Get relative path for transition lookup
                 rel_path = focus_file
-                _proj_root = _resolve_project_path()
+                _proj_root = manager.get_project_path()
                 if _proj_root and rel_path.startswith(_proj_root + '/'):
                     rel_path = rel_path[len(_proj_root) + 1:]
 
