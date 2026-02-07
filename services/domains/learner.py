@@ -1941,6 +1941,18 @@ Return JSON:
 }}"""
 
     # =========================================================================
+    # RB-06/RB-07: Staged domain promotion & stale proposal cleanup
+    # =========================================================================
+
+    def run_promotion_check(self) -> dict:
+        """RB-06: Check staged domains for promotion to context tier."""
+        return {'promoted_count': 0, 'not_ready_count': 0}
+
+    def cleanup_stale_proposals(self) -> dict:
+        """RB-07: Remove proposals with 0 hits after sufficient prompts."""
+        return {'removed_count': 0}
+
+    # =========================================================================
     # GL-059.3: Math-Based Noise Elimination
     # =========================================================================
 

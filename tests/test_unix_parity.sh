@@ -544,7 +544,9 @@ test_zero_results_guidance() {
     section "Zero Results Guidance"
 
     # Search for something that won't match as exact token
-    local result=$(aoa grep "xyznonexistent99" 2>&1)
+    # Build term dynamically to avoid self-referential match in this file
+    local nosuch="qqq""zzz""nonesuch""999"
+    local result=$(aoa grep "$nosuch" 2>&1)
     if [[ "$result" == *"egrep"* ]]; then
         pass "aoa grep (0 hits) - suggests egrep for substring search"
     else

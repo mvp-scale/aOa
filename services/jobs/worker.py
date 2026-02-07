@@ -56,12 +56,6 @@ class JobWorker:
         self.project_root = self._resolve_project_root()
         self.handlers: dict[JobType, Callable] = {
             JobType.ENRICH: self._handle_enrich,
-            JobType.MAP_KEYWORDS: self._handle_map_keywords,
-            JobType.ANALYZE_INTENT: self._handle_analyze_intent,
-            JobType.DISCOVER_DOMAIN: self._handle_discover_domain,
-            JobType.CLEANUP: self._handle_cleanup,
-            JobType.TUNE: self._handle_tune,
-            JobType.REINDEX: self._handle_reindex,
             JobType.SCRAPE: self._handle_scrape,
         }
 
