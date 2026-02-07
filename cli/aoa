@@ -199,6 +199,22 @@ cmd_grep() {
     local since=""
     local before=""
 
+    # _grep_flag: process a single short flag. Returns 0 if handled.
+    _grep_flag() {
+        case "$1" in
+            a) and_mode=true ;;
+            i) case_insensitive=true ;;
+            w) word_boundary=true ;;
+            c) count_only=true ;;
+            q) quiet=true ;;
+            E) shift; cmd_egrep "$@"; exit $? ;;
+            r|R|n|H|F|l) ;; # No-ops: always recursive, line numbers, filenames, literal
+            e) return 1 ;; # Needs argument, can't combine
+            *) return 2 ;; # Truly unknown
+        esac
+        return 0
+    }
+
     # Parse flags
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -277,8 +293,45 @@ cmd_grep() {
                 fi
                 shift 2
                 ;;
+            --include|--include=*)
+                # Unix grep --include="*.py" → aOa file filter
+                if [[ "$1" == --include=* ]]; then
+                    file_filter="${1#--include=}"
+                else
+                    file_filter="$2"
+                    shift
+                fi
+                shift
+                ;;
+            --exclude|--exclude=*)
+                # Not supported, skip with note
+                shift
+                [[ "$1" != -* ]] && shift
+                ;;
+            -[a-zA-Z][a-zA-Z]*)
+                # Combined short flags like -ri, -rn, -riH
+                local flags="${1#-}"
+                shift
+                local unknown_in_combo=""
+                for (( ci=0; ci<${#flags}; ci++ )); do
+                    local ch="${flags:$ci:1}"
+                    _grep_flag "$ch"
+                    local rc=$?
+                    if [ $rc -eq 2 ]; then
+                        unknown_in_combo="$ch"
+                    fi
+                done
+                if [ -n "$unknown_in_combo" ]; then
+                    echo -e "${DIM}aOa grep searches indexed symbols (exact token match).${NC}"
+                    echo -e "${DIM}Unsupported flag: -${unknown_in_combo}. Supported: -i -w -c -q -e -E -a${NC}"
+                    return 1
+                fi
+                ;;
             -*)
-                echo "Unknown flag: $1"
+                echo -e "${DIM}aOa grep searches indexed symbols (exact token match).${NC}"
+                echo -e "${DIM}Unsupported: $1${NC}"
+                echo -e "${DIM}Supported flags: -i -w -c -q -e -E -a --since --include${NC}"
+                echo -e "${DIM}For regex/substring: aoa egrep \"pattern\"${NC}"
                 return 1
                 ;;
             *)
@@ -487,9 +540,13 @@ display_ranked_grep_results() {
     local ms="$3"
     local count="$4"
 
-    # If no results, show simple message
+    # If no results, show guidance
     if [ "$count" -lt 1 ]; then
         printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} 0 hits ${DIM}│${NC} ${GREEN}%.2fms${NC}\n" "$ms"
+        echo ""
+        echo -e "${DIM}grep matches exact tokens. \"auth\" won't match \"authentication\".${NC}"
+        echo -e "${DIM}Try:  aoa egrep \"${query}\"    ${NC}${DIM}# substring/regex search${NC}"
+        echo -e "${DIM}      aoa grep \"${query} ...\" ${NC}${DIM}# add related terms (OR search)${NC}"
         return 0
     fi
 
