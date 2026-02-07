@@ -175,17 +175,85 @@ get_project_name() {
 #
 # =============================================================================
 
+_grep_help() {
+    echo -e "${CYAN}${BOLD}aoa grep${NC} - Indexed symbol search (exact token match)"
+    echo ""
+    echo -e "${BOLD}USAGE${NC}"
+    echo "  aoa grep <term> [file-pattern] [options]"
+    echo "  aoa grep \"term1 term2\"              OR search (either term)"
+    echo "  aoa grep -a term1,term2             AND search (all terms required)"
+    echo ""
+    echo -e "${BOLD}HOW IT WORKS${NC}"
+    echo "  aoa grep searches a pre-built symbol index. It matches exact"
+    echo "  tokens, not substrings. \"auth\" finds \"auth\" but not \"authentication\"."
+    echo "  For substring/regex matching, use: aoa egrep \"pattern\""
+    echo ""
+    echo -e "${BOLD}OUTPUT FORMAT${NC}"
+    echo "  Not just file:line. Each result includes the containing symbol,"
+    echo "  its line range, semantic domain, and intent tags:"
+    echo ""
+    echo "  handler.py:AuthService().login()[10-45]:12 def login(u):  @auth  #security"
+    echo ""
+    echo "  file       handler.py            Source file"
+    echo "  scope      AuthService().login()  Class and method containing the match"
+    echo "  range      [10-45]               Symbol spans lines 10 to 45"
+    echo "  line       :12                   Exact line of the match"
+    echo "  content    def login(u):         The matched source line"
+    echo "  @domain    @auth                 Semantic domain (area of code)"
+    echo "  #tags      #security             Intent tags (what you're working on)"
+    echo ""
+    echo -e "${BOLD}SEARCH OPTIONS${NC}"
+    echo "  -a, --and             AND mode: all comma-separated terms required"
+    echo "  -i, --ignore-case     Case insensitive search"
+    echo "  -w, --word-regexp     Word boundary match"
+    echo "  -e, --regexp PATTERN  Multiple patterns (OR): -e foo -e bar"
+    echo "  -E, --extended-regexp Routes to egrep for regex matching"
+    echo "  -P, --perl-regexp     Routes to egrep for regex matching"
+    echo ""
+    echo -e "${BOLD}OUTPUT OPTIONS${NC}"
+    echo "  -c, --count           Show match count only"
+    echo "  -q, --quiet           Quiet mode (exit code only)"
+    echo "  -m, --max-count NUM   Limit results (default: 20)"
+    echo "  --json                Output as JSON"
+    echo ""
+    echo -e "${BOLD}FILE FILTERS${NC}"
+    echo "  aoa grep term *.py          Positional file pattern"
+    echo "  --include=GLOB              Include only matching files"
+    echo "  --exclude=GLOB              Exclude matching files (skipped)"
+    echo ""
+    echo -e "${BOLD}TIME FILTERS${NC}"
+    echo "  --since TIME          Files modified since TIME (1h, 7d, 30m)"
+    echo "  --before TIME         Files modified before TIME"
+    echo "  --today               Shortcut for --since 24h"
+    echo ""
+    echo -e "${BOLD}UNIX COMPAT (accepted, no effect)${NC}"
+    echo "  -r, -R, --recursive   Always recursive"
+    echo "  -n, --line-number     Always shows line numbers"
+    echo "  -H, --with-filename   Always shows filenames"
+    echo "  -h, --no-filename     Cannot suppress filenames"
+    echo "  -F, --fixed-strings   Already literal search"
+    echo "  -G, --basic-regexp    Already literal search"
+    echo "  -l                    Default behavior (files with matches)"
+    echo "  -o, --only-matching   Shows full line context"
+    echo "  -s, --no-messages     Errors always suppressed"
+    echo "  -A, -B, -C NUM       Context lines (not applicable to index)"
+    echo "  --color, --colour     Always colored"
+    echo ""
+    echo -e "${BOLD}EXAMPLES${NC}"
+    echo "  aoa grep handleAuth              Single symbol lookup"
+    echo "  aoa grep \"auth token session\"    OR search (any term)"
+    echo "  aoa grep -a auth,session         AND search (all terms)"
+    echo "  aoa grep -ri auth --include=*.py Case insensitive, Python only"
+    echo "  aoa grep auth --since 1h         Modified in last hour"
+    echo "  aoa grep auth --today --json     Today's results as JSON"
+    echo ""
+    echo -e "${BOLD}SEE ALSO${NC}"
+    echo "  aoa egrep \"regex\"    Substring/regex search (working set)"
+    echo "  aoa find \"*.py\"     File discovery by pattern"
+    echo "  aoa locate name     Fast filename search"
+}
+
 cmd_grep() {
-    # aoa grep <term>           - Symbol search (O(1) indexed)
-    # aoa grep "a b c"          - Multi-term OR search, ranked
-    # aoa grep -a term1,term2   - Multi-term AND (all terms required)
-    # aoa grep -i <term>        - Case insensitive
-    # aoa grep --since 1h       - Files modified in last hour
-    # aoa grep --today          - Files modified today (last 24h)
-    # aoa grep --json           - Output as JSON
-    # aoa grep -c               - Count only
-    # aoa grep -q               - Quiet (exit code only)
-    # aoa grep <term> *.py      - Filter to file pattern (GL-051 Unix parity)
     local and_mode=false
     local case_insensitive=false
     local word_boundary=false
@@ -207,8 +275,8 @@ cmd_grep() {
             w) word_boundary=true ;;
             c) count_only=true ;;
             q) quiet=true ;;
-            E) shift; cmd_egrep "$@"; exit $? ;;
-            r|R|n|H|F|l) ;; # No-ops: always recursive, line numbers, filenames, literal
+            E|P) return 3 ;; # Routes to egrep, can't combine
+            r|R|n|H|F|G|l|o|s|h|v) ;; # No-ops / not applicable
             e) return 1 ;; # Needs argument, can't combine
             *) return 2 ;; # Truly unknown
         esac
@@ -218,15 +286,19 @@ cmd_grep() {
     # Parse flags
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --help)
+                _grep_help
+                return 0
+                ;;
             -a|--and)
                 and_mode=true
                 shift
                 ;;
-            -i|--ignore-case)
+            -i|--ignore-case|--no-ignore-case)
                 case_insensitive=true
                 shift
                 ;;
-            -w|--word)
+            -w|--word-regexp)
                 word_boundary=true
                 shift
                 ;;
@@ -238,15 +310,19 @@ cmd_grep() {
                 count_only=true
                 shift
                 ;;
-            -q|--quiet)
+            -q|--quiet|--silent)
                 quiet=true
                 shift
                 ;;
-            -l|--limit)
+            -l|--limit|-m|--max-count)
                 limit="$2"
                 shift 2
                 ;;
-            -m|--mode)
+            --max-count=*|--limit=*)
+                limit="${1#*=}"
+                shift
+                ;;
+            --mode)
                 mode="$2"
                 shift 2
                 ;;
@@ -262,39 +338,56 @@ cmd_grep() {
                 since="24h"
                 shift
                 ;;
-            -E|--extended-regexp)
-                # Unix parity: grep -E routes to egrep
+            -E|--extended-regexp|-P|--perl-regexp)
+                # Unix parity: grep -E/-P routes to egrep
                 shift
                 cmd_egrep "$@"
                 return $?
                 ;;
-            -r|-R|--recursive)
-                # No-op: aOa is always recursive (searches entire index)
-                shift
-                ;;
+            -r|-R|--recursive|--dereference-recursive)
+                shift ;; # No-op: always recursive
             -n|--line-number)
-                # No-op: aOa always shows line numbers
+                shift ;; # No-op: always shows line numbers
+            -H|--with-filename|-h|--no-filename)
+                shift ;; # No-op: always shows filenames
+            -F|--fixed-strings|-G|--basic-regexp)
+                shift ;; # No-op: already literal search
+            -o|--only-matching)
+                shift ;; # No-op: shows full line context
+            -s|--no-messages)
+                shift ;; # No-op: errors handled internally
+            -v|--invert-match)
+                shift ;; # Not applicable to index search
+            -A|-B|-C)
+                # Context lines: accept and skip the NUM argument
+                shift 2 ;;
+            --context|--before-context|--after-context)
+                shift 2 ;;
+            -[0-9]|-[0-9][0-9]|-[0-9][0-9][0-9])
+                shift ;; # grep -NUM context shorthand
+            --color|--colour|--color=*|--colour=*)
+                shift ;; # No-op: always colored
+            --label|--label=*|--binary-files|--binary-files=*)
+                # Skip flag + value
+                if [[ "$1" != *=* ]]; then shift; fi
                 shift
                 ;;
-            -H|--with-filename)
-                # No-op: aOa always shows filenames
-                shift
-                ;;
-            -F|--fixed-strings)
-                # No-op: aOa grep is already literal/symbol-based
-                shift
-                ;;
-            -e|--regexp)
+            -e|--regexp|--regexp=*)
                 # Unix parity: grep -e foo -e bar → OR search
-                if [ -z "$query" ]; then
-                    query="$2"
+                if [[ "$1" == --regexp=* ]]; then
+                    local val="${1#--regexp=}"
+                    if [ -z "$query" ]; then query="$val"; else query="$query $val"; fi
+                    shift
                 else
-                    query="$query $2"
+                    if [ -z "$query" ]; then query="$2"; else query="$query $2"; fi
+                    shift 2
                 fi
+                ;;
+            -f|--file)
+                # grep -f FILE: not supported, skip
                 shift 2
                 ;;
             --include|--include=*)
-                # Unix grep --include="*.py" → aOa file filter
                 if [[ "$1" == --include=* ]]; then
                     file_filter="${1#--include=}"
                 else
@@ -303,10 +396,14 @@ cmd_grep() {
                 fi
                 shift
                 ;;
-            --exclude|--exclude=*)
-                # Not supported, skip with note
-                shift
-                [[ "$1" != -* ]] && shift
+            --exclude|--exclude=*|--exclude-dir|--exclude-dir=*|--exclude-from)
+                # Accept and skip
+                if [[ "$1" != *=* ]]; then
+                    shift
+                    [[ "${1:-}" != -* ]] 2>/dev/null && shift
+                else
+                    shift
+                fi
                 ;;
             -[a-zA-Z][a-zA-Z]*)
                 # Combined short flags like -ri, -rn, -riH
@@ -319,19 +416,19 @@ cmd_grep() {
                     local rc=$?
                     if [ $rc -eq 2 ]; then
                         unknown_in_combo="$ch"
+                    elif [ $rc -eq 3 ]; then
+                        # -E/-P in combo: route remaining args to egrep
+                        cmd_egrep "$@"
+                        return $?
                     fi
                 done
                 if [ -n "$unknown_in_combo" ]; then
-                    echo -e "${DIM}aOa grep searches indexed symbols (exact token match).${NC}"
-                    echo -e "${DIM}Unsupported flag: -${unknown_in_combo}. Supported: -i -w -c -q -e -E -a${NC}"
+                    echo -e "${DIM}Unknown flag: -${unknown_in_combo}. Run: aoa grep --help${NC}"
                     return 1
                 fi
                 ;;
             -*)
-                echo -e "${DIM}aOa grep searches indexed symbols (exact token match).${NC}"
-                echo -e "${DIM}Unsupported: $1${NC}"
-                echo -e "${DIM}Supported flags: -i -w -c -q -e -E -a --since --include${NC}"
-                echo -e "${DIM}For regex/substring: aoa egrep \"pattern\"${NC}"
+                echo -e "${DIM}Unknown: $1. Run: aoa grep --help${NC}"
                 return 1
                 ;;
             *)
@@ -369,28 +466,7 @@ cmd_grep() {
     [ -n "$before" ] && before_seconds=$(parse_time_to_seconds "$before")
 
     if [ -z "$query" ]; then
-        echo "Usage: aoa grep <term> [options]"
-        echo ""
-        echo "Options:"
-        echo "  -a, --and          AND mode: all comma-separated terms required"
-        echo "  -i, --ignore-case  Case insensitive search"
-        echo "  -w, --word         Word boundary match"
-        echo "  -l, --limit N      Limit results (default: 20)"
-        echo "  --since TIME       Files modified since TIME (e.g., 1h, 7d, 30m)"
-        echo "  --before TIME      Files modified before TIME"
-        echo "  --today            Shortcut for --since 24h"
-        echo "  --json             Output as JSON"
-        echo "  -c, --count        Show count only"
-        echo "  -q, --quiet        Quiet mode (exit code only)"
-        echo ""
-        echo "Examples:"
-        echo "  aoa grep handleAuth          # Symbol search"
-        echo "  aoa grep \"auth token\"        # OR search (either term)"
-        echo "  aoa grep -a auth,session     # AND search (all terms)"
-        echo "  aoa grep auth --since 1h     # Modified in last hour"
-        echo "  aoa grep auth --today        # Modified today"
-        echo "  aoa grep auth --json         # JSON output"
-        echo "  aoa grep auth -c             # Count only"
+        _grep_help
         return 1
     fi
 

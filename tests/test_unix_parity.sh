@@ -11,7 +11,7 @@
 #   1 = Some tests failed
 #
 # Coverage:
-#   53 tests total (42 flag acceptance + 11 behavioral verification)
+#   67 tests total (56 flag acceptance + 11 behavioral verification)
 #
 # Skipped Tests (2):
 #   These are acceptable edge cases, not broken features:
@@ -405,18 +405,18 @@ test_edge_cases() {
 
     # Empty query
     local result=$(aoa grep 2>&1)
-    if [[ "$result" == *"Usage"* ]]; then
-        pass "aoa grep (no args) - shows usage"
+    if [[ "$result" == *"USAGE"* ]] || [[ "$result" == *"Usage"* ]]; then
+        pass "aoa grep (no args) - shows help"
     else
-        fail "aoa grep (no args)" "usage message" "$result"
+        fail "aoa grep (no args)" "help output" "$result"
     fi
 
     # Unknown flag
     result=$(aoa grep --unknown-flag test 2>&1)
-    if [[ "$result" == *"Unknown"* ]] || [[ "$result" == *"unknown"* ]] || [[ "$result" == *"error"* ]]; then
-        pass "aoa grep --unknown-flag - rejects unknown flags"
+    if [[ "$result" == *"Unknown"* ]] || [[ "$result" == *"--help"* ]]; then
+        pass "aoa grep --unknown-flag - rejects unknown flags with --help pointer"
     else
-        fail "aoa grep --unknown-flag" "error message" "$result"
+        fail "aoa grep --unknown-flag" "error with --help reference" "$result"
     fi
 
     # Query with special chars that aren't regex
@@ -457,11 +457,11 @@ test_time_filters() {
 }
 
 test_combined_flags() {
-    section "Combined Flags"
+    section "Combined Flags (Separate)"
 
     # -i -w together
     local result=$(aoa grep -i -w AUTH 2>&1)
-    if [[ "$result" != *"Unknown"* && "$result" != *"error"* ]]; then
+    if [[ "$result" != *"Unknown"* && "$result" != *"Unsupported"* && "$result" != *"error"* ]]; then
         pass "aoa grep -i -w <term> - multiple flags combined"
     else
         fail "aoa grep -i -w" "flags combined" "$result"
@@ -469,7 +469,7 @@ test_combined_flags() {
 
     # -r -n -H (all no-ops combined)
     result=$(aoa grep -r -n -H auth 2>&1)
-    if [[ "$result" != *"Unknown"* && "$result" != *"error"* ]]; then
+    if [[ "$result" != *"Unknown"* && "$result" != *"Unsupported"* && "$result" != *"error"* ]]; then
         pass "aoa grep -r -n -H <term> - no-op flags combined"
     else
         fail "aoa grep -r -n -H" "no-op flags combined" "$result"
@@ -477,10 +477,104 @@ test_combined_flags() {
 
     # -e with -i
     result=$(aoa grep -i -e auth -e token 2>&1)
-    if [[ "$result" != *"Unknown"* && "$result" != *"error"* ]]; then
+    if [[ "$result" != *"Unknown"* && "$result" != *"Unsupported"* && "$result" != *"error"* ]]; then
         pass "aoa grep -i -e pattern1 -e pattern2 - case insensitive OR"
     else
         fail "aoa grep -i -e -e" "flags combined" "$result"
+    fi
+}
+
+test_combined_short_flags() {
+    section "Combined Short Flags (Smushed: -ri, -rn, -riH)"
+
+    # -ri = -r (no-op) + -i (case insensitive)
+    local result=$(aoa grep -ri auth 2>&1)
+    if [[ "$result" == *"hits"* ]]; then
+        pass "aoa grep -ri <term> - combined -r + -i works"
+    else
+        fail "aoa grep -ri" "search results" "$result"
+    fi
+
+    # -rn = -r (no-op) + -n (no-op)
+    result=$(aoa grep -rn auth 2>&1)
+    if [[ "$result" == *"hits"* ]]; then
+        pass "aoa grep -rn <term> - combined no-ops work"
+    else
+        fail "aoa grep -rn" "search results" "$result"
+    fi
+
+    # -riH = -r (no-op) + -i + -H (no-op)
+    result=$(aoa grep -riH auth 2>&1)
+    if [[ "$result" == *"hits"* ]]; then
+        pass "aoa grep -riH <term> - triple combined flags work"
+    else
+        fail "aoa grep -riH" "search results" "$result"
+    fi
+
+    # -rn with --include (real-world Claude usage)
+    result=$(aoa grep -ri auth --include="*.py" 2>&1)
+    if [[ "$result" == *"hits"* ]]; then
+        pass "aoa grep -ri <term> --include='*.py' - full real-world usage"
+    else
+        fail "aoa grep -ri --include" "search results" "$result"
+    fi
+}
+
+test_include_flag() {
+    section "--include File Filter (Unix Parity)"
+
+    # --include="*.py"
+    local result=$(aoa grep auth --include="*.py" 2>&1)
+    if [[ "$result" == *"hits"* ]]; then
+        pass "aoa grep <term> --include='*.py' - include flag accepted"
+    else
+        fail "aoa grep --include" "flag accepted" "$result"
+    fi
+
+    # --include *.sh (space-separated)
+    result=$(aoa grep cmd --include "*.sh" 2>&1)
+    if [[ "$result" == *"hits"* ]]; then
+        pass "aoa grep <term> --include '*.sh' - space-separated include"
+    else
+        fail "aoa grep --include space" "flag accepted" "$result"
+    fi
+}
+
+test_zero_results_guidance() {
+    section "Zero Results Guidance"
+
+    # Search for something that won't match as exact token
+    local result=$(aoa grep "xyznonexistent99" 2>&1)
+    if [[ "$result" == *"egrep"* ]]; then
+        pass "aoa grep (0 hits) - suggests egrep for substring search"
+    else
+        fail "aoa grep zero results" "egrep suggestion" "$result"
+    fi
+
+    if [[ "$result" == *"exact token"* ]]; then
+        pass "aoa grep (0 hits) - explains exact token matching"
+    else
+        fail "aoa grep zero results" "exact token explanation" "$result"
+    fi
+}
+
+test_unknown_flag_guidance() {
+    section "Unknown Flag Guidance"
+
+    # Unknown long flag
+    local result=$(aoa grep --unknown-xyz test 2>&1)
+    if [[ "$result" == *"--help"* ]]; then
+        pass "aoa grep --unknown - points to --help"
+    else
+        fail "aoa grep --unknown" "--help reference" "$result"
+    fi
+
+    # --help flag itself
+    result=$(aoa grep --help 2>&1)
+    if [[ "$result" == *"egrep"* ]]; then
+        pass "aoa grep --help - mentions egrep alternative"
+    else
+        fail "aoa grep --help egrep" "mentions egrep" "$result"
     fi
 }
 
@@ -680,6 +774,10 @@ main() {
     test_edge_cases
     test_time_filters
     test_combined_flags
+    test_combined_short_flags
+    test_include_flag
+    test_zero_results_guidance
+    test_unknown_flag_guidance
 
     # Behavioral verification (flags actually work, not just accepted)
     test_case_insensitive_behavior
