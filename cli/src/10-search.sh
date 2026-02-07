@@ -467,13 +467,18 @@ display_ranked_grep_results() {
     local ms="$3"
     local count="$4"
 
-    # If no results, show guidance
+    # If no results, show guidance appropriate to search type
     if [ "$count" -lt 1 ]; then
         printf "${CYAN}${BOLD}⚡ aOa${NC} ${DIM}│${NC} 0 hits ${DIM}│${NC} ${GREEN}%.2fms${NC}\n" "$ms"
         echo ""
-        echo -e "${DIM}grep matches exact tokens. \"auth\" won't match \"authentication\".${NC}"
-        echo -e "${DIM}Try:  aoa egrep \"${query}\"    ${NC}${DIM}# substring/regex search${NC}"
-        echo -e "${DIM}      aoa grep \"${query} ...\" ${NC}${DIM}# add related terms (OR search)${NC}"
+        if [ "${AOA_SEARCH_TYPE:-}" = "regex" ]; then
+            echo -e "${DIM}egrep searches the working set (~30-50 recent files), not the full index.${NC}"
+            echo -e "${DIM}Try:  aoa grep \"${query}\"  ${NC}${DIM}# search full index (exact tokens)${NC}"
+        else
+            echo -e "${DIM}grep matches exact tokens. \"auth\" won't match \"authentication\".${NC}"
+            echo -e "${DIM}Try:  aoa egrep \"${query}\"    ${NC}${DIM}# substring/regex search${NC}"
+            echo -e "${DIM}      aoa grep \"${query} ...\" ${NC}${DIM}# add related terms (OR search)${NC}"
+        fi
         return 0
     fi
 
