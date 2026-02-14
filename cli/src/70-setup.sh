@@ -137,10 +137,13 @@ It replaces slow Grep/Glob operations with indexed symbol lookup.
 ## Commands
 
 ```bash
-aoa search <term>    # Search this project
+aoa grep <term>      # O(1) symbol search
+aoa egrep <regex>    # Regex search (working set)
 aoa health           # Check services
 aoa remove           # Remove aOa from this project
 ```
+
+See `.aoa/USAGE.md` for all commands, `.aoa/VALUE.md` for result anatomy.
 
 ## Global Settings
 
@@ -149,8 +152,9 @@ edit the .env file in your aOa installation directory.
 EOFREADME
     fi
 
-    # Copy USAGE.md - goal-oriented guide for Claude
+    # Copy guides - USAGE (commands) + VALUE (result anatomy)
     cp "$AOA_HOME/plugin/USAGE.md" "$project_root/.aoa/USAGE.md" 2>/dev/null || true
+    cp "$AOA_HOME/plugin/VALUE.md" "$project_root/.aoa/VALUE.md" 2>/dev/null || true
     echo -e "${GREEN}✓${NC}"
 
     # Add aOa reference to CLAUDE.md - PREPEND for priority
@@ -166,7 +170,7 @@ EOFREADME
 
 `aoa grep` and `aoa egrep` work like Unix grep/egrep but use O(1) indexed search (10-100x faster). Results include `file:func[range]:line` — use [range] to read only relevant code.
 
-See `.aoa/USAGE.md` for details.
+See `.aoa/USAGE.md` for commands, `.aoa/VALUE.md` for result anatomy.
 
 ---
 

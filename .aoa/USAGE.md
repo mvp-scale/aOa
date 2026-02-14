@@ -1,112 +1,112 @@
-# aOa Usage Guide
+# aOa — Agent Instructions
 
-> **5 angles. 1 attack.** Each angle solves a real problem.
+> **This is guidance directly to you, the AI agent.** Use these commands instead of Grep, Glob, and Read-entire-file patterns. They are O(1) indexed, return ranked results, and save 86% of tokens.
+>
+> For the human-readable project description, see the project README.
+
+For what your results mean and how to act on them, see `.aoa/VALUE.md`.
 
 ---
 
-## 1. Search Angle — Find code instantly
+## Search — Use instead of Grep/Glob
 
-**Why:** Grep scans everything. aOa is O(1) indexed. 100x faster.
+Use `aoa grep` for every code search. It searches a pre-built O(1) index of the full codebase. Do not fall back to Grep or Glob tools.
 
 ```bash
-# Basic search
-aoa grep handleAuth           # Find any symbol
-aoa grep "auth token"         # Multi-term OR (ranked)
-aoa grep -a auth,session      # Multi-term AND (all required)
+# Exact token search (O(1), full codebase)
+aoa grep handleAuth           # Single symbol
+aoa grep "auth token session" # Multi-term OR (space-separated, ranked)
+aoa grep -a auth,session      # Multi-term AND (all terms required)
 
-# Unix grep parity
+# Flags (Unix grep parity)
 aoa grep -i auth              # Case insensitive
 aoa grep -w token             # Whole word match
 aoa grep -c error             # Count matches only
 aoa grep -q config && echo y  # Quiet (exit code only)
 
-# Regex with egrep
+# Regex search (working set only, ~30-50 files)
 aoa egrep "TODO|FIXME"        # OR patterns
 aoa egrep "def\s+handle"      # Regex patterns
 aoa egrep -e auth -e login    # Multiple patterns
-
-# Combine flags
-aoa grep -i -w Auth           # Case insensitive + whole word
-aoa grep --help               # All flags and examples
 ```
 
-**Result format:**
-```
-file:Class.method[range]:line <grep output> @domain #tags
-```
-- `Class.method` — containing class and function
-- `[range]` — function line range (read only what matters)
-- `<grep output>` — standard grep content
-- `@domain` — semantic domain
-- `#tags` — intent indicators
+**When to use which:**
+- `aoa grep` — You know the symbol or keyword. Searches full codebase in O(1).
+- `aoa egrep` — You need regex or substring matching. Searches working set only (~30-50 files).
+
+**Key detail:** Tokens split on hyphens and dots (`app.post` → `app`, `post`). Space-separated terms are OR, not phrase search.
 
 ---
 
-## 2. File Angle — Navigate structure
-
-**Why:** Stop guessing where things are. See the structure, jump to the symbol.
+## Files — Use instead of Glob/find
 
 ```bash
-aoa find "*.py"               # Find files by pattern
+aoa find "*.py"               # Find files by glob pattern
+aoa find -type py             # Find files by language
 aoa locate handler            # Fast filename search
 aoa tree src/                 # Directory structure
+aoa head <file> [n]           # First n lines (default 20)
+aoa tail <file> [n]           # Last n lines (default 20)
+aoa lines <file> M-N          # Specific line range
 ```
 
 ---
 
-## 3. Behavioral Angle — Work smarter
+## Behavioral — Your working set
 
-**Why:** The files you touch often are the files you need next. aOa learns your rhythm.
+aOa tracks which files you touch. Use these to avoid redundant discovery.
 
 ```bash
-aoa hot                       # Files you access most
-aoa touched                   # Files from this session
-aoa predict                   # What you'll likely need next
-aoa changes 1h                # Recently modified
+aoa touched [since]           # Files from this session/time period
+aoa focus                     # Current working set from memory
+aoa changes [time]            # Recently modified files (e.g., 5m, 1h)
+aoa files [pattern]           # List indexed files
 ```
 
 ---
 
-## 4. Outline Angle — Semantic compression
+## Outline — Code structure without reading files
 
-**Why:** Compress meaning into searchable tags. One scan, searchable forever.
+Get function signatures and semantic tags without a Read call.
 
 ```bash
-aoa outline <file>            # See structure without reading all
-aoa outline --pending         # Files needing tags
-aoa outline --json            # Machine-readable output
+aoa outline <file>            # Code structure (functions, classes, methods)
+aoa outline --pending         # Check tagging status
+aoa outline --enrich-all      # Files needing tags
 ```
 
 ---
 
-## 5. Intent Angle — See your session
+## Intent — Session context
 
-**Why:** See your session as aOa sees it—operations, patterns, savings.
+See what you've been working on. Useful for resuming context or understanding patterns.
 
 ```bash
-aoa intent                    # Recent activity (default 20)
-aoa intent -n 50              # Show more records
+aoa intent recent [since]     # Recent intent records (e.g., 1h, 30m)
+aoa intent tags               # All tags with file counts
+aoa intent files <tag>        # Files associated with a tag
+aoa intent file <path>        # Tags associated with a file
+aoa intent stats              # Intent index statistics
 ```
 
 ---
 
-## Intel Angle — Knowledge sources (local + external)
+## Intel — Domains + external repos
 
-**Why:** Understand your code semantically (domains) and reference external repos without bloat.
+Semantic domains classify the codebase. External repos provide reference without polluting your context.
 
 ```bash
-# Domains - semantic labels for your code
+# Domains
 aoa domains                   # Show learned domains and terms
-aoa domains -n 10             # Show top 10 domains
+aoa domains -n 10             # Top 10 domains
 aoa domains --json            # Machine-readable output
+aoa bigrams                   # Usage signal bigrams
 
-# External repos - isolated from your code
+# External repos (isolated, searched explicitly)
 aoa repo add flask https://github.com/pallets/flask
-aoa repo flask search Blueprint  # Search Flask repo (explicit)
-aoa repo list                    # Your intel sources
+aoa repo flask search Blueprint
+aoa repo list
 ```
-
-**External repos are isolated** - they never mix with your project code. Searching is explicit (`aoa repo <name> search`), not automatic. This saves tokens vs MCP servers by avoiding context bloat.
 
 ---
 
@@ -115,12 +115,17 @@ aoa repo list                    # Your intel sources
 ```bash
 aoa health                    # Check all angles
 aoa help                      # Full command list
+aoa stats                     # Session statistics
+aoa config                    # Show/set configuration
+aoa jobs                      # Domain enrichment queue
+aoa start / stop              # Docker service lifecycle
+aoa info                      # Indexing config, mounts, projects
+aoa metrics                   # Prediction accuracy and savings
+aoa services                  # Visual service map
+aoa wipe                      # Reset all project data
 aoa <command> --help          # Flags for any command
-aoa wipe                      # Reset project data
 ```
 
 ---
 
-**Every command supports `--help`** for detailed flags and examples.
-
-**The value:** 50 lines instead of 3,700. Instant search. Every session builds on the last.
+**Every command supports `--help`.** For result format and extraction patterns, see `.aoa/VALUE.md`.
