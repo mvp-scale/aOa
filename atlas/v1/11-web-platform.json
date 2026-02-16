@@ -1,0 +1,74 @@
+[
+  {
+    "domain": "seo",
+    "terms": {
+      "metadata": ["title", "description", "og", "twitter", "canonical", "hreflang", "robots"],
+      "structured": ["jsonld", "schema", "rich", "snippet", "breadcrumb", "faq", "howto"],
+      "technical": ["sitemap", "robots", "canonical", "noindex", "nofollow", "crawl", "redirect"],
+      "performance": ["lcp", "fid", "cls", "inp", "ttfb", "fcp", "vitals"],
+      "content": ["heading", "alt", "semantic", "keyword", "density", "readability", "internal"],
+      "indexing": ["google", "bing", "fetch", "render", "index", "deindex", "submit"],
+      "analytics": ["searchconsole", "rank", "impression", "ctr", "position", "query", "page"]
+    }
+  },
+  {
+    "domain": "pwa",
+    "terms": {
+      "service_worker": ["register", "install", "activate", "fetch", "cache", "precache", "update"],
+      "caching": ["cachefirst", "networkfirst", "stale", "revalidate", "runtime", "precache", "strategy"],
+      "manifest": ["manifest", "icon", "theme", "display", "standalone", "scope", "start"],
+      "offline": ["offline", "fallback", "sync", "background", "queue", "retry", "pending"],
+      "install": ["prompt", "beforeinstall", "add", "standalone", "installed", "criteria", "banner"],
+      "push": ["pushmanager", "subscribe", "vapid", "notification", "permission", "payload", "click"],
+      "storage": ["cacheapi", "indexeddb", "quota", "persist", "estimate", "evict", "clear"]
+    }
+  },
+  {
+    "domain": "bundling",
+    "terms": {
+      "bundlers": ["webpack", "vite", "esbuild", "rollup", "parcel", "turbopack", "rspack"],
+      "optimization": ["treeshake", "codesplit", "minify", "chunk", "dedupe", "sideeffect", "pure"],
+      "loaders": ["loader", "plugin", "transform", "resolve", "alias", "extension", "rule"],
+      "output": ["entry", "output", "filename", "hash", "chunk", "asset", "publicpath"],
+      "dev": ["devserver", "hmr", "hot", "livereload", "proxy", "sourcemap", "watch"],
+      "config": ["config", "override", "merge", "extend", "preset", "mode", "target"],
+      "assets": ["image", "font", "svg", "css", "json", "wasm", "worker"]
+    }
+  },
+  {
+    "domain": "content_management",
+    "terms": {
+      "headless": ["headless", "api", "structured", "contenttype", "field", "entry", "asset"],
+      "markdown": ["markdown", "mdx", "frontmatter", "remark", "rehype", "parse", "render"],
+      "platforms": ["contentful", "sanity", "strapi", "directus", "payload", "keystonejs", "ghost"],
+      "rendering": ["ssg", "isr", "ondemand", "revalidate", "incremental", "static", "dynamic"],
+      "media": ["image", "responsive", "srcset", "lazy", "blur", "placeholder", "optimize"],
+      "taxonomy": ["category", "tag", "collection", "hierarchy", "slug", "permalink", "archive"],
+      "workflow": ["draft", "publish", "schedule", "review", "approve", "version", "rollback"]
+    }
+  },
+  {
+    "domain": "web_performance",
+    "terms": {
+      "metrics": ["lcp", "fid", "cls", "inp", "ttfb", "fcp", "tti"],
+      "loading": ["lazy", "preload", "prefetch", "preconnect", "prerender", "priority", "fetchpriority"],
+      "images": ["responsive", "srcset", "avif", "webp", "compress", "dimension", "placeholder"],
+      "scripts": ["defer", "async", "module", "nomodule", "inline", "critical", "thirdparty"],
+      "caching": ["serviceworker", "etag", "immutable", "maxage", "stale", "cdn", "edge"],
+      "profiling": ["lighthouse", "devtools", "webpagetest", "crux", "rum", "synthetic", "budget"],
+      "rendering": ["critical", "above", "fold", "paint", "layout", "composite", "blocking"]
+    }
+  },
+  {
+    "domain": "web_security",
+    "terms": {
+      "csp": ["csp", "nonce", "hash", "report", "strict", "unsafe", "directive"],
+      "headers": ["xframe", "xcontent", "referrer", "permissions", "feature", "coep", "coop"],
+      "sandbox": ["iframe", "sandbox", "allow", "permission", "cross", "origin", "isolated"],
+      "integrity": ["sri", "integrity", "crossorigin", "subresource", "hash", "verify", "pin"],
+      "storage": ["secure", "httponly", "samesite", "partition", "opaque", "credential", "third"],
+      "reporting": ["report", "csp", "deprecation", "intervention", "crash", "nel", "endpoint"],
+      "isolation": ["crossorigin", "opener", "embedder", "coep", "coop", "corp", "orb"]
+    }
+  }
+]

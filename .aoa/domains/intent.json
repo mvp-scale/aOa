@@ -1,0 +1,35 @@
+[
+  {
+    "domain": "@metrics",
+    "description": "Hit counting, co-occurrence tracking, and usage statistics",
+    "terms": {
+      "hit": ["counting", "tracking", "increment", "decay", "threshold"],
+      "co": ["occurrence", "frequency", "signal", "correlation", "pair"],
+      "range": ["domain", "boundary", "span", "limit", "window"],
+      "expected": ["output", "result", "fixture", "baseline", "match"],
+      "scoring": ["rank", "weight", "boost", "penalty", "normalize"]
+    }
+  },
+  {
+    "domain": "@navigation",
+    "description": "Code navigation through file paths, line numbers, and symbol resolution",
+    "terms": {
+      "file": ["path", "location", "directory", "name", "extension"],
+      "line": ["number", "offset", "position", "range", "content"],
+      "symbol": ["tokens", "identifier", "lookup", "resolution", "reference"],
+      "path": ["file", "directory", "resolve", "absolute", "relative"],
+      "locate": ["find", "search", "position", "target", "match"]
+    }
+  },
+  {
+    "domain": "@go_port",
+    "description": "Go language port development and board tracking",
+    "terms": {
+      "go": ["board", "module", "build", "binary", "compile"],
+      "port": ["rewrite", "migrate", "convert", "translate", "adapt"],
+      "fixture": ["test", "expected", "output", "sample", "golden"],
+      "board": ["task", "status", "progress", "item", "track"],
+      "build": ["compile", "binary", "output", "target", "run"]
+    }
+  }
+]

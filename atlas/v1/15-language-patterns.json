@@ -1,0 +1,74 @@
+[
+  {
+    "domain": "type_system",
+    "terms": {
+      "generics": ["generic", "parameter", "constraint", "bound", "variance", "covariant", "contravariant"],
+      "types": ["interface", "struct", "enum", "union", "alias", "literal", "tuple"],
+      "advanced": ["conditional", "mapped", "utility", "partial", "required", "readonly", "pick"],
+      "inference": ["infer", "narrow", "widen", "guard", "predicate", "assert", "satisfies"],
+      "validation": ["runtime", "zod", "io", "typebox", "ajv", "joi", "yup"],
+      "patterns": ["discriminated", "tagged", "phantom", "branded", "opaque", "newtype", "nominal"],
+      "tools": ["typescript", "mypy", "pyright", "flow", "sorbet", "gleam", "rescript"]
+    }
+  },
+  {
+    "domain": "functional",
+    "terms": {
+      "core": ["pure", "immutable", "compose", "curry", "partial", "pipe", "point"],
+      "types": ["maybe", "option", "either", "result", "io", "task", "reader"],
+      "collections": ["map", "filter", "reduce", "flatmap", "fold", "traverse", "sequence"],
+      "patterns": ["monad", "functor", "applicative", "lens", "prism", "optic", "transducer"],
+      "effects": ["effect", "sideeffect", "pure", "suspend", "run", "interpret", "handler"],
+      "libraries": ["ramda", "lodash", "fp", "effect", "zio", "cats", "arrow"],
+      "techniques": ["pointfree", "tacit", "eta", "thunk", "trampoline", "memoize", "lazy"]
+    }
+  },
+  {
+    "domain": "oop",
+    "terms": {
+      "creational": ["factory", "abstract", "builder", "singleton", "prototype", "pool", "multiton"],
+      "structural": ["adapter", "bridge", "composite", "decorator", "facade", "flyweight", "proxy"],
+      "behavioral": ["observer", "strategy", "command", "mediator", "visitor", "chain", "template"],
+      "principles": ["solid", "single", "open", "liskov", "interface", "dependency", "inversion"],
+      "structure": ["class", "interface", "abstract", "mixin", "trait", "extend", "implement"],
+      "relationships": ["inherit", "compose", "delegate", "associate", "aggregate", "depend", "realize"],
+      "encapsulation": ["private", "protected", "public", "internal", "getter", "setter", "property"]
+    }
+  },
+  {
+    "domain": "reactive",
+    "terms": {
+      "observables": ["observable", "subscribe", "unsubscribe", "pipe", "operator", "subject", "behavior"],
+      "operators": ["map", "filter", "merge", "switchmap", "concat", "debounce", "throttle"],
+      "creation": ["of", "from", "interval", "timer", "defer", "generate", "range"],
+      "error": ["catch", "retry", "finalize", "timeout", "onerror", "fallback", "recover"],
+      "multicasting": ["share", "publish", "replay", "multicast", "connect", "refcount", "hot"],
+      "scheduling": ["async", "queue", "animationframe", "asap", "scheduler", "observe", "subscribe"],
+      "libraries": ["rxjs", "reactor", "rxjava", "combine", "flow", "rxswift", "rxdart"]
+    }
+  },
+  {
+    "domain": "metaprogramming",
+    "terms": {
+      "reflection": ["reflect", "inspect", "getattr", "setattr", "descriptor", "metaclass", "mirror"],
+      "codegen": ["generate", "template", "macro", "ast", "transform", "emit", "source"],
+      "decorators": ["decorator", "annotation", "attribute", "metadata", "wrap", "enhance", "aspect"],
+      "dynamic": ["eval", "dynamic", "proxy", "intercept", "dispatch", "invoke", "method"],
+      "compile_time": ["consteval", "comptime", "build", "proc", "derive", "attribute", "syn"],
+      "serialization": ["reflect", "tag", "field", "struct", "json", "xml", "custom"],
+      "introspection": ["type", "kind", "name", "method", "field", "interface", "implements"]
+    }
+  },
+  {
+    "domain": "interop",
+    "terms": {
+      "ffi": ["cgo", "cffi", "ctypes", "napi", "jni", "pyo3", "bindgen"],
+      "wasm": ["wasm", "wasi", "compile", "instantiate", "import", "export", "memory"],
+      "embedding": ["embed", "script", "lua", "python", "javascript", "evaluate", "context"],
+      "abi": ["calling", "convention", "cdecl", "stdcall", "layout", "alignment", "padding"],
+      "bindings": ["binding", "wrapper", "bridge", "generate", "header", "interface", "stub"],
+      "memory": ["pointer", "unsafe", "pin", "box", "arc", "ref", "release"],
+      "protocols": ["grpc", "thrift", "flatbuffers", "capnproto", "protobuf", "idl", "schema"]
+    }
+  }
+]

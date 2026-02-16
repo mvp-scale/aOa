@@ -1,0 +1,865 @@
+{
+  "files": {
+    "1":  {"path": "services/auth/handler.py",       "language": "python", "domain": "@authentication"},
+    "2":  {"path": "services/auth/middleware.py",     "language": "python", "domain": "@authentication"},
+    "3":  {"path": "services/api/router.py",          "language": "python", "domain": "@api"},
+    "4":  {"path": "services/api/serializer.py",      "language": "python", "domain": "@api"},
+    "5":  {"path": "services/database/models.py",     "language": "python", "domain": "@database"},
+    "6":  {"path": "services/database/queries.py",    "language": "python", "domain": "@database"},
+    "7":  {"path": "services/cache/redis_client.py",  "language": "python", "domain": "@caching"},
+    "8":  {"path": "lib/utils/logger.py",             "language": "python", "domain": "@logging"},
+    "9":  {"path": "lib/utils/config.py",             "language": "python", "domain": "@configuration"},
+    "10": {"path": "tests/test_auth.py",              "language": "python", "domain": "@testing"},
+    "11": {"path": "tests/test_api.py",               "language": "python", "domain": "@testing"},
+    "12": {"path": "cmd/server.py",                   "language": "python", "domain": "@deployment"},
+    "13": {"path": "docker/Dockerfile",               "language": "dockerfile", "domain": "@deployment"}
+  },
+  "symbols": [
+    {
+      "file_id": 1,
+      "name": "AuthHandler",
+      "signature": "class AuthHandler",
+      "kind": "class",
+      "start_line": 8,
+      "end_line": 120,
+      "parent": "",
+      "tokens": ["auth", "handler"],
+      "tags": ["auth", "handler"]
+    },
+    {
+      "file_id": 1,
+      "name": "login",
+      "signature": "login(self, user, password)",
+      "kind": "function",
+      "start_line": 15,
+      "end_line": 45,
+      "parent": "AuthHandler",
+      "tokens": ["login", "user", "password"],
+      "tags": ["login", "session", "token"]
+    },
+    {
+      "file_id": 1,
+      "name": "logout",
+      "signature": "logout(self, session_id)",
+      "kind": "function",
+      "start_line": 47,
+      "end_line": 65,
+      "parent": "AuthHandler",
+      "tokens": ["logout", "session"],
+      "tags": ["logout", "session"]
+    },
+    {
+      "file_id": 1,
+      "name": "register",
+      "signature": "register(self, email, password)",
+      "kind": "function",
+      "start_line": 67,
+      "end_line": 95,
+      "parent": "AuthHandler",
+      "tokens": ["register", "email", "password"],
+      "tags": ["register", "email", "password"]
+    },
+    {
+      "file_id": 1,
+      "name": "refresh_token",
+      "signature": "refresh_token(self, token)",
+      "kind": "function",
+      "start_line": 97,
+      "end_line": 120,
+      "parent": "AuthHandler",
+      "tokens": ["refresh", "token"],
+      "tags": ["refresh", "token"]
+    },
+    {
+      "file_id": 2,
+      "name": "AuthMiddleware",
+      "signature": "class AuthMiddleware",
+      "kind": "class",
+      "start_line": 5,
+      "end_line": 85,
+      "parent": "",
+      "tokens": ["auth", "middleware"],
+      "tags": ["auth", "middleware"]
+    },
+    {
+      "file_id": 2,
+      "name": "authenticate",
+      "signature": "authenticate(self, request)",
+      "kind": "function",
+      "start_line": 12,
+      "end_line": 40,
+      "parent": "AuthMiddleware",
+      "tokens": ["authenticate", "request"],
+      "tags": ["authenticate", "request"]
+    },
+    {
+      "file_id": 2,
+      "name": "validate_token",
+      "signature": "validate_token(self, token)",
+      "kind": "function",
+      "start_line": 42,
+      "end_line": 60,
+      "parent": "AuthMiddleware",
+      "tokens": ["validate", "token"],
+      "tags": ["validate", "token"]
+    },
+    {
+      "file_id": 2,
+      "name": "get_user_from_token",
+      "signature": "get_user_from_token(self, token)",
+      "kind": "function",
+      "start_line": 62,
+      "end_line": 85,
+      "parent": "AuthMiddleware",
+      "tokens": ["get", "user", "from", "token"],
+      "tags": ["get", "user", "token"]
+    },
+    {
+      "file_id": 3,
+      "name": "Router",
+      "signature": "class Router",
+      "kind": "class",
+      "start_line": 10,
+      "end_line": 130,
+      "parent": "",
+      "tokens": ["router"],
+      "tags": ["router"]
+    },
+    {
+      "file_id": 3,
+      "name": "setup_routes",
+      "signature": "setup_routes(self, app)",
+      "kind": "function",
+      "start_line": 18,
+      "end_line": 35,
+      "parent": "Router",
+      "tokens": ["setup", "routes", "app"],
+      "tags": ["setup", "routes", "app"]
+    },
+    {
+      "file_id": 3,
+      "name": "handle_login",
+      "signature": "handle_login(self, request)",
+      "kind": "function",
+      "start_line": 37,
+      "end_line": 55,
+      "parent": "Router",
+      "tokens": ["handle", "login", "request"],
+      "tags": ["login", "handler", "request"]
+    },
+    {
+      "file_id": 3,
+      "name": "handle_register",
+      "signature": "handle_register(self, request)",
+      "kind": "function",
+      "start_line": 57,
+      "end_line": 75,
+      "parent": "Router",
+      "tokens": ["handle", "register", "request"],
+      "tags": ["handle", "register", "request"]
+    },
+    {
+      "file_id": 3,
+      "name": "handle_users",
+      "signature": "handle_users(self, request)",
+      "kind": "function",
+      "start_line": 77,
+      "end_line": 100,
+      "parent": "Router",
+      "tokens": ["handle", "users", "request"],
+      "tags": ["handle", "users", "request"]
+    },
+    {
+      "file_id": 3,
+      "name": "handle_health",
+      "signature": "handle_health(self)",
+      "kind": "function",
+      "start_line": 102,
+      "end_line": 110,
+      "parent": "Router",
+      "tokens": ["handle", "health"],
+      "tags": ["handle", "health"]
+    },
+    {
+      "file_id": 3,
+      "name": "log_request",
+      "signature": "log_request(self, request, response)",
+      "kind": "function",
+      "start_line": 112,
+      "end_line": 130,
+      "parent": "Router",
+      "tokens": ["log", "request", "response"],
+      "tags": ["log", "request", "response"]
+    },
+    {
+      "file_id": 4,
+      "name": "UserSerializer",
+      "signature": "class UserSerializer",
+      "kind": "class",
+      "start_line": 5,
+      "end_line": 50,
+      "parent": "",
+      "tokens": ["user", "serializer"],
+      "tags": ["user", "serializer"]
+    },
+    {
+      "file_id": 4,
+      "name": "serialize",
+      "signature": "serialize(self, user)",
+      "kind": "function",
+      "start_line": 10,
+      "end_line": 25,
+      "parent": "UserSerializer",
+      "tokens": ["serialize", "user"],
+      "tags": ["serialize", "user"]
+    },
+    {
+      "file_id": 4,
+      "name": "deserialize",
+      "signature": "deserialize(self, data)",
+      "kind": "function",
+      "start_line": 27,
+      "end_line": 50,
+      "parent": "UserSerializer",
+      "tokens": ["deserialize", "data"],
+      "tags": ["deserialize", "data"]
+    },
+    {
+      "file_id": 4,
+      "name": "ResponseFormatter",
+      "signature": "class ResponseFormatter",
+      "kind": "class",
+      "start_line": 52,
+      "end_line": 90,
+      "parent": "",
+      "tokens": ["response", "formatter"],
+      "tags": ["response", "formatter"]
+    },
+    {
+      "file_id": 4,
+      "name": "format_response",
+      "signature": "format_response(self, data, status_code)",
+      "kind": "function",
+      "start_line": 58,
+      "end_line": 75,
+      "parent": "ResponseFormatter",
+      "tokens": ["format", "response", "data", "status", "code"],
+      "tags": ["format", "response", "data"]
+    },
+    {
+      "file_id": 4,
+      "name": "format_error",
+      "signature": "format_error(self, message, status_code)",
+      "kind": "function",
+      "start_line": 77,
+      "end_line": 90,
+      "parent": "ResponseFormatter",
+      "tokens": ["format", "error", "message", "status", "code"],
+      "tags": ["format", "error", "message"]
+    },
+    {
+      "file_id": 5,
+      "name": "User",
+      "signature": "class User(Base)",
+      "kind": "class",
+      "start_line": 8,
+      "end_line": 35,
+      "parent": "",
+      "tokens": ["user", "base"],
+      "tags": ["user", "model"]
+    },
+    {
+      "file_id": 5,
+      "name": "Session",
+      "signature": "class Session(Base)",
+      "kind": "class",
+      "start_line": 37,
+      "end_line": 60,
+      "parent": "",
+      "tokens": ["session", "base"],
+      "tags": ["session", "model"]
+    },
+    {
+      "file_id": 5,
+      "name": "Role",
+      "signature": "class Role(Base)",
+      "kind": "class",
+      "start_line": 62,
+      "end_line": 80,
+      "parent": "",
+      "tokens": ["role", "base"],
+      "tags": ["role"]
+    },
+    {
+      "file_id": 5,
+      "name": "Token",
+      "signature": "class Token(Base)",
+      "kind": "class",
+      "start_line": 82,
+      "end_line": 105,
+      "parent": "",
+      "tokens": ["token", "base"],
+      "tags": ["token", "model"]
+    },
+    {
+      "file_id": 5,
+      "name": "AuditLog",
+      "signature": "class AuditLog(Base)",
+      "kind": "class",
+      "start_line": 107,
+      "end_line": 130,
+      "parent": "",
+      "tokens": ["audit", "log", "base"],
+      "tags": ["audit", "log"]
+    },
+    {
+      "file_id": 6,
+      "name": "UserQueries",
+      "signature": "class UserQueries",
+      "kind": "class",
+      "start_line": 5,
+      "end_line": 80,
+      "parent": "",
+      "tokens": ["user", "queries"],
+      "tags": ["user", "queries"]
+    },
+    {
+      "file_id": 6,
+      "name": "get_user_by_id",
+      "signature": "get_user_by_id(self, user_id)",
+      "kind": "function",
+      "start_line": 10,
+      "end_line": 25,
+      "parent": "UserQueries",
+      "tokens": ["get", "user", "by"],
+      "tags": ["get", "user"]
+    },
+    {
+      "file_id": 6,
+      "name": "get_user_by_email",
+      "signature": "get_user_by_email(self, email)",
+      "kind": "function",
+      "start_line": 27,
+      "end_line": 42,
+      "parent": "UserQueries",
+      "tokens": ["get", "user", "by", "email"],
+      "tags": ["get", "user", "email"]
+    },
+    {
+      "file_id": 6,
+      "name": "create_user",
+      "signature": "create_user(self, email, password_hash)",
+      "kind": "function",
+      "start_line": 44,
+      "end_line": 60,
+      "parent": "UserQueries",
+      "tokens": ["create", "user", "email", "password", "hash"],
+      "tags": ["create", "user"]
+    },
+    {
+      "file_id": 6,
+      "name": "SessionQueries",
+      "signature": "class SessionQueries",
+      "kind": "class",
+      "start_line": 82,
+      "end_line": 130,
+      "parent": "",
+      "tokens": ["session", "queries"],
+      "tags": ["session", "queries"]
+    },
+    {
+      "file_id": 6,
+      "name": "create_session",
+      "signature": "create_session(self, user_id, token)",
+      "kind": "function",
+      "start_line": 87,
+      "end_line": 105,
+      "parent": "SessionQueries",
+      "tokens": ["create", "session", "user", "token"],
+      "tags": ["create", "session", "token"]
+    },
+    {
+      "file_id": 6,
+      "name": "invalidate_session",
+      "signature": "invalidate_session(self, session_id)",
+      "kind": "function",
+      "start_line": 107,
+      "end_line": 125,
+      "parent": "SessionQueries",
+      "tokens": ["invalidate", "session"],
+      "tags": ["invalidate", "session"]
+    },
+    {
+      "file_id": 6,
+      "name": "cleanup_expired",
+      "signature": "cleanup_expired(self)",
+      "kind": "function",
+      "start_line": 127,
+      "end_line": 130,
+      "parent": "SessionQueries",
+      "tokens": ["cleanup", "expired"],
+      "tags": ["cleanup", "expired"]
+    },
+    {
+      "file_id": 7,
+      "name": "RedisCache",
+      "signature": "class RedisCache",
+      "kind": "class",
+      "start_line": 8,
+      "end_line": 100,
+      "parent": "",
+      "tokens": ["redis", "cache"],
+      "tags": ["redis", "cache"]
+    },
+    {
+      "file_id": 7,
+      "name": "get",
+      "signature": "get(self, key)",
+      "kind": "function",
+      "start_line": 15,
+      "end_line": 30,
+      "parent": "RedisCache",
+      "tokens": ["get", "key"],
+      "tags": ["get", "cache"]
+    },
+    {
+      "file_id": 7,
+      "name": "set",
+      "signature": "set(self, key, value, ttl)",
+      "kind": "function",
+      "start_line": 32,
+      "end_line": 50,
+      "parent": "RedisCache",
+      "tokens": ["set", "key", "value", "ttl"],
+      "tags": ["set", "key", "value"]
+    },
+    {
+      "file_id": 7,
+      "name": "invalidate",
+      "signature": "invalidate(self, key)",
+      "kind": "function",
+      "start_line": 52,
+      "end_line": 65,
+      "parent": "RedisCache",
+      "tokens": ["invalidate", "key"],
+      "tags": ["invalidate", "cache"]
+    },
+    {
+      "file_id": 7,
+      "name": "invalidate_pattern",
+      "signature": "invalidate_pattern(self, pattern)",
+      "kind": "function",
+      "start_line": 67,
+      "end_line": 85,
+      "parent": "RedisCache",
+      "tokens": ["invalidate", "pattern"],
+      "tags": ["invalidate", "cache"]
+    },
+    {
+      "file_id": 7,
+      "name": "flush_all",
+      "signature": "flush_all(self)",
+      "kind": "function",
+      "start_line": 87,
+      "end_line": 100,
+      "parent": "RedisCache",
+      "tokens": ["flush", "all"],
+      "tags": ["flush", "all"]
+    },
+    {
+      "file_id": 8,
+      "name": "Logger",
+      "signature": "class Logger",
+      "kind": "class",
+      "start_line": 5,
+      "end_line": 70,
+      "parent": "",
+      "tokens": ["logger"],
+      "tags": ["logger"]
+    },
+    {
+      "file_id": 8,
+      "name": "setup_logger",
+      "signature": "setup_logger(name, level)",
+      "kind": "function",
+      "start_line": 10,
+      "end_line": 25,
+      "parent": "",
+      "tokens": ["setup", "logger", "name", "level"],
+      "tags": ["setup", "logger", "level"]
+    },
+    {
+      "file_id": 8,
+      "name": "log",
+      "signature": "log(self, level, message)",
+      "kind": "function",
+      "start_line": 30,
+      "end_line": 45,
+      "parent": "Logger",
+      "tokens": ["log", "level", "message"],
+      "tags": ["log", "level", "message"]
+    },
+    {
+      "file_id": 8,
+      "name": "format_message",
+      "signature": "format_message(self, message, context)",
+      "kind": "function",
+      "start_line": 47,
+      "end_line": 60,
+      "parent": "Logger",
+      "tokens": ["format", "message", "context"],
+      "tags": ["format", "message", "context"]
+    },
+    {
+      "file_id": 8,
+      "name": "get_log_level",
+      "signature": "get_log_level(level_name)",
+      "kind": "function",
+      "start_line": 62,
+      "end_line": 70,
+      "parent": "",
+      "tokens": ["get", "log", "level", "name"],
+      "tags": ["get", "log", "level"]
+    },
+    {
+      "file_id": 9,
+      "name": "Config",
+      "signature": "class Config",
+      "kind": "class",
+      "start_line": 5,
+      "end_line": 75,
+      "parent": "",
+      "tokens": ["config"],
+      "tags": ["config"]
+    },
+    {
+      "file_id": 9,
+      "name": "load_config",
+      "signature": "load_config(path)",
+      "kind": "function",
+      "start_line": 10,
+      "end_line": 30,
+      "parent": "",
+      "tokens": ["load", "config", "path"],
+      "tags": ["load", "config", "path"]
+    },
+    {
+      "file_id": 9,
+      "name": "get_env",
+      "signature": "get_env(self, key, default)",
+      "kind": "function",
+      "start_line": 35,
+      "end_line": 50,
+      "parent": "Config",
+      "tokens": ["get", "env", "key", "default"],
+      "tags": ["get", "env"]
+    },
+    {
+      "file_id": 9,
+      "name": "validate_config",
+      "signature": "validate_config(self)",
+      "kind": "function",
+      "start_line": 52,
+      "end_line": 70,
+      "parent": "Config",
+      "tokens": ["validate", "config"],
+      "tags": ["validate", "config"]
+    },
+    {
+      "file_id": 9,
+      "name": "get_database_url",
+      "signature": "get_database_url(self)",
+      "kind": "function",
+      "start_line": 72,
+      "end_line": 75,
+      "parent": "Config",
+      "tokens": ["get", "database", "url"],
+      "tags": ["get", "database", "url"]
+    },
+    {
+      "file_id": 10,
+      "name": "TestAuth",
+      "signature": "class TestAuth(TestCase)",
+      "kind": "class",
+      "start_line": 8,
+      "end_line": 120,
+      "parent": "",
+      "tokens": ["test", "auth", "case"],
+      "tags": ["test", "auth"]
+    },
+    {
+      "file_id": 10,
+      "name": "test_login_success",
+      "signature": "test_login_success(self)",
+      "kind": "function",
+      "start_line": 15,
+      "end_line": 35,
+      "parent": "TestAuth",
+      "tokens": ["test", "login", "success"],
+      "tags": ["test", "login"]
+    },
+    {
+      "file_id": 10,
+      "name": "test_login_invalid_password",
+      "signature": "test_login_invalid_password(self)",
+      "kind": "function",
+      "start_line": 37,
+      "end_line": 55,
+      "parent": "TestAuth",
+      "tokens": ["test", "login", "invalid", "password"],
+      "tags": ["test", "login", "password"]
+    },
+    {
+      "file_id": 10,
+      "name": "test_register",
+      "signature": "test_register(self)",
+      "kind": "function",
+      "start_line": 57,
+      "end_line": 75,
+      "parent": "TestAuth",
+      "tokens": ["test", "register"],
+      "tags": ["test", "register"]
+    },
+    {
+      "file_id": 10,
+      "name": "test_token_refresh",
+      "signature": "test_token_refresh(self)",
+      "kind": "function",
+      "start_line": 77,
+      "end_line": 95,
+      "parent": "TestAuth",
+      "tokens": ["test", "token", "refresh"],
+      "tags": ["test", "token", "refresh"]
+    },
+    {
+      "file_id": 10,
+      "name": "test_logout",
+      "signature": "test_logout(self)",
+      "kind": "function",
+      "start_line": 97,
+      "end_line": 110,
+      "parent": "TestAuth",
+      "tokens": ["test", "logout"],
+      "tags": ["test", "logout"]
+    },
+    {
+      "file_id": 10,
+      "name": "setUp",
+      "signature": "setUp(self)",
+      "kind": "function",
+      "start_line": 10,
+      "end_line": 13,
+      "parent": "TestAuth",
+      "tokens": ["set", "up"],
+      "tags": ["set", "up"]
+    },
+    {
+      "file_id": 11,
+      "name": "TestAPI",
+      "signature": "class TestAPI(TestCase)",
+      "kind": "class",
+      "start_line": 8,
+      "end_line": 110,
+      "parent": "",
+      "tokens": ["test", "api", "case"],
+      "tags": ["test", "api"]
+    },
+    {
+      "file_id": 11,
+      "name": "test_get_users",
+      "signature": "test_get_users(self)",
+      "kind": "function",
+      "start_line": 15,
+      "end_line": 35,
+      "parent": "TestAPI",
+      "tokens": ["test", "get", "users"],
+      "tags": ["test", "get", "users"]
+    },
+    {
+      "file_id": 11,
+      "name": "test_create_user",
+      "signature": "test_create_user(self)",
+      "kind": "function",
+      "start_line": 37,
+      "end_line": 60,
+      "parent": "TestAPI",
+      "tokens": ["test", "create", "user"],
+      "tags": ["test", "create", "user"]
+    },
+    {
+      "file_id": 11,
+      "name": "test_handle_login",
+      "signature": "test_handle_login(self)",
+      "kind": "function",
+      "start_line": 62,
+      "end_line": 80,
+      "parent": "TestAPI",
+      "tokens": ["test", "handle", "login"],
+      "tags": ["test", "handle", "login"]
+    },
+    {
+      "file_id": 11,
+      "name": "test_health_endpoint",
+      "signature": "test_health_endpoint(self)",
+      "kind": "function",
+      "start_line": 82,
+      "end_line": 95,
+      "parent": "TestAPI",
+      "tokens": ["test", "health", "endpoint"],
+      "tags": ["test", "health"]
+    },
+    {
+      "file_id": 11,
+      "name": "test_serialization",
+      "signature": "test_serialization(self)",
+      "kind": "function",
+      "start_line": 97,
+      "end_line": 110,
+      "parent": "TestAPI",
+      "tokens": ["test", "serialization"],
+      "tags": ["test", "serialization"]
+    },
+    {
+      "file_id": 12,
+      "name": "create_app",
+      "signature": "create_app(config)",
+      "kind": "function",
+      "start_line": 10,
+      "end_line": 35,
+      "parent": "",
+      "tokens": ["create", "app", "config"],
+      "tags": ["create", "app", "config"]
+    },
+    {
+      "file_id": 12,
+      "name": "configure_logging",
+      "signature": "configure_logging(app, config)",
+      "kind": "function",
+      "start_line": 37,
+      "end_line": 55,
+      "parent": "",
+      "tokens": ["configure", "logging", "app", "config"],
+      "tags": ["configure", "logging", "app"]
+    },
+    {
+      "file_id": 12,
+      "name": "run_server",
+      "signature": "run_server(host, port)",
+      "kind": "function",
+      "start_line": 57,
+      "end_line": 75,
+      "parent": "",
+      "tokens": ["run", "server", "host", "port"],
+      "tags": ["run", "server", "host"]
+    },
+    {
+      "file_id": 12,
+      "name": "health_check",
+      "signature": "health_check()",
+      "kind": "function",
+      "start_line": 77,
+      "end_line": 90,
+      "parent": "",
+      "tokens": ["health", "check"],
+      "tags": ["health", "check"]
+    },
+    {
+      "file_id": 12,
+      "name": "shutdown_handler",
+      "signature": "shutdown_handler(signal)",
+      "kind": "function",
+      "start_line": 92,
+      "end_line": 110,
+      "parent": "",
+      "tokens": ["shutdown", "handler", "signal"],
+      "tags": ["shutdown", "handler", "signal"]
+    },
+    {
+      "file_id": 13,
+      "name": "EXPOSE",
+      "signature": "EXPOSE 8080",
+      "kind": "directive",
+      "start_line": 15,
+      "end_line": 15,
+      "parent": "",
+      "tokens": ["expose"],
+      "tags": ["expose"]
+    },
+    {
+      "file_id": 13,
+      "name": "CMD",
+      "signature": "CMD [\"python\", \"cmd/server.py\"]",
+      "kind": "directive",
+      "start_line": 20,
+      "end_line": 20,
+      "parent": "",
+      "tokens": ["cmd", "python", "server"],
+      "tags": ["cmd", "python", "server"]
+    }
+  ],
+  "domains": {
+    "@authentication": {
+      "terms": {
+        "login": ["login", "signin", "authenticate", "credentials"],
+        "session": ["session", "cookie", "jwt", "token"],
+        "token": ["token", "bearer", "refresh", "access_token"],
+        "register": ["register", "signup", "enroll"]
+      }
+    },
+    "@api": {
+      "terms": {
+        "handler": ["handler", "endpoint", "controller"],
+        "route": ["route", "router", "path", "url"],
+        "request": ["request", "response", "payload"],
+        "serialize": ["serialize", "deserialize", "format", "parse"]
+      }
+    },
+    "@database": {
+      "terms": {
+        "query": ["query", "queries", "sql", "select"],
+        "model": ["model", "schema", "table", "column"],
+        "user": ["user", "users", "account", "profile"],
+        "create": ["create", "insert", "save", "persist"]
+      }
+    },
+    "@testing": {
+      "terms": {
+        "test": ["test", "spec", "check", "verify"],
+        "assert": ["assert", "expect", "should", "equal"],
+        "mock": ["mock", "stub", "fake", "fixture"],
+        "setup": ["setup", "teardown", "before", "after"]
+      }
+    },
+    "@caching": {
+      "terms": {
+        "cache": ["cache", "cached", "memoize"],
+        "redis": ["redis", "memcached", "store"],
+        "invalidate": ["invalidate", "expire", "evict", "flush"],
+        "ttl": ["ttl", "timeout", "expiry"]
+      }
+    },
+    "@logging": {
+      "terms": {
+        "logger": ["logger", "logging", "log"],
+        "level": ["level", "debug", "info", "warn", "error"],
+        "format": ["format", "formatter", "template"]
+      }
+    },
+    "@configuration": {
+      "terms": {
+        "config": ["config", "configuration", "settings"],
+        "env": ["env", "environment", "variable"],
+        "load": ["load", "read", "parse"],
+        "validate": ["validate", "validation", "check"]
+      }
+    },
+    "@deployment": {
+      "terms": {
+        "docker": ["docker", "container", "image"],
+        "server": ["server", "host", "port", "bind"],
+        "health": ["health", "healthcheck", "status", "ping"],
+        "shutdown": ["shutdown", "stop", "graceful", "signal"]
+      }
+    }
+  }
+}

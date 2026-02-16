@@ -1,0 +1,86 @@
+[
+  {
+    "domain": "unit_testing",
+    "terms": {
+      "assertions": ["assert", "expect", "equal", "deep", "throw", "reject", "match"],
+      "structure": ["describe", "it", "test", "suite", "spec", "given", "when"],
+      "mocking": ["mock", "stub", "spy", "fake", "double", "jest", "sinon"],
+      "fixtures": ["factory", "builder", "seed", "fixture", "shared", "context", "setup"],
+      "coverage": ["coverage", "line", "branch", "function", "statement", "threshold", "uncovered"],
+      "runners": ["jest", "mocha", "pytest", "rspec", "junit", "vitest", "ava"],
+      "patterns": ["arrange", "act", "assert", "given", "when", "then", "table"]
+    }
+  },
+  {
+    "domain": "integration_testing",
+    "terms": {
+      "database": ["testdb", "migrate", "truncate", "transaction", "rollback", "seed", "cleanup"],
+      "api": ["request", "response", "supertest", "httptest", "client", "status", "body"],
+      "contracts": ["contract", "pact", "provider", "consumer", "verify", "publish", "broker"],
+      "containers": ["testcontainers", "docker", "compose", "startup", "cleanup", "port", "health"],
+      "fixtures": ["setup", "teardown", "before", "after", "each", "all", "suite"],
+      "services": ["mock", "server", "wiremock", "stub", "intercept", "record", "replay"],
+      "snapshots": ["snapshot", "inline", "update", "diff", "serialize", "match", "tofile"]
+    }
+  },
+  {
+    "domain": "e2e_testing",
+    "terms": {
+      "automation": ["playwright", "cypress", "selenium", "puppeteer", "webdriver", "detox", "maestro"],
+      "interactions": ["click", "type", "select", "hover", "drag", "scroll", "wait"],
+      "selectors": ["testid", "role", "label", "css", "xpath", "text", "placeholder"],
+      "assertions": ["visible", "hidden", "enabled", "disabled", "contain", "value", "attribute"],
+      "patterns": ["pageobject", "screenplay", "fixture", "beforeeach", "intercept", "route", "mock"],
+      "visual": ["screenshot", "snapshot", "diff", "baseline", "threshold", "mask", "clip"],
+      "parallel": ["shard", "worker", "retry", "flaky", "quarantine", "tag", "grep"]
+    }
+  },
+  {
+    "domain": "performance_testing",
+    "terms": {
+      "load": ["concurrent", "virtual", "rampup", "sustained", "throughput", "latency", "percentile"],
+      "stress": ["breaking", "saturation", "spike", "soak", "endurance", "recovery", "degradation"],
+      "benchmarks": ["benchmark", "baseline", "regression", "flamegraph", "profile", "trace", "sample"],
+      "tools": ["k6", "gatling", "jmeter", "artillery", "wrk", "vegeta", "locust"],
+      "metrics": ["p50", "p95", "p99", "rps", "tps", "error", "duration"],
+      "analysis": ["bottleneck", "hotpath", "allocation", "gc", "contention", "lock", "wait"],
+      "scenarios": ["scenario", "threshold", "check", "stage", "iteration", "vu", "rate"]
+    }
+  },
+  {
+    "domain": "test_infrastructure",
+    "terms": {
+      "ci": ["pipeline", "workflow", "job", "step", "artifact", "cache", "matrix"],
+      "parallelism": ["shard", "split", "worker", "balance", "distribute", "merge", "collect"],
+      "reporting": ["report", "junit", "html", "json", "badge", "trend", "history"],
+      "flaky": ["retry", "quarantine", "detect", "threshold", "skip", "annotate", "track"],
+      "environments": ["staging", "preview", "ephemeral", "sandbox", "isolated", "dedicated", "shared"],
+      "data": ["factory", "faker", "seed", "generate", "fixture", "snapshot", "golden"],
+      "tools": ["allure", "reportportal", "testrail", "xray", "qase", "currents", "sorry"]
+    }
+  },
+  {
+    "domain": "code_quality",
+    "terms": {
+      "linting": ["eslint", "pylint", "golangci", "rubocop", "clippy", "rule", "autofix"],
+      "formatting": ["prettier", "gofmt", "black", "rustfmt", "editorconfig", "indent", "semicolon"],
+      "type_checking": ["typescript", "mypy", "flow", "pyright", "inference", "strict", "narrow"],
+      "complexity": ["cyclomatic", "cognitive", "nesting", "loc", "coupling", "cohesion", "maintainability"],
+      "duplication": ["duplicate", "clone", "similar", "extract", "refactor", "dryrun", "threshold"],
+      "dependencies": ["circular", "unused", "orphan", "depth", "graph", "boundary", "coupling"],
+      "tools": ["sonarqube", "codeclimate", "deepsource", "semgrep", "codeql", "megalinter", "trunk"]
+    }
+  },
+  {
+    "domain": "documentation",
+    "terms": {
+      "code_docs": ["jsdoc", "godoc", "sphinx", "docstring", "annotation", "comment", "typedoc"],
+      "api_docs": ["openapi", "swagger", "redoc", "stoplight", "postman", "insomnia", "hoppscotch"],
+      "guides": ["readme", "getting", "started", "tutorial", "example", "quickstart", "walkthrough"],
+      "generation": ["autogenerate", "changelog", "release", "notes", "extract", "parse", "render"],
+      "diagrams": ["mermaid", "plantuml", "c4", "sequence", "flowchart", "erd", "architecture"],
+      "hosting": ["gitbook", "docusaurus", "mkdocs", "vitepress", "nextra", "hugo", "astro"],
+      "standards": ["adr", "rfc", "spec", "proposal", "decision", "record", "rationale"]
+    }
+  }
+]

@@ -1,0 +1,146 @@
+[
+  {
+    "domain": "rest_api",
+    "terms": {
+      "endpoints": ["route", "endpoint", "handler", "controller", "resource", "path", "prefix"],
+      "methods": ["get", "post", "put", "patch", "delete", "head", "options"],
+      "responses": ["status", "response", "payload", "envelope", "pagination", "cursor", "offset"],
+      "versioning": ["version", "deprecated", "sunset", "migration", "compatibility", "changelog", "breaking"],
+      "middleware": ["middleware", "interceptor", "filter", "chain", "pipe", "before", "after"],
+      "validation": ["validate", "schema", "required", "optional", "constraint", "sanitize", "coerce"],
+      "documentation": ["openapi", "swagger", "spec", "definition", "example", "description", "tag"]
+    }
+  },
+  {
+    "domain": "graphql",
+    "terms": {
+      "schema": ["typedef", "scalar", "enum", "interface", "union", "input", "directive"],
+      "resolvers": ["resolver", "loader", "dataloader", "batch", "context", "parent", "info"],
+      "queries": ["query", "mutation", "subscription", "fragment", "variable", "alias", "operation"],
+      "types": ["nullable", "nonnull", "list", "field", "argument", "default", "deprecate"],
+      "federation": ["subgraph", "gateway", "entity", "key", "external", "requires", "provides"],
+      "execution": ["execute", "parse", "validate", "introspect", "complexity", "depth", "cost"],
+      "tooling": ["codegen", "schema", "stitch", "merge", "playground", "voyager", "altair"]
+    }
+  },
+  {
+    "domain": "websocket",
+    "terms": {
+      "connection": ["connect", "disconnect", "handshake", "upgrade", "close", "reconnect", "ping"],
+      "messaging": ["send", "receive", "broadcast", "emit", "message", "binary", "text"],
+      "channels": ["room", "channel", "topic", "subscribe", "unsubscribe", "join", "leave"],
+      "protocols": ["socketio", "ws", "wss", "stomp", "mqtt", "amqp", "frame"],
+      "state": ["open", "closing", "closed", "connecting", "ready", "buffered", "backpressure"],
+      "scaling": ["adapter", "sticky", "redis", "pubsub", "namespace", "multiplexing", "shard"],
+      "heartbeat": ["ping", "pong", "interval", "timeout", "keepalive", "latency", "health"]
+    }
+  },
+  {
+    "domain": "grpc",
+    "terms": {
+      "protobuf": ["proto", "message", "enum", "oneof", "repeated", "map", "any"],
+      "services": ["unary", "stream", "bidirectional", "rpc", "method", "service", "stub"],
+      "interceptors": ["interceptor", "middleware", "metadata", "trailer", "header", "deadline", "cancel"],
+      "codegen": ["protoc", "plugin", "generate", "descriptor", "reflection", "registry", "import"],
+      "transport": ["channel", "credentials", "insecure", "tls", "compression", "keepalive", "authority"],
+      "errors": ["status", "code", "details", "unavailable", "deadline", "cancelled", "unknown"],
+      "streaming": ["recv", "send", "closesend", "trailer", "header", "flow", "window"]
+    }
+  },
+  {
+    "domain": "http",
+    "terms": {
+      "client": ["request", "response", "timeout", "retry", "pool", "transport", "roundtrip"],
+      "server": ["listen", "serve", "handler", "mux", "router", "graceful", "shutdown"],
+      "headers": ["contenttype", "authorization", "accept", "origin", "useragent", "etag", "vary"],
+      "caching": ["cache", "expires", "maxage", "nocache", "nostore", "revalidate", "conditional"],
+      "cookies": ["cookie", "setcookie", "domain", "path", "secure", "httponly", "samesite"],
+      "proxy": ["proxy", "reverse", "forward", "gateway", "upstream", "downstream", "balancer"],
+      "protocol": ["http2", "http3", "quic", "alpn", "upgrade", "websocket", "sse"]
+    }
+  },
+  {
+    "domain": "messaging",
+    "terms": {
+      "queues": ["enqueue", "dequeue", "fifo", "priority", "delay", "retry", "deadletter"],
+      "pubsub": ["publish", "subscribe", "topic", "fan", "filter", "broadcast", "durable"],
+      "brokers": ["rabbitmq", "kafka", "sqs", "nats", "pulsar", "redis", "activemq"],
+      "consumers": ["consumer", "worker", "handler", "ack", "nack", "reject", "prefetch"],
+      "producers": ["producer", "publisher", "dispatch", "batch", "partition", "key", "header"],
+      "patterns": ["saga", "outbox", "inbox", "idempotent", "dedup", "compensate", "choreography"],
+      "delivery": ["atleast", "atmost", "exactly", "order", "guarantee", "replay", "offset"]
+    }
+  },
+  {
+    "domain": "email",
+    "terms": {
+      "sending": ["smtp", "send", "deliver", "queue", "throttle", "bulk", "transactional"],
+      "templates": ["template", "mjml", "html", "text", "personalize", "merge", "render"],
+      "receiving": ["imap", "pop3", "webhook", "inbound", "parse", "forward", "alias"],
+      "deliverability": ["spf", "dkim", "dmarc", "bounce", "complaint", "reputation", "warmup"],
+      "attachments": ["attach", "inline", "multipart", "mime", "base64", "content", "disposition"],
+      "tracking": ["open", "click", "unsubscribe", "pixel", "link", "engagement", "analytics"],
+      "providers": ["sendgrid", "ses", "postmark", "mailgun", "resend", "sparkpost", "mandrill"]
+    }
+  },
+  {
+    "domain": "notifications",
+    "terms": {
+      "push": ["fcm", "apns", "token", "payload", "badge", "sound", "silent"],
+      "inapp": ["toast", "snackbar", "banner", "bell", "badge", "unread", "dismiss"],
+      "channels": ["sms", "slack", "webhook", "dispatch", "preference", "channel", "priority"],
+      "templates": ["template", "variable", "locale", "render", "preview", "fallback", "default"],
+      "delivery": ["send", "queue", "batch", "retry", "throttle", "deduplicate", "schedule"],
+      "preferences": ["optin", "optout", "frequency", "digest", "mute", "category", "override"],
+      "tracking": ["delivered", "read", "clicked", "failed", "bounced", "opened", "receipt"]
+    }
+  },
+  {
+    "domain": "streaming",
+    "terms": {
+      "sse": ["eventsource", "event", "data", "retry", "id", "stream", "text"],
+      "datastreams": ["kafka", "kinesis", "flink", "spark", "window", "watermark", "partition"],
+      "backpressure": ["buffer", "overflow", "drop", "block", "rate", "throttle", "control"],
+      "replay": ["offset", "checkpoint", "snapshot", "rewind", "seek", "position", "cursor"],
+      "processing": ["map", "filter", "aggregate", "reduce", "join", "enrich", "transform"],
+      "windowing": ["tumbling", "sliding", "session", "global", "trigger", "evict", "late"],
+      "sinks": ["sink", "output", "destination", "write", "flush", "commit", "batch"]
+    }
+  },
+  {
+    "domain": "serialization",
+    "terms": {
+      "json": ["marshal", "unmarshal", "encode", "decode", "parse", "stringify", "indent"],
+      "binary": ["protobuf", "msgpack", "avro", "cbor", "flatbuffers", "thrift", "bson"],
+      "xml": ["parse", "generate", "xpath", "xslt", "namespace", "element", "attribute"],
+      "schema": ["jsonschema", "openapi", "avroschema", "validate", "evolve", "compatible", "registry"],
+      "csv": ["delimiter", "header", "quote", "escape", "row", "column", "reader"],
+      "yaml": ["yaml", "indent", "anchor", "alias", "merge", "multiline", "tag"],
+      "conversion": ["transform", "map", "convert", "adapt", "serialize", "deserialize", "codec"]
+    }
+  },
+  {
+    "domain": "rate_limiting",
+    "terms": {
+      "algorithms": ["tokenbucket", "slidingwindow", "leakybucket", "fixed", "counter", "adaptive", "quota"],
+      "enforcement": ["limit", "throttle", "block", "reject", "backoff", "cooldown", "exempt"],
+      "headers": ["ratelimit", "remaining", "reset", "retryafter", "quota", "window", "policy"],
+      "distributed": ["redis", "shared", "cluster", "consistent", "atomic", "increment", "expire"],
+      "scoping": ["peruser", "perip", "perendpoint", "global", "tier", "plan", "apikey"],
+      "monitoring": ["exceeded", "warning", "threshold", "alert", "metric", "counter", "log"],
+      "configuration": ["rule", "policy", "whitelist", "blacklist", "dynamic", "override", "default"]
+    }
+  },
+  {
+    "domain": "webhooks",
+    "terms": {
+      "outgoing": ["deliver", "dispatch", "payload", "retry", "backoff", "timeout", "queue"],
+      "incoming": ["receive", "parse", "validate", "route", "acknowledge", "process", "handle"],
+      "security": ["signature", "hmac", "secret", "verify", "timestamp", "replay", "nonce"],
+      "management": ["register", "subscribe", "unsubscribe", "rotate", "endpoint", "active", "paused"],
+      "reliability": ["retry", "exponential", "circuit", "dlq", "log", "alert", "fallback"],
+      "idempotency": ["idempotent", "dedup", "key", "once", "replay", "upsert", "ignore"],
+      "monitoring": ["success", "failure", "latency", "status", "dashboard", "alert", "history"]
+    }
+  }
+]

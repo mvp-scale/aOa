@@ -1,0 +1,134 @@
+[
+  {
+    "domain": "event_driven",
+    "terms": {
+      "sourcing": ["eventstore", "aggregate", "projection", "replay", "snapshot", "stream", "version"],
+      "cqrs": ["command", "query", "readmodel", "writemodel", "projection", "eventual", "sync"],
+      "bus": ["eventbus", "commandbus", "dispatch", "handler", "subscribe", "publish", "mediator"],
+      "patterns": ["saga", "process", "compensate", "orchestrate", "choreograph", "correlate", "timeout"],
+      "storage": ["append", "immutable", "sequence", "position", "checkpoint", "subscription", "category"],
+      "projections": ["projection", "rebuild", "catchup", "live", "inline", "async", "materialized"],
+      "messaging": ["envelope", "metadata", "causation", "correlation", "idempotent", "dedup", "retry"]
+    }
+  },
+  {
+    "domain": "microservices",
+    "terms": {
+      "decomposition": ["bounded", "context", "aggregate", "service", "domain", "subdomain", "capability"],
+      "communication": ["sync", "async", "request", "event", "choreography", "orchestration", "api"],
+      "discovery": ["registry", "consul", "eureka", "dns", "health", "heartbeat", "deregister"],
+      "resilience": ["circuit", "breaker", "bulkhead", "retry", "timeout", "fallback", "hedging"],
+      "observability": ["trace", "span", "metric", "log", "correlate", "propagate", "sample"],
+      "deployment": ["sidecar", "ambassador", "gateway", "mesh", "canary", "blue", "green"],
+      "data": ["eventual", "saga", "outbox", "cdc", "shared", "ownership", "boundary"]
+    }
+  },
+  {
+    "domain": "dependency_injection",
+    "terms": {
+      "containers": ["container", "register", "resolve", "bind", "provide", "inject", "get"],
+      "patterns": ["constructor", "method", "property", "factory", "provider", "token", "qualifier"],
+      "lifecycle": ["singleton", "transient", "scoped", "lazy", "eager", "dispose", "finalize"],
+      "frameworks": ["spring", "guice", "wire", "dig", "fx", "inversify", "tsyringe"],
+      "testing": ["override", "mock", "stub", "replace", "fake", "test", "module"],
+      "modules": ["module", "import", "export", "provide", "configure", "feature", "root"],
+      "scope": ["request", "session", "application", "custom", "child", "parent", "hierarchy"]
+    }
+  },
+  {
+    "domain": "middleware",
+    "terms": {
+      "http": ["request", "response", "next", "use", "handler", "router", "mount"],
+      "error": ["catch", "recover", "panic", "handler", "fallback", "retry", "circuit"],
+      "common": ["logger", "auth", "cors", "compress", "ratelimit", "timeout", "requestid"],
+      "patterns": ["chain", "pipeline", "decorator", "wrapper", "interceptor", "filter", "hook"],
+      "ordering": ["before", "after", "priority", "order", "first", "last", "global"],
+      "context": ["context", "locals", "store", "pass", "attach", "extract", "propagate"],
+      "async": ["await", "promise", "callback", "stream", "pipe", "transform", "through"]
+    }
+  },
+  {
+    "domain": "plugin_system",
+    "terms": {
+      "loading": ["load", "discover", "register", "dynamic", "import", "require", "resolve"],
+      "lifecycle": ["init", "start", "stop", "enable", "disable", "configure", "health"],
+      "api": ["hook", "extension", "point", "contract", "interface", "callback", "event"],
+      "isolation": ["sandbox", "permission", "capability", "restrict", "validate", "version", "compat"],
+      "registry": ["registry", "manifest", "metadata", "dependency", "resolve", "publish", "install"],
+      "patterns": ["observer", "strategy", "visitor", "adapter", "facade", "proxy", "decorator"],
+      "config": ["config", "option", "default", "override", "merge", "validate", "schema"]
+    }
+  },
+  {
+    "domain": "configuration",
+    "terms": {
+      "sources": ["env", "file", "flag", "remote", "consul", "etcd", "vault"],
+      "parsing": ["yaml", "toml", "json", "dotenv", "ini", "hcl", "properties"],
+      "validation": ["required", "default", "type", "range", "enum", "pattern", "custom"],
+      "patterns": ["twelve", "factor", "hierarchical", "overlay", "profile", "environment", "merge"],
+      "hot_reload": ["watch", "reload", "notify", "callback", "atomic", "graceful", "rollback"],
+      "secrets": ["encrypt", "vault", "sops", "sealed", "external", "rotate", "reference"],
+      "frameworks": ["viper", "config", "convict", "dotenv", "figaro", "environ", "pydantic"]
+    }
+  },
+  {
+    "domain": "error_handling",
+    "terms": {
+      "types": ["domain", "infrastructure", "validation", "notfound", "conflict", "timeout", "unauthorized"],
+      "propagation": ["wrap", "unwrap", "chain", "cause", "stack", "context", "annotate"],
+      "recovery": ["retry", "fallback", "circuit", "degrade", "compensate", "heal", "restart"],
+      "reporting": ["sentry", "bugsnag", "rollbar", "capture", "breadcrumb", "tag", "context"],
+      "patterns": ["result", "either", "option", "try", "catch", "finally", "panic"],
+      "http": ["status", "code", "message", "detail", "type", "instance", "problem"],
+      "logging": ["error", "warn", "fatal", "stack", "context", "correlate", "alert"]
+    }
+  },
+  {
+    "domain": "concurrency",
+    "terms": {
+      "primitives": ["mutex", "semaphore", "channel", "atomic", "waitgroup", "barrier", "latch"],
+      "patterns": ["pool", "fanout", "fanin", "pipeline", "producer", "consumer", "broadcast"],
+      "async": ["promise", "future", "async", "await", "coroutine", "goroutine", "task"],
+      "safety": ["race", "deadlock", "livelock", "starvation", "contention", "hazard", "reentrancy"],
+      "scheduling": ["scheduler", "executor", "dispatch", "priority", "fair", "steal", "preempt"],
+      "synchronization": ["lock", "unlock", "rlock", "trylock", "condition", "notify", "signal"],
+      "data": ["concurrent", "lockfree", "waitfree", "cas", "queue", "map", "ring"]
+    }
+  },
+  {
+    "domain": "scheduling",
+    "terms": {
+      "cron": ["cron", "schedule", "recurring", "expression", "timezone", "overlap", "jitter"],
+      "queues": ["job", "queue", "worker", "priority", "delay", "retry", "dlq"],
+      "processing": ["batch", "chunk", "throttle", "concurrency", "ratelimit", "backoff", "circuit"],
+      "frameworks": ["sidekiq", "celery", "bull", "agenda", "hangfire", "quartz", "temporal"],
+      "monitoring": ["progress", "status", "failed", "completed", "pending", "stale", "stuck"],
+      "patterns": ["delayed", "scheduled", "repeatable", "unique", "debounce", "dedup", "idempotent"],
+      "distributed": ["lock", "lease", "election", "coordination", "partition", "rebalance", "assign"]
+    }
+  },
+  {
+    "domain": "state_machine",
+    "terms": {
+      "definition": ["state", "transition", "event", "guard", "action", "initial", "final"],
+      "patterns": ["finite", "hierarchical", "parallel", "history", "compound", "atomic", "orthogonal"],
+      "execution": ["send", "interpret", "transition", "invoke", "spawn", "forward", "escalate"],
+      "persistence": ["snapshot", "restore", "serialize", "rehydrate", "checkpoint", "replay", "audit"],
+      "tools": ["xstate", "aasm", "statechart", "workflow", "statemachine", "transitions", "machina"],
+      "visualization": ["diagram", "graph", "inspect", "devtools", "visualize", "export", "simulate"],
+      "guards": ["condition", "predicate", "evaluate", "allow", "block", "validate", "check"]
+    }
+  },
+  {
+    "domain": "clean_architecture",
+    "terms": {
+      "layers": ["domain", "application", "infrastructure", "presentation", "interface", "framework", "driver"],
+      "boundaries": ["port", "adapter", "hexagonal", "onion", "boundary", "gateway", "repository"],
+      "dependencies": ["inversion", "abstraction", "interface", "inject", "provide", "decouple", "contract"],
+      "domain": ["entity", "valueobject", "aggregate", "service", "factory", "specification", "repository"],
+      "application": ["usecase", "command", "query", "handler", "dto", "mapper", "assembler"],
+      "testing": ["unit", "integration", "acceptance", "mock", "fake", "stub", "inmemory"],
+      "patterns": ["repository", "unitofwork", "specification", "factory", "strategy", "observer", "mediator"]
+    }
+  }
+]

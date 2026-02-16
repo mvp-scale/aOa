@@ -1,0 +1,122 @@
+[
+  {
+    "domain": "ecommerce",
+    "terms": {
+      "catalog": ["product", "category", "variant", "sku", "price", "inventory", "attribute"],
+      "cart": ["cart", "add", "remove", "quantity", "subtotal", "discount", "coupon"],
+      "checkout": ["checkout", "shipping", "tax", "address", "billing", "order", "confirmation"],
+      "orders": ["order", "status", "fulfill", "ship", "track", "refund", "cancel"],
+      "pricing": ["price", "discount", "promotion", "tier", "bundle", "dynamic", "margin"],
+      "search": ["filter", "facet", "sort", "relevance", "suggest", "autocomplete", "browse"],
+      "reviews": ["review", "rating", "star", "comment", "moderate", "verify", "helpful"]
+    }
+  },
+  {
+    "domain": "payment",
+    "terms": {
+      "processing": ["charge", "capture", "refund", "void", "authorize", "settle", "payout"],
+      "providers": ["stripe", "paypal", "braintree", "adyen", "square", "mollie", "razorpay"],
+      "methods": ["card", "bank", "wallet", "applepay", "googlepay", "ach", "sepa"],
+      "security": ["pci", "tokenize", "3ds", "fraud", "chargeback", "dispute", "verify"],
+      "recurring": ["subscription", "invoice", "prorate", "retry", "dunning", "grace", "cancel"],
+      "checkout": ["session", "intent", "confirm", "redirect", "webhook", "receipt", "metadata"],
+      "reporting": ["balance", "transaction", "payout", "fee", "reconcile", "statement", "export"]
+    }
+  },
+  {
+    "domain": "subscription",
+    "terms": {
+      "billing": ["plan", "tier", "price", "interval", "prorate", "invoice", "charge"],
+      "lifecycle": ["trial", "active", "paused", "canceled", "expired", "past", "grace"],
+      "management": ["upgrade", "downgrade", "addon", "entitlement", "feature", "limit", "quota"],
+      "metering": ["usage", "meter", "credit", "overage", "threshold", "reset", "aggregate"],
+      "dunning": ["retry", "remind", "escalate", "suspend", "recover", "delinquent", "churn"],
+      "portal": ["portal", "manage", "update", "cancel", "history", "receipt", "download"],
+      "analytics": ["mrr", "arr", "churn", "ltv", "arpu", "retention", "cohort"]
+    }
+  },
+  {
+    "domain": "cms_content",
+    "terms": {
+      "content": ["page", "post", "block", "richtext", "wysiwyg", "editor", "field"],
+      "workflow": ["draft", "review", "publish", "schedule", "archive", "unpublish", "approve"],
+      "taxonomy": ["category", "tag", "collection", "hierarchy", "slug", "permalink", "breadcrumb"],
+      "media": ["upload", "gallery", "image", "video", "embed", "crop", "optimize"],
+      "localization": ["locale", "translate", "fallback", "alternate", "hreflang", "rtl", "variant"],
+      "versioning": ["version", "revision", "diff", "restore", "compare", "history", "autosave"],
+      "templates": ["template", "layout", "partial", "component", "slot", "block", "inherit"]
+    }
+  },
+  {
+    "domain": "social",
+    "terms": {
+      "feed": ["timeline", "activity", "stream", "aggregate", "rank", "algorithm", "chronological"],
+      "relationships": ["follow", "friend", "block", "mute", "connection", "suggest", "mutual"],
+      "interactions": ["like", "comment", "share", "react", "mention", "bookmark", "repost"],
+      "moderation": ["report", "review", "ban", "mute", "filter", "spam", "automod"],
+      "messaging": ["dm", "thread", "conversation", "read", "typing", "online", "presence"],
+      "notifications": ["notify", "mention", "reply", "follow", "like", "digest", "preference"],
+      "privacy": ["private", "public", "followers", "mutual", "block", "restrict", "hide"]
+    }
+  },
+  {
+    "domain": "gaming",
+    "terms": {
+      "engine": ["gameloop", "scene", "entity", "component", "system", "world", "tick"],
+      "physics": ["collision", "rigidbody", "raycast", "force", "gravity", "joint", "trigger"],
+      "rendering": ["sprite", "mesh", "shader", "material", "camera", "light", "shadow"],
+      "input": ["keyboard", "gamepad", "touch", "mouse", "action", "binding", "axis"],
+      "audio": ["sound", "music", "sfx", "spatial", "mixer", "volume", "loop"],
+      "networking": ["lobby", "matchmaking", "sync", "interpolate", "predict", "lag", "authority"],
+      "ui": ["hud", "menu", "inventory", "dialog", "tooltip", "health", "minimap"]
+    }
+  },
+  {
+    "domain": "iot",
+    "terms": {
+      "protocols": ["mqtt", "coap", "ble", "zigbee", "lora", "modbus", "opcua"],
+      "devices": ["sensor", "actuator", "gateway", "edge", "firmware", "embedded", "microcontroller"],
+      "management": ["provision", "register", "ota", "fleet", "twin", "shadow", "config"],
+      "telemetry": ["metric", "event", "timestamp", "interval", "aggregate", "threshold", "alert"],
+      "platforms": ["awsiot", "azure", "gcp", "thingsboard", "home", "particle", "tasmota"],
+      "edge": ["compute", "filter", "aggregate", "buffer", "store", "forward", "offline"],
+      "security": ["certificate", "mutual", "provision", "rotate", "attest", "secure", "element"]
+    }
+  },
+  {
+    "domain": "blockchain",
+    "terms": {
+      "contracts": ["solidity", "deploy", "interact", "abi", "bytecode", "constructor", "modifier"],
+      "transactions": ["sign", "gas", "nonce", "receipt", "hash", "block", "confirm"],
+      "wallets": ["address", "private", "public", "hd", "mnemonic", "keystore", "recover"],
+      "tokens": ["erc20", "erc721", "erc1155", "mint", "burn", "transfer", "approve"],
+      "defi": ["swap", "liquidity", "pool", "stake", "yield", "farm", "amm"],
+      "tools": ["hardhat", "foundry", "truffle", "ethers", "web3", "wagmi", "viem"],
+      "testing": ["fork", "snapshot", "impersonate", "expect", "revert", "event", "balance"]
+    }
+  },
+  {
+    "domain": "audio_video",
+    "terms": {
+      "playback": ["player", "play", "pause", "seek", "volume", "mute", "buffer"],
+      "webrtc": ["peer", "sdp", "ice", "stun", "turn", "datachannel", "mediastream"],
+      "recording": ["capture", "record", "encode", "format", "quality", "duration", "stop"],
+      "streaming": ["hls", "dash", "adaptive", "bitrate", "manifest", "segment", "drm"],
+      "processing": ["transcode", "codec", "ffmpeg", "filter", "overlay", "concat", "trim"],
+      "conferencing": ["room", "participant", "screen", "share", "mute", "layout", "record"],
+      "accessibility": ["caption", "subtitle", "transcript", "audio", "description", "sign", "track"]
+    }
+  },
+  {
+    "domain": "maps",
+    "terms": {
+      "display": ["tile", "marker", "popup", "overlay", "cluster", "layer", "control"],
+      "interaction": ["pan", "zoom", "draw", "measure", "select", "click", "hover"],
+      "routing": ["direction", "waypoint", "distance", "duration", "traffic", "avoid", "optimize"],
+      "providers": ["mapbox", "google", "leaflet", "openlayers", "osm", "here", "tomtom"],
+      "data": ["geojson", "feature", "collection", "property", "geometry", "style", "source"],
+      "geocoding": ["geocode", "reverse", "autocomplete", "place", "address", "coordinate", "suggest"],
+      "visualization": ["heatmap", "choropleth", "3d", "terrain", "satellite", "custom", "animate"]
+    }
+  }
+]

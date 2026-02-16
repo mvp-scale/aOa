@@ -1,0 +1,74 @@
+[
+  {
+    "domain": "debugging",
+    "terms": {
+      "breakpoints": ["breakpoint", "conditional", "hitcount", "logpoint", "exception", "data", "function"],
+      "inspection": ["watch", "evaluate", "callstack", "scope", "variable", "expression", "hover"],
+      "tools": ["debugger", "repl", "devtools", "lldb", "gdb", "delve", "pdb"],
+      "techniques": ["bisect", "trace", "print", "step", "over", "into", "continue"],
+      "memory": ["coredump", "heapdump", "snapshot", "allocation", "leak", "profile", "valgrind"],
+      "remote": ["attach", "remote", "ssh", "tunnel", "forward", "port", "container"],
+      "logging": ["verbose", "trace", "debug", "conditional", "timestamp", "context", "filter"]
+    }
+  },
+  {
+    "domain": "profiling",
+    "terms": {
+      "cpu": ["flamegraph", "hotpath", "sample", "instrument", "overhead", "wallclock", "cpu"],
+      "memory": ["heap", "allocation", "growth", "snapshot", "diff", "retain", "gc"],
+      "network": ["waterfall", "timing", "dns", "tcp", "tls", "ttfb", "transfer"],
+      "tools": ["pprof", "pyspy", "perf", "instruments", "dtrace", "strace", "async"],
+      "analysis": ["bottleneck", "contention", "lock", "wait", "io", "syscall", "context"],
+      "continuous": ["continuous", "production", "sampling", "overhead", "agent", "baseline", "regression"],
+      "visualization": ["flamegraph", "icicle", "sunburst", "timeline", "callgraph", "treemap", "diff"]
+    }
+  },
+  {
+    "domain": "build_system",
+    "terms": {
+      "compilers": ["gcc", "clang", "rustc", "tsc", "javac", "swiftc", "kotlinc"],
+      "build_tools": ["make", "cmake", "gradle", "bazel", "meson", "ninja", "buck"],
+      "targets": ["binary", "library", "shared", "static", "module", "bundle", "archive"],
+      "optimization": ["incremental", "parallel", "cache", "distributed", "remote", "hash", "deterministic"],
+      "linking": ["link", "dynamic", "static", "symbol", "rpath", "soname", "visibility"],
+      "cross": ["cross", "target", "toolchain", "sysroot", "platform", "arch", "triple"],
+      "scripting": ["task", "recipe", "phony", "dependency", "variable", "function", "include"]
+    }
+  },
+  {
+    "domain": "editor_tooling",
+    "terms": {
+      "lsp": ["language", "server", "completion", "diagnostic", "hover", "definition", "reference"],
+      "extensions": ["extension", "plugin", "formatter", "linter", "debugger", "adapter", "provider"],
+      "config": ["workspace", "settings", "task", "launch", "snippet", "keybinding", "theme"],
+      "ai": ["copilot", "completion", "inline", "suggestion", "chat", "edit", "explain"],
+      "refactoring": ["rename", "extract", "inline", "move", "organize", "import", "quickfix"],
+      "navigation": ["goto", "definition", "reference", "implementation", "symbol", "outline", "breadcrumb"],
+      "collaboration": ["liveshare", "pair", "remote", "tunnel", "codespace", "devcontainer", "ssh"]
+    }
+  },
+  {
+    "domain": "project_setup",
+    "terms": {
+      "scaffolding": ["create", "init", "generate", "template", "boilerplate", "starter", "skeleton"],
+      "structure": ["directory", "layout", "convention", "entry", "config", "source", "output"],
+      "standards": ["gitignore", "editorconfig", "license", "contributing", "codeofconduct", "readme", "changelog"],
+      "monorepo": ["workspace", "lerna", "nx", "turborepo", "pnpm", "changesets", "publish"],
+      "toolchain": ["node", "python", "go", "rust", "java", "ruby", "dotnet"],
+      "environment": ["nvm", "pyenv", "goenv", "rustup", "sdkman", "asdf", "mise"],
+      "devcontainer": ["devcontainer", "codespace", "docker", "compose", "feature", "postCreate", "forward"]
+    }
+  },
+  {
+    "domain": "internationalization",
+    "terms": {
+      "translation": ["translate", "message", "key", "plural", "interpolate", "context", "namespace"],
+      "locale": ["locale", "language", "region", "fallback", "detect", "negotiate", "switch"],
+      "formatting": ["number", "currency", "date", "relative", "unit", "list", "collation"],
+      "libraries": ["intl", "i18next", "formatjs", "fluent", "gettext", "icu", "messageformat"],
+      "extraction": ["extract", "scan", "unused", "missing", "compile", "pseudo", "lint"],
+      "rtl": ["direction", "rtl", "ltr", "bidi", "mirror", "logical", "physical"],
+      "management": ["crowdin", "lokalise", "phrase", "transifex", "weblate", "po", "xliff"]
+    }
+  }
+]

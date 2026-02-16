@@ -1,0 +1,170 @@
+[
+  {
+    "domain": "database",
+    "terms": {
+      "queries": ["select", "insert", "update", "delete", "where", "join", "subquery"],
+      "schema": ["table", "column", "constraint", "index", "foreign", "primary", "unique"],
+      "migrations": ["migrate", "rollback", "seed", "version", "up", "down", "alter"],
+      "transactions": ["begin", "commit", "rollback", "isolation", "deadlock", "lock", "savepoint"],
+      "views": ["view", "materialized", "refresh", "virtual", "derived", "aggregate", "summary"],
+      "procedures": ["procedure", "function", "trigger", "cursor", "declare", "execute", "call"],
+      "optimization": ["explain", "analyze", "plan", "vacuum", "reindex", "partition", "shard"]
+    }
+  },
+  {
+    "domain": "orm",
+    "terms": {
+      "models": ["model", "entity", "field", "column", "type", "default", "nullable"],
+      "relations": ["belongsto", "hasmany", "manytomany", "polymorphic", "through", "foreign", "inverse"],
+      "querying": ["scope", "eager", "lazy", "preload", "include", "where", "order"],
+      "lifecycle": ["callback", "hook", "beforesave", "aftercreate", "beforedelete", "validate", "observe"],
+      "migration": ["migration", "schema", "addcolumn", "removecolumn", "rename", "change", "reversible"],
+      "serialization": ["serialize", "json", "attribute", "hidden", "visible", "cast", "accessor"],
+      "frameworks": ["activerecord", "sequelize", "prisma", "sqlalchemy", "gorm", "hibernate", "typeorm"]
+    }
+  },
+  {
+    "domain": "nosql",
+    "terms": {
+      "document": ["collection", "document", "aggregate", "pipeline", "projection", "upsert", "findone"],
+      "keyvalue": ["get", "set", "del", "ttl", "expire", "atomic", "increment"],
+      "widecolumn": ["columnfamily", "partition", "cluster", "compaction", "consistency", "quorum", "tombstone"],
+      "graph": ["vertex", "edge", "traversal", "cypher", "gremlin", "path", "neighbor"],
+      "engines": ["mongodb", "redis", "cassandra", "neo4j", "dynamodb", "couchdb", "riak"],
+      "indexing": ["index", "secondary", "compound", "sparse", "text", "geospatial", "hash"],
+      "replication": ["replica", "shard", "consistent", "eventual", "quorum", "oplog", "raft"]
+    }
+  },
+  {
+    "domain": "caching",
+    "terms": {
+      "strategies": ["readthrough", "writebehind", "aside", "refresh", "writethrough", "nocache", "stale"],
+      "invalidation": ["invalidate", "purge", "evict", "ttl", "expire", "tag", "pattern"],
+      "layers": ["l1", "l2", "memory", "distributed", "edge", "browser", "cdn"],
+      "engines": ["redis", "memcached", "varnish", "hazelcast", "caffeine", "guava", "lru"],
+      "patterns": ["memoize", "warm", "preload", "lazy", "compute", "stampede", "thundering"],
+      "metrics": ["hit", "miss", "ratio", "eviction", "size", "memory", "latency"],
+      "http": ["etag", "lastmodified", "maxage", "nocache", "nostore", "vary", "conditional"]
+    }
+  },
+  {
+    "domain": "search_engine",
+    "terms": {
+      "indexing": ["index", "reindex", "mapping", "analyzer", "tokenizer", "filter", "synonym"],
+      "querying": ["fulltext", "fuzzy", "phrase", "bool", "match", "term", "range"],
+      "aggregation": ["bucket", "metric", "histogram", "terms", "nested", "pipeline", "cardinality"],
+      "ranking": ["score", "boost", "relevance", "decay", "function", "rescore", "explain"],
+      "engines": ["elasticsearch", "solr", "meilisearch", "typesense", "opensearch", "lucene", "algolia"],
+      "infrastructure": ["shard", "replica", "cluster", "node", "routing", "alias", "rollover"],
+      "analysis": ["stemmer", "stopword", "ngram", "edge", "lowercase", "normalizer", "char"]
+    }
+  },
+  {
+    "domain": "file_storage",
+    "terms": {
+      "upload": ["upload", "multipart", "chunk", "presigned", "progress", "resume", "stream"],
+      "cloud": ["s3", "gcs", "azure", "blob", "bucket", "container", "object"],
+      "processing": ["resize", "thumbnail", "transcode", "convert", "compress", "optimize", "watermark"],
+      "serving": ["cdn", "signed", "download", "range", "streaming", "cache", "origin"],
+      "metadata": ["contenttype", "size", "checksum", "etag", "lastmodified", "custom", "tag"],
+      "lifecycle": ["expire", "archive", "glacier", "transition", "retention", "version", "delete"],
+      "permissions": ["acl", "policy", "public", "private", "cors", "signed", "presigned"]
+    }
+  },
+  {
+    "domain": "data_pipeline",
+    "terms": {
+      "extraction": ["connector", "source", "cdc", "poll", "webhook", "ingest", "tap"],
+      "transformation": ["transform", "map", "filter", "enrich", "deduplicate", "normalize", "flatten"],
+      "loading": ["load", "bulk", "upsert", "merge", "sink", "target", "destination"],
+      "orchestration": ["dag", "task", "schedule", "trigger", "dependency", "retry", "backfill"],
+      "engines": ["airflow", "dagster", "prefect", "luigi", "beam", "spark", "dbt"],
+      "quality": ["validate", "schema", "anomaly", "freshness", "completeness", "accuracy", "lineage"],
+      "monitoring": ["alert", "sla", "failure", "duration", "throughput", "lag", "checkpoint"]
+    }
+  },
+  {
+    "domain": "analytics",
+    "terms": {
+      "events": ["track", "identify", "property", "event", "session", "pageview", "conversion"],
+      "aggregation": ["rollup", "cube", "groupby", "pivot", "window", "partition", "materialized"],
+      "reporting": ["dashboard", "chart", "metric", "kpi", "dimension", "measure", "drill"],
+      "warehouses": ["bigquery", "redshift", "snowflake", "clickhouse", "databricks", "duckdb", "presto"],
+      "modeling": ["fact", "dimension", "star", "snowflake", "slowly", "surrogate", "bridge"],
+      "streaming": ["realtime", "window", "aggregate", "emit", "late", "watermark", "trigger"],
+      "export": ["csv", "excel", "pdf", "parquet", "arrow", "json", "api"]
+    }
+  },
+  {
+    "domain": "data_modeling",
+    "terms": {
+      "entities": ["entity", "attribute", "relationship", "cardinality", "constraint", "domain", "value"],
+      "normalization": ["normalize", "denormalize", "redundancy", "dependency", "decompose", "canonical", "atomic"],
+      "patterns": ["softdelete", "polymorphic", "eav", "audit", "temporal", "versioned", "hierarchical"],
+      "schema": ["ddl", "create", "alter", "drop", "type", "enum", "composite"],
+      "relationships": ["onetomany", "manytomany", "onetoone", "self", "recursive", "bridge", "junction"],
+      "validation": ["constraint", "check", "unique", "notnull", "default", "domain", "trigger"],
+      "evolution": ["migrate", "backward", "forward", "compatible", "breaking", "additive", "deprecate"]
+    }
+  },
+  {
+    "domain": "time_series",
+    "terms": {
+      "ingestion": ["metric", "datapoint", "timestamp", "resolution", "batch", "stream", "write"],
+      "querying": ["range", "downsample", "aggregate", "rate", "delta", "histogram", "percentile"],
+      "engines": ["influxdb", "timescaledb", "prometheus", "victoriametrics", "questdb", "tdengine", "druid"],
+      "retention": ["retention", "compaction", "rollup", "archive", "purge", "policy", "tier"],
+      "labels": ["label", "tag", "dimension", "series", "cardinality", "filter", "matcher"],
+      "functions": ["avg", "sum", "min", "max", "count", "rate", "increase"],
+      "alerting": ["threshold", "anomaly", "trigger", "silence", "escalate", "evaluate", "pending"]
+    }
+  },
+  {
+    "domain": "blob_processing",
+    "terms": {
+      "images": ["resize", "crop", "format", "exif", "optimize", "thumbnail", "webp"],
+      "video": ["transcode", "codec", "hls", "dash", "ffmpeg", "bitrate", "resolution"],
+      "audio": ["encode", "decode", "waveform", "transcribe", "sample", "channel", "normalize"],
+      "documents": ["pdf", "generate", "parse", "ocr", "watermark", "merge", "split"],
+      "conversion": ["convert", "transform", "format", "quality", "lossless", "lossy", "compress"],
+      "pipelines": ["pipeline", "step", "queue", "worker", "progress", "callback", "webhook"],
+      "storage": ["temporary", "permanent", "archive", "cleanup", "quota", "limit", "deduplicate"]
+    }
+  },
+  {
+    "domain": "geospatial",
+    "terms": {
+      "coordinates": ["latitude", "longitude", "geojson", "wkt", "point", "polygon", "linestring"],
+      "queries": ["within", "intersects", "nearest", "distance", "bbox", "contains", "buffer"],
+      "services": ["geocode", "reverse", "routing", "directions", "elevation", "isochrone", "tile"],
+      "indexing": ["rtree", "geohash", "h3", "quadtree", "spatial", "gist", "spheroid"],
+      "projections": ["srid", "epsg", "mercator", "wgs84", "utm", "transform", "datum"],
+      "formats": ["shapefile", "geotiff", "kml", "gpx", "topojson", "mvt", "pbf"],
+      "visualization": ["heatmap", "cluster", "choropleth", "marker", "layer", "overlay", "viewport"]
+    }
+  },
+  {
+    "domain": "replication",
+    "terms": {
+      "strategies": ["master", "slave", "primary", "secondary", "multimaster", "leader", "follower"],
+      "consistency": ["strong", "eventual", "causal", "linearizable", "quorum", "read", "write"],
+      "conflict": ["resolution", "crdt", "vector", "lastwrite", "merge", "tombstone", "version"],
+      "sync": ["bidirectional", "changelog", "oplog", "binlog", "wal", "snapshot", "incremental"],
+      "failover": ["promote", "election", "sentinel", "watchdog", "automatic", "manual", "split"],
+      "topologies": ["chain", "star", "ring", "mesh", "cascade", "hub", "spoke"],
+      "monitoring": ["lag", "offset", "drift", "heartbeat", "health", "latency", "throughput"]
+    }
+  },
+  {
+    "domain": "backup",
+    "terms": {
+      "strategies": ["full", "incremental", "differential", "continuous", "snapshot", "logical", "physical"],
+      "storage": ["offsite", "encrypted", "compressed", "deduplicate", "tier", "glacier", "vault"],
+      "recovery": ["restore", "pointintime", "pitr", "granular", "test", "verify", "drill"],
+      "scheduling": ["cron", "retention", "rotation", "window", "frequency", "policy", "lifecycle"],
+      "databases": ["dump", "export", "basebackup", "xtrabackup", "rman", "mongodump", "pgdump"],
+      "verification": ["checksum", "integrity", "validate", "compare", "audit", "report", "alert"],
+      "disaster": ["rpo", "rto", "failover", "site", "warm", "cold", "hot"]
+    }
+  }
+]

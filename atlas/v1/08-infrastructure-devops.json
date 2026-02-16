@@ -1,0 +1,170 @@
+[
+  {
+    "domain": "containers",
+    "terms": {
+      "docker": ["dockerfile", "build", "layer", "multistage", "compose", "image", "tag"],
+      "runtime": ["entrypoint", "cmd", "volume", "network", "port", "healthcheck", "restart"],
+      "registry": ["push", "pull", "registry", "ecr", "gcr", "ghcr", "digest"],
+      "optimization": ["cache", "slim", "distroless", "scratch", "buildkit", "buildx", "squash"],
+      "compose": ["service", "depends", "network", "volume", "environment", "profile", "override"],
+      "security": ["scan", "rootless", "readonly", "seccomp", "apparmor", "user", "capability"],
+      "orchestration": ["swarm", "stack", "service", "replicas", "constraint", "placement", "rolling"]
+    }
+  },
+  {
+    "domain": "kubernetes",
+    "terms": {
+      "workloads": ["deployment", "statefulset", "daemonset", "job", "cronjob", "replicaset", "pod"],
+      "networking": ["service", "ingress", "networkpolicy", "dns", "loadbalancer", "clusterip", "nodeport"],
+      "config": ["configmap", "secret", "env", "volumemount", "projected", "downward", "fieldref"],
+      "scaling": ["hpa", "vpa", "keda", "autoscale", "replicas", "metric", "target"],
+      "storage": ["pv", "pvc", "storageclass", "csi", "emptydir", "hostpath", "nfs"],
+      "operations": ["rollout", "restart", "scale", "patch", "apply", "delete", "label"],
+      "tools": ["kubectl", "helm", "kustomize", "argocd", "flux", "operator", "crd"]
+    }
+  },
+  {
+    "domain": "ci_cd",
+    "terms": {
+      "pipelines": ["pipeline", "workflow", "stage", "job", "step", "trigger", "cron"],
+      "builds": ["build", "compile", "test", "lint", "artifact", "cache", "matrix"],
+      "deployment": ["deploy", "release", "promote", "approve", "gate", "rollback", "canary"],
+      "platforms": ["github", "gitlab", "jenkins", "circleci", "travis", "buildkite", "drone"],
+      "artifacts": ["artifact", "package", "publish", "registry", "version", "checksum", "sign"],
+      "environments": ["staging", "production", "preview", "ephemeral", "protect", "secret", "variable"],
+      "notifications": ["notify", "slack", "email", "webhook", "status", "badge", "comment"]
+    }
+  },
+  {
+    "domain": "cloud",
+    "terms": {
+      "compute": ["ec2", "gce", "vm", "instance", "serverless", "lambda", "function"],
+      "networking": ["vpc", "subnet", "securitygroup", "nat", "gateway", "peering", "endpoint"],
+      "storage": ["s3", "gcs", "blob", "ebs", "efs", "disk", "bucket"],
+      "iac": ["terraform", "pulumi", "cloudformation", "cdk", "bicep", "crossplane", "ansible"],
+      "identity": ["iam", "policy", "role", "serviceaccount", "assume", "federate", "condition"],
+      "regions": ["region", "zone", "availability", "multiregion", "edge", "latency", "failover"],
+      "cost": ["budget", "billing", "reserved", "spot", "savings", "rightsizing", "tag"]
+    }
+  },
+  {
+    "domain": "monitoring",
+    "terms": {
+      "metrics": ["prometheus", "grafana", "counter", "gauge", "histogram", "summary", "scrape"],
+      "alerting": ["alert", "threshold", "pagerduty", "opsgenie", "escalation", "silence", "inhibit"],
+      "dashboards": ["panel", "query", "variable", "annotation", "template", "drill", "refresh"],
+      "health": ["healthcheck", "readiness", "liveness", "startup", "probe", "endpoint", "interval"],
+      "apm": ["apm", "transaction", "span", "trace", "error", "throughput", "latency"],
+      "uptime": ["uptime", "synthetic", "ping", "http", "tcp", "ssl", "certificate"],
+      "incidents": ["incident", "oncall", "runbook", "postmortem", "severity", "acknowledge", "resolve"]
+    }
+  },
+  {
+    "domain": "logging",
+    "terms": {
+      "structured": ["json", "level", "field", "context", "correlation", "request", "trace"],
+      "collection": ["fluentd", "logstash", "vector", "filebeat", "promtail", "agent", "shipper"],
+      "storage": ["elasticsearch", "loki", "cloudwatch", "splunk", "datadog", "retention", "index"],
+      "levels": ["debug", "info", "warn", "error", "fatal", "trace", "verbose"],
+      "analysis": ["search", "filter", "aggregate", "pattern", "anomaly", "parse", "extract"],
+      "rotation": ["rotate", "size", "age", "compress", "archive", "truncate", "logrotate"],
+      "correlation": ["traceid", "spanid", "requestid", "correlationid", "breadcrumb", "context", "propagate"]
+    }
+  },
+  {
+    "domain": "tracing",
+    "terms": {
+      "instrumentation": ["span", "trace", "baggage", "context", "propagate", "inject", "extract"],
+      "collection": ["opentelemetry", "jaeger", "zipkin", "tempo", "xray", "exporter", "collector"],
+      "analysis": ["waterfall", "flamegraph", "latency", "critical", "dependency", "service", "operation"],
+      "sampling": ["sample", "rate", "adaptive", "tail", "head", "probabilistic", "ratelimit"],
+      "context": ["traceid", "spanid", "parent", "baggage", "w3c", "b3", "tracestate"],
+      "attributes": ["attribute", "resource", "semantic", "convention", "status", "event", "link"],
+      "integration": ["middleware", "interceptor", "hook", "wrapper", "automatic", "manual", "sdk"]
+    }
+  },
+  {
+    "domain": "dns",
+    "terms": {
+      "records": ["a", "aaaa", "cname", "mx", "txt", "srv", "ns"],
+      "management": ["registrar", "nameserver", "ttl", "propagation", "zone", "transfer", "notify"],
+      "routing": ["weighted", "latency", "geolocation", "failover", "multivalue", "health", "alias"],
+      "security": ["dnssec", "caa", "tlsa", "dane", "rpz", "sinkhole", "firewall"],
+      "providers": ["route53", "cloudflare", "gcloud", "azure", "dnsimple", "ns1", "powerdns"],
+      "discovery": ["srv", "consul", "etcd", "coredns", "resolve", "lookup", "register"],
+      "caching": ["resolver", "cache", "negative", "prefetch", "stub", "forward", "recursive"]
+    }
+  },
+  {
+    "domain": "networking",
+    "terms": {
+      "protocols": ["tcp", "udp", "http2", "http3", "quic", "grpc", "tls"],
+      "configuration": ["port", "interface", "bind", "listen", "accept", "connect", "dial"],
+      "vpn": ["wireguard", "ipsec", "openvpn", "tunnel", "mesh", "overlay", "encapsulate"],
+      "service_mesh": ["istio", "linkerd", "envoy", "sidecar", "mtls", "traffic", "circuit"],
+      "load_balancing": ["round", "least", "hash", "sticky", "weighted", "health", "upstream"],
+      "firewall": ["iptables", "nftables", "rule", "chain", "accept", "drop", "reject"],
+      "troubleshooting": ["tcpdump", "wireshark", "netstat", "traceroute", "dig", "nslookup", "curl"]
+    }
+  },
+  {
+    "domain": "serverless",
+    "terms": {
+      "functions": ["lambda", "function", "handler", "event", "context", "response", "invoke"],
+      "triggers": ["http", "schedule", "queue", "stream", "storage", "event", "webhook"],
+      "patterns": ["coldstart", "warmup", "concurrency", "timeout", "memory", "layer", "extension"],
+      "frameworks": ["serverless", "sam", "sst", "arc", "chalice", "zappa", "claudia"],
+      "deployment": ["deploy", "package", "bundle", "stage", "alias", "version", "rollback"],
+      "edge": ["edge", "cdn", "worker", "middleware", "rewrite", "redirect", "transform"],
+      "providers": ["lambda", "cloudfunction", "azurefunction", "deno", "cloudflare", "vercel", "netlify"]
+    }
+  },
+  {
+    "domain": "infrastructure_security",
+    "terms": {
+      "iam": ["policy", "role", "user", "group", "permission", "boundary", "condition"],
+      "network": ["securitygroup", "nacl", "private", "bastion", "jumpbox", "vpn", "endpoint"],
+      "secrets": ["vault", "ssm", "secretsmanager", "sops", "sealed", "external", "rotate"],
+      "compliance": ["cis", "benchmark", "drift", "remediate", "scan", "report", "baseline"],
+      "hardening": ["patch", "update", "disable", "minimize", "immutable", "golden", "ami"],
+      "detection": ["guardduty", "securityhub", "cloudtrail", "flowlog", "alert", "anomaly", "threat"],
+      "response": ["isolate", "quarantine", "revoke", "rotate", "forensic", "snapshot", "preserve"]
+    }
+  },
+  {
+    "domain": "release",
+    "terms": {
+      "versioning": ["semver", "major", "minor", "patch", "prerelease", "build", "tag"],
+      "changelog": ["changelog", "conventional", "commit", "breaking", "feature", "fix", "generate"],
+      "feature_flags": ["flag", "toggle", "rollout", "percentage", "segment", "kill", "variant"],
+      "strategies": ["canary", "bluegreen", "rolling", "recreate", "shadow", "dark", "ring"],
+      "rollback": ["rollback", "revert", "previous", "pin", "hotfix", "cherry", "backport"],
+      "automation": ["goreleaser", "semantic", "changesets", "lerna", "nx", "rush", "turbo"],
+      "distribution": ["binary", "package", "registry", "homebrew", "apt", "snap", "flatpak"]
+    }
+  },
+  {
+    "domain": "package_management",
+    "terms": {
+      "registries": ["npm", "pypi", "maven", "crates", "nuget", "rubygems", "gomodule"],
+      "lockfiles": ["lockfile", "shrinkwrap", "frozen", "deterministic", "resolution", "hoist", "dedup"],
+      "publishing": ["publish", "version", "prepublish", "access", "scope", "deprecate", "unpublish"],
+      "security": ["audit", "advisory", "override", "resolution", "allowlist", "ignore", "force"],
+      "monorepo": ["workspace", "lerna", "nx", "turborepo", "pnpm", "changesets", "hoist"],
+      "resolution": ["resolve", "peer", "optional", "conflict", "alias", "overrides", "resolutions"],
+      "caching": ["cache", "offline", "mirror", "proxy", "verdaccio", "nexus", "artifactory"]
+    }
+  },
+  {
+    "domain": "git",
+    "terms": {
+      "branching": ["branch", "merge", "rebase", "cherry", "squash", "fast", "conflict"],
+      "workflow": ["pr", "review", "approve", "request", "draft", "merge", "protect"],
+      "operations": ["commit", "push", "pull", "fetch", "clone", "stash", "reset"],
+      "hooks": ["precommit", "prepush", "commitmsg", "husky", "lefthook", "lint", "format"],
+      "history": ["log", "blame", "bisect", "reflog", "diff", "show", "annotate"],
+      "submodules": ["submodule", "subtree", "sparse", "checkout", "lfs", "filter", "clean"],
+      "collaboration": ["fork", "upstream", "remote", "origin", "contributor", "codeowner", "maintainer"]
+    }
+  }
+]

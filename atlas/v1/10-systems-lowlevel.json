@@ -1,0 +1,98 @@
+[
+  {
+    "domain": "memory",
+    "terms": {
+      "allocation": ["heap", "stack", "arena", "pool", "slab", "alloc", "free"],
+      "gc": ["gc", "generation", "pause", "sweep", "mark", "compact", "finalizer"],
+      "leaks": ["leak", "retain", "cycle", "weak", "strong", "ref", "release"],
+      "optimization": ["cache", "locality", "alignment", "padding", "zerocopy", "mmap", "hugepage"],
+      "profiling": ["heapprof", "memprof", "snapshot", "growth", "allocation", "flamegraph", "pprof"],
+      "safety": ["bounds", "overflow", "underflow", "null", "dangling", "uninitialize", "sanitizer"],
+      "management": ["allocator", "custom", "buddy", "bump", "freelist", "compact", "defragment"]
+    }
+  },
+  {
+    "domain": "process",
+    "terms": {
+      "lifecycle": ["spawn", "fork", "exec", "wait", "exit", "kill", "terminate"],
+      "ipc": ["pipe", "socket", "sharedmemory", "mqueue", "semaphore", "fifo", "unix"],
+      "signals": ["sigterm", "sigint", "sighup", "sigkill", "sigusr", "handler", "trap"],
+      "management": ["pid", "daemon", "supervisor", "watchdog", "restart", "orphan", "zombie"],
+      "environment": ["env", "cwd", "stdin", "stdout", "stderr", "fd", "dup"],
+      "isolation": ["namespace", "cgroup", "chroot", "seccomp", "capability", "sandbox", "jail"],
+      "scheduling": ["nice", "priority", "affinity", "cpu", "realtime", "batch", "idle"]
+    }
+  },
+  {
+    "domain": "filesystem",
+    "terms": {
+      "operations": ["read", "write", "stat", "rename", "unlink", "truncate", "sync"],
+      "watching": ["inotify", "fsnotify", "kqueue", "poll", "watch", "event", "recursive"],
+      "permissions": ["chmod", "chown", "acl", "umask", "sticky", "setuid", "setgid"],
+      "patterns": ["tempfile", "atomic", "lockfile", "glob", "walk", "traverse", "symlink"],
+      "types": ["regular", "directory", "symlink", "device", "socket", "fifo", "block"],
+      "advanced": ["xattr", "sparse", "hole", "fallocate", "sendfile", "splice", "tee"],
+      "virtual": ["proc", "sys", "dev", "tmpfs", "overlay", "fuse", "bind"]
+    }
+  },
+  {
+    "domain": "io",
+    "terms": {
+      "streams": ["reader", "writer", "buffer", "pipe", "tee", "multi", "limit"],
+      "async": ["epoll", "kqueue", "iouring", "iocp", "poll", "select", "nonblocking"],
+      "encoding": ["utf8", "ascii", "binary", "endian", "varint", "protobuf", "ber"],
+      "compression": ["gzip", "zstd", "brotli", "snappy", "deflate", "lz4", "xz"],
+      "buffering": ["buffered", "unbuffered", "flush", "sync", "writeback", "direct", "mmap"],
+      "multiplexing": ["multiplex", "demux", "channel", "select", "poll", "reactor", "proactor"],
+      "serialization": ["serialize", "deserialize", "encode", "decode", "marshal", "unmarshal", "codec"]
+    }
+  },
+  {
+    "domain": "cli",
+    "terms": {
+      "parsing": ["flag", "arg", "subcommand", "completion", "validate", "parse", "required"],
+      "output": ["color", "ansi", "table", "progress", "spinner", "bold", "format"],
+      "interaction": ["prompt", "confirm", "select", "password", "multiselect", "editor", "autocomplete"],
+      "frameworks": ["cobra", "click", "argparse", "clap", "commander", "oclif", "cliffy"],
+      "config": ["config", "dotfile", "xdg", "home", "global", "local", "project"],
+      "scripting": ["pipe", "stdin", "stdout", "exit", "signal", "tty", "interactive"],
+      "distribution": ["install", "update", "selfupdate", "version", "manpage", "completions", "alias"]
+    }
+  },
+  {
+    "domain": "regex",
+    "terms": {
+      "syntax": ["group", "capture", "lookahead", "lookbehind", "quantifier", "alternation", "anchor"],
+      "engines": ["pcre", "re2", "oniguruma", "posix", "nfa", "dfa", "backtrack"],
+      "usage": ["match", "find", "replace", "split", "test", "exec", "search"],
+      "performance": ["compile", "cache", "catastrophic", "backtrack", "optimize", "precompile", "lazy"],
+      "classes": ["digit", "word", "whitespace", "boundary", "unicode", "property", "category"],
+      "named": ["named", "group", "backreference", "subroutine", "conditional", "atomic", "possessive"],
+      "tools": ["regex101", "debugger", "visualizer", "tester", "generator", "explain", "lint"]
+    }
+  },
+  {
+    "domain": "date_time",
+    "terms": {
+      "parsing": ["parse", "format", "iso8601", "rfc3339", "unix", "epoch", "timestamp"],
+      "arithmetic": ["add", "subtract", "duration", "interval", "diff", "between", "overlap"],
+      "timezone": ["tz", "utc", "offset", "iana", "dst", "convert", "zoneinfo"],
+      "formatting": ["locale", "relative", "calendar", "humanize", "ago", "fromNow", "intl"],
+      "libraries": ["moment", "dayjs", "luxon", "date", "chrono", "joda", "arrow"],
+      "ranges": ["range", "period", "span", "start", "end", "contains", "overlap"],
+      "recurring": ["cron", "rrule", "recurrence", "frequency", "until", "count", "byday"]
+    }
+  },
+  {
+    "domain": "math",
+    "terms": {
+      "precision": ["float", "decimal", "bigint", "overflow", "underflow", "rounding", "epsilon"],
+      "statistics": ["mean", "median", "percentile", "stddev", "variance", "distribution", "sample"],
+      "algorithms": ["sort", "search", "graph", "tree", "heap", "hash", "bloom"],
+      "random": ["prng", "csprng", "seed", "uniform", "normal", "shuffle", "sample"],
+      "linear": ["matrix", "vector", "dot", "cross", "transpose", "inverse", "determinant"],
+      "crypto": ["modular", "prime", "gcd", "exponent", "discrete", "elliptic", "field"],
+      "encoding": ["base64", "hex", "binary", "uuid", "snowflake", "ulid", "cuid"]
+    }
+  }
+]

@@ -1,0 +1,9030 @@
+[
+  {
+    "prompt_number": 101,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 505,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 102,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 510,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 103,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "model",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "model",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "model",
+          "model"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 515,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 104,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "login",
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 520,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 105,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "model",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "model",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "model",
+          "model"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 525,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 106,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 530,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 107,
+    "observe": {
+      "keywords": [
+        "token",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 535,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 108,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric",
+        "counter"
+      ],
+      "terms": [
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ],
+        [
+          "counter",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 540,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 109,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 545,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 110,
+    "observe": {
+      "keywords": [
+        "login",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 550,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 111,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_api.py",
+      "offset": 555,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 112,
+    "observe": {
+      "keywords": [
+        "query",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "query",
+        "test"
+      ],
+      "domains": [
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "query",
+          "query"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "query",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/models.py",
+      "offset": 560,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 113,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 565,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 114,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 570,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 115,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "alert"
+      ],
+      "terms": [
+        "test",
+        "alert"
+      ],
+      "domains": [
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "alert",
+          "alert"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "alert",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_api.py",
+      "offset": 575,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 116,
+    "observe": {
+      "keywords": [
+        "login",
+        "query",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "query",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "query",
+          "query"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "query",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 580,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 117,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 585,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 118,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 590,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 119,
+    "observe": {
+      "keywords": [
+        "token",
+        "model",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "model",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "model",
+          "model"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "model",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 595,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 120,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 600,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 121,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 605,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 122,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "login",
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 610,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 123,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 615,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 124,
+    "observe": {
+      "keywords": [
+        "handler",
+        "middleware",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "handler",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "handler",
+          "handler"
+        ],
+        [
+          "middleware",
+          "handler"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "handler",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/routes.py",
+      "offset": 620,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 125,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 625,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 126,
+    "observe": {
+      "keywords": [
+        "query",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric",
+        "counter"
+      ],
+      "terms": [
+        "query",
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@database",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "query",
+          "query"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ],
+        [
+          "counter",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "query",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/models.py",
+      "offset": 630,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 127,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_api.py",
+      "offset": 635,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 128,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 640,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 129,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "model",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric",
+        "counter"
+      ],
+      "terms": [
+        "endpoint",
+        "model",
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@api",
+        "@database",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "model",
+          "model"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ],
+        [
+          "counter",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 645,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 130,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 650,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 131,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 655,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 132,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 660,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 133,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "model",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "model",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "model",
+          "model"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 665,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 134,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 670,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 135,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_api.py",
+      "offset": 675,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 136,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 680,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 137,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 685,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 138,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/routes.py",
+      "offset": 690,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 139,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_api.py",
+      "offset": 695,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 140,
+    "observe": {
+      "keywords": [
+        "login",
+        "query",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "query",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "query",
+          "query"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "query",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 700,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 141,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 705,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 142,
+    "observe": {
+      "keywords": [
+        "query",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "query",
+        "test"
+      ],
+      "domains": [
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "query",
+          "query"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "query",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/models.py",
+      "offset": 710,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 143,
+    "observe": {
+      "keywords": [
+        "token",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "token",
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 715,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 144,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 720,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 145,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 725,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 146,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 730,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 147,
+    "observe": {
+      "keywords": [
+        "model",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "model",
+        "test"
+      ],
+      "domains": [
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "model",
+          "model"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "model",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/queries.py",
+      "offset": 735,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 148,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 740,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 149,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 745,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 150,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric",
+        "counter"
+      ],
+      "terms": [
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ],
+        [
+          "counter",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 750,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 151,
+    "observe": {
+      "keywords": [
+        "token",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 755,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 152,
+    "observe": {
+      "keywords": [
+        "login",
+        "handler",
+        "middleware",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "handler",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "handler",
+          "handler"
+        ],
+        [
+          "middleware",
+          "handler"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "handler",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 760,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 153,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 765,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 154,
+    "observe": {
+      "keywords": [
+        "query",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "query",
+        "test"
+      ],
+      "domains": [
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "query",
+          "query"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "query",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/models.py",
+      "offset": 770,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 155,
+    "observe": {
+      "keywords": [
+        "token",
+        "model",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "model",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "model",
+          "model"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "model",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 775,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 156,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 780,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 157,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "endpoint",
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@api",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 785,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 158,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 790,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 159,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric",
+        "counter"
+      ],
+      "terms": [
+        "endpoint",
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@api",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ],
+        [
+          "counter",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 795,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 160,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 800,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 161,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "model",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "model",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "model",
+          "model"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 805,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 162,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 810,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 163,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_api.py",
+      "offset": 815,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 164,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "login",
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 820,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 165,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 825,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 166,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/routes.py",
+      "offset": 830,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 167,
+    "observe": {
+      "keywords": [
+        "token",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 835,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 168,
+    "observe": {
+      "keywords": [
+        "query",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "query",
+        "test"
+      ],
+      "domains": [
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "query",
+          "query"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "query",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/models.py",
+      "offset": 840,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 169,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 845,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 170,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "alert"
+      ],
+      "terms": [
+        "login",
+        "test",
+        "alert"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "alert",
+          "alert"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "alert",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 850,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 171,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric",
+        "counter"
+      ],
+      "terms": [
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ],
+        [
+          "counter",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_api.py",
+      "offset": 855,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 172,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 860,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 173,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 865,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 174,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 870,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 175,
+    "observe": {
+      "keywords": [
+        "model",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "model",
+        "test"
+      ],
+      "domains": [
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "model",
+          "model"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "model",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/queries.py",
+      "offset": 875,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 176,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 880,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 177,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 885,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 178,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 890,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 179,
+    "observe": {
+      "keywords": [
+        "token",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 895,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 180,
+    "observe": {
+      "keywords": [
+        "handler",
+        "middleware",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "handler",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "handler",
+          "handler"
+        ],
+        [
+          "middleware",
+          "handler"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "handler",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/routes.py",
+      "offset": 900,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 181,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "model",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "endpoint",
+        "model",
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@api",
+        "@database",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "model",
+          "model"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 905,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 182,
+    "observe": {
+      "keywords": [
+        "login",
+        "query",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "query",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "query",
+          "query"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "query",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 910,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 183,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_api.py",
+      "offset": 915,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 184,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 920,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 185,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "alert"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "test",
+        "alert"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "alert",
+          "alert"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "alert",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 925,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 186,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 930,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 187,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 935,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 188,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 940,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 189,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "model",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "model",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "model",
+          "model"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 945,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 190,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 950,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 191,
+    "observe": {
+      "keywords": [
+        "token",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 955,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 192,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric",
+        "counter"
+      ],
+      "terms": [
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ],
+        [
+          "counter",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 960,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 193,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 965,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 194,
+    "observe": {
+      "keywords": [
+        "login",
+        "endpoint",
+        "query",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "endpoint",
+        "query",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "query",
+          "query"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "query",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 970,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 195,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_api.py",
+      "offset": 975,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 196,
+    "observe": {
+      "keywords": [
+        "query",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "query",
+        "test"
+      ],
+      "domains": [
+        "@database",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "query",
+          "query"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "query",
+          "@database"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/models.py",
+      "offset": 980,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 197,
+    "observe": {
+      "keywords": [
+        "token",
+        "endpoint",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 985,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 198,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "test"
+      ],
+      "domains": [
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_auth.py",
+      "offset": 990,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 199,
+    "observe": {
+      "keywords": [
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "metric"
+      ],
+      "terms": [
+        "test",
+        "metric"
+      ],
+      "domains": [
+        "@testing",
+        "@monitoring"
+      ],
+      "keyword_terms": [
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "metric",
+          "metric"
+        ]
+      ],
+      "term_domains": [
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "metric",
+          "@monitoring"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "tests/test_api.py",
+      "offset": 995,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 200,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 1000,
+      "limit": 30
+    }
+  }
+]

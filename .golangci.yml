@@ -1,0 +1,28 @@
+run:
+  timeout: 2m
+
+linters:
+  enable:
+    - errcheck       # unchecked errors
+    - govet          # suspicious constructs
+    - staticcheck    # comprehensive static analysis
+    - unused         # unused variables, functions
+    - gosimple       # simplifications
+    - ineffassign    # useless assignments
+    - gocritic       # opinionated but catches real bugs
+    - misspell       # typos in comments/strings
+
+linters-settings:
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+    disabled-checks:
+      - hugeParam  # we'll use pointers deliberately
+
+issues:
+  # Don't flag skipped test bodies
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck

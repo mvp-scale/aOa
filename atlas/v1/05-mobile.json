@@ -1,0 +1,98 @@
+[
+  {
+    "domain": "mobile_navigation",
+    "terms": {
+      "stacks": ["push", "pop", "modal", "present", "dismiss", "reset", "navigate"],
+      "tabs": ["bottomtab", "toptab", "badge", "lazy", "tabbar", "icon", "label"],
+      "deep_linking": ["deeplink", "universal", "scheme", "deferred", "branch", "applink", "intent"],
+      "transitions": ["animation", "gesture", "shared", "hero", "fade", "slide", "custom"],
+      "state": ["state", "params", "focused", "unfocused", "initial", "history", "current"],
+      "patterns": ["drawer", "bottomsheet", "overlay", "nested", "split", "master", "detail"],
+      "frameworks": ["reactnavigation", "navigator", "router", "expo", "flutternav", "gorouter", "autoroute"]
+    }
+  },
+  {
+    "domain": "mobile_ui",
+    "terms": {
+      "gestures": ["tap", "swipe", "pinch", "longpress", "pan", "fling", "doubletap"],
+      "lists": ["flatlist", "sectionlist", "recyclerview", "pullrefresh", "infinite", "scroll", "virtualized"],
+      "layout": ["safearea", "keyboard", "statusbar", "platform", "insets", "notch", "orientation"],
+      "feedback": ["haptic", "vibration", "toast", "snackbar", "loading", "skeleton", "shimmer"],
+      "input": ["textfield", "picker", "datepicker", "slider", "switch", "stepper", "searchbar"],
+      "media": ["image", "camera", "gallery", "crop", "filter", "placeholder", "cache"],
+      "theming": ["appearance", "dark", "light", "dynamic", "system", "font", "scale"]
+    }
+  },
+  {
+    "domain": "push_notifications",
+    "terms": {
+      "remote": ["fcm", "apns", "token", "payload", "data", "notification", "priority"],
+      "local": ["schedule", "recurring", "trigger", "action", "category", "attachment", "sound"],
+      "handling": ["foreground", "background", "tap", "deeplink", "dismiss", "receive", "display"],
+      "management": ["channel", "group", "badge", "permission", "provisional", "critical", "silent"],
+      "providers": ["firebase", "onesignal", "expo", "pusher", "airship", "braze", "sns"],
+      "payload": ["title", "body", "image", "data", "collapse", "ttl", "priority"],
+      "analytics": ["delivered", "opened", "dismissed", "conversion", "impression", "ctr", "funnel"]
+    }
+  },
+  {
+    "domain": "app_lifecycle",
+    "terms": {
+      "states": ["foreground", "background", "inactive", "suspended", "terminated", "detached", "resumed"],
+      "startup": ["coldstart", "warmstart", "splash", "launch", "initialize", "preload", "prefetch"],
+      "memory": ["warning", "pressure", "trim", "cache", "cleanup", "leak", "retain"],
+      "updates": ["appupdate", "force", "optional", "inapp", "codepush", "hotfix", "version"],
+      "tasks": ["background", "fetch", "task", "completion", "expiration", "identifier", "schedule"],
+      "links": ["universal", "deeplink", "scheme", "intent", "url", "handle", "route"],
+      "permissions": ["request", "granted", "denied", "restricted", "settings", "rationale", "never"]
+    }
+  },
+  {
+    "domain": "mobile_storage",
+    "terms": {
+      "secure": ["keychain", "keystore", "encrypted", "biometric", "credential", "token", "sensitive"],
+      "local": ["sqlite", "realm", "coredata", "room", "mmkv", "asyncstorage", "watermelon"],
+      "sync": ["offline", "conflict", "queue", "retry", "merge", "pending", "reconcile"],
+      "files": ["document", "cache", "temporary", "shared", "bundle", "asset", "resource"],
+      "preferences": ["defaults", "sharedpreferences", "settings", "config", "flag", "store", "persist"],
+      "migration": ["version", "schema", "migrate", "transform", "compact", "reset", "backup"],
+      "encryption": ["encrypt", "decrypt", "key", "aes", "pbkdf2", "salt", "iv"]
+    }
+  },
+  {
+    "domain": "mobile_platform",
+    "terms": {
+      "camera": ["capture", "photo", "video", "permission", "barcode", "qr", "ar"],
+      "location": ["gps", "geofence", "background", "accuracy", "heading", "speed", "altitude"],
+      "biometrics": ["faceid", "touchid", "fingerprint", "authenticate", "fallback", "enrolled", "available"],
+      "contacts": ["addressbook", "picker", "permission", "phone", "email", "import", "vcard"],
+      "sensors": ["accelerometer", "gyroscope", "magnetometer", "pedometer", "barometer", "proximity", "ambient"],
+      "sharing": ["share", "intent", "activity", "clipboard", "airdrop", "social", "extension"],
+      "health": ["healthkit", "googlefit", "step", "heartrate", "workout", "sleep", "nutrition"]
+    }
+  },
+  {
+    "domain": "cross_platform",
+    "terms": {
+      "bridge": ["native", "module", "bridge", "channel", "ffi", "turbo", "fabric"],
+      "rendering": ["nativeview", "custom", "platform", "detect", "adaptive", "widget", "element"],
+      "frameworks": ["reactnative", "flutter", "kotlin", "capacitor", "ionic", "maui", "compose"],
+      "sharing": ["shared", "common", "expect", "actual", "platform", "abstract", "interface"],
+      "build": ["gradle", "xcode", "cocoapods", "swift", "podfile", "pbxproj", "target"],
+      "testing": ["detox", "maestro", "appium", "xctest", "espresso", "integration", "screenshot"],
+      "distribution": ["appstore", "playstore", "testflight", "beta", "release", "signing", "provisioning"]
+    }
+  },
+  {
+    "domain": "wearable",
+    "terms": {
+      "watch": ["complication", "glance", "tile", "watchface", "crown", "digital", "analog"],
+      "health": ["heartrate", "step", "calorie", "workout", "sleep", "oxygen", "ecg"],
+      "connectivity": ["companion", "transfer", "sync", "bluetooth", "standalone", "cellular", "wifi"],
+      "ui": ["small", "circular", "list", "button", "haptic", "notification", "shortlook"],
+      "platforms": ["watchos", "wearos", "tizen", "fitbit", "garmin", "watchkit", "compose"],
+      "sensors": ["accelerometer", "gyroscope", "altimeter", "temperature", "ambient", "heart", "motion"],
+      "battery": ["lowpower", "background", "refresh", "complication", "budget", "schedule", "efficient"]
+    }
+  }
+]

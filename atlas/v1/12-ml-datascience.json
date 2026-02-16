@@ -1,0 +1,98 @@
+[
+  {
+    "domain": "ml_training",
+    "terms": {
+      "training": ["epoch", "batch", "learning", "loss", "optimizer", "gradient", "backward"],
+      "evaluation": ["accuracy", "precision", "recall", "f1", "confusion", "roc", "auc"],
+      "tuning": ["hyperparameter", "grid", "random", "bayesian", "cross", "validation", "fold"],
+      "tracking": ["experiment", "mlflow", "wandb", "neptune", "run", "artifact", "metric"],
+      "data": ["dataloader", "dataset", "transform", "augment", "normalize", "batch", "shuffle"],
+      "regularization": ["dropout", "weight", "decay", "early", "stopping", "l1", "l2"],
+      "distributed": ["distributed", "ddp", "horovod", "parallel", "gpu", "tpu", "shard"]
+    }
+  },
+  {
+    "domain": "ml_inference",
+    "terms": {
+      "serving": ["serve", "endpoint", "predict", "batch", "realtime", "grpc", "rest"],
+      "optimization": ["quantize", "prune", "distill", "onnx", "tensorrt", "openvino", "tflite"],
+      "pipeline": ["preprocess", "postprocess", "feature", "transform", "normalize", "decode", "encode"],
+      "monitoring": ["drift", "skew", "accuracy", "latency", "throughput", "shadow", "champion"],
+      "deployment": ["model", "version", "canary", "rollback", "registry", "artifact", "stage"],
+      "scaling": ["autoscale", "gpu", "cpu", "memory", "concurrency", "queue", "batch"],
+      "frameworks": ["triton", "seldon", "kserve", "bentoml", "torchserve", "tfserving", "ray"]
+    }
+  },
+  {
+    "domain": "ml_data",
+    "terms": {
+      "datasets": ["load", "split", "train", "test", "validate", "stratify", "sample"],
+      "features": ["extract", "select", "engineer", "encode", "scale", "normalize", "impute"],
+      "labeling": ["annotate", "label", "active", "weak", "supervision", "agreement", "quality"],
+      "versioning": ["dvc", "lineage", "snapshot", "hash", "track", "reproduce", "diff"],
+      "preprocessing": ["clean", "filter", "deduplicate", "outlier", "missing", "balance", "oversample"],
+      "storage": ["parquet", "arrow", "feather", "hdf5", "tfrecord", "petastorm", "delta"],
+      "augmentation": ["augment", "synthetic", "oversample", "smote", "cutout", "mixup", "rotate"]
+    }
+  },
+  {
+    "domain": "nlp",
+    "terms": {
+      "tokenization": ["tokenize", "subword", "bpe", "wordpiece", "sentencepiece", "vocab", "encode"],
+      "models": ["transformer", "bert", "gpt", "embedding", "attention", "encoder", "decoder"],
+      "tasks": ["classify", "ner", "sentiment", "summarize", "translate", "generate", "qa"],
+      "preprocessing": ["clean", "normalize", "stem", "lemmatize", "stopword", "lowercase", "segment"],
+      "evaluation": ["bleu", "rouge", "perplexity", "meteor", "bertscore", "human", "benchmark"],
+      "libraries": ["huggingface", "spacy", "nltk", "transformers", "tokenizers", "datasets", "evaluate"],
+      "fine_tuning": ["finetune", "lora", "peft", "adapter", "freeze", "head", "transfer"]
+    }
+  },
+  {
+    "domain": "computer_vision",
+    "terms": {
+      "detection": ["detect", "yolo", "bbox", "anchor", "nms", "iou", "confidence"],
+      "classification": ["classify", "resnet", "vgg", "efficientnet", "softmax", "topk", "pretrained"],
+      "segmentation": ["segment", "mask", "pixel", "instance", "semantic", "panoptic", "contour"],
+      "preprocessing": ["resize", "normalize", "augment", "crop", "pad", "color", "channel"],
+      "tracking": ["track", "reid", "kalman", "hungarian", "deepsort", "bytetrack", "mot"],
+      "generation": ["gan", "diffusion", "vae", "stylegan", "stable", "generate", "sample"],
+      "tools": ["opencv", "torchvision", "pillow", "albumentations", "detectron2", "ultralytics", "mmdet"]
+    }
+  },
+  {
+    "domain": "llm",
+    "terms": {
+      "prompting": ["prompt", "template", "fewshot", "chain", "thought", "system", "instruction"],
+      "apis": ["completion", "chat", "stream", "token", "usage", "model", "temperature"],
+      "rag": ["retrieval", "context", "chunk", "embed", "vector", "similarity", "rerank"],
+      "agents": ["tool", "function", "calling", "action", "observe", "plan", "execute"],
+      "memory": ["conversation", "history", "summary", "buffer", "window", "persistent", "semantic"],
+      "evaluation": ["benchmark", "eval", "judge", "score", "rubric", "human", "automated"],
+      "frameworks": ["langchain", "llamaindex", "semantic", "autogen", "crew", "dspy", "guidance"]
+    }
+  },
+  {
+    "domain": "data_visualization",
+    "terms": {
+      "charts": ["bar", "line", "scatter", "histogram", "heatmap", "pie", "treemap"],
+      "libraries": ["d3", "chartjs", "plotly", "matplotlib", "recharts", "echarts", "vega"],
+      "interactive": ["zoom", "pan", "tooltip", "brush", "crossfilter", "drill", "hover"],
+      "layout": ["axis", "scale", "legend", "label", "grid", "margin", "responsive"],
+      "data": ["series", "dataset", "aggregate", "bin", "transform", "filter", "sort"],
+      "export": ["png", "svg", "pdf", "canvas", "download", "print", "embed"],
+      "realtime": ["stream", "update", "animate", "transition", "live", "websocket", "poll"]
+    }
+  },
+  {
+    "domain": "notebook",
+    "terms": {
+      "jupyter": ["cell", "kernel", "execute", "output", "markdown", "magic", "interrupt"],
+      "workflow": ["explore", "prototype", "iterate", "visualize", "present", "share", "export"],
+      "libraries": ["pandas", "numpy", "scipy", "sklearn", "matplotlib", "seaborn", "plotly"],
+      "data": ["dataframe", "series", "index", "column", "dtype", "groupby", "merge"],
+      "display": ["html", "latex", "image", "widget", "interactive", "rich", "table"],
+      "collaboration": ["colab", "kaggle", "sagemaker", "databricks", "hex", "observable", "deepnote"],
+      "extensions": ["nbextension", "lab", "voila", "papermill", "nbconvert", "jupytext", "quarto"]
+    }
+  }
+]

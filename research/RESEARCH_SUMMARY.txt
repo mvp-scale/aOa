@@ -1,0 +1,172 @@
+SESSION LOG PARSING RESEARCH - COMPLETE
+========================================
+
+Document: /home/corey/aOa/aOa-go/research/session-parsing-patterns.md
+Size: 893 lines | 35KB | Comprehensive reference
+Date: 2026-02-14
+
+KEY FINDINGS
+============
+
+1. SESSION STORAGE
+   - Location: ~/.claude/projects/{encoded-path}/*.jsonl
+   - Path encoding: /home/corey/aOa -> -home-corey-aOa
+   - Format: Newline-delimited JSON (JSONL)
+   - Staleness: Hours behind real-time (DON'T use for live signals)
+
+2. EVENT TYPES (4 core types)
+   - "user": User messages (prompts)
+   - "assistant": Claude responses (tool calls, token usage)
+   - "system" (subtype: turn_duration): Turn latency metadata
+   - "file-history-snapshot": File backups (skip)
+
+3. SIGNALS AVAILABLE
+
+   From "user" events:
+   - User prompts (after cleaning system blocks)
+   - Session timestamps
+
+   From "assistant" events:
+   - Tool calls: Read, Edit, Write, Bash, Grep, Glob, etc.
+   - File paths: absolute paths with optional offset:limit ranges
+   - aOa commands: parsed from bash input (grep, find, locate, etc.)
+   - Token usage: input, output, cache_read, cache_write
+   - Model name: which Claude version
+
+   From "system" events:
+   - Turn duration: ms to execute (for throughput calculation)
+
+4. JSON FIELD MAPPINGS
+
+   Tool input extraction:
+   - file_path, path, notebook_path -> file location
+   - offset, limit -> partial read range
+   - command -> bash commands (parse for aoa grep)
+   - pattern -> glob/grep patterns
+
+   Token usage fields:
+   - input_tokens, output_tokens
+   - cache_creation_input_tokens (cache write cost)
+   - cache_read_input_tokens (cache hit cost)
+
+   Thinking field:
+   - content[].thinking -> extended thinking text
+   - Used for actual output token calculation
+
+5. PARSING PATTERNS
+
+   Two-pass strategy:
+   PASS 1: Collect turn_duration events (map uuid -> ms)
+   PASS 2: Process all messages with durations available
+
+   Defensive design:
+   - Try/catch every JSON.parse (skip malformed lines)
+   - safe_get() for nested dicts (return defaults)
+   - Regex cleanup for prompts (remove system blocks)
+   - Path validation (absolute, reasonable length)
+
+6. SESSION END DETECTION
+
+   Method 1 (Recommended):
+   - Timeout: 5 minutes without new messages
+   - Real-time tailing (check mtime changes)
+
+   Method 2 (Future):
+   - Explicit marker (not yet documented by Claude)
+
+   Method 3 (Batch):
+   - File modification time
+
+7. PERFORMANCE METRICS
+   - Parse single turn: ~1-5ms
+   - Parse full session (50 turns): ~50-250ms
+   - Extract tool events: ~0.5ms per tool
+   - Buffering: 100-200 lines or 5 second intervals
+
+8. RATE LIMITING
+   - Real-time hooks: No buffering needed
+   - Batch parsing: Buffer 100-200 lines, POST every 5s
+   - NO rate limits on single session (sequential)
+
+9. CRITICAL INSIGHT
+
+   DON'T parse session files for real-time signals.
+   Session JSONL files are stale (hours behind conversation).
+
+   INSTEAD use hooks:
+   - Receive data via stdin in real-time
+   - UserPromptSubmit, PostToolUse, Stop hooks
+   - Data already extracted (no parsing needed)
+   - POST directly to /intent API (async)
+
+   PARSE session files only for:
+   - Bigram extraction (when session ends)
+   - File transition analysis (offline)
+   - Analytics (retention, token usage, models)
+
+10. INTEGRATION POINTS
+
+    Real-time (hooks):
+    - ~/.claude/hooks/aoa-gateway.py receives stdin
+    - Extracts data and POSTs to /intent API
+
+    Batch (background jobs):
+    - services/ranking/session_parser.py
+    - Extracts file transitions, bigrams
+    - Syncs to Redis for predictions
+
+    CLI inspection:
+    - SessionMetrics class (services/session/metrics.py)
+    - Commands: aoa cc sessions, aoa cc prompts, aoa cc stats
+
+SOURCES EXAMINED
+================
+
+aOa Python Services:
+- services/session/metrics.py (309 lines) - Full session parsing
+- services/session/reader.py (258 lines) - Reader interface
+- services/ranking/session_parser.py (660 lines) - Event extraction
+- .claude/hooks/aoa-gateway.py (538 lines) - Real-time hook handler
+
+Supporting files:
+- .context/archive/2026-02-04-session-67.md (Key insight discovery)
+- .context/benchmarks/fixtures/synthetic-sessions.jsonl (Example data)
+
+ACTIONABLE OUTPUTS
+==================
+
+1. Event Type Catalog (table format)
+2. JSON Field Mappings (for each event/tool type)
+3. Parsing Pseudocode (Python-like, executable)
+4. Session End Detection (3 methods)
+5. Performance Guidelines (ms, buffering, rate limits)
+6. Edge Cases & Defensive Patterns
+7. Integration Points (hooks, batch, CLI)
+8. Complete Example: extract_session_signals()
+9. Testing & Validation Examples
+
+NEXT STEPS FOR GO IMPLEMENTATION
+=================================
+
+1. Use synthetic-sessions.jsonl as test fixture
+2. Implement JSONL line parser (handle malformed)
+3. Implement two-pass parsing (durations first)
+4. Implement tool extraction regex (aoa commands)
+5. Implement safe_get() for nested dicts
+6. Implement session end detection (timeout-based)
+7. Add buffering for batch POST (5s or 100 lines)
+8. Validate against metrics.py behavior
+9. Performance test: aim for <50ms per session
+
+DOCUMENT LOCATION
+=================
+
+/home/corey/aOa/aOa-go/research/session-parsing-patterns.md
+
+This file contains complete reference implementation including:
+- Executable pseudocode (Python)
+- JSON examples
+- Field mappings
+- Edge case handling
+- Integration examples
+- Testing patterns

@@ -1,0 +1,98 @@
+[
+  {
+    "domain": "security_scanning",
+    "terms": {
+      "sast": ["static", "analysis", "scan", "rule", "pattern", "finding", "severity"],
+      "dast": ["dynamic", "fuzz", "penetration", "probe", "payload", "inject", "crawl"],
+      "dependencies": ["cve", "advisory", "vulnerability", "sca", "audit", "outdated", "patch"],
+      "secrets": ["secret", "leak", "exposed", "rotate", "precommit", "detect", "remediate"],
+      "container": ["trivy", "grype", "scan", "sbom", "layer", "base", "vulnerable"],
+      "compliance": ["benchmark", "cis", "nist", "baseline", "deviation", "remediate", "evidence"],
+      "pipeline": ["gate", "block", "threshold", "report", "sarif", "dashboard", "trend"]
+    }
+  },
+  {
+    "domain": "input_validation",
+    "terms": {
+      "sql_injection": ["parameterized", "prepared", "escape", "bind", "placeholder", "sanitize", "whitelist"],
+      "xss": ["encode", "escape", "csp", "sanitize", "dompurify", "innerhtml", "textcontent"],
+      "command_injection": ["exec", "spawn", "shell", "escape", "allowlist", "sandbox", "validate"],
+      "path_traversal": ["normalize", "resolve", "chroot", "allowlist", "relative", "canonical", "jail"],
+      "deserialization": ["deserialize", "untrusted", "gadget", "allowlist", "type", "class", "safe"],
+      "headers": ["host", "forwarded", "referer", "origin", "inject", "crlf", "split"],
+      "upload": ["extension", "mime", "magic", "size", "rename", "quarantine", "virus"]
+    }
+  },
+  {
+    "domain": "network_security",
+    "terms": {
+      "tls": ["certificate", "pin", "mutual", "mtls", "cipher", "protocol", "verify"],
+      "cors": ["origin", "method", "header", "credential", "preflight", "expose", "maxage"],
+      "csrf": ["token", "samesite", "double", "origin", "referer", "synchronizer", "stateless"],
+      "firewall": ["waf", "rule", "block", "allow", "geoblocking", "ratelimit", "ddos"],
+      "dns": ["dnssec", "caa", "transparency", "hijack", "rebind", "poisoning", "resolver"],
+      "vpn": ["wireguard", "ipsec", "tunnel", "mesh", "zerotrust", "split", "endpoint"],
+      "headers": ["hsts", "xframe", "xcontent", "referrer", "permissions", "coep", "coop"]
+    }
+  },
+  {
+    "domain": "compliance",
+    "terms": {
+      "gdpr": ["consent", "subject", "right", "erasure", "portability", "processing", "dpa"],
+      "hipaa": ["phi", "baa", "safeguard", "minimum", "breach", "disclosure", "covered"],
+      "pci": ["cardholder", "tokenize", "scope", "segmentation", "compensating", "attestation", "qsa"],
+      "audit": ["trail", "immutable", "retention", "access", "change", "who", "when"],
+      "privacy": ["anonymize", "pseudonymize", "mask", "redact", "minimize", "purpose", "lawful"],
+      "soc2": ["control", "evidence", "criteria", "trust", "availability", "integrity", "confidentiality"],
+      "reporting": ["assessment", "gap", "remediation", "risk", "framework", "maturity", "roadmap"]
+    }
+  },
+  {
+    "domain": "secure_coding",
+    "terms": {
+      "boundaries": ["trust", "boundary", "validate", "sanitize", "encode", "escape", "verify"],
+      "least_privilege": ["minimal", "permission", "restrict", "scope", "elevate", "drop", "capability"],
+      "fail_safe": ["default", "deny", "safe", "fallback", "graceful", "closed", "secure"],
+      "supply_chain": ["pin", "lockfile", "checksum", "verify", "reproducible", "attest", "provenance"],
+      "memory": ["overflow", "bounds", "unsafe", "free", "use", "null", "initialize"],
+      "concurrency": ["race", "toctou", "atomic", "mutex", "deadlock", "reentrancy", "synchronize"],
+      "logging": ["sensitive", "redact", "mask", "pii", "credential", "sanitize", "structured"]
+    }
+  },
+  {
+    "domain": "identity_security",
+    "terms": {
+      "passwords": ["policy", "complexity", "breach", "pwned", "rotation", "history", "strength"],
+      "credential_storage": ["hash", "salt", "timing", "constant", "compare", "stretch", "iterations"],
+      "brute_force": ["lockout", "captcha", "delay", "progressive", "ipblock", "threshold", "cooldown"],
+      "session_security": ["fixation", "hijack", "invalidate", "bind", "rotate", "absolute", "idle"],
+      "tokens": ["revoke", "blacklist", "introspect", "opaque", "reference", "lifetime", "audience"],
+      "phishing": ["homograph", "punycode", "spoof", "lookalike", "verify", "domain", "indicator"],
+      "enumeration": ["timing", "generic", "consistent", "message", "delay", "honeypot", "canary"]
+    }
+  },
+  {
+    "domain": "data_protection",
+    "terms": {
+      "at_rest": ["disk", "volume", "tde", "field", "column", "envelope", "kek"],
+      "in_transit": ["tls", "hsts", "certificate", "upgrade", "redirect", "strict", "preload"],
+      "masking": ["mask", "tokenize", "anonymize", "pseudonymize", "redact", "obfuscate", "generalize"],
+      "classification": ["sensitive", "confidential", "public", "internal", "restricted", "label", "tag"],
+      "retention": ["policy", "purge", "archive", "legal", "hold", "schedule", "automate"],
+      "access": ["encrypt", "decrypt", "wrap", "unwrap", "authorize", "audit", "rotate"],
+      "key_management": ["kms", "hsm", "dek", "kek", "rotate", "generate", "destroy"]
+    }
+  },
+  {
+    "domain": "threat_modeling",
+    "terms": {
+      "methodology": ["stride", "dread", "pasta", "attack", "kill", "mitre", "diamond"],
+      "assets": ["crown", "dataflow", "boundary", "entry", "surface", "exposure", "vector"],
+      "mitigations": ["control", "countermeasure", "compensating", "detective", "preventive", "corrective", "deterrent"],
+      "risk": ["likelihood", "impact", "severity", "residual", "inherent", "appetite", "tolerance"],
+      "review": ["assessment", "pentest", "redteam", "blueteam", "purple", "tabletop", "exercise"],
+      "documentation": ["diagram", "dataflow", "sequence", "trust", "boundary", "assumption", "finding"],
+      "prioritization": ["critical", "high", "medium", "low", "cvss", "epss", "exploitable"]
+    }
+  }
+]

@@ -1,0 +1,1012 @@
+[
+  {
+    "_comment": "Q01: Single common term — 'login' appears in auth handler, router, and test files",
+    "query": "login",
+    "mode": "literal",
+    "flags": {},
+    "expected": [
+      {
+        "file": "services/auth/handler.py",
+        "line": 15,
+        "symbol": "AuthHandler.login(self, user, password)",
+        "range": [15, 45],
+        "domain": "@authentication",
+        "tags": ["login", "session", "token"]
+      },
+      {
+        "file": "services/api/router.py",
+        "line": 37,
+        "symbol": "Router.handle_login(self, request)",
+        "range": [37, 55],
+        "domain": "@api",
+        "tags": ["login", "handler", "request"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 15,
+        "symbol": "TestAuth.test_login_success(self)",
+        "range": [15, 35],
+        "domain": "@testing",
+        "tags": ["test", "login"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 37,
+        "symbol": "TestAuth.test_login_invalid_password(self)",
+        "range": [37, 55],
+        "domain": "@testing",
+        "tags": ["test", "login", "password"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 62,
+        "symbol": "TestAPI.test_handle_login(self)",
+        "range": [62, 80],
+        "domain": "@testing",
+        "tags": ["test", "handle", "login"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q02: Single unique term — 'invalidate' appears only in cache and queries",
+    "query": "invalidate",
+    "mode": "literal",
+    "flags": {},
+    "expected": [
+      {
+        "file": "services/database/queries.py",
+        "line": 107,
+        "symbol": "SessionQueries.invalidate_session(self, session_id)",
+        "range": [107, 125],
+        "domain": "@database",
+        "tags": ["invalidate", "session"]
+      },
+      {
+        "file": "services/cache/redis_client.py",
+        "line": 52,
+        "symbol": "RedisCache.invalidate(self, key)",
+        "range": [52, 65],
+        "domain": "@caching",
+        "tags": ["invalidate", "cache"]
+      },
+      {
+        "file": "services/cache/redis_client.py",
+        "line": 67,
+        "symbol": "RedisCache.invalidate_pattern(self, pattern)",
+        "range": [67, 85],
+        "domain": "@caching",
+        "tags": ["invalidate", "cache"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q03: Single broad term — 'test' appears in 12 symbols across test files and TestAuth/TestAPI classes",
+    "query": "test",
+    "mode": "literal",
+    "flags": {},
+    "expected": [
+      {
+        "file": "tests/test_auth.py",
+        "line": 8,
+        "symbol": "TestAuth(TestCase)",
+        "range": [8, 120],
+        "domain": "@testing",
+        "tags": ["test", "auth"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 15,
+        "symbol": "TestAuth.test_login_success(self)",
+        "range": [15, 35],
+        "domain": "@testing",
+        "tags": ["test", "login"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 37,
+        "symbol": "TestAuth.test_login_invalid_password(self)",
+        "range": [37, 55],
+        "domain": "@testing",
+        "tags": ["test", "login", "password"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 57,
+        "symbol": "TestAuth.test_register(self)",
+        "range": [57, 75],
+        "domain": "@testing",
+        "tags": ["test", "register"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 77,
+        "symbol": "TestAuth.test_token_refresh(self)",
+        "range": [77, 95],
+        "domain": "@testing",
+        "tags": ["test", "token", "refresh"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 97,
+        "symbol": "TestAuth.test_logout(self)",
+        "range": [97, 110],
+        "domain": "@testing",
+        "tags": ["test", "logout"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 8,
+        "symbol": "TestAPI(TestCase)",
+        "range": [8, 110],
+        "domain": "@testing",
+        "tags": ["test", "api"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 15,
+        "symbol": "TestAPI.test_get_users(self)",
+        "range": [15, 35],
+        "domain": "@testing",
+        "tags": ["test", "get", "users"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 37,
+        "symbol": "TestAPI.test_create_user(self)",
+        "range": [37, 60],
+        "domain": "@testing",
+        "tags": ["test", "create", "user"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 62,
+        "symbol": "TestAPI.test_handle_login(self)",
+        "range": [62, 80],
+        "domain": "@testing",
+        "tags": ["test", "handle", "login"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 82,
+        "symbol": "TestAPI.test_health_endpoint(self)",
+        "range": [82, 95],
+        "domain": "@testing",
+        "tags": ["test", "health"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 97,
+        "symbol": "TestAPI.test_serialization(self)",
+        "range": [97, 110],
+        "domain": "@testing",
+        "tags": ["test", "serialization"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q04: Zero results — nonexistent token",
+    "query": "xyznonexistent",
+    "mode": "literal",
+    "flags": {},
+    "expected": []
+  },
+  {
+    "_comment": "Q05: Short token — single char 'a' is below min length 2, returns nothing",
+    "query": "a",
+    "mode": "literal",
+    "flags": {},
+    "expected": []
+  },
+  {
+    "_comment": "Q06: Multi-term OR — 'login session' returns union of both terms, ranked by density then file_id then line",
+    "query": "login session",
+    "mode": "literal",
+    "flags": {},
+    "expected": [
+      {
+        "file": "services/auth/handler.py",
+        "line": 15,
+        "symbol": "AuthHandler.login(self, user, password)",
+        "range": [15, 45],
+        "domain": "@authentication",
+        "tags": ["login", "session", "token"]
+      },
+      {
+        "file": "services/auth/handler.py",
+        "line": 47,
+        "symbol": "AuthHandler.logout(self, session_id)",
+        "range": [47, 65],
+        "domain": "@authentication",
+        "tags": ["logout", "session"]
+      },
+      {
+        "file": "services/api/router.py",
+        "line": 37,
+        "symbol": "Router.handle_login(self, request)",
+        "range": [37, 55],
+        "domain": "@api",
+        "tags": ["login", "handler", "request"]
+      },
+      {
+        "file": "services/database/models.py",
+        "line": 37,
+        "symbol": "Session(Base)",
+        "range": [37, 60],
+        "domain": "@database",
+        "tags": ["session", "model"]
+      },
+      {
+        "file": "services/database/queries.py",
+        "line": 82,
+        "symbol": "SessionQueries",
+        "range": [82, 130],
+        "domain": "@database",
+        "tags": ["session", "queries"]
+      },
+      {
+        "file": "services/database/queries.py",
+        "line": 87,
+        "symbol": "SessionQueries.create_session(self, user_id, token)",
+        "range": [87, 105],
+        "domain": "@database",
+        "tags": ["create", "session", "token"]
+      },
+      {
+        "file": "services/database/queries.py",
+        "line": 107,
+        "symbol": "SessionQueries.invalidate_session(self, session_id)",
+        "range": [107, 125],
+        "domain": "@database",
+        "tags": ["invalidate", "session"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 15,
+        "symbol": "TestAuth.test_login_success(self)",
+        "range": [15, 35],
+        "domain": "@testing",
+        "tags": ["test", "login"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 37,
+        "symbol": "TestAuth.test_login_invalid_password(self)",
+        "range": [37, 55],
+        "domain": "@testing",
+        "tags": ["test", "login", "password"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 62,
+        "symbol": "TestAPI.test_handle_login(self)",
+        "range": [62, 80],
+        "domain": "@testing",
+        "tags": ["test", "handle", "login"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q07: Three-term OR — 'auth token session' broad union across auth files, models, queries. 6:87 density 2 (session+token) ranks first.",
+    "query": "auth token session",
+    "mode": "literal",
+    "flags": {},
+    "expected": [
+      {
+        "file": "services/database/queries.py",
+        "line": 87,
+        "symbol": "SessionQueries.create_session(self, user_id, token)",
+        "range": [87, 105],
+        "domain": "@database",
+        "tags": ["create", "session", "token"]
+      },
+      {
+        "file": "services/auth/handler.py",
+        "line": 8,
+        "symbol": "AuthHandler",
+        "range": [8, 120],
+        "domain": "@authentication",
+        "tags": ["auth", "handler"]
+      },
+      {
+        "file": "services/auth/handler.py",
+        "line": 47,
+        "symbol": "AuthHandler.logout(self, session_id)",
+        "range": [47, 65],
+        "domain": "@authentication",
+        "tags": ["logout", "session"]
+      },
+      {
+        "file": "services/auth/handler.py",
+        "line": 97,
+        "symbol": "AuthHandler.refresh_token(self, token)",
+        "range": [97, 120],
+        "domain": "@authentication",
+        "tags": ["refresh", "token"]
+      },
+      {
+        "file": "services/auth/middleware.py",
+        "line": 5,
+        "symbol": "AuthMiddleware",
+        "range": [5, 85],
+        "domain": "@authentication",
+        "tags": ["auth", "middleware"]
+      },
+      {
+        "file": "services/auth/middleware.py",
+        "line": 42,
+        "symbol": "AuthMiddleware.validate_token(self, token)",
+        "range": [42, 60],
+        "domain": "@authentication",
+        "tags": ["validate", "token"]
+      },
+      {
+        "file": "services/auth/middleware.py",
+        "line": 62,
+        "symbol": "AuthMiddleware.get_user_from_token(self, token)",
+        "range": [62, 85],
+        "domain": "@authentication",
+        "tags": ["get", "user", "token"]
+      },
+      {
+        "file": "services/database/models.py",
+        "line": 37,
+        "symbol": "Session(Base)",
+        "range": [37, 60],
+        "domain": "@database",
+        "tags": ["session", "model"]
+      },
+      {
+        "file": "services/database/models.py",
+        "line": 82,
+        "symbol": "Token(Base)",
+        "range": [82, 105],
+        "domain": "@database",
+        "tags": ["token", "model"]
+      },
+      {
+        "file": "services/database/queries.py",
+        "line": 82,
+        "symbol": "SessionQueries",
+        "range": [82, 130],
+        "domain": "@database",
+        "tags": ["session", "queries"]
+      },
+      {
+        "file": "services/database/queries.py",
+        "line": 107,
+        "symbol": "SessionQueries.invalidate_session(self, session_id)",
+        "range": [107, 125],
+        "domain": "@database",
+        "tags": ["invalidate", "session"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 8,
+        "symbol": "TestAuth(TestCase)",
+        "range": [8, 120],
+        "domain": "@testing",
+        "tags": ["test", "auth"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 77,
+        "symbol": "TestAuth.test_token_refresh(self)",
+        "range": [77, 95],
+        "domain": "@testing",
+        "tags": ["test", "token", "refresh"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q08: Overlapping OR terms — 'login authenticate' same domain, overlapping files",
+    "query": "login authenticate",
+    "mode": "literal",
+    "flags": {},
+    "expected": [
+      {
+        "file": "services/auth/handler.py",
+        "line": 15,
+        "symbol": "AuthHandler.login(self, user, password)",
+        "range": [15, 45],
+        "domain": "@authentication",
+        "tags": ["login", "session", "token"]
+      },
+      {
+        "file": "services/auth/middleware.py",
+        "line": 12,
+        "symbol": "AuthMiddleware.authenticate(self, request)",
+        "range": [12, 40],
+        "domain": "@authentication",
+        "tags": ["authenticate", "request"]
+      },
+      {
+        "file": "services/api/router.py",
+        "line": 37,
+        "symbol": "Router.handle_login(self, request)",
+        "range": [37, 55],
+        "domain": "@api",
+        "tags": ["login", "handler", "request"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 15,
+        "symbol": "TestAuth.test_login_success(self)",
+        "range": [15, 35],
+        "domain": "@testing",
+        "tags": ["test", "login"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 37,
+        "symbol": "TestAuth.test_login_invalid_password(self)",
+        "range": [37, 55],
+        "domain": "@testing",
+        "tags": ["test", "login", "password"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 62,
+        "symbol": "TestAPI.test_handle_login(self)",
+        "range": [62, 80],
+        "domain": "@testing",
+        "tags": ["test", "handle", "login"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q09: AND mode two terms — 'login,handler' intersection: only symbols containing BOTH tokens",
+    "query": "login,handler",
+    "mode": "literal",
+    "flags": {"and_mode": true},
+    "expected": []
+  },
+  {
+    "_comment": "Q10: AND mode three terms — 'auth,middleware,token' intersection: AuthMiddleware has auth; validate_token and get_user_from_token have token; all in file 2 which has middleware via AuthMiddleware",
+    "query": "validate,token",
+    "mode": "literal",
+    "flags": {"and_mode": true},
+    "expected": [
+      {
+        "file": "services/auth/middleware.py",
+        "line": 42,
+        "symbol": "AuthMiddleware.validate_token(self, token)",
+        "range": [42, 60],
+        "domain": "@authentication",
+        "tags": ["validate", "token"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q11: AND with no intersection — 'login,dockerfile' no symbol has both tokens",
+    "query": "login,expose",
+    "mode": "literal",
+    "flags": {"and_mode": true},
+    "expected": []
+  },
+  {
+    "_comment": "Q12: Regex simple — 'handle.*login' matches symbol names containing handle followed by login (2 matches: handle_login and test_handle_login)",
+    "query": "handle.*login",
+    "mode": "regex",
+    "flags": {},
+    "expected": [
+      {
+        "file": "services/api/router.py",
+        "line": 37,
+        "symbol": "Router.handle_login(self, request)",
+        "range": [37, 55],
+        "domain": "@api",
+        "tags": ["login", "handler", "request"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 62,
+        "symbol": "TestAPI.test_handle_login(self)",
+        "range": [62, 80],
+        "domain": "@testing",
+        "tags": ["test", "handle", "login"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q13: Regex alternation — 'login|logout' matches both",
+    "query": "login|logout",
+    "mode": "regex",
+    "flags": {},
+    "expected": [
+      {
+        "file": "services/auth/handler.py",
+        "line": 15,
+        "symbol": "AuthHandler.login(self, user, password)",
+        "range": [15, 45],
+        "domain": "@authentication",
+        "tags": ["login", "session", "token"]
+      },
+      {
+        "file": "services/auth/handler.py",
+        "line": 47,
+        "symbol": "AuthHandler.logout(self, session_id)",
+        "range": [47, 65],
+        "domain": "@authentication",
+        "tags": ["logout", "session"]
+      },
+      {
+        "file": "services/api/router.py",
+        "line": 37,
+        "symbol": "Router.handle_login(self, request)",
+        "range": [37, 55],
+        "domain": "@api",
+        "tags": ["login", "handler", "request"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 15,
+        "symbol": "TestAuth.test_login_success(self)",
+        "range": [15, 35],
+        "domain": "@testing",
+        "tags": ["test", "login"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 37,
+        "symbol": "TestAuth.test_login_invalid_password(self)",
+        "range": [37, 55],
+        "domain": "@testing",
+        "tags": ["test", "login", "password"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 97,
+        "symbol": "TestAuth.test_logout(self)",
+        "range": [97, 110],
+        "domain": "@testing",
+        "tags": ["test", "logout"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 62,
+        "symbol": "TestAPI.test_handle_login(self)",
+        "range": [62, 80],
+        "domain": "@testing",
+        "tags": ["test", "handle", "login"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q14: Regex pattern — 'test_.*login' find test functions for login",
+    "query": "test_.*login",
+    "mode": "regex",
+    "flags": {},
+    "expected": [
+      {
+        "file": "tests/test_auth.py",
+        "line": 15,
+        "symbol": "TestAuth.test_login_success(self)",
+        "range": [15, 35],
+        "domain": "@testing",
+        "tags": ["test", "login"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 37,
+        "symbol": "TestAuth.test_login_invalid_password(self)",
+        "range": [37, 55],
+        "domain": "@testing",
+        "tags": ["test", "login", "password"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 62,
+        "symbol": "TestAPI.test_handle_login(self)",
+        "range": [62, 80],
+        "domain": "@testing",
+        "tags": ["test", "handle", "login"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q15: Case insensitive — 'LOGIN' with -i flag should match lowercase 'login'",
+    "query": "LOGIN",
+    "mode": "literal",
+    "flags": {"case_insensitive": true},
+    "expected": [
+      {
+        "file": "services/auth/handler.py",
+        "line": 15,
+        "symbol": "AuthHandler.login(self, user, password)",
+        "range": [15, 45],
+        "domain": "@authentication",
+        "tags": ["login", "session", "token"]
+      },
+      {
+        "file": "services/api/router.py",
+        "line": 37,
+        "symbol": "Router.handle_login(self, request)",
+        "range": [37, 55],
+        "domain": "@api",
+        "tags": ["login", "handler", "request"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 15,
+        "symbol": "TestAuth.test_login_success(self)",
+        "range": [15, 35],
+        "domain": "@testing",
+        "tags": ["test", "login"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 37,
+        "symbol": "TestAuth.test_login_invalid_password(self)",
+        "range": [37, 55],
+        "domain": "@testing",
+        "tags": ["test", "login", "password"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 62,
+        "symbol": "TestAPI.test_handle_login(self)",
+        "range": [62, 80],
+        "domain": "@testing",
+        "tags": ["test", "handle", "login"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q16: Word boundary — 'log' with -w should match only exact token 'log', NOT 'login', 'logout', 'logger', 'logging'",
+    "query": "log",
+    "mode": "literal",
+    "flags": {"word_boundary": true},
+    "expected": [
+      {
+        "file": "services/api/router.py",
+        "line": 112,
+        "symbol": "Router.log_request(self, request, response)",
+        "range": [112, 130],
+        "domain": "@api",
+        "tags": ["log", "request", "response"]
+      },
+      {
+        "file": "services/database/models.py",
+        "line": 107,
+        "symbol": "AuditLog(Base)",
+        "range": [107, 130],
+        "domain": "@database",
+        "tags": ["audit", "log"]
+      },
+      {
+        "file": "lib/utils/logger.py",
+        "line": 30,
+        "symbol": "Logger.log(self, level, message)",
+        "range": [30, 45],
+        "domain": "@logging",
+        "tags": ["log", "level", "message"]
+      },
+      {
+        "file": "lib/utils/logger.py",
+        "line": 62,
+        "symbol": "get_log_level(level_name)",
+        "range": [62, 70],
+        "domain": "@logging",
+        "tags": ["get", "log", "level"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q17: Count only — 'auth' with -c flag returns count, not results. 3 symbols have 'auth' token.",
+    "query": "auth",
+    "mode": "literal",
+    "flags": {"count_only": true},
+    "expected_count": 3
+  },
+  {
+    "_comment": "Q18: Include glob — 'handler' with --include='services/*' limits to services/ files only",
+    "query": "handler",
+    "mode": "literal",
+    "flags": {"include_glob": "services/*"},
+    "expected": [
+      {
+        "file": "services/auth/handler.py",
+        "line": 8,
+        "symbol": "AuthHandler",
+        "range": [8, 120],
+        "domain": "@authentication",
+        "tags": ["auth", "handler"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q19: CamelCase query — 'getUserToken' tokenizes to get+user+token (OR search). Density 3: get_user_from_token. Density 2: get_user_by_id, get_user_by_email, create_session. Rest density 1.",
+    "query": "getUserToken",
+    "mode": "literal",
+    "flags": {},
+    "expected_tokenization": ["get", "user", "token"],
+    "expected": [
+      {
+        "file": "services/auth/middleware.py",
+        "line": 62,
+        "symbol": "AuthMiddleware.get_user_from_token(self, token)",
+        "range": [62, 85],
+        "domain": "@authentication",
+        "tags": ["get", "user", "token"]
+      },
+      {
+        "file": "services/database/queries.py",
+        "line": 10,
+        "symbol": "UserQueries.get_user_by_id(self, user_id)",
+        "range": [10, 25],
+        "domain": "@database",
+        "tags": ["get", "user"]
+      },
+      {
+        "file": "services/database/queries.py",
+        "line": 27,
+        "symbol": "UserQueries.get_user_by_email(self, email)",
+        "range": [27, 42],
+        "domain": "@database",
+        "tags": ["get", "user", "email"]
+      },
+      {
+        "file": "services/database/queries.py",
+        "line": 87,
+        "symbol": "SessionQueries.create_session(self, user_id, token)",
+        "range": [87, 105],
+        "domain": "@database",
+        "tags": ["create", "session", "token"]
+      },
+      {
+        "file": "services/auth/handler.py",
+        "line": 15,
+        "symbol": "AuthHandler.login(self, user, password)",
+        "range": [15, 45],
+        "domain": "@authentication",
+        "tags": ["login", "session", "token"]
+      },
+      {
+        "file": "services/auth/handler.py",
+        "line": 97,
+        "symbol": "AuthHandler.refresh_token(self, token)",
+        "range": [97, 120],
+        "domain": "@authentication",
+        "tags": ["refresh", "token"]
+      },
+      {
+        "file": "services/auth/middleware.py",
+        "line": 42,
+        "symbol": "AuthMiddleware.validate_token(self, token)",
+        "range": [42, 60],
+        "domain": "@authentication",
+        "tags": ["validate", "token"]
+      },
+      {
+        "file": "services/api/serializer.py",
+        "line": 5,
+        "symbol": "UserSerializer",
+        "range": [5, 50],
+        "domain": "@api",
+        "tags": ["user", "serializer"]
+      },
+      {
+        "file": "services/api/serializer.py",
+        "line": 10,
+        "symbol": "UserSerializer.serialize(self, user)",
+        "range": [10, 25],
+        "domain": "@api",
+        "tags": ["serialize", "user"]
+      },
+      {
+        "file": "services/database/models.py",
+        "line": 8,
+        "symbol": "User(Base)",
+        "range": [8, 35],
+        "domain": "@database",
+        "tags": ["user", "model"]
+      },
+      {
+        "file": "services/database/models.py",
+        "line": 82,
+        "symbol": "Token(Base)",
+        "range": [82, 105],
+        "domain": "@database",
+        "tags": ["token", "model"]
+      },
+      {
+        "file": "services/database/queries.py",
+        "line": 5,
+        "symbol": "UserQueries",
+        "range": [5, 80],
+        "domain": "@database",
+        "tags": ["user", "queries"]
+      },
+      {
+        "file": "services/database/queries.py",
+        "line": 44,
+        "symbol": "UserQueries.create_user(self, email, password_hash)",
+        "range": [44, 60],
+        "domain": "@database",
+        "tags": ["create", "user"]
+      },
+      {
+        "file": "services/cache/redis_client.py",
+        "line": 15,
+        "symbol": "RedisCache.get(self, key)",
+        "range": [15, 30],
+        "domain": "@caching",
+        "tags": ["get", "cache"]
+      },
+      {
+        "file": "lib/utils/logger.py",
+        "line": 62,
+        "symbol": "get_log_level(level_name)",
+        "range": [62, 70],
+        "domain": "@logging",
+        "tags": ["get", "log", "level"]
+      },
+      {
+        "file": "lib/utils/config.py",
+        "line": 35,
+        "symbol": "Config.get_env(self, key, default)",
+        "range": [35, 50],
+        "domain": "@configuration",
+        "tags": ["get", "env"]
+      },
+      {
+        "file": "lib/utils/config.py",
+        "line": 72,
+        "symbol": "Config.get_database_url(self)",
+        "range": [72, 75],
+        "domain": "@configuration",
+        "tags": ["get", "database", "url"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 77,
+        "symbol": "TestAuth.test_token_refresh(self)",
+        "range": [77, 95],
+        "domain": "@testing",
+        "tags": ["test", "token", "refresh"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 15,
+        "symbol": "TestAPI.test_get_users(self)",
+        "range": [15, 35],
+        "domain": "@testing",
+        "tags": ["test", "get", "users"]
+      },
+      {
+        "file": "tests/test_api.py",
+        "line": 37,
+        "symbol": "TestAPI.test_create_user(self)",
+        "range": [37, 60],
+        "domain": "@testing",
+        "tags": ["test", "create", "user"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q20: Dotted query — 'app.post' tokenizes to app+post (OR search). Only 'app' has hits; 'post' has none.",
+    "query": "app.post",
+    "mode": "literal",
+    "flags": {},
+    "expected_tokenization": ["app", "post"],
+    "expected": [
+      {
+        "file": "services/api/router.py",
+        "line": 18,
+        "symbol": "Router.setup_routes(self, app)",
+        "range": [18, 35],
+        "domain": "@api",
+        "tags": ["setup", "routes", "app"]
+      },
+      {
+        "file": "cmd/server.py",
+        "line": 10,
+        "symbol": "create_app(config)",
+        "range": [10, 35],
+        "domain": "@deployment",
+        "tags": ["create", "app", "config"]
+      },
+      {
+        "file": "cmd/server.py",
+        "line": 37,
+        "symbol": "configure_logging(app, config)",
+        "range": [37, 55],
+        "domain": "@deployment",
+        "tags": ["configure", "logging", "app"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q21: Hyphenated query — 'tree-sitter' tokenizes to tree+sitter (OR search). Neither exists in index.",
+    "query": "tree-sitter",
+    "mode": "literal",
+    "flags": {},
+    "expected_tokenization": ["tree", "sitter"],
+    "expected": []
+  },
+  {
+    "_comment": "Q22: Unicode/special chars — 'resume' handled gracefully, no crash, no results",
+    "query": "r\u00e9sum\u00e9",
+    "mode": "literal",
+    "flags": {},
+    "expected": []
+  },
+  {
+    "_comment": "Q23: Max count — 'test' with max_count=3 limits to first 3 results only",
+    "query": "test",
+    "mode": "literal",
+    "flags": {"max_count": 3},
+    "expected": [
+      {
+        "file": "tests/test_auth.py",
+        "line": 8,
+        "symbol": "TestAuth(TestCase)",
+        "range": [8, 120],
+        "domain": "@testing",
+        "tags": ["test", "auth"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 15,
+        "symbol": "TestAuth.test_login_success(self)",
+        "range": [15, 35],
+        "domain": "@testing",
+        "tags": ["test", "login"]
+      },
+      {
+        "file": "tests/test_auth.py",
+        "line": 37,
+        "symbol": "TestAuth.test_login_invalid_password(self)",
+        "range": [37, 55],
+        "domain": "@testing",
+        "tags": ["test", "login", "password"]
+      }
+    ]
+  },
+  {
+    "_comment": "Q24: Quiet mode — 'config' with -q flag, results exist so exit code 0",
+    "query": "config",
+    "mode": "literal",
+    "flags": {"quiet": true},
+    "expected_exit_code": 0
+  },
+  {
+    "_comment": "Q25: Quiet mode no results — 'xyznothing' with -q flag, no results so exit code 1",
+    "query": "xyznothing",
+    "mode": "literal",
+    "flags": {"quiet": true},
+    "expected_exit_code": 1
+  },
+  {
+    "_comment": "Q26: Exclude glob — 'create' with --exclude='tests/*' skips test files",
+    "query": "create",
+    "mode": "literal",
+    "flags": {"exclude_glob": "tests/*"},
+    "expected": [
+      {
+        "file": "services/database/queries.py",
+        "line": 44,
+        "symbol": "UserQueries.create_user(self, email, password_hash)",
+        "range": [44, 60],
+        "domain": "@database",
+        "tags": ["create", "user"]
+      },
+      {
+        "file": "services/database/queries.py",
+        "line": 87,
+        "symbol": "SessionQueries.create_session(self, user_id, token)",
+        "range": [87, 105],
+        "domain": "@database",
+        "tags": ["create", "session", "token"]
+      },
+      {
+        "file": "cmd/server.py",
+        "line": 10,
+        "symbol": "create_app(config)",
+        "range": [10, 35],
+        "domain": "@deployment",
+        "tags": ["create", "app", "config"]
+      }
+    ]
+  }
+]

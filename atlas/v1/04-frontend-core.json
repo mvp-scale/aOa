@@ -1,0 +1,122 @@
+[
+  {
+    "domain": "components",
+    "terms": {
+      "rendering": ["render", "mount", "unmount", "update", "rerender", "virtual", "reconcile"],
+      "composition": ["props", "children", "slot", "hoc", "compound", "forward", "portal"],
+      "state": ["state", "ref", "context", "provider", "consumer", "derived", "computed"],
+      "lifecycle": ["effect", "cleanup", "memo", "lazy", "suspense", "boundary", "fallback"],
+      "patterns": ["container", "presentational", "headless", "controlled", "uncontrolled", "render", "compound"],
+      "styling": ["classname", "style", "css", "module", "scoped", "variant", "theme"],
+      "events": ["onclick", "onchange", "onsubmit", "handler", "listener", "propagate", "prevent"]
+    }
+  },
+  {
+    "domain": "state_management",
+    "terms": {
+      "stores": ["store", "slice", "module", "atom", "signal", "observable", "writable"],
+      "updates": ["dispatch", "action", "reducer", "mutation", "setter", "commit", "emit"],
+      "selectors": ["selector", "derived", "computed", "memoized", "reselect", "subscribe", "snapshot"],
+      "middleware": ["thunk", "saga", "effect", "epic", "logger", "devtools", "persist"],
+      "patterns": ["flux", "proxy", "immutable", "immer", "patch", "normalize", "denormalize"],
+      "frameworks": ["redux", "zustand", "mobx", "recoil", "jotai", "pinia", "vuex"],
+      "persistence": ["persist", "hydrate", "rehydrate", "storage", "migrate", "purge", "serialize"]
+    }
+  },
+  {
+    "domain": "routing",
+    "terms": {
+      "routes": ["route", "path", "param", "query", "wildcard", "dynamic", "nested"],
+      "navigation": ["navigate", "push", "replace", "back", "forward", "redirect", "link"],
+      "guards": ["guard", "middleware", "before", "after", "canactivate", "resolve", "loader"],
+      "history": ["history", "hash", "browser", "memory", "state", "location", "popstate"],
+      "splitting": ["lazy", "import", "chunk", "prefetch", "preload", "suspense", "loading"],
+      "patterns": ["layout", "outlet", "index", "catchall", "group", "parallel", "intercept"],
+      "frameworks": ["reactrouter", "nextjs", "nuxt", "svelte", "remix", "tanstack", "wouter"]
+    }
+  },
+  {
+    "domain": "forms",
+    "terms": {
+      "fields": ["input", "select", "checkbox", "radio", "textarea", "file", "hidden"],
+      "validation": ["required", "minlength", "maxlength", "pattern", "custom", "async", "schema"],
+      "state": ["dirty", "touched", "pristine", "valid", "invalid", "submitting", "submitted"],
+      "errors": ["error", "message", "field", "summary", "inline", "tooltip", "highlight"],
+      "arrays": ["fieldarray", "append", "remove", "swap", "move", "insert", "prepend"],
+      "frameworks": ["formik", "hookform", "yup", "zod", "vee", "vuelidate", "finalform"],
+      "patterns": ["wizard", "stepper", "multistep", "autosave", "debounce", "mask", "format"]
+    }
+  },
+  {
+    "domain": "styling",
+    "terms": {
+      "methodology": ["bem", "module", "cssinjs", "utility", "atomic", "scoped", "global"],
+      "theming": ["theme", "token", "variable", "dark", "light", "scheme", "palette"],
+      "responsive": ["breakpoint", "media", "container", "fluid", "grid", "flex", "adaptive"],
+      "preprocessors": ["sass", "less", "postcss", "tailwind", "styled", "emotion", "vanilla"],
+      "layout": ["flex", "grid", "absolute", "relative", "fixed", "sticky", "float"],
+      "animation": ["transition", "transform", "keyframe", "duration", "easing", "delay", "fill"],
+      "utilities": ["margin", "padding", "border", "shadow", "opacity", "zindex", "overflow"]
+    }
+  },
+  {
+    "domain": "animation",
+    "terms": {
+      "transitions": ["enter", "exit", "fade", "slide", "scale", "opacity", "duration"],
+      "keyframes": ["keyframe", "from", "to", "sequence", "stagger", "loop", "alternate"],
+      "physics": ["spring", "damping", "stiffness", "mass", "velocity", "bounce", "decay"],
+      "scroll": ["parallax", "intersection", "observer", "trigger", "progress", "pin", "scrub"],
+      "gesture": ["drag", "swipe", "pinch", "rotate", "pan", "inertia", "snap"],
+      "libraries": ["framer", "gsap", "lottie", "rive", "motion", "animejs", "popmotion"],
+      "performance": ["gpu", "composite", "wilchange", "requestanimation", "throttle", "raf", "repaint"]
+    }
+  },
+  {
+    "domain": "accessibility",
+    "terms": {
+      "semantics": ["aria", "role", "label", "describedby", "landmark", "heading", "region"],
+      "keyboard": ["tabindex", "focus", "trap", "skip", "shortcut", "roving", "arrow"],
+      "visual": ["contrast", "fontsize", "color", "reduced", "motion", "highcontrast", "zoom"],
+      "screen_reader": ["announce", "live", "polite", "assertive", "atomic", "relevant", "busy"],
+      "forms": ["label", "error", "required", "invalid", "autocomplete", "hint", "group"],
+      "testing": ["axe", "lighthouse", "wave", "wcag", "audit", "violation", "remediate"],
+      "patterns": ["disclosure", "dialog", "menu", "tab", "tree", "combobox", "listbox"]
+    }
+  },
+  {
+    "domain": "data_fetching",
+    "terms": {
+      "requests": ["fetch", "axios", "interceptor", "abort", "timeout", "cancel", "retry"],
+      "caching": ["swr", "stale", "revalidate", "invalidate", "optimistic", "prefetch", "dedupe"],
+      "pagination": ["cursor", "offset", "infinite", "virtual", "loadmore", "hasnext", "total"],
+      "mutations": ["mutate", "optimistic", "rollback", "invalidate", "refetch", "update", "create"],
+      "frameworks": ["reactquery", "tanstack", "apollo", "urql", "rtk", "swr", "trpc"],
+      "state": ["loading", "error", "success", "idle", "fetching", "stale", "fresh"],
+      "realtime": ["poll", "subscribe", "sse", "websocket", "refetch", "interval", "focus"]
+    }
+  },
+  {
+    "domain": "browser",
+    "terms": {
+      "storage": ["localstorage", "sessionstorage", "indexeddb", "cookie", "cache", "quota", "persist"],
+      "workers": ["worker", "serviceworker", "shared", "postmessage", "transfer", "terminate", "register"],
+      "apis": ["clipboard", "notification", "geolocation", "mediastream", "bluetooth", "usb", "serial"],
+      "events": ["listener", "delegate", "custom", "dispatch", "bubble", "capture", "passive"],
+      "navigation": ["pushstate", "replacestate", "popstate", "hash", "location", "history", "navigation"],
+      "performance": ["performance", "observer", "mark", "measure", "entry", "timing", "resource"],
+      "media": ["canvas", "webgl", "audio", "video", "mediaquery", "fullscreen", "picture"]
+    }
+  },
+  {
+    "domain": "dom",
+    "terms": {
+      "manipulation": ["createelement", "queryselector", "appendchild", "removechild", "clone", "fragment", "template"],
+      "rendering": ["ssr", "csr", "ssg", "isr", "hydrate", "stream", "progressive"],
+      "observation": ["mutationobserver", "intersectionobserver", "resizeobserver", "change", "attribute", "childlist", "subtree"],
+      "virtual": ["vdom", "diff", "patch", "reconcile", "fiber", "key", "batch"],
+      "shadow": ["shadow", "host", "slot", "custom", "template", "encapsulate", "pierce"],
+      "performance": ["reflow", "repaint", "layout", "composite", "debounce", "requestanimation", "idle"],
+      "selection": ["range", "selection", "caret", "anchor", "focus", "collapse", "extend"]
+    }
+  }
+]

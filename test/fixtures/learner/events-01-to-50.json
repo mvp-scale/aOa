@@ -1,0 +1,2109 @@
+[
+  {
+    "prompt_number": 1,
+    "observe": {
+      "keywords": [
+        "token",
+        "jwt"
+      ],
+      "terms": [
+        "token"
+      ],
+      "domains": [
+        "@authentication"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "jwt",
+          "session"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 5,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 2,
+    "observe": {
+      "keywords": [
+        "login",
+        "endpoint"
+      ],
+      "terms": [
+        "login",
+        "endpoint"
+      ],
+      "domains": [
+        "@authentication",
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 10,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 3,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "route",
+        "model"
+      ],
+      "terms": [
+        "login",
+        "route",
+        "model"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "route",
+          "route"
+        ],
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "route",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 15,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 4,
+    "observe": {
+      "keywords": [
+        "handler",
+        "middleware",
+        "test"
+      ],
+      "terms": [
+        "handler",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "handler",
+          "handler"
+        ],
+        [
+          "middleware",
+          "handler"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "handler",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/routes.py",
+      "offset": 20,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 5,
+    "observe": {
+      "keywords": [
+        "token",
+        "jwt"
+      ],
+      "terms": [
+        "token"
+      ],
+      "domains": [
+        "@authentication"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "jwt",
+          "session"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 25,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 6,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "route"
+      ],
+      "terms": [
+        "login",
+        "route"
+      ],
+      "domains": [
+        "@authentication",
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "route",
+          "route"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "route",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 30,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 7,
+    "observe": {
+      "keywords": [
+        "model"
+      ],
+      "terms": [
+        "model"
+      ],
+      "domains": [
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/queries.py",
+      "offset": 35,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 8,
+    "observe": {
+      "keywords": [
+        "login",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 40,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 9,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "test",
+        "mock"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "mock",
+          "mock"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 45,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 10,
+    "observe": {
+      "keywords": [
+        "login",
+        "endpoint",
+        "logger"
+      ],
+      "terms": [
+        "login",
+        "endpoint",
+        "logger"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@logging"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "logger",
+          "logger"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "logger",
+          "@logging"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 50,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 11,
+    "observe": {
+      "keywords": [
+        "token",
+        "jwt",
+        "endpoint",
+        "model"
+      ],
+      "terms": [
+        "token",
+        "endpoint",
+        "model"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "jwt",
+          "session"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 55,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 12,
+    "observe": {
+      "keywords": [
+        "handler",
+        "middleware"
+      ],
+      "terms": [
+        "handler"
+      ],
+      "domains": [
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "handler",
+          "handler"
+        ],
+        [
+          "middleware",
+          "handler"
+        ]
+      ],
+      "term_domains": [
+        [
+          "handler",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/routes.py",
+      "offset": 60,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 13,
+    "observe": {
+      "keywords": [
+        "token",
+        "jwt",
+        "model"
+      ],
+      "terms": [
+        "token",
+        "model"
+      ],
+      "domains": [
+        "@authentication",
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "jwt",
+          "session"
+        ],
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 65,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 14,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "test"
+      ],
+      "terms": [
+        "endpoint",
+        "test"
+      ],
+      "domains": [
+        "@api",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/routes.py",
+      "offset": 70,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 15,
+    "observe": {
+      "keywords": [
+        "query",
+        "select",
+        "cache",
+        "redis"
+      ],
+      "terms": [
+        "query",
+        "cache"
+      ],
+      "domains": [
+        "@database",
+        "@caching"
+      ],
+      "keyword_terms": [
+        [
+          "query",
+          "query"
+        ],
+        [
+          "select",
+          "query"
+        ],
+        [
+          "cache",
+          "cache"
+        ],
+        [
+          "redis",
+          "cache"
+        ]
+      ],
+      "term_domains": [
+        [
+          "query",
+          "@database"
+        ],
+        [
+          "cache",
+          "@caching"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/queries.py",
+      "offset": 75,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 16,
+    "observe": {
+      "keywords": [
+        "login",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 80,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 17,
+    "observe": {
+      "keywords": [
+        "token",
+        "jwt",
+        "model"
+      ],
+      "terms": [
+        "token",
+        "model"
+      ],
+      "domains": [
+        "@authentication",
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "jwt",
+          "session"
+        ],
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 85,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 18,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "route"
+      ],
+      "terms": [
+        "login",
+        "route"
+      ],
+      "domains": [
+        "@authentication",
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "route",
+          "route"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "route",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 90,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 19,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "model"
+      ],
+      "terms": [
+        "endpoint",
+        "model"
+      ],
+      "domains": [
+        "@api",
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 95,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 20,
+    "observe": {
+      "keywords": [
+        "login",
+        "test",
+        "assert"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "assert",
+          "assert"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 100,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 21,
+    "observe": {
+      "keywords": [
+        "model"
+      ],
+      "terms": [
+        "model"
+      ],
+      "domains": [
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/queries.py",
+      "offset": 105,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 22,
+    "observe": {
+      "keywords": [
+        "endpoint"
+      ],
+      "terms": [
+        "endpoint"
+      ],
+      "domains": [
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/routes.py",
+      "offset": 110,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 23,
+    "observe": {
+      "keywords": [
+        "model"
+      ],
+      "terms": [
+        "model"
+      ],
+      "domains": [
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/queries.py",
+      "offset": 115,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 24,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "test",
+        "mock"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "mock",
+          "mock"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 120,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 25,
+    "observe": {
+      "keywords": [
+        "token",
+        "jwt",
+        "test",
+        "assert"
+      ],
+      "terms": [
+        "token",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "jwt",
+          "session"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "assert",
+          "assert"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 125,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 26,
+    "observe": {
+      "keywords": [
+        "login",
+        "endpoint"
+      ],
+      "terms": [
+        "login",
+        "endpoint"
+      ],
+      "domains": [
+        "@authentication",
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 130,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 27,
+    "observe": {
+      "keywords": [
+        "route",
+        "model"
+      ],
+      "terms": [
+        "route",
+        "model"
+      ],
+      "domains": [
+        "@api",
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "route",
+          "route"
+        ],
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "route",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 135,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 28,
+    "observe": {
+      "keywords": [
+        "login"
+      ],
+      "terms": [
+        "login"
+      ],
+      "domains": [
+        "@authentication"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 140,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 29,
+    "observe": {
+      "keywords": [
+        "endpoint"
+      ],
+      "terms": [
+        "endpoint"
+      ],
+      "domains": [
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 145,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 30,
+    "observe": {
+      "keywords": [
+        "route",
+        "test",
+        "assert",
+        "logger"
+      ],
+      "terms": [
+        "route",
+        "test",
+        "logger"
+      ],
+      "domains": [
+        "@api",
+        "@testing",
+        "@logging"
+      ],
+      "keyword_terms": [
+        [
+          "route",
+          "route"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "assert",
+          "assert"
+        ],
+        [
+          "logger",
+          "logger"
+        ]
+      ],
+      "term_domains": [
+        [
+          "route",
+          "@api"
+        ],
+        [
+          "test",
+          "@testing"
+        ],
+        [
+          "logger",
+          "@logging"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/routes.py",
+      "offset": 150,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 31,
+    "observe": {
+      "keywords": [
+        "model"
+      ],
+      "terms": [
+        "model"
+      ],
+      "domains": [
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/queries.py",
+      "offset": 155,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 32,
+    "observe": {
+      "keywords": [
+        "login"
+      ],
+      "terms": [
+        "login"
+      ],
+      "domains": [
+        "@authentication"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 160,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 33,
+    "observe": {
+      "keywords": [
+        "login",
+        "session"
+      ],
+      "terms": [
+        "login"
+      ],
+      "domains": [
+        "@authentication"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 165,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 34,
+    "observe": {
+      "keywords": [
+        "login",
+        "endpoint"
+      ],
+      "terms": [
+        "login",
+        "endpoint"
+      ],
+      "domains": [
+        "@authentication",
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 170,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 35,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "query",
+        "select"
+      ],
+      "terms": [
+        "endpoint",
+        "query"
+      ],
+      "domains": [
+        "@api",
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "query",
+          "query"
+        ],
+        [
+          "select",
+          "query"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "query",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 175,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 36,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "test",
+        "mock"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "test",
+          "test"
+        ],
+        [
+          "mock",
+          "mock"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 180,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 37,
+    "observe": {
+      "keywords": [
+        "endpoint"
+      ],
+      "terms": [
+        "endpoint"
+      ],
+      "domains": [
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 185,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 38,
+    "observe": {
+      "keywords": [
+        "endpoint"
+      ],
+      "terms": [
+        "endpoint"
+      ],
+      "domains": [
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/routes.py",
+      "offset": 190,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 39,
+    "observe": {
+      "keywords": [
+        "model"
+      ],
+      "terms": [
+        "model"
+      ],
+      "domains": [
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/db/queries.py",
+      "offset": 195,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 40,
+    "observe": {
+      "keywords": [
+        "login"
+      ],
+      "terms": [
+        "login"
+      ],
+      "domains": [
+        "@authentication"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 200,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 41,
+    "observe": {
+      "keywords": [
+        "token",
+        "jwt",
+        "test"
+      ],
+      "terms": [
+        "token",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "jwt",
+          "session"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 205,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 42,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "route"
+      ],
+      "terms": [
+        "login",
+        "route"
+      ],
+      "domains": [
+        "@authentication",
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "route",
+          "route"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "route",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 210,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 43,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "model"
+      ],
+      "terms": [
+        "endpoint",
+        "model"
+      ],
+      "domains": [
+        "@api",
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 215,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 44,
+    "observe": {
+      "keywords": [
+        "login"
+      ],
+      "terms": [
+        "login"
+      ],
+      "domains": [
+        "@authentication"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 220,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 45,
+    "observe": {
+      "keywords": [
+        "route",
+        "cache",
+        "redis"
+      ],
+      "terms": [
+        "route",
+        "cache"
+      ],
+      "domains": [
+        "@api",
+        "@caching"
+      ],
+      "keyword_terms": [
+        [
+          "route",
+          "route"
+        ],
+        [
+          "cache",
+          "cache"
+        ],
+        [
+          "redis",
+          "cache"
+        ]
+      ],
+      "term_domains": [
+        [
+          "route",
+          "@api"
+        ],
+        [
+          "cache",
+          "@caching"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 225,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 46,
+    "observe": {
+      "keywords": [
+        "login",
+        "test"
+      ],
+      "terms": [
+        "login",
+        "test"
+      ],
+      "domains": [
+        "@authentication",
+        "@testing"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "test",
+          "test"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "test",
+          "@testing"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 230,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 47,
+    "observe": {
+      "keywords": [
+        "endpoint",
+        "model"
+      ],
+      "terms": [
+        "endpoint",
+        "model"
+      ],
+      "domains": [
+        "@api",
+        "@database"
+      ],
+      "keyword_terms": [
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "model",
+          "model"
+        ]
+      ],
+      "term_domains": [
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "model",
+          "@database"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/api/middleware.py",
+      "offset": 235,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 48,
+    "observe": {
+      "keywords": [
+        "login",
+        "session",
+        "handler",
+        "middleware"
+      ],
+      "terms": [
+        "login",
+        "handler"
+      ],
+      "domains": [
+        "@authentication",
+        "@api"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "session",
+          "session"
+        ],
+        [
+          "handler",
+          "handler"
+        ],
+        [
+          "middleware",
+          "handler"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "handler",
+          "@api"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/handler.py",
+      "offset": 240,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 49,
+    "observe": {
+      "keywords": [
+        "token",
+        "jwt"
+      ],
+      "terms": [
+        "token"
+      ],
+      "domains": [
+        "@authentication"
+      ],
+      "keyword_terms": [
+        [
+          "token",
+          "token"
+        ],
+        [
+          "jwt",
+          "session"
+        ]
+      ],
+      "term_domains": [
+        [
+          "token",
+          "@authentication"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/session.py",
+      "offset": 245,
+      "limit": 30
+    }
+  },
+  {
+    "prompt_number": 50,
+    "observe": {
+      "keywords": [
+        "login",
+        "endpoint",
+        "logger"
+      ],
+      "terms": [
+        "login",
+        "endpoint",
+        "logger"
+      ],
+      "domains": [
+        "@authentication",
+        "@api",
+        "@logging"
+      ],
+      "keyword_terms": [
+        [
+          "login",
+          "login"
+        ],
+        [
+          "endpoint",
+          "endpoint"
+        ],
+        [
+          "logger",
+          "logger"
+        ]
+      ],
+      "term_domains": [
+        [
+          "login",
+          "@authentication"
+        ],
+        [
+          "endpoint",
+          "@api"
+        ],
+        [
+          "logger",
+          "@logging"
+        ]
+      ]
+    },
+    "file_read": {
+      "file": "services/auth/token.py",
+      "offset": 250,
+      "limit": 30
+    }
+  }
+]

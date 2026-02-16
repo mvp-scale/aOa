@@ -1,0 +1,74 @@
+[
+  {
+    "domain": "authentication",
+    "terms": {
+      "login": ["signin", "signout", "logout", "authenticate", "unauthenticated", "credential", "login"],
+      "password": ["bcrypt", "argon2", "scrypt", "salt", "pepper", "hash", "plaintext"],
+      "token": ["jwt", "bearer", "refresh", "expiry", "claims", "decode", "verify"],
+      "oauth": ["pkce", "authorization", "redirect", "provider", "consent", "scope", "grant"],
+      "mfa": ["totp", "otp", "recovery", "verification", "factor", "challenge", "enroll"],
+      "sso": ["saml", "federation", "idp", "assertion", "relay", "metadata", "certificate"],
+      "session": ["cookie", "httponly", "samesite", "secure", "invalidate", "renew", "expire"]
+    }
+  },
+  {
+    "domain": "authorization",
+    "terms": {
+      "rbac": ["role", "permission", "assign", "hierarchy", "admin", "moderator", "grant"],
+      "policy": ["allow", "deny", "evaluate", "rule", "condition", "enforce", "decision"],
+      "scope": ["scope", "consent", "resource", "access", "restrict", "privilege", "entitlement"],
+      "acl": ["owner", "group", "inherit", "entry", "principal", "trustee", "mask"],
+      "guard": ["guard", "protect", "authorize", "forbidden", "unauthorized", "intercept", "gate"],
+      "middleware": ["before", "after", "filter", "chain", "handler", "wrapper", "decorator"],
+      "tenant": ["tenant", "isolation", "partition", "organization", "workspace", "account", "boundary"]
+    }
+  },
+  {
+    "domain": "user_management",
+    "terms": {
+      "registration": ["signup", "register", "onboard", "invite", "confirm", "activate", "welcome"],
+      "profile": ["avatar", "bio", "display", "preference", "setting", "username", "email"],
+      "account": ["deactivate", "suspend", "delete", "ban", "archive", "restore", "close"],
+      "identity": ["claim", "attribute", "identifier", "subject", "issuer", "audience", "principal"],
+      "verification": ["verify", "confirm", "validate", "pending", "approved", "rejected", "status"],
+      "search": ["lookup", "find", "filter", "paginate", "directory", "list", "browse"],
+      "import": ["bulk", "csv", "batch", "migrate", "sync", "provision", "seed"]
+    }
+  },
+  {
+    "domain": "session",
+    "terms": {
+      "storage": ["redis", "memcached", "memory", "file", "database", "ttl", "evict"],
+      "lifecycle": ["create", "destroy", "expire", "renew", "timeout", "idle", "absolute"],
+      "security": ["fixation", "hijack", "binding", "fingerprint", "rotate", "invalidate", "revoke"],
+      "cookie": ["domain", "path", "secure", "httponly", "samesite", "maxage", "encrypt"],
+      "tracking": ["visitor", "anonymous", "identified", "merge", "device", "browser", "ip"],
+      "concurrency": ["limit", "kick", "notify", "force", "priority", "queue", "throttle"],
+      "distributed": ["sticky", "replicate", "centralize", "cluster", "failover", "serialize", "consistent"]
+    }
+  },
+  {
+    "domain": "encryption",
+    "terms": {
+      "symmetric": ["aes", "encrypt", "decrypt", "key", "iv", "nonce", "cipher"],
+      "asymmetric": ["rsa", "ecdsa", "sign", "verify", "public", "private", "certificate"],
+      "hashing": ["sha256", "sha512", "md5", "digest", "checksum", "hmac", "integrity"],
+      "secrets": ["vault", "kms", "rotate", "env", "dotenv", "parameter", "ssm"],
+      "tls": ["certificate", "chain", "ca", "pem", "pkcs", "handshake", "pinning"],
+      "encoding": ["base64", "hex", "encode", "decode", "serialize", "marshal", "unmarshal"],
+      "random": ["uuid", "csprng", "entropy", "seed", "nonce", "salt", "generate"]
+    }
+  },
+  {
+    "domain": "directory",
+    "terms": {
+      "ldap": ["bind", "search", "dn", "attribute", "entry", "filter", "connection"],
+      "active_directory": ["ou", "gpo", "domain", "controller", "forest", "trust", "kerberos"],
+      "provisioning": ["scim", "sync", "lifecycle", "deprovision", "reconcile", "import", "connector"],
+      "groups": ["member", "nested", "dynamic", "distribution", "security", "assign", "enumerate"],
+      "schema": ["objectclass", "attribute", "syntax", "oid", "extension", "custom", "auxiliary"],
+      "authentication": ["bind", "simple", "sasl", "kerberos", "ntlm", "negotiate", "digest"],
+      "replication": ["replica", "multimaster", "changelog", "conflict", "topology", "partition", "referral"]
+    }
+  }
+]
