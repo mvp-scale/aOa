@@ -35,9 +35,10 @@ type App struct {
 	Reader   *claude.Reader
 	Index    *ports.Index
 
-	mu           sync.Mutex             // serializes learner access (searches are concurrent)
-	promptN      uint32                 // prompt counter (incremented on each user input)
-	lastAutotune *learner.AutotuneResult // most recent autotune result (for status line)
+	mu             sync.Mutex             // serializes learner access (searches are concurrent)
+	promptN        uint32                 // prompt counter (incremented on each user input)
+	lastAutotune   *learner.AutotuneResult // most recent autotune result (for status line)
+	statusLinePath string                 // project-local path for status line file
 }
 
 // Config holds initialization parameters for the App.
@@ -119,17 +120,21 @@ func New(cfg Config) (*App, error) {
 		ProjectRoot: cfg.ProjectRoot,
 	})
 
+	// Status line goes alongside the DB in .aoa/
+	statusPath := filepath.Join(cfg.ProjectRoot, ".aoa", status.StatusFile)
+
 	a := &App{
-		ProjectRoot: cfg.ProjectRoot,
-		ProjectID:   cfg.ProjectID,
-		Store:       store,
-		Watcher:     watcher,
-		Enricher:    enr,
-		Engine:      engine,
-		Learner:     lrn,
-		Reader:      reader,
-		Index:       idx,
-		promptN:     lrn.PromptCount(),
+		ProjectRoot:    cfg.ProjectRoot,
+		ProjectID:      cfg.ProjectID,
+		Store:          store,
+		Watcher:        watcher,
+		Enricher:       enr,
+		Engine:         engine,
+		Learner:        lrn,
+		Reader:         reader,
+		Index:          idx,
+		promptN:        lrn.PromptCount(),
+		statusLinePath: statusPath,
 	}
 
 	// Create server with App as query provider (for domains, stats, etc.)
@@ -277,7 +282,7 @@ func (a *App) writeStatus(autotune *learner.AutotuneResult) {
 		a.lastAutotune = autotune
 	}
 	line := status.Generate(a.Learner.State(), a.lastAutotune)
-	_ = status.Write(status.DefaultPath, line)
+	_ = status.Write(a.statusLinePath, line)
 }
 
 // LearnerSnapshot returns a deep copy of the current learner state.

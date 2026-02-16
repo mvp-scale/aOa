@@ -19,7 +19,8 @@ import (
 )
 
 // DefaultPath is where the status line is written.
-const DefaultPath = "/tmp/aoa-status-line.txt"
+// StatusFile is the filename within the .aoa directory where the status line is written.
+const StatusFile = "status-line.txt"
 
 // Generate produces a status line string from current learner state.
 // If autotune is non-nil, autotune stats are included.
