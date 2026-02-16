@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/corey/aoa-go/internal/adapters/socket"
+	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +21,7 @@ func runLocate(cmd *cobra.Command, args []string) error {
 	client := socket.NewClient(sockPath)
 
 	if !client.Ping() {
-		return fmt.Errorf("daemon not running. Start with: aoa-go daemon start")
+		return fmt.Errorf("daemon not running. Start with: aoa daemon start")
 	}
 
 	result, err := client.Files("", args[0])

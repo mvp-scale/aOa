@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/corey/aoa-go/internal/adapters/socket"
+	"github.com/corey/aoa/internal/adapters/socket"
 )
 
 // ANSI color codes for terminal output.
@@ -69,7 +69,7 @@ func formatSearchResult(result *socket.SearchResult, countOnly, quiet bool) stri
 // formatHealth formats a HealthResult for terminal display.
 func formatHealth(h *socket.HealthResult) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s⚡ aOa-go daemon%s\n", colorBold, colorReset))
+	sb.WriteString(fmt.Sprintf("%s⚡ aOa daemon%s\n", colorBold, colorReset))
 	sb.WriteString(fmt.Sprintf("  Status:  %s%s%s\n", colorGreen, h.Status, colorReset))
 	sb.WriteString(fmt.Sprintf("  Files:   %d\n", h.FileCount))
 	sb.WriteString(fmt.Sprintf("  Tokens:  %d\n", h.TokenCount))
@@ -116,7 +116,7 @@ func formatDomains(result *socket.DomainsResult) string {
 // formatStats formats a StatsResult for terminal display.
 func formatStats(result *socket.StatsResult) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s⚡ aOa-go stats%s\n", colorBold, colorReset))
+	sb.WriteString(fmt.Sprintf("%s⚡ aOa stats%s\n", colorBold, colorReset))
 	sb.WriteString(fmt.Sprintf("  Prompts:     %d\n", result.PromptCount))
 	sb.WriteString(fmt.Sprintf("  Domains:     %d (%d core, %d context)\n", result.DomainCount, result.CoreCount, result.ContextCount))
 	sb.WriteString(fmt.Sprintf("  Keywords:    %d\n", result.KeywordCount))

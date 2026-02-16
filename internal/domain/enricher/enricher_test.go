@@ -3,7 +3,7 @@ package enricher
 import (
 	"testing"
 
-	"github.com/corey/aoa-go/atlas"
+	"github.com/corey/aoa/atlas"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

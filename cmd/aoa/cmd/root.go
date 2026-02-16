@@ -8,8 +8,8 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "aoa-go",
-	Short: "aOa-go — semantic code search engine",
+	Use:   "aoa",
+	Short: "aOa — semantic code search engine",
 	Long:  "Fast symbol lookup, regex search, and domain-aware results for codebases.",
 }
 

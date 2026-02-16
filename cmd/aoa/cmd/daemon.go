@@ -6,14 +6,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/corey/aoa-go/internal/adapters/socket"
-	"github.com/corey/aoa-go/internal/app"
+	"github.com/corey/aoa/internal/adapters/socket"
+	"github.com/corey/aoa/internal/app"
 	"github.com/spf13/cobra"
 )
 
 var daemonCmd = &cobra.Command{
 	Use:   "daemon",
-	Short: "Manage the aOa-go daemon",
+	Short: "Manage the aOa daemon",
 }
 
 var daemonStartCmd = &cobra.Command{
@@ -54,7 +54,7 @@ func runDaemonStart(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("⚡ aOa-go daemon started at %s\n", sockPath)
+	fmt.Printf("⚡ aOa daemon started at %s\n", sockPath)
 
 	// Wait for shutdown signal
 	sigCh := make(chan os.Signal, 1)

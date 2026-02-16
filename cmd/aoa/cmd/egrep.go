@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/corey/aoa-go/internal/adapters/socket"
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/adapters/socket"
+	"github.com/corey/aoa/internal/ports"
 	"github.com/spf13/cobra"
 )
 
@@ -79,7 +79,7 @@ func runEgrepSearch(pattern string) error {
 		return nil
 	}
 
-	return fmt.Errorf("daemon not running. Start with: aoa-go daemon start")
+	return fmt.Errorf("daemon not running. Start with: aoa daemon start")
 }
 
 // buildEgrepPattern combines args and -e patterns into a single regex.

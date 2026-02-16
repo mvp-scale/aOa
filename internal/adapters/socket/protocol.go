@@ -1,4 +1,4 @@
-// Package socket implements a JSON-over-Unix-socket protocol for the aOa-go daemon.
+// Package socket implements a JSON-over-Unix-socket protocol for the aOa daemon.
 // The protocol uses newline-delimited JSON: each message is one JSON object + \n.
 package socket
 
@@ -7,18 +7,18 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // SocketPath returns the Unix socket path for a given project root.
-// Format: /tmp/aoa-go-{first12hex}.sock
+// Format: /tmp/aoa-{first12hex}.sock
 func SocketPath(projectRoot string) string {
 	abs, err := filepath.Abs(projectRoot)
 	if err != nil {
 		abs = projectRoot
 	}
 	h := sha256.Sum256([]byte(abs))
-	return fmt.Sprintf("/tmp/aoa-go-%x.sock", h[:6])
+	return fmt.Sprintf("/tmp/aoa-%x.sock", h[:6])
 }
 
 // Method names for the protocol.

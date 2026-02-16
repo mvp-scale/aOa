@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

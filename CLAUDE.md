@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Isolation Rule
 
-**aOa-go is a standalone project.** Do NOT import, reference, copy, or depend on anything from outside the `aOa-go/` directory. No imports from the parent `aOa/` codebase. All dependencies come from Go modules (`go.mod`) or are written fresh here. This is a clean-room rewrite guided by behavioral specs and test fixtures in `test/fixtures/`, not by copying Python code.
+**aOa is a standalone project.** Do NOT import, reference, copy, or depend on anything from outside the `aOa/` directory. No imports from the parent `aOa/` codebase. All dependencies come from Go modules (`go.mod`) or are written fresh here. This is a clean-room rewrite guided by behavioral specs and test fixtures in `test/fixtures/`, not by copying Python code.
 
 ## GO-BOARD
 
@@ -22,7 +22,7 @@ go test ./... -bench=. -benchmem -run=^$                  # Benchmarks only
 make check                    # Local CI: vet + lint + test (run before committing)
 ```
 
-The module path is `github.com/corey/aoa-go`. The binary entry point is `cmd/aoa/main.go`.
+The module path is `github.com/corey/aoa`. The binary entry point is `cmd/aoa/main.go`.
 
 ## Architecture
 
@@ -44,7 +44,7 @@ internal/
     status/           Status line generation + file write
   adapters/
     bbolt/            Persistence (project-scoped buckets, JSON serialization)
-    socket/           Unix socket daemon (JSON-over-socket, /tmp/aoa-go-{hash}.sock)
+    socket/           Unix socket daemon (JSON-over-socket, /tmp/aoa-{hash}.sock)
     tailer/           Session log tailer (defensive JSONL parser, UUID dedup)
     claude/           Claude Code adapter (Session Prism: raw JSONL -> canonical events)
     treesitter/       28-language structural parser (CGo, compiled-in grammars)
@@ -80,8 +80,8 @@ Searches also generate learning signals via `searchObserver` in `app.go`.
 | Purpose | Path |
 |---------|------|
 | Database | `{ProjectRoot}/.aoa/aoa.db` (bbolt, project-scoped) |
-| Status line | `{ProjectRoot}/.aoa/status-line.txt` |
-| Socket | `/tmp/aoa-go-{sha256(root)[:12]}.sock` |
+| Status line | `{ProjectRoot}/.aoa/status.json` |
+| Socket | `/tmp/aoa-{sha256(root)[:12]}.sock` |
 | Session logs | `~/.claude/projects/{encoded-path}/*.jsonl` (read-only) |
 
 ## Behavioral Parity

@@ -1,13 +1,13 @@
 package status
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
-	"github.com/corey/aoa-go/internal/domain/learner"
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/domain/learner"
+	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,14 +22,13 @@ func TestGenerate_Basic(t *testing.T) {
 		},
 	}
 
-	line := GeneratePlain(state, nil)
-	assert.Contains(t, line, "150 intents")
-	assert.Contains(t, line, "3 domains")
-	assert.Contains(t, line, "@authentication")
-	assert.Contains(t, line, "@rest_api")
-	assert.Contains(t, line, "@database")
-	// No autotune stats when nil
-	assert.NotContains(t, line, "promoted:")
+	data := Generate(state, nil)
+	assert.Equal(t, uint32(150), data.Intents)
+	assert.Equal(t, 3, data.Domains)
+	assert.Contains(t, data.TopDomains, "authentication")
+	assert.Contains(t, data.TopDomains, "rest_api")
+	assert.Contains(t, data.TopDomains, "database")
+	assert.Nil(t, data.Autotune)
 }
 
 func TestGenerate_WithAutotune(t *testing.T) {
@@ -46,12 +45,13 @@ func TestGenerate_WithAutotune(t *testing.T) {
 		Pruned:   3,
 	}
 
-	line := GeneratePlain(state, result)
-	assert.Contains(t, line, "200 intents")
-	assert.Contains(t, line, "promoted:1")
-	assert.Contains(t, line, "demoted:2")
-	assert.Contains(t, line, "decayed:8")
-	assert.Contains(t, line, "pruned:3")
+	data := Generate(state, result)
+	assert.Equal(t, uint32(200), data.Intents)
+	require.NotNil(t, data.Autotune)
+	assert.Equal(t, 1, data.Autotune.Promoted)
+	assert.Equal(t, 2, data.Autotune.Demoted)
+	assert.Equal(t, 8, data.Autotune.Decayed)
+	assert.Equal(t, 3, data.Autotune.Pruned)
 }
 
 func TestGenerate_EmptyState(t *testing.T) {
@@ -59,9 +59,10 @@ func TestGenerate_EmptyState(t *testing.T) {
 		DomainMeta: map[string]*ports.DomainMeta{},
 	}
 
-	line := GeneratePlain(state, nil)
-	assert.Contains(t, line, "0 intents")
-	assert.Contains(t, line, "0 domains")
+	data := Generate(state, nil)
+	assert.Equal(t, uint32(0), data.Intents)
+	assert.Equal(t, 0, data.Domains)
+	assert.Empty(t, data.TopDomains)
 }
 
 func TestGenerate_TopDomainsLimitedTo3(t *testing.T) {
@@ -76,13 +77,11 @@ func TestGenerate_TopDomainsLimitedTo3(t *testing.T) {
 		},
 	}
 
-	line := GeneratePlain(state, nil)
-	// Should show top 3 only
-	assert.Contains(t, line, "@a")
-	assert.Contains(t, line, "@b")
-	assert.Contains(t, line, "@c")
-	assert.NotContains(t, line, "@d")
-	assert.NotContains(t, line, "@e")
+	data := Generate(state, nil)
+	require.Len(t, data.TopDomains, 3)
+	assert.Equal(t, "a", data.TopDomains[0])
+	assert.Equal(t, "b", data.TopDomains[1])
+	assert.Equal(t, "c", data.TopDomains[2])
 }
 
 func TestGenerate_SkipsDeprecatedDomains(t *testing.T) {
@@ -94,9 +93,9 @@ func TestGenerate_SkipsDeprecatedDomains(t *testing.T) {
 		},
 	}
 
-	line := GeneratePlain(state, nil)
-	assert.Contains(t, line, "@active_one")
-	assert.NotContains(t, line, "@deprecated_x")
+	data := Generate(state, nil)
+	require.Len(t, data.TopDomains, 1)
+	assert.Equal(t, "active_one", data.TopDomains[0])
 }
 
 func TestGenerate_SkipsZeroHitDomains(t *testing.T) {
@@ -108,45 +107,46 @@ func TestGenerate_SkipsZeroHitDomains(t *testing.T) {
 		},
 	}
 
-	line := GeneratePlain(state, nil)
-	assert.Contains(t, line, "@active")
-	assert.NotContains(t, line, "@zerohit")
+	data := Generate(state, nil)
+	require.Len(t, data.TopDomains, 1)
+	assert.Equal(t, "active", data.TopDomains[0])
 }
 
-func TestGenerate_ColoredVersion(t *testing.T) {
-	state := &ports.LearnerState{
-		PromptCount: 42,
-		DomainMeta:  map[string]*ports.DomainMeta{},
+func TestWriteJSON_CreatesFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "status.json")
+
+	data := &StatusData{
+		Intents:    100,
+		Domains:    3,
+		TopDomains: []string{"auth", "api"},
 	}
+	err := WriteJSON(path, data)
+	require.NoError(t, err)
 
-	line := Generate(state, nil)
-	// Should contain ANSI escape codes
-	assert.Contains(t, line, "\033[96m")
-	assert.Contains(t, line, "42 intents")
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	var loaded StatusData
+	require.NoError(t, json.Unmarshal(raw, &loaded))
+	assert.Equal(t, uint32(100), loaded.Intents)
+	assert.Equal(t, 3, loaded.Domains)
+	assert.Equal(t, []string{"auth", "api"}, loaded.TopDomains)
 }
 
-func TestWrite_CreatesFile(t *testing.T) {
+func TestWriteJSON_Overwrites(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "status.txt")
+	path := filepath.Join(dir, "status.json")
 
-	err := Write(path, "⚡ aOa-go │ 100 intents")
+	require.NoError(t, WriteJSON(path, &StatusData{Intents: 1}))
+	require.NoError(t, WriteJSON(path, &StatusData{Intents: 2}))
+
+	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Equal(t, "⚡ aOa-go │ 100 intents\n", string(data))
-}
-
-func TestWrite_Overwrites(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "status.txt")
-
-	require.NoError(t, Write(path, "old"))
-	require.NoError(t, Write(path, "new"))
-
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Equal(t, "new\n", string(data))
+	var loaded StatusData
+	require.NoError(t, json.Unmarshal(raw, &loaded))
+	assert.Equal(t, uint32(2), loaded.Intents)
 }
 
 func TestTopDomains_SortedByHits(t *testing.T) {
@@ -160,21 +160,23 @@ func TestTopDomains_SortedByHits(t *testing.T) {
 
 	top := topDomains(state, 3)
 	require.Len(t, top, 3)
-	assert.Equal(t, "@high", top[0])
-	assert.Equal(t, "@mid", top[1])
-	assert.Equal(t, "@low", top[2])
+	assert.Equal(t, "high", top[0])
+	assert.Equal(t, "mid", top[1])
+	assert.Equal(t, "low", top[2])
 }
 
-func TestGeneratePlain_PipeDelimited(t *testing.T) {
+func TestGenerate_JSONRoundtrip(t *testing.T) {
 	state := &ports.LearnerState{
 		PromptCount: 50,
 		DomainMeta:  map[string]*ports.DomainMeta{},
 	}
 
-	line := GeneratePlain(state, nil)
-	parts := strings.Split(line, " │ ")
-	require.GreaterOrEqual(t, len(parts), 3)
-	assert.Equal(t, "⚡ aOa-go", parts[0])
-	assert.Equal(t, "50 intents", parts[1])
-	assert.Equal(t, "0 domains", parts[2])
+	data := Generate(state, nil)
+	b, err := json.Marshal(data)
+	require.NoError(t, err)
+
+	var loaded StatusData
+	require.NoError(t, json.Unmarshal(b, &loaded))
+	assert.Equal(t, uint32(50), loaded.Intents)
+	assert.Equal(t, 0, loaded.Domains)
 }

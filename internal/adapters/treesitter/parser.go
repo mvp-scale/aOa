@@ -12,7 +12,7 @@ import (
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // Symbol represents an extracted code symbol before it becomes a SymbolMeta.

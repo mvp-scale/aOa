@@ -1,4 +1,4 @@
-# aOa-go Language Support
+# aOa Language Support
 
 ## Compiled-In Grammars (28 languages)
 

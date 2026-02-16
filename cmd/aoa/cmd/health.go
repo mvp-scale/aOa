@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/corey/aoa-go/internal/adapters/socket"
+	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +19,7 @@ func runHealth(cmd *cobra.Command, args []string) error {
 	client := socket.NewClient(sockPath)
 
 	if !client.Ping() {
-		fmt.Println("⚡ aOa-go daemon is not running")
+		fmt.Println("⚡ aOa daemon is not running")
 		return nil
 	}
 

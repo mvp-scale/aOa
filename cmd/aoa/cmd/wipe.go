@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/corey/aoa-go/internal/adapters/bbolt"
-	"github.com/corey/aoa-go/internal/adapters/socket"
+	"github.com/corey/aoa/internal/adapters/bbolt"
+	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/spf13/cobra"
 )
 

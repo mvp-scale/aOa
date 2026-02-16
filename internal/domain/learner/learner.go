@@ -12,7 +12,7 @@ package learner
 import (
 	"encoding/json"
 
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // Constants matching Python canonical values (from SPEC.md).

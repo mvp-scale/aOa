@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // assignDomain returns the domain for a symbol.

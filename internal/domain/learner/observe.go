@@ -3,7 +3,7 @@ package learner
 import (
 	"fmt"
 
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // ObserveEvent is a single observe signal from an intent.

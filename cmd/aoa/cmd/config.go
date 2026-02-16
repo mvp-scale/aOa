@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/corey/aoa-go/internal/adapters/socket"
+	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +27,7 @@ func runConfig(cmd *cobra.Command, args []string) error {
 		daemonStatus = fmt.Sprintf("%s✓ running%s", colorGreen, colorReset)
 	}
 
-	fmt.Printf("%s⚡ aOa-go config%s\n", colorBold, colorReset)
+	fmt.Printf("%s⚡ aOa config%s\n", colorBold, colorReset)
 	fmt.Printf("  Project:    %s\n", projectID)
 	fmt.Printf("  Root:       %s\n", root)
 	fmt.Printf("  DB:         %s\n", dbPath)

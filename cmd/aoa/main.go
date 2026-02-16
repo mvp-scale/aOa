@@ -5,7 +5,7 @@ package main
 import (
 	"os"
 
-	"github.com/corey/aoa-go/cmd/aoa/cmd"
+	"github.com/corey/aoa/cmd/aoa/cmd"
 )
 
 func main() {

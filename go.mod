@@ -1,4 +1,4 @@
-module github.com/corey/aoa-go
+module github.com/corey/aoa
 
 go 1.25.6
 

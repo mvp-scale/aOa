@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/corey/aoa-go/internal/domain/index"
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/domain/index"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // AppQueries provides read access to app state for server handlers.

@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/corey/aoa-go/internal/adapters/tailer"
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/adapters/tailer"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // Reader implements ports.SessionReader for Claude Code sessions.

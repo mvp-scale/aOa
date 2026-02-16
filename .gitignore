@@ -1,0 +1,12 @@
+# Binary
+/aoa
+
+# Runtime state (project-local, not committed)
+.aoa/aoa.db
+.aoa/status.json
+
+# direnv
+.envrc
+
+# Claude Code local settings (per-machine)
+.claude/settings.local.json

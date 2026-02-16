@@ -7,10 +7,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/ports"
 )
 
-// Client connects to the aOa-go daemon over a Unix socket.
+// Client connects to the aOa daemon over a Unix socket.
 type Client struct {
 	sockPath string
 }

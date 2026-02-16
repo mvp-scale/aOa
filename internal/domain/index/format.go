@@ -3,7 +3,7 @@ package index
 import (
 	"strings"
 
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // FormatSymbol creates the display scope string for a symbol.

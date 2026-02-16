@@ -1,4 +1,4 @@
-# aOa-go - Angle O(1)f Attack
+# aOa - Angle O(1)f Attack
 
 > **5 angles. 1 attack. 1 binary.** Save your tokens. Save your time. Zero Docker.
 
@@ -32,9 +32,9 @@ Claude: "I see the issue. Line 47."
 
 The [original aOa](https://github.com/CTGS-Innovations/aOa) runs as a Python service in Docker. It works. But it can be better.
 
-**aOa-go is a clean-room rewrite** that eliminates Docker entirely and delivers order-of-magnitude performance improvements:
+**aOa is a clean-room rewrite** that eliminates Docker entirely and delivers order-of-magnitude performance improvements:
 
-| Metric | Python aOa | aOa-go | Improvement |
+| Metric | Python aOa | aOa | Improvement |
 |--------|-----------|--------|-------------|
 | Search latency | 8-15ms | <0.5ms | **16-30x faster** |
 | Autotune | 250-600ms | ~2.5&micro;s | **100,000x faster** |
@@ -78,8 +78,8 @@ All angles converge into **one confident answer**.
 
 ```bash
 # From source
-git clone https://github.com/CTGS-Innovations/aOa-go
-cd aOa-go
+git clone https://github.com/CTGS-Innovations/aOa
+cd aOa
 go build ./cmd/aoa/
 ```
 
@@ -148,7 +148,7 @@ aoa egrep "handle.*login"    # Regex mode
 
 ### Architecture
 
-aOa-go uses a hexagonal (ports/adapters) architecture:
+aOa uses a hexagonal (ports/adapters) architecture:
 
 ```
 cmd/aoa/              CLI entrypoint (cobra)
@@ -253,7 +253,7 @@ Nothing else to clean up. No containers. No services. No config files scattered 
 
 ## Project Status
 
-aOa-go is in active development. **211 tests passing, 0 failing.**
+aOa is in active development. **211 tests passing, 0 failing.**
 
 - Phases 1-5: Complete (foundation, search, domains, learning, session integration)
 - Phase 6: In progress (CLI complete, daemon wired, release pipeline pending)

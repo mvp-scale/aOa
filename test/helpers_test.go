@@ -6,8 +6,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/corey/aoa-go/internal/domain/index"
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/domain/index"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // --- Index State Fixture ---

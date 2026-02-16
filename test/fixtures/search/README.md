@@ -1,6 +1,6 @@
 # Search Test Fixtures (F-04)
 
-Behavioral parity fixtures for the aOa-go search engine.
+Behavioral parity fixtures for the aOa search engine.
 Every query defines deterministic expected results against a mock codebase index.
 The Go search engine must produce identical results for every fixture.
 

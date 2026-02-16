@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/corey/aoa-go/internal/adapters/socket"
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/adapters/socket"
+	"github.com/corey/aoa/internal/ports"
 	"github.com/spf13/cobra"
 )
 
@@ -117,5 +117,5 @@ func executeSearch(query string, opts ports.SearchOptions) error {
 
 	// No daemon running — direct mode would go here once app.go wiring is complete.
 	// For now, report that daemon isn't running.
-	return fmt.Errorf("daemon not running. Start with: aoa-go daemon start")
+	return fmt.Errorf("daemon not running. Start with: aoa daemon start")
 }

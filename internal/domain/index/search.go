@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // Domain holds the term->keyword mapping for enrichment.

@@ -1,5 +1,5 @@
 // Package app wires together all adapters and domain logic.
-// It provides lifecycle management for the aOa-go daemon: create, start, stop.
+// It provides lifecycle management for the aOa daemon: create, start, stop.
 package app
 
 import (
@@ -9,16 +9,16 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/corey/aoa-go/atlas"
-	"github.com/corey/aoa-go/internal/adapters/bbolt"
-	claude "github.com/corey/aoa-go/internal/adapters/claude"
-	fsw "github.com/corey/aoa-go/internal/adapters/fsnotify"
-	"github.com/corey/aoa-go/internal/adapters/socket"
-	"github.com/corey/aoa-go/internal/domain/enricher"
-	"github.com/corey/aoa-go/internal/domain/index"
-	"github.com/corey/aoa-go/internal/domain/learner"
-	"github.com/corey/aoa-go/internal/domain/status"
-	"github.com/corey/aoa-go/internal/ports"
+	"github.com/corey/aoa/atlas"
+	"github.com/corey/aoa/internal/adapters/bbolt"
+	claude "github.com/corey/aoa/internal/adapters/claude"
+	fsw "github.com/corey/aoa/internal/adapters/fsnotify"
+	"github.com/corey/aoa/internal/adapters/socket"
+	"github.com/corey/aoa/internal/domain/enricher"
+	"github.com/corey/aoa/internal/domain/index"
+	"github.com/corey/aoa/internal/domain/learner"
+	"github.com/corey/aoa/internal/domain/status"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // App is the top-level container wiring all components together.
@@ -275,14 +275,14 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 	}
 }
 
-// writeStatus generates and writes the status line to the default path.
+// writeStatus generates and writes status JSON to the project-local file.
 // Must be called with a.mu held.
 func (a *App) writeStatus(autotune *learner.AutotuneResult) {
 	if autotune != nil {
 		a.lastAutotune = autotune
 	}
-	line := status.Generate(a.Learner.State(), a.lastAutotune)
-	_ = status.Write(a.statusLinePath, line)
+	data := status.Generate(a.Learner.State(), a.lastAutotune)
+	_ = status.WriteJSON(a.statusLinePath, data)
 }
 
 // LearnerSnapshot returns a deep copy of the current learner state.

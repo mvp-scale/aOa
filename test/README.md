@@ -1,4 +1,4 @@
-# aOa-go Test-Driven Development
+# aOa Test-Driven Development
 
 > Tests fail first. Implementation makes them pass. Zero tolerance for behavioral divergence.
 
