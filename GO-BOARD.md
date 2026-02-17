@@ -1,7 +1,8 @@
-# aOa-go GO-BOARD
+# aOa GO-BOARD
 
-> **Updated**: 2026-02-16 | **Phase**: Phase 6 IN PROGRESS | **Status**: 211 tests passing, 0 failing — CLI complete (13 commands), daemon fully wired
+> **Updated**: 2026-02-16 | **Phase**: Phase 6 IN PROGRESS | **Status**: 181 tests passing, 0 failing — 14 commands, daemon + init working, full search loop operational
 > **Architecture**: Hexagonal (ports/adapters) + Session Prism | **Target**: Single binary, zero Docker
+> **Module**: `github.com/corey/aoa` | **Binary**: `cmd/aoa/main.go`
 
 ---
 
@@ -324,7 +325,7 @@ test/
 | **BUILD + DISTRIBUTE** |
 | S-02b | Loader | Purego .so loader for runtime grammar loading (unlimited extensibility) | Medium | TODO | 🟢 | ✓ | | | | | | | S-02 | `internal/adapters/treesitter/loader.go` | Load .so from .aoa/grammars/, parse file, identical to compiled-in |
 | C-03 | Grammars | Build tree-sitter grammar downloader (CI: compile .so, host on GitHub Releases) | High | TODO | 🟡 | | | | | | | | S-02b | `.github/workflows/build-grammars.yml` | Download+load 20 grammars from releases |
-| C-04 | Init | Implement init command (download grammars, scan codebase, build index, load domains) | Critical | TODO | 🟢 | | | ✓ | | ✓ | | | C-01, C-03, U-06 | `cmd/aoa-go/cmd/init.go` | `aoa-go init` indexes 500-file project in <10s |
+| C-04 | Init | Implement init command (scan codebase, tree-sitter parse, build index, persist to bbolt) | Critical | Done | 🟢 | ✓ | | ✓ | | ✓ | | | C-01 | `cmd/aoa/cmd/init.go` | `aoa init` indexes 111-file project: 525 symbols, 882 tokens |
 | C-05 | Release | Build release pipeline (goreleaser, linux/darwin x amd64/arm64) | High | TODO | 🟢 | | | | | | | | C-01 | `.goreleaser.yml` | Binaries build for all 4 platforms |
 | C-06 | Docs | Write installation docs (`go install` or download binary, `aoa-go init`, done) | Medium | TODO | 🟢 | | | | | | | | C-05 | `aOa-go/README.md` | New user can install and run in <5 min |
 
@@ -1150,6 +1151,147 @@ Claude JSONL
 - S-03: bbolt storage adapter
 - Tests already written — remove `t.Skip()` as each component is built
 - Run `make check` after each component
+
+### Session Log (2026-02-16, session 2)
+
+**What was done:**
+1. **Full migration to standalone project**
+   - direnv installed, `.envrc` with `PATH_add .` — Go binary shadows Python `~/bin/aoa` when in aOa-go directory
+   - Hooked into `~/.bashrc` with `eval "$(direnv hook bash)"`
+
+2. **Unified naming** — removed all `aOa-go` / `aoa-go` branding
+   - Module path: `github.com/corey/aoa-go` → `github.com/corey/aoa`
+   - CLI: `Use: "aoa"`, all error messages, all output headers
+   - Comments, docs, README updated
+   - Socket path kept as `/tmp/aoa-go-{hash}.sock` (avoids collision with Python)
+
+3. **Status line rewrite** — matches Python version's two-line format
+   - Daemon writes JSON to `.aoa/status.json` (not `/tmp/`)
+   - Hook reads daemon JSON + Claude Code stdin (context window, model)
+   - Format: `user:dir (branch) +add/-del ccVersion` / `⚡ aOa 🟢 42 │ 8 domains │ ctx:28k/200k (14%) │ Opus 4.6 │ @auth @api`
+   - Traffic light: gray < 30, yellow 30-100, green 100+
+   - `.claude/settings.local.json` created with statusLine hook
+
+4. **Implemented C-04: `aoa init`** — the critical missing piece
+   - Walks project directory (skips .git, node_modules, vendor, .aoa, .claude, etc.)
+   - Parses files with tree-sitter (28 compiled-in languages)
+   - Tokenizes symbol names via `index.Tokenize()`
+   - Populates inverted index (Tokens → TokenRef → SymbolMeta)
+   - Saves to bbolt via `store.SaveIndex()`
+   - Result: 111 files, 525 symbols, 882 tokens indexed in <2s
+
+5. **Full search loop validated**
+   - `aoa init` → `aoa daemon start` → `aoa grep test` → 20 hits in 77ms
+   - `aoa grep Tokenize` → 16 hits in 6ms
+   - `aoa health` → shows 111 files, 882 tokens
+   - `aoa domains` → 6 domains learned from Claude session
+   - `aoa stats`, `aoa intent`, `aoa bigrams` — all functional
+
+6. **Created `.gitignore`** — binary, runtime state, local settings
+7. **Created `README.md`** — adapted from Python version for single-binary delivery
+8. **Updated `CLAUDE.md`** — build commands, architecture, key paths, test structure
+
+**Files created:**
+- `cmd/aoa/cmd/init.go` — init command (filesystem scan → tree-sitter → index → bbolt)
+- `.envrc` — direnv PATH isolation
+- `.gitignore` — binary, .aoa/aoa.db, .aoa/status.json, .claude/settings.local.json
+- `.claude/settings.local.json` — statusLine hook config
+- `hooks/aoa-status-line.sh` — two-line status display (rewrote from scratch)
+- `README.md` — full project README
+- `.aoa/status.json` — seeded status file
+
+**Files modified:**
+- `go.mod` — module path `github.com/corey/aoa`
+- `internal/domain/status/status.go` — JSON output instead of ANSI text
+- `internal/domain/status/status_test.go` — tests updated for JSON API
+- `internal/app/app.go` — project-local status path, JSON write
+- `cmd/aoa/cmd/root.go` — registered init command, unified naming
+- `cmd/aoa/cmd/*.go` — all 13 commands: removed `aoa-go` references
+- `internal/adapters/socket/protocol.go` — comment updates
+- `internal/adapters/socket/client.go` — comment updates
+- `~/.bashrc` — direnv hook added
+- All `.go` files — import paths updated to `github.com/corey/aoa`
+
+**Key discovery: bbolt exclusive lock**
+- `aoa init` hangs silently if daemon holds DB lock (bbolt is exclusive)
+- Need to either: check for running daemon before init, or have init talk to daemon
+
+---
+
+## Deployment Strategy
+
+### Current Model: Per-Project
+
+Each project gets its own aOa instance:
+
+```
+project-a/
+  .aoa/
+    aoa.db           ← bbolt (index + learner state)
+    status.json      ← daemon status for hook
+  /tmp/aoa-{hash-a}.sock  ← daemon socket
+
+project-b/
+  .aoa/
+    aoa.db           ← separate index, separate learner
+    status.json
+  /tmp/aoa-{hash-b}.sock  ← separate daemon
+```
+
+**Advantages:**
+- Complete isolation between projects (no shared state)
+- No single point of failure (one daemon crash doesn't affect others)
+- Project-scoped learning (domains trained per codebase)
+- Simple deployment (just copy the binary + run `aoa init`)
+- bbolt is embedded — no external services
+
+**Limitations to address:**
+- Each project runs its own daemon process (memory per daemon ~20-30MB)
+- No shared learning across projects (by design — but could be a feature)
+- Binary must be accessible from each project (direnv or PATH)
+
+### User Workflow
+
+```bash
+# 1. Install binary (once)
+go install github.com/corey/aoa/cmd/aoa@latest
+# or: download from GitHub Releases
+
+# 2. Initialize a project
+cd my-project
+aoa init              # scans files, builds index, creates .aoa/
+
+# 3. Start daemon (per project)
+aoa daemon start      # foreground, or:
+aoa daemon start &    # background
+
+# 4. Use
+aoa grep handleAuth   # instant results
+aoa domains           # see what aOa learned
+aoa intent            # session tracking
+
+# 5. Remove from project
+aoa wipe --force      # deletes .aoa/ directory
+```
+
+### Multi-Project
+
+Multiple daemons run simultaneously — each with its own socket and DB:
+- `cd project-a && aoa daemon start &`
+- `cd project-b && aoa daemon start &`
+- Sockets are hash-based on absolute path — no collisions
+- Claude Code hooks use `$CLAUDE_PROJECT_DIR` — project-scoped
+
+### TODO: Deployment Improvements
+
+| ID | Task | Priority | Notes |
+|----|------|----------|-------|
+| D-01 | Init checks for running daemon (bbolt lock guard) | High | Currently hangs if daemon holds lock |
+| D-02 | `aoa daemon start --background` (daemonize properly) | Medium | Fork to background, write PID file |
+| D-03 | `aoa remove` command (clean uninstall from project) | Medium | Alias for `aoa wipe --force` + remove hooks |
+| D-04 | Global binary install via `go install` | High | Needs module path published to GitHub |
+| D-05 | Systemd/launchd service templates | Low | Auto-start daemon on login |
+| D-06 | Multi-project dashboard (`aoa status --all`) | Low | Scan /tmp/aoa-*.sock, report all running daemons |
 
 ---
 
