@@ -128,6 +128,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			Path:         relPath,
 			LastModified: info.ModTime().Unix(),
 			Language:     ext,
+			Size:         info.Size(),
 		}
 
 		metas, err := parser.ParseFileToMeta(path, source)

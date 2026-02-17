@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -24,6 +25,42 @@ func (m *mockQueries) LearnerSnapshot() *ports.LearnerState {
 }
 
 func (m *mockQueries) WipeProject() error {
+	return nil
+}
+
+func (m *mockQueries) SessionMetricsSnapshot() socket.SessionMetricsResult {
+	return socket.SessionMetricsResult{}
+}
+
+func (m *mockQueries) ToolMetricsSnapshot() socket.ToolMetricsResult {
+	return socket.ToolMetricsResult{}
+}
+
+func (m *mockQueries) ConversationTurns() socket.ConversationFeedResult {
+	return socket.ConversationFeedResult{}
+}
+
+func (m *mockQueries) ActivityFeed() socket.ActivityFeedResult {
+	return socket.ActivityFeedResult{Entries: []socket.ActivityEntryResult{}}
+}
+
+func (m *mockQueries) TopKeywords(limit int) socket.TopItemsResult {
+	return socket.TopItemsResult{}
+}
+
+func (m *mockQueries) TopTerms(limit int) socket.TopItemsResult {
+	return socket.TopItemsResult{}
+}
+
+func (m *mockQueries) TopFiles(limit int) socket.TopItemsResult {
+	return socket.TopItemsResult{}
+}
+
+func (m *mockQueries) DomainTermNames(domain string) []string {
+	return nil
+}
+
+func (m *mockQueries) DomainTermHitCounts(domain string) map[string]int {
 	return nil
 }
 
@@ -59,11 +96,19 @@ func setupTestServer(t *testing.T) *httptest.Server {
 
 	srv := NewServer(queries, idx, engine, "")
 	mux := http.NewServeMux()
-	mux.Handle("GET /", http.FileServerFS(staticFS))
+	staticSub, _ := fs.Sub(staticFS, "static")
+	mux.Handle("GET /", http.FileServerFS(staticSub))
 	mux.HandleFunc("GET /api/health", srv.handleHealth)
 	mux.HandleFunc("GET /api/stats", srv.handleStats)
 	mux.HandleFunc("GET /api/domains", srv.handleDomains)
 	mux.HandleFunc("GET /api/bigrams", srv.handleBigrams)
+	mux.HandleFunc("GET /api/conversation/metrics", srv.handleConvMetrics)
+	mux.HandleFunc("GET /api/conversation/tools", srv.handleConvTools)
+	mux.HandleFunc("GET /api/conversation/feed", srv.handleConvFeed)
+	mux.HandleFunc("GET /api/top-keywords", srv.handleTopKeywords)
+	mux.HandleFunc("GET /api/top-terms", srv.handleTopTerms)
+	mux.HandleFunc("GET /api/top-files", srv.handleTopFiles)
+	mux.HandleFunc("GET /api/activity/feed", srv.handleActivityFeed)
 
 	return httptest.NewServer(mux)
 }
@@ -152,7 +197,8 @@ func TestDashboardHTML(t *testing.T) {
 	ts := setupTestServer(t)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/static/index.html")
+	// Test root path serves index.html
+	resp, err := http.Get(ts.URL + "/")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -175,4 +221,106 @@ func TestDefaultPort(t *testing.T) {
 	// Not guaranteed to be different but we can check range
 	assert.GreaterOrEqual(t, port3, 19000)
 	assert.Less(t, port3, 20000)
+}
+
+func TestConvMetricsEndpoint(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/conversation/metrics")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, 200, resp.StatusCode)
+
+	var result socket.SessionMetricsResult
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	// Zero values expected from mock
+}
+
+func TestConvToolsEndpoint(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/conversation/tools")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, 200, resp.StatusCode)
+
+	var result socket.ToolMetricsResult
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+}
+
+func TestConvFeedEndpoint(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/conversation/feed")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, 200, resp.StatusCode)
+
+	var result socket.ConversationFeedResult
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+}
+
+func TestTopKeywordsEndpoint(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/top-keywords")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, 200, resp.StatusCode)
+
+	var result socket.TopItemsResult
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+}
+
+func TestTopTermsEndpoint(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/top-terms")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, 200, resp.StatusCode)
+
+	var result socket.TopItemsResult
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+}
+
+func TestTopFilesEndpoint(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/top-files")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, 200, resp.StatusCode)
+
+	var result socket.TopItemsResult
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+}
+
+func TestHandleActivityFeed(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/activity/feed")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var result socket.ActivityFeedResult
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.NotNil(t, result.Entries)
+	assert.Equal(t, 0, result.Count)
 }

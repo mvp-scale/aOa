@@ -61,6 +61,7 @@ type FileMeta struct {
 	LastModified int64
 	Language     string
 	Domain       string // assigned semantic domain (e.g., "@authentication")
+	Size         int64  // file size in bytes
 }
 
 // LearnerState holds all domain learning state for a project.

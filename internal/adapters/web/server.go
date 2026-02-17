@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -67,11 +68,25 @@ func (s *Server) Start(preferredPort int) error {
 	s.started = time.Now()
 
 	mux := http.NewServeMux()
-	mux.Handle("GET /", http.FileServerFS(staticFS))
+
+	// Serve static files from embedded FS (strip "static/" prefix so / → static/index.html)
+	staticSub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		return fmt.Errorf("create static sub-fs: %w", err)
+	}
+	mux.Handle("GET /", http.FileServerFS(staticSub))
+
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("GET /api/stats", s.handleStats)
 	mux.HandleFunc("GET /api/domains", s.handleDomains)
 	mux.HandleFunc("GET /api/bigrams", s.handleBigrams)
+	mux.HandleFunc("GET /api/conversation/metrics", s.handleConvMetrics)
+	mux.HandleFunc("GET /api/conversation/tools", s.handleConvTools)
+	mux.HandleFunc("GET /api/conversation/feed", s.handleConvFeed)
+	mux.HandleFunc("GET /api/top-keywords", s.handleTopKeywords)
+	mux.HandleFunc("GET /api/top-terms", s.handleTopTerms)
+	mux.HandleFunc("GET /api/top-files", s.handleTopFiles)
+	mux.HandleFunc("GET /api/activity/feed", s.handleActivityFeed)
 
 	s.httpSrv = &http.Server{Handler: mux}
 
@@ -175,11 +190,13 @@ func (s *Server) handleDomains(w http.ResponseWriter, r *http.Request) {
 	var coreCount int
 	for name, dm := range state.DomainMeta {
 		domains = append(domains, socket.DomainInfo{
-			Name:   name,
-			Hits:   dm.Hits,
-			Tier:   dm.Tier,
-			State:  dm.State,
-			Source: dm.Source,
+			Name:     name,
+			Hits:     dm.Hits,
+			Tier:     dm.Tier,
+			State:    dm.State,
+			Source:   dm.Source,
+			Terms:    s.queries.DomainTermNames(name),
+			TermHits: s.queries.DomainTermHitCounts(name),
 		})
 		if dm.Tier == "core" {
 			coreCount++
@@ -220,6 +237,76 @@ func (s *Server) handleBigrams(w http.ResponseWriter, r *http.Request) {
 		CohitTdCount:    len(state.CohitTermDomain),
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleConvMetrics(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	result := s.queries.SessionMetricsSnapshot()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleConvTools(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	result := s.queries.ToolMetricsSnapshot()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleConvFeed(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	result := s.queries.ConversationTurns()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleTopKeywords(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	result := s.queries.TopKeywords(15)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleTopTerms(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	result := s.queries.TopTerms(15)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleTopFiles(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	result := s.queries.TopFiles(15)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleActivityFeed(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	result := s.queries.ActivityFeed()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }

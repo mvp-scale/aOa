@@ -107,11 +107,13 @@ type DomainsResult struct {
 
 // DomainInfo describes a single domain.
 type DomainInfo struct {
-	Name   string  `json:"name"`
-	Hits   float64 `json:"hits"`
-	Tier   string  `json:"tier"`
-	State  string  `json:"state"`
-	Source string  `json:"source"`
+	Name     string         `json:"name"`
+	Hits     float64        `json:"hits"`
+	Tier     string         `json:"tier"`
+	State    string         `json:"state"`
+	Source   string         `json:"source"`
+	Terms    []string       `json:"terms,omitempty"`
+	TermHits map[string]int `json:"term_hits,omitempty"` // term name -> total keyword hits (for popularity sort + flash)
 }
 
 // BigramsResult is the result of a bigrams request.
@@ -137,4 +139,88 @@ type StatsResult struct {
 	FileHitCount int    `json:"file_hit_count"`
 	IndexFiles   int    `json:"index_files"`
 	IndexTokens  int    `json:"index_tokens"`
+}
+
+// SessionMetricsResult is the result of a session metrics request.
+type SessionMetricsResult struct {
+	InputTokens   int     `json:"input_tokens"`
+	OutputTokens  int     `json:"output_tokens"`
+	CacheReadTokens int   `json:"cache_read_tokens"`
+	CacheWriteTokens int  `json:"cache_write_tokens"`
+	TurnCount     int     `json:"turn_count"`
+	CacheHitRate  float64 `json:"cache_hit_rate"`
+}
+
+// ToolMetricsResult is the result of a tool metrics request.
+type ToolMetricsResult struct {
+	ReadCount    int            `json:"read_count"`
+	WriteCount   int            `json:"write_count"`
+	EditCount    int            `json:"edit_count"`
+	BashCount    int            `json:"bash_count"`
+	GrepCount    int            `json:"grep_count"`
+	GlobCount    int            `json:"glob_count"`
+	OtherCount   int            `json:"other_count"`
+	TotalCount   int            `json:"total_count"`
+	FileReads    map[string]int `json:"file_reads"`
+	BashCommands map[string]int `json:"bash_commands"`
+	GrepPatterns map[string]int `json:"grep_patterns"`
+}
+
+// ConversationFeedResult is the result of a conversation feed request.
+type ConversationFeedResult struct {
+	Turns []ConversationTurnResult `json:"turns"`
+	Count int                      `json:"count"`
+}
+
+// ConversationTurnResult describes a single turn in the conversation.
+type ConversationTurnResult struct {
+	TurnID       string             `json:"turn_id"`
+	Role         string             `json:"role"`
+	Text         string             `json:"text"`
+	ThinkingText string             `json:"thinking_text,omitempty"`
+	DurationMs   int                `json:"duration_ms"`
+	ToolNames    []string           `json:"tool_names"`
+	Actions      []TurnActionResult `json:"actions,omitempty"`
+	Timestamp    int64              `json:"timestamp"`
+	Model        string             `json:"model"`
+	InputTokens  int                `json:"input_tokens,omitempty"`
+	OutputTokens int                `json:"output_tokens,omitempty"`
+}
+
+// TurnActionResult describes a single tool action within a conversation turn.
+type TurnActionResult struct {
+	Tool   string `json:"tool"`
+	Target string `json:"target"`
+	Range  string `json:"range,omitempty"`
+	Impact string `json:"impact,omitempty"`
+}
+
+// ActivityEntryResult describes a single action in the activity feed.
+type ActivityEntryResult struct {
+	Action    string `json:"action"`
+	Source    string `json:"source"`
+	Attrib    string `json:"attrib"`
+	Impact    string `json:"impact"`
+	Tags      string `json:"tags"`
+	Target    string `json:"target"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+// ActivityFeedResult is the result of an activity feed request.
+type ActivityFeedResult struct {
+	Entries []ActivityEntryResult `json:"entries"`
+	Count   int                   `json:"count"`
+}
+
+// TopItemsResult is the result of a top items request.
+type TopItemsResult struct {
+	Items []RankedItem `json:"items"`
+	Count int          `json:"count"`
+	Kind  string       `json:"kind"`
+}
+
+// RankedItem describes a single ranked item (keyword, term, file, etc.).
+type RankedItem struct {
+	Name  string  `json:"name"`
+	Count float64 `json:"count"`
 }

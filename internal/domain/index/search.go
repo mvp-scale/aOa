@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/corey/aoa/internal/ports"
 )
@@ -13,9 +14,9 @@ type Domain struct {
 	Terms map[string][]string // term -> keywords
 }
 
-// SearchObserver is called after every search with the query, options, and results.
+// SearchObserver is called after every search with the query, options, results, and elapsed time.
 // Used by the app layer to feed search signals into the learner.
-type SearchObserver func(query string, opts ports.SearchOptions, result *SearchResult)
+type SearchObserver func(query string, opts ports.SearchOptions, result *SearchResult, elapsed time.Duration)
 
 // SearchEngine is the in-memory search index with domain enrichment.
 type SearchEngine struct {
@@ -79,6 +80,8 @@ func (e *SearchEngine) SetObserver(obs SearchObserver) {
 
 // Search executes a query with the given options.
 func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchResult {
+	start := time.Now()
+
 	maxCount := opts.MaxCount
 	if maxCount <= 0 {
 		maxCount = 20
@@ -109,9 +112,10 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 	}
 
 	result := e.buildResult(hits, opts, maxCount)
+	elapsed := time.Since(start)
 
 	if e.observer != nil {
-		e.observer(query, opts, result)
+		e.observer(query, opts, result, elapsed)
 	}
 
 	return result

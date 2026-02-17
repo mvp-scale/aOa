@@ -21,6 +21,15 @@ import (
 type AppQueries interface {
 	LearnerSnapshot() *ports.LearnerState
 	WipeProject() error
+	SessionMetricsSnapshot() SessionMetricsResult
+	ToolMetricsSnapshot() ToolMetricsResult
+	ConversationTurns() ConversationFeedResult
+	ActivityFeed() ActivityFeedResult
+	TopKeywords(limit int) TopItemsResult
+	TopTerms(limit int) TopItemsResult
+	TopFiles(limit int) TopItemsResult
+	DomainTermNames(domain string) []string
+	DomainTermHitCounts(domain string) map[string]int
 }
 
 // Server is the daemon that listens on a Unix socket and serves search requests.
@@ -298,11 +307,13 @@ func (s *Server) handleDomains(req Request) Response {
 	var coreCount int
 	for name, dm := range state.DomainMeta {
 		domains = append(domains, DomainInfo{
-			Name:   name,
-			Hits:   dm.Hits,
-			Tier:   dm.Tier,
-			State:  dm.State,
-			Source: dm.Source,
+			Name:     name,
+			Hits:     dm.Hits,
+			Tier:     dm.Tier,
+			State:    dm.State,
+			Source:   dm.Source,
+			Terms:    s.queries.DomainTermNames(name),
+			TermHits: s.queries.DomainTermHitCounts(name),
 		})
 		if dm.Tier == "core" {
 			coreCount++

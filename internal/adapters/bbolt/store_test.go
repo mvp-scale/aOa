@@ -73,9 +73,9 @@ func makeTestIndex() *ports.Index {
 			},
 		},
 		Files: map[uint32]*ports.FileMeta{
-			1: {Path: "services/auth/handler.py", LastModified: 1700000000, Language: "python", Domain: "@authentication"},
-			2: {Path: "views/login.py", LastModified: 1700000100, Language: "python", Domain: "@api"},
-			3: {Path: "services/session/manager.py", LastModified: 1700000200, Language: "python", Domain: "@authentication"},
+			1: {Path: "services/auth/handler.py", LastModified: 1700000000, Language: "python", Domain: "@authentication", Size: 4096},
+			2: {Path: "views/login.py", LastModified: 1700000100, Language: "python", Domain: "@api", Size: 2048},
+			3: {Path: "services/session/manager.py", LastModified: 1700000200, Language: "python", Domain: "@authentication", Size: 8192},
 		},
 	}
 }
@@ -161,6 +161,7 @@ func TestStore_SaveLoadIndex_Roundtrip(t *testing.T) {
 		assert.Equal(t, fm.LastModified, loadedFM.LastModified)
 		assert.Equal(t, fm.Language, loadedFM.Language)
 		assert.Equal(t, fm.Domain, loadedFM.Domain)
+		assert.Equal(t, fm.Size, loadedFM.Size)
 	}
 }
 
