@@ -336,8 +336,12 @@ func (s *Server) handleBigrams(req Request) Response {
 	return Response{
 		ID: req.ID,
 		Result: BigramsResult{
-			Bigrams: state.Bigrams,
-			Count:   len(state.Bigrams),
+			Bigrams:         state.Bigrams,
+			Count:           len(state.Bigrams),
+			CohitKwTerm:     state.CohitKwTerm,
+			CohitTermDomain: state.CohitTermDomain,
+			CohitKwCount:    len(state.CohitKwTerm),
+			CohitTdCount:    len(state.CohitTermDomain),
 		},
 	}
 }

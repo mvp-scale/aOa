@@ -1,6 +1,6 @@
 # aOa GO-BOARD
 
-> **Updated**: 2026-02-17 | **Phase**: Phase 7a DONE | **Status**: 233 tests passing, 0 failing — 11 commands, 42 integration tests, web dashboard, daemonized background process
+> **Updated**: 2026-02-17 | **Phase**: Phase 7a DONE | **Status**: 233 tests passing, 0 failing — 11 commands, 42 integration tests, web dashboard (Activity + Learning tabs live, Conversation placeholder), daemonized background process
 > **Architecture**: Hexagonal (ports/adapters) + Session Prism | **Target**: Single binary, zero Docker
 > **Module**: `github.com/corey/aoa` | **Binary**: `cmd/aoa/main.go`
 
@@ -8,18 +8,26 @@
 
 ## Quick Start (Resume Session)
 
-**Where We Are:** Phase 7a complete. 11 CLI commands (removed 4 informational commands → web dashboard), 233 tests passing.
+**Where We Are:** Phase 7a complete. Web dashboard live with surgical DOM updates, universal change-pulse animation, N-gram metrics (bigrams + cohits), dark/light themes. 11 CLI commands (removed 4 informational → web), 233 tests passing.
 
 **What Works:**
 ```bash
-./aoa init                # Index project
-./aoa daemon start        # Returns terminal, prints dashboard URL
-./aoa grep login         # Search
-./aoa open               # Open web dashboard in browser
-./aoa daemon stop        # Graceful shutdown
+./aoa init                      # Index project
+./aoa daemon start              # Returns terminal, prints dashboard URL
+./aoa open                      # Opens http://localhost:19xxx in browser
+./aoa grep login               # Search (CLI remains operational-only)
+./aoa daemon stop              # Graceful shutdown
+# Dashboard: http://localhost:19xxx/static/index.html?mock  (mock mode)
 ```
 
-**Next Phase:** Phase 7b — Validate against Python aOa (search diff, learner state diff, benchmarks)
+**Dashboard Features:**
+- Activity tab: prompts, keywords, terms, bigrams, file hits, autotune progress
+- Learning tab: all domains (magenta @names, green terms), N-gram metrics (bigrams + 2 cohit types)
+- Conversation tab: placeholders for conversation feed, tools, token economics (backend plumbing needed)
+- Universal pulse: cyan glow on any changed value (1.2s fade)
+- Mock mode: `?mock` for visual testing with random data updates
+
+**Next Phase:** Phase 7b — Dashboard data layer (savings, activity feed, conversation, tool timeline) + innovation opportunities (predictive ranges, velocity tracking, heatmaps)
 
 **Key Files:**
 - `cmd/aoa/cmd/daemon.go` — daemonization, PID mgmt, orphan cleanup
@@ -515,6 +523,143 @@ test/
 - ✅ Socket, PID, and log cleanup on shutdown
 - ⏸️ Performance validation (Phase 7)
 - ⏸️ Python parity validation (Phase 7)
+
+---
+
+## Phase 7a: Web Dashboard (CLI Simplification)
+
+**Goal:** Move informational commands (domains, intent, bigrams, stats) from CLI to web dashboard. Clean separation: CLI stays lean and operational, dashboard provides rich analytical views with auto-refresh.
+
+**Outcome:** 11 CLI commands (down from 14), embedded web dashboard, zero new dependencies.
+
+| ID | Area | Task | Status | Files |
+|----|------|------|:------:|-------|
+| **WEB ADAPTER** |
+| W-01 | Web | Create `internal/adapters/web/` package (server, embed, routes) | Done | `embed.go`, `server.go`, `server_test.go` |
+| W-02 | Web | Design HTML dashboard (dark/light theme, responsive, surgical DOM updates) | Done | `static/index.html` |
+| W-03 | Web | HTTP routes: `/`, `/api/health`, `/api/stats`, `/api/domains`, `/api/bigrams` | Done | `server.go` |
+| W-04 | App | Wire HTTP server into App lifecycle (start after socket, stop before store) | Done | `internal/app/app.go` |
+| W-05 | Daemon | Log dashboard URL on daemon start | Done | `cmd/aoa/cmd/daemon.go` |
+| **CLI CLEANUP** |
+| W-06 | CLI | Remove 4 commands: `domains`, `intent`, `bigrams`, `stats` | Done | Deleted 4 .go files, updated `root.go` |
+| W-07 | CLI | Remove formatters: `formatDomains()`, `formatStats()` | Done | `cmd/aoa/cmd/output.go` |
+| W-08 | CLI | Add `aoa open` command (reads `.aoa/http.port`, opens browser) | Done | `cmd/aoa/cmd/open.go` |
+| W-09 | CLI | Update `config` to show dashboard URL when daemon running | Done | `cmd/aoa/cmd/config.go` |
+| **TESTING** |
+| W-10 | Tests | Update integration tests (remove 4 CLI command tests, add 5 dashboard tests) | Done | `test/integration/cli_test.go` |
+| W-11 | Tests | Unit tests for web adapter (6 tests: endpoints + HTML + port) | Done | `internal/adapters/web/server_test.go` |
+| **DASHBOARD DESIGN** |
+| W-12 | UX | v3 refined design: tabbed layout (Activity, Learning, Conversation) | Done | `static/index.html` |
+| W-13 | UX | Universal change-pulse animation (cyan glow on any value change) | Done | CSS `@keyframes changepulse` |
+| W-14 | UX | Mock data mode (`?mock` URL param for visual testing) | Done | JS mock generator |
+| W-15 | UX | Dark/light theme toggle (moon/sun icon + label) | Done | Theme switcher |
+| W-16 | Data | N-gram Metrics panel (bigrams + cohits: kw→term + term→domain) | Done | Combined view with color-coded bars |
+| W-17 | Data | Domains table: magenta @names, green terms, no tier column | Done | 3-column layout |
+
+**Dashboard Features (Live):**
+- **Activity tab**: Prompts, keywords, terms, bigrams, file hits, autotune progress (real-time)
+- **Learning tab**: Domains table (all 24 compressed, magenta @names, green terms), N-gram Metrics (bigrams + 2 cohit types with color-coded bars)
+- **Conversation tab**: Placeholder for conversation feed, tools timeline, token economics (backend plumbing needed)
+- **Hero metrics**: Prompts processed (cyan), active domains (green), core/keywords/terms/files/uptime chips
+- **Universal pulse**: Any changed value gets a 1.2s cyan glow fade-out
+- **Mock mode**: `?mock` URL parameter runs simulated data with random increments for visual testing
+- **Surgical DOM updates**: Only touches changed elements, never rebuilds entire sections
+- **Responsive**: CSS grid collapse at 900px and 1100px breakpoints
+
+**API Endpoints:**
+- `GET /` → embedded `index.html`
+- `GET /api/health` → `HealthResult` (file count, token count, uptime)
+- `GET /api/stats` → `StatsResult` (prompt count, domain/keyword/term/bigram counts, file hits, index size)
+- `GET /api/domains` → `DomainsResult` (domains sorted by hits, core count)
+- `GET /api/bigrams` → `BigramsResult` (bigrams + cohit_kw_term + cohit_term_domain with counts)
+
+**HTTP Server:**
+- Binds to `127.0.0.1` only (localhost, no network exposure)
+- Port: `19000 + (hash(project_root) % 1000)` — project-specific, collision-resistant
+- Port written to `.aoa/http.port` for discovery (removed on shutdown)
+- Non-fatal startup — if port unavailable, daemon still works (socket is primary)
+
+**Test Coverage:**
+- **233 tests passing, 0 failing** (down from 266 due to removed CLI command tests)
+- **42 integration tests** (down from 51: -8 removed commands, +5 new dashboard tests)
+- **6 web adapter unit tests** (all endpoints + HTML + port logic)
+
+**Files Created (5):**
+- `internal/adapters/web/embed.go`
+- `internal/adapters/web/server.go`
+- `internal/adapters/web/server_test.go`
+- `internal/adapters/web/static/index.html`
+- `cmd/aoa/cmd/open.go`
+
+**Files Modified (6):**
+- `internal/app/app.go` (WebServer field, HTTPPort config, lifecycle hooks)
+- `cmd/aoa/cmd/daemon.go` (log dashboard URL)
+- `cmd/aoa/cmd/root.go` (removed 4 commands, added open)
+- `cmd/aoa/cmd/output.go` (removed 2 formatters)
+- `cmd/aoa/cmd/config.go` (show dashboard URL)
+- `test/integration/cli_test.go` (updated tests)
+
+**Files Deleted (4):**
+- `cmd/aoa/cmd/domains.go`
+- `cmd/aoa/cmd/intent.go`
+- `cmd/aoa/cmd/bigrams.go`
+- `cmd/aoa/cmd/stats.go`
+
+**Usage:**
+```bash
+./aoa daemon start    # Prints "dashboard: http://localhost:19270"
+./aoa open            # Opens dashboard in browser
+./aoa config          # Shows dashboard URL if daemon running
+```
+
+**Session log (2026-02-17) — Phase 7a Complete:**
+
+The web dashboard successfully replaces 4 informational CLI commands with a professional browser interface. The CLI is now purely operational (search, init, daemon, wipe), and all analytical/monitoring views live in the dashboard where they can use modern web UI patterns (tabs, auto-refresh, responsive layout, dark/light themes).
+
+Current state: 11 commands, 233 tests, HTTP dashboard with surgical DOM updates and universal change-pulse animation. Ready for next iteration: data gaps analysis and innovation layer (savings accumulator, activity feed, conversation/tool timeline).
+
+---
+
+## Phase 7b: Dashboard Data Layer (Next)
+
+**Goal:** Wire the missing backend data for Activity feed, Conversation view, and Savings metrics. Identify innovation opportunities.
+
+**Data Inventory:**
+
+**What we have (wired):**
+- ✅ Health (uptime, file/token counts)
+- ✅ Stats (prompts, domains, keywords, terms, bigrams, file hits, index size)
+- ✅ Domains (sorted by hits, core count)
+- ✅ N-grams (bigrams + cohits)
+- ✅ Autotune progress (prompt_count % 50)
+
+**What we have (not yet surfaced):**
+- ⏸️ Session events (user inputs, AI responses, thinking blocks) — `claude.Reader` extracts these, but `onSessionEvent` only uses them for bigrams. The text and timing data get dropped.
+- ⏸️ Tool invocations (Read/Edit/Bash/Task with file paths, ranges, commands) — `SessionEvent.Tool` and `SessionEvent.File` have this, not surfaced via API.
+- ⏸️ Token economics (input/output/cache per turn) — `SessionEvent.Usage` has this, not aggregated or exposed.
+
+**What we need to build:**
+- 🔴 Savings calculation — Requires `FileMeta.Size` (add to index), guided read detector (already in `onSessionEvent`), running accumulator
+- 🔴 Activity log — Ring buffer of recent events (searches + guided reads) with attribution and impact
+- 🔴 Conversation buffer — Last N turns (user/AI/thinking) for live conversation view
+- 🔴 Tool timeline — Last N tool calls with results (Read guided vs full, Edit, Bash exit codes, Task agent names)
+- 🔴 Token aggregates — Per-session and per-period (today/7d/30d) rollups of Usage data
+- 🔴 Per-model velocity — Tokens/sec breakdown by model (Opus/Sonnet/Haiku) from turn duration + output tokens
+
+**Innovation Opportunities:**
+- 🟡 Predictive read ranges — ML model trained on guided read patterns → suggest line ranges before Claude asks
+- 🟡 Domain velocity tracking — Which domains are "heating up" in the current session vs baseline
+- 🟡 Search quality metrics — Hit rate, zero-result queries, retry patterns
+- 🟡 File hotspots — Heatmap of most-read files, correlation with domain activation
+- 🟡 Autotune impact visualization — Before/after domain tier changes, prune events
+- 🟡 Cost projection — Estimated savings over next week/month based on current trajectory
+
+**Next Steps:**
+1. Data gap analysis — parallel search to identify what's available in session events vs what needs new accumulators
+2. Design API contracts for new endpoints (`/api/activity`, `/api/conversation`, `/api/savings`)
+3. Implement backend accumulators (savings, activity ring buffer, conversation buffer)
+4. Wire to dashboard
+5. Explore innovation layer (predictive ranges, velocity, heatmaps)
 
 ---
 

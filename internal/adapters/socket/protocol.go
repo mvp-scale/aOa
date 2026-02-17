@@ -115,9 +115,14 @@ type DomainInfo struct {
 }
 
 // BigramsResult is the result of a bigrams request.
+// Also includes cohit data for the dashboard n-gram metrics panel.
 type BigramsResult struct {
-	Bigrams map[string]uint32 `json:"bigrams"`
-	Count   int               `json:"count"`
+	Bigrams         map[string]uint32 `json:"bigrams"`
+	Count           int               `json:"count"`
+	CohitKwTerm     map[string]uint32 `json:"cohit_kw_term,omitempty"`
+	CohitTermDomain map[string]uint32 `json:"cohit_term_domain,omitempty"`
+	CohitKwCount    int               `json:"cohit_kw_count"`
+	CohitTdCount    int               `json:"cohit_td_count"`
 }
 
 // StatsResult is the result of a stats request.

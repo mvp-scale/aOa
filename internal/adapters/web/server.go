@@ -212,8 +212,12 @@ func (s *Server) handleBigrams(w http.ResponseWriter, r *http.Request) {
 	state := s.queries.LearnerSnapshot()
 
 	result := socket.BigramsResult{
-		Bigrams: state.Bigrams,
-		Count:   len(state.Bigrams),
+		Bigrams:         state.Bigrams,
+		Count:           len(state.Bigrams),
+		CohitKwTerm:     state.CohitKwTerm,
+		CohitTermDomain: state.CohitTermDomain,
+		CohitKwCount:    len(state.CohitKwTerm),
+		CohitTdCount:    len(state.CohitTermDomain),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
