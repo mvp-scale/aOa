@@ -125,6 +125,11 @@ func spawnDaemon(root, sockPath string) error {
 		if client.Ping() {
 			fmt.Printf("⚡ daemon started (pid %d)\n", pid)
 			fmt.Printf("  log: %s\n", logPath)
+			// Show dashboard URL if HTTP port file exists
+			httpPortPath := filepath.Join(aoaDir, "http.port")
+			if portData, err := os.ReadFile(httpPortPath); err == nil {
+				fmt.Printf("  dashboard: http://localhost:%s\n", strings.TrimSpace(string(portData)))
+			}
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -168,6 +173,9 @@ func runDaemonLoop(root, sockPath string) error {
 	}
 
 	fmt.Printf("[%s] daemon ready at %s\n", time.Now().Format(time.RFC3339), sockPath)
+	if a.WebServer.Port() > 0 {
+		fmt.Printf("[%s] dashboard at %s\n", time.Now().Format(time.RFC3339), a.WebServer.URL())
+	}
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

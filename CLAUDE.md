@@ -29,8 +29,8 @@ The module path is `github.com/corey/aoa`. The binary entry point is `cmd/aoa/ma
 Hexagonal (ports/adapters) architecture. All domain logic is dependency-free. External concerns are behind interfaces in `internal/ports/`.
 
 ```
-cmd/aoa/              Cobra CLI (grep, egrep, find, locate, tree, domains,
-                      intent, bigrams, stats, config, health, wipe, daemon)
+cmd/aoa/              Cobra CLI (grep, egrep, find, locate, tree, config,
+                      health, wipe, daemon, init, open)
 
 internal/
   ports/              Interfaces + shared data types (Index, LearnerState,
@@ -45,6 +45,7 @@ internal/
   adapters/
     bbolt/            Persistence (project-scoped buckets, JSON serialization)
     socket/           Unix socket daemon (JSON-over-socket, /tmp/aoa-{hash}.sock)
+    web/              HTTP dashboard (embedded HTML, JSON API, localhost-only)
     tailer/           Session log tailer (defensive JSONL parser, UUID dedup)
     claude/           Claude Code adapter (Session Prism: raw JSONL -> canonical events)
     treesitter/       28-language structural parser (CGo, compiled-in grammars)
@@ -82,6 +83,8 @@ Searches also generate learning signals via `searchObserver` in `app.go`.
 | Database | `{ProjectRoot}/.aoa/aoa.db` (bbolt, project-scoped) |
 | Status line | `{ProjectRoot}/.aoa/status.json` |
 | Socket | `/tmp/aoa-{sha256(root)[:12]}.sock` |
+| HTTP port | `{ProjectRoot}/.aoa/http.port` (port number for dashboard) |
+| Dashboard | `http://localhost:{port}` (localhost-only, auto-refreshing) |
 | Session logs | `~/.claude/projects/{encoded-path}/*.jsonl` (read-only) |
 
 ## Behavioral Parity

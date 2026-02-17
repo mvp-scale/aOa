@@ -1,6 +1,6 @@
 # aOa GO-BOARD
 
-> **Updated**: 2026-02-17 | **Phase**: Phase 6b DONE | **Status**: 266 tests passing, 0 failing — 14 commands, 51 integration tests, daemonized background process, full search loop operational
+> **Updated**: 2026-02-17 | **Phase**: Phase 7a DONE | **Status**: 233 tests passing, 0 failing — 11 commands, 42 integration tests, web dashboard, daemonized background process
 > **Architecture**: Hexagonal (ports/adapters) + Session Prism | **Target**: Single binary, zero Docker
 > **Module**: `github.com/corey/aoa` | **Binary**: `cmd/aoa/main.go`
 
@@ -8,30 +8,33 @@
 
 ## Quick Start (Resume Session)
 
-**Where We Are:** Phase 6b complete. All 14 CLI commands working, daemon daemonizes, 266 tests passing.
+**Where We Are:** Phase 7a complete. 11 CLI commands (removed 4 informational commands → web dashboard), 233 tests passing.
 
 **What Works:**
 ```bash
 ./aoa init                # Index project
-./aoa daemon start        # Returns terminal, logs to .aoa/daemon.log
+./aoa daemon start        # Returns terminal, prints dashboard URL
 ./aoa grep login         # Search
+./aoa open               # Open web dashboard in browser
 ./aoa daemon stop        # Graceful shutdown
 ```
 
-**Next Phase:** Phase 7 — Validate against Python aOa (search diff, learner state diff, benchmarks)
+**Next Phase:** Phase 7b — Validate against Python aOa (search diff, learner state diff, benchmarks)
 
 **Key Files:**
 - `cmd/aoa/cmd/daemon.go` — daemonization, PID mgmt, orphan cleanup
-- `cmd/aoa/cmd/errors.go` — lock diagnosis helpers
-- `test/integration/cli_test.go` — 51 battle-tested integration tests
+- `cmd/aoa/cmd/open.go` — opens web dashboard in browser
+- `internal/adapters/web/` — HTTP dashboard (embedded HTML, JSON API)
+- `test/integration/cli_test.go` — 42 integration tests
 - `.aoa/daemon.log` — daemon output (timestamped)
 - `.aoa/daemon.pid` — process ID (removed on clean shutdown)
+- `.aoa/http.port` — HTTP port for dashboard (removed on shutdown)
 
 **Build & Test:**
 ```bash
 go build ./cmd/aoa/              # Build binary
-go test ./... -count=1           # 266 tests
-go test ./test/integration/ -v   # 51 integration tests
+go test ./... -count=1           # 233 tests
+go test ./test/integration/ -v   # 42 integration tests
 ```
 
 ---
@@ -49,7 +52,7 @@ go test ./test/integration/ -v   # 51 integration tests
 
 **Non-Goals for v1:**
 - Dimensional bitmask analysis (deferred to v2)
-- Live WebSocket dashboard (deferred to v2)
+- Live WebSocket push (dashboard uses polling; WebSocket upgrade deferred to v2)
 
 ---
 

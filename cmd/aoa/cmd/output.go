@@ -91,39 +91,3 @@ func formatFiles(result *socket.FilesResult) string {
 	return sb.String()
 }
 
-// formatDomains formats a DomainsResult for terminal display.
-func formatDomains(result *socket.DomainsResult) string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s⚡ %d domains%s (%d core)\n", colorBold, result.Count, colorReset, result.CoreCount))
-	for _, d := range result.Domains {
-		tierColor := colorGreen
-		if d.Tier == "context" {
-			tierColor = colorGray
-		}
-		stateStr := ""
-		if d.State != "active" {
-			stateStr = fmt.Sprintf(" %s[%s]%s", colorYellow, d.State, colorReset)
-		}
-		sb.WriteString(fmt.Sprintf("  %s@%-20s%s %6.1f hits  %s%-7s%s  %s%s\n",
-			colorMagenta, d.Name, colorReset,
-			d.Hits,
-			tierColor, d.Tier, colorReset,
-			d.Source, stateStr))
-	}
-	return sb.String()
-}
-
-// formatStats formats a StatsResult for terminal display.
-func formatStats(result *socket.StatsResult) string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s⚡ aOa stats%s\n", colorBold, colorReset))
-	sb.WriteString(fmt.Sprintf("  Prompts:     %d\n", result.PromptCount))
-	sb.WriteString(fmt.Sprintf("  Domains:     %d (%d core, %d context)\n", result.DomainCount, result.CoreCount, result.ContextCount))
-	sb.WriteString(fmt.Sprintf("  Keywords:    %d\n", result.KeywordCount))
-	sb.WriteString(fmt.Sprintf("  Terms:       %d\n", result.TermCount))
-	sb.WriteString(fmt.Sprintf("  Bigrams:     %d\n", result.BigramCount))
-	sb.WriteString(fmt.Sprintf("  File hits:   %d\n", result.FileHitCount))
-	sb.WriteString(fmt.Sprintf("  Index files: %d\n", result.IndexFiles))
-	sb.WriteString(fmt.Sprintf("  Index tokens: %d\n", result.IndexTokens))
-	return sb.String()
-}

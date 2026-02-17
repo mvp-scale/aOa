@@ -2,3 +2,6 @@
 [2026-02-17T01:09:41-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
 [2026-02-17T01:16:59-05:00] remote stop, shutting down
 [2026-02-17T01:16:59-05:00] daemon stopped
+[2026-02-17T01:58:39-05:00] daemon starting
+[2026-02-17T01:58:39-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-17T01:58:39-05:00] dashboard at http://localhost:19270

@@ -36,11 +36,8 @@ func init() {
 	rootCmd.AddCommand(findCmd)
 	rootCmd.AddCommand(locateCmd)
 	rootCmd.AddCommand(treeCmd)
-	rootCmd.AddCommand(domainsCmd)
-	rootCmd.AddCommand(intentCmd)
-	rootCmd.AddCommand(bigramsCmd)
-	rootCmd.AddCommand(statsCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(wipeCmd)
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(openCmd)
 }

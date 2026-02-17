@@ -14,6 +14,7 @@ import (
 	claude "github.com/corey/aoa/internal/adapters/claude"
 	fsw "github.com/corey/aoa/internal/adapters/fsnotify"
 	"github.com/corey/aoa/internal/adapters/socket"
+	"github.com/corey/aoa/internal/adapters/web"
 	"github.com/corey/aoa/internal/domain/enricher"
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/domain/learner"
@@ -26,19 +27,21 @@ type App struct {
 	ProjectRoot string
 	ProjectID   string
 
-	Store    *bbolt.Store
-	Watcher  *fsw.Watcher
-	Enricher *enricher.Enricher
-	Engine   *index.SearchEngine
-	Learner  *learner.Learner
-	Server   *socket.Server
-	Reader   *claude.Reader
-	Index    *ports.Index
+	Store     *bbolt.Store
+	Watcher   *fsw.Watcher
+	Enricher  *enricher.Enricher
+	Engine    *index.SearchEngine
+	Learner   *learner.Learner
+	Server    *socket.Server
+	WebServer *web.Server
+	Reader    *claude.Reader
+	Index     *ports.Index
 
 	mu             sync.Mutex             // serializes learner access (searches are concurrent)
 	promptN        uint32                 // prompt counter (incremented on each user input)
 	lastAutotune   *learner.AutotuneResult // most recent autotune result (for status line)
 	statusLinePath string                 // project-local path for status line file
+	httpPort       int                    // preferred HTTP port (0 = auto from project root)
 }
 
 // Config holds initialization parameters for the App.
@@ -46,6 +49,7 @@ type Config struct {
 	ProjectRoot string
 	ProjectID   string
 	DBPath      string // path to bbolt file (default: .aoa/aoa.db)
+	HTTPPort    int    // preferred HTTP port (default: computed from project root)
 }
 
 // New creates an App with all dependencies wired. Does not start services.
@@ -135,11 +139,16 @@ func New(cfg Config) (*App, error) {
 		Index:          idx,
 		promptN:        lrn.PromptCount(),
 		statusLinePath: statusPath,
+		httpPort:       cfg.HTTPPort,
 	}
 
 	// Create server with App as query provider (for domains, stats, etc.)
 	sockPath := socket.SocketPath(cfg.ProjectRoot)
 	a.Server = socket.NewServer(engine, idx, sockPath, a)
+
+	// Create HTTP server for web dashboard
+	httpPortFile := filepath.Join(cfg.ProjectRoot, ".aoa", "http.port")
+	a.WebServer = web.NewServer(a, idx, engine, httpPortFile)
 
 	// Wire search observer: search results → learning signals
 	engine.SetObserver(a.searchObserver)
@@ -216,10 +225,18 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 	}
 }
 
-// Start begins the daemon (socket server + file watcher + session reader).
+// Start begins the daemon (socket server + HTTP server + session reader).
 func (a *App) Start() error {
 	if err := a.Server.Start(); err != nil {
 		return fmt.Errorf("start server: %w", err)
+	}
+	// Start HTTP dashboard — non-fatal if port unavailable
+	httpPort := a.httpPort
+	if httpPort == 0 {
+		httpPort = web.DefaultPort(a.ProjectRoot)
+	}
+	if err := a.WebServer.Start(httpPort); err != nil {
+		fmt.Printf("[warning] HTTP dashboard unavailable: %v\n", err)
 	}
 	// Start session reader — tails Claude session logs for learning signals
 	a.Reader.Start(a.onSessionEvent)
@@ -234,6 +251,7 @@ func (a *App) Start() error {
 func (a *App) Stop() error {
 	a.Reader.Stop()
 	a.Watcher.Stop()
+	a.WebServer.Stop()
 	a.Server.Stop()
 	// Persist final learner state before shutdown
 	a.mu.Lock()

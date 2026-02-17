@@ -2,7 +2,9 @@ package integration
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -695,7 +697,7 @@ func TestEgrep_NoDaemon(t *testing.T) {
 }
 
 // =============================================================================
-// V-10: Query commands (health, find, locate, domains, intent, bigrams, stats)
+// V-10: Query commands (health, find, locate, open)
 // =============================================================================
 
 func TestHealth_Running(t *testing.T) {
@@ -782,69 +784,116 @@ func TestLocate_NoArg(t *testing.T) {
 	}
 }
 
-func TestDomains_Basic(t *testing.T) {
+func TestOpen_NoDaemon(t *testing.T) {
 	dir := setupProject(t)
-	runAOA(t, dir, "init")
-
-	cleanup := startDaemon(t, dir)
-	defer cleanup()
-
-	stdout, _, exit := runAOA(t, dir, "domains")
-	if exit != 0 {
-		t.Fatalf("domains exit %d", exit)
+	_, stderr, exit := runAOA(t, dir, "open")
+	if exit == 0 {
+		t.Error("open without daemon should exit non-zero")
 	}
-	if !strings.Contains(stdout, "domains") {
-		t.Errorf("should contain 'domains':\n%s", stdout)
+	if !strings.Contains(stderr, "daemon not running") {
+		t.Errorf("error should mention 'daemon not running':\n%s", stderr)
 	}
 }
 
-func TestIntent_Basic(t *testing.T) {
+func TestDashboard_HealthEndpoint(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
 
 	cleanup := startDaemon(t, dir)
 	defer cleanup()
 
-	stdout, _, exit := runAOA(t, dir, "intent")
-	if exit != 0 {
-		t.Fatalf("intent exit %d", exit)
+	// Read the HTTP port file
+	portData, err := os.ReadFile(filepath.Join(dir, ".aoa", "http.port"))
+	if err != nil {
+		t.Fatalf("read http.port: %v", err)
 	}
-	if !strings.Contains(stdout, "Intent tracking") {
-		t.Errorf("should contain 'Intent tracking':\n%s", stdout)
+	port := strings.TrimSpace(string(portData))
+	url := fmt.Sprintf("http://localhost:%s/api/health", port)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatalf("GET /api/health: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("decode JSON: %v", err)
+	}
+	if result["status"] != "ok" {
+		t.Errorf("expected status 'ok', got %v", result["status"])
 	}
 }
 
-func TestBigrams_Basic(t *testing.T) {
+func TestDashboard_HTMLServed(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
 
 	cleanup := startDaemon(t, dir)
 	defer cleanup()
 
-	stdout, _, exit := runAOA(t, dir, "bigrams")
-	if exit != 0 {
-		t.Fatalf("bigrams exit %d", exit)
+	portData, err := os.ReadFile(filepath.Join(dir, ".aoa", "http.port"))
+	if err != nil {
+		t.Fatalf("read http.port: %v", err)
 	}
-	if !strings.Contains(stdout, "bigrams") {
-		t.Errorf("should contain 'bigrams':\n%s", stdout)
+	port := strings.TrimSpace(string(portData))
+	url := fmt.Sprintf("http://localhost:%s/static/index.html", port)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	ct := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("expected text/html, got %s", ct)
 	}
 }
 
-func TestStats_Basic(t *testing.T) {
+func TestDashboard_PortCleanedOnStop(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
 
 	cleanup := startDaemon(t, dir)
-	defer cleanup()
+	portFile := filepath.Join(dir, ".aoa", "http.port")
 
-	stdout, _, exit := runAOA(t, dir, "stats")
-	if exit != 0 {
-		t.Fatalf("stats exit %d", exit)
+	// Port file should exist while running.
+	if _, err := os.Stat(portFile); os.IsNotExist(err) {
+		t.Error("http.port file should exist while daemon is running")
 	}
-	for _, want := range []string{"Prompts:", "Domains:", "Index files:"} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("stats missing %q:\n%s", want, stdout)
-		}
+
+	cleanup()
+	time.Sleep(200 * time.Millisecond)
+
+	// Port file should be removed after stop.
+	if _, err := os.Stat(portFile); err == nil {
+		t.Error("http.port file should be removed after daemon stop")
+	}
+}
+
+func TestDaemonStart_ShowsDashboardURL(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	stdout, _, exit := runAOA(t, dir, "daemon", "start")
+	if exit != 0 {
+		t.Fatalf("daemon start failed: exit %d, output: %s", exit, stdout)
+	}
+	defer func() { runAOA(t, dir, "daemon", "stop") }()
+
+	if !strings.Contains(stdout, "dashboard:") {
+		t.Errorf("daemon start should show dashboard URL:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "http://localhost:") {
+		t.Errorf("daemon start should include http://localhost:\n%s", stdout)
 	}
 }
 
@@ -863,10 +912,7 @@ func TestNoDaemon_AllCommands(t *testing.T) {
 		{"egrep", []string{"egrep", "test"}},
 		{"find", []string{"find", "*.go"}},
 		{"locate", []string{"locate", "main"}},
-		{"domains", []string{"domains"}},
-		{"intent", []string{"intent"}},
-		{"bigrams", []string{"bigrams"}},
-		{"stats", []string{"stats"}},
+		{"open", []string{"open"}},
 	}
 
 	for _, tc := range cases {

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aOa Dashboard</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --text: #c8c8d0;
+    --text-dim: #6e6e80;
+    --cyan: #00e5ff;
+    --green: #00c853;
+    --magenta: #e040fb;
+    --yellow: #ffd600;
+    --red: #ff1744;
+    --gray: #6e6e80;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .brand { color: var(--cyan); font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    display: inline-block;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .status-dot.disconnected { background: var(--red); animation: none; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .header-info { display: flex; gap: 20px; color: var(--text-dim); font-size: 12px; }
+  .header-info span { display: flex; align-items: center; gap: 6px; }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .stat-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 22px; font-weight: 700; color: var(--cyan); margin-top: 4px; }
+
+  /* Panels */
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 800px) { .panels { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-header .count { color: var(--cyan); }
+  .panel-body { padding: 8px 0; max-height: 500px; overflow-y: auto; }
+
+  /* Domains table */
+  .domain-row {
+    display: grid;
+    grid-template-columns: 1fr 70px 70px;
+    padding: 6px 16px;
+    align-items: center;
+    font-size: 12px;
+  }
+  .domain-row:hover { background: rgba(0,229,255,0.04); }
+  .domain-name { color: var(--magenta); }
+  .domain-hits { text-align: right; font-variant-numeric: tabular-nums; }
+  .domain-tier { text-align: center; }
+  .tier-core { color: var(--green); }
+  .tier-context { color: var(--gray); }
+
+  /* Bigrams */
+  .bigram-row {
+    display: grid;
+    grid-template-columns: 1fr 50px 1fr;
+    padding: 5px 16px;
+    align-items: center;
+    font-size: 12px;
+    gap: 10px;
+  }
+  .bigram-row:hover { background: rgba(0,229,255,0.04); }
+  .bigram-name { color: var(--text); }
+  .bigram-count { text-align: right; color: var(--cyan); font-variant-numeric: tabular-nums; }
+  .bigram-bar-wrap { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .bigram-bar { height: 100%; background: var(--cyan); border-radius: 2px; transition: width 0.3s ease; }
+
+  /* Disconnected overlay */
+  .disconnected-banner {
+    display: none;
+    padding: 8px 16px;
+    background: rgba(255,23,68,0.1);
+    border: 1px solid var(--red);
+    border-radius: 6px;
+    color: var(--red);
+    text-align: center;
+    margin-bottom: 16px;
+    font-size: 12px;
+  }
+  .disconnected-banner.show { display: block; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span class="brand">aOa</span>
+    <span class="status-dot" id="statusDot"></span>
+  </div>
+  <div class="header-info">
+    <span>uptime: <b id="uptime">--</b></span>
+    <span>files: <b id="fileCount">--</b></span>
+    <span>tokens: <b id="tokenCount">--</b></span>
+  </div>
+</div>
+
+<div class="disconnected-banner" id="disconnectedBanner">
+  Daemon unreachable — polling paused. Reconnecting...
+</div>
+
+<div class="stats-grid" id="statsGrid">
+  <div class="stat-card"><div class="stat-label">Prompts</div><div class="stat-value" id="statPrompts">--</div></div>
+  <div class="stat-card"><div class="stat-label">Domains</div><div class="stat-value" id="statDomains">--</div></div>
+  <div class="stat-card"><div class="stat-label">Keywords</div><div class="stat-value" id="statKeywords">--</div></div>
+  <div class="stat-card"><div class="stat-label">Terms</div><div class="stat-value" id="statTerms">--</div></div>
+  <div class="stat-card"><div class="stat-label">Bigrams</div><div class="stat-value" id="statBigrams">--</div></div>
+  <div class="stat-card"><div class="stat-label">File Hits</div><div class="stat-value" id="statFileHits">--</div></div>
+  <div class="stat-card"><div class="stat-label">Index Files</div><div class="stat-value" id="statIndexFiles">--</div></div>
+  <div class="stat-card"><div class="stat-label">Index Tokens</div><div class="stat-value" id="statIndexTokens">--</div></div>
+</div>
+
+<div class="panels">
+  <div class="panel">
+    <div class="panel-header">
+      <span>Domains</span>
+      <span class="count" id="domainCount">--</span>
+    </div>
+    <div class="panel-body" id="domainsBody"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header">
+      <span>Bigrams</span>
+      <span class="count" id="bigramCount">--</span>
+    </div>
+    <div class="panel-body" id="bigramsBody"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  let connected = true;
+  let retryDelay = 2000;
+  let timer = null;
+
+  function setConnected(ok) {
+    connected = ok;
+    document.getElementById('statusDot').classList.toggle('disconnected', !ok);
+    document.getElementById('disconnectedBanner').classList.toggle('show', !ok);
+  }
+
+  async function fetchAll() {
+    try {
+      const [health, stats, domains, bigrams] = await Promise.all([
+        fetch('/api/health').then(r => r.json()),
+        fetch('/api/stats').then(r => r.json()),
+        fetch('/api/domains').then(r => r.json()),
+        fetch('/api/bigrams').then(r => r.json()),
+      ]);
+
+      setConnected(true);
+      retryDelay = 2000;
+
+      // Health
+      document.getElementById('uptime').textContent = health.uptime || '--';
+      document.getElementById('fileCount').textContent = health.file_count;
+      document.getElementById('tokenCount').textContent = health.token_count;
+
+      // Stats
+      document.getElementById('statPrompts').textContent = stats.prompt_count;
+      document.getElementById('statDomains').textContent = stats.domain_count + ' (' + stats.core_count + ' core)';
+      document.getElementById('statKeywords').textContent = stats.keyword_count;
+      document.getElementById('statTerms').textContent = stats.term_count;
+      document.getElementById('statBigrams').textContent = stats.bigram_count;
+      document.getElementById('statFileHits').textContent = stats.file_hit_count;
+      document.getElementById('statIndexFiles').textContent = stats.index_files;
+      document.getElementById('statIndexTokens').textContent = stats.index_tokens;
+
+      // Domains
+      document.getElementById('domainCount').textContent = domains.count + ' (' + domains.core_count + ' core)';
+      let dhtml = '';
+      (domains.domains || []).forEach(function(d) {
+        const tierClass = d.tier === 'core' ? 'tier-core' : 'tier-context';
+        dhtml += '<div class="domain-row">' +
+          '<span class="domain-name">@' + esc(d.name) + '</span>' +
+          '<span class="domain-hits">' + d.hits.toFixed(1) + '</span>' +
+          '<span class="domain-tier ' + tierClass + '">' + esc(d.tier) + '</span>' +
+          '</div>';
+      });
+      document.getElementById('domainsBody').innerHTML = dhtml;
+
+      // Bigrams
+      const bg = bigrams.bigrams || {};
+      const sorted = Object.entries(bg).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 50);
+      document.getElementById('bigramCount').textContent = bigrams.count;
+      const maxCount = sorted.length > 0 ? sorted[0][1] : 1;
+      let bhtml = '';
+      sorted.forEach(function(pair) {
+        const pct = (pair[1] / maxCount * 100).toFixed(1);
+        bhtml += '<div class="bigram-row">' +
+          '<span class="bigram-name">' + esc(pair[0]) + '</span>' +
+          '<span class="bigram-count">' + pair[1] + '</span>' +
+          '<span class="bigram-bar-wrap"><span class="bigram-bar" style="width:' + pct + '%"></span></span>' +
+          '</div>';
+      });
+      document.getElementById('bigramsBody').innerHTML = bhtml;
+
+    } catch (e) {
+      setConnected(false);
+      retryDelay = Math.min(retryDelay * 1.5, 10000);
+    }
+
+    timer = setTimeout(fetchAll, retryDelay);
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  fetchAll();
+})();
+</script>
+</body>
+</html>
