@@ -32,19 +32,23 @@ type Server struct {
 	sockPath string
 	started  time.Time
 
-	done chan struct{}
-	wg   sync.WaitGroup
+	done         chan struct{}
+	shutdownCh   chan struct{} // closed when a remote shutdown request is received
+	shutdownOnce sync.Once
+	stopOnce     sync.Once
+	wg           sync.WaitGroup
 }
 
 // NewServer creates a daemon server backed by the given search engine.
 // The queries parameter may be nil if learner/wipe features are not needed.
 func NewServer(engine *index.SearchEngine, idx *ports.Index, sockPath string, queries AppQueries) *Server {
 	return &Server{
-		engine:   engine,
-		idx:      idx,
-		queries:  queries,
-		sockPath: sockPath,
-		done:     make(chan struct{}),
+		engine:     engine,
+		idx:        idx,
+		queries:    queries,
+		sockPath:   sockPath,
+		done:       make(chan struct{}),
+		shutdownCh: make(chan struct{}),
 	}
 }
 
@@ -77,14 +81,24 @@ func (s *Server) Start() error {
 }
 
 // Stop gracefully shuts down the server, closing the listener and removing the socket file.
+// Idempotent — safe to call multiple times (e.g., after remote shutdown + signal).
 func (s *Server) Stop() error {
-	close(s.done)
-	if s.listener != nil {
-		s.listener.Close()
-	}
-	s.wg.Wait()
-	os.Remove(s.sockPath)
+	s.stopOnce.Do(func() {
+		close(s.done)
+		if s.listener != nil {
+			s.listener.Close()
+		}
+		s.wg.Wait()
+		os.Remove(s.sockPath)
+	})
 	return nil
+}
+
+// ShutdownCh returns a channel that is closed when a remote shutdown request
+// is received. The daemon's main goroutine should select on this alongside
+// OS signals so the process actually exits after a remote stop.
+func (s *Server) ShutdownCh() <-chan struct{} {
+	return s.shutdownCh
 }
 
 // Addr returns the socket path the server is listening on.
@@ -132,7 +146,7 @@ func (s *Server) handleConn(conn net.Conn) {
 		s.writeResponse(conn, resp)
 
 		if req.Method == MethodShutdown {
-			go s.Stop()
+			s.shutdownOnce.Do(func() { close(s.shutdownCh) })
 			return
 		}
 	}

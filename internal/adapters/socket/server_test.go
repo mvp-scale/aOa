@@ -137,14 +137,22 @@ func TestServer_Shutdown(t *testing.T) {
 	// Verify it's running
 	assert.True(t, client.Ping())
 
-	// Shutdown
+	// Send shutdown request — this closes shutdownCh (signals the daemon).
 	err := client.Shutdown()
 	require.NoError(t, err)
 
-	// Give server time to shut down
-	srv.wg.Wait()
+	// ShutdownCh should be closed.
+	select {
+	case <-srv.ShutdownCh():
+		// Good — channel is closed, daemon would call Stop() here.
+	default:
+		t.Fatal("ShutdownCh should be closed after Shutdown request")
+	}
 
-	// Socket file should be removed
+	// The daemon is responsible for calling Stop() after receiving the signal.
+	srv.Stop()
+
+	// Socket file should be removed.
 	_, err = os.Stat(sockPath)
 	assert.True(t, os.IsNotExist(err), "socket file should be removed after shutdown")
 }

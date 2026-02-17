@@ -42,10 +42,10 @@ func runWipe(cmd *cobra.Command, args []string) error {
 	sockPath := socket.SocketPath(root)
 	client := socket.NewClient(sockPath)
 
-	// If daemon is running, wipe via socket
+	// If daemon is running, wipe via socket — the daemon holds the lock.
 	if client.Ping() {
 		if err := client.Wipe(); err != nil {
-			return err
+			return fmt.Errorf("wipe via daemon failed: %w", err)
 		}
 		fmt.Println("⚡ project data wiped (daemon)")
 		return nil
@@ -60,7 +60,10 @@ func runWipe(cmd *cobra.Command, args []string) error {
 
 	store, err := bbolt.NewStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("open store: %w", err)
+		if isDBLockError(err) {
+			return fmt.Errorf("cannot wipe: %s", diagnoseDBLock(root))
+		}
+		return fmt.Errorf("open database: %w", err)
 	}
 
 	projectID := filepath.Base(root)

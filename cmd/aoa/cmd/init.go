@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/corey/aoa/internal/adapters/bbolt"
+	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/adapters/treesitter"
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/ports"
@@ -43,6 +44,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 	dbPath := filepath.Join(root, ".aoa", "aoa.db")
 	projectID := filepath.Base(root)
 
+	// Fail fast if daemon is running — it holds the bbolt exclusive lock.
+	sockPath := socket.SocketPath(root)
+	client := socket.NewClient(sockPath)
+	if client.Ping() {
+		return fmt.Errorf("cannot init: database is locked by the running daemon\n" +
+			"  → stop it first:  aoa daemon stop\n" +
+			"  → then retry:     aoa init")
+	}
+
 	// Ensure .aoa directory exists
 	if err := os.MkdirAll(filepath.Join(root, ".aoa"), 0755); err != nil {
 		return fmt.Errorf("create .aoa dir: %w", err)
@@ -50,7 +60,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	store, err := bbolt.NewStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("open store: %w", err)
+		if isDBLockError(err) {
+			return fmt.Errorf("cannot init: %s", diagnoseDBLock(root))
+		}
+		return fmt.Errorf("open database: %w", err)
 	}
 	defer store.Close()
 

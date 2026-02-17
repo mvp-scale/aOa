@@ -1,8 +1,38 @@
 # aOa GO-BOARD
 
-> **Updated**: 2026-02-16 | **Phase**: Phase 6 IN PROGRESS | **Status**: 181 tests passing, 0 failing — 14 commands, daemon + init working, full search loop operational
+> **Updated**: 2026-02-17 | **Phase**: Phase 6b DONE | **Status**: 266 tests passing, 0 failing — 14 commands, 51 integration tests, daemonized background process, full search loop operational
 > **Architecture**: Hexagonal (ports/adapters) + Session Prism | **Target**: Single binary, zero Docker
 > **Module**: `github.com/corey/aoa` | **Binary**: `cmd/aoa/main.go`
+
+---
+
+## Quick Start (Resume Session)
+
+**Where We Are:** Phase 6b complete. All 14 CLI commands working, daemon daemonizes, 266 tests passing.
+
+**What Works:**
+```bash
+./aoa init                # Index project
+./aoa daemon start        # Returns terminal, logs to .aoa/daemon.log
+./aoa grep login         # Search
+./aoa daemon stop        # Graceful shutdown
+```
+
+**Next Phase:** Phase 7 — Validate against Python aOa (search diff, learner state diff, benchmarks)
+
+**Key Files:**
+- `cmd/aoa/cmd/daemon.go` — daemonization, PID mgmt, orphan cleanup
+- `cmd/aoa/cmd/errors.go` — lock diagnosis helpers
+- `test/integration/cli_test.go` — 51 battle-tested integration tests
+- `.aoa/daemon.log` — daemon output (timestamped)
+- `.aoa/daemon.pid` — process ID (removed on clean shutdown)
+
+**Build & Test:**
+```bash
+go build ./cmd/aoa/              # Build binary
+go test ./... -count=1           # 266 tests
+go test ./test/integration/ -v   # 51 integration tests
+```
 
 ---
 
@@ -346,6 +376,142 @@ test/
 - 9 new CLI commands: find, locate, tree, domains, intent, bigrams, stats, config, wipe
 - `tree` and `config` work without daemon; `wipe` works with or without
 - All 211 existing tests pass (0 regressions)
+
+---
+
+## Phase 6b: CLI Validation & Hardening
+
+**Goal:** Fix daemon lifecycle bugs, daemonize background process, battle-test all 14 commands, actionable error messages for every failure mode
+
+| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
+|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
+| **BUG FIXES** |
+| V-01 | bbolt | Add 1s timeout to bolt.Open (prevents infinite hang on lock contention) | Critical | Done | 🟢 | - | `internal/adapters/bbolt/store.go` | 4 lock contention unit tests: timeout fires ~1s, concurrent attempts, reopen after close |
+| V-02 | Init | Daemon detection guard + lock diagnosis with remediation | Critical | Done | 🟢 | V-01 | `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/errors.go` | 6 tests: happy, empty, reinit, daemon blocks, orphaned lock, external lock |
+| V-03 | Wipe | Lock diagnosis with 3-state detection (daemon/stale/unknown) | High | Done | 🟢 | V-01 | `cmd/aoa/cmd/wipe.go`, `cmd/aoa/cmd/errors.go` | 4 tests: direct, daemon, no-data, orphaned lock |
+| V-03b | Daemon | Fix process not exiting after remote `daemon stop` (ShutdownCh) | Critical | Done | 🟢 | - | `internal/adapters/socket/server.go`, `cmd/aoa/cmd/daemon.go` | TestDaemon_RemoteStop: process exits, DB unlocked, init works after |
+| V-03c | Daemon | Idempotent Stop (sync.Once), stale socket cleanup, verified stop | High | Done | 🟢 | V-03b | `internal/adapters/socket/server.go`, `cmd/aoa/cmd/daemon.go` | TestDaemon_StopStaleSocket, TestDaemon_StartStopStart |
+| **DAEMONIZATION** |
+| V-13 | Daemon | Background daemon: `daemon start` forks, returns terminal, writes `.aoa/daemon.log` | Critical | Done | 🟢 | V-03b | `cmd/aoa/cmd/daemon.go` | TestDaemon_StartStop, TestDaemon_RemoteStop (PID-based) |
+| V-14 | Daemon | PID file management: `.aoa/daemon.pid` written on start, removed on clean shutdown | High | Done | 🟢 | V-13 | `cmd/aoa/cmd/daemon.go` | TestDaemon_RemoteStop: PID file removed after stop |
+| V-15 | Daemon | PID-based orphan stop: `daemon stop` reads PID file, SIGTERM/SIGKILL orphaned processes | High | Done | 🟢 | V-14 | `cmd/aoa/cmd/daemon.go` | TestDaemon_StopStaleSocket, stale PID cleanup |
+| V-16 | Daemon | Early exit detection: parent reads log tail on child failure, shows error inline | High | Done | 🟢 | V-13 | `cmd/aoa/cmd/daemon.go` | TestDaemon_StartLockedDB: error contains "locked" from log tail |
+| **INTEGRATION TESTS** |
+| V-04 | Infra | Test infrastructure: TestMain binary, setupProject, runAOA, startDaemon, holdDBLock, socketPathForDir | Critical | Done | 🟢 | V-01 | `test/integration/cli_test.go` | Binary builds once, 6 helpers, flock-based lock simulation |
+| V-05 | CLI | Standalone commands (tree, config) | High | Done | 🟢 | V-04 | `test/integration/cli_test.go` | 4 tests: tree basic/depth, config basic/no-daemon |
+| V-06 | CLI | Init command (happy, empty, reinit, daemon, orphan, external lock) | High | Done | 🟢 | V-04 | `test/integration/cli_test.go` | 6 tests with timing + error message quality assertions |
+| V-07 | CLI | Wipe command (direct, daemon, no-data, orphaned lock) | High | Done | 🟢 | V-04 | `test/integration/cli_test.go` | 4 tests with lock contention simulation |
+| V-08 | CLI | Daemon lifecycle (start/stop, remote stop, double start, stale socket, restart, locked DB) | High | Done | 🟢 | V-04 | `test/integration/cli_test.go` | 7 tests: full state machine coverage |
+| V-09 | CLI | Search commands (grep, egrep — basic, no-daemon, no-query) | High | Done | 🟢 | V-04 | `test/integration/cli_test.go` | 5 tests |
+| V-10 | CLI | Query commands (health, find, locate, domains, intent, bigrams, stats) | High | Done | 🟢 | V-04 | `test/integration/cli_test.go` | 10 tests with output field validation |
+| V-11 | CLI | No-daemon table test (8 commands exit non-zero with guidance) | High | Done | 🟢 | V-04 | `test/integration/cli_test.go` | 8 subtests |
+| V-12 | CLI | Error message quality + timing guarantees | High | Done | 🟢 | V-04 | `test/integration/cli_test.go` | 6 tests: remediation text validation, all locked ops <3s |
+
+**Tests:**
+- `go test ./test/integration/ -v` — **51/51 passing** (all integration tests incl. subtests)
+- `go test ./internal/adapters/bbolt/ -run OpenTimeout` — **4/4 passing** (lock contention unit tests)
+- `go test ./...` — **266 tests passing**, 0 failing
+- `go vet ./...` — clean
+
+**Validation:**
+- **Daemonized:** `daemon start` returns terminal immediately, child runs in background
+  - Logs to `.aoa/daemon.log` (timestamped, append mode)
+  - PID tracked in `.aoa/daemon.pid` (removed on clean shutdown)
+  - Parent detects child failure and shows log tail inline — no manual log check needed
+- **Root cause fixed:** daemon process exits after remote `daemon stop` (ShutdownCh + select)
+- `bolt.Open` uses `Timeout: 1*time.Second` — 4 unit tests prove it fires at ~1s, not forever
+- `Server.Stop()` is idempotent (sync.Once) — safe to call from both signal handler and shutdown
+- `daemon stop` three-tier detection:
+  1. Socket reachable → graceful shutdown via socket, verify via Ping loop
+  2. PID file exists → read PID, SIGTERM, wait, SIGKILL if needed
+  3. Stale socket only → remove, suggest checking for processes
+- `init`, `wipe`, `daemon start` all detect lock contention and give 3-state diagnosis:
+  - Daemon running → "stop it first: aoa daemon stop"
+  - Stale socket → "find the process: ps aux | grep 'aoa daemon'"
+  - Unknown lock → "find the process: ps aux | grep 'aoa'"
+- Real-world verified: `daemon start` → returns terminal → `daemon stop` → `init` works cleanly
+
+**Session log (2026-02-17) — Phase 6b Complete:**
+
+**Initial Problem:** User hit stale daemon (PID 441069) holding bbolt lock forever with no socket file. `daemon start` locked up terminal. Zero integration tests covering real failure modes.
+
+**Root Cause Analysis:**
+- `daemon stop` closed socket but process stayed alive on `<-sigCh` forever (nothing unblocked it)
+- No timeout on `bolt.Open()` — second open hung forever instead of failing fast
+- Integration tests used `startDaemon()` that manually managed process — not realistic
+- No log file — daemon output went nowhere, users blind to failures
+
+**What Was Fixed:**
+
+1. **Daemon Shutdown Flow** (server.go, daemon.go)
+   - Added `shutdownCh` to server — closes on remote shutdown request
+   - Daemon main goroutine now selects on **both** `sigCh` and `ShutdownCh()`
+   - `Server.Stop()` idempotent via `sync.Once` — safe from both paths
+   - `daemon stop` verifies process died via Ping loop (3s timeout)
+
+2. **Daemonization** (daemon.go)
+   - `daemon start` re-execs itself with `AOA_DAEMON_CHILD=1` env var
+   - Child runs detached (Setpgid), stdout/stderr → `.aoa/daemon.log`
+   - PID written to `.aoa/daemon.pid` (removed on clean shutdown)
+   - Parent polls socket, detects early child exit, reads log tail inline
+   - **User experience:** Returns terminal immediately, shows PID + log path
+
+3. **Lock Contention Safety** (store.go, errors.go)
+   - `bolt.Open` uses `Timeout: 1*time.Second` — no more infinite hangs
+   - Created `isDBLockError()` and `diagnoseDBLock()` (3-state detection)
+   - All commands (init, wipe, daemon start) give actionable remediation
+
+4. **PID-Based Orphan Cleanup** (daemon.go)
+   - `daemon stop` three-tier: socket → PID file → stale socket
+   - SIGTERM, wait 3s, SIGKILL if needed
+   - Cleans up `.aoa/daemon.pid` and socket on all paths
+
+5. **Battle-Tested Integration Tests** (cli_test.go)
+   - Rewrote from 32 existence checks to 51 multi-angle tests
+   - `holdDBLock(flock)` simulates external lock holder
+   - Orphaned process tests: start daemon, remove socket, verify fast fail
+   - Timing guarantees: all locked ops complete <3s (not hang)
+   - Error message quality: verify remediation text contains exact commands
+   - `startDaemon()` simplified — just calls `daemon start` (realistic)
+
+6. **Unit Tests** (store_test.go)
+   - 4 lock contention tests: timeout ~1s, error message, reopen, concurrent
+
+**Current State:**
+- 266 tests passing, 0 failing
+- `aoa daemon start` → returns terminal, logs to `.aoa/daemon.log`
+- `aoa daemon stop` → graceful shutdown, kills orphans, cleans up files
+- All 14 commands working, battle-tested, actionable errors
+
+**Files Modified:**
+- `internal/adapters/socket/server.go` — shutdownCh, idempotent Stop
+- `internal/adapters/socket/server_test.go` — updated shutdown test
+- `cmd/aoa/cmd/daemon.go` — full daemonization, PID management, log tailing
+- `cmd/aoa/cmd/errors.go` — NEW: lock diagnosis helpers
+- `cmd/aoa/cmd/init.go` — lock diagnosis
+- `cmd/aoa/cmd/wipe.go` — lock diagnosis
+- `internal/adapters/bbolt/store.go` — 1s timeout
+- `internal/adapters/bbolt/store_test.go` — 4 lock tests
+- `test/integration/cli_test.go` — 51 comprehensive tests
+
+**What's Left for Phase 7:**
+- Parallel run Python vs Go (5 test projects)
+- Search diff (100 queries, zero divergence)
+- Learner state diff (200 intents, zero tolerance)
+- Benchmark comparison (search, autotune, startup, memory)
+- Migration docs
+
+**Production-Ready Checklist:**
+- ✅ Daemon daemonizes properly
+- ✅ No infinite hangs on lock contention
+- ✅ Actionable errors for every failure mode
+- ✅ Orphaned processes cleaned up
+- ✅ Log file for debugging
+- ✅ PID file for process tracking
+- ✅ All 14 commands tested
+- ✅ Socket, PID, and log cleanup on shutdown
+- ⏸️ Performance validation (Phase 7)
+- ⏸️ Python parity validation (Phase 7)
 
 ---
 

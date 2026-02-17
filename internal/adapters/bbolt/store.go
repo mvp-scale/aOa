@@ -7,6 +7,7 @@ package bbolt
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/corey/aoa/internal/ports"
 	bolt "go.etcd.io/bbolt"
@@ -29,7 +30,7 @@ type Store struct {
 
 // NewStore opens (or creates) a bbolt database at the given path.
 func NewStore(path string) (*Store, error) {
-	db, err := bolt.Open(path, 0600, nil)
+	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("bbolt open: %w", err)
 	}

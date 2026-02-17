@@ -447,3 +447,107 @@ func TestStore_StateSurvivesRestart(t *testing.T) {
 	assert.Equal(t, original.KeywordBlocklist, loaded.KeywordBlocklist)
 	assert.Equal(t, original.GapKeywords, loaded.GapKeywords)
 }
+
+// =============================================================================
+// Lock contention tests — verify the 1s timeout prevents hangs
+// =============================================================================
+
+func TestStore_OpenTimeout_DoesNotHang(t *testing.T) {
+	// V-01: When another process/goroutine holds the bbolt exclusive lock,
+	// a second open should timeout in ~1 second, not hang forever.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "locked.db")
+
+	// First store holds the exclusive lock.
+	store1, err := NewStore(path)
+	require.NoError(t, err)
+	defer store1.Close()
+
+	// Second open should timeout, not hang.
+	start := time.Now()
+	store2, err := NewStore(path)
+	elapsed := time.Since(start)
+
+	require.Error(t, err, "second open should fail with lock timeout")
+	assert.Nil(t, store2, "store should be nil on timeout")
+	assert.Contains(t, err.Error(), "timeout", "error should mention timeout")
+	assert.Less(t, elapsed, 3*time.Second, "should complete within 3s, not hang")
+	assert.GreaterOrEqual(t, elapsed, 900*time.Millisecond, "should wait ~1s for the configured timeout")
+}
+
+func TestStore_OpenTimeout_ErrorMessage(t *testing.T) {
+	// The error message should be useful for diagnosis — wrapped with context.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "locked.db")
+
+	store1, err := NewStore(path)
+	require.NoError(t, err)
+	defer store1.Close()
+
+	_, err = NewStore(path)
+	require.Error(t, err)
+	// Should include our "bbolt open:" wrapper
+	assert.Contains(t, err.Error(), "bbolt open")
+	assert.Contains(t, err.Error(), "timeout")
+}
+
+func TestStore_OpenAfterClose_Succeeds(t *testing.T) {
+	// After the lock holder closes, a new open should succeed immediately.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "released.db")
+
+	store1, err := NewStore(path)
+	require.NoError(t, err)
+	// Write some data so the file isn't empty.
+	require.NoError(t, store1.SaveIndex("test", makeTestIndex()))
+	store1.Close()
+
+	// Second open should succeed immediately (no timeout wait).
+	start := time.Now()
+	store2, err := NewStore(path)
+	elapsed := time.Since(start)
+
+	require.NoError(t, err, "open after close should succeed")
+	require.NotNil(t, store2)
+	assert.Less(t, elapsed, 500*time.Millisecond, "should open instantly after lock released")
+	defer store2.Close()
+
+	// Verify data is accessible.
+	idx, err := store2.LoadIndex("test")
+	require.NoError(t, err)
+	assert.Equal(t, 3, len(idx.Tokens))
+}
+
+func TestStore_OpenTimeout_ConcurrentAttempts(t *testing.T) {
+	// Multiple goroutines trying to open a locked DB should all fail fast.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "locked.db")
+
+	store1, err := NewStore(path)
+	require.NoError(t, err)
+	defer store1.Close()
+
+	const n = 3
+	errs := make(chan error, n)
+	durations := make(chan time.Duration, n)
+
+	for i := 0; i < n; i++ {
+		go func() {
+			start := time.Now()
+			s, err := NewStore(path)
+			durations <- time.Since(start)
+			if s != nil {
+				s.Close()
+			}
+			errs <- err
+		}()
+	}
+
+	for i := 0; i < n; i++ {
+		err := <-errs
+		d := <-durations
+		assert.Error(t, err, "concurrent open %d should fail", i)
+		assert.Contains(t, err.Error(), "timeout")
+		assert.Less(t, d, 3*time.Second, "concurrent open %d should not hang", i)
+	}
+}
