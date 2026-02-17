@@ -156,7 +156,7 @@ The Activity & Impact table (Overview tab) needs behavioral parity with the lega
 | A-15 | Frontend | Impact `0 hits` rendered in dim/muted (not cyan) | Medium | TODO | 🟢 | ✓ | | - | `static/index.html` | Zero-hit style distinct from positive |
 | A-16 | Frontend | Ensure all `aOa` text uses consistent casing and cyan+bold color | High | TODO | 🟢 | ✓ | | - | `static/index.html`, `app.go` | Brand audit across all surfaces |
 | **TEST RUBRIC** |
-| A-17 | Test | Build activity rubric: enumerate all action/source/attrib/impact combinations | High | TODO | 🟢 | ✓ | ✓ | - | test fixture or script | Every combination exercised and verified |
+| A-17 | Test | Build activity rubric: enumerate all action/source/attrib/impact combinations | High | Done | 🟢 | ✓ | ✓ | - | `internal/app/activity_test.go` | 13-row rubric; passing: searchAttrib (indexed/multi-or/regex), searchTarget, readSavings, ringBuffer. Failing (expected — documents A-01–A-10): source casing, impact default, guided attrib, path stripping, bash filtering, and-mode attrib |
 
 ### 8b: Conversation Tab — Narrative Redesign ✅ DONE
 
