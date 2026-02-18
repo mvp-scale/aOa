@@ -1,8 +1,9 @@
 # aOa GO-BOARD
 
-> **Updated**: 2026-02-17 | **Phase**: Phase 8 — Web Dashboard Refinement | **Status**: 315+ tests passing, 0 failing | **Progress**: ~84%
+> **Updated**: 2026-02-18 | **Phase**: Phase 8d/8e — Value Metrics & Dashboard Restructure | **Status**: 315+ tests passing, 0 failing
 > **Architecture**: Hexagonal (ports/adapters) + Session Prism | **Target**: Single binary, zero Docker
 > **Module**: `github.com/corey/aoa` | **Binary**: `cmd/aoa/main.go`
+> **Completed work**: See `.context/COMPLETED.md` for Phases 1–8c (all validated)
 
 ---
 
@@ -22,7 +23,7 @@
 ```bash
 go build ./cmd/aoa/              # Build binary
 go vet ./...                     # Static analysis
-go test ./...                    # All tests (309 passing)
+go test ./...                    # All tests (315+ passing)
 go test ./test/integration/ -v   # 42 integration tests
 make check                       # Local CI: vet + lint + test
 ```
@@ -31,15 +32,15 @@ make check                       # Local CI: vet + lint + test
 
 ## Design Goals
 
-| ID | Goal | aOa-go Solution |
-|----|------|-----------------|
-| G1 | O(1) Performance | All in-memory, observe() 5ns, autotune 2.5μs, zero hooks |
-| G2 | Grep/egrep Parity | Type-safe flag parsing, identical output format |
-| G3 | Domain Learning | Compiled binary, universal domains, event log |
-| G4 | Hit Tracking | All counters decayed in autotune, noise filter on in-memory maps |
-| G5 | Cohesive Architecture | Single binary, typed Go structs, hexagonal ports/adapters |
-| G6 | Embedded Storage | bbolt, no network, transactions native |
-| G7 | Memory Bounded | Explicit bounds, bbolt with compaction, project-scoped buckets |
+| ID | Goal | aOa-go Solution | Status |
+|----|------|-----------------|--------|
+| G1 | O(1) Performance | All in-memory, observe() 5ns, autotune 2.5μs, zero hooks | ✅ |
+| G2 | Grep/egrep Parity | Type-safe flag parsing, identical output format | ✅ |
+| G3 | Domain Learning | Compiled binary, universal domains, event log | ✅ |
+| G4 | Hit Tracking | All counters decayed in autotune, noise filter on in-memory maps | ✅ |
+| G5 | Cohesive Architecture | Single binary, typed Go structs, hexagonal ports/adapters | ✅ |
+| G6 | Embedded Storage | bbolt, no network, transactions native | ✅ |
+| G7 | Memory Bounded | Explicit bounds, bbolt with compaction, project-scoped buckets | ✅ |
 
 ## Legend
 
@@ -49,212 +50,148 @@ make check                       # Local CI: vet + lint + test
 | 🟡 | Uncertain — may need research |
 | 🔴 | Blocked — needs research first |
 
-| Status | Meaning |
-|--------|---------|
-| TODO | Not started |
-| WIP | In progress |
-| Done | Completed and validated |
+---
+
+## Phase 8d: Value Metrics — Context Runway & Savings
+
+**Goal:** Replace vanity metrics (raw token counts, keyword counts) with metrics that communicate real value. Every hero card, stat grid, and metrics panel should answer: *"What did aOa save me?"*
+
+**Guiding principle:** Lead with the metric every Claude Code user has physically felt — context filling up and the model forgetting things.
+
+**Three metric tiers (ascending perceived value):**
+
+| Tier | Metric | Formula | Display |
+|------|--------|---------|---------|
+| Vanity | Tokens saved | `Σ(full_size - guided_size)` | Small/secondary — keep but de-emphasize |
+| Tangible | Sessions extended | `tokens_saved / avg_session_cost` | Weekly rollup: "aOa gave you 3 extra sessions this week" |
+| **Visceral** | **Context runway** | `(window_max - current_usage) / burn_rate` | **Lead metric:** "47 min remaining. Without aOa: 12 min." |
+
+| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
+|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
+| V-01 | Backend | Burn rate accumulator — rolling window of tokens consumed per minute | Critical | TODO | 🟢 | - | `internal/app/app.go` | Accumulator produces stable rate after 5+ data points |
+| V-02 | Backend | Context window max lookup — map model tag to window size | High | TODO | 🟢 | - | `internal/app/app.go` | opus-4 → 200k, sonnet → 200k, haiku → 200k |
+| V-03 | Backend | Dual projection — with-aOa vs without-aOa burn rates using guided savings delta | Critical | TODO | 🟢 | V-01 | `internal/app/app.go` | Two rates diverge when guided reads occur |
+| V-04 | Backend | Context runway API — expose both projections via `/api/runway` | High | TODO | 🟢 | V-03 | `web/server.go`, `socket/protocol.go` | Returns minutes remaining with and without aOa |
+| V-05 | Backend | Weekly rollup persistence — sessions-extended counter survives daemon restart | Medium | TODO | 🟡 | V-03 | `adapters/bbolt/store.go` | Counter persists across restart, resets weekly |
+| V-06 | Frontend | Live tab hero — context runway as primary display ("47 min remaining") | Critical | TODO | 🟢 | V-04 | `static/index.html` | Hero shows dual projection with visual contrast |
+| V-07 | Frontend | Live tab metrics panel — replace prompts/domains with savings-oriented metrics | High | TODO | 🟢 | V-04 | `static/index.html` | Panel shows token savings, avg query speed, sessions extended |
+| V-08 | Frontend | Stats grid revision — cards show rolling avg speed, tokens saved, guided ratio | High | TODO | 🟢 | V-04 | `static/index.html` | Cards communicate value, not raw counters |
+
+**Kill list:** Time-saved ranges (e.g., "3.9h-9.6h") — ranges communicate uncertainty, undermine trust. Pick one defensible number or drop entirely.
 
 ---
 
-## Completed Phases (1–7b)
+## Phase 8e: Dashboard Restructure — 5-Tab Tactical Layout
 
-All phases below are **done and validated**. Collapsed for clarity.
+**Goal:** Expand from 3 tabs to 5. Each tab maps to what the user is *doing* when they click it.
 
-### Phase 1: Foundation & Test Harness — DONE
-Project structure, hexagonal architecture, test fixtures (5 learner snapshots, 26 search queries, 13-file index), behavioral parity framework. 80 tests passing.
+| New Tab | Old Tab | Content | What User Is Doing |
+|---------|---------|---------|-------------------|
+| **Live** | Overview | Real-time intent feed, activity table, context runway, status | "What's happening right now?" |
+| **Recon** | *(new)* | Search interface — grep/egrep/find in the browser | "I need to find something" |
+| **Intel** | Learning | Domain rankings, n-gram metrics, intent score | "What has aOa learned?" |
+| **Debrief** | Conversation | Session stats, conversation feed, token metrics | "What just happened?" |
+| **Arsenal** | *(new)* | Config, aliases, daemon status, setup, port management | "How is my system configured?" |
 
-### Phase 2: Core Search Engine — DONE
-O(1) indexed search, 26/26 parity tests, tree-sitter (28 languages, CGo), bbolt persistence, fsnotify watcher, Unix socket daemon. All search modes: literal, OR, AND, regex.
+| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
+|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
+| T-01 | Frontend | Rename tabs: Overview→Live, Learning→Intel, Conversation→Debrief | High | TODO | 🟢 | - | `static/index.html` | All tab labels, IDs, CSS classes updated |
+| T-02 | Frontend | Add Recon tab (stub) — "use `ag <query>` in your terminal" placeholder | Medium | TODO | 🟢 | T-01 | `static/index.html` | Tab renders, placeholder visible |
+| T-03 | Frontend | Add Arsenal tab — daemon status, config display, alias instructions, port info | Medium | TODO | 🟢 | T-01 | `static/index.html` | Shows config data from `/api/health` |
+| T-04 | Frontend | 5-tab header layout — ensure responsive at smaller widths | Medium | TODO | 🟢 | T-01 | `static/index.html` | Tabs don't overflow at 800px width |
+| T-05 | Backend | Arsenal API — expose config, alias state, daemon info | Low | TODO | 🟢 | T-03 | `web/server.go` | `/api/config` returns project root, paths, alias status |
 
-### Phase 3: Universal Domain Structure — DONE
-134 domains across 15 focus areas embedded via `//go:embed`. 938 terms, 6566 keywords. Enricher: O(1) keyword→term→domain lookup (~20ns). Shared keywords, runtime noise filter.
-
-### Phase 4: Learning System — DONE
-`observe()`, 21-step autotune, competitive displacement (top 24 core). 5/5 fixture parity (zero float divergence). Cohit dedup, bigram extraction, keyword blocklist. Autotune ~2.5μs.
-
-### Phase 5: Session Integration — DONE
-Session Prism: Claude JSONL → tailer → parser → claude.Reader → canonical events. Signal chain: UserInput→bigrams, ToolInvocation→range gate→file_hits. Status line hook. 83 tests.
-
-### Phase 6: CLI & Hardening — DONE
-11 CLI commands (grep, egrep, find, locate, tree, config, health, wipe, daemon, init, open). Daemonized background process, PID management, lock contention diagnostics, orphan cleanup. 42 integration tests, all actionable error messages.
-
-### Phase 7a: Web Dashboard — DONE
-Embedded HTML dashboard (dark/light theme, responsive, surgical DOM updates). 4 API endpoints: health, stats, domains, bigrams. Removed 4 CLI commands (domains, intent, bigrams, stats) → dashboard. Mock mode (`?mock`). Universal pulse animation.
-
-### Phase 7b: Dashboard Metrics Infrastructure — DONE
-6 new API endpoints (conversation metrics/tools/feed, top keywords/terms/files, activity feed). Session event accumulators (tokens, tools, conversation ring buffer). All 3 tabs live with real data. Activity & Impact table with 7-column layout (Action, Source, Attrib, aOa Impact, Tags, Target, Time). Activity ring buffer with search observer timing. 309 tests passing.
-
-**Key Endpoints (11 total):**
-| Endpoint | Returns |
-|----------|---------|
-| `GET /` | Embedded dashboard HTML |
-| `GET /api/health` | File count, token count, uptime |
-| `GET /api/stats` | Prompt count, domain/keyword/term/bigram counts |
-| `GET /api/domains` | Domains sorted by hits, core count, term names |
-| `GET /api/bigrams` | Bigrams + cohit KW→Term + cohit Term→Domain |
-| `GET /api/conversation/metrics` | Input/output/cache tokens, turns, hit rate |
-| `GET /api/conversation/tools` | Per-tool counters, top file reads/bash/grep |
-| `GET /api/conversation/feed` | Last 20 conversation turns |
-| `GET /api/top-keywords` | Top 15 keywords by hit count |
-| `GET /api/top-terms` | Top 15 terms by hit count |
-| `GET /api/top-files` | Top 15 files by hit count |
-| `GET /api/activity/feed` | Last 20 activity entries (Action/Source/Attrib/Impact/Target) |
+**Recon — future scope:** Full browser search UI. Stubbed for now with guidance card pointing to CLI.
+**Arsenal — future scope:** Interactive `aoa init` in browser, alias toggle, .gitignore exception editor. Start read-only.
 
 ---
 
-## Phase 8: Web Dashboard Refinement
+## Phase 8 — Remaining Attribution Work
 
-**Goal:** Elevate the dashboard from functional to best-in-class. The legacy Python CLI showed rich, well-branded information at the command line. With a full browser canvas, we can do better. Three focus areas: Activity & Impact accuracy, Conversation narrative flow, and consistent aOa branding.
+**Attribution Philosophy:**
+- **aOa gets credit** when it saves tokens or provides indexed speed
+- **"productive"** for Write/Edit — desired development work, aOa not involved
+- **"unguided"** for Claude's Grep/Glob — expensive operations where aOa indexed search is the alternative
+- **System events** (Autotune, Learn) — aOa working in the background
 
-### Research References
+### TODO Attribution Rows
 
-Legacy behavioral specs used to derive Phase 8 requirements:
+| # | Action | Source | Attrib | aOa Impact | Target | Status |
+|---|--------|--------|--------|------------|--------|--------|
+| 8 | Write | Claude | `productive` | `-` | file | TODO |
+| 9 | Edit | Claude | `productive` | `-` | file | TODO |
+| 10 | Grep (Claude's) | Claude | `unguided` | est. Nk tokens | pattern | Partial — no token cost |
+| 11 | Glob (Claude's) | Claude | `unguided` | est. Nk tokens | path/pattern | TODO |
+| 14 | Autotune | aOa | `cycle N` | +P promoted, -D demoted, ~X decayed | — | TODO |
+| 15 | Learn | aOa | `observe` | +N keywords, +M terms, +K domains | — | TODO |
 
-| Document | What It Contains |
-|----------|-----------------|
-| `research/legacy_cli/intent.png` | Screenshot of legacy `intent` command — the gold standard for Activity & Impact rendering |
-| `research/legacy_cli/COLOR_PALET.md` | Full ANSI color palette + semantic color map (CYAN+BOLD=brand, GREEN=value, YELLOW=caution, MAGENTA=domains) |
-| `research/legacy_cli/CC_THINKING.md` | How legacy extracts thinking blocks from Claude session JSONL (`.thinking` field asymmetry, content block types, display format) |
+### Tasks
 
-Key behavioral details from legacy `intent` renderer (`cli/src/50-intent.sh`):
-- **Actions shown:** Everything with ≥1 file. Bash `./aoa` commands remapped to Search/Find/etc. Non-aOa Bash without file context filtered out.
-- **"aOa guided":** Pure savings calculation — `file_size/4` vs `output_size/4`. Threshold ≥50% savings. NOT path-matching against search results.
-- **Target format:** aOa commands = `<CYAN>aOa</CYAN> <GREEN>grep</GREEN> <plain>query</plain>`. All others = relative path (project root stripped), Read includes `:start-end` range.
-- **Impact format:** Search = `<CYAN+BOLD>N hits</CYAN+BOLD> <DIM>│</DIM> <GREEN>X.XXms</GREEN>`. Guided reads = `<GREEN+BOLD>↓N%</GREEN+BOLD> (Xk → Yk)`. Zero hits = DIM.
-- **Attrib vocabulary:** `indexed`, `multi-or`, `multi-and`, `regex`, `aOa guided`, `aOa`, `-` (and legacy-only: `semantic`, `targets`, `files`, `structure`, `filename`, `content`, `session`, `context`, `+N domains`, `cycle N`)
+| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
+|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
+| AT-06 | Backend | Verify autotune is firing correctly every 50 prompts | Critical | TODO | 🟢 | - | `internal/app/app.go` | Instrument autotune, confirm via session log |
+| AT-04 | Backend | Autotune activity event: "Autotune \| aOa \| cycle N \| +P/-D/~X" | High | TODO | 🟢 | AT-06 | `internal/app/app.go` | Autotune emits activity entry |
+| AT-02 | Backend | Glob attrib = "unguided" + estimated token cost | High | TODO | 🟢 | - | `internal/app/app.go` | Glob tool calls show token estimate |
+| AT-01 | Backend | Write/Edit attrib = "productive" | Medium | TODO | 🟢 | - | `internal/app/app.go` | Write/Edit tool calls get attrib |
+| AT-03 | Backend | Grep (Claude) impact = estimated token cost | Medium | TODO | 🟢 | - | `internal/app/app.go` | Grep tool calls show token estimate |
+| AT-05 | Backend | Learn activity event (observe signals summary) | Low | TODO | 🟢 | - | `internal/app/app.go` | Observe emits summary activity entry |
+| AT-07 | Frontend | Dashboard: color-code "productive" attrib (green) | Medium | TODO | 🟢 | AT-01 | `static/index.html` | Productive attrib styled green |
+| AT-08 | Frontend | Dashboard: render token cost impact for Grep/Glob | Medium | TODO | 🟢 | AT-02, AT-03 | `static/index.html` | Token cost rendered in impact column |
 
-### 8a: Activity & Impact — Fix Pass
+### Flag Gap
 
-The Activity & Impact table (Overview tab) needs behavioral parity with the legacy `intent` command plus modern visual treatment.
-
-**Completed in this session:**
-- ✅ `FileMeta.Size` added to ports/storage — enables savings calculation from indexed file sizes
-- ✅ `TurnAction` struct with Tool/Target/Range/Impact — structured tool action data
-- ✅ `readSavings()` helper — token-based savings (bytes/4), returns `↓N% (Xk → Yk)` format
-- ✅ Range-limited reads generate impact strings with before/after token counts
-- ✅ All A-01 through A-17 tasks complete — 30 activity rubric tests passing
-
-| ID | Area | Task | Priority | Status | Conf | G2 | G5 | Deps | Files | Test Strategy |
-|----|------|------|:--------:|:------:|:----:|:--:|:--:|------|-------|---------------|
-| **BEHAVIORAL FIXES** |
-| A-01 | Backend | Source capitalization: `"claude"` → `"Claude"` in backend | High | Done | 🟢 | ✓ | | - | `internal/app/app.go` | Activity feed entries show "Claude" |
-| A-02 | Backend | Attrib: `"and"` → `"multi-and"` for AND search mode | High | Done | 🟢 | ✓ | | - | `internal/app/app.go` | AND search attrib = "multi-and" |
-| A-03 | Backend | Filter Bash `./aoa` commands — already captured as Search by observer | Critical | Done | 🟢 | ✓ | | - | `internal/app/app.go` | No duplicate Bash+Search entries |
-| A-04 | Backend | Filter Bash commands without file context (e.g., `git status`) | High | Done | 🟢 | | ✓ | A-03 | `internal/app/app.go` | Only file-bearing tool calls in feed |
-| A-05 | Backend | Read targets: strip project root, show relative path + `:offset-limit` range | High | Done | 🟢 | ✓ | | - | `internal/app/app.go` | Read target = `src/foo.go:200-400` |
-| A-06 | Backend | All tool targets: strip project root prefix for relative paths | High | Done | 🟢 | ✓ | | A-05 | `internal/app/app.go` | All targets use relative paths |
-| **"aOa GUIDED" REWORK** |
-| A-07 | Backend | Remove `guidedPaths` map — wrong approach (path-matching search results) | Critical | Done | 🟢 | | ✓ | - | `internal/app/app.go` | Map and related code removed |
-| A-08 | Backend | Implement savings-based attribution: `file_size` vs `output_size` | Critical | Done | 🟢 | ✓ | | A-07 | `internal/app/app.go` | Token approximation (bytes/4); `savingsInfo` struct + `readSavings()` reworked |
-| A-09 | Backend | Attrib = `"aOa guided"` when savings ≥ 50% (legacy threshold) | Critical | Done | 🟢 | ✓ | | A-08 | `internal/app/app.go` | Reads with ≥50% token savings get attrib |
-| A-10 | Backend | Impact format for guided reads: `↓N% (Xk → Yk)` with token approximation (bytes/4) | High | Done | 🟢 | ✓ | | A-08 | `internal/app/app.go` | Impact shows savings arrow + before/after |
-| **BRANDING & COLOR** |
-| A-11 | Frontend | Target three-part color: `<cyan+bold>aOa</cyan+bold> <green>grep</green> <plain>query</plain>` | High | Done | 🟢 | ✓ | | - | `static/index.html` | Target renders with 3 distinct colors |
-| A-12 | Frontend | Source `aOa` styled cyan+bold (brand identity color) | High | Done | 🟢 | ✓ | | - | `static/index.html` | Source column uses brand color (was already correct) |
-| A-13 | Frontend | Attrib `aOa guided`: "aOa" in cyan+bold, "guided" in green | High | Done | 🟢 | ✓ | | - | `static/index.html` | Two-tone attrib rendering |
-| A-14 | Frontend | Impact hits: `<cyan+bold>N hits</cyan+bold> <dim>│</dim> <green>X.XXms</green>` | Medium | Done | 🟢 | ✓ | | - | `static/index.html` | Three-part impact rendering |
-| A-15 | Frontend | Impact `0 hits` rendered in dim/muted (not cyan) | Medium | Done | 🟢 | ✓ | | - | `static/index.html` | Zero-hit style distinct from positive |
-| A-16 | Frontend | Ensure all `aOa` text uses consistent casing and cyan+bold color | High | Done | 🟢 | ✓ | | - | `static/index.html`, `app.go` | Nav header, domain footer, page footer, table header — all use `.aoa-brand` cyan+bold |
-| **TEST RUBRIC** |
-| A-17 | Test | Build activity rubric: enumerate all action/source/attrib/impact combinations | High | Done | 🟢 | ✓ | ✓ | - | `internal/app/activity_test.go` | 30 tests, all passing: searchAttrib (4), searchTarget (2), source casing, impact default, guided savings, no-savings, path stripping (4), bash filtering (3), full rubric (13), readSavings (4), ring buffer |
-
-### 8b: Conversation Tab — Narrative Redesign ✅ DONE
-
-Complete overhaul of the Conversation tab from flat metric cards to a two-column threaded narrative.
-
-**What was built:**
-- ✅ **Two-column feed card** — Yellow-bordered card, bottom-anchored scroll, bold yellow scrollbar
-- ✅ **Turn grouping** — All assistant events (thinking + response + tools) between user inputs merge into one row via `currentBuilder`. No more fragmented 5-6 rows per exchange.
-- ✅ **Left column: Conversation** — User line (yellow border), thinking line (purple, click to expand), assistant response (green, with model tag + timing + token count)
-- ✅ **Right column: Actions** — Tool chips (color-coded by type) with target paths, range info, and impact badges. Footer with tool/edit/guided counts.
-- ✅ **Thinking text captured** — `turnBuilder.ThinkingText` accumulates from `EventAIThinking`, truncated to 500 chars for display
-- ✅ **Per-turn token usage** — `InputTokens`/`OutputTokens` accumulated per exchange, shown as "N tok" on assistant line
-- ✅ **In-progress turn** — `ConversationTurns()` includes `currentBuilder` as first entry, so dashboard shows the turn being built live
-- ✅ **Scroll management** — Auto-scroll to bottom on new turns, "Jump to now" button when scrolled up
-- ✅ **NOW bar** — Green live indicator at bottom of feed
-- ✅ **Tool usage panel removed** — Standalone tool distribution bar and top file reads/bash panels removed; tools shown per-turn in actions column
-- ✅ **Agent-agnostic labels** — "Assistant" not "Claude"; model shown as tag (e.g., `opus-4-6`)
-
-**Wire protocol expanded:**
-- `ConversationTurnResult`: added `thinking_text`, `actions[]`, `input_tokens`, `output_tokens`
-- `TurnActionResult`: new struct with `tool`, `target`, `range`, `impact`
-- Frontend no longer fetches `/api/conversation/tools` (endpoint still exists for API consumers)
-
-| ID | Area | Task | Priority | Status |
-|----|------|------|:--------:|:------:|
-| C-01 | Frontend | Redesign: conversation as threaded narrative | Critical | Done |
-| C-02 | Frontend | Turn structure: User → thinking → response → tools | Critical | Done |
-| C-03 | Backend | Extract thinking blocks from session events | High | Done |
-| C-04 | Frontend | Real-time flow — in-progress turn visible | High | Done |
-| C-05 | Frontend | Tool calls as inline action chips per turn | High | Done |
-| C-06 | Frontend | User prompts: yellow accent | Medium | Done |
-| C-07 | Frontend | Assistant responses: green accent | Medium | Done |
-| C-08 | Frontend | Thinking blocks: dim, collapsible, click to expand | Medium | Done |
-| C-09 | Frontend | Tool chips: action-colored pills | Medium | Done |
-| C-10 | Frontend | Token metrics kept as stat cards above feed | Medium | Done |
-| C-11 | Frontend | Removed standalone tool distribution/top panels | Medium | Done |
-| C-12 | Frontend | Hero narrative retained above stat cards | Medium | Done |
-
-### 8b-2: Learning Tab — Live Signal Visualization ✅ DONE
-
-Enhanced the Learning tab with live visual feedback showing where learning signals are flowing.
-
-**What was built:**
-- ✅ **Term pills sorted by popularity** — Most-hit terms on left, least on right. Sorted by sum of keyword hits per term. Deterministic (no more random map iteration dance).
-- ✅ **Term pills gray by default** — `var(--border-subtle)` background, `var(--mute)` text. Quiet baseline.
-- ✅ **Term flash on hit** — When a keyword maps to a term and its count increases, that specific pill flashes bright green then fades back to gray over **30 seconds**. You see exactly where learning is happening.
-- ✅ **Per-term hit counts in API** — `DomainInfo.TermHits map[string]int` sent to frontend for per-term change detection.
-- ✅ **`DomainTermHitCounts()`** — New method sums keyword hits per term from learner state.
-- ✅ **Number glow on change** — All stat card values (keywords, terms, bigrams, domain count, etc.) get a subtle blue text-shadow glow that fades over 4s when they change.
-- ✅ **N-gram row flash** — Bigram, cohit kw→term, cohit term→domain rows get a green background flash (3s) and count glow (4s) when values change.
-- ✅ **Up to 10 terms per row** — Increased from 5, smaller pills with flex-wrap + overflow hidden to stay in viewable area.
-
-**Known gap: File watcher not wired** — The `fsnotify.Watcher` adapter is built and tested, `treesitter.Parser` is built and tested, but the file-watch → re-parse → update-index pipeline is not connected in `app.go`. The watcher is created and stopped but `Watch()` is never called. Dynamic re-indexing on file changes is a future task.
-
-### 8c: Global Branding & Color System
-
-Consistent semantic color language across all surfaces (dashboard, CLI, status line).
-
-| Color | Semantic Role | CSS Variable | Usage |
-|-------|--------------|-------------|-------|
-| **CYAN+BOLD** | aOa brand identity | `var(--cyan)` + `font-weight: 600` | `aOa` everywhere — headers, source column, targets |
-| **CYAN** | System/UI accent | `var(--cyan)` | Attrib values (indexed, multi-or, regex), tags, hit counts |
-| **GREEN** | Positive/value | `var(--green)` | Savings arrows, timing, "guided", grep/egrep commands |
-| **YELLOW** | Caution/in-progress | `var(--yellow)` | User prompts, learning state, warnings |
-| **RED** | Error/critical | `var(--red)` | Errors, disconnected, critical context usage |
-| **PURPLE/MAGENTA** | Domain names | `var(--purple)` | @authentication, @search — always purple |
-| **DIM/MUTE** | De-emphasized | `var(--mute)` | Separators, secondary info, 0 hits, thinking blocks |
-| **BOLD** | Emphasis | `font-weight: 700` | File paths, section headers, hit counts |
+| Flag | Short | Status |
+|------|-------|--------|
+| `--invert-match` | `-v` | Not implemented |
 
 ---
 
-## Remaining Phases
+## Known Gaps
 
-### Phase 9: Migration & Validation
+| Gap | Description | Priority |
+|-----|-------------|----------|
+| **File watcher not wired** | `fsnotify.Watcher` built and tested, `treesitter.Parser` built and tested, but `Watch()` never called in `app.go`. No dynamic re-indexing pipeline. | High |
+| **bbolt lock contention** | `aoa init` fails while daemon holds the bbolt lock. Need in-process reindex command (socket command or `aoa daemon reindex`). | High |
+| **Aho-Corasick stubbed** | `ports.PatternMatcher` interface exists, adapter dir exists, tests skipped. Future use for dimensional analysis bitmask scanning. | Low |
+
+---
+
+## Open Questions (Pending Discussion)
+
+Items from feedback session that need alignment before becoming board tasks:
+
+| # | Topic | Status | Summary |
+|---|-------|--------|---------|
+| 3 | **Alias strategy** | Needs answer | Goal: replace `grep` itself (not shortcuts). `grep auth` → `aoa grep auth` transparently. Eliminates 250-token prompt education tax. Graceful degradation on unsupported flags? |
+| 4 | **Real-time conversation** | Needs investigation | Legacy Python showed real-time conversation despite shell/curl limitations. Go dashboard with 2s poll should do better — why isn't it? User to provide more direction. |
+| 5 | **Intent score visualization** | Needs discussion | Formula: `coverage × confidence × momentum` (0-100). Lives in domain rankings (Intel tab) as the sorting/scoring mechanism. Traffic light vs number display. |
+
+---
+
+## Phase 9: Migration & Validation
 
 **Goal:** Run both systems in parallel, prove equivalence
 
-| ID | Area | Task | Priority | Status | Conf | G1 | G2 | G3 | G4 | Deps | Files | Test Strategy |
-|----|------|------|:--------:|:------:|:----:|:--:|:--:|:--:|:--:|------|-------|---------------|
-| M-01 | Migrate | Parallel run on 5 test projects (Python and Go side-by-side) | Critical | TODO | 🟢 | | | | | - | `test/migration/*.sh` | Both produce identical output |
-| M-02 | Search | Diff search results: 100 queries/project, zero divergence | Critical | TODO | 🟢 | ✓ | ✓ | | | M-01 | `test/migration/search-diff.sh` | `diff` output = 0 for all queries |
-| M-03 | Learner | Diff learner state: 200 intents, zero tolerance | Critical | TODO | 🟡 | | | ✓ | ✓ | M-01 | `test/migration/state-diff.sh` | JSON diff of state = empty |
-| M-04 | Bench | Benchmark comparison (search, autotune, startup, memory) | High | TODO | 🟢 | ✓ | | | | M-01 | `test/benchmarks/compare.sh` | Confirm 50-120x speedup targets |
-| M-05 | Docs | Migration path (stop Python, install Go, migrate data) | High | TODO | 🟢 | | | | | M-01 | `MIGRATION.md` | Existing user migrates in <10 min |
+| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
+|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
+| M-01 | Migrate | Parallel run on 5 test projects (Python and Go side-by-side) | Critical | TODO | 🟢 | - | `test/migration/*.sh` | Both produce identical output |
+| M-02 | Search | Diff search results: 100 queries/project, zero divergence | Critical | TODO | 🟢 | M-01 | `test/migration/search-diff.sh` | `diff` output = 0 for all queries |
+| M-03 | Learner | Diff learner state: 200 intents, zero tolerance | Critical | TODO | 🟡 | M-01 | `test/migration/state-diff.sh` | JSON diff of state = empty |
+| M-04 | Bench | Benchmark comparison (search, autotune, startup, memory) | High | TODO | 🟢 | M-01 | `test/benchmarks/compare.sh` | Confirm 50-120x speedup targets |
+| M-05 | Docs | Migration path (stop Python, install Go, migrate data) | High | TODO | 🟢 | M-01 | `MIGRATION.md` | Existing user migrates cleanly |
 
-### Phase 10: Distribution
+## Phase 10: Distribution
 
 **Goal:** Single binary, zero Docker, instant install
 
-| ID | Area | Task | Priority | Status | Conf | G1 | G5 | Deps | Files | Test Strategy |
-|----|------|------|:--------:|:------:|:----:|:--:|:--:|------|-------|---------------|
-| R-01 | Parser | Purego .so loader for runtime grammar loading | Medium | TODO | 🟢 | ✓ | | - | `internal/adapters/treesitter/loader.go` | Load .so, parse file, identical to compiled-in |
-| R-02 | Build | Grammar downloader (CI: compile .so, host on GitHub Releases) | High | TODO | 🟡 | | | R-01 | `.github/workflows/build-grammars.yml` | Download+load 20 grammars from releases |
-| R-03 | Build | Goreleaser (linux/darwin × amd64/arm64) | High | TODO | 🟢 | | ✓ | - | `.goreleaser.yml` | Binaries build for all 4 platforms |
-| R-04 | Docs | Installation docs (`go install` or download binary) | Medium | TODO | 🟢 | | | R-03 | `README.md` | New user installs and runs in <5 min |
+| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
+|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
+| R-01 | Parser | Purego .so loader for runtime grammar loading | Medium | TODO | 🟢 | - | `adapters/treesitter/loader.go` | Load .so, parse file, identical to compiled-in |
+| R-02 | Build | Grammar downloader (CI: compile .so, host on GitHub Releases) | High | TODO | 🟡 | R-01 | `.github/workflows/build-grammars.yml` | Download+load 20 grammars from releases |
+| R-03 | Build | Goreleaser (linux/darwin × amd64/arm64) | High | TODO | 🟢 | - | `.goreleaser.yml` | Binaries build for all 4 platforms |
+| R-04 | Docs | Installation docs (`go install` or download binary) | Medium | TODO | 🟢 | R-03 | `README.md` | New user installs and runs cleanly |
 
-### v2: Dimensional Analysis (Post-Release)
+## v2: Dimensional Analysis (Post-Release)
 
 **Goal:** Multi-dimensional static analysis hints (security, performance, standards). Deferred.
 
@@ -301,24 +238,8 @@ hooks/                Status line hook
 research/             Legacy CLI reference docs
 ```
 
-### Signal Flow
-```
-Claude JSONL → tailer → parser → claude.Reader → app.onSessionEvent()
-  UserInput     → flush currentBuilder → push user turn → promptN++, bigrams, status line
-  AIThinking    → bigrams + buffer thinking text on currentBuilder
-  AIResponse    → bigrams + buffer response text + per-turn & global token accumulators
-  ToolInvocation → range gate → file_hits → observe
-                 → TurnAction (tool/target/range/impact) on currentBuilder
-                 → activity ring buffer (Action/Source/Attrib/Impact/Target)
-
-Search (CLI) → searchObserver → learner signals + activity ring buffer
-
-Dashboard poll (2s) → ConversationTurns() includes in-progress currentBuilder
-                    → DomainTermNames() sorted by keyword hit popularity
-                    → DomainTermHitCounts() for per-term flash detection
-```
-
 ### Key Paths
+
 | Purpose | Path |
 |---------|------|
 | Database | `{ProjectRoot}/.aoa/aoa.db` |
@@ -327,159 +248,3 @@ Dashboard poll (2s) → ConversationTurns() includes in-progress currentBuilder
 | HTTP port | `{ProjectRoot}/.aoa/http.port` |
 | Dashboard | `http://localhost:{port}` |
 | Session logs | `~/.claude/projects/{encoded-path}/*.jsonl` |
-
----
-
-## Success Metrics
-
-| Metric | Target | Status |
-|--------|--------|--------|
-| Search latency | <0.5ms | ✅ Verified |
-| Autotune latency | <5ms | ✅ 2.5μs (2000x margin) |
-| Startup time | <200ms | ✅ Verified |
-| Memory footprint | <50MB | ✅ Verified |
-| Behavioral parity | 100% | ✅ 26/26 search, 5/5 learner |
-| Tests passing | 300+ | ✅ 309 |
-| Hook elimination | 0-1 | ✅ Optional status line only |
-| Haiku elimination | 0 | ✅ Universal atlas |
-
----
-
-## Session Log
-
-### 2026-02-17: Conversation Redesign + Data Pipeline + Learning Visualization
-
-**Scope:** Phase 8b (Conversation tab), 8b-2 (Learning tab), partial 8a (FileMeta.Size, TurnAction)
-
-**Backend changes:**
-- `ports/storage.go`: Added `Size int64` to `FileMeta`
-- `cmd/aoa/cmd/init.go`: Captures `info.Size()` during indexing
-- `app/app.go`: Added `TurnAction` struct, `currentBuilder` exchange grouping (replaces per-TurnID fragmentation), `turnFromBuilder()`, `readSavings()`, `DomainTermHitCounts()`, `flushCurrentBuilder()`. `DomainTermNames()` now sorts by keyword hit popularity. In-progress turn included in `ConversationTurns()` response.
-- `socket/protocol.go`: Added `TurnActionResult`, expanded `ConversationTurnResult` with `thinking_text`, `actions[]`, `input_tokens`, `output_tokens`. `DomainInfo` gained `TermHits map[string]int`.
-- `socket/server.go`: `AppQueries` interface expanded with `DomainTermHitCounts()`. Both web and socket servers populate `TermHits`.
-
-**Frontend changes:**
-- Conversation tab: Complete HTML/CSS/JS overhaul — two-column feed card (messages left, actions right), yellow border, bottom-anchored scroll, NOW bar, jump-to-now button. Removed standalone Tool Usage card.
-- Learning tab: Term pills gray by default, flash green on hit with 30s fade. Terms sorted by popularity (most-hit left). Up to 10 terms per row. Blue text-shadow glow on all stat number changes (4s). N-gram rows flash green background (3s) + count glow on change.
-- Global: `set()` helper upgraded from color pulse to `num-glow` animation.
-
-**Key fix: Turn grouping** — Replaced per-TurnID `turnBuffer` map with single `currentBuilder`. All assistant events between user inputs accumulate into one exchange. Eliminated fragmented 5-6 row turns.
-
-**Key fix: Term dancing** — `DomainTermNames()` was iterating a Go map (random order each call). Now sorts by keyword hit popularity with alphabetical tiebreaker. Stable and deterministic.
-
-**Known gaps identified:**
-- File watcher (`fsnotify`) built but not wired — `Watch()` never called, no dynamic re-indexing
-- `aoa init` can't run while daemon holds bbolt lock — need in-process reindex command
-
-### 2026-02-17: Content Search + Tag Correction + Activity Enrichment
-
-**Scope:** Phase 8a continued — `aoa grep` content scanning, tag system correction, search observer enrichment, activity & impact refinements.
-
-**Content search (`aoa grep` body scanning):**
-- `internal/domain/index/content.go` (NEW): `scanFileContents()` scans indexed file contents on disk for grep-style matches. Deduplicates against symbol hits (same file+line). Skips files >1MB. Line-by-line `bufio.Scanner`.
-- `internal/domain/index/content.go`: `buildContentMatcher()` handles all modes: literal (case-insensitive), regex, AND (comma-separated), word-boundary.
-- `internal/domain/index/content.go`: `buildFileSpans()` + `findEnclosingSymbol()` — pre-computes per-file symbol ranges from tree-sitter index, resolves innermost enclosing function/method/class for each content hit. Content hits carry parent symbol name and range.
-- `internal/domain/index/search.go`: Added `projectRoot` to `SearchEngine`, `Kind`/`Content` fields to `Hit`. `NewSearchEngine()` takes third `projectRoot` parameter. `Search()` appends content hits after symbol hits, giving symbol hits natural priority.
-- Symbol hits: `Kind: "symbol"`, full domain + tags + symbol signature.
-- Content hits: `Kind: "content"`, enclosing symbol + range, tags (terms), NO domain (domains only on structural declarations).
-- `cmd/aoa/cmd/output.go`: Two-section display — symbol hits render as before, content hits render with enclosing symbol context + grep-style line content. Header shows `(N symbol, M content)` breakdown.
-- `internal/adapters/socket/protocol.go` + `server.go`: Added `Kind`/`Content` to wire format `SearchHit`.
-- `internal/app/app.go`: Passes `cfg.ProjectRoot` to engine.
-- 7 new content tests: FindsBodyMatch, DedupWithSymbol, RegexMode, NoDomainButHasTerms, NestedEnclosingSymbol, SkipsLargeFiles, MissingFile.
-
-**Tag system correction (keywords → terms):**
-- **Bug found**: `generateTags()` and `generateTagsFromTokens()` returned raw index tokens (keywords like `#project`, `#testsessiondirforproject`). Tags are prefixed with `#` implying atlas terms, but no atlas resolution was happening.
-- **Fix**: Built `keywordToTerms` reverse lookup in `NewSearchEngine()` by inverting the `Domain.Terms` map. New `resolveTerms()` method maps raw tokens through atlas to produce actual term names. Both `generateTags()` (symbol hits) and `generateContentTags()` (content hits) now resolve to atlas terms.
-- Content lines normalized via `nonAlnumRe` before tokenizing (syntax characters like `(){}=` aren't handled by the tokenizer's `[/_\-.\s]+` separator).
-- Parity test fixtures regenerated from engine output to match corrected term-level tags. All 26 parity tests pass.
-
-**Domain rule enforcement:**
-- Domains ONLY on structural declarations (function/method/class/struct/interface — any tree-sitter container at any nesting level).
-- Content hits inside function bodies: tags (terms) YES, domain NO.
-
-**Search observer enrichment:**
-- **Bug found**: Observer only extracted signals from query tokens ("project" → config, "id" → sse). Content hits had empty domains, and hit tags were never fed to the learner.
-- **Fix**: `signalCollector` struct encapsulates deduplication. Observer now collects: (1) query tokens → keywords → terms → domains, (2) top 10 hit domains, (3) hit tags as terms → domains, (4) hit content/symbol keywords → terms → domains. All fed to learner.
-- `enricher.LookupTerm()` added — reverse lookup from term name to owning domain(s).
-
-**Activity & Impact refinements:**
-- Impact format: `"N hits, M files | Xms"` — added unique file count.
-- Target preserves flags: `aOa grep -a auth,login`, `aOa grep -w store`, `aOa grep --include *.go projectRoot`.
-- `readSavings()` path normalization: absolute paths now converted to relative before index lookup (was causing all Read impacts to show "-").
-- Claude Grep attrib: `"unguided"` — signals aOa indexed search not used.
-- Dashboard layout: Time column moved to far left, Tags column dropped, Target gets remaining width with ellipsis truncation. Attrib values color-coded (cyan=indexed, yellow=regex, green=multi-*). "now" time highlighted cyan. Impact parses new hits+files format. Savings format rendered green.
-
----
-
-## Activity & Impact Attribution Table
-
-Complete state table for all action/source/attrib/impact combinations. This is the requirement specification.
-
-### Implemented
-
-| # | Action | Source | Attrib | aOa Impact | Target | Status |
-|---|--------|--------|--------|------------|--------|--------|
-| 1 | Search | aOa | `indexed` | N hits, M files \| Xms | aOa grep \<query\> | Done |
-| 2 | Search | aOa | `multi-or` | N hits, M files \| Xms | aOa grep \<q1\> \<q2\> | Done |
-| 3 | Search | aOa | `multi-and` | N hits, M files \| Xms | aOa grep -a \<q1\>,\<q2\> | Done |
-| 4 | Search | aOa | `regex` | N hits, M files \| Xms | aOa egrep \<pattern\> | Done |
-| 5 | Read (ranged, ≥50% savings) | Claude | `aOa guided` | ↓90% (44k → 4k) | file:offset-end | Done |
-| 6 | Read (ranged, <50% savings) | Claude | `-` | ↓44% (2.5k → 1.4k) | file:offset-end | Done |
-| 7 | Read (whole file) | Claude | `-` | `-` | file | Done |
-| 8 | Write | Claude | productive | `-` | file | TODO |
-| 9 | Edit | Claude | productive | `-` | file | TODO |
-| 10 | Grep (Claude's) | Claude | `unguided` | est. Nk tokens | pattern | Partial — no token cost |
-| 11 | Glob (Claude's) | Claude | `unguided` | est. Nk tokens | path/pattern | TODO — most expensive unguided op |
-| 12 | Bash (aOa command) | *filtered* | — | — | — | Done |
-| 13 | Bash (no file) | *filtered* | — | — | — | Done |
-
-### System Events (not yet in activity feed)
-
-| # | Action | Source | Attrib | aOa Impact | Notes | Status |
-|---|--------|--------|--------|------------|-------|--------|
-| 14 | Autotune | aOa | cycle N | +P promoted, -D demoted, ~X decayed | Every 50 prompts. Currently only writes status line. | TODO |
-| 15 | Learn | aOa | observe | +N keywords, +M terms, +K domains | From search observer and session reads. | TODO |
-
-### Grep/Egrep Flag Parity
-
-All Unix grep/egrep flags must work and map to correct attributions. Python had 100% parity.
-
-| Flag | Short | Grep | Egrep | SearchOptions | Attrib | Status |
-|------|-------|------|-------|---------------|--------|--------|
-| `--and` | `-a` | Yes | No | `AndMode` | multi-and | Done |
-| `--count` | `-c` | Yes | Yes | `CountOnly` | (same as mode) | Done |
-| `--ignore-case` | `-i` | Yes | No | `Mode="case_insensitive"` | indexed/multi-or | Done |
-| `--word-regexp` | `-w` | Yes | No | `WordBoundary` | (same as mode) | Done |
-| `--quiet` | `-q` | Yes | Yes | `Quiet` | (same as mode) | Done |
-| `--max-count` | `-m` | Yes | Yes | `MaxCount` | (same as mode) | Done |
-| `--extended-regexp` | `-E` | Yes | n/a | Routes to egrep | regex | Done |
-| `--regexp` | `-e` | Yes | Yes | Multi-pattern OR/regex | multi-or/regex | Done |
-| `--include` | — | Yes | Yes | `IncludeGlob` | (same as mode) | Done |
-| `--exclude` | — | Yes | Yes | `ExcludeGlob` | (same as mode) | Done |
-| `--recursive` | `-r` | no-op | no-op | — | — | Done (hidden) |
-| `--line-number` | `-n` | no-op | no-op | — | — | Done (hidden) |
-| `--with-filename` | `-H` | no-op | no-op | — | — | Done (hidden) |
-| `--fixed-strings` | `-F` | no-op | — | — | — | Done (hidden) |
-| `--files-with-matches` | `-l` | no-op | — | — | — | Done (hidden) |
-| `--invert-match` | `-v` | — | — | — | — | Not implemented |
-
-### Attribution Philosophy
-
-- **aOa gets credit** when it demonstrably saves tokens or provides indexed speed: ranged reads with savings, search results with file/hit counts, autotune cycles.
-- **"productive"** for Write/Edit — this is desired development work. aOa isn't involved. "This is the way."
-- **"unguided"** for Claude's Grep/Glob — these are expensive unguided operations. aOa indexed search exists as a faster, cheaper alternative. Show estimated token cost as impact.
-- **System events** (Autotune, Learn) show aOa working in the background — continuous improvement signals.
-- **No attribution** for Bash/Task — captured elsewhere, not relevant to the activity table.
-
-### Remaining Work
-
-| ID | Task | Priority | Status |
-|----|------|----------|--------|
-| AT-01 | Write/Edit attrib = "productive" | Medium | TODO |
-| AT-02 | Glob attrib = "unguided" + estimated token cost | High | TODO |
-| AT-03 | Grep (Claude) impact = estimated token cost | Medium | TODO |
-| AT-04 | Autotune activity event: "Autotune \| aOa \| cycle N \| +P/-D/~X" | High | TODO |
-| AT-05 | Learn activity event (observe signals summary) | Low | TODO |
-| AT-06 | Verify autotune is firing correctly every 50 prompts | Critical | TODO |
-| AT-07 | Dashboard: color-code "productive" attrib (green) | Medium | TODO — after AT-01 |
-| AT-08 | Dashboard: render token cost impact for Grep/Glob | Medium | TODO — after AT-02/03 |
