@@ -88,7 +88,7 @@ make check                       # Local CI: vet + lint + test
 | New Tab | Old Tab | Content | What User Is Doing |
 |---------|---------|---------|-------------------|
 | **Live** | Overview | Real-time intent feed, activity table, context runway, status | "What's happening right now?" |
-| **Recon** | *(new)* | Search interface — grep/egrep/find in the browser | "I need to find something" |
+| **Recon** | *(new)* | Dimensional intelligence — security/perf/quality/compliance/architecture/observability drill-down | "Where are concerns in my codebase?" |
 | **Intel** | Learning | Domain rankings, n-gram metrics, intent score | "What has aOa learned?" |
 | **Debrief** | Conversation | Session stats, conversation feed, token metrics | "What just happened?" |
 | **Arsenal** | *(new)* | Config, aliases, daemon status, setup, port management | "How is my system configured?" |
@@ -105,9 +105,14 @@ make check                       # Local CI: vet + lint + test
 | T-08 | Frontend | Activity table: responsive — drop time+target at 900px, keep action/source/attrib/impact (20/20/25/35) | High | Done | 🟢 | T-07 | `static/index.html` | 4-column layout at narrow width, balanced spacing |
 | T-09 | Frontend | Negative feedback loop — unguided Grep/Glob: red pills, red attrib, red target, wasted token estimate in impact | High | Done | 🟢 | - | `static/index.html` | Grep/Glob rows read as costly end-to-end; productive=green, unguided=red |
 
+| T-10 | Frontend | Standardized hero section — 150px min-height, 2/3 hero card + 1/3 metrics panel, consistent across all tabs | High | Done | 🟢 | - | all mockups | Hero row height, padding, flex ratio matches Live and Recon |
+
 **Live mockup locked** (`_throwaway_mockups/live.html`): Context runway hero, value metrics panel, fixed-column activity table with negative feedback loop, responsive 900px breakpoint.
 
-**Recon — future scope:** Full browser search UI. Stubbed for now with guidance card pointing to CLI.
+**Recon mockup in progress** (`_throwaway_mockups/recon.html`): Sidebar-driven dimensional intelligence. 6 tiers / 22 dimensions, all detectable by AC + tree-sitter on code files. Collapsible tier groups with per-dimension toggles. Folder → file → method drill-down with severity scoring and bubble-up aggregation. Hero card + metrics panel standardized to 150px.
+
+**Dashboard design standard:** All tabs use the same hero row layout — 150px min-height, gradient-border hero card (2/3 width) telling the tab's story + metrics panel (1/3 width) with key numbers. Padding 18px vertical, 24px horizontal. Metric values 20-22px. Responsive: stacks at 900px.
+
 **Arsenal — future scope:** Interactive `aoa init` in browser, alias toggle, .gitignore exception editor. Start read-only.
 
 ---
@@ -201,7 +206,18 @@ Items from feedback session that need alignment before becoming board tasks:
 
 ## v2: Dimensional Analysis — Recon
 
-**Goal:** Structural code analysis via tree-sitter AST pattern matching + AC text scanning. Surfaces security, performance, and quality concerns as navigable dimension tags (NER-style). Extensible beyond 3 dimensions — any structural pattern that can be expressed as an AST query becomes a new dimension.
+**Goal:** Structural code analysis via tree-sitter AST pattern matching + AC text scanning. Surfaces concerns as navigable dimension tags (NER-style entity detection applied to code). 6 tiers, 22 dimensions — all detectable by scanning code files only.
+
+**6 Tiers:**
+
+| Tier | Color | Dimensions | What it catches |
+|------|-------|-----------|----------------|
+| **Security** | Red | Injection, Secrets, Auth Gaps, Cryptography, Path Traversal | SQL/cmd/XSS injection, hardcoded keys, missing auth, weak hash, symlink |
+| **Performance** | Yellow | Query Patterns, Memory, Concurrency, Resource Leaks | N+1, unbounded alloc, mutex over I/O, unclosed handles |
+| **Quality** | Blue | Complexity, Error Handling, Dead Code, Conventions | God functions, ignored errors, unreachable code, magic numbers |
+| **Compliance** | Purple | CVE Patterns, Licensing, Data Handling | Known vuln patterns, copyleft conflicts, PII in logs |
+| **Architecture** | Cyan | Import Health, API Surface, Anti-patterns | Circular deps, layer violations, global state, hardcoded config |
+| **Observability** | Green | Silent Failures, Debug Artifacts | Swallowed errors, leftover print statements, TODO markers |
 
 **Detection architecture (dual engine):**
 
@@ -242,15 +258,18 @@ Both engines produce bits in the same bitmask. The Recon tab doesn't care which 
 | D-03 | Engine | AC text scanner — compile text patterns into automaton, scan raw source | High | TODO | 🟢 | D-01 | `internal/domain/analyzer/text_scan.go` | Reuses `adapters/ahocorasick/`, returns bit positions |
 | D-04 | Engine | Language mapping layer — normalize AST node names across 28 languages | High | TODO | 🟡 | D-02 | `internal/domain/analyzer/lang_map.go` | Same structural query matches Go + Python + JS + Rust |
 | D-05 | Analyzer | Bitmask composer — merge structural + text bits, compute weighted severity score | Critical | TODO | 🟢 | D-02, D-03 | `internal/domain/analyzer/score.go` | Bitmask per file/method, score = weighted sum of set bits |
-| D-06 | Dimensions | Security dimension (~75-100 patterns: injection, secrets, traversal, deserialize) | High | TODO | 🟡 | D-01 | `dimensions/security/*.yaml` | Catches known vulns in test projects |
-| D-07 | Dimensions | Performance dimension (~60-75 patterns: N+1, unbounded alloc, blocking I/O) | High | TODO | 🟡 | D-01 | `dimensions/performance/*.yaml` | Flags structural perf issues |
-| D-08 | Dimensions | Standards dimension (~40-55 patterns: god function, error handling, naming) | Medium | TODO | 🟡 | D-01 | `dimensions/standards/*.yaml` | Scores correlate with code review findings |
+| D-06 | Dimensions | Security tier (5 dims: injection, secrets, auth, crypto, path traversal) | High | TODO | 🟡 | D-01 | `dimensions/security/*.yaml` | Catches known vulns in test projects |
+| D-07 | Dimensions | Performance tier (4 dims: queries, memory, concurrency, resource leaks) | High | TODO | 🟡 | D-01 | `dimensions/performance/*.yaml` | Flags structural perf issues |
+| D-08 | Dimensions | Quality tier (4 dims: complexity, error handling, dead code, conventions) | Medium | TODO | 🟡 | D-01 | `dimensions/quality/*.yaml` | Scores correlate with code review findings |
+| D-08b | Dimensions | Compliance tier (3 dims: CVE patterns, licensing, data handling) | Medium | TODO | 🟡 | D-01 | `dimensions/compliance/*.yaml` | CVE matches, license conflicts, PII exposure |
+| D-08c | Dimensions | Architecture tier (3 dims: import health, API surface, anti-patterns) | Medium | TODO | 🟡 | D-01 | `dimensions/architecture/*.yaml` | Circular deps, layer violations, global state |
+| D-08d | Dimensions | Observability tier (2 dims: silent failures, debug artifacts) | Low | TODO | 🟡 | D-01 | `dimensions/observability/*.yaml` | Swallowed errors, leftover debug statements |
 | D-09 | Integration | Wire analyzer into `aoa init` — scan all files, store bitmasks in bbolt | High | TODO | 🟢 | D-05 | `internal/app/app.go` | Bitmasks persist, available to search + dashboard |
 | D-10 | Format | Add dimension scores to search results (`S:-1 P:0 C:+2`) | High | TODO | 🟢 | D-05 | `internal/domain/index/format.go` | Scores in output |
 | D-11 | Query | Dimension query support (`--dimension=security --risk=high`) | High | TODO | 🟢 | D-05 | `cmd/aoa/cmd/grep.go` | Filter by dimension |
 | D-12 | Frontend | Recon tab — NER-style dimensional view: dimension toggle sidebar, file→method drill-down, severity scoring | High | TODO | 🟢 | D-09 | `static/index.html` | Mockup validated in `_throwaway_mockups/recon.html` |
 
-**Extensibility:** New dimensions are just new YAML directories. Add `dimensions/accessibility/*.yaml` or `dimensions/testing/*.yaml` — the engine picks them up. No code changes.
+**Extensibility:** New dimensions are just new YAML directories. Add `dimensions/testing/*.yaml` or `dimensions/accessibility/*.yaml` — the engine picks them up. No code changes. New tiers appear in the sidebar automatically.
 
 **Research — Neural 1-bit embeddings (deferred):**
 Investigated and deprioritized. Pre-trained embedding models (nomic-embed 137M, mxbai-embed 335M) encode semantic similarity, not security/quality properties — signal-to-noise ratio is poor for vulnerability detection. Probing the embedding space (XOR + popcount) showed vocabulary changes fire the same magnitude of signal as structural changes. A fine-tuned classifier would work but requires thousands of labeled examples per detection. The deterministic tree-sitter + AC approach gives better signal with full interpretability. Revisit only if the AC/AST pattern library hits a ceiling on novel code shapes.

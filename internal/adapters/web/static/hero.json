@@ -1,0 +1,102 @@
+{
+  "identities": [
+    "10x Developers",
+    "Relentless Builders",
+    "Precision Engineers",
+    "Full-Stack Architects",
+    "High-Velocity Teams"
+  ],
+  "separators": [
+    "minus the",
+    "instead of",
+    "bypassing",
+    "without"
+  ],
+  "tabs": {
+    "live": {
+      "label": "ANGLE OF ATTACK",
+      "stories": [
+        {
+          "outcome": "want full context that lasts the entire task",
+          "exclusion": "context cliff that kills momentum at 60%"
+        },
+        {
+          "outcome": "need every guided read to extend the session",
+          "exclusion": "token waste from unguided file scans"
+        },
+        {
+          "outcome": "want to ship the feature in one unbroken session",
+          "exclusion": "starting over when the model loses context"
+        }
+      ]
+    },
+    "recon": {
+      "label": "RECON",
+      "stories": [
+        {
+          "outcome": "want full visibility into codebase risk",
+          "exclusion": "manual code review that misses what matters"
+        },
+        {
+          "outcome": "need security and quality concerns surfaced before they ship",
+          "exclusion": "audit surprises discovered in production"
+        },
+        {
+          "outcome": "want dimensional intelligence across every file",
+          "exclusion": "blind spots hiding in code nobody reviews"
+        }
+      ]
+    },
+    "intel": {
+      "label": "INTEL",
+      "stories": [
+        {
+          "outcome": "want a system that learns their codebase deeply",
+          "exclusion": "starting from zero every session"
+        },
+        {
+          "outcome": "need domain intelligence that sharpens with every prompt",
+          "exclusion": "static tools that never adapt to how you work"
+        },
+        {
+          "outcome": "want their working patterns to drive smarter results",
+          "exclusion": "generic search that treats every query the same"
+        }
+      ]
+    },
+    "debrief": {
+      "label": "DEBRIEF",
+      "stories": [
+        {
+          "outcome": "want to see exactly what happened and why",
+          "exclusion": "scrolling through terminal history to reconstruct the timeline"
+        },
+        {
+          "outcome": "need to understand where tokens went and what they bought",
+          "exclusion": "guessing why context filled up so fast"
+        },
+        {
+          "outcome": "want a clear record of every action and its impact",
+          "exclusion": "losing track of what was searched, read, and written"
+        }
+      ]
+    },
+    "arsenal": {
+      "label": "ARSENAL",
+      "stories": [
+        {
+          "outcome": "want their system configured and ready to perform",
+          "exclusion": "setup friction that delays the real work"
+        },
+        {
+          "outcome": "need full visibility into daemon health and indexing state",
+          "exclusion": "wondering whether the system is actually running"
+        },
+        {
+          "outcome": "want one place to verify everything is wired correctly",
+          "exclusion": "debugging configuration spread across scattered files"
+        }
+      ]
+    }
+  }
+}
