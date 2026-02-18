@@ -19,10 +19,11 @@ const (
 )
 
 // formatSearchResult formats a SearchResult for terminal display.
-// Matches the Python aOa output format:
+// Symbol hits render with symbols/ranges/tags; content hits render grep-style.
 //
-//	⚡ N hits │ Xms
+//	⚡ 15 hits (10 symbol, 5 content) │ Xms
 //	  file:symbol[range]:line  @domain  #tag1 #tag2
+//	  file:line: matching content text
 func formatSearchResult(result *socket.SearchResult, countOnly, quiet bool) string {
 	if quiet {
 		return ""
@@ -32,10 +33,60 @@ func formatSearchResult(result *socket.SearchResult, countOnly, quiet bool) stri
 		return fmt.Sprintf("%s⚡ %d hits%s │ %s", colorBold, result.Count, colorReset, result.Elapsed)
 	}
 
+	// Count symbol vs content hits
+	symbolCount := 0
+	contentCount := 0
+	for _, hit := range result.Hits {
+		if hit.Kind == "content" {
+			contentCount++
+		} else {
+			symbolCount++
+		}
+	}
+
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s⚡ %d hits%s │ %s\n", colorBold, len(result.Hits), colorReset, result.Elapsed))
+
+	// Header with breakdown when content hits exist
+	if contentCount > 0 {
+		sb.WriteString(fmt.Sprintf("%s⚡ %d hits%s (%d symbol, %d content) │ %s\n",
+			colorBold, len(result.Hits), colorReset, symbolCount, contentCount, result.Elapsed))
+	} else {
+		sb.WriteString(fmt.Sprintf("%s⚡ %d hits%s │ %s\n",
+			colorBold, len(result.Hits), colorReset, result.Elapsed))
+	}
 
 	for _, hit := range result.Hits {
+		if hit.Kind == "content" {
+			// Content hit: file:symbol[range]:line: content + tags (no domain)
+			sb.WriteString(fmt.Sprintf("  %s%s%s:", colorCyan, hit.File, colorReset))
+
+			// Enclosing symbol from tree-sitter (structural context)
+			if hit.Symbol != "" {
+				sb.WriteString(hit.Symbol)
+			}
+			if hit.Range[0] > 0 || hit.Range[1] > 0 {
+				sb.WriteString(fmt.Sprintf("[%d-%d]", hit.Range[0], hit.Range[1]))
+			}
+
+			sb.WriteString(fmt.Sprintf(":%d: %s%s%s",
+				hit.Line,
+				colorGray, hit.Content, colorReset))
+
+			if len(hit.Tags) > 0 {
+				sb.WriteString("  ")
+				for i, tag := range hit.Tags {
+					if i > 0 {
+						sb.WriteString(" ")
+					}
+					sb.WriteString(fmt.Sprintf("%s#%s%s", colorGreen, tag, colorReset))
+				}
+			}
+
+			sb.WriteString("\n")
+			continue
+		}
+
+		// Symbol hit: file:symbol[range]:line  @domain  #tags
 		sb.WriteString(fmt.Sprintf("  %s%s%s:", colorCyan, hit.File, colorReset))
 
 		if hit.Symbol != "" {

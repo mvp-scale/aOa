@@ -37,9 +37,16 @@ var daemonStopCmd = &cobra.Command{
 	RunE:  runDaemonStop,
 }
 
+var daemonRestartCmd = &cobra.Command{
+	Use:   "restart",
+	Short: "Restart the daemon (stop + start)",
+	RunE:  runDaemonRestart,
+}
+
 func init() {
 	daemonCmd.AddCommand(daemonStartCmd)
 	daemonCmd.AddCommand(daemonStopCmd)
+	daemonCmd.AddCommand(daemonRestartCmd)
 }
 
 func runDaemonStart(cmd *cobra.Command, args []string) error {
@@ -60,6 +67,17 @@ func runDaemonStart(cmd *cobra.Command, args []string) error {
 
 	// Parent: spawn the daemon as a detached background process.
 	return spawnDaemon(root, sockPath)
+}
+
+func runDaemonRestart(cmd *cobra.Command, args []string) error {
+	// Stop the running daemon (ignores "not running" — idempotent).
+	_ = runDaemonStop(cmd, args)
+
+	// Brief pause to let the socket file be cleaned up.
+	time.Sleep(200 * time.Millisecond)
+
+	// Start a fresh daemon.
+	return runDaemonStart(cmd, args)
 }
 
 // spawnDaemon re-execs the current binary as a background process with

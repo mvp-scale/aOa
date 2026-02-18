@@ -20,8 +20,9 @@ type SearchObserver func(query string, opts ports.SearchOptions, result *SearchR
 
 // SearchEngine is the in-memory search index with domain enrichment.
 type SearchEngine struct {
-	idx     *ports.Index
-	domains map[string]Domain
+	idx         *ports.Index
+	domains     map[string]Domain
+	projectRoot string // project root for content scanning; empty disables it
 
 	// refToTokens maps each TokenRef back to its token list.
 	// Built from the inverted index during construction.
@@ -29,6 +30,10 @@ type SearchEngine struct {
 
 	// tokenDocFreq counts how many symbols contain each token.
 	tokenDocFreq map[string]int
+
+	// keywordToTerms maps keyword -> unique term names (reverse of Domain.Terms).
+	// Used to resolve raw tokens to atlas terms for tag generation.
+	keywordToTerms map[string][]string
 
 	// observer is called after each search to emit learning signals.
 	observer SearchObserver
@@ -43,23 +48,28 @@ type SearchResult struct {
 
 // Hit represents a single search result entry.
 type Hit struct {
-	File   string   `json:"file"`
-	Line   int      `json:"line"`
-	Symbol string   `json:"symbol"`
-	Range  [2]int   `json:"range"`
-	Domain string   `json:"domain"`
-	Tags   []string `json:"tags"`
+	File    string   `json:"file"`
+	Line    int      `json:"line"`
+	Symbol  string   `json:"symbol"`
+	Range   [2]int   `json:"range"`
+	Domain  string   `json:"domain"`
+	Tags    []string `json:"tags"`
+	Kind    string   `json:"kind,omitempty"`    // "symbol" or "content"
+	Content string   `json:"content,omitempty"` // matching line text (content hits only)
 
 	fileID uint32 // internal, for deterministic sorting
 }
 
 // NewSearchEngine creates an engine from an existing index + domain map.
-func NewSearchEngine(idx *ports.Index, domains map[string]Domain) *SearchEngine {
+// If projectRoot is non-empty, content scanning (grep-style body matches) is enabled.
+func NewSearchEngine(idx *ports.Index, domains map[string]Domain, projectRoot string) *SearchEngine {
 	e := &SearchEngine{
-		idx:          idx,
-		domains:      domains,
-		refToTokens:  make(map[ports.TokenRef][]string),
-		tokenDocFreq: make(map[string]int),
+		idx:            idx,
+		domains:        domains,
+		projectRoot:    projectRoot,
+		refToTokens:    make(map[ports.TokenRef][]string),
+		tokenDocFreq:   make(map[string]int),
+		keywordToTerms: make(map[string][]string),
 	}
 
 	// Build reverse map: ref -> tokens, and doc frequency
@@ -67,6 +77,24 @@ func NewSearchEngine(idx *ports.Index, domains map[string]Domain) *SearchEngine 
 		e.tokenDocFreq[tok] = len(refs)
 		for _, ref := range refs {
 			e.refToTokens[ref] = append(e.refToTokens[ref], tok)
+		}
+	}
+
+	// Build keyword -> terms reverse lookup from atlas domains.
+	// Domain.Terms maps term -> []keyword; invert to keyword -> []term.
+	kwTermSeen := make(map[string]map[string]bool) // keyword -> set of terms
+	for _, domain := range domains {
+		for term, keywords := range domain.Terms {
+			for _, kw := range keywords {
+				kwLower := strings.ToLower(kw)
+				if kwTermSeen[kwLower] == nil {
+					kwTermSeen[kwLower] = make(map[string]bool)
+				}
+				if !kwTermSeen[kwLower][term] {
+					kwTermSeen[kwLower][term] = true
+					e.keywordToTerms[kwLower] = append(e.keywordToTerms[kwLower], term)
+				}
+			}
 		}
 	}
 
@@ -109,6 +137,12 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 		} else {
 			hits = e.searchOR(tokens, opts)
 		}
+	}
+
+	// Append content hits from file body scanning (grep-style)
+	if e.projectRoot != "" {
+		contentHits := e.scanFileContents(query, opts, hits)
+		hits = append(hits, contentHits...)
 	}
 
 	result := e.buildResult(hits, opts, maxCount)
@@ -353,6 +387,7 @@ func (e *SearchEngine) buildHit(ref ports.TokenRef, sym *ports.SymbolMeta, file 
 		Range:  [2]int{int(sym.StartLine), int(sym.EndLine)},
 		Domain: e.assignDomain(ref),
 		Tags:   e.generateTags(ref),
+		Kind:   "symbol",
 		fileID: ref.FileID,
 	}
 }

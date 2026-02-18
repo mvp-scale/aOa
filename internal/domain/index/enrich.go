@@ -59,60 +59,52 @@ func (e *SearchEngine) assignDomainByKeywords(ref ports.TokenRef) string {
 	return bestDomain
 }
 
-// generateTags returns the tags for a symbol.
-// Uses pre-computed tags from SymbolMeta if available,
-// otherwise falls back to token-based generation.
+// generateTags returns atlas terms for a symbol by resolving its tokens
+// through the keyword→term reverse lookup. Tags are terms, not raw keywords.
 func (e *SearchEngine) generateTags(ref ports.TokenRef) []string {
-	sym := e.idx.Metadata[ref]
-	if sym != nil && len(sym.Tags) > 0 {
-		return sym.Tags
-	}
-
-	// Fallback: use tokens from inverted index
-	return e.generateTagsFromTokens(ref)
+	tokens := e.refToTokens[ref]
+	return e.resolveTerms(tokens)
 }
 
-// Token exclusion set for fallback tag generation.
+// Token exclusion set for tag generation.
 var excludeTokens = map[string]bool{
 	"self": true,
 	"base": true,
 	"case": true,
 }
 
-// generateTagsFromTokens generates tags from the inverted index tokens.
-func (e *SearchEngine) generateTagsFromTokens(ref ports.TokenRef) []string {
-	tokens := e.refToTokens[ref]
+// resolveTerms converts raw tokens (keywords) to atlas terms via the
+// keyword→term reverse lookup. Returns up to 3 unique terms, sorted
+// alphabetically for deterministic output.
+func (e *SearchEngine) resolveTerms(tokens []string) []string {
 	if len(tokens) == 0 {
 		return nil
 	}
 
 	seen := make(map[string]bool)
-	var candidates []string
+	var terms []string
 	for _, tok := range tokens {
-		if excludeTokens[tok] || seen[tok] {
+		if excludeTokens[tok] {
 			continue
 		}
-		seen[tok] = true
-		candidates = append(candidates, tok)
+		for _, term := range e.keywordToTerms[strings.ToLower(tok)] {
+			if !seen[term] {
+				seen[term] = true
+				terms = append(terms, term)
+			}
+		}
 	}
 
-	if len(candidates) == 0 {
+	if len(terms) == 0 {
 		return nil
 	}
 
-	sort.SliceStable(candidates, func(i, j int) bool {
-		fi := e.tokenDocFreq[candidates[i]]
-		fj := e.tokenDocFreq[candidates[j]]
-		if fi != fj {
-			return fi < fj
-		}
-		return candidates[i] < candidates[j]
-	})
+	sort.Strings(terms)
 
-	if len(candidates) > 3 {
-		candidates = candidates[:3]
+	if len(terms) > 3 {
+		terms = terms[:3]
 	}
-	return candidates
+	return terms
 }
 
 // refTokenSet returns the set of tokens for a ref from the reverse map.

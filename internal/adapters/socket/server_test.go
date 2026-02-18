@@ -69,7 +69,7 @@ func testFixtures() (*index.SearchEngine, *ports.Index) {
 		"@api":            {Terms: map[string][]string{"api": {"view", "handler"}}},
 	}
 
-	engine := index.NewSearchEngine(idx, domains)
+	engine := index.NewSearchEngine(idx, domains, "")
 	return engine, idx
 }
 

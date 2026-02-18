@@ -52,6 +52,21 @@ func (e *Enricher) DomainTerms(domain string) map[string][]string {
 	return nil
 }
 
+// LookupTerm returns the domain(s) that own a given term name.
+// A term may belong to multiple domains (shared terms).
+// Returns nil for unknown terms.
+func (e *Enricher) LookupTerm(term string) []string {
+	var domains []string
+	seen := make(map[string]bool)
+	for _, d := range e.atlas.Domains {
+		if _, ok := d.Terms[term]; ok && !seen[d.Domain] {
+			seen[d.Domain] = true
+			domains = append(domains, d.Domain)
+		}
+	}
+	return domains
+}
+
 // Stats returns atlas statistics: domain count, term count, total keyword entries, unique keywords.
 func (e *Enricher) Stats() (domains, terms, keywordEntries, uniqueKeywords int) {
 	return e.atlas.DomainCount, e.atlas.TermCount, e.atlas.KeywordEntries, e.atlas.UniqueKeywords

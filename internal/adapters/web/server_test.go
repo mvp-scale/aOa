@@ -91,7 +91,7 @@ func setupTestServer(t *testing.T) *httptest.Server {
 		Files:    map[uint32]*ports.FileMeta{1: {Path: "auth.go", Language: "go"}},
 	}
 	domains := make(map[string]index.Domain)
-	engine := index.NewSearchEngine(idx, domains)
+	engine := index.NewSearchEngine(idx, domains, "")
 	queries := &mockQueries{state: newTestState()}
 
 	srv := NewServer(queries, idx, engine, "")

@@ -131,32 +131,33 @@ The Activity & Impact table (Overview tab) needs behavioral parity with the lega
 **Completed in this session:**
 - ✅ `FileMeta.Size` added to ports/storage — enables savings calculation from indexed file sizes
 - ✅ `TurnAction` struct with Tool/Target/Range/Impact — structured tool action data
-- ✅ `readSavings()` helper — computes `↓N%` from `FileMeta.Size` vs read limit
-- ✅ Range-limited reads generate impact strings (e.g., `↓85%`)
+- ✅ `readSavings()` helper — token-based savings (bytes/4), returns `↓N% (Xk → Yk)` format
+- ✅ Range-limited reads generate impact strings with before/after token counts
+- ✅ All A-01 through A-17 tasks complete — 30 activity rubric tests passing
 
 | ID | Area | Task | Priority | Status | Conf | G2 | G5 | Deps | Files | Test Strategy |
 |----|------|------|:--------:|:------:|:----:|:--:|:--:|------|-------|---------------|
 | **BEHAVIORAL FIXES** |
-| A-01 | Backend | Source capitalization: `"claude"` → `"Claude"` in backend | High | TODO | 🟢 | ✓ | | - | `internal/app/app.go` | Activity feed entries show "Claude" |
-| A-02 | Backend | Attrib: `"and"` → `"multi-and"` for AND search mode | High | TODO | 🟢 | ✓ | | - | `internal/app/app.go` | AND search attrib = "multi-and" |
-| A-03 | Backend | Filter Bash `./aoa` commands — already captured as Search by observer | Critical | TODO | 🟢 | ✓ | | - | `internal/app/app.go` | No duplicate Bash+Search entries |
-| A-04 | Backend | Filter Bash commands without file context (e.g., `git status`) | High | TODO | 🟢 | | ✓ | A-03 | `internal/app/app.go` | Only file-bearing tool calls in feed |
-| A-05 | Backend | Read targets: strip project root, show relative path + `:offset-limit` range | High | TODO | 🟢 | ✓ | | - | `internal/app/app.go` | Read target = `src/foo.go:200-400` |
-| A-06 | Backend | All tool targets: strip project root prefix for relative paths | High | TODO | 🟢 | ✓ | | A-05 | `internal/app/app.go` | All targets use relative paths |
+| A-01 | Backend | Source capitalization: `"claude"` → `"Claude"` in backend | High | Done | 🟢 | ✓ | | - | `internal/app/app.go` | Activity feed entries show "Claude" |
+| A-02 | Backend | Attrib: `"and"` → `"multi-and"` for AND search mode | High | Done | 🟢 | ✓ | | - | `internal/app/app.go` | AND search attrib = "multi-and" |
+| A-03 | Backend | Filter Bash `./aoa` commands — already captured as Search by observer | Critical | Done | 🟢 | ✓ | | - | `internal/app/app.go` | No duplicate Bash+Search entries |
+| A-04 | Backend | Filter Bash commands without file context (e.g., `git status`) | High | Done | 🟢 | | ✓ | A-03 | `internal/app/app.go` | Only file-bearing tool calls in feed |
+| A-05 | Backend | Read targets: strip project root, show relative path + `:offset-limit` range | High | Done | 🟢 | ✓ | | - | `internal/app/app.go` | Read target = `src/foo.go:200-400` |
+| A-06 | Backend | All tool targets: strip project root prefix for relative paths | High | Done | 🟢 | ✓ | | A-05 | `internal/app/app.go` | All targets use relative paths |
 | **"aOa GUIDED" REWORK** |
-| A-07 | Backend | Remove `guidedPaths` map — wrong approach (path-matching search results) | Critical | TODO | 🟢 | | ✓ | - | `internal/app/app.go` | Map and related code removed |
-| A-08 | Backend | Implement savings-based attribution: `file_size` vs `output_size` | Critical | WIP | 🟢 | ✓ | | A-07 | `internal/app/app.go` | `FileMeta.Size` now available; `readSavings()` implemented |
-| A-09 | Backend | Attrib = `"aOa guided"` when savings ≥ 50% (legacy threshold) | Critical | TODO | 🟢 | ✓ | | A-08 | `internal/app/app.go` | Reads with ≥50% token savings get attrib |
-| A-10 | Backend | Impact format for guided reads: `↓N% (Xk → Yk)` with token approximation (bytes/4) | High | TODO | 🟢 | ✓ | | A-08 | `internal/app/app.go` | Impact shows savings arrow + before/after |
+| A-07 | Backend | Remove `guidedPaths` map — wrong approach (path-matching search results) | Critical | Done | 🟢 | | ✓ | - | `internal/app/app.go` | Map and related code removed |
+| A-08 | Backend | Implement savings-based attribution: `file_size` vs `output_size` | Critical | Done | 🟢 | ✓ | | A-07 | `internal/app/app.go` | Token approximation (bytes/4); `savingsInfo` struct + `readSavings()` reworked |
+| A-09 | Backend | Attrib = `"aOa guided"` when savings ≥ 50% (legacy threshold) | Critical | Done | 🟢 | ✓ | | A-08 | `internal/app/app.go` | Reads with ≥50% token savings get attrib |
+| A-10 | Backend | Impact format for guided reads: `↓N% (Xk → Yk)` with token approximation (bytes/4) | High | Done | 🟢 | ✓ | | A-08 | `internal/app/app.go` | Impact shows savings arrow + before/after |
 | **BRANDING & COLOR** |
-| A-11 | Frontend | Target three-part color: `<cyan+bold>aOa</cyan+bold> <green>grep</green> <plain>query</plain>` | High | TODO | 🟢 | ✓ | | - | `static/index.html` | Target renders with 3 distinct colors |
-| A-12 | Frontend | Source `aOa` styled cyan+bold (brand identity color) | High | TODO | 🟢 | ✓ | | - | `static/index.html` | Source column uses brand color |
-| A-13 | Frontend | Attrib `aOa guided`: "aOa" in cyan+bold, "guided" in green | High | TODO | 🟢 | ✓ | | - | `static/index.html` | Two-tone attrib rendering |
-| A-14 | Frontend | Impact hits: `<cyan+bold>N hits</cyan+bold> <dim>│</dim> <green>X.XXms</green>` | Medium | TODO | 🟢 | ✓ | | - | `static/index.html` | Three-part impact rendering |
-| A-15 | Frontend | Impact `0 hits` rendered in dim/muted (not cyan) | Medium | TODO | 🟢 | ✓ | | - | `static/index.html` | Zero-hit style distinct from positive |
-| A-16 | Frontend | Ensure all `aOa` text uses consistent casing and cyan+bold color | High | TODO | 🟢 | ✓ | | - | `static/index.html`, `app.go` | Brand audit across all surfaces |
+| A-11 | Frontend | Target three-part color: `<cyan+bold>aOa</cyan+bold> <green>grep</green> <plain>query</plain>` | High | Done | 🟢 | ✓ | | - | `static/index.html` | Target renders with 3 distinct colors |
+| A-12 | Frontend | Source `aOa` styled cyan+bold (brand identity color) | High | Done | 🟢 | ✓ | | - | `static/index.html` | Source column uses brand color (was already correct) |
+| A-13 | Frontend | Attrib `aOa guided`: "aOa" in cyan+bold, "guided" in green | High | Done | 🟢 | ✓ | | - | `static/index.html` | Two-tone attrib rendering |
+| A-14 | Frontend | Impact hits: `<cyan+bold>N hits</cyan+bold> <dim>│</dim> <green>X.XXms</green>` | Medium | Done | 🟢 | ✓ | | - | `static/index.html` | Three-part impact rendering |
+| A-15 | Frontend | Impact `0 hits` rendered in dim/muted (not cyan) | Medium | Done | 🟢 | ✓ | | - | `static/index.html` | Zero-hit style distinct from positive |
+| A-16 | Frontend | Ensure all `aOa` text uses consistent casing and cyan+bold color | High | Done | 🟢 | ✓ | | - | `static/index.html`, `app.go` | Nav header, domain footer, page footer, table header — all use `.aoa-brand` cyan+bold |
 | **TEST RUBRIC** |
-| A-17 | Test | Build activity rubric: enumerate all action/source/attrib/impact combinations | High | Done | 🟢 | ✓ | ✓ | - | `internal/app/activity_test.go` | 13-row rubric; passing: searchAttrib (indexed/multi-or/regex), searchTarget, readSavings, ringBuffer. Failing (expected — documents A-01–A-10): source casing, impact default, guided attrib, path stripping, bash filtering, and-mode attrib |
+| A-17 | Test | Build activity rubric: enumerate all action/source/attrib/impact combinations | High | Done | 🟢 | ✓ | ✓ | - | `internal/app/activity_test.go` | 30 tests, all passing: searchAttrib (4), searchTarget (2), source casing, impact default, guided savings, no-savings, path stripping (4), bash filtering (3), full rubric (13), readSavings (4), ring buffer |
 
 ### 8b: Conversation Tab — Narrative Redesign ✅ DONE
 

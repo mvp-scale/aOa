@@ -183,7 +183,7 @@ body {
 .nav-brand .name {
   font-size: 16px;
   font-weight: 700;
-  color: var(--text);
+  color: var(--cyan);
   letter-spacing: 0.5px;
 }
 
@@ -697,6 +697,15 @@ body {
   font-weight: 600;
 }
 
+.aoa-brand {
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.target-cmd {
+  color: var(--green);
+}
+
 .attrib-guided {
   color: var(--green);
   font-weight: 500;
@@ -710,6 +719,21 @@ body {
 .impact-hits {
   color: var(--cyan);
   font-weight: 600;
+  font-size: 11px;
+}
+
+.impact-timing {
+  color: var(--green);
+  font-size: 11px;
+}
+
+.impact-sep {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.impact-zero {
+  color: var(--mute);
   font-size: 11px;
 }
 
@@ -1585,7 +1609,7 @@ body {
           <div id="domainTableContainer">
             <div class="awaiting-data" id="domainPlaceholder">Awaiting domain data...</div>
           </div>
-          <div class="domain-footer">aOa learns your workflow &rarr; Claude reads only what it needs.</div>
+          <div class="domain-footer"><span class="aoa-brand">aOa</span> learns your workflow &rarr; Claude reads only what it needs.</div>
         </div>
         <div class="card">
           <div class="card-header">
@@ -1674,7 +1698,7 @@ body {
     <span>Online &middot; v1.0.0</span>
   </div>
   <div class="footer-right">
-    <span class="footer-motto">aOa learns &rarr; you build faster. <span class="way">This is the way.</span></span>
+    <span class="footer-motto"><span class="aoa-brand">aOa</span> learns &rarr; you build faster. <span class="way">This is the way.</span></span>
     <span class="footer-clock" id="clock"></span>
   </div>
 </div>
@@ -2237,7 +2261,7 @@ body {
     badge.className = 'badge badge-live';
     badge.textContent = 'live';
     body.innerHTML = '<table class="activity-table"><thead><tr>' +
-      '<th>Action</th><th>Source</th><th>Attrib</th><th>aOa Impact</th><th>Tags</th><th>Target</th><th>Time</th>' +
+      '<th>Action</th><th>Source</th><th>Attrib</th><th><span class="aoa-brand">aOa</span> Impact</th><th>Tags</th><th>Target</th><th>Time</th>' +
       '</tr></thead><tbody id="activityTbody"></tbody></table>';
     activityInitialized = true;
   }
@@ -2252,7 +2276,7 @@ body {
     if (roll < 0.35) {
       entry = {
         action: 'Search', source: 'aOa',
-        attrib: ['indexed', 'multi-or', 'regex', 'and'][Math.floor(Math.random() * 4)],
+        attrib: ['indexed', 'multi-or', 'regex', 'multi-and'][Math.floor(Math.random() * 4)],
         impact: (Math.floor(Math.random() * 20) + 1) + ' hits | ' + (Math.random() * 5).toFixed(2) + 'ms',
         tags: '', target: 'aOa grep ' + mockTargetsSearch[Math.floor(Math.random() * mockTargetsSearch.length)],
         timestamp: nowSec - Math.floor(Math.random() * 60)
@@ -2260,26 +2284,26 @@ body {
     } else if (roll < 0.6) {
       var file = mockTargetsRead[Math.floor(Math.random() * mockTargetsRead.length)];
       entry = {
-        action: 'Read', source: 'claude',
+        action: 'Read', source: 'Claude',
         attrib: Math.random() < 0.4 ? 'aOa guided' : '-',
         impact: '-', tags: '', target: file,
         timestamp: nowSec - Math.floor(Math.random() * 120)
       };
     } else if (roll < 0.75) {
       entry = {
-        action: 'Edit', source: 'claude', attrib: '-',
+        action: 'Edit', source: 'Claude', attrib: '-',
         impact: '-', tags: '', target: mockTargetsRead[Math.floor(Math.random() * mockTargetsRead.length)],
         timestamp: nowSec - Math.floor(Math.random() * 180)
       };
     } else if (roll < 0.9) {
       entry = {
-        action: 'Bash', source: 'claude', attrib: '-',
+        action: 'Bash', source: 'Claude', attrib: '-',
         impact: '-', tags: '', target: ['go test ./...', 'go build ./cmd/aoa/', 'git status'][Math.floor(Math.random() * 3)],
         timestamp: nowSec - Math.floor(Math.random() * 120)
       };
     } else {
       entry = {
-        action: 'Grep', source: 'claude', attrib: '-',
+        action: 'Grep', source: 'Claude', attrib: '-',
         impact: '-', tags: '', target: mockTargetsSearch[Math.floor(Math.random() * mockTargetsSearch.length)],
         timestamp: nowSec - Math.floor(Math.random() * 60)
       };
@@ -2496,12 +2520,12 @@ body {
             // Impact badge
             if (act.impact) {
               var impCls = '';
-              if (act.impact.indexOf('\u2193') === 0 || act.impact === 'guided') impCls = 'guided';
+              if (act.impact.indexOf('\u2193') === 0) impCls = 'guided';
               else if (act.impact.indexOf('match') >= 0 || act.impact.indexOf('hits') >= 0) impCls = 'hits';
               else if (act.impact.indexOf('pass') >= 0 || act.impact === 'clean') impCls = 'pass';
               else if (act.impact.indexOf('fail') >= 0) impCls = 'fail';
               html += '<span class="cv-imp ' + impCls + '">' + esc(act.impact) + '</span>';
-              if (act.impact.indexOf('guided') >= 0 || act.impact.indexOf('\u2193') === 0) guidedCount++;
+              if (act.impact.indexOf('\u2193') === 0) guidedCount++;
             }
             html += '</div>';
             if (act.tool === 'Edit') editCount++;
@@ -2597,18 +2621,33 @@ body {
         sourceHtml = '<span class="source-text">' + esc(entry.source) + '</span>';
       }
 
-      // Attrib styling
+      // Attrib styling — A-13: two-tone for "aOa guided"
       var attribHtml;
       if (entry.attrib === 'aOa guided') {
-        attribHtml = '<span class="attrib-guided">aOa guided</span>';
+        attribHtml = '<span class="aoa-brand">aOa</span> <span class="attrib-guided">guided</span>';
       } else {
         attribHtml = '<span class="attrib-text">' + esc(entry.attrib) + '</span>';
       }
 
-      // Impact styling
+      // Impact styling — A-14: three-part for hits, A-15: dim for 0 hits
       var impactHtml;
       if (entry.impact && entry.impact !== '-') {
-        impactHtml = '<span class="impact-hits">' + esc(entry.impact) + '</span>';
+        var hitMatch = entry.impact.match(/^(\d+ hits?)\s*\|\s*(.+)$/);
+        if (hitMatch) {
+          var hitPart = hitMatch[1];
+          var timePart = hitMatch[2];
+          if (hitPart === '0 hits') {
+            impactHtml = '<span class="impact-zero">' + esc(hitPart) + '</span>' +
+              ' <span class="impact-sep">\u2502</span> ' +
+              '<span class="impact-timing">' + esc(timePart) + '</span>';
+          } else {
+            impactHtml = '<span class="impact-hits">' + esc(hitPart) + '</span>' +
+              ' <span class="impact-sep">\u2502</span> ' +
+              '<span class="impact-timing">' + esc(timePart) + '</span>';
+          }
+        } else {
+          impactHtml = '<span class="impact-hits">' + esc(entry.impact) + '</span>';
+        }
       } else {
         impactHtml = '<span class="attrib-text">-</span>';
       }
@@ -2616,13 +2655,13 @@ body {
       // Tags
       var tagsHtml = '<span class="tags-text">' + (entry.tags || '-') + '</span>';
 
-      // Target with aOa highlight
+      // Target with aOa highlight — A-11: three-part color
       var targetHtml;
       if (entry.target && (entry.target.indexOf('aOa grep ') === 0 || entry.target.indexOf('aOa egrep ') === 0)) {
-        var spaceIdx = entry.target.indexOf(' ', 4); // after "aOa "
-        var prefix = entry.target.substring(0, spaceIdx + 1);
-        var rest = entry.target.substring(spaceIdx + 1);
-        targetHtml = '<span class="aoa-highlight">' + esc(prefix) + '</span>' + esc(rest);
+        var cmdEnd = entry.target.indexOf(' ', 4); // end of "grep"/"egrep"
+        var cmd = entry.target.substring(4, cmdEnd);
+        var query = entry.target.substring(cmdEnd + 1);
+        targetHtml = '<span class="aoa-brand">aOa</span> <span class="target-cmd">' + esc(cmd) + '</span> ' + esc(query);
       } else {
         targetHtml = esc(entry.target || '-');
       }

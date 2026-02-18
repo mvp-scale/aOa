@@ -28,11 +28,11 @@ func newTestApp(t *testing.T) *App {
 		Tokens:   make(map[string][]ports.TokenRef),
 		Metadata: make(map[ports.TokenRef]*ports.SymbolMeta),
 		Files: map[uint32]*ports.FileMeta{
-			1: {Path: "/home/user/project/src/big.go", Size: 176000, Language: "go"},   // 176KB — ~4400 lines at 40B/line
-			2: {Path: "/home/user/project/src/small.go", Size: 4000, Language: "go"},    // 4KB — ~100 lines
-			3: {Path: "/home/user/project/src/foo.go", Size: 2000, Language: "go"},      // 2KB — ~50 lines
-			4: {Path: "/home/user/project/src/bar.go", Size: 1000, Language: "go"},      // 1KB
-			5: {Path: "/home/user/project/src/baz.go", Size: 800, Language: "go"},       // 0.8KB
+			1: {Path: "/home/user/project/src/big.go", Size: 176000, Language: "go"},    // 176KB → 44k tokens
+			2: {Path: "/home/user/project/src/small.go", Size: 10000, Language: "go"},   // 10KB → 2500 tokens
+			3: {Path: "/home/user/project/src/foo.go", Size: 2000, Language: "go"},      // 2KB → 500 tokens
+			4: {Path: "/home/user/project/src/bar.go", Size: 1000, Language: "go"},      // 1KB → 250 tokens
+			5: {Path: "/home/user/project/src/baz.go", Size: 800, Language: "go"},       // 0.8KB → 200 tokens
 			6: {Path: "/home/user/project/src/handlers/auth.go", Size: 500, Language: "go"},
 		},
 	}
@@ -48,8 +48,7 @@ func newTestApp(t *testing.T) *App {
 			BashCommands: make(map[string]int),
 			GrepPatterns: make(map[string]int),
 		},
-		turnBuffer:  make(map[string]*turnBuilder),
-		guidedPaths: make(map[string]int64),
+		turnBuffer: make(map[string]*turnBuilder),
 	}
 	return a
 }
@@ -157,8 +156,8 @@ func TestActivityImpactDefault(t *testing.T) {
 func TestActivityReadSavingsGuided(t *testing.T) {
 	a := newTestApp(t)
 
-	// Read 200 lines of a 176KB file (~4400 lines at 40B/line).
-	// 200/4400 ≈ 4.5% read → ~95% savings → well above 50% threshold → "aOa guided"
+	// 176KB file → 44000 tokens. Reading 200 lines → ~4000 tokens (200×20).
+	// Savings: (44000-4000)/44000 = 90% → well above 50% threshold → "aOa guided"
 	ev := ports.SessionEvent{
 		Kind:      ports.EventToolInvocation,
 		TurnID:    "turn-1",
@@ -586,8 +585,6 @@ func TestActivityRubric(t *testing.T) {
 			a.activityRing = [50]ActivityEntry{}
 			a.activityHead = 0
 			a.activityCount = 0
-			// Clear guidedPaths to avoid cross-contamination
-			a.guidedPaths = make(map[string]int64)
 
 			a.onSessionEvent(tc.ev)
 
@@ -637,21 +634,34 @@ func TestReadSavings(t *testing.T) {
 	a := newTestApp(t)
 
 	t.Run("big_file_small_read", func(t *testing.T) {
-		// 176KB file ≈ 4400 lines. Reading 200 lines → ~95% savings
+		// 176KB → 44000 tokens. Reading 200 lines → 4000 tokens. Savings: 90%
 		got := a.readSavings("/home/user/project/src/big.go", 200)
-		assert.NotEmpty(t, got, "should compute savings for large file with small read")
-		assert.True(t, strings.HasPrefix(got, "↓"),
-			"savings string should start with ↓, got %q", got)
+		assert.NotEmpty(t, got.display, "should compute savings for large file with small read")
+		assert.Equal(t, 90, got.pct)
+		assert.Equal(t, int64(44000), got.fileTokens)
+		assert.Equal(t, int64(4000), got.readTokens)
+		assert.True(t, strings.HasPrefix(got.display, "↓"),
+			"savings display should start with ↓, got %q", got.display)
+		assert.Contains(t, got.display, "44.0k")
+		assert.Contains(t, got.display, "4.0k")
+	})
+
+	t.Run("small_file_moderate_read", func(t *testing.T) {
+		// 10KB → 2500 tokens. Reading 70 lines → 1400 tokens. Savings: 44%
+		got := a.readSavings("/home/user/project/src/small.go", 70)
+		assert.NotEmpty(t, got.display, "should compute savings")
+		assert.Equal(t, 44, got.pct)
+		assert.True(t, got.pct < 50, "should be below 50%% guided threshold")
 	})
 
 	t.Run("whole_file_read", func(t *testing.T) {
 		got := a.readSavings("/home/user/project/src/foo.go", 0)
-		assert.Empty(t, got, "limit=0 should return empty savings")
+		assert.Empty(t, got.display, "limit=0 should return empty savings")
 	})
 
 	t.Run("unknown_file", func(t *testing.T) {
 		got := a.readSavings("/nonexistent/file.go", 100)
-		assert.Empty(t, got, "unknown file should return empty savings")
+		assert.Empty(t, got.display, "unknown file should return empty savings")
 	})
 }
 

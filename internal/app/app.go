@@ -138,7 +138,6 @@ type App struct {
 	activityRing  [50]ActivityEntry // ring buffer of last 50 activity entries
 	activityHead  int
 	activityCount int
-	guidedPaths   map[string]int64 // file path -> unix timestamp of last aOa search hit
 }
 
 // Config holds initialization parameters for the App.
@@ -201,7 +200,7 @@ func New(cfg Config) (*App, error) {
 		domains[d.Domain] = index.Domain{Terms: d.Terms}
 	}
 
-	engine := index.NewSearchEngine(idx, domains)
+	engine := index.NewSearchEngine(idx, domains, cfg.ProjectRoot)
 
 	// Load existing learner state or create fresh
 	ls, err := store.LoadLearnerState(cfg.ProjectID)
@@ -242,8 +241,7 @@ func New(cfg Config) (*App, error) {
 			BashCommands: make(map[string]int),
 			GrepPatterns: make(map[string]int),
 		},
-		turnBuffer:  make(map[string]*turnBuilder),
-		guidedPaths: make(map[string]int64),
+		turnBuffer: make(map[string]*turnBuilder),
 	}
 
 	// Create server with App as query provider (for domains, stats, etc.)
@@ -260,6 +258,80 @@ func New(cfg Config) (*App, error) {
 	return a, nil
 }
 
+// signalCollector accumulates unique keywords, terms, domains, and their
+// relationship pairs from search queries and results. Each add method
+// deduplicates so the caller doesn't need to track what's been seen.
+type signalCollector struct {
+	Keywords    []string
+	Terms       []string
+	Domains     []string
+	KwTerms     [][2]string
+	TermDomains [][2]string
+
+	seenKw      map[string]bool
+	seenTerms   map[string]bool
+	seenDomains map[string]bool
+}
+
+func newSignalCollector() *signalCollector {
+	return &signalCollector{
+		seenKw:      make(map[string]bool),
+		seenTerms:   make(map[string]bool),
+		seenDomains: make(map[string]bool),
+	}
+}
+
+// addKeyword adds a keyword and resolves it through the enricher to
+// discover terms and domains. Skips duplicates.
+func (sc *signalCollector) addKeyword(kw string, enr *enricher.Enricher) {
+	if sc.seenKw[kw] {
+		return
+	}
+	sc.seenKw[kw] = true
+	sc.Keywords = append(sc.Keywords, kw)
+
+	for _, m := range enr.Lookup(kw) {
+		sc.KwTerms = append(sc.KwTerms, [2]string{kw, m.Term})
+		sc.addTermDomain(m.Term, m.Domain)
+	}
+}
+
+// addTerm adds a term and resolves it to its owning domain(s). Skips duplicates.
+func (sc *signalCollector) addTerm(term string, enr *enricher.Enricher) {
+	if sc.seenTerms[term] {
+		return
+	}
+	sc.seenTerms[term] = true
+	sc.Terms = append(sc.Terms, term)
+
+	for _, domain := range enr.LookupTerm(term) {
+		sc.addTermDomain(term, domain)
+	}
+}
+
+// addDomain adds a domain directly. Skips duplicates.
+func (sc *signalCollector) addDomain(domain string) {
+	d := strings.TrimPrefix(domain, "@")
+	if d == "" || sc.seenDomains[d] {
+		return
+	}
+	sc.seenDomains[d] = true
+	sc.Domains = append(sc.Domains, d)
+}
+
+// addTermDomain records a term→domain pair and ensures both are tracked.
+func (sc *signalCollector) addTermDomain(term, domain string) {
+	sc.TermDomains = append(sc.TermDomains, [2]string{term, domain})
+	if !sc.seenTerms[term] {
+		sc.seenTerms[term] = true
+		sc.Terms = append(sc.Terms, term)
+	}
+	if !sc.seenDomains[domain] {
+		sc.seenDomains[domain] = true
+		sc.Domains = append(sc.Domains, domain)
+	}
+}
+
 // searchObserver extracts learning signals from search queries and results.
 // Called after every search. Thread-safe via mutex.
 func (a *App) searchObserver(query string, opts ports.SearchOptions, result *index.SearchResult, elapsed time.Duration) {
@@ -268,89 +340,58 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 
 	a.promptN++
 
-	// Tokenize query into keywords
 	tokens := index.Tokenize(query)
 	if len(tokens) == 0 {
 		return
 	}
 
-	var keywords []string
-	var terms []string
-	var domains []string
-	var kwTerms [][2]string
-	var termDomains [][2]string
+	sc := newSignalCollector()
 
-	seenTerms := make(map[string]bool)
-	seenDomains := make(map[string]bool)
-
-	// Resolve each query token via the atlas enricher
+	// 1. Query tokens → keywords → terms → domains
 	for _, tok := range tokens {
-		keywords = append(keywords, tok)
-		matches := a.Enricher.Lookup(tok)
-		for _, m := range matches {
-			kwTerms = append(kwTerms, [2]string{tok, m.Term})
-			termDomains = append(termDomains, [2]string{m.Term, m.Domain})
-			if !seenTerms[m.Term] {
-				seenTerms[m.Term] = true
-				terms = append(terms, m.Term)
-			}
-			if !seenDomains[m.Domain] {
-				seenDomains[m.Domain] = true
-				domains = append(domains, m.Domain)
-			}
-		}
+		sc.addKeyword(tok, a.Enricher)
 	}
 
-	// Collect domains from result hits (file-level domains)
-	for _, hit := range result.Hits {
-		d := strings.TrimPrefix(hit.Domain, "@")
-		if d != "" && !seenDomains[d] {
-			seenDomains[d] = true
-			domains = append(domains, d)
+	// 2. Top result hits → hit domains, hit tags (terms), hit content keywords
+	topN := len(result.Hits)
+	if topN > 10 {
+		topN = 10
+	}
+	for _, hit := range result.Hits[:topN] {
+		sc.addDomain(hit.Domain)
+		for _, term := range hit.Tags {
+			sc.addTerm(term, a.Enricher)
+		}
+		for _, tok := range index.Tokenize(hit.Symbol + " " + hit.Content) {
+			sc.addKeyword(tok, a.Enricher)
 		}
 	}
 
 	event := learner.ObserveEvent{
 		PromptNumber: a.promptN,
 		Observe: learner.ObserveData{
-			Keywords:     keywords,
-			Terms:        terms,
-			Domains:      domains,
-			KeywordTerms: kwTerms,
-			TermDomains:  termDomains,
+			Keywords:     sc.Keywords,
+			Terms:        sc.Terms,
+			Domains:      sc.Domains,
+			KeywordTerms: sc.KwTerms,
+			TermDomains:  sc.TermDomains,
 		},
 	}
 
 	tuneResult := a.Learner.ObserveAndMaybeTune(event)
 	if tuneResult != nil {
-		// Persist state after autotune cycle
 		_ = a.Store.SaveLearnerState(a.ProjectID, a.Learner.State())
 		a.writeStatus(tuneResult)
 	}
 
-	// Record activity entry for the search
-	entry := ActivityEntry{
+	a.pushActivity(ActivityEntry{
 		Action:    "Search",
 		Source:    "aOa",
 		Attrib:    a.searchAttrib(query, opts),
 		Impact:    fmt.Sprintf("%d hits | %.2fms", len(result.Hits), elapsed.Seconds()*1000),
 		Target:    a.searchTarget(query, opts),
 		Timestamp: time.Now().Unix(),
-	}
-	a.pushActivity(entry)
-
-	// Cache result file paths in guidedPaths
-	now := time.Now().Unix()
-	for _, hit := range result.Hits {
-		a.guidedPaths[hit.File] = now
-	}
-
-	// Prune stale guidedPaths entries (older than 5 minutes)
-	for path, ts := range a.guidedPaths {
-		if now-ts > 300 {
-			delete(a.guidedPaths, path)
-		}
-	}
+	})
 }
 
 // Start begins the daemon (socket server + HTTP server + session reader).
@@ -473,23 +514,20 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			attrib := "-"
 			target := ""
 			rangeStr := ""
-			impact := ""
+			impact := "-"
+			skipActivity := false
 
 			switch action {
 			case "Read":
 				if ev.File != nil && ev.File.Path != "" {
-					target = ev.File.Path
+					target = a.relativePath(ev.File.Path)
 					if ev.File.Offset > 0 || ev.File.Limit > 0 {
 						rangeStr = fmt.Sprintf(":%d-%d", ev.File.Offset, ev.File.Offset+ev.File.Limit)
-						// Calculate savings from FileMeta.Size
-						impact = a.readSavings(ev.File.Path, ev.File.Limit)
-					}
-					// Check if this read was guided by a recent aOa search
-					if guidedTS, ok := a.guidedPaths[ev.File.Path]; ok {
-						if time.Now().Unix()-guidedTS < 300 {
-							attrib = "aOa guided"
-							if impact == "" {
-								impact = "guided"
+						s := a.readSavings(ev.File.Path, ev.File.Limit)
+						if s.display != "" {
+							impact = s.display
+							if s.pct >= 50 {
+								attrib = "aOa guided"
 							}
 						}
 					}
@@ -498,17 +536,24 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				if ev.Tool.Command != "" {
 					target = a.truncate(ev.Tool.Command, 100)
 				}
+				// A-03: Filter aOa commands (already captured as Search by observer)
+				// A-04: Filter Bash commands without file context
+				if strings.HasPrefix(ev.Tool.Command, "./aoa ") ||
+					strings.HasPrefix(ev.Tool.Command, "aoa ") ||
+					ev.File == nil {
+					skipActivity = true
+				}
 			case "Grep":
 				if ev.Tool.Pattern != "" {
 					target = ev.Tool.Pattern
 				}
 			case "Write", "Edit":
 				if ev.File != nil && ev.File.Path != "" {
-					target = ev.File.Path
+					target = a.relativePath(ev.File.Path)
 				}
 			case "Glob":
 				if ev.File != nil && ev.File.Path != "" {
-					target = ev.File.Path
+					target = a.relativePath(ev.File.Path)
 				} else if ev.Tool.Pattern != "" {
 					target = ev.Tool.Pattern
 				}
@@ -532,14 +577,16 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				actTarget = target + rangeStr
 			}
 
-			a.pushActivity(ActivityEntry{
-				Action:    action,
-				Source:    "claude",
-				Attrib:    attrib,
-				Impact:    impact,
-				Target:    actTarget,
-				Timestamp: time.Now().Unix(),
-			})
+			if !skipActivity {
+				a.pushActivity(ActivityEntry{
+					Action:    action,
+					Source:    "Claude",
+					Attrib:    attrib,
+					Impact:    impact,
+					Target:    actTarget,
+					Timestamp: time.Now().Unix(),
+				})
+			}
 		}
 
 	case ports.EventSystemMeta:
@@ -578,7 +625,7 @@ func (a *App) searchAttrib(query string, opts ports.SearchOptions) string {
 		return "regex"
 	}
 	if opts.AndMode {
-		return "and"
+		return "multi-and"
 	}
 	tokens := index.Tokenize(query)
 	if len(tokens) > 1 {
@@ -989,31 +1036,63 @@ func (a *App) accumulateTool(ev ports.SessionEvent) {
 	}
 }
 
-// readSavings computes a savings string for a range-limited read vs full file.
-// Returns e.g. "↓62%" or empty string if savings can't be computed.
+// savingsInfo holds the result of a token-savings calculation for a range-limited read.
+type savingsInfo struct {
+	pct        int    // savings percentage (0-100)
+	fileTokens int64  // full file estimated tokens
+	readTokens int64  // read portion estimated tokens
+	display    string // formatted "↓N% (Xk → Yk)" or ""
+}
+
+// readSavings computes token savings for a range-limited read vs full file.
+// Token approximation: bytes / 4. Read output: limit lines × ~80 bytes/line / 4.
 // Must be called with a.mu held.
-func (a *App) readSavings(path string, limit int) string {
+func (a *App) readSavings(path string, limit int) savingsInfo {
 	if limit <= 0 || a.Index == nil {
-		return ""
+		return savingsInfo{}
 	}
-	// Find the file's size from the index
 	for _, fm := range a.Index.Files {
 		if fm.Path == path && fm.Size > 0 {
-			// Approximate lines: assume ~40 bytes per line
-			totalLines := fm.Size / 40
-			if totalLines <= 0 {
-				totalLines = 1
+			fileTokens := fm.Size / 4
+			if fileTokens <= 0 {
+				fileTokens = 1
 			}
-			if int64(limit) < totalLines {
-				pct := 100 - (int64(limit)*100)/totalLines
-				if pct > 0 && pct <= 99 {
-					return fmt.Sprintf("\u2193%d%%", pct)
-				}
+			readTokens := int64(limit) * 20 // ~80 bytes/line ÷ 4 bytes/token
+			if readTokens >= fileTokens {
+				return savingsInfo{}
 			}
-			break
+			pct := int((fileTokens - readTokens) * 100 / fileTokens)
+			if pct <= 0 || pct > 99 {
+				return savingsInfo{}
+			}
+			display := fmt.Sprintf("↓%d%% (%s → %s)", pct, formatTokens(fileTokens), formatTokens(readTokens))
+			return savingsInfo{pct: pct, fileTokens: fileTokens, readTokens: readTokens, display: display}
 		}
 	}
-	return ""
+	return savingsInfo{}
+}
+
+// relativePath strips the project root prefix from an absolute path.
+func (a *App) relativePath(path string) string {
+	if a.ProjectRoot != "" && strings.HasPrefix(path, a.ProjectRoot) {
+		rel := strings.TrimPrefix(path, a.ProjectRoot)
+		rel = strings.TrimPrefix(rel, "/")
+		if rel != "" {
+			return rel
+		}
+	}
+	return path
+}
+
+// formatTokens formats a token count with k/M suffixes.
+func formatTokens(tokens int64) string {
+	if tokens >= 1_000_000 {
+		return fmt.Sprintf("%.1fM", float64(tokens)/1_000_000)
+	}
+	if tokens >= 1_000 {
+		return fmt.Sprintf("%.1fk", float64(tokens)/1_000)
+	}
+	return fmt.Sprintf("%d", tokens)
 }
 
 // truncate truncates a string to a maximum length.
@@ -1145,7 +1224,6 @@ func (a *App) WipeProject() error {
 	a.activityRing = [50]ActivityEntry{}
 	a.activityHead = 0
 	a.activityCount = 0
-	a.guidedPaths = make(map[string]int64)
 
 	return nil
 }

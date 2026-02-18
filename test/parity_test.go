@@ -22,7 +22,7 @@ func TestSearchParity(t *testing.T) {
 	idx, domains, err := loadIndexFixture("fixtures/search/index-state.json")
 	require.NoError(t, err, "Failed to load index-state.json")
 
-	engine := index.NewSearchEngine(idx, domains)
+	engine := index.NewSearchEngine(idx, domains, "")
 
 	// Load search queries
 	fixtures, err := loadSearchFixtures("fixtures/search/queries.json")
