@@ -100,6 +100,12 @@ make check                       # Local CI: vet + lint + test
 | T-03 | Frontend | Add Arsenal tab — daemon status, config display, alias instructions, port info | Medium | TODO | 🟢 | T-01 | `static/index.html` | Shows config data from `/api/health` |
 | T-04 | Frontend | 5-tab header layout — ensure responsive at smaller widths | Medium | TODO | 🟢 | T-01 | `static/index.html` | Tabs don't overflow at 800px width |
 | T-05 | Backend | Arsenal API — expose config, alias state, daemon info | Low | TODO | 🟢 | T-03 | `web/server.go` | `/api/config` returns project root, paths, alias status |
+| T-06 | Frontend | Relative timestamps — "now", "12s", "3m" (no "ago" suffix) | High | Done | 🟢 | - | `static/index.html` | Timestamps update live, weighted distribution, shared `relativeTime()` helper |
+| T-07 | Frontend | Activity table: fixed columns, no jitter — `table-layout:fixed`, 2/3 left + 1/3 target | High | Done | 🟢 | - | `static/index.html` | Columns: time 8%, action 10%, source 10%, attrib 15%, impact 24%, target 33% |
+| T-08 | Frontend | Activity table: responsive — drop time+target at 900px, keep action/source/attrib/impact (20/20/25/35) | High | Done | 🟢 | T-07 | `static/index.html` | 4-column layout at narrow width, balanced spacing |
+| T-09 | Frontend | Negative feedback loop — unguided Grep/Glob: red pills, red attrib, red target, wasted token estimate in impact | High | Done | 🟢 | - | `static/index.html` | Grep/Glob rows read as costly end-to-end; productive=green, unguided=red |
+
+**Live mockup locked** (`_throwaway_mockups/live.html`): Context runway hero, value metrics panel, fixed-column activity table with negative feedback loop, responsive 900px breakpoint.
 
 **Recon — future scope:** Full browser search UI. Stubbed for now with guidance card pointing to CLI.
 **Arsenal — future scope:** Interactive `aoa init` in browser, alias toggle, .gitignore exception editor. Start read-only.
@@ -135,8 +141,9 @@ make check                       # Local CI: vet + lint + test
 | AT-01 | Backend | Write/Edit attrib = "productive" | Medium | TODO | 🟢 | - | `internal/app/app.go` | Write/Edit tool calls get attrib |
 | AT-03 | Backend | Grep (Claude) impact = estimated token cost | Medium | TODO | 🟢 | - | `internal/app/app.go` | Grep tool calls show token estimate |
 | AT-05 | Backend | Learn activity event (observe signals summary) | Low | TODO | 🟢 | - | `internal/app/app.go` | Observe emits summary activity entry |
-| AT-07 | Frontend | Dashboard: color-code "productive" attrib (green) | Medium | TODO | 🟢 | AT-01 | `static/index.html` | Productive attrib styled green |
+| AT-07 | Frontend | Dashboard: color-code attribs — green for "productive", **red for "unguided"** (negative feedback loop) | Medium | Done | 🟢 | AT-01 | `static/index.html` | Productive=green, unguided=red, Grep/Glob pills red, mock data updated |
 | AT-08 | Frontend | Dashboard: render token cost impact for Grep/Glob | Medium | TODO | 🟢 | AT-02, AT-03 | `static/index.html` | Token cost rendered in impact column |
+| AT-09 | Backend | Target capture — preserve full query syntax as-is, no normalization (regex, multi-arg, etc.) | High | TODO | 🟢 | - | `internal/app/app.go` | Regex queries stored verbatim, not normalized |
 
 ### Flag Gap
 
@@ -165,6 +172,7 @@ Items from feedback session that need alignment before becoming board tasks:
 | 3 | **Alias strategy** | Needs answer | Goal: replace `grep` itself (not shortcuts). `grep auth` → `aoa grep auth` transparently. Eliminates 250-token prompt education tax. Graceful degradation on unsupported flags? |
 | 4 | **Real-time conversation** | Needs investigation | Legacy Python showed real-time conversation despite shell/curl limitations. Go dashboard with 2s poll should do better — why isn't it? User to provide more direction. |
 | 5 | **Intent score visualization** | Needs discussion | Formula: `coverage × confidence × momentum` (0-100). Lives in domain rankings (Intel tab) as the sorting/scoring mechanism. Traffic light vs number display. |
+| 6 | **Glob token cost visibility** | Needs research | Claude's Glob/Read operations consume large token counts (entire files read into context). Do the JSONL session logs expose the token count for each tool result? If yes, we can show actual cost in the "unguided" impact column. If no, we need a heuristic (file size × ~0.25 tokens/byte). This research unblocks AT-02 and AT-08 with real numbers instead of estimates. |
 
 ---
 
@@ -191,20 +199,61 @@ Items from feedback session that need alignment before becoming board tasks:
 | R-03 | Build | Goreleaser (linux/darwin × amd64/arm64) | High | TODO | 🟢 | - | `.goreleaser.yml` | Binaries build for all 4 platforms |
 | R-04 | Docs | Installation docs (`go install` or download binary) | Medium | TODO | 🟢 | R-03 | `README.md` | New user installs and runs cleanly |
 
-## v2: Dimensional Analysis (Post-Release)
+## v2: Dimensional Analysis — Recon
 
-**Goal:** Multi-dimensional static analysis hints (security, performance, standards). Deferred.
+**Goal:** Structural code analysis via tree-sitter AST pattern matching + AC text scanning. Surfaces security, performance, and quality concerns as navigable dimension tags (NER-style). Extensible beyond 3 dimensions — any structural pattern that can be expressed as an AST query becomes a new dimension.
+
+**Detection architecture (dual engine):**
+
+| Layer | Engine | Detects | Speed | Example |
+|-------|--------|---------|-------|---------|
+| **Structural** | Tree-sitter AST walker | Patterns that require code structure | ~100-500μs/file | SQL injection (concat → query call), N+1 (loop → db call), god function (branch count) |
+| **Text** | Aho-Corasick automaton | Simple literal patterns | ~15μs/file | Hardcoded secrets, known-bad function names, TODO markers |
+
+Both engines produce bits in the same bitmask. The Recon tab doesn't care which engine found it.
+
+**Structural query format** — one definition per detection, language-agnostic with a thin node-name mapping:
+
+```yaml
+- id: sql_injection
+  severity: critical
+  dimension: security
+  query:
+    match: call_expression
+    receiver_contains: [db, query, exec, prepare]
+    has_arg:
+      type: binary_expression
+      contains_string: ["SELECT", "INSERT", "UPDATE", "DELETE"]
+      contains_identifier: true
+  lang_map:
+    go: { call: call_expression, string: interpreted_string_literal }
+    python: { call: call, string: string }
+    javascript: { call: call_expression, string: template_string }
+```
+
+**Tree-sitter is already built** — 28 languages compiled in, tested. ASTs are already produced at `aoa init` for symbol extraction. The detection engine reuses those ASTs — no re-parse cost.
+
+### Tasks
 
 | ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
 |----|------|------|:--------:|:------:|:----:|------|-------|---------------|
-| D-01 | Schema | Design dimension YAML schema (3 dims, 5 angles each) | Critical | TODO | 🟢 | - | `dimensions/schema.yaml` | Schema validates all dimension files |
-| D-02 | Security | Build security dimension (~75-100 bits) | High | TODO | 🟡 | D-01 | `dimensions/security.yaml` | Catches known vulns in test projects |
-| D-03 | Perf | Build performance dimension (~60-75 bits) | High | TODO | 🟡 | D-01 | `dimensions/performance.yaml` | Flags N+1, unbounded allocs |
-| D-04 | Standards | Build standards dimension (~40-55 bits) | Medium | TODO | 🟡 | D-01 | `dimensions/standards.yaml` | Scores correlate with code review |
-| D-05 | Compiler | Build aoa-dimgen compiler (YAML → binary, AC automaton) | Critical | TODO | 🟡 | D-01 | `cmd/aoa-dimgen/main.go` | All 3 dimensions compile, <100ms |
-| D-06 | Analyzer | Implement Analyzer domain (ComputeBitmask, ScoreDimension) | Critical | TODO | 🟡 | D-05 | `internal/domain/analyzer/` | Bitmask ~100ns/line |
-| D-07 | Format | Add dimension scores to search results (`S:-1 P:0 C:+2`) | High | TODO | 🟢 | D-06 | `internal/domain/index/format.go` | Scores in output |
-| D-08 | Query | Dimension query support (`--dimension=security --risk=high`) | High | TODO | 🟢 | D-06 | `cmd/aoa/cmd/grep.go` | Filter by dimension |
+| D-01 | Schema | Design structural query YAML schema (AST patterns + lang_map + AC text patterns) | Critical | TODO | 🟢 | - | `dimensions/schema.yaml` | Schema validates both structural and text detection definitions |
+| D-02 | Engine | Tree-sitter AST walker — match structural patterns against parsed AST | Critical | TODO | 🟢 | D-01 | `internal/domain/analyzer/walker.go` | Walks AST, matches query definitions, returns bit positions |
+| D-03 | Engine | AC text scanner — compile text patterns into automaton, scan raw source | High | TODO | 🟢 | D-01 | `internal/domain/analyzer/text_scan.go` | Reuses `adapters/ahocorasick/`, returns bit positions |
+| D-04 | Engine | Language mapping layer — normalize AST node names across 28 languages | High | TODO | 🟡 | D-02 | `internal/domain/analyzer/lang_map.go` | Same structural query matches Go + Python + JS + Rust |
+| D-05 | Analyzer | Bitmask composer — merge structural + text bits, compute weighted severity score | Critical | TODO | 🟢 | D-02, D-03 | `internal/domain/analyzer/score.go` | Bitmask per file/method, score = weighted sum of set bits |
+| D-06 | Dimensions | Security dimension (~75-100 patterns: injection, secrets, traversal, deserialize) | High | TODO | 🟡 | D-01 | `dimensions/security/*.yaml` | Catches known vulns in test projects |
+| D-07 | Dimensions | Performance dimension (~60-75 patterns: N+1, unbounded alloc, blocking I/O) | High | TODO | 🟡 | D-01 | `dimensions/performance/*.yaml` | Flags structural perf issues |
+| D-08 | Dimensions | Standards dimension (~40-55 patterns: god function, error handling, naming) | Medium | TODO | 🟡 | D-01 | `dimensions/standards/*.yaml` | Scores correlate with code review findings |
+| D-09 | Integration | Wire analyzer into `aoa init` — scan all files, store bitmasks in bbolt | High | TODO | 🟢 | D-05 | `internal/app/app.go` | Bitmasks persist, available to search + dashboard |
+| D-10 | Format | Add dimension scores to search results (`S:-1 P:0 C:+2`) | High | TODO | 🟢 | D-05 | `internal/domain/index/format.go` | Scores in output |
+| D-11 | Query | Dimension query support (`--dimension=security --risk=high`) | High | TODO | 🟢 | D-05 | `cmd/aoa/cmd/grep.go` | Filter by dimension |
+| D-12 | Frontend | Recon tab — NER-style dimensional view: dimension toggle sidebar, file→method drill-down, severity scoring | High | TODO | 🟢 | D-09 | `static/index.html` | Mockup validated in `_throwaway_mockups/recon.html` |
+
+**Extensibility:** New dimensions are just new YAML directories. Add `dimensions/accessibility/*.yaml` or `dimensions/testing/*.yaml` — the engine picks them up. No code changes.
+
+**Research — Neural 1-bit embeddings (deferred):**
+Investigated and deprioritized. Pre-trained embedding models (nomic-embed 137M, mxbai-embed 335M) encode semantic similarity, not security/quality properties — signal-to-noise ratio is poor for vulnerability detection. Probing the embedding space (XOR + popcount) showed vocabulary changes fire the same magnitude of signal as structural changes. A fine-tuned classifier would work but requires thousands of labeled examples per detection. The deterministic tree-sitter + AC approach gives better signal with full interpretability. Revisit only if the AC/AST pattern library hits a ceiling on novel code shapes.
 
 ---
 
@@ -248,3 +297,49 @@ research/             Legacy CLI reference docs
 | HTTP port | `{ProjectRoot}/.aoa/http.port` |
 | Dashboard | `http://localhost:{port}` |
 | Session logs | `~/.claude/projects/{encoded-path}/*.jsonl` |
+
+---
+
+## Session Log
+
+### 2026-02-18: Strategy Session — Feedback, Value Metrics, Dashboard Restructure, Mockups
+
+**Scope:** Product direction alignment. No code changes to production. New tasks added to board. Static mockups created.
+
+**Feedback captured:**
+- Created `research/feedback/OUTLINE.md` — full system map (dashboard tabs/sections, CLI commands, backend systems) with founder notes on each section
+- Legacy system responses ingested for 5 strategic questions: value metrics, tab naming, alias strategy, conversation feed, intent score
+
+**Decisions made and added to board:**
+
+*Phase 8d — Value Metrics:*
+- Lead metric: **context runway** — `(window_max - current_usage) / burn_rate` → "47 min remaining. Without aOa: 12 min."
+- Secondary: **sessions extended** weekly rollup — `tokens_saved / avg_session_cost`
+- Kill: time-saved ranges (undermine trust). Token counts stay but de-emphasized.
+- 8 tasks added (V-01 through V-08)
+
+*Phase 8e — 5-Tab Tactical Layout:*
+- Tabs renamed: **Live** (was Overview) / **Recon** (new) / **Intel** (was Learning) / **Debrief** (was Conversation) / **Arsenal** (new)
+- Each tab named after what the user is doing when they click it
+- 5 tasks added (T-01 through T-05)
+
+**Open questions (on board, pending next session):**
+- **#3 Alias strategy** — goal is replacing `grep` itself, not adding shortcuts. `grep auth` → `aoa grep auth` transparently. Eliminates 250-token prompt education tax in sub-agents.
+- **#4 Real-time conversation** — legacy Python showed real-time despite shell/curl limits; Go dashboard with 2s poll should do better. Needs investigation.
+- **#5 Intent score visualization** — formula `coverage × confidence × momentum` (0-100). Lives in domain rankings (Intel tab) as the sorting mechanism. Traffic light vs number display still open.
+
+**Board cleanup:**
+- Moved all completed phases (1–8c) to `.context/COMPLETED.md` with expanded why/validation notes
+- Board trimmed from ~545 lines to ~251 lines
+- Added "Open Questions" section for unresolved strategic items
+
+**Static mockups created** (`_throwaway_mockups/`):
+- `live.html` — context runway hero, value-oriented stats grid, full activity table
+- `recon.html` — command reference, interactive search demo with 70 symbols across 10 query categories
+- `intel.html` — intent score traffic light, domain rankings with composite score, n-gram metrics
+- `debrief.html` — two-column conversation feed (no yellow border), NOW bar, tool action chips
+- `arsenal.html` — daemon status, project config, alias checklist with `eval "$(aoa shell-init)"`, perf metrics
+- All 5 pages: correct nav (Live/Recon/Intel/Debrief/Arsenal), consistent width (`padding: 24px`, `gap: 20px`), dark/light theme, "Generate Mock Data" button, inter-page links
+- Old mockups archived to `_throwaway_mockups/_remove/`
+
+**Next session focus:** Review mockups in browser, give feedback on layout/content, then begin implementation starting with tab rename (T-01) or value metrics backend (V-01).
