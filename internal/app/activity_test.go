@@ -396,7 +396,7 @@ func TestActivityRubric(t *testing.T) {
 			query:      "auth,login",
 			opts:       ports.SearchOptions{AndMode: true},
 			wantAttrib: "multi-and",
-			wantTarget: "aOa grep auth,login",
+			wantTarget: "aOa grep -a auth,login",
 		},
 		{
 			name:       "search_regex",
@@ -535,7 +535,7 @@ func TestActivityRubric(t *testing.T) {
 			},
 			wantAction: "Grep",
 			wantSource: "Claude",
-			wantAttrib: "-",
+			wantAttrib: "unguided",
 			wantImpact: "-",
 			wantTarget: "auth.*handler",
 		},

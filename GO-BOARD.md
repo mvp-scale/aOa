@@ -1,6 +1,6 @@
 # aOa GO-BOARD
 
-> **Updated**: 2026-02-17 | **Phase**: Phase 8 — Web Dashboard Refinement | **Status**: 309+ tests passing, 0 failing | **Progress**: ~82%
+> **Updated**: 2026-02-17 | **Phase**: Phase 8 — Web Dashboard Refinement | **Status**: 315+ tests passing, 0 failing | **Progress**: ~84%
 > **Architecture**: Hexagonal (ports/adapters) + Session Prism | **Target**: Single binary, zero Docker
 > **Module**: `github.com/corey/aoa` | **Binary**: `cmd/aoa/main.go`
 
@@ -369,5 +369,117 @@ Dashboard poll (2s) → ConversationTurns() includes in-progress currentBuilder
 
 **Known gaps identified:**
 - File watcher (`fsnotify`) built but not wired — `Watch()` never called, no dynamic re-indexing
-- Activity rubric needed — enumerate all action/source/attrib/impact combinations for testing
 - `aoa init` can't run while daemon holds bbolt lock — need in-process reindex command
+
+### 2026-02-17: Content Search + Tag Correction + Activity Enrichment
+
+**Scope:** Phase 8a continued — `aoa grep` content scanning, tag system correction, search observer enrichment, activity & impact refinements.
+
+**Content search (`aoa grep` body scanning):**
+- `internal/domain/index/content.go` (NEW): `scanFileContents()` scans indexed file contents on disk for grep-style matches. Deduplicates against symbol hits (same file+line). Skips files >1MB. Line-by-line `bufio.Scanner`.
+- `internal/domain/index/content.go`: `buildContentMatcher()` handles all modes: literal (case-insensitive), regex, AND (comma-separated), word-boundary.
+- `internal/domain/index/content.go`: `buildFileSpans()` + `findEnclosingSymbol()` — pre-computes per-file symbol ranges from tree-sitter index, resolves innermost enclosing function/method/class for each content hit. Content hits carry parent symbol name and range.
+- `internal/domain/index/search.go`: Added `projectRoot` to `SearchEngine`, `Kind`/`Content` fields to `Hit`. `NewSearchEngine()` takes third `projectRoot` parameter. `Search()` appends content hits after symbol hits, giving symbol hits natural priority.
+- Symbol hits: `Kind: "symbol"`, full domain + tags + symbol signature.
+- Content hits: `Kind: "content"`, enclosing symbol + range, tags (terms), NO domain (domains only on structural declarations).
+- `cmd/aoa/cmd/output.go`: Two-section display — symbol hits render as before, content hits render with enclosing symbol context + grep-style line content. Header shows `(N symbol, M content)` breakdown.
+- `internal/adapters/socket/protocol.go` + `server.go`: Added `Kind`/`Content` to wire format `SearchHit`.
+- `internal/app/app.go`: Passes `cfg.ProjectRoot` to engine.
+- 7 new content tests: FindsBodyMatch, DedupWithSymbol, RegexMode, NoDomainButHasTerms, NestedEnclosingSymbol, SkipsLargeFiles, MissingFile.
+
+**Tag system correction (keywords → terms):**
+- **Bug found**: `generateTags()` and `generateTagsFromTokens()` returned raw index tokens (keywords like `#project`, `#testsessiondirforproject`). Tags are prefixed with `#` implying atlas terms, but no atlas resolution was happening.
+- **Fix**: Built `keywordToTerms` reverse lookup in `NewSearchEngine()` by inverting the `Domain.Terms` map. New `resolveTerms()` method maps raw tokens through atlas to produce actual term names. Both `generateTags()` (symbol hits) and `generateContentTags()` (content hits) now resolve to atlas terms.
+- Content lines normalized via `nonAlnumRe` before tokenizing (syntax characters like `(){}=` aren't handled by the tokenizer's `[/_\-.\s]+` separator).
+- Parity test fixtures regenerated from engine output to match corrected term-level tags. All 26 parity tests pass.
+
+**Domain rule enforcement:**
+- Domains ONLY on structural declarations (function/method/class/struct/interface — any tree-sitter container at any nesting level).
+- Content hits inside function bodies: tags (terms) YES, domain NO.
+
+**Search observer enrichment:**
+- **Bug found**: Observer only extracted signals from query tokens ("project" → config, "id" → sse). Content hits had empty domains, and hit tags were never fed to the learner.
+- **Fix**: `signalCollector` struct encapsulates deduplication. Observer now collects: (1) query tokens → keywords → terms → domains, (2) top 10 hit domains, (3) hit tags as terms → domains, (4) hit content/symbol keywords → terms → domains. All fed to learner.
+- `enricher.LookupTerm()` added — reverse lookup from term name to owning domain(s).
+
+**Activity & Impact refinements:**
+- Impact format: `"N hits, M files | Xms"` — added unique file count.
+- Target preserves flags: `aOa grep -a auth,login`, `aOa grep -w store`, `aOa grep --include *.go projectRoot`.
+- `readSavings()` path normalization: absolute paths now converted to relative before index lookup (was causing all Read impacts to show "-").
+- Claude Grep attrib: `"unguided"` — signals aOa indexed search not used.
+- Dashboard layout: Time column moved to far left, Tags column dropped, Target gets remaining width with ellipsis truncation. Attrib values color-coded (cyan=indexed, yellow=regex, green=multi-*). "now" time highlighted cyan. Impact parses new hits+files format. Savings format rendered green.
+
+---
+
+## Activity & Impact Attribution Table
+
+Complete state table for all action/source/attrib/impact combinations. This is the requirement specification.
+
+### Implemented
+
+| # | Action | Source | Attrib | aOa Impact | Target | Status |
+|---|--------|--------|--------|------------|--------|--------|
+| 1 | Search | aOa | `indexed` | N hits, M files \| Xms | aOa grep \<query\> | Done |
+| 2 | Search | aOa | `multi-or` | N hits, M files \| Xms | aOa grep \<q1\> \<q2\> | Done |
+| 3 | Search | aOa | `multi-and` | N hits, M files \| Xms | aOa grep -a \<q1\>,\<q2\> | Done |
+| 4 | Search | aOa | `regex` | N hits, M files \| Xms | aOa egrep \<pattern\> | Done |
+| 5 | Read (ranged, ≥50% savings) | Claude | `aOa guided` | ↓90% (44k → 4k) | file:offset-end | Done |
+| 6 | Read (ranged, <50% savings) | Claude | `-` | ↓44% (2.5k → 1.4k) | file:offset-end | Done |
+| 7 | Read (whole file) | Claude | `-` | `-` | file | Done |
+| 8 | Write | Claude | productive | `-` | file | TODO |
+| 9 | Edit | Claude | productive | `-` | file | TODO |
+| 10 | Grep (Claude's) | Claude | `unguided` | est. Nk tokens | pattern | Partial — no token cost |
+| 11 | Glob (Claude's) | Claude | `unguided` | est. Nk tokens | path/pattern | TODO — most expensive unguided op |
+| 12 | Bash (aOa command) | *filtered* | — | — | — | Done |
+| 13 | Bash (no file) | *filtered* | — | — | — | Done |
+
+### System Events (not yet in activity feed)
+
+| # | Action | Source | Attrib | aOa Impact | Notes | Status |
+|---|--------|--------|--------|------------|-------|--------|
+| 14 | Autotune | aOa | cycle N | +P promoted, -D demoted, ~X decayed | Every 50 prompts. Currently only writes status line. | TODO |
+| 15 | Learn | aOa | observe | +N keywords, +M terms, +K domains | From search observer and session reads. | TODO |
+
+### Grep/Egrep Flag Parity
+
+All Unix grep/egrep flags must work and map to correct attributions. Python had 100% parity.
+
+| Flag | Short | Grep | Egrep | SearchOptions | Attrib | Status |
+|------|-------|------|-------|---------------|--------|--------|
+| `--and` | `-a` | Yes | No | `AndMode` | multi-and | Done |
+| `--count` | `-c` | Yes | Yes | `CountOnly` | (same as mode) | Done |
+| `--ignore-case` | `-i` | Yes | No | `Mode="case_insensitive"` | indexed/multi-or | Done |
+| `--word-regexp` | `-w` | Yes | No | `WordBoundary` | (same as mode) | Done |
+| `--quiet` | `-q` | Yes | Yes | `Quiet` | (same as mode) | Done |
+| `--max-count` | `-m` | Yes | Yes | `MaxCount` | (same as mode) | Done |
+| `--extended-regexp` | `-E` | Yes | n/a | Routes to egrep | regex | Done |
+| `--regexp` | `-e` | Yes | Yes | Multi-pattern OR/regex | multi-or/regex | Done |
+| `--include` | — | Yes | Yes | `IncludeGlob` | (same as mode) | Done |
+| `--exclude` | — | Yes | Yes | `ExcludeGlob` | (same as mode) | Done |
+| `--recursive` | `-r` | no-op | no-op | — | — | Done (hidden) |
+| `--line-number` | `-n` | no-op | no-op | — | — | Done (hidden) |
+| `--with-filename` | `-H` | no-op | no-op | — | — | Done (hidden) |
+| `--fixed-strings` | `-F` | no-op | — | — | — | Done (hidden) |
+| `--files-with-matches` | `-l` | no-op | — | — | — | Done (hidden) |
+| `--invert-match` | `-v` | — | — | — | — | Not implemented |
+
+### Attribution Philosophy
+
+- **aOa gets credit** when it demonstrably saves tokens or provides indexed speed: ranged reads with savings, search results with file/hit counts, autotune cycles.
+- **"productive"** for Write/Edit — this is desired development work. aOa isn't involved. "This is the way."
+- **"unguided"** for Claude's Grep/Glob — these are expensive unguided operations. aOa indexed search exists as a faster, cheaper alternative. Show estimated token cost as impact.
+- **System events** (Autotune, Learn) show aOa working in the background — continuous improvement signals.
+- **No attribution** for Bash/Task — captured elsewhere, not relevant to the activity table.
+
+### Remaining Work
+
+| ID | Task | Priority | Status |
+|----|------|----------|--------|
+| AT-01 | Write/Edit attrib = "productive" | Medium | TODO |
+| AT-02 | Glob attrib = "unguided" + estimated token cost | High | TODO |
+| AT-03 | Grep (Claude) impact = estimated token cost | Medium | TODO |
+| AT-04 | Autotune activity event: "Autotune \| aOa \| cycle N \| +P/-D/~X" | High | TODO |
+| AT-05 | Learn activity event (observe signals summary) | Low | TODO |
+| AT-06 | Verify autotune is firing correctly every 50 prompts | Critical | TODO |
+| AT-07 | Dashboard: color-code "productive" attrib (green) | Medium | TODO — after AT-01 |
+| AT-08 | Dashboard: render token cost impact for Grep/Glob | Medium | TODO — after AT-02/03 |

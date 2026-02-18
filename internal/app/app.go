@@ -384,11 +384,17 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 		a.writeStatus(tuneResult)
 	}
 
+	// Count unique files in results
+	fileSet := make(map[string]bool)
+	for _, hit := range result.Hits {
+		fileSet[hit.File] = true
+	}
+
 	a.pushActivity(ActivityEntry{
 		Action:    "Search",
 		Source:    "aOa",
 		Attrib:    a.searchAttrib(query, opts),
-		Impact:    fmt.Sprintf("%d hits | %.2fms", len(result.Hits), elapsed.Seconds()*1000),
+		Impact:    fmt.Sprintf("%d hits, %d files | %.2fms", len(result.Hits), len(fileSet), elapsed.Seconds()*1000),
 		Target:    a.searchTarget(query, opts),
 		Timestamp: time.Now().Unix(),
 	})
@@ -547,6 +553,9 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				if ev.Tool.Pattern != "" {
 					target = ev.Tool.Pattern
 				}
+				// aOa impact: Claude is using raw grep instead of aOa grep.
+				// Show that aOa indexed search exists as an alternative.
+				attrib = "unguided"
 			case "Write", "Edit":
 				if ev.File != nil && ev.File.Path != "" {
 					target = a.relativePath(ev.File.Path)
@@ -635,11 +644,31 @@ func (a *App) searchAttrib(query string, opts ports.SearchOptions) string {
 }
 
 // searchTarget returns the target label for a search query.
+// Preserves the actual command with flags as the user typed it.
 func (a *App) searchTarget(query string, opts ports.SearchOptions) string {
+	var parts []string
 	if opts.Mode == "regex" {
-		return "aOa egrep " + query
+		parts = append(parts, "aOa egrep")
+	} else {
+		parts = append(parts, "aOa grep")
 	}
-	return "aOa grep " + query
+	if opts.AndMode {
+		parts = append(parts, "-a")
+	}
+	if opts.WordBoundary {
+		parts = append(parts, "-w")
+	}
+	if opts.CountOnly {
+		parts = append(parts, "-c")
+	}
+	if opts.IncludeGlob != "" {
+		parts = append(parts, "--include", opts.IncludeGlob)
+	}
+	if opts.ExcludeGlob != "" {
+		parts = append(parts, "--exclude", opts.ExcludeGlob)
+	}
+	parts = append(parts, query)
+	return strings.Join(parts, " ")
 }
 
 // ActivityFeed returns the most recent activity entries for the dashboard.
@@ -1051,8 +1080,14 @@ func (a *App) readSavings(path string, limit int) savingsInfo {
 	if limit <= 0 || a.Index == nil {
 		return savingsInfo{}
 	}
+	// Normalize to relative path for index lookup
+	relPath := path
+	if a.ProjectRoot != "" && strings.HasPrefix(path, a.ProjectRoot) {
+		relPath = strings.TrimPrefix(path, a.ProjectRoot)
+		relPath = strings.TrimPrefix(relPath, "/")
+	}
 	for _, fm := range a.Index.Files {
-		if fm.Path == path && fm.Size > 0 {
+		if (fm.Path == path || fm.Path == relPath) && fm.Size > 0 {
 			fileTokens := fm.Size / 4
 			if fileTokens <= 0 {
 				fileTokens = 1

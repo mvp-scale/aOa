@@ -665,6 +665,8 @@ body {
 .impact-green { color: var(--green); }
 .impact-cyan { color: var(--cyan); }
 .impact-purple { color: var(--purple); }
+.impact-files { color: var(--dim); font-size: 11px; }
+.impact-savings { color: var(--green); font-weight: 600; font-size: 11px; }
 
 .target-text {
   color: var(--dim);
@@ -673,8 +675,13 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 300px;
+  max-width: 0;
+  width: 100%;
 }
+
+.attrib-indexed { color: var(--cyan); }
+.attrib-regex { color: var(--yellow); }
+.attrib-multi { color: var(--green); }
 
 .time-text {
   color: var(--mute);
@@ -2261,7 +2268,7 @@ body {
     badge.className = 'badge badge-live';
     badge.textContent = 'live';
     body.innerHTML = '<table class="activity-table"><thead><tr>' +
-      '<th>Action</th><th>Source</th><th>Attrib</th><th><span class="aoa-brand">aOa</span> Impact</th><th>Tags</th><th>Target</th><th>Time</th>' +
+      '<th>Time</th><th>Action</th><th>Source</th><th>Attrib</th><th><span class="aoa-brand">aOa</span> Impact</th><th>Target</th>' +
       '</tr></thead><tbody id="activityTbody"></tbody></table>';
     activityInitialized = true;
   }
@@ -2591,7 +2598,7 @@ body {
     var now = Date.now();
 
     if (entries.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--mute); padding:40px;">Awaiting session activity...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--mute); padding:40px;">Awaiting session activity...</td></tr>';
       return;
     }
 
@@ -2621,30 +2628,36 @@ body {
         sourceHtml = '<span class="source-text">' + esc(entry.source) + '</span>';
       }
 
-      // Attrib styling — A-13: two-tone for "aOa guided"
+      // Attrib styling — highlight search modes, two-tone for "aOa guided"
       var attribHtml;
       if (entry.attrib === 'aOa guided') {
         attribHtml = '<span class="aoa-brand">aOa</span> <span class="attrib-guided">guided</span>';
+      } else if (entry.attrib === 'indexed') {
+        attribHtml = '<span class="attrib-indexed">' + esc(entry.attrib) + '</span>';
+      } else if (entry.attrib === 'regex') {
+        attribHtml = '<span class="attrib-regex">' + esc(entry.attrib) + '</span>';
+      } else if (entry.attrib === 'multi-or' || entry.attrib === 'multi-and') {
+        attribHtml = '<span class="attrib-multi">' + esc(entry.attrib) + '</span>';
       } else {
         attribHtml = '<span class="attrib-text">' + esc(entry.attrib) + '</span>';
       }
 
-      // Impact styling — A-14: three-part for hits, A-15: dim for 0 hits
+      // Impact styling — parse "N hits, M files | Xms" or savings "↓N% (Xk → Yk)"
       var impactHtml;
       if (entry.impact && entry.impact !== '-') {
-        var hitMatch = entry.impact.match(/^(\d+ hits?)\s*\|\s*(.+)$/);
+        var hitMatch = entry.impact.match(/^(\d+ hits),\s*(\d+ files?)\s*\|\s*(.+)$/);
         if (hitMatch) {
           var hitPart = hitMatch[1];
-          var timePart = hitMatch[2];
-          if (hitPart === '0 hits') {
-            impactHtml = '<span class="impact-zero">' + esc(hitPart) + '</span>' +
-              ' <span class="impact-sep">\u2502</span> ' +
-              '<span class="impact-timing">' + esc(timePart) + '</span>';
-          } else {
-            impactHtml = '<span class="impact-hits">' + esc(hitPart) + '</span>' +
-              ' <span class="impact-sep">\u2502</span> ' +
-              '<span class="impact-timing">' + esc(timePart) + '</span>';
-          }
+          var filePart = hitMatch[2];
+          var timePart = hitMatch[3];
+          var hitClass = hitPart === '0 hits' ? 'impact-zero' : 'impact-hits';
+          impactHtml = '<span class="' + hitClass + '">' + esc(hitPart) + '</span>' +
+            ', <span class="impact-files">' + esc(filePart) + '</span>' +
+            ' <span class="impact-sep">\u2502</span> ' +
+            '<span class="impact-timing">' + esc(timePart) + '</span>';
+        } else if (entry.impact.indexOf('\u2193') === 0 || entry.impact.indexOf('↓') === 0) {
+          // Savings format: ↓N% (Xk → Yk)
+          impactHtml = '<span class="impact-savings">' + esc(entry.impact) + '</span>';
         } else {
           impactHtml = '<span class="impact-hits">' + esc(entry.impact) + '</span>';
         }
@@ -2652,28 +2665,31 @@ body {
         impactHtml = '<span class="attrib-text">-</span>';
       }
 
-      // Tags
-      var tagsHtml = '<span class="tags-text">' + (entry.tags || '-') + '</span>';
-
       // Target with aOa highlight — A-11: three-part color
       var targetHtml;
-      if (entry.target && (entry.target.indexOf('aOa grep ') === 0 || entry.target.indexOf('aOa egrep ') === 0)) {
-        var cmdEnd = entry.target.indexOf(' ', 4); // end of "grep"/"egrep"
-        var cmd = entry.target.substring(4, cmdEnd);
-        var query = entry.target.substring(cmdEnd + 1);
-        targetHtml = '<span class="aoa-brand">aOa</span> <span class="target-cmd">' + esc(cmd) + '</span> ' + esc(query);
+      if (entry.target && (entry.target.indexOf('aOa grep') === 0 || entry.target.indexOf('aOa egrep') === 0)) {
+        // Parse: "aOa grep" or "aOa egrep" then flags and query
+        var rest = entry.target.substring(4); // after "aOa "
+        var spaceIdx = rest.indexOf(' ');
+        var cmd = rest.substring(0, spaceIdx);
+        var args = rest.substring(spaceIdx + 1);
+        targetHtml = '<span class="aoa-brand">aOa</span> <span class="target-cmd">' + esc(cmd) + '</span> ' + esc(args);
       } else {
         targetHtml = esc(entry.target || '-');
       }
 
+      // Time highlight: "now" gets brighter color
+      var timeHtml = timeStr === 'now'
+        ? '<span style="color:var(--cyan)">' + timeStr + '</span>'
+        : timeStr;
+
       html += '<tr>' +
+        '<td class="time-text">' + timeHtml + '</td>' +
         '<td>' + actionHtml + '</td>' +
         '<td>' + sourceHtml + '</td>' +
         '<td>' + attribHtml + '</td>' +
         '<td>' + impactHtml + '</td>' +
-        '<td>' + tagsHtml + '</td>' +
         '<td class="target-text">' + targetHtml + '</td>' +
-        '<td class="time-text">' + timeStr + '</td>' +
         '</tr>';
     });
     tbody.innerHTML = html;
