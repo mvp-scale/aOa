@@ -118,20 +118,21 @@ type DomainMeta struct {
 // SessionSummary holds aggregated metrics for a single Claude session.
 // Persisted to bbolt for cross-session analysis and value reporting.
 type SessionSummary struct {
-	SessionID        string  `json:"session_id"`
-	StartTime        int64   `json:"start_time"`
-	EndTime          int64   `json:"end_time"`
-	PromptCount      int     `json:"prompt_count"`
-	ReadCount        int     `json:"read_count"`
-	GuidedReadCount  int     `json:"guided_read_count"`
-	GuidedRatio      float64 `json:"guided_ratio"`
-	TokensSaved      int64   `json:"tokens_saved"`
-	TokensCounterfact int64  `json:"tokens_counterfact"`
-	InputTokens      int     `json:"input_tokens"`
-	OutputTokens     int     `json:"output_tokens"`
-	CacheReadTokens  int     `json:"cache_read_tokens"`
-	CacheWriteTokens int     `json:"cache_write_tokens"`
-	Model            string  `json:"model"`
+	SessionID         string  `json:"session_id"`
+	StartTime         int64   `json:"start_time"`
+	EndTime           int64   `json:"end_time"`
+	PromptCount       int     `json:"prompt_count"`
+	ReadCount         int     `json:"read_count"`
+	GuidedReadCount   int     `json:"guided_read_count"`
+	GuidedRatio       float64 `json:"guided_ratio"`
+	TokensSaved       int64   `json:"tokens_saved"`
+	TimeSavedMs       int64   `json:"time_saved_ms"`
+	TokensCounterfact int64   `json:"tokens_counterfact"`
+	InputTokens       int     `json:"input_tokens"`
+	OutputTokens      int     `json:"output_tokens"`
+	CacheReadTokens   int     `json:"cache_read_tokens"`
+	CacheWriteTokens  int     `json:"cache_write_tokens"`
+	Model             string  `json:"model"`
 }
 
 // SearchOptions controls grep/egrep behavior. Passed through the search path

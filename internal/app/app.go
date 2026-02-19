@@ -59,13 +59,14 @@ type ToolMetrics struct {
 
 // TurnAction describes a single tool action within a conversation turn.
 type TurnAction struct {
-	Tool    string // "Read", "Edit", "Bash", "Grep", "Glob", "Task", etc.
-	Target  string // relative path, command, or pattern
-	Range   string // ":offset-limit" for reads, empty otherwise
-	Impact  string // "↓62%", "4 match", "309 pass", "1 fail", etc.
-	Attrib  string // "aOa guided", "unguided", "crafted"/"authored"/"forged"/"innovated", "-"
-	Tokens  int    // estimated token cost of this action (0 = unknown)
-	Savings int    // savings percentage when guided (0-99), 0 = none
+	Tool        string // "Read", "Edit", "Bash", "Grep", "Glob", "Task", etc.
+	Target      string // relative path, command, or pattern
+	Range       string // ":offset-limit" for reads, empty otherwise
+	Impact      string // "↓62%", "4 match", "309 pass", "1 fail", etc.
+	Attrib      string // "aOa guided", "unguided", "crafted"/"authored"/"forged"/"innovated", "-"
+	Tokens      int    // estimated token cost of this action (0 = unknown)
+	Savings     int    // savings percentage when guided (0-99), 0 = none
+	TimeSavedMs int64  // estimated time saved in ms (only on guided)
 }
 
 // ConversationTurn describes a single turn in the conversation feed.
@@ -150,6 +151,10 @@ type App struct {
 	// Burn rate tracking (L0.1)
 	burnRate            *BurnRateTracker // actual token burn rate
 	burnRateCounterfact *BurnRateTracker // counterfactual (what burn would be without aOa)
+
+	// Time savings tracking (L0.55)
+	rateTracker        *RateTracker // dynamic ms/token rate from completed turns
+	sessionTimeSavedMs int64        // cumulative time saved this session (ms)
 
 	// Value engine fields (L0.3)
 	currentModel          string // model from most recent event
@@ -271,6 +276,7 @@ func New(cfg Config) (*App, error) {
 		turnBuffer:          make(map[string]*turnBuilder),
 		burnRate:            NewBurnRateTracker(5 * time.Minute),
 		burnRateCounterfact: NewBurnRateTracker(5 * time.Minute),
+		rateTracker:         NewRateTracker(30 * time.Minute),
 	}
 
 	// Create server with App as query provider (for domains, stats, etc.)
@@ -581,6 +587,8 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				delta := int(s.fileTokens - s.readTokens)
 				a.counterfactTokensSaved += int64(delta)
 				a.burnRateCounterfact.Record(delta)
+				_, tsMs := a.timeSavedForTokens(delta)
+				a.sessionTimeSavedMs += tsMs
 			}
 			// L0.11: Learn activity for file read
 			relPath := a.relativePath(ev.File.Path)
@@ -606,6 +614,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			impact := "-"
 			tokens := 0
 			savings := 0
+			var timeSavedMs int64
 			skipActivity := false
 
 			switch action {
@@ -622,6 +631,11 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 							if s.pct >= 50 {
 								attrib = "aOa guided"
 								savings = s.pct
+								timeDisplay, tsMs := a.timeSavedForTokens(int(s.fileTokens - s.readTokens))
+								if timeDisplay != "" {
+									impact = s.display + " · " + timeDisplay
+								}
+								timeSavedMs = tsMs
 							}
 						} else {
 							// Partial read but no savings data — estimate from lines
@@ -690,13 +704,14 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 
 			// Append structured action to turn builder
 			tb.Actions = append(tb.Actions, TurnAction{
-				Tool:    action,
-				Target:  target,
-				Range:   rangeStr,
-				Impact:  impact,
-				Attrib:  attrib,
-				Tokens:  tokens,
-				Savings: savings,
+				Tool:        action,
+				Target:      target,
+				Range:       rangeStr,
+				Impact:      impact,
+				Attrib:      attrib,
+				Tokens:      tokens,
+				Savings:     savings,
+				TimeSavedMs: timeSavedMs,
 			})
 
 			// Activity feed target includes range for reads
@@ -865,6 +880,7 @@ func (a *App) RunwayProjection() socket.RunwayResult {
 		CounterfactMinutes: counterfactMin,
 		DeltaMinutes:       runwayMin - counterfactMin,
 		TokensSaved:        a.counterfactTokensSaved,
+		TimeSavedMs:        a.sessionTimeSavedMs,
 	}
 }
 
@@ -899,6 +915,7 @@ func (a *App) SessionList() socket.SessionListResult {
 			GuidedReadCount:  s.GuidedReadCount,
 			GuidedRatio:      s.GuidedRatio,
 			TokensSaved:      s.TokensSaved,
+			TimeSavedMs:      s.TimeSavedMs,
 			InputTokens:      s.InputTokens,
 			OutputTokens:     s.OutputTokens,
 			CacheReadTokens:  s.CacheReadTokens,
@@ -1031,13 +1048,14 @@ func (a *App) ConversationTurns() socket.ConversationFeedResult {
 		var actions []socket.TurnActionResult
 		for _, act := range inProgress.Actions {
 			actions = append(actions, socket.TurnActionResult{
-				Tool:    act.Tool,
-				Target:  act.Target,
-				Range:   act.Range,
-				Impact:  act.Impact,
-				Attrib:  act.Attrib,
-				Tokens:  act.Tokens,
-				Savings: act.Savings,
+				Tool:        act.Tool,
+				Target:      act.Target,
+				Range:       act.Range,
+				Impact:      act.Impact,
+				Attrib:      act.Attrib,
+				Tokens:      act.Tokens,
+				Savings:     act.Savings,
+				TimeSavedMs: act.TimeSavedMs,
 			})
 		}
 		turns = append(turns, socket.ConversationTurnResult{
@@ -1062,13 +1080,14 @@ func (a *App) ConversationTurns() socket.ConversationFeedResult {
 		var actions []socket.TurnActionResult
 		for _, act := range turn.Actions {
 			actions = append(actions, socket.TurnActionResult{
-				Tool:    act.Tool,
-				Target:  act.Target,
-				Range:   act.Range,
-				Impact:  act.Impact,
-				Attrib:  act.Attrib,
-				Tokens:  act.Tokens,
-				Savings: act.Savings,
+				Tool:        act.Tool,
+				Target:      act.Target,
+				Range:       act.Range,
+				Impact:      act.Impact,
+				Attrib:      act.Attrib,
+				Tokens:      act.Tokens,
+				Savings:     act.Savings,
+				TimeSavedMs: act.TimeSavedMs,
 			})
 		}
 		turns = append(turns, socket.ConversationTurnResult{
@@ -1220,6 +1239,10 @@ func (a *App) ensureTurnBuilder(turnID string, ts int64, model string) *turnBuil
 // Must be called with a.mu held.
 func (a *App) flushCurrentBuilder() {
 	if a.currentBuilder != nil {
+		// Record ms/token rate sample for time savings computation
+		if a.currentBuilder.DurationMs > 0 && a.currentBuilder.OutputTokens > 0 {
+			a.rateTracker.Record(a.currentBuilder.DurationMs, a.currentBuilder.OutputTokens)
+		}
 		a.pushTurn(a.turnFromBuilder(a.currentBuilder))
 		a.currentBuilder = nil
 	}
@@ -1256,17 +1279,20 @@ func (a *App) handleSessionBoundary(ev ports.SessionEvent) {
 			a.sessionReadCount = existing.ReadCount
 			a.sessionGuidedCount = existing.GuidedReadCount
 			a.counterfactTokensSaved = existing.TokensSaved
+			a.sessionTimeSavedMs = existing.TimeSavedMs
 			a.currentSessionStart = existing.StartTime
 		} else {
 			a.sessionPrompts = 0
 			a.sessionReadCount = 0
 			a.sessionGuidedCount = 0
+			a.sessionTimeSavedMs = 0
 			a.currentSessionStart = ev.Timestamp.Unix()
 		}
 	} else {
 		a.sessionPrompts = 0
 		a.sessionReadCount = 0
 		a.sessionGuidedCount = 0
+		a.sessionTimeSavedMs = 0
 		a.currentSessionStart = ev.Timestamp.Unix()
 	}
 	a.currentSessionID = ev.SessionID
@@ -1291,6 +1317,7 @@ func (a *App) flushSessionSummary() {
 		GuidedReadCount:  a.sessionGuidedCount,
 		GuidedRatio:      guidedRatio,
 		TokensSaved:      a.counterfactTokensSaved,
+		TimeSavedMs:      a.sessionTimeSavedMs,
 		InputTokens:      a.sessionMetrics.InputTokens,
 		OutputTokens:     a.sessionMetrics.OutputTokens,
 		CacheReadTokens:  a.sessionMetrics.CacheReadTokens,
@@ -1431,6 +1458,34 @@ func formatTokens(tokens int64) string {
 		return fmt.Sprintf("%.1fk", float64(tokens)/1_000)
 	}
 	return fmt.Sprintf("%d", tokens)
+}
+
+// formatTimeSaved formats milliseconds into a human-readable "saved ~Ns" or "saved ~N.Nmin" string.
+// Returns "" for values ≤ 0.
+func formatTimeSaved(ms int64) string {
+	if ms <= 0 {
+		return ""
+	}
+	if ms >= 60000 {
+		return fmt.Sprintf("saved ~%.1fmin", float64(ms)/60000)
+	}
+	return fmt.Sprintf("saved ~%ds", ms/1000)
+}
+
+// timeSavedForTokens converts token savings into a time estimate.
+// Uses dynamic rate from rateTracker if available, otherwise falls back to 7.5 ms/token.
+// Returns the display string and raw milliseconds.
+// Must be called with a.mu held.
+func (a *App) timeSavedForTokens(tokensSaved int) (string, int64) {
+	if tokensSaved <= 0 {
+		return "", 0
+	}
+	rate := 7.5 // fallback constant
+	if a.rateTracker != nil && a.rateTracker.HasData() {
+		rate = a.rateTracker.MsPerToken()
+	}
+	ms := int64(float64(tokensSaved) * rate)
+	return formatTimeSaved(ms), ms
 }
 
 // estimateGlobCost estimates the token cost of a glob operation by scanning
@@ -1703,6 +1758,10 @@ func (a *App) WipeProject() error {
 	// Reset burn rate trackers (L0.1)
 	a.burnRate.Reset()
 	a.burnRateCounterfact.Reset()
+
+	// Reset time savings tracking (L0.55)
+	a.sessionTimeSavedMs = 0
+	a.rateTracker.Reset()
 
 	// Reset value engine fields (L0.3)
 	a.currentModel = ""

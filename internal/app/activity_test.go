@@ -51,6 +51,7 @@ func newTestApp(t *testing.T) *App {
 		turnBuffer:          make(map[string]*turnBuilder),
 		burnRate:            NewBurnRateTracker(5 * time.Minute),
 		burnRateCounterfact: NewBurnRateTracker(5 * time.Minute),
+		rateTracker:         NewRateTracker(30 * time.Minute),
 	}
 	return a
 }
@@ -883,4 +884,123 @@ func TestActivityLearnFromFileRead(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "L0.11: expected a Learn activity entry from range-gated read")
+}
+
+// --- Time Savings Tests ---
+
+func TestActivityGuidedReadShowsTimeSaved(t *testing.T) {
+	a := newTestApp(t)
+
+	// 176KB file → 44000 tokens. Reading 200 lines → 4000 tokens.
+	// Savings: 90% → guided → should show "saved ~" in impact
+	ev := ports.SessionEvent{
+		Kind:      ports.EventToolInvocation,
+		TurnID:    "turn-ts-1",
+		Timestamp: time.Now(),
+		Tool:      &ports.ToolEvent{Name: "Read"},
+		File: &ports.FileRef{
+			Path:   "/home/user/project/src/big.go",
+			Action: "read",
+			Offset: 200,
+			Limit:  200,
+		},
+	}
+	a.onSessionEvent(ev)
+
+	// Check the last TurnAction on the currentBuilder
+	require.NotNil(t, a.currentBuilder, "should have a current builder")
+	require.NotEmpty(t, a.currentBuilder.Actions, "should have actions")
+	act := a.currentBuilder.Actions[len(a.currentBuilder.Actions)-1]
+	assert.Contains(t, act.Impact, "saved ~",
+		"guided read impact should contain time saved display")
+	assert.Greater(t, act.TimeSavedMs, int64(0),
+		"guided read TimeSavedMs should be > 0")
+}
+
+func TestActivityUnguidedReadNoTimeSaved(t *testing.T) {
+	a := newTestApp(t)
+
+	// Full file read (no offset/limit) → unguided → NO time saved
+	ev := ports.SessionEvent{
+		Kind:      ports.EventToolInvocation,
+		TurnID:    "turn-ts-2",
+		Timestamp: time.Now(),
+		Tool:      &ports.ToolEvent{Name: "Read"},
+		File: &ports.FileRef{
+			Path:   "/home/user/project/src/foo.go",
+			Action: "read",
+		},
+	}
+	a.onSessionEvent(ev)
+
+	require.NotNil(t, a.currentBuilder)
+	require.NotEmpty(t, a.currentBuilder.Actions)
+	act := a.currentBuilder.Actions[len(a.currentBuilder.Actions)-1]
+	assert.NotContains(t, act.Impact, "saved",
+		"unguided read impact should NOT contain 'saved'")
+	assert.Equal(t, int64(0), act.TimeSavedMs,
+		"unguided read TimeSavedMs should be 0")
+}
+
+func TestTimeSavedForTokens_WithRate(t *testing.T) {
+	a := newTestApp(t)
+	now := time.Now()
+
+	// Populate rate tracker with 5 valid samples at 10 ms/tok
+	for i := 0; i < 5; i++ {
+		a.rateTracker.RecordAt(now.Add(time.Duration(i)*time.Second), 5000, 500)
+	}
+	require.True(t, a.rateTracker.HasData())
+
+	display, ms := a.timeSavedForTokens(40000) // 40k tokens × 10 ms/tok = 400000ms = 400s
+	assert.Contains(t, display, "saved ~")
+	assert.Contains(t, display, "min") // 400s > 60s → shows minutes
+	assert.Equal(t, int64(400000), ms)
+}
+
+func TestTimeSavedForTokens_Fallback(t *testing.T) {
+	a := newTestApp(t)
+
+	// No rate data → falls back to 7.5 ms/tok
+	assert.False(t, a.rateTracker.HasData())
+
+	display, ms := a.timeSavedForTokens(40000) // 40k tokens × 7.5 ms/tok = 300000ms = 300s
+	assert.Contains(t, display, "saved ~")
+	assert.Contains(t, display, "min") // 300s > 60s → shows minutes
+	assert.Equal(t, int64(300000), ms)
+}
+
+func TestTimeSavedForTokens_Zero(t *testing.T) {
+	a := newTestApp(t)
+
+	display, ms := a.timeSavedForTokens(0)
+	assert.Equal(t, "", display)
+	assert.Equal(t, int64(0), ms)
+
+	display, ms = a.timeSavedForTokens(-100)
+	assert.Equal(t, "", display)
+	assert.Equal(t, int64(0), ms)
+}
+
+func TestFormatTimeSaved(t *testing.T) {
+	tests := []struct {
+		ms   int64
+		want string
+	}{
+		{0, ""},
+		{-100, ""},
+		{500, "saved ~0s"},
+		{1500, "saved ~1s"},
+		{5000, "saved ~5s"},
+		{59999, "saved ~59s"},
+		{60000, "saved ~1.0min"},
+		{90000, "saved ~1.5min"},
+		{300000, "saved ~5.0min"},
+	}
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%dms", tc.ms), func(t *testing.T) {
+			got := formatTimeSaved(tc.ms)
+			assert.Equal(t, tc.want, got)
+		})
+	}
 }

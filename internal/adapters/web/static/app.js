@@ -54,6 +54,12 @@ function fmtK(n) {
   if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
   return String(n);
 }
+function fmtTime(ms) {
+  if (!ms || ms <= 0) return '-';
+  if (ms >= 60000) return (ms / 60000).toFixed(1) + 'min';
+  if (ms >= 1000) return (ms / 1000).toFixed(1) + 's';
+  return ms + 'ms';
+}
 function fmtPct(n) {
   if (n === undefined || n === null) return '-';
   return (Number(n) * 100).toFixed(0) + '%';
@@ -319,6 +325,7 @@ function renderLive() {
   var parts = [];
   parts.push('<span class="g">' + fmtMin(rw.runway_minutes) + '</span> runway');
   parts.push('<span class="g">' + fmtK(rw.tokens_saved || 0) + '</span> tokens saved');
+  if (rw.time_saved_ms > 0) parts.push('saved <span class="g">' + fmtTime(rw.time_saved_ms) + '</span>');
   parts.push('<span class="c">' + (st.domain_count || 0) + '</span> domains');
   parts.push('<span class="c">' + (st.prompt_count || 0) + '</span> prompts');
   if (rw.counterfact_minutes) parts.push('without aOa: <span class="r">' + fmtMin(rw.counterfact_minutes) + '</span>');
@@ -911,6 +918,7 @@ function renderArsenal() {
 
   // Aggregate stats
   var totalSaved = rw.tokens_saved || 0;
+  var totalTimeSavedMs = rw.time_saved_ms || 0;
   var totalReads = 0, totalGuidedReads = 0, totalPrompts = 0;
 
   for (var i = 0; i < sessions.length; i++) {
@@ -919,6 +927,7 @@ function renderArsenal() {
     totalGuidedReads += (s.guided_read_count || 0);
     totalPrompts += (s.prompt_count || 0);
     totalSaved += (s.tokens_saved || 0);
+    totalTimeSavedMs += (s.time_saved_ms || 0);
   }
 
   var overallRatio = totalReads > 0 ? totalGuidedReads / totalReads : 0;
@@ -934,6 +943,7 @@ function renderArsenal() {
   // Hero support
   var sup = [];
   sup.push('<span class="g">' + fmtK(totalSaved) + '</span> tokens saved');
+  if (totalTimeSavedMs > 0) sup.push('saved <span class="g">' + fmtTime(totalTimeSavedMs) + '</span>');
   if (rw.delta_minutes) sup.push('<span class="b">' + fmtMin(rw.delta_minutes) + '</span> extended');
   sup.push('<span class="c">' + sessionCount + '</span> sessions');
   sup.push('guided <span class="g">' + fmtPct(overallRatio) + '</span>');
@@ -971,6 +981,7 @@ function renderArsenal() {
       '<td class="mono" style="font-size:11px">' + (sess.read_count || 0) + '</td>' +
       '<td class="mono" style="font-size:11px">' + gr + '%<span class="mini-bar-wrap"><span class="mini-bar" style="width:' + grWidth + '%"></span></span></td>' +
       '<td class="mono text-green" style="font-size:11px">' + fmtK(sess.tokens_saved || 0) + '</td>' +
+      '<td class="mono text-green" style="font-size:11px">' + (sess.time_saved_ms > 0 ? fmtTime(sess.time_saved_ms) : '-') + '</td>' +
       '<td class="mono text-red" style="font-size:11px">' + waste + '</td>' +
       '<td class="mono text-dim" style="font-size:11px">' + rp + '</td>' +
       '</tr>';

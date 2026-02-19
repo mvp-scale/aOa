@@ -192,13 +192,14 @@ type ConversationTurnResult struct {
 
 // TurnActionResult describes a single tool action within a conversation turn.
 type TurnActionResult struct {
-	Tool    string `json:"tool"`
-	Target  string `json:"target"`
-	Range   string `json:"range,omitempty"`
-	Impact  string `json:"impact,omitempty"`
-	Attrib  string `json:"attrib,omitempty"`
-	Tokens  int    `json:"tokens,omitempty"`
-	Savings int    `json:"savings,omitempty"`
+	Tool        string `json:"tool"`
+	Target      string `json:"target"`
+	Range       string `json:"range,omitempty"`
+	Impact      string `json:"impact,omitempty"`
+	Attrib      string `json:"attrib,omitempty"`
+	Tokens      int    `json:"tokens,omitempty"`
+	Savings     int    `json:"savings,omitempty"`
+	TimeSavedMs int64  `json:"time_saved_ms,omitempty"`
 }
 
 // ActivityEntryResult describes a single action in the activity feed.
@@ -242,6 +243,7 @@ type RunwayResult struct {
 	CounterfactMinutes float64 `json:"counterfact_minutes"`
 	DeltaMinutes       float64 `json:"delta_minutes"`
 	TokensSaved        int64   `json:"tokens_saved"`
+	TimeSavedMs        int64   `json:"time_saved_ms"`
 }
 
 // SessionSummaryResult describes a single persisted session in the API response.
@@ -254,6 +256,7 @@ type SessionSummaryResult struct {
 	GuidedReadCount  int     `json:"guided_read_count"`
 	GuidedRatio      float64 `json:"guided_ratio"`
 	TokensSaved      int64   `json:"tokens_saved"`
+	TimeSavedMs      int64   `json:"time_saved_ms"`
 	InputTokens      int     `json:"input_tokens"`
 	OutputTokens     int     `json:"output_tokens"`
 	CacheReadTokens  int     `json:"cache_read_tokens"`
