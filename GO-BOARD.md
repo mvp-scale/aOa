@@ -3,7 +3,7 @@
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
 > **Updated**: 2026-02-18 (Session 47) | **Phase**: Dashboard value metrics & 5-tab restructure
-> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c (315+ tests, 88% context)
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c (~260 active tests, 291 declared, 88% context)
 
 ---
 
