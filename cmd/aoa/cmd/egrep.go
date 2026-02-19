@@ -13,6 +13,7 @@ import (
 var (
 	egrepCountOnly   bool
 	egrepQuiet       bool
+	egrepInvertMatch bool
 	egrepMaxCount    int
 	egrepPatterns    []string
 	egrepIncludeGlob string
@@ -31,6 +32,7 @@ func init() {
 	f := egrepCmd.Flags()
 	f.BoolVarP(&egrepCountOnly, "count", "c", false, "Count only")
 	f.BoolVarP(&egrepQuiet, "quiet", "q", false, "Quiet mode (exit code only)")
+	f.BoolVarP(&egrepInvertMatch, "invert-match", "v", false, "Select non-matching")
 	f.IntVarP(&egrepMaxCount, "max-count", "m", 20, "Max results")
 	f.StringArrayVarP(&egrepPatterns, "regexp", "e", nil, "Multiple patterns (combined with |)")
 	f.StringVar(&egrepIncludeGlob, "include", "", "File glob filter (include)")
@@ -58,6 +60,7 @@ func runEgrepSearch(pattern string) error {
 		Mode:        "regex",
 		CountOnly:   egrepCountOnly,
 		Quiet:       egrepQuiet,
+		InvertMatch: egrepInvertMatch,
 		MaxCount:    egrepMaxCount,
 		IncludeGlob: egrepIncludeGlob,
 		ExcludeGlob: egrepExcludeGlob,

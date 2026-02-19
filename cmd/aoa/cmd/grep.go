@@ -16,6 +16,7 @@ var (
 	grepCaseInsens   bool
 	grepWordBound    bool
 	grepQuiet        bool
+	grepInvertMatch  bool
 	grepMaxCount     int
 	grepUseRegex     bool
 	grepPatterns     []string
@@ -38,6 +39,7 @@ func init() {
 	f.BoolVarP(&grepCaseInsens, "ignore-case", "i", false, "Case insensitive")
 	f.BoolVarP(&grepWordBound, "word-regexp", "w", false, "Word boundary")
 	f.BoolVarP(&grepQuiet, "quiet", "q", false, "Quiet mode (exit code only)")
+	f.BoolVarP(&grepInvertMatch, "invert-match", "v", false, "Select non-matching")
 	f.IntVarP(&grepMaxCount, "max-count", "m", 20, "Max results")
 	f.BoolVarP(&grepUseRegex, "extended-regexp", "E", false, "Use regex (routes to egrep)")
 	f.StringArrayVarP(&grepPatterns, "regexp", "e", nil, "Multiple patterns (OR)")
@@ -74,6 +76,7 @@ func runGrep(cmd *cobra.Command, args []string) error {
 		CountOnly:    grepCountOnly,
 		WordBoundary: grepWordBound,
 		Quiet:        grepQuiet,
+		InvertMatch:  grepInvertMatch,
 		MaxCount:     grepMaxCount,
 		IncludeGlob:  grepIncludeGlob,
 		ExcludeGlob:  grepExcludeGlob,

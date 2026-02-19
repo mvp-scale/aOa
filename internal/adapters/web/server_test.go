@@ -28,6 +28,10 @@ func (m *mockQueries) WipeProject() error {
 	return nil
 }
 
+func (m *mockQueries) Reindex() (socket.ReindexResult, error) {
+	return socket.ReindexResult{}, nil
+}
+
 func (m *mockQueries) SessionMetricsSnapshot() socket.SessionMetricsResult {
 	return socket.SessionMetricsResult{}
 }

@@ -31,6 +31,7 @@ const (
 	MethodBigrams  = "bigrams"
 	MethodStats    = "stats"
 	MethodWipe     = "wipe"
+	MethodReindex  = "reindex"
 )
 
 // Request is the wire format for client-to-server messages.
@@ -275,4 +276,12 @@ type ProjectConfigResult struct {
 	IndexFiles    int    `json:"index_files"`
 	IndexTokens   int    `json:"index_tokens"`
 	UptimeSeconds int64  `json:"uptime_seconds"`
+}
+
+// ReindexResult is the result of a reindex request.
+type ReindexResult struct {
+	FileCount   int    `json:"file_count"`
+	SymbolCount int    `json:"symbol_count"`
+	TokenCount  int    `json:"token_count"`
+	ElapsedMs   int64  `json:"elapsed_ms"`
 }

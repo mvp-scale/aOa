@@ -140,6 +140,7 @@ type SearchOptions struct {
 	Mode         string // "literal" (default), "regex", "case_insensitive"
 	AndMode      bool   // -a: intersection of comma-separated terms
 	WordBoundary bool   // -w: match whole words only
+	InvertMatch  bool   // -v: select non-matching lines/symbols
 	CountOnly    bool   // -c: return count, not results
 	Quiet        bool   // -q: exit code only, no output
 	MaxCount     int    // -m: limit results (default 20)

@@ -77,7 +77,11 @@ func (e *SearchEngine) scanFileContents(query string, opts ports.SearchOptions, 
 		for scanner.Scan() {
 			lineNum++
 			line := scanner.Text()
-			if !matcher(line) {
+			matched := matcher(line)
+			if opts.InvertMatch {
+				matched = !matched
+			}
+			if !matched {
 				continue
 			}
 			fl := fileLine{fileID, lineNum}

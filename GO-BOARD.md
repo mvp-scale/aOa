@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-19 (Session 50) | **Phase**: L1 dashboard complete — 5-tab SPA live-wired
-> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 (~286 active tests)
+> **Updated**: 2026-02-19 (Session 52) | **Phase**: L2 complete — Infrastructure gaps closed (invert-match, file watcher, bbolt lock fix)
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 (302 active tests)
 
 ---
 
@@ -71,7 +71,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: L1 dashboard complete. ~286 active tests. All 5 tabs (Live, Recon, Intel, Debrief, Arsenal) implemented as a live-wired 3-file SPA (`index.html` + `style.css` + `app.js`). `/api/sessions` and `/api/config` endpoints added. Intel tab has change-tracking visual effects (soft glow on term pills and ngram counts). Ready for L2 infrastructure gaps.
+**Current**: L2 infrastructure gaps complete (Session 52). Three gaps closed: (1) `grep -v` / `--invert-match` flag — inverts symbol and content matches across all 4 search modes (literal, OR, AND, regex), 8 new tests. (2) File watcher wired — `Watch()` called in `Start()`, `onFileChanged()` handles add/modify/delete with `Rebuild()` on the search engine, `removeFileFromIndex()` cleans all 3 index maps, 5 new tests. (3) bbolt lock contention fixed — `BuildIndex()` extracted as shared function, `MethodReindex` socket command with 120s timeout, `aoa init` delegates to daemon when running instead of failing, falls back to direct mode otherwise, 4 new tests. Next: L3 migration and parity proof.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -88,14 +88,24 @@
 **Design Decisions Locked** (Session 50):
 - **Dashboard split into 3 files** — `index.html` (354 lines, HTML shell), `style.css` (552 lines, all CSS), `app.js` (1022 lines, all logic). `embed.go` uses `//go:embed static` to pick up all three. Monolithic single-file approach abandoned after agent reliability issues with large files.
 - **Soft glow animation system** — Replaced all harsh flash/glow animations with CSS transition-based diffuse effects. `soft-glow` (box-shadow, 2.5s ease-out) on ngram counts; `text-glow` (text-shadow, 2.5s ease-out) on hit values and ngram names; `.lit` class on term pills triggers a CSS `transition: background/color/box-shadow 2.5s ease-out` fade. No harsh instant-on effects anywhere.
-- **Ngram limits: 10/5/5** — Bigrams capped at 10, Cohit KW→Term at 5, Cohit Term→Domain at 5. Fits the card without scroll. Total 20 rows + 3 headers in the ngram card.
 - **Domain table: no Tier column** — Removed. Table is `#`, `@Domain`, `Hits`, `Terms`. Tier is surfaced via the domain name and stats grid (Core count), not a separate column.
 - **Tab state in URL hash** — `#live`, `#recon`, `#intel`, `#debrief`, `#arsenal`. Restored on page load. Direct links to tabs work.
 - **Tab-aware polling** — Each tab only fetches its relevant endpoints. Live: runway + stats + activity. Intel: stats + domains + bigrams. Debrief: conv/metrics + conv/feed. Arsenal: sessions + config + runway. Recon: health only. 3s interval.
 
+**Design Decisions Locked** (Session 51):
+- **Ngram limits: 10/5/5** — Bigrams capped at 10, Cohit KW→Term at 5, Cohit Term→Domain at 5. Section spacing 24px.
+- **Debrief exchange grouping** — Consecutive user+assistant turns paired into "exchanges". Turn numbering counts exchanges, not individual messages. Oldest at top, newest at bottom (scroll lands at NOW).
+- **Thinking as nested sub-element** — Always visible (no click-to-expand). Indented 16px with purple left border. Each thinking chunk is a separate line (backend separates with `\n`). 11px italic font, muted color. Thinking text truncation raised to 2000 chars.
+- **Markdown rendering in Debrief** — Lightweight `renderMd()`: code blocks, inline code (cyan), bold, italic, line breaks. Applied to assistant text and thinking lines.
+- **Token estimates on all message types** — User: `~text.length/4` (heuristic, prefixed with `~`). Thinking: `~text.length/4`. Assistant: actual `output_tokens` from API (no prefix). No double-counting.
+- **Debrief actions: Save/Tok columns** — Two fixed-width (38px) right-aligned columns per turn. `Save`: green `↓N%` when aOa guided, blank otherwise. `Tok`: green when guided (reduced cost), red when unguided (full cost), blank for productive. Column headers at turn level with hover titles.
+- **Full-file reads classified as unguided** — Read with limit=0 now gets `attrib="unguided"` and `tokens=fileSize/4` from index. Previously had no classification.
+- **TurnAction carries Attrib/Tokens/Savings** — Backend `TurnAction` and `TurnActionResult` now include `attrib` (string), `tokens` (int), `savings` (int). Same data flows to both Live activity and Debrief actions.
+
 **Needs Discussion** (before L2):
 - **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
 - **Real-time conversation** — Legacy Python showed real-time; Go dashboard with 3s poll should do better. Needs investigation.
+- **Unified value framework** — Data collection across all tabs should use a consistent framework for representing aOa's value prop: token savings (guided vs unguided), time savings (search speed), knowledge savings (learning curve). Live activity, Debrief actions, and Arsenal sessions should all feed from the same metrics pipeline. Partially started in Session 51 (Save/Tok columns, TurnAction enrichment), needs completion across remaining tabs.
 
 ---
 
@@ -123,9 +133,9 @@
 | [L1](#layer-1) | [L1.6](#l16) | x | | | | | | x | L0.4 | 🟢 | 🟢 | 🟢 | Live tab hero — context runway as primary display | Lead with the value prop | Hero shows runway + dual projection support line |
 | [L1](#layer-1) | [L1.7](#l17) | | | | | | | x | L0.4 | 🟢 | 🟢 | 🟢 | Live tab metrics panel — savings-oriented cards | Replace vanity metrics with value | 6 cards: guided ratio, avg savings, searches, files, autotune, burn rate |
 | [L1](#layer-1) | [L1.8](#l18) | | | | | | | x | L0.9, L0.10 | 🟢 | 🟢 | 🟢 | Dashboard: render token cost for Grep/Glob | Show unguided cost inline | Red-coded cost in activity impact column |
-| [L2](#layer-2) | [L2.1](#l21) | x | | | | x | x | | - | 🟢 | ⚪ | ⚪ | Wire file watcher — `Watch()` in app.go, change→reparse→reindex | Dynamic re-indexing without restart | File edit triggers re-index within 2s |
-| [L2](#layer-2) | [L2.2](#l22) | x | | | | x | | | - | 🟢 | ⚪ | ⚪ | Fix bbolt lock contention — in-process reindex via socket command | `aoa init` works while daemon runs | Init succeeds with daemon running |
-| [L2](#layer-2) | [L2.3](#l23) | | x | | x | | | | - | 🟢 | ⚪ | ⚪ | Implement `--invert-match` / `-v` flag for grep/egrep | Complete grep flag parity | `-v` excludes matching lines, parity test passes |
+| [L2](#layer-2) | [L2.1](#l21) | x | | | | x | x | | - | 🟢 | 🟢 | 🟢 | Wire file watcher — `Watch()` in app.go, change→reparse→reindex | Dynamic re-indexing without restart | File edit triggers re-index within 2s |
+| [L2](#layer-2) | [L2.2](#l22) | x | | | | x | | | - | 🟢 | 🟢 | 🟢 | Fix bbolt lock contention — in-process reindex via socket command | `aoa init` works while daemon runs | Init succeeds with daemon running |
+| [L2](#layer-2) | [L2.3](#l23) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | Implement `--invert-match` / `-v` flag for grep/egrep | Complete grep flag parity | `-v` excludes matching lines, parity test passes |
 | [L3](#layer-3) | [L3.1](#l31) | | x | | | | | | - | 🟢 | ⚪ | ⚪ | Parallel run on 5 test projects — Python and Go side-by-side | Prove equivalence at scale | Both systems produce identical output |
 | [L3](#layer-3) | [L3.2](#l32) | | x | | | | | | L3.1 | 🟢 | ⚪ | ⚪ | Diff search results: 100 queries/project, zero divergence | Search parity proof | `diff` output = 0 for all 500 queries |
 | [L3](#layer-3) | [L3.3](#l33) | | x | | | | | | L3.1 | 🟡 | ⚪ | ⚪ | Diff learner state: 200 intents, zero tolerance | Learner parity proof | JSON diff of state = empty |
@@ -268,7 +278,7 @@ Two sources: (1) `searchObserver` pushes `Learn` with keyword/term/domain counts
 - **Live** (was Overview) — Context runway hero, savings stats, activity feed
 - **Recon** (new) — Dimensional analysis view (stub until L5)
 - **Intel** (was Learning) — Domain rankings, intent score, n-gram metrics
-- **Debrief** (was Conversation) — Two-column conversation feed, tool actions
+- **Debrief** (was Conversation) — Exchange-grouped conversation feed (user→thinking→assistant), markdown rendered, Save/Tok value columns in actions
 - **Arsenal** (new) — Value proof over time: session savings chart, learning curve, session history table, compact system status
 
 **Design standard (locked Session 48):**
@@ -297,7 +307,7 @@ Full dashboard rewrite delivered as 3 files in `internal/adapters/web/static/`:
 - **Live**: Runway projection hero (dual projection), 6 stats cards, activity feed table with colored pills
 - **Recon**: Hero + stats placeholders + "available in future release" card
 - **Intel**: Domain rankings (no Tier column, term pills with `.lit` glow on hit, surgical DOM updates), N-gram metrics (6 bigrams / 4 cohit KW→Term / 4 cohit Term→Domain, no scroll, soft-glow on count changes)
-- **Debrief**: Conversation feed (user/thinking/assistant messages, expandable thinking blocks), actions column with tool chips
+- **Debrief**: Exchange-grouped conversation feed (user→thinking→assistant paired into turns, chronological order), inline thinking (always visible, nested italic, per-chunk lines), markdown rendering, token estimates on all message types, actions column with Save/Tok value columns (guided green, unguided red)
 - **Arsenal**: Savings chart (div-based dual bars), session history table (mini guided-ratio bar), learning curve canvas (HiDPI), system status strip
 
 **New backend** (`L1.5`): `SessionSummaryResult`, `SessionListResult`, `ProjectConfigResult` types. `SessionList()` + `ProjectConfig()` on `AppQueries`. `GET /api/sessions` + `GET /api/config` on web server. `dbPath` and `started` fields added to App struct. 2 new endpoint tests.
@@ -311,31 +321,31 @@ Full dashboard rewrite delivered as 3 files in `internal/adapters/web/static/`:
 **Layer 2: Infrastructure Gaps (File watcher, bbolt lock, CLI completeness)**
 
 > Fix the known gaps that prevent production-grade operation.
-> **Quality Gate**: `aoa init` works while daemon runs; file changes trigger re-index within 2s; `grep -v` works.
+> **Quality Gate**: ✅ `aoa init` works while daemon runs; file changes trigger re-index; `grep -v` works. 17 new tests, 302 total passing.
 
 #### L2.1
 
-**Wire file watcher**
+**Wire file watcher** — 🟢 Complete
 
-`fsnotify.Watcher` and `treesitter.Parser` are both built and tested. The pipeline (file change → re-parse → update index in bbolt) needs to be connected in `app.go`. `Watch()` is never called today.
+`Rebuild()` method added to `SearchEngine` (reconstructs `refToTokens`, `tokenDocFreq`, `keywordToTerms` from current index state). `Parser *treesitter.Parser` added to `App` struct. `onFileChanged()` handles add/modify/delete: acquires mutex, checks extension support, computes relative path, removes old entries if modifying, parses with tree-sitter, adds tokens, calls `Rebuild()` + `SaveIndex()`. `removeFileFromIndex()` cleans all 3 index maps (Metadata, Tokens, Files). `Watch()` called in `Start()` (non-fatal on failure). 5 tests: rebuild after mutation, new file, modify file, delete file, unsupported extension.
 
-**Files**: `internal/app/app.go`, `internal/adapters/fsnotify/watcher.go`
+**Files**: `internal/domain/index/search.go` (Rebuild), `internal/app/app.go` (Parser field, Start wiring), `internal/app/watcher.go` (new: onFileChanged, removeFileFromIndex), `internal/domain/index/rebuild_test.go` (new), `internal/app/watcher_test.go` (new)
 
 #### L2.2
 
-**Fix bbolt lock contention**
+**Fix bbolt lock contention** — 🟢 Complete
 
-`aoa init` fails while daemon holds the bbolt lock. Solution: in-process reindex command via socket (`aoa daemon reindex`). Daemon receives command, re-indexes while holding the lock, reports progress.
+`BuildIndex()` extracted from `init.go` into `internal/app/indexer.go` as shared function with `IndexResult` struct. `MethodReindex` socket command added with `ReindexResult` type. `Reindex()` on `AppQueries` interface — builds index outside mutex (IO-heavy walk/parse), then swaps maps in-place under lock and calls `Rebuild()`. Client `Reindex()` uses 120s timeout via new `callWithTimeout()` helper. `init.go` rewritten: delegates to daemon via socket when running (no lock error), falls back to direct `BuildIndex()` + bbolt otherwise. 4 tests: counts, large file skip, ignored dirs, full reindex cycle.
 
-**Files**: `internal/adapters/socket/server.go`, `cmd/aoa/cmd/daemon.go`
+**Files**: `internal/app/indexer.go` (new: BuildIndex, IndexResult, skipDirs), `internal/adapters/socket/protocol.go` (MethodReindex, ReindexResult), `internal/adapters/socket/server.go` (Reindex on AppQueries, handleReindex), `internal/adapters/socket/client.go` (Reindex, callWithTimeout), `internal/app/app.go` (Reindex impl), `cmd/aoa/cmd/init.go` (rewritten), `internal/app/indexer_test.go` (new), `internal/app/reindex_test.go` (new)
 
 #### L2.3
 
-**Implement --invert-match**
+**Implement --invert-match** — 🟢 Complete
 
-The `-v` flag for grep/egrep is the last missing flag from the parity table. Exclude matching lines from results.
+`InvertMatch bool` added to `SearchOptions`. `-v`/`--invert-match` flag registered in both `grep.go` and `egrep.go`, wired into opts. `invertSymbolHits()` method on `SearchEngine` computes the complement: builds set of matched `(fileID, line)` pairs, then collects all symbols NOT in that set (respecting glob filters). Content scanning flips the matcher result when `InvertMatch` is set. `-v` added to `searchTarget()` display. 8 tests: literal, regex, OR, AND, content, count-only, quiet, with-glob.
 
-**Files**: `cmd/aoa/cmd/grep.go`, `cmd/aoa/cmd/egrep.go`, `internal/domain/index/search.go`
+**Files**: `internal/ports/storage.go` (InvertMatch field), `cmd/aoa/cmd/grep.go` (-v flag), `cmd/aoa/cmd/egrep.go` (-v flag), `internal/domain/index/search.go` (invertSymbolHits), `internal/domain/index/content.go` (matcher flip), `internal/app/app.go` (searchTarget), `internal/domain/index/invert_test.go` (new)
 
 ---
 
@@ -556,14 +566,17 @@ NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→m
 
 | Component | Notes |
 |-----------|-------|
-| Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, content scanning. Do not change search logic. |
+| Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, content scanning, `Rebuild()` for live mutation. Do not change search logic. |
 | Learner (21-step autotune) | 5/5 fixture parity, float64 precision on DomainMeta.Hits. Do not change decay/prune constants. |
 | Session Prism (Claude JSONL reader) | Defensive parsing, UUID dedup, compound message decomposition. Battle-tested. |
 | Tree-sitter parser (28 languages) | Symbol extraction working for Go, Python, JS/TS + 24 generic. Reuse ASTs for L5. |
-| Socket protocol | JSON-over-socket IPC. Concurrent clients. Extend, don't replace. |
+| Socket protocol | JSON-over-socket IPC. Concurrent clients. `Reindex` command with extended timeout. Extend, don't replace. |
 | Value engine (L0, 24 new tests) | Burn rate, runway projection, session persistence, activity enrichments. All wired. |
 | Activity rubric (38 tests) | Color-coded attribs, impact formatting. Productive/unguided/Learn/Autotune enrichments. |
 | Dashboard (L1, 5-tab SPA) | 3-file split: `index.html` + `style.css` + `app.js`. Tab-aware polling. Soft glow animations. All tabs render live data. |
+| File watcher (L2, 5 new tests) | `fsnotify` → `onFileChanged` → re-parse → `Rebuild()` → `SaveIndex()`. Add/modify/delete. |
+| Invert-match (L2, 8 new tests) | `-v` flag for grep/egrep. Symbol complement + content matcher flip. All 4 modes. |
+| Reindex protocol (L2, 4 new tests) | `BuildIndex()` shared function. `aoa init` delegates to daemon or runs direct. No more lock errors. |
 
 ### What We're NOT Doing
 

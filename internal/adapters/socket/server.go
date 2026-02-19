@@ -21,6 +21,7 @@ import (
 type AppQueries interface {
 	LearnerSnapshot() *ports.LearnerState
 	WipeProject() error
+	Reindex() (ReindexResult, error)
 	SessionMetricsSnapshot() SessionMetricsResult
 	ToolMetricsSnapshot() ToolMetricsResult
 	ConversationTurns() ConversationFeedResult
@@ -182,6 +183,8 @@ func (s *Server) handleRequest(req Request) Response {
 		return s.handleStats(req)
 	case MethodWipe:
 		return s.handleWipe(req)
+	case MethodReindex:
+		return s.handleReindex(req)
 	default:
 		return Response{ID: req.ID, Error: fmt.Sprintf("unknown method: %s", req.Method)}
 	}
@@ -395,6 +398,18 @@ func (s *Server) handleStats(req Request) Response {
 			IndexTokens:  len(s.idx.Tokens),
 		},
 	}
+}
+
+func (s *Server) handleReindex(req Request) Response {
+	if s.queries == nil {
+		return Response{ID: req.ID, Error: "reindex not available"}
+	}
+
+	result, err := s.queries.Reindex()
+	if err != nil {
+		return Response{ID: req.ID, Error: err.Error()}
+	}
+	return Response{ID: req.ID, Result: result}
 }
 
 func (s *Server) handleWipe(req Request) Response {

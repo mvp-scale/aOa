@@ -154,6 +154,26 @@ func (c *Client) Stats() (*StatsResult, error) {
 	return &result, nil
 }
 
+// Reindex sends a reindex request to the daemon with an extended timeout.
+func (c *Client) Reindex() (*ReindexResult, error) {
+	resp, err := c.callWithTimeout(Request{
+		ID:     "1",
+		Method: MethodReindex,
+	}, 120*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	resultJSON, err := json.Marshal(resp.Result)
+	if err != nil {
+		return nil, fmt.Errorf("marshal result: %w", err)
+	}
+	var result ReindexResult
+	if err := json.Unmarshal(resultJSON, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal result: %w", err)
+	}
+	return &result, nil
+}
+
 // Wipe sends a wipe request to clear all project data.
 func (c *Client) Wipe() error {
 	_, err := c.call(Request{
@@ -174,6 +194,10 @@ func (c *Client) Ping() bool {
 }
 
 func (c *Client) call(req Request) (*Response, error) {
+	return c.callWithTimeout(req, 5*time.Second)
+}
+
+func (c *Client) callWithTimeout(req Request, timeout time.Duration) (*Response, error) {
 	conn, err := net.DialTimeout("unix", c.sockPath, 2*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
@@ -181,7 +205,7 @@ func (c *Client) call(req Request) (*Response, error) {
 	defer conn.Close()
 
 	// Set deadline for the whole request/response
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	conn.SetDeadline(time.Now().Add(timeout))
 
 	// Send request
 	data, err := json.Marshal(req)

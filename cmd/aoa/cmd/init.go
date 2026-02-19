@@ -4,33 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 
 	"github.com/corey/aoa/internal/adapters/bbolt"
 	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/adapters/treesitter"
-	"github.com/corey/aoa/internal/domain/index"
-	"github.com/corey/aoa/internal/ports"
+	"github.com/corey/aoa/internal/app"
 	"github.com/spf13/cobra"
 )
-
-// Directories to skip during indexing (matches fsnotify watcher).
-var skipDirs = map[string]bool{
-	".git":         true,
-	"node_modules": true,
-	".venv":        true,
-	"__pycache__":  true,
-	"vendor":       true,
-	".idea":        true,
-	".vscode":      true,
-	"dist":         true,
-	"build":        true,
-	".aoa":         true,
-	".next":        true,
-	"target":       true,
-	".claude":      true,
-}
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -44,14 +24,21 @@ func runInit(cmd *cobra.Command, args []string) error {
 	dbPath := filepath.Join(root, ".aoa", "aoa.db")
 	projectID := filepath.Base(root)
 
-	// Fail fast if daemon is running — it holds the bbolt exclusive lock.
+	// If daemon is running, delegate reindex via socket (avoids bbolt lock contention).
 	sockPath := socket.SocketPath(root)
 	client := socket.NewClient(sockPath)
 	if client.Ping() {
-		return fmt.Errorf("cannot init: database is locked by the running daemon\n" +
-			"  → stop it first:  aoa daemon stop\n" +
-			"  → then retry:     aoa init")
+		fmt.Println("⚡ Daemon running — delegating reindex...")
+		result, err := client.Reindex()
+		if err != nil {
+			return fmt.Errorf("reindex via daemon: %w", err)
+		}
+		fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens (%dms)\n",
+			result.FileCount, result.SymbolCount, result.TokenCount, result.ElapsedMs)
+		return nil
 	}
+
+	// No daemon — do it directly.
 
 	// Ensure .aoa directory exists
 	if err := os.MkdirAll(filepath.Join(root, ".aoa"), 0755); err != nil {
@@ -69,100 +56,18 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	parser := treesitter.NewParser()
 
-	// Walk the project and collect code files
-	var files []string
-	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // skip unreadable
-		}
-		if info.IsDir() {
-			if skipDirs[info.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		ext := strings.ToLower(filepath.Ext(path))
-		if ext != "" && parser.SupportsExtension(ext) {
-			files = append(files, path)
-		}
-		return nil
-	})
+	fmt.Println("⚡ Scanning project...")
+
+	idx, stats, err := app.BuildIndex(root, parser)
 	if err != nil {
-		return fmt.Errorf("walk: %w", err)
-	}
-
-	sort.Strings(files)
-
-	idx := &ports.Index{
-		Tokens:   make(map[string][]ports.TokenRef),
-		Metadata: make(map[ports.TokenRef]*ports.SymbolMeta),
-		Files:    make(map[uint32]*ports.FileMeta),
-	}
-
-	var totalSymbols int
-	var fileID uint32
-
-	fmt.Printf("⚡ Scanning %d files...\n", len(files))
-
-	for i, path := range files {
-		info, err := os.Stat(path)
-		if err != nil {
-			continue
-		}
-
-		// Skip files > 1MB
-		if info.Size() > 1<<20 {
-			continue
-		}
-
-		source, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-
-		fileID++
-		relPath, _ := filepath.Rel(root, path)
-
-		ext := strings.TrimPrefix(filepath.Ext(path), ".")
-		idx.Files[fileID] = &ports.FileMeta{
-			Path:         relPath,
-			LastModified: info.ModTime().Unix(),
-			Language:     ext,
-			Size:         info.Size(),
-		}
-
-		metas, err := parser.ParseFileToMeta(path, source)
-		if err != nil || len(metas) == 0 {
-			continue
-		}
-
-		if (i+1)%50 == 0 {
-			fmt.Printf("  %d/%d files...\n", i+1, len(files))
-		}
-
-		for _, meta := range metas {
-			ref := ports.TokenRef{FileID: fileID, Line: meta.StartLine}
-			idx.Metadata[ref] = meta
-			totalSymbols++
-
-			// Tokenize symbol name and add to inverted index
-			tokens := index.Tokenize(meta.Name)
-			for _, tok := range tokens {
-				idx.Tokens[tok] = append(idx.Tokens[tok], ref)
-			}
-
-			// Also index the full name as a token
-			lower := strings.ToLower(meta.Name)
-			if lower != "" {
-				idx.Tokens[lower] = append(idx.Tokens[lower], ref)
-			}
-		}
+		return fmt.Errorf("build index: %w", err)
 	}
 
 	if err := store.SaveIndex(projectID, idx); err != nil {
 		return fmt.Errorf("save index: %w", err)
 	}
 
-	fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens\n", len(files), totalSymbols, len(idx.Tokens))
+	fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens\n",
+		stats.FileCount, stats.SymbolCount, stats.TokenCount)
 	return nil
 }

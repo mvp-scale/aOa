@@ -101,6 +101,37 @@ func NewSearchEngine(idx *ports.Index, domains map[string]Domain, projectRoot st
 	return e
 }
 
+// Rebuild reconstructs derived maps (refToTokens, tokenDocFreq, keywordToTerms)
+// from current index state. Must be called after any index mutation (add/remove symbols).
+func (e *SearchEngine) Rebuild() {
+	e.refToTokens = make(map[ports.TokenRef][]string)
+	e.tokenDocFreq = make(map[string]int)
+
+	for tok, refs := range e.idx.Tokens {
+		e.tokenDocFreq[tok] = len(refs)
+		for _, ref := range refs {
+			e.refToTokens[ref] = append(e.refToTokens[ref], tok)
+		}
+	}
+
+	kwTermSeen := make(map[string]map[string]bool)
+	e.keywordToTerms = make(map[string][]string)
+	for _, domain := range e.domains {
+		for term, keywords := range domain.Terms {
+			for _, kw := range keywords {
+				kwLower := strings.ToLower(kw)
+				if kwTermSeen[kwLower] == nil {
+					kwTermSeen[kwLower] = make(map[string]bool)
+				}
+				if !kwTermSeen[kwLower][term] {
+					kwTermSeen[kwLower][term] = true
+					e.keywordToTerms[kwLower] = append(e.keywordToTerms[kwLower], term)
+				}
+			}
+		}
+	}
+}
+
 // SetObserver registers a callback invoked after every search.
 func (e *SearchEngine) SetObserver(obs SearchObserver) {
 	e.observer = obs
@@ -137,6 +168,11 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 		} else {
 			hits = e.searchOR(tokens, opts)
 		}
+	}
+
+	// Invert symbol hits: replace with all symbols NOT in the matched set
+	if opts.InvertMatch {
+		hits = e.invertSymbolHits(hits, opts)
 	}
 
 	// Append content hits from file body scanning (grep-style)
@@ -376,6 +412,41 @@ func (e *SearchEngine) searchRegex(pattern string, opts ports.SearchOptions) []H
 
 	sortByFileIDLine(hits)
 	return hits
+}
+
+// invertSymbolHits returns all symbols NOT in the matched set, respecting glob filters.
+func (e *SearchEngine) invertSymbolHits(matched []Hit, opts ports.SearchOptions) []Hit {
+	// Build set of matched (fileID, line) pairs
+	type fileLine struct {
+		fileID uint32
+		line   uint16
+	}
+	matchSet := make(map[fileLine]bool, len(matched))
+	for _, h := range matched {
+		matchSet[fileLine{h.fileID, uint16(h.Line)}] = true
+	}
+
+	// Collect all symbols NOT in the matched set
+	var inverted []Hit
+	for ref, sym := range e.idx.Metadata {
+		if sym == nil {
+			continue
+		}
+		if matchSet[fileLine{ref.FileID, ref.Line}] {
+			continue
+		}
+		file := e.idx.Files[ref.FileID]
+		if file == nil {
+			continue
+		}
+		if !matchesGlobs(file.Path, opts.IncludeGlob, opts.ExcludeGlob) {
+			continue
+		}
+		inverted = append(inverted, e.buildHit(ref, sym, file))
+	}
+
+	sortByFileIDLine(inverted)
+	return inverted
 }
 
 // buildHit constructs a Hit from a ref, symbol, and file.

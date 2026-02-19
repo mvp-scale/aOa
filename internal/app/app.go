@@ -16,6 +16,7 @@ import (
 	claude "github.com/corey/aoa/internal/adapters/claude"
 	fsw "github.com/corey/aoa/internal/adapters/fsnotify"
 	"github.com/corey/aoa/internal/adapters/socket"
+	"github.com/corey/aoa/internal/adapters/treesitter"
 	"github.com/corey/aoa/internal/adapters/web"
 	"github.com/corey/aoa/internal/domain/enricher"
 	"github.com/corey/aoa/internal/domain/index"
@@ -117,6 +118,7 @@ type App struct {
 	Enricher  *enricher.Enricher
 	Engine    *index.SearchEngine
 	Learner   *learner.Learner
+	Parser    *treesitter.Parser
 	Server    *socket.Server
 	WebServer *web.Server
 	Reader    *claude.Reader
@@ -220,6 +222,8 @@ func New(cfg Config) (*App, error) {
 		domains[d.Domain] = index.Domain{Terms: d.Terms}
 	}
 
+	parser := treesitter.NewParser()
+
 	engine := index.NewSearchEngine(idx, domains, cfg.ProjectRoot)
 
 	// Load existing learner state or create fresh
@@ -251,6 +255,7 @@ func New(cfg Config) (*App, error) {
 		Enricher:       enr,
 		Engine:         engine,
 		Learner:        lrn,
+		Parser:         parser,
 		Reader:         reader,
 		Index:          idx,
 		promptN:        lrn.PromptCount(),
@@ -454,6 +459,10 @@ func (a *App) Start() error {
 	}
 	if err := a.WebServer.Start(httpPort); err != nil {
 		fmt.Printf("[warning] HTTP dashboard unavailable: %v\n", err)
+	}
+	// Start file watcher — non-fatal if setup fails
+	if err := a.Watcher.Watch(a.ProjectRoot, a.onFileChanged); err != nil {
+		fmt.Printf("[warning] file watcher unavailable: %v\n", err)
 	}
 	// Start session reader — tails Claude session logs for learning signals
 	a.Reader.Start(a.onSessionEvent)
@@ -752,6 +761,9 @@ func (a *App) searchTarget(query string, opts ports.SearchOptions) string {
 		parts = append(parts, "aOa egrep")
 	} else {
 		parts = append(parts, "aOa grep")
+	}
+	if opts.InvertMatch {
+		parts = append(parts, "-v")
 	}
 	if opts.AndMode {
 		parts = append(parts, "-a")
@@ -1585,6 +1597,43 @@ func (a *App) sortAndTruncate(m map[string]uint32, limit int) []socket.RankedIte
 		}
 	}
 	return result
+}
+
+// Reindex performs a full project walk + parse + index rebuild.
+// The IO-heavy walk/parse runs outside the mutex; only the swap is locked.
+// Implements socket.AppQueries.
+func (a *App) Reindex() (socket.ReindexResult, error) {
+	start := time.Now()
+
+	// Build new index outside the mutex (IO-heavy)
+	idx, stats, err := BuildIndex(a.ProjectRoot, a.Parser)
+	if err != nil {
+		return socket.ReindexResult{}, fmt.Errorf("build index: %w", err)
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	// Swap index maps in-place (engine/server hold pointer to a.Index struct)
+	a.Index.Tokens = idx.Tokens
+	a.Index.Metadata = idx.Metadata
+	a.Index.Files = idx.Files
+
+	a.Engine.Rebuild()
+
+	if a.Store != nil {
+		if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
+			return socket.ReindexResult{}, fmt.Errorf("save index: %w", err)
+		}
+	}
+
+	elapsed := time.Since(start)
+	return socket.ReindexResult{
+		FileCount:   stats.FileCount,
+		SymbolCount: stats.SymbolCount,
+		TokenCount:  stats.TokenCount,
+		ElapsedMs:   elapsed.Milliseconds(),
+	}, nil
 }
 
 // WipeProject deletes all persisted data and resets in-memory state.
