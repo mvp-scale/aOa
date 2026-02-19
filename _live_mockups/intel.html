@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aOa — Intel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ====== @property for gradient angle ====== */
+@property --gradient-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* ====== CSS VARIABLES — identical to live.html ====== */
+[data-theme="dark"] {
+  --bg: #0c0c0e;
+  --card: #161618;
+  --card-hover: #1c1c1f;
+  --border: #252528;
+  --border-subtle: #1e1e21;
+  --text: #e8e8ec;
+  --text-secondary: #c4c4cc;
+  --dim: #8b8b96;
+  --mute: #55555f;
+  --green: #34d399;
+  --green-dim: rgba(52,211,153,0.12);
+  --blue: #60a5fa;
+  --blue-dim: rgba(96,165,250,0.12);
+  --purple: #c084fc;
+  --purple-dim: rgba(192,132,252,0.12);
+  --cyan: #22d3ee;
+  --cyan-dim: rgba(34,211,238,0.12);
+  --yellow: #fbbf24;
+  --yellow-dim: rgba(251,191,36,0.12);
+  --red: #f87171;
+  --red-dim: rgba(248,113,113,0.12);
+  --shadow: none;
+  --nav-bg: rgba(12,12,14,0.82);
+  --table-hover: rgba(255,255,255,0.03);
+}
+
+[data-theme="light"] {
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --card-hover: #fafafa;
+  --border: #e5e5ea;
+  --border-subtle: #ececee;
+  --text: #1d1d1f;
+  --text-secondary: #3a3a3c;
+  --dim: #6e6e73;
+  --mute: #aeaeb2;
+  --green: #16a34a;
+  --blue: #2563eb;
+  --purple: #9333ea;
+  --cyan: #0891b2;
+  --yellow: #d97706;
+  --red: #dc2626;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  --nav-bg: rgba(245,245,247,0.82);
+  --table-hover: rgba(0,0,0,0.02);
+  --green-dim: rgba(22,163,74,0.1);
+  --blue-dim: rgba(37,99,235,0.1);
+  --purple-dim: rgba(147,51,234,0.1);
+  --cyan-dim: rgba(8,145,178,0.1);
+  --yellow-dim: rgba(217,119,6,0.1);
+  --red-dim: rgba(220,38,38,0.1);
+}
+
+/* ====== RESET & BODY ====== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+}
+
+/* ====== ANIMATIONS ====== */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes gradient-rotate {
+  0% { --gradient-angle: 0deg; }
+  100% { --gradient-angle: 360deg; }
+}
+
+/* ====== NAV — identical to live.html ====== */
+.nav {
+  height: 52px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--nav-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-left { display: flex; align-items: center; gap: 8px; }
+
+.nav-brand {
+  display: flex; align-items: center; gap: 6px;
+  margin-right: 20px; text-decoration: none;
+}
+.nav-brand .angle { font-size: 22px; color: var(--green); font-weight: 700; line-height: 1; }
+.nav-brand .name { font-size: 16px; font-weight: 700; color: var(--cyan); letter-spacing: 0.5px; }
+
+.nav-tabs { display: flex; gap: 4px; }
+.nav-tab {
+  padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--dim);
+  cursor: pointer; transition: color 0.15s; user-select: none;
+  border: none; background: none; position: relative; text-decoration: none;
+  font-family: inherit;
+}
+.nav-tab:hover { color: var(--text-secondary); }
+.nav-tab.active { color: var(--green); }
+.nav-tab.active::after {
+  content: ''; position: absolute; bottom: -1px; left: 8px; right: 8px;
+  height: 2px; background: var(--green); border-radius: 1px;
+}
+
+.nav-right { display: flex; align-items: center; gap: 12px; }
+.status-badge { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+.status-badge .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.status-badge.mock { background: var(--yellow-dim); color: var(--yellow); }
+.status-badge.mock .dot { background: var(--yellow); animation: blink 2s ease-in-out infinite; }
+
+.theme-toggle {
+  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--card);
+  cursor: pointer; color: var(--dim); transition: all 0.15s;
+}
+.theme-toggle:hover { border-color: var(--mute); color: var(--text); }
+.theme-toggle svg { width: 16px; height: 16px; }
+
+/* ====== MAIN — identical to live.html ====== */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ====== HERO ROW — identical to live.html ====== */
+.hero-row {
+  display: flex;
+  gap: 16px;
+  min-height: 160px;
+}
+
+.hero-card-wrapper {
+  flex: 2;
+  min-width: 0;
+  position: relative;
+  border-radius: 18px;
+  padding: 2px;
+  background: conic-gradient(from var(--gradient-angle), var(--green), var(--blue), var(--purple), var(--green));
+  animation: gradient-rotate 6s linear infinite;
+}
+
+.hero-card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 18px 24px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: none;
+}
+
+.hero-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 500;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--mute);
+}
+
+.hero-headline { line-height: 1.4; font-size: 17px; }
+.hero-identity { font-size: 22px; font-weight: 700; background: linear-gradient(135deg, var(--green), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.hero-outcome { font-weight: 500; color: var(--text-secondary); }
+.hero-pause { font-weight: 700; color: var(--cyan); letter-spacing: 3px; }
+.hero-line2 { display: block; padding-left: 33%; margin-top: 2px; }
+.hero-separator { font-weight: 600; color: var(--cyan); }
+.hero-exclusion { font-weight: 500; color: var(--dim); }
+
+.hero-support { margin-top: auto; font-size: 13px; color: var(--dim); line-height: 1.5; }
+.hero-support .val { font-weight: 600; }
+.hero-support .val.g { color: var(--green); }
+.hero-support .val.c { color: var(--cyan); }
+.hero-support .val.p { color: var(--purple); }
+.hero-support .val.b { color: var(--blue); }
+.hero-support .val.y { color: var(--yellow); }
+.hero-support .dot { color: var(--mute); margin: 0 10px; opacity: 0.5; }
+
+/* Hero Metrics — 2×2 cause→effect grid — identical to live.html */
+.hero-metrics {
+  flex: 1;
+  flex-shrink: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 20px;
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px 0;
+  align-items: center;
+}
+.hm-cell { display: flex; flex-direction: column; gap: 2px; }
+.hm-cell.right { padding-left: 12px; }
+.hm-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.hm-value.green { color: var(--green); }
+.hm-value.cyan { color: var(--cyan); }
+.hm-value.purple { color: var(--purple); }
+.hm-value.yellow { color: var(--yellow); }
+.hm-label { font-size: 11px; color: var(--dim); font-weight: 500; }
+.hm-arrow { color: var(--mute); font-size: 14px; padding: 0 8px; opacity: 0.5; }
+
+/* ====== STATS GRID — identical to live.html ====== */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+}
+
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+
+.stat-card.cyan::before    { background: var(--cyan); }
+.stat-card.green::before   { background: var(--green); }
+.stat-card.blue::before    { background: var(--blue); }
+.stat-card.purple::before  { background: var(--purple); }
+.stat-card.yellow::before  { background: var(--yellow); }
+.stat-card.red::before     { background: var(--red); }
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.stat-card.cyan .stat-value   { color: var(--cyan); }
+.stat-card.green .stat-value  { color: var(--green); }
+.stat-card.blue .stat-value   { color: var(--blue); }
+.stat-card.purple .stat-value { color: var(--purple); }
+.stat-card.yellow .stat-value { color: var(--yellow); }
+.stat-card.red .stat-value    { color: var(--red); }
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dim);
+  margin-bottom: 2px;
+}
+
+.stat-sub {
+  font-size: 11px;
+  color: var(--mute);
+}
+
+/* ====== LEARNING GRID: Domains + N-grams side by side ====== */
+.learning-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ====== CARD ====== */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.card-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--dim);
+}
+
+.card-subtitle {
+  font-size: 10px;
+  color: var(--mute);
+  font-weight: 400;
+}
+
+/* ====== DOMAIN TABLE — matches current dashboard ====== */
+.domain-table-wrap {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.domain-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.domain-table th {
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--mute);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  z-index: 2;
+}
+
+.domain-table th:nth-child(3) { text-align: right; }
+
+.domain-table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.domain-table tr:hover td { background: var(--table-hover); }
+.domain-table tr:last-child td { border-bottom: none; }
+
+.d-rank {
+  color: var(--mute);
+  font-size: 10px;
+  width: 28px;
+}
+
+.d-name {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--purple);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.d-hits {
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--green);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.d-terms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  max-width: 500px;
+  max-height: 24px;
+  overflow: hidden;
+}
+
+.term-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  margin: 1px 2px 1px 0;
+  background: var(--border-subtle);
+  color: var(--mute);
+  white-space: nowrap;
+}
+
+.term-pill.hot {
+  background: var(--green);
+  color: #000;
+}
+
+.term-pill.warm {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.term-overflow {
+  font-size: 9px;
+  color: var(--mute);
+  margin-left: 2px;
+}
+
+.domain-footer {
+  padding: 12px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--mute);
+  border-top: 1px solid var(--border-subtle);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.aoa-brand {
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+/* ====== N-GRAM METRICS — matches current dashboard ====== */
+.ngram-wrap {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 16px 20px;
+}
+
+.ngram-section {
+  margin-bottom: 16px;
+}
+
+.ngram-section:last-child {
+  margin-bottom: 0;
+}
+
+.ngram-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--mute);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ngram-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  margin-bottom: 3px;
+}
+
+.ngram-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  width: 130px;
+  min-width: 130px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ngram-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  display: block;
+}
+
+.ngram-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+  display: block;
+}
+
+.ngram-bar-fill.bar-cyan   { background: var(--cyan); }
+.ngram-bar-fill.bar-green  { background: var(--green); }
+.ngram-bar-fill.bar-purple { background: var(--purple); }
+
+.ngram-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ====== FOOTER — identical to live.html ====== */
+.footer {
+  height: 36px;
+  flex-shrink: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--mute);
+}
+
+.footer-left { display: flex; align-items: center; gap: 16px; }
+.footer-online { display: flex; align-items: center; gap: 6px; }
+.footer-online .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 2s ease-in-out infinite; }
+.footer-right { display: flex; align-items: center; gap: 16px; }
+.footer-motto { font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+.footer-motto .way { color: var(--yellow); font-weight: 600; }
+.footer-clock { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; font-size: 10px; }
+
+/* ====== GENERATE MOCK BUTTON ====== */
+.gen-btn {
+  position: fixed; bottom: 52px; right: 24px; z-index: 200;
+  padding: 10px 20px; background: var(--cyan); color: #0c0c0e;
+  font-size: 12px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+  border: none; border-radius: 24px; cursor: pointer;
+  box-shadow: 0 2px 12px rgba(34,211,238,0.3); transition: all 0.15s;
+}
+.gen-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(34,211,238,0.4); }
+.gen-btn:active { transform: translateY(0); }
+
+/* ====== SCROLLBAR ====== */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--mute); }
+
+/* ====== RESPONSIVE ====== */
+@media (max-width: 1100px) {
+  .learning-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .stats-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 600px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- ====== NAV ====== -->
+<div class="nav">
+  <div class="nav-left">
+    <a class="nav-brand" href="live.html">
+      <span class="angle">&ang;</span>
+      <span class="name">aOa</span>
+    </a>
+    <div class="nav-tabs">
+      <a class="nav-tab" href="live.html">Live</a>
+      <a class="nav-tab" href="recon.html">Recon</a>
+      <a class="nav-tab active" href="intel.html">Intel</a>
+      <a class="nav-tab" href="debrief.html">Debrief</a>
+      <a class="nav-tab" href="arsenal.html">Arsenal</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="status-badge mock"><span class="dot"></span><span>mock</span></div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- ====== MAIN ====== -->
+<div class="main">
+
+  <!-- Hero Row -->
+  <div class="hero-row">
+    <div class="hero-card-wrapper">
+      <div class="hero-card">
+        <div class="hero-label">INTEL</div>
+        <div class="hero-headline" id="heroHeadline"></div>
+        <div class="hero-support" id="heroSupport"></div>
+      </div>
+    </div>
+    <div class="hero-metrics">
+      <div class="hm-cell">
+        <div class="hm-value purple" id="hmDomains">24</div>
+        <div class="hm-label">domains</div>
+      </div>
+      <div class="hm-arrow">&rarr;</div>
+      <div class="hm-cell right">
+        <div class="hm-value green" id="hmCore">12</div>
+        <div class="hm-label">core</div>
+      </div>
+      <div class="hm-cell">
+        <div class="hm-value cyan" id="hmTerms">156</div>
+        <div class="hm-label">terms matched</div>
+      </div>
+      <div class="hm-arrow">&rarr;</div>
+      <div class="hm-cell right">
+        <div class="hm-value yellow" id="hmBigrams">34</div>
+        <div class="hm-label">bigrams</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card purple"><div class="stat-value" id="sDomains">24</div><div class="stat-label">Domains</div><div class="stat-sub">semantic domains</div></div>
+    <div class="stat-card green"><div class="stat-value" id="sCore">12</div><div class="stat-label">Core</div><div class="stat-sub">top ranked</div></div>
+    <div class="stat-card cyan"><div class="stat-value" id="sTerms">156</div><div class="stat-label">Terms</div><div class="stat-sub">atlas terms matched</div></div>
+    <div class="stat-card blue"><div class="stat-value" id="sKeywords">892</div><div class="stat-label">Keywords</div><div class="stat-sub">unique keywords</div></div>
+    <div class="stat-card yellow"><div class="stat-value" id="sBigrams">34</div><div class="stat-label">Bigrams</div><div class="stat-sub">conversation patterns</div></div>
+    <div class="stat-card red"><div class="stat-value" id="sHits">4,201</div><div class="stat-label">Total Hits</div><div class="stat-sub">learning signals</div></div>
+  </div>
+
+  <!-- Domain Rankings + N-gram Metrics -->
+  <div class="learning-grid">
+
+    <!-- Domain Rankings -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <span class="card-title">Domain Rankings</span>
+          <span style="font-weight:400; color:var(--dim); font-size:12px"> &mdash; sorted by learning signal strength</span>
+        </div>
+      </div>
+      <div class="domain-table-wrap">
+        <table class="domain-table">
+          <thead><tr>
+            <th>#</th>
+            <th>Domain</th>
+            <th>Hits</th>
+            <th>Terms</th>
+          </tr></thead>
+          <tbody id="domainTbody"></tbody>
+        </table>
+      </div>
+      <div class="domain-footer"><span class="aoa-brand">aOa</span> learns your workflow &rarr; Claude reads only what it needs.</div>
+    </div>
+
+    <!-- N-gram Metrics -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <span class="card-title">N-gram Metrics</span>
+          <div class="card-subtitle">Frequency patterns from session analysis</div>
+        </div>
+      </div>
+      <div class="ngram-wrap" id="ngramContainer"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ====== FOOTER ====== -->
+<div class="footer">
+  <div class="footer-left">
+    <span class="footer-online"><span class="dot"></span> Online</span>
+    <span>v1.0.0</span>
+  </div>
+  <div class="footer-right">
+    <span class="footer-motto"><span class="aoa-brand">aOa</span> learns &rarr; you build faster. <span class="way">This is the way.</span></span>
+    <span class="footer-clock" id="clock"></span>
+  </div>
+</div>
+
+<button class="gen-btn" id="genBtn">Generate Mock Data</button>
+
+<script>
+(function() {
+  'use strict';
+
+  // ====== THEME ======
+  var savedTheme = localStorage.getItem('aoa-theme');
+  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+
+  var themeToggle = document.getElementById('themeToggle');
+  var themeIcon = document.getElementById('themeIcon');
+
+  function updateThemeIcon() {
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+      themeIcon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+    } else {
+      themeIcon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+    }
+  }
+  themeToggle.addEventListener('click', function() {
+    var current = document.documentElement.getAttribute('data-theme');
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('aoa-theme', next);
+    updateThemeIcon();
+  });
+  updateThemeIcon();
+
+  // ====== CLOCK ======
+  function tick() {
+    var d = new Date();
+    document.getElementById('clock').textContent =
+      String(d.getHours()).padStart(2,'0') + ':' +
+      String(d.getMinutes()).padStart(2,'0') + ':' +
+      String(d.getSeconds()).padStart(2,'0');
+  }
+  tick(); setInterval(tick, 1000);
+
+  // ====== HELPERS ======
+  function randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+  function randChoice(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function shuffle(a) { var c = a.slice(); for (var i = c.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = c[i]; c[i] = c[j]; c[j] = t; } return c; }
+  function pickN(a, n) { return shuffle(a).slice(0, n); }
+  function fmtNum(n) { return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+  // ====== HERO DATA ======
+  var HERO = {
+    identities: ['10x Developers', 'Relentless Builders', 'Precision Engineers', 'Full-Stack Architects', 'High-Velocity Teams'],
+    separators: ['minus the', 'instead of', 'bypassing', 'without'],
+    stories: [
+      { outcome: 'want a system that learns their codebase deeply', exclusion: 'starting from zero every session' },
+      { outcome: 'need domain intelligence that sharpens with every prompt', exclusion: 'static tools that never adapt to how you work' },
+      { outcome: 'want their working patterns to drive smarter results', exclusion: 'generic search that treats every query the same' },
+    ],
+  };
+
+  function renderHero() {
+    var id = randChoice(HERO.identities), s = randChoice(HERO.stories), sep = randChoice(HERO.separators);
+    document.getElementById('heroHeadline').innerHTML =
+      '<span class="hero-identity">' + id + '</span> ' +
+      '<span class="hero-outcome">' + s.outcome + '</span>' +
+      '<span class="hero-pause">\u2009.\u2009.\u2009.</span>' +
+      '<span class="hero-line2"><span class="hero-separator">' + sep + '</span> ' +
+      '<span class="hero-exclusion">' + s.exclusion + '.</span></span>';
+  }
+
+  // ====== DOMAIN DATA ======
+  var ALL_DOMAINS = [
+    { name: 'authentication', terms: ['oauth', 'jwt', 'session', 'token', 'login', 'password', 'credentials', 'bearer', 'saml', 'mfa'] },
+    { name: 'search', terms: ['query', 'index', 'tokenizer', 'ranking', 'filter', 'facet', 'fuzzy', 'inverted_index', 'relevance', 'boost'] },
+    { name: 'database', terms: ['schema', 'migration', 'query', 'transaction', 'cursor', 'index', 'constraint', 'foreign_key', 'join', 'aggregate'] },
+    { name: 'testing', terms: ['assert', 'mock', 'fixture', 'benchmark', 'coverage', 'suite', 'stub', 'integration', 'unit', 'snapshot'] },
+    { name: 'api', terms: ['endpoint', 'handler', 'middleware', 'route', 'request', 'response', 'status_code', 'payload', 'rest', 'graphql'] },
+    { name: 'error_handling', terms: ['panic', 'recover', 'sentinel', 'wrap', 'stack_trace', 'retry', 'fallback', 'circuit_breaker'] },
+    { name: 'configuration', terms: ['env', 'yaml', 'toml', 'flag', 'default', 'override', 'secrets', 'dotenv', 'viper'] },
+    { name: 'logging', terms: ['level', 'structured', 'slog', 'zerolog', 'trace_id', 'correlation', 'stdout', 'rotation'] },
+    { name: 'security', terms: ['encryption', 'hash', 'salt', 'tls', 'certificate', 'cors', 'csp', 'xss', 'csrf', 'sanitize'] },
+    { name: 'parsing', terms: ['lexer', 'ast', 'grammar', 'token', 'scanner', 'visitor', 'tree_sitter', 'syntax', 'node'] },
+    { name: 'serialization', terms: ['json', 'protobuf', 'msgpack', 'marshal', 'unmarshal', 'codec', 'binary', 'encoding'] },
+    { name: 'concurrency', terms: ['goroutine', 'channel', 'mutex', 'waitgroup', 'atomic', 'select', 'context', 'pool', 'semaphore'] },
+    { name: 'http', terms: ['server', 'client', 'header', 'cookie', 'redirect', 'tls', 'proxy', 'websocket', 'http2'] },
+    { name: 'cli', terms: ['cobra', 'flag', 'subcommand', 'arg', 'stdin', 'stdout', 'ansi', 'prompt', 'completion'] },
+    { name: 'file_io', terms: ['reader', 'writer', 'buffer', 'stream', 'seek', 'mmap', 'inode', 'fsync', 'tempfile'] },
+    { name: 'networking', terms: ['socket', 'tcp', 'udp', 'dns', 'port', 'listener', 'dial', 'conn', 'packet'] },
+    { name: 'observability', terms: ['metric', 'trace', 'span', 'prometheus', 'grafana', 'otel', 'histogram', 'counter'] },
+    { name: 'deployment', terms: ['docker', 'kubernetes', 'helm', 'ci_cd', 'pipeline', 'image', 'container', 'registry'] },
+    { name: 'caching', terms: ['redis', 'memcached', 'ttl', 'lru', 'eviction', 'invalidation', 'warmup', 'miss'] },
+    { name: 'messaging', terms: ['queue', 'kafka', 'nats', 'pubsub', 'consumer', 'producer', 'offset', 'topic'] },
+  ];
+
+  var BIGRAM_NAMES = [
+    'go:error', 'test:assert', 'auth:token', 'api:handler', 'error:retry',
+    'config:env', 'parse:ast', 'db:query', 'log:level', 'cli:flag',
+    'http:server', 'json:marshal', 'go:context', 'search:index',
+  ];
+
+  var COHIT_KW_TERM = [
+    'oauth -> authentication', 'goroutine -> concurrency', 'cobra -> cli_framework',
+    'protobuf -> wire_format', 'mutex -> synchronization', 'jwt -> token_auth',
+    'slog -> structured_log', 'ast -> syntax_tree', 'tls -> transport_security',
+    'mmap -> memory_io', 'cors -> cross_origin', 'yaml -> config_format',
+  ];
+
+  var COHIT_TERM_DOMAIN = [
+    'token_auth -> @authentication', 'inverted_index -> @search', 'migration -> @database',
+    'fixture -> @testing', 'middleware -> @api', 'sentinel -> @error_handling',
+    'dotenv -> @configuration', 'structured_log -> @logging', 'encryption -> @security',
+    'tree_sitter -> @parsing', 'protobuf -> @serialization', 'waitgroup -> @concurrency',
+  ];
+
+  // ====== RENDER DOMAINS ======
+  function renderDomains() {
+    var domainCount = randInt(10, 20);
+    var picked = pickN(ALL_DOMAINS, Math.min(domainCount, ALL_DOMAINS.length));
+
+    // Assign hits (float64, decaying)
+    var domains = [];
+    for (var i = 0; i < picked.length; i++) {
+      var hits = parseFloat((Math.random() * 900 + 10).toFixed(1));
+      var termCount = randInt(3, Math.min(10, picked[i].terms.length));
+      var terms = pickN(picked[i].terms, termCount);
+      // Some terms are "hot" (recently hit)
+      var hotCount = randInt(0, Math.min(3, terms.length));
+      var warmCount = randInt(0, Math.min(2, terms.length - hotCount));
+      domains.push({
+        name: picked[i].name,
+        hits: hits,
+        terms: terms,
+        hotCount: hotCount,
+        warmCount: warmCount,
+      });
+    }
+
+    // Sort by hits descending
+    domains.sort(function(a, b) { return b.hits - a.hits; });
+
+    // Limit to 24
+    domains = domains.slice(0, 24);
+
+    var numCore = Math.min(randInt(6, 12), domains.length);
+    var totalHits = 0;
+    var totalTerms = 0;
+    var totalKeywords = 0;
+
+    var html = '';
+    for (var i = 0; i < domains.length; i++) {
+      var d = domains[i];
+      totalHits += d.hits;
+      totalTerms += d.terms.length;
+      totalKeywords += randInt(20, 120);
+
+      // Build term pills
+      var termHtml = '';
+      for (var j = 0; j < d.terms.length; j++) {
+        var cls = 'term-pill';
+        if (j < d.hotCount) cls += ' hot';
+        else if (j < d.hotCount + d.warmCount) cls += ' warm';
+        termHtml += '<span class="' + cls + '">' + d.terms[j] + '</span>';
+      }
+      if (d.terms.length > 8) {
+        termHtml += '<span class="term-overflow">+' + (d.terms.length - 8) + '</span>';
+      }
+
+      html += '<tr>' +
+        '<td class="d-rank">' + (i + 1) + '</td>' +
+        '<td class="d-name">@' + d.name + '</td>' +
+        '<td class="d-hits">' + d.hits.toFixed(1) + '</td>' +
+        '<td class="d-terms">' + termHtml + '</td>' +
+        '</tr>';
+    }
+
+    document.getElementById('domainTbody').innerHTML = html;
+
+    return {
+      domains: domains.length,
+      core: numCore,
+      terms: totalTerms,
+      keywords: totalKeywords,
+      totalHits: Math.round(totalHits),
+    };
+  }
+
+  // ====== RENDER N-GRAMS ======
+  function buildNgramSection(title, data, barClass) {
+    if (data.length === 0) return '';
+    var maxVal = data[0][1];
+    var html = '<div class="ngram-section">';
+    html += '<div class="ngram-section-title">' + title + '</div>';
+    for (var i = 0; i < data.length; i++) {
+      var pct = maxVal > 0 ? (data[i][1] / maxVal * 100).toFixed(1) : 0;
+      html += '<div class="ngram-row">' +
+        '<span class="ngram-name">' + data[i][0] + '</span>' +
+        '<span class="ngram-bar-track"><span class="ngram-bar-fill ' + barClass + '" style="width:' + pct + '%"></span></span>' +
+        '<span class="ngram-count">' + data[i][1] + '</span>' +
+        '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderNgrams() {
+    var bigramCount = randInt(6, 10);
+    var bigramData = pickN(BIGRAM_NAMES, bigramCount).map(function(n) {
+      return [n, randInt(3, 120)];
+    }).sort(function(a, b) { return b[1] - a[1]; });
+
+    var ckCount = randInt(5, 8);
+    var ckData = pickN(COHIT_KW_TERM, ckCount).map(function(n) {
+      return [n, randInt(2, 85)];
+    }).sort(function(a, b) { return b[1] - a[1]; });
+
+    var ctCount = randInt(5, 8);
+    var ctData = pickN(COHIT_TERM_DOMAIN, ctCount).map(function(n) {
+      return [n, randInt(1, 60)];
+    }).sort(function(a, b) { return b[1] - a[1]; });
+
+    var html = '';
+    html += buildNgramSection('BIGRAMS', bigramData, 'bar-cyan');
+    html += buildNgramSection('COHITS: KW \u2192 TERM', ckData, 'bar-green');
+    html += buildNgramSection('COHITS: TERM \u2192 DOMAIN', ctData, 'bar-purple');
+
+    document.getElementById('ngramContainer').innerHTML = html;
+
+    return bigramData.length;
+  }
+
+  // ====== RENDER STATS ======
+  function renderStats(domainStats, bigramCount) {
+    document.getElementById('hmDomains').textContent = domainStats.domains;
+    document.getElementById('hmCore').textContent = domainStats.core;
+    document.getElementById('hmTerms').textContent = domainStats.terms;
+    document.getElementById('hmBigrams').textContent = bigramCount;
+
+    document.getElementById('sDomains').textContent = domainStats.domains;
+    document.getElementById('sCore').textContent = domainStats.core;
+    document.getElementById('sTerms').textContent = domainStats.terms;
+    document.getElementById('sKeywords').textContent = fmtNum(domainStats.keywords);
+    document.getElementById('sBigrams').textContent = bigramCount;
+    document.getElementById('sHits').textContent = fmtNum(domainStats.totalHits);
+
+    document.getElementById('heroSupport').innerHTML =
+      '<span class="val p">' + domainStats.domains + '</span> domains' +
+      '<span class="dot">&middot;</span>' +
+      '<span class="val g">' + domainStats.core + '</span> core' +
+      '<span class="dot">&middot;</span>' +
+      '<span class="val c">' + domainStats.terms + '</span> terms' +
+      '<span class="dot">&middot;</span>' +
+      '<span class="val b">' + fmtNum(domainStats.keywords) + '</span> keywords' +
+      '<span class="dot">&middot;</span>' +
+      '<span class="val y">' + bigramCount + '</span> bigrams';
+  }
+
+  // ====== GENERATE ======
+  function generate() {
+    renderHero();
+    var domainStats = renderDomains();
+    var bigramCount = renderNgrams();
+    renderStats(domainStats, bigramCount);
+  }
+
+  generate();
+  document.getElementById('genBtn').addEventListener('click', generate);
+
+})();
+</script>
+</body>
+</html>

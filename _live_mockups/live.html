@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aOa — Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ====== @property for gradient angle ====== */
+@property --gradient-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* ====== CSS VARIABLES ====== */
+[data-theme="dark"] {
+  --bg: #0c0c0e;
+  --card: #161618;
+  --card-hover: #1c1c1f;
+  --border: #252528;
+  --border-subtle: #1e1e21;
+  --text: #e8e8ec;
+  --text-secondary: #c4c4cc;
+  --dim: #8b8b96;
+  --mute: #55555f;
+  --green: #34d399;
+  --green-dim: rgba(52,211,153,0.12);
+  --blue: #60a5fa;
+  --blue-dim: rgba(96,165,250,0.12);
+  --purple: #c084fc;
+  --purple-dim: rgba(192,132,252,0.12);
+  --cyan: #22d3ee;
+  --cyan-dim: rgba(34,211,238,0.12);
+  --yellow: #fbbf24;
+  --yellow-dim: rgba(251,191,36,0.12);
+  --red: #f87171;
+  --red-dim: rgba(248,113,113,0.12);
+  --shadow: none;
+  --nav-bg: rgba(12,12,14,0.82);
+  --table-hover: rgba(255,255,255,0.03);
+}
+
+[data-theme="light"] {
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --card-hover: #fafafa;
+  --border: #e5e5ea;
+  --border-subtle: #ececee;
+  --text: #1d1d1f;
+  --text-secondary: #3a3a3c;
+  --dim: #6e6e73;
+  --mute: #aeaeb2;
+  --green: #16a34a;
+  --blue: #2563eb;
+  --purple: #9333ea;
+  --cyan: #0891b2;
+  --yellow: #d97706;
+  --red: #dc2626;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  --nav-bg: rgba(245,245,247,0.82);
+  --table-hover: rgba(0,0,0,0.02);
+  --green-dim: rgba(22,163,74,0.1);
+  --blue-dim: rgba(37,99,235,0.1);
+  --purple-dim: rgba(147,51,234,0.1);
+  --cyan-dim: rgba(8,145,178,0.1);
+  --yellow-dim: rgba(217,119,6,0.1);
+  --red-dim: rgba(220,38,38,0.1);
+}
+
+/* ====== RESET & BODY ====== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+}
+
+.tabnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ====== ANIMATIONS ====== */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes gradient-rotate {
+  0% { --gradient-angle: 0deg; }
+  100% { --gradient-angle: 360deg; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+/* ====== NAV ====== */
+.nav {
+  height: 52px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--nav-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 20px;
+  text-decoration: none;
+}
+
+.nav-brand .angle {
+  font-size: 22px;
+  color: var(--green);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.nav-brand .name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 0.5px;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.nav-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dim);
+  cursor: pointer;
+  transition: color 0.15s;
+  user-select: none;
+  border: none;
+  background: none;
+  position: relative;
+  text-decoration: none;
+}
+
+.nav-tab:hover {
+  color: var(--text-secondary);
+}
+
+.nav-tab.active {
+  color: var(--green);
+}
+
+.nav-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--green);
+  border-radius: 1px;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.status-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-badge.mock {
+  background: var(--yellow-dim);
+  color: var(--yellow);
+}
+
+.status-badge.mock .dot {
+  background: var(--yellow);
+  animation: blink 2s ease-in-out infinite;
+}
+
+.theme-toggle {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  cursor: pointer;
+  color: var(--dim);
+  transition: all 0.15s;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.theme-toggle:hover {
+  border-color: var(--mute);
+  color: var(--text);
+}
+
+/* ====== MAIN CONTENT ====== */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ====== CARDS ====== */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+/* ====== HERO ROW ====== */
+.hero-row {
+  display: flex;
+  gap: 16px;
+  min-height: 160px;
+}
+
+/* Hero Card */
+.hero-card-wrapper {
+  flex: 2;
+  min-width: 0;
+  position: relative;
+  border-radius: 18px;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--gradient-angle),
+    var(--green),
+    var(--blue),
+    var(--purple),
+    var(--green)
+  );
+  animation: gradient-rotate 6s linear infinite;
+}
+
+.hero-card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 18px 24px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: none;
+}
+
+.hero-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.hero-headline {
+  line-height: 1.4;
+  font-size: 17px;
+}
+
+.hero-identity {
+  font-size: 22px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--green), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-outcome {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.hero-pause {
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 3px;
+}
+
+.hero-line2 {
+  display: block;
+  padding-left: 33%;
+  margin-top: 2px;
+}
+
+.hero-separator {
+  font-weight: 600;
+  color: var(--cyan);
+}
+
+.hero-exclusion {
+  font-weight: 500;
+  color: var(--dim);
+}
+
+.hero-support {
+  margin-top: auto;
+  font-size: 13px;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+.hero-support .val { font-weight: 600; }
+.hero-support .val.g { color: var(--green); }
+.hero-support .val.c { color: var(--cyan); }
+.hero-support .val.r { color: var(--red); }
+.hero-support .dot { color: var(--mute); margin: 0 10px; opacity: 0.5; }
+
+/* Hero Metrics — 2x2 cause→effect grid */
+.hero-metrics {
+  flex: 1;
+  flex-shrink: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 20px;
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px 0;
+  align-items: center;
+}
+
+.hm-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hm-cell.right {
+  padding-left: 12px;
+}
+
+.hm-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.hm-value.green { color: var(--green); }
+.hm-value.cyan { color: var(--cyan); }
+.hm-value.blue { color: var(--blue); }
+
+.hm-label {
+  font-size: 11px;
+  color: var(--dim);
+  font-weight: 500;
+}
+
+.hm-arrow {
+  color: var(--mute);
+  font-size: 14px;
+  padding: 0 8px;
+  opacity: 0.5;
+}
+
+.hm-divider {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: var(--border-subtle);
+  display: none;
+}
+
+
+/* ====== STATS GRID ====== */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+}
+
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+
+.stat-card.cyan::before    { background: var(--cyan); }
+.stat-card.green::before   { background: var(--green); }
+.stat-card.blue::before    { background: var(--blue); }
+.stat-card.purple::before  { background: var(--purple); }
+.stat-card.yellow::before  { background: var(--yellow); }
+.stat-card.red::before     { background: var(--red); }
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.stat-card.cyan .stat-value   { color: var(--cyan); }
+.stat-card.green .stat-value  { color: var(--green); }
+.stat-card.blue .stat-value   { color: var(--blue); }
+.stat-card.purple .stat-value { color: var(--purple); }
+.stat-card.yellow .stat-value { color: var(--yellow); }
+.stat-card.red .stat-value    { color: var(--red); }
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dim);
+  margin-bottom: 2px;
+}
+
+.stat-sub {
+  font-size: 11px;
+  color: var(--mute);
+}
+
+/* ====== ACTIVITY TABLE ====== */
+.activity-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.activity-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.activity-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.activity-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-table-wrap {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+
+.activity-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+
+.activity-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.activity-table th {
+  background: var(--card);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mute);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+/* Fixed column widths — 2/3 left, 1/3 target */
+.activity-table .col-time    { width: 8%; }
+.activity-table .col-action  { width: 10%; }
+.activity-table .col-source  { width: 10%; }
+.activity-table .col-attrib  { width: 15%; }
+.activity-table .col-impact  { width: 24%; }
+.activity-table .col-target  { width: 33%; }
+
+.activity-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-table tbody tr:hover {
+  background: var(--table-hover);
+}
+
+.activity-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Time column */
+.td-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--mute);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Action pills */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pill-read    { background: var(--green-dim); color: var(--green); }
+.pill-search  { background: var(--cyan-dim);  color: var(--cyan); }
+.pill-write   { background: var(--purple-dim); color: var(--purple); }
+.pill-edit    { background: var(--yellow-dim); color: var(--yellow); }
+.pill-grep    { background: var(--red-dim);  color: var(--red); }
+.pill-glob    { background: var(--red-dim);  color: var(--red); }
+
+/* Source */
+.src-aoa {
+  color: var(--cyan);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.src-claude {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+/* Attrib */
+.attrib-indexed    { color: var(--cyan); font-weight: 500; }
+.attrib-multi-or   { color: var(--green); font-weight: 500; }
+.attrib-multi-and  { color: var(--green); font-weight: 500; }
+.attrib-regex      { color: var(--yellow); font-weight: 500; }
+.attrib-guided     { font-weight: 500; }
+.attrib-guided .a  { color: var(--cyan); }
+.attrib-guided .b  { color: var(--green); }
+.attrib-productive { color: var(--green); font-weight: 500; }
+.attrib-unguided   { color: var(--red); font-weight: 600; }
+.attrib-none       { color: var(--mute); }
+
+/* Impact */
+.impact-hits {
+  font-size: 12px;
+}
+
+.impact-hits .h {
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.impact-hits .sep {
+  color: var(--mute);
+  margin: 0 4px;
+}
+
+.impact-hits .t {
+  color: var(--green);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.impact-savings {
+  color: var(--green);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.impact-none {
+  color: var(--mute);
+}
+
+.impact-waste {
+  color: var(--red);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* Target */
+.td-target {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.td-target .cmd-aoa   { color: var(--cyan); font-weight: 500; }
+.td-target .cmd-verb  { color: var(--green); font-weight: 500; }
+.td-target .cmd-arg   { color: var(--text-secondary); }
+.td-target.unguided   { color: var(--red); }
+
+/* ====== FOOTER ====== */
+.footer {
+  height: 36px;
+  flex-shrink: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--mute);
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.footer-online {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.footer-online .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: blink 2s ease-in-out infinite;
+}
+
+.footer-tagline .way {
+  color: var(--yellow);
+  font-weight: 600;
+}
+
+.footer-right {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ====== GENERATE BUTTON ====== */
+.gen-btn {
+  position: fixed;
+  bottom: 52px;
+  right: 24px;
+  z-index: 200;
+  padding: 10px 22px;
+  background: var(--cyan);
+  color: #000;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 16px rgba(34,211,238,0.25);
+}
+
+.gen-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(34,211,238,0.35);
+}
+
+.gen-btn:active {
+  transform: translateY(0);
+}
+
+/* ====== SCROLLBAR ====== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--mute); }
+
+/* ====== RESPONSIVE ====== */
+@media (max-width: 1200px) {
+  .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .hero-row {
+    flex-direction: column;
+  }
+  .metrics-panel {
+    width: 100%;
+  }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Drop Time and Target at narrow widths */
+  .activity-table .col-time,
+  .activity-table td:nth-child(1) { display: none; }
+  .activity-table .col-target,
+  .activity-table td:nth-child(6) { display: none; }
+
+  /* Redistribute evenly across 4 columns */
+  .activity-table .col-action  { width: 20%; }
+  .activity-table .col-source  { width: 20%; }
+  .activity-table .col-attrib  { width: 25%; }
+  .activity-table .col-impact  { width: 35%; }
+}
+</style>
+</head>
+<body>
+
+<!-- ====== NAV ====== -->
+<nav class="nav">
+  <div class="nav-left">
+    <a class="nav-brand" href="live.html">
+      <span class="angle">&ang;</span>
+      <span class="name">aOa</span>
+    </a>
+    <div class="nav-tabs">
+      <a class="nav-tab active" href="live.html">Live</a>
+      <a class="nav-tab" href="recon.html">Recon</a>
+      <a class="nav-tab" href="intel.html">Intel</a>
+      <a class="nav-tab" href="debrief.html">Debrief</a>
+      <a class="nav-tab" href="arsenal.html">Arsenal</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="status-badge mock">
+      <span class="dot"></span>
+      mock
+    </div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+      <span id="themeIcon"></span>
+    </button>
+  </div>
+</nav>
+
+<!-- ====== MAIN ====== -->
+<div class="main">
+
+  <!-- Hero Row -->
+  <div class="hero-row">
+    <div class="hero-card-wrapper">
+      <div class="hero-card">
+        <div class="hero-label">ANGLE OF ATTACK</div>
+        <div class="hero-headline" id="heroHeadline">
+          <!-- Rendered by JS: Identity + Outcome + ... + Separator + Exclusion -->
+        </div>
+        <div class="hero-support" id="heroSupport">
+          <span class="val g">47 min</span> runway<span class="dot">&middot;</span><span class="val g">87k</span> tokens saved<span class="dot">&middot;</span><span class="val c">23</span> guided reads<span class="dot">&middot;</span><span class="val c">14</span> domains<span class="dot">&middot;</span>without aOa: <span class="val r">12 min</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-metrics">
+      <!-- Row 1: guided reads → savings per read -->
+      <div class="hm-cell">
+        <div class="hm-value cyan" id="hmGuidedRatio">73%</div>
+        <div class="hm-label">guided reads</div>
+      </div>
+      <div class="hm-arrow">&rarr;</div>
+      <div class="hm-cell right">
+        <div class="hm-value green" id="hmAvgSavings">&darr;91%</div>
+        <div class="hm-label">avg savings</div>
+      </div>
+      <!-- Row 2: tokens saved → sessions extended -->
+      <div class="hm-cell">
+        <div class="hm-value green" id="hmTokensSaved">184k</div>
+        <div class="hm-label">tokens saved</div>
+      </div>
+      <div class="hm-arrow">&rarr;</div>
+      <div class="hm-cell right">
+        <div class="hm-value blue" id="hmSessionsExt">2.4</div>
+        <div class="hm-label">sessions extended</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card cyan">
+      <div class="stat-value" id="statGuidedRatio">73%</div>
+      <div class="stat-label">Guided Ratio</div>
+      <div class="stat-sub">of reads guided</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-value" id="statAvgSavings">&darr;84%</div>
+      <div class="stat-label">Avg Savings</div>
+      <div class="stat-sub">per guided read</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-value" id="statSearches">47</div>
+      <div class="stat-label">Searches</div>
+      <div class="stat-sub">indexed queries</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="stat-value" id="statFiles">1,204</div>
+      <div class="stat-label">Files Indexed</div>
+      <div class="stat-sub">symbols tracked</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-value" id="statAutotune">34/50</div>
+      <div class="stat-label">Autotune</div>
+      <div class="stat-sub">next cycle in 16</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-value" id="statBurn">2.1k/min</div>
+      <div class="stat-label">Context Burn</div>
+      <div class="stat-sub">token burn rate</div>
+    </div>
+  </div>
+
+  <!-- Activity & Impact Table -->
+  <div class="card activity-card">
+    <div class="activity-header">
+      <span class="activity-title">Activity &amp; Impact</span>
+      <span class="activity-badge" id="activityCount">18</span>
+    </div>
+    <div class="activity-table-wrap">
+      <table class="activity-table">
+        <thead>
+          <tr>
+            <th class="col-time">Time</th>
+            <th class="col-action">Action</th>
+            <th class="col-source">Source</th>
+            <th class="col-attrib">Attrib</th>
+            <th class="col-impact">Impact</th>
+            <th class="col-target">Target</th>
+          </tr>
+        </thead>
+        <tbody id="activityBody">
+          <!-- Generated by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ====== FOOTER ====== -->
+<footer class="footer">
+  <div class="footer-left">
+    <span class="footer-online"><span class="dot"></span> Online</span>
+    <span>v1.0.0</span>
+    <span class="footer-tagline">aOa learns &rarr; you build faster. <span class="way">This is the way.</span></span>
+  </div>
+  <div class="footer-right" id="footerClock">00:00:00</div>
+</footer>
+
+<!-- ====== GENERATE BUTTON ====== -->
+<button class="gen-btn" id="genBtn">Generate Mock Data</button>
+
+<script>
+// ====== THEME TOGGLE ======
+const html = document.documentElement;
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
+
+function setTheme(theme) {
+  html.setAttribute('data-theme', theme);
+  themeIcon.textContent = theme === 'dark' ? '\u263D' : '\u2600';
+  localStorage.setItem('aoa-theme', theme);
+}
+
+themeToggle.addEventListener('click', () => {
+  setTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+});
+
+setTheme(localStorage.getItem('aoa-theme') || 'dark');
+
+// ====== LIVE CLOCK ======
+function updateClock() {
+  const now = new Date();
+  document.getElementById('footerClock').textContent =
+    now.toLocaleTimeString('en-US', { hour12: false });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ====== HELPERS ======
+function randInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function randFloat(min, max, decimals) {
+  return (Math.random() * (max - min) + min).toFixed(decimals);
+}
+
+function randChoice(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function relativeTime(seconds) {
+  if (seconds < 5) return '<span style="color:var(--cyan)">now</span>';
+  if (seconds < 60) return seconds + 's';
+  if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
+  return Math.floor(seconds / 3600) + 'h';
+}
+
+function formatNum(n) {
+  if (n >= 1000) return (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k';
+  return n.toString();
+}
+
+function commaNum(n) {
+  return n.toLocaleString('en-US');
+}
+
+// ====== HERO DATA ======
+const HERO = {
+  identities: [
+    '10x Developers',
+    'Relentless Builders',
+    'Precision Engineers',
+    'Full-Stack Architects',
+    'High-Velocity Teams',
+  ],
+  separators: ['minus the', 'instead of', 'bypassing', 'without'],
+  stories: [
+    {
+      outcome: 'want full context that lasts the entire task',
+      exclusion: 'context cliff that kills momentum at 60%',
+    },
+    {
+      outcome: 'need every guided read to extend the session',
+      exclusion: 'token waste from unguided file scans',
+    },
+    {
+      outcome: 'want to ship the feature in one unbroken session',
+      exclusion: 'starting over when the model loses context',
+    },
+  ],
+};
+
+function renderHeroHeadline() {
+  const identity = randChoice(HERO.identities);
+  const story = randChoice(HERO.stories);
+  const separator = randChoice(HERO.separators);
+
+  document.getElementById('heroHeadline').innerHTML =
+    `<span class="hero-identity">${identity}</span> ` +
+    `<span class="hero-outcome">${story.outcome}</span>` +
+    `<span class="hero-pause">\u2009.\u2009.\u2009.</span>` +
+    `<span class="hero-line2">` +
+    `<span class="hero-separator">${separator}</span> ` +
+    `<span class="hero-exclusion">${story.exclusion}.</span>` +
+    `</span>`;
+}
+
+// ====== MOCK DATA GENERATION ======
+const filePaths = [
+  'internal/domain/learner/learner.go',
+  'internal/domain/index/search.go',
+  'internal/adapters/bbolt/store.go',
+  'internal/ports/interfaces.go',
+  'internal/app/app.go',
+  'cmd/aoa/main.go',
+  'internal/domain/enricher/atlas.go',
+  'internal/adapters/socket/server.go',
+  'internal/adapters/web/handler.go',
+  'internal/adapters/tailer/tailer.go',
+  'internal/adapters/claude/reader.go',
+  'internal/domain/index/tokenizer.go',
+  'internal/domain/status/status.go',
+  'internal/adapters/treesitter/parser.go',
+  'atlas/v1/go_stdlib.json',
+  'internal/adapters/fsnotify/watcher.go',
+  'test/parity_test.go',
+  'internal/domain/learner/autotune.go',
+  'internal/domain/learner/bigrams.go',
+  'internal/domain/index/format.go',
+];
+
+const searchQueries = [
+  'autotune decay rate',
+  'bbolt bucket schema',
+  'tokenizer split logic',
+  'search OR mode',
+  'learner observe',
+  'domain enrichment',
+  'bigram extraction',
+  'cohit dedup',
+  'competitive displacement',
+  'session event types',
+  'prune floor threshold',
+  'index rebuild',
+  'socket protocol',
+  'http dashboard',
+  'status line format',
+  'treesitter grammar',
+  'file watcher debounce',
+  'aho-corasick match',
+  'guided read ratio',
+  'context runway calc',
+];
+
+const grepPatterns = [
+  'func.*Observe',
+  'DecayRate',
+  'AutotuneInterval',
+  'PruneFloor',
+  'CoreDomainsMax',
+  'SearchOptions',
+  'TokenRef',
+  'SymbolMeta',
+  'func.*Search',
+  'mutex.*Lock',
+];
+
+const globPatterns = [
+  '**/*.go',
+  'internal/**/*_test.go',
+  'atlas/v1/*.json',
+  'cmd/**/*.go',
+  'internal/domain/**/*.go',
+];
+
+function generateActivityRows(count) {
+  const rows = [];
+  const now = new Date();
+
+  for (let i = 0; i < count; i++) {
+    // Weight toward recent: first few rows are near-now, rest spread out
+    const pct = i / count;
+    let timeOffset;
+    if (pct < 0.15) timeOffset = randInt(0, 4);        // "now"
+    else if (pct < 0.4) timeOffset = randInt(5, 59);    // seconds ago
+    else if (pct < 0.8) timeOffset = randInt(60, 600);   // minutes ago
+    else timeOffset = randInt(600, 3600);                 // older
+    const timeStr = relativeTime(timeOffset);
+
+    // Pick action type with weighted distribution
+    const roll = Math.random();
+    let action, actionClass, source, attrib, attribClass, impact, target;
+
+    if (roll < 0.25) {
+      // Search via aOa
+      action = 'search';
+      actionClass = 'pill-search';
+      source = 'aoa';
+      const query = randChoice(searchQueries);
+      const hits = randInt(2, 48);
+      const files = randInt(1, Math.min(hits, 13));
+      const ms = randFloat(0.1, 0.9, 2);
+      const attribTypes = [
+        { text: 'indexed', cls: 'attrib-indexed' },
+        { text: 'multi-or', cls: 'attrib-multi-or' },
+        { text: 'multi-and', cls: 'attrib-multi-and' },
+        { text: 'regex', cls: 'attrib-regex' },
+      ];
+      const at = randChoice(attribTypes);
+      attrib = at.text;
+      attribClass = at.cls;
+      impact = `<span class="impact-hits"><span class="h">${hits} hits</span>, ${files} files <span class="sep">|</span> <span class="t">${ms}ms</span></span>`;
+      target = `<span class="cmd-aoa">aOa</span> <span class="cmd-verb">grep</span> <span class="cmd-arg">${query}</span>`;
+    } else if (roll < 0.50) {
+      // Read - guided or unguided
+      action = 'read';
+      actionClass = 'pill-read';
+      const file = randChoice(filePaths);
+      const guided = Math.random() < 0.7;
+      if (guided) {
+        source = 'aoa';
+        attrib = 'aOa guided';
+        attribClass = 'attrib-guided';
+        const pct = randInt(60, 95);
+        const before = randFloat(2, 12, 1);
+        const after = randFloat(0.3, before * 0.4, 1);
+        impact = `<span class="impact-savings">&darr;${pct}% (${before}k &rarr; ${after}k)</span>`;
+      } else {
+        source = 'claude';
+        attrib = 'unguided';
+        attribClass = 'attrib-unguided';
+        impact = `<span class="impact-none">&mdash;</span>`;
+      }
+      target = file;
+    } else if (roll < 0.65) {
+      // Write
+      action = 'write';
+      actionClass = 'pill-write';
+      source = 'claude';
+      attrib = 'productive';
+      attribClass = 'attrib-productive';
+      impact = `<span class="impact-none">&mdash;</span>`;
+      target = randChoice(filePaths);
+    } else if (roll < 0.80) {
+      // Edit
+      action = 'edit';
+      actionClass = 'pill-edit';
+      source = 'claude';
+      attrib = 'productive';
+      attribClass = 'attrib-productive';
+      impact = `<span class="impact-none">&mdash;</span>`;
+      target = randChoice(filePaths);
+    } else if (roll < 0.92) {
+      // Grep via Claude
+      action = 'grep';
+      actionClass = 'pill-grep';
+      source = 'claude';
+      const pattern = randChoice(grepPatterns);
+      const hits = randInt(3, 30);
+      const files = randInt(1, Math.min(hits, 8));
+      const wastedTokens = formatNum(files * randInt(200, 800));
+      attrib = 'unguided';
+      attribClass = 'attrib-unguided';
+      impact = `<span class="impact-waste">~${wastedTokens} tokens</span>`;
+      target = `grep -r "${pattern}"`;
+    } else {
+      // Glob
+      action = 'glob';
+      actionClass = 'pill-glob';
+      source = 'claude';
+      const pattern = randChoice(globPatterns);
+      const files = randInt(5, 80);
+      const wastedTokens = formatNum(files * randInt(150, 600));
+      attrib = 'unguided';
+      attribClass = 'attrib-unguided';
+      impact = `<span class="impact-waste">~${wastedTokens} tokens</span>`;
+      target = `glob "${pattern}"`;
+    }
+
+    const sourceHtml = source === 'aoa'
+      ? '<span class="src-aoa">aOa</span>'
+      : '<span class="src-claude">Claude</span>';
+
+    let attribHtml;
+    if (attribClass === 'attrib-guided') {
+      attribHtml = '<span class="attrib-guided"><span class="a">aOa</span> <span class="b">guided</span></span>';
+    } else {
+      attribHtml = `<span class="${attribClass}">${attrib}</span>`;
+    }
+
+    const targetClass = attribClass === 'attrib-unguided' ? 'td-target unguided' : 'td-target';
+
+    rows.push({
+      timeOffset,
+      html: `<tr>
+        <td class="td-time">${timeStr}</td>
+        <td><span class="pill ${actionClass}">${action}</span></td>
+        <td>${sourceHtml}</td>
+        <td>${attribHtml}</td>
+        <td>${impact}</td>
+        <td class="${targetClass}">${target}</td>
+      </tr>`
+    });
+  }
+
+  // Sort by time offset (most recent first)
+  rows.sort((a, b) => a.timeOffset - b.timeOffset);
+  return rows.map(r => r.html).join('');
+}
+
+function generateMockData() {
+  // Hero headline — persuasion line
+  renderHeroHeadline();
+
+  // Support line — single flowing narrative
+  const runwayWith = randInt(20, 90);
+  const runwayWithout = randInt(5, 20);
+  const domains = randInt(6, 28);
+  const guidedReads = randInt(8, 60);
+  const tokensSaved = randInt(20, 200);
+  document.getElementById('heroSupport').innerHTML =
+    `<span class="val g">${runwayWith} min</span> runway` +
+    `<span class="dot">&middot;</span>` +
+    `<span class="val g">${tokensSaved}k</span> tokens saved` +
+    `<span class="dot">&middot;</span>` +
+    `<span class="val c">${guidedReads}</span> guided reads` +
+    `<span class="dot">&middot;</span>` +
+    `<span class="val c">${domains}</span> domains` +
+    `<span class="dot">&middot;</span>` +
+    `without aOa: <span class="val r">${runwayWithout} min</span>`;
+
+  // Hero metrics — cause→effect grid
+  const guidedRatio = randInt(45, 92);
+  const avgSavings = randInt(60, 95);
+  const sessionsExt = randFloat(1.0, 5.0, 1);
+  document.getElementById('hmGuidedRatio').textContent = `${guidedRatio}%`;
+  document.getElementById('hmAvgSavings').innerHTML = `&darr;${avgSavings}%`;
+  document.getElementById('hmTokensSaved').textContent = `${tokensSaved}k`;
+  document.getElementById('hmSessionsExt').textContent = sessionsExt;
+
+
+  // Stats grid — sync with hero metrics
+  document.getElementById('statGuidedRatio').textContent = `${guidedRatio}%`;
+  document.getElementById('statAvgSavings').innerHTML = `&darr;${avgSavings}%`;
+  document.getElementById('statSearches').textContent = randInt(10, 120);
+  document.getElementById('statFiles').textContent = commaNum(randInt(200, 3000));
+  const autotuneProgress = randInt(0, 49);
+  const autotuneRemaining = 50 - autotuneProgress;
+  document.getElementById('statAutotune').textContent = `${autotuneProgress}/50`;
+  document.querySelector('.stat-card.yellow .stat-sub').textContent = `next cycle in ${autotuneRemaining}`;
+  const burnRate = randFloat(0.5, 4.5, 1);
+  document.getElementById('statBurn').textContent = `${burnRate}k/min`;
+
+  // Activity table
+  const rowCount = randInt(15, 20);
+  document.getElementById('activityBody').innerHTML = generateActivityRows(rowCount);
+  document.getElementById('activityCount').textContent = rowCount;
+}
+
+// Initial generation
+generateMockData();
+
+// Button handler
+document.getElementById('genBtn').addEventListener('click', generateMockData);
+</script>
+</body>
+</html>

@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aOa Dashboard — Debrief</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ====== @property for gradient angle ====== */
+@property --gradient-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* ====== CSS VARIABLES ====== */
+[data-theme="dark"] {
+  --bg: #0c0c0e;
+  --card: #161618;
+  --card-hover: #1c1c1f;
+  --border: #252528;
+  --border-subtle: #1e1e21;
+  --text: #e8e8ec;
+  --text-secondary: #c4c4cc;
+  --dim: #8b8b96;
+  --mute: #55555f;
+  --green: #34d399;
+  --green-dim: rgba(52,211,153,0.12);
+  --blue: #60a5fa;
+  --blue-dim: rgba(96,165,250,0.12);
+  --purple: #c084fc;
+  --purple-dim: rgba(192,132,252,0.12);
+  --cyan: #22d3ee;
+  --cyan-dim: rgba(34,211,238,0.12);
+  --yellow: #fbbf24;
+  --yellow-dim: rgba(251,191,36,0.12);
+  --red: #f87171;
+  --shadow: none;
+  --nav-bg: rgba(12,12,14,0.82);
+  --table-hover: rgba(255,255,255,0.03);
+}
+
+[data-theme="light"] {
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --card-hover: #fafafa;
+  --border: #e5e5ea;
+  --border-subtle: #ececee;
+  --text: #1d1d1f;
+  --text-secondary: #3a3a3c;
+  --dim: #6e6e73;
+  --mute: #aeaeb2;
+  --green: #16a34a;
+  --blue: #2563eb;
+  --purple: #9333ea;
+  --cyan: #0891b2;
+  --yellow: #d97706;
+  --red: #dc2626;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  --nav-bg: rgba(245,245,247,0.82);
+  --table-hover: rgba(0,0,0,0.02);
+  --green-dim: rgba(22,163,74,0.1);
+  --blue-dim: rgba(37,99,235,0.1);
+  --purple-dim: rgba(147,51,234,0.1);
+  --cyan-dim: rgba(8,145,178,0.1);
+  --yellow-dim: rgba(217,119,6,0.1);
+}
+
+/* ====== RESET & BODY ====== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+}
+
+.tabnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ====== ANIMATIONS ====== */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes gradient-rotate {
+  0% { --gradient-angle: 0deg; }
+  100% { --gradient-angle: 360deg; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes value-pulse {
+  0% { color: var(--green); }
+  100% { color: inherit; }
+}
+.pulse { animation: value-pulse 0.8s ease-out; }
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(52,211,153,0); }
+}
+
+/* ====== NAV ====== */
+.nav {
+  height: 52px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--nav-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 20px;
+  text-decoration: none;
+}
+
+.nav-brand .angle {
+  font-size: 22px;
+  color: var(--green);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.nav-brand .name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 0.5px;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.nav-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dim);
+  cursor: pointer;
+  transition: color 0.15s;
+  user-select: none;
+  border: none;
+  background: none;
+  position: relative;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.nav-tab:hover {
+  color: var(--text-secondary);
+}
+
+.nav-tab.active {
+  color: var(--green);
+}
+
+.nav-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--green);
+  border-radius: 1px;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.status-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-badge.mock {
+  background: var(--yellow-dim);
+  color: var(--yellow);
+}
+
+.status-badge.mock .dot {
+  background: var(--yellow);
+  animation: blink 2s ease-in-out infinite;
+}
+
+.theme-toggle {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  cursor: pointer;
+  color: var(--dim);
+  transition: all 0.15s;
+}
+
+.theme-toggle:hover {
+  border-color: var(--mute);
+  color: var(--text);
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ====== MAIN CONTENT ====== */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ====== HERO ROW ====== */
+.hero-row {
+  display: flex;
+  gap: 16px;
+  min-height: 160px;
+  flex-shrink: 0;
+}
+
+.hero-card-wrapper {
+  flex: 2;
+  position: relative;
+  border-radius: 18px;
+  padding: 2px;
+  background: conic-gradient(from var(--gradient-angle), var(--green), var(--blue), var(--purple), var(--green));
+  animation: gradient-rotate 8s linear infinite;
+}
+
+.hero-card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+}
+
+.hero-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+
+.hero-headline { line-height: 1.4; font-size: 17px; }
+.hero-identity { font-size: 22px; font-weight: 700; background: linear-gradient(135deg, var(--green), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.hero-outcome { font-weight: 500; color: var(--text-secondary); }
+.hero-pause { font-weight: 700; color: var(--cyan); letter-spacing: 3px; }
+.hero-line2 { display: block; padding-left: 33%; margin-top: 2px; }
+.hero-separator { font-weight: 600; color: var(--cyan); }
+.hero-exclusion { font-weight: 500; color: var(--dim); }
+
+.hero-support { margin-top: auto; font-size: 13px; color: var(--dim); line-height: 1.5; }
+.hero-support .val { font-weight: 600; }
+.hero-support .val.g { color: var(--green); }
+.hero-support .val.c { color: var(--cyan); }
+.hero-support .val.b { color: var(--blue); }
+.hero-support .val.p { color: var(--purple); }
+.hero-support .val.y { color: var(--yellow); }
+.hero-support .dot { color: var(--mute); margin: 0 10px; opacity: 0.5; }
+
+/* Hero Metrics — 2x2 cause→effect grid */
+.hero-metrics {
+  flex: 1; flex-shrink: 0; background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 16px 20px; box-shadow: var(--shadow);
+  display: grid; grid-template-columns: 1fr auto 1fr; grid-template-rows: 1fr 1fr;
+  gap: 8px 0; align-items: center;
+}
+.hm-cell { display: flex; flex-direction: column; gap: 2px; }
+.hm-cell.right { padding-left: 12px; }
+.hm-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.hm-value.green { color: var(--green); }
+.hm-value.cyan { color: var(--cyan); }
+.hm-value.blue { color: var(--blue); }
+.hm-value.purple { color: var(--purple); }
+.hm-label { font-size: 11px; color: var(--dim); font-weight: 500; }
+.hm-arrow { color: var(--mute); font-size: 14px; padding: 0 8px; opacity: 0.5; }
+
+/* ====== STAT GRID ====== */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+
+.stat-card.sc-cyan::before { background: var(--cyan); }
+.stat-card.sc-green::before { background: var(--green); }
+.stat-card.sc-purple::before { background: var(--purple); }
+.stat-card.sc-yellow::before { background: var(--yellow); }
+.stat-card.sc-blue::before { background: var(--blue); }
+
+.stat-card .stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card .stat-label {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 2px;
+}
+
+.stat-card .stat-sub {
+  font-size: 10px;
+  color: var(--mute);
+  margin-top: 1px;
+}
+
+/* ====== CONVERSATION FEED CARD ====== */
+.feed-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.feed-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--dim);
+}
+
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.badge-count {
+  background: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+.feed-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.feed-body.no-actions {
+  grid-template-columns: 1fr;
+}
+
+/* ====== LEFT COLUMN — Messages ====== */
+.messages-col {
+  overflow-y: auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.turn-group {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Turn separator */
+.turn-sep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px 6px;
+}
+
+.turn-sep-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.turn-sep-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--mute);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* Message rows */
+.msg-row {
+  padding: 6px 20px 6px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative;
+}
+
+.msg-border {
+  width: 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  align-self: stretch;
+  min-height: 20px;
+}
+
+.msg-border.yellow { background: var(--yellow); }
+.msg-border.green { background: var(--green); }
+.msg-border.purple { background: var(--purple); }
+
+.msg-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.msg-role {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.msg-role.user { color: var(--yellow); }
+.msg-role.assistant { color: var(--green); }
+.msg-role.thinking { color: var(--purple); font-size: 10px; }
+
+.model-tag {
+  font-size: 9px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--border-subtle);
+  color: var(--mute);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.duration-tag {
+  font-size: 9px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--purple-dim);
+  color: var(--purple);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.msg-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.msg-text.thinking-text {
+  font-style: italic;
+  color: var(--mute);
+  cursor: pointer;
+}
+
+.msg-text.thinking-text:hover {
+  color: var(--dim);
+}
+
+.msg-text .expand-hint {
+  font-size: 10px;
+  color: var(--purple);
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.msg-tokens {
+  float: right;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--mute);
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  margin-left: 12px;
+}
+
+/* NOW bar */
+.now-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.now-bar-line {
+  flex: 1;
+  height: 1px;
+  background: var(--green);
+  opacity: 0.5;
+}
+
+.now-bar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.now-bar-text {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--green);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 1px;
+}
+
+/* ====== RIGHT COLUMN — Actions ====== */
+.actions-col {
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 0;
+}
+
+.action-group {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.action-group:last-child {
+  border-bottom: none;
+}
+
+.action-turn-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--mute);
+  margin-bottom: 8px;
+}
+
+.action-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.action-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tool-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tool-chip.read { background: var(--blue-dim); color: var(--blue); }
+.tool-chip.write { background: var(--green-dim); color: var(--green); }
+.tool-chip.edit { background: var(--green-dim); color: var(--green); }
+.tool-chip.bash { background: var(--cyan-dim); color: var(--cyan); }
+.tool-chip.grep { background: var(--purple-dim); color: var(--purple); }
+.tool-chip.glob { background: var(--purple-dim); color: var(--purple); }
+
+.action-path {
+  font-size: 10px;
+  color: var(--mute);
+  font-family: 'JetBrains Mono', monospace;
+  word-break: break-all;
+  line-height: 1.4;
+  padding-top: 1px;
+}
+
+.impact-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--green-dim);
+  color: var(--green);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.action-footer {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--mute);
+  font-family: 'JetBrains Mono', monospace;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.action-empty {
+  padding: 20px 16px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--mute);
+}
+
+/* ====== FOOTER ====== */
+.footer {
+  height: 32px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--mute);
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.footer-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--yellow);
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.footer-motto {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+}
+
+.footer-motto .way {
+  color: var(--yellow);
+  font-weight: 600;
+}
+
+.footer-clock {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+}
+
+.aoa-brand {
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+/* ====== GENERATE MOCK BUTTON ====== */
+.mock-btn {
+  position: fixed;
+  bottom: 48px;
+  right: 24px;
+  z-index: 200;
+  padding: 10px 20px;
+  background: var(--cyan);
+  color: #000;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(34,211,238,0.3);
+  transition: all 0.15s;
+}
+
+.mock-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(34,211,238,0.4);
+}
+
+.mock-btn:active {
+  transform: translateY(0);
+}
+
+/* ====== SCROLLBAR ====== */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--mute); }
+
+/* ====== RESPONSIVE ====== */
+@media (max-width: 900px) {
+  .stat-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .feed-body {
+    grid-template-columns: 1fr;
+  }
+  .actions-col {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .nav {
+    padding: 0 12px;
+  }
+  .main {
+    padding: 12px;
+  }
+}
+
+/* Thinking expand */
+.thinking-full {
+  display: none;
+  font-size: 12px;
+  color: var(--dim);
+  line-height: 1.6;
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: var(--card-hover);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+}
+
+.thinking-full.expanded {
+  display: block;
+}
+</style>
+</head>
+<body>
+
+<!-- ====== NAV ====== -->
+<div class="nav">
+  <div class="nav-left">
+    <a class="nav-brand" href="overview.html">
+      <span class="angle">&ang;</span>
+      <span class="name">aOa</span>
+    </a>
+    <div class="nav-tabs">
+      <a class="nav-tab" href="live.html">Live</a>
+      <a class="nav-tab" href="recon.html">Recon</a>
+      <a class="nav-tab" href="intel.html">Intel</a>
+      <a class="nav-tab active" href="debrief.html">Debrief</a>
+      <a class="nav-tab" href="arsenal.html">Arsenal</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="status-badge mock">
+      <span class="dot"></span>
+      <span>mockup</span>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- ====== MAIN ====== -->
+<div class="main" id="mainContent">
+
+  <!-- Hero Row -->
+  <div class="hero-row">
+    <div class="hero-card-wrapper">
+      <div class="hero-card">
+        <div class="hero-label">DEBRIEF</div>
+        <div class="hero-headline" id="heroHeadline">
+          <!-- Rendered by JS -->
+        </div>
+        <div class="hero-support" id="heroSupport">
+          <span class="val g">7</span> turns<span class="dot">&middot;</span><span class="val c">97.0k</span> tokens<span class="dot">&middot;</span><span class="val g">69%</span> cache hit<span class="dot">&middot;</span><span class="val g">14.2k</span> saved
+        </div>
+      </div>
+    </div>
+    <div class="hero-metrics">
+      <div class="hm-cell">
+        <div class="hm-value cyan" id="hmInput">84.2k</div>
+        <div class="hm-label">input tokens</div>
+      </div>
+      <div class="hm-arrow">&rarr;</div>
+      <div class="hm-cell right">
+        <div class="hm-value blue" id="hmOutput">12.8k</div>
+        <div class="hm-label">output tokens</div>
+      </div>
+      <div class="hm-cell">
+        <div class="hm-value green" id="hmCacheReused">67.1k</div>
+        <div class="hm-label">cache reused</div>
+      </div>
+      <div class="hm-arrow">&rarr;</div>
+      <div class="hm-cell right">
+        <div class="hm-value green" id="hmSaved">14.2k</div>
+        <div class="hm-label">tokens saved</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stat-grid" id="statsGrid">
+    <div class="stat-card sc-cyan">
+      <div class="stat-value" style="color: var(--cyan)" id="statInput">84.2k</div>
+      <div class="stat-label">Input Tokens</div>
+      <div class="stat-sub">prompt + context</div>
+    </div>
+    <div class="stat-card sc-blue">
+      <div class="stat-value" style="color: var(--blue)" id="statOutput">12.8k</div>
+      <div class="stat-label">Output Tokens</div>
+      <div class="stat-sub">completions</div>
+    </div>
+    <div class="stat-card sc-green">
+      <div class="stat-value" style="color: var(--green)" id="statCacheRead">67.1k</div>
+      <div class="stat-label">Cache Read</div>
+      <div class="stat-sub">reused context</div>
+    </div>
+    <div class="stat-card sc-purple">
+      <div class="stat-value" style="color: var(--purple)" id="statCacheWrite">14.3k</div>
+      <div class="stat-label">Cache Write</div>
+      <div class="stat-sub">new cache entries</div>
+    </div>
+    <div class="stat-card sc-yellow">
+      <div class="stat-value" style="color: var(--yellow)" id="statCacheHit">94%</div>
+      <div class="stat-label">Cache Hit %</div>
+      <div class="stat-sub">read / (read+write)</div>
+    </div>
+  </div>
+
+  <!-- Conversation Feed Card -->
+  <div class="feed-card" id="feedCard">
+    <div class="feed-header">
+      <span class="feed-title">CONVERSATION FEED</span>
+      <span class="badge badge-count" id="feedBadge">7 messages</span>
+    </div>
+    <div class="feed-body" id="feedBody">
+      <!-- Left: Messages -->
+      <div class="messages-col" id="messagesCol"></div>
+      <!-- Right: Actions -->
+      <div class="actions-col" id="actionsCol"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ====== FOOTER ====== -->
+<div class="footer">
+  <div class="footer-left">
+    <span class="footer-dot"></span>
+    <span>Mock &middot; v1.0.0</span>
+  </div>
+  <div class="footer-right">
+    <span class="footer-motto"><span class="aoa-brand">aOa</span> learns &rarr; you build faster. <span class="way">This is the way.</span></span>
+    <span class="footer-clock" id="clock"></span>
+  </div>
+</div>
+
+<!-- Generate Mock Data button -->
+<button class="mock-btn" id="mockBtn">Generate Mock Data</button>
+
+<script>
+(function() {
+  'use strict';
+
+  // ====== THEME ======
+  var savedTheme = localStorage.getItem('aoa-theme');
+  if (savedTheme) {
+    document.documentElement.dataset.theme = savedTheme;
+  }
+  updateThemeIcon();
+
+  document.getElementById('themeToggle').addEventListener('click', function() {
+    var html = document.documentElement;
+    var isDark = html.dataset.theme === 'dark';
+    html.dataset.theme = isDark ? 'light' : 'dark';
+    localStorage.setItem('aoa-theme', html.dataset.theme);
+    updateThemeIcon();
+  });
+
+  function updateThemeIcon() {
+    var isDark = document.documentElement.dataset.theme === 'dark';
+    var icon = document.getElementById('themeIcon');
+    if (isDark) {
+      icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+    } else {
+      icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+    }
+  }
+
+  // ====== CLOCK ======
+  function updateClock() {
+    var now = new Date();
+    var h = String(now.getHours()).padStart(2, '0');
+    var m = String(now.getMinutes()).padStart(2, '0');
+    var s = String(now.getSeconds()).padStart(2, '0');
+    document.getElementById('clock').textContent = h + ':' + m + ':' + s;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // ====== MOCK DATA DEFINITIONS ======
+
+  var userPrompts = [
+    "There's a nil pointer panic in the socket handler when the daemon restarts mid-request. Can you track it down and fix it?",
+    "Can you also add a test for that edge case? I want to make sure it doesn't regress.",
+    "The search results are showing duplicate entries when the same file matches both a bigram and a keyword. What's going on?",
+    "Refactor the token counting in the tailer -- it's getting hard to follow with all the special cases.",
+    "Run the full test suite and fix anything that's broken.",
+    "The status line isn't updating after autotune runs. Check the observer hook.",
+    "Can you add a --json flag to the search command so I can pipe results?",
+    "The dashboard shows 0 for cache metrics even though the daemon is running. Debug it.",
+    "Update the GO-BOARD with what we just did this session.",
+    "Why is the enricher returning empty domains for 'kubernetes'? The atlas data should have it."
+  ];
+
+  var thinkingPreviews = [
+    "Let me trace the call stack from the socket handler through to the learner mutex acquisition...",
+    "I need to check if the nil check exists at the connection boundary or if it's deeper in the dispatch...",
+    "Looking at the dedup logic in result formatting -- the issue might be in how we merge hits from different sources...",
+    "The token counting has three paths: standard JSONL, chunked streaming, and the legacy fallback. Let me map them...",
+    "Running go test ./... and analyzing failures -- there are 2 failing tests related to the recent observer changes...",
+    "The status line writer depends on the observer callback, which should fire after every autotune cycle...",
+    "I'll need to add a new output formatter and wire it through the cobra command flags...",
+    "The cache metrics come from the session event parser. Let me check if the field names changed in the latest JSONL format...",
+    "Let me review the current GO-BOARD state and draft the session log entry...",
+    "Checking atlas/v1/ for kubernetes coverage -- it should be in the infrastructure domain file..."
+  ];
+
+  var thinkingFull = [
+    "The socket handler in internal/adapters/socket/server.go dispatches incoming JSON commands to handler functions. When the daemon restarts, any in-flight connections get a broken pipe, but the handler doesn't check for nil on the App reference before calling into it. The mutex acquisition in App.handleSearch assumes app.learner is initialized, but during restart there's a window where it's nil. I need to add a nil guard at the dispatch level and return a clean error to the client.",
+    "I should write a test that simulates a restart scenario. The test should: 1) start the daemon, 2) initiate a search request, 3) trigger a restart mid-handler, 4) verify the client gets an error response instead of a panic. I can use a mock App with a channel-based restart signal.",
+    "The dedup happens in internal/domain/index/results.go formatResults(). When a file matches via both bigram lookup and keyword scan, it creates two separate Hit entries. The merge logic checks file path equality but the bigram hit has a normalized path while the keyword hit preserves the original. I need to normalize both before comparison.",
+    "There are three token counting paths because the JSONL format evolved. The original format had a single 'usage' field, then they added streaming chunks with partial counts, and the legacy sessions still have the old format. I should unify them into a single TokenAccumulator that handles all three.",
+    "Two tests are failing: TestAutotuneDecay and TestSearchObserver. The autotune test expects the old observer signature. The search observer test has a race condition in the mock -- it's not waiting for the async callback.",
+    "Found it. The status writer subscribes to autotune events via a callback, but the callback registration happens in App.init() which runs before the status writer is fully initialized. The fix is to register after all components are ready, or use a lazy initialization pattern."
+  ];
+
+  var assistantResponses = [
+    "Found it. The socket handler in `server.go` dispatches to `app.handleSearch()` without a nil guard. During daemon restart, `app.learner` is nil for ~200ms. Added a nil check at the dispatch level that returns `{\"error\": \"daemon restarting\"}` to the client. The fix is 3 lines.",
+    "Added `TestSocketRestartMidRequest` in `server_test.go`. It uses a channel to simulate the restart window, verifies the client receives a clean JSON error instead of a connection reset, and checks that subsequent requests succeed after the restart completes. All passing.",
+    "The dedup bug was in `formatResults()` -- bigram hits use normalized paths (`filepath.Clean`) but keyword hits preserve the original. Added `filepath.Clean` to the keyword path before the merge comparison. 3 duplicate entries eliminated in the test fixture.",
+    "Refactored the three token counting paths into a single `TokenAccumulator` struct with `Feed(event)` method. It auto-detects the format from the event structure. Reduced `tailer.go` from 340 to 210 lines. All existing tests pass unchanged.",
+    "Test results: 47/49 passing. Fixed `TestAutotuneDecay` (updated observer signature) and `TestSearchObserver` (added sync.WaitGroup to mock callback). Full suite green now.",
+    "The status line observer was registered in `App.init()` before the status writer was ready. Moved registration to `App.Start()` after all components initialize. Status line now updates within 100ms of autotune completing.",
+    "Added `--json` flag to `aoa search`. When set, output is a JSON array of `{path, line, score, domains}` objects. Wired through cobra, added `FormatJSON()` to the result formatter. Works with pipes: `aoa search kubernetes --json | jq '.[] | .path'`.",
+    "The dashboard reads cache metrics from `/api/metrics` which pulls from the session event stream. The JSONL field was renamed from `cache_read_tokens` to `cache_read_input_tokens` in the latest Claude format. Updated the parser mapping. Metrics now populate correctly."
+  ];
+
+  var toolActions = [
+    // Turn format: array of {tool, path, impact?}
+    [
+      { tool: 'Read', path: 'internal/adapters/socket/server.go' },
+      { tool: 'Read', path: 'internal/app/app.go' },
+      { tool: 'Read', path: 'internal/adapters/socket/server_test.go', impact: '\u2193 guided' },
+      { tool: 'Edit', path: 'internal/adapters/socket/server.go' }
+    ],
+    [
+      { tool: 'Read', path: 'internal/adapters/socket/server_test.go' },
+      { tool: 'Write', path: 'internal/adapters/socket/server_test.go' },
+      { tool: 'Bash', path: 'go test ./internal/adapters/socket/ -run TestSocketRestart -v' }
+    ],
+    [
+      { tool: 'Grep', path: 'internal/domain/index/ "formatResults"' },
+      { tool: 'Read', path: 'internal/domain/index/results.go' },
+      { tool: 'Edit', path: 'internal/domain/index/results.go' },
+      { tool: 'Bash', path: 'go test ./internal/domain/index/ -v' }
+    ],
+    [
+      { tool: 'Read', path: 'internal/adapters/tailer/tailer.go' },
+      { tool: 'Read', path: 'internal/adapters/claude/reader.go', impact: '\u2193 guided' },
+      { tool: 'Edit', path: 'internal/adapters/tailer/tailer.go' },
+      { tool: 'Edit', path: 'internal/adapters/claude/reader.go' },
+      { tool: 'Bash', path: 'go test ./internal/adapters/tailer/ ./internal/adapters/claude/ -v' }
+    ],
+    [
+      { tool: 'Bash', path: 'go test ./... -v 2>&1 | tail -20' },
+      { tool: 'Read', path: 'internal/domain/learner/learner_test.go', impact: '\u2193 guided' },
+      { tool: 'Edit', path: 'internal/domain/learner/learner_test.go' },
+      { tool: 'Read', path: 'internal/app/app_test.go' },
+      { tool: 'Edit', path: 'internal/app/app_test.go' },
+      { tool: 'Bash', path: 'go test ./... -v' }
+    ],
+    [
+      { tool: 'Grep', path: 'internal/ "observer" "status"' },
+      { tool: 'Read', path: 'internal/app/app.go' },
+      { tool: 'Read', path: 'internal/domain/status/writer.go' },
+      { tool: 'Edit', path: 'internal/app/app.go' }
+    ],
+    [
+      { tool: 'Read', path: 'cmd/aoa/search.go' },
+      { tool: 'Read', path: 'internal/domain/index/format.go', impact: '\u2193 guided' },
+      { tool: 'Edit', path: 'cmd/aoa/search.go' },
+      { tool: 'Edit', path: 'internal/domain/index/format.go' },
+      { tool: 'Bash', path: 'go build ./cmd/aoa/ && ./aoa search kubernetes --json | head -5' }
+    ],
+    [
+      { tool: 'Read', path: 'internal/adapters/web/handler.go' },
+      { tool: 'Grep', path: 'internal/adapters/claude/ "cache_read"' },
+      { tool: 'Read', path: 'internal/adapters/claude/reader.go' },
+      { tool: 'Edit', path: 'internal/adapters/claude/reader.go' },
+      { tool: 'Bash', path: 'go test ./internal/adapters/claude/ -run TestCacheMetrics -v' }
+    ]
+  ];
+
+  var modelTags = ['opus-4-6', 'opus-4-6', 'opus-4-6', 'opus-4-6', 'opus-4-6', 'opus-4-6', 'opus-4-6', 'opus-4-6'];
+
+  // ====== BUILD INITIAL DATA ======
+  function generateSessionData(turnCount) {
+    if (!turnCount) turnCount = 7;
+    turnCount = Math.min(turnCount, userPrompts.length, assistantResponses.length, toolActions.length);
+
+    var turns = [];
+    var totalInput = 0;
+    var totalOutput = 0;
+    var totalCacheRead = 0;
+    var totalCacheWrite = 0;
+
+    // Shuffle indices
+    var indices = [];
+    for (var i = 0; i < userPrompts.length; i++) indices.push(i);
+    shuffleArray(indices);
+    indices = indices.slice(0, turnCount);
+
+    var baseTime = new Date();
+    baseTime.setMinutes(baseTime.getMinutes() - turnCount * 4);
+
+    for (var t = 0; t < turnCount; t++) {
+      var idx = indices[t];
+      var inputTok = randInt(8000, 18000);
+      var outputTok = randInt(800, 3200);
+      var cacheRead = randInt(4000, 16000);
+      var cacheWrite = randInt(1000, 5000);
+      var hasThinking = Math.random() > 0.3;
+      var thinkDuration = hasThinking ? (randInt(2, 12) + '.' + randInt(0, 9) + 's') : null;
+
+      totalInput += inputTok;
+      totalOutput += outputTok;
+      totalCacheRead += cacheRead;
+      totalCacheWrite += cacheWrite;
+
+      var turnTime = new Date(baseTime.getTime() + t * (randInt(120, 360)) * 1000);
+
+      turns.push({
+        num: t + 1,
+        timestamp: formatTime(turnTime),
+        user: userPrompts[idx],
+        hasThinking: hasThinking,
+        thinkingPreview: thinkingPreviews[Math.min(idx, thinkingPreviews.length - 1)],
+        thinkingFull: thinkingFull[Math.min(idx, thinkingFull.length - 1)] || thinkingPreviews[Math.min(idx, thinkingPreviews.length - 1)],
+        thinkDuration: thinkDuration,
+        assistant: assistantResponses[idx],
+        model: modelTags[Math.min(idx, modelTags.length - 1)],
+        inputTokens: inputTok,
+        outputTokens: outputTok,
+        actions: toolActions[idx] || []
+      });
+    }
+
+    var cacheHitPct = totalCacheRead + totalCacheWrite > 0
+      ? Math.round((totalCacheRead / (totalCacheRead + totalCacheWrite)) * 100)
+      : 0;
+
+    // Compute guided saves
+    var guidedCount = 0;
+    turns.forEach(function(turn) {
+      turn.actions.forEach(function(a) {
+        if (a.impact) guidedCount++;
+      });
+    });
+    var savedTokens = guidedCount * randInt(3000, 6000);
+
+    return {
+      turns: turns,
+      stats: {
+        input: totalInput,
+        output: totalOutput,
+        cacheRead: totalCacheRead,
+        cacheWrite: totalCacheWrite,
+        cacheHitPct: cacheHitPct,
+        turnCount: turnCount,
+        totalTokens: totalInput + totalOutput,
+        savedTokens: savedTokens
+      }
+    };
+  }
+
+  function shuffleArray(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
+  }
+
+  function randInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function formatTokens(n) {
+    if (n >= 1000) {
+      return (n / 1000).toFixed(1) + 'k';
+    }
+    return String(n);
+  }
+
+  function formatTime(d) {
+    var h = String(d.getHours()).padStart(2, '0');
+    var m = String(d.getMinutes()).padStart(2, '0');
+    var s = String(d.getSeconds()).padStart(2, '0');
+    return h + ':' + m + ':' + s;
+  }
+
+  function randChoice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  // ====== HERO DATA ======
+  var HERO = {
+    identities: ['10x Developers', 'Relentless Builders', 'Precision Engineers', 'Full-Stack Architects', 'High-Velocity Teams'],
+    separators: ['minus the', 'instead of', 'bypassing', 'without'],
+    stories: [
+      { outcome: 'want to see exactly what happened and why', exclusion: 'scrolling through terminal history to reconstruct the timeline' },
+      { outcome: 'need to understand where tokens went and what they bought', exclusion: 'guessing why context filled up so fast' },
+      { outcome: 'want a clear record of every action and its impact', exclusion: 'losing track of what was searched, read, and written' },
+    ],
+  };
+
+  function renderHeroHeadline() {
+    var identity = randChoice(HERO.identities);
+    var story = randChoice(HERO.stories);
+    var separator = randChoice(HERO.separators);
+    document.getElementById('heroHeadline').innerHTML =
+      '<span class="hero-identity">' + identity + '</span> ' +
+      '<span class="hero-outcome">' + story.outcome + '</span>' +
+      '<span class="hero-pause">\u2009.\u2009.\u2009.</span>' +
+      '<span class="hero-line2">' +
+      '<span class="hero-separator">' + separator + '</span> ' +
+      '<span class="hero-exclusion">' + story.exclusion + '.</span>' +
+      '</span>';
+  }
+
+  // ====== RENDER ======
+  function render(data) {
+    var stats = data.stats;
+    var turns = data.turns;
+
+    // Hero headline
+    renderHeroHeadline();
+
+    // Hero support line
+    document.getElementById('heroSupport').innerHTML =
+      '<span class="val g">' + stats.turnCount + '</span> turns' +
+      '<span class="dot">&middot;</span>' +
+      '<span class="val c">' + formatTokens(stats.totalTokens) + '</span> tokens' +
+      '<span class="dot">&middot;</span>' +
+      '<span class="val g">' + stats.cacheHitPct + '%</span> cache hit' +
+      '<span class="dot">&middot;</span>' +
+      '<span class="val g">' + formatTokens(stats.savedTokens) + '</span> saved';
+
+    // Hero metrics
+    document.getElementById('hmInput').textContent = formatTokens(stats.input);
+    document.getElementById('hmOutput').textContent = formatTokens(stats.output);
+    document.getElementById('hmCacheReused').textContent = formatTokens(stats.cacheRead);
+    document.getElementById('hmSaved').textContent = formatTokens(stats.savedTokens);
+
+    // Stats
+    document.getElementById('statInput').textContent = formatTokens(stats.input);
+    document.getElementById('statOutput').textContent = formatTokens(stats.output);
+    document.getElementById('statCacheRead').textContent = formatTokens(stats.cacheRead);
+    document.getElementById('statCacheWrite').textContent = formatTokens(stats.cacheWrite);
+    document.getElementById('statCacheHit').textContent = stats.cacheHitPct + '%';
+
+    // Badge
+    document.getElementById('feedBadge').textContent = stats.turnCount + ' messages';
+
+    // Messages column
+    var messagesHtml = '';
+    var actionsHtml = '';
+
+    turns.forEach(function(turn, i) {
+      // Turn separator
+      messagesHtml += '<div class="turn-group">';
+      messagesHtml += '<div class="turn-sep">';
+      messagesHtml += '<span class="turn-sep-line"></span>';
+      messagesHtml += '<span class="turn-sep-label">Turn ' + turn.num + ' \u00b7 ' + turn.timestamp + '</span>';
+      messagesHtml += '<span class="turn-sep-line"></span>';
+      messagesHtml += '</div>';
+
+      // User message
+      messagesHtml += '<div class="msg-row">';
+      messagesHtml += '<div class="msg-border yellow"></div>';
+      messagesHtml += '<div class="msg-content">';
+      messagesHtml += '<div class="msg-meta"><span class="msg-role user">User</span></div>';
+      messagesHtml += '<div class="msg-text">' + escapeHtml(turn.user) + '</div>';
+      messagesHtml += '</div></div>';
+
+      // Thinking (optional)
+      if (turn.hasThinking) {
+        var thinkId = 'think-' + i;
+        messagesHtml += '<div class="msg-row">';
+        messagesHtml += '<div class="msg-border purple"></div>';
+        messagesHtml += '<div class="msg-content">';
+        messagesHtml += '<div class="msg-meta">';
+        messagesHtml += '<span class="msg-role thinking">THINKING</span>';
+        messagesHtml += '<span class="duration-tag">' + turn.thinkDuration + '</span>';
+        messagesHtml += '</div>';
+        messagesHtml += '<div class="msg-text thinking-text" onclick="toggleThinking(\'' + thinkId + '\')">';
+        messagesHtml += escapeHtml(turn.thinkingPreview);
+        messagesHtml += '<span class="expand-hint">[click to expand]</span>';
+        messagesHtml += '</div>';
+        messagesHtml += '<div class="thinking-full" id="' + thinkId + '">' + escapeHtml(turn.thinkingFull) + '</div>';
+        messagesHtml += '</div></div>';
+      }
+
+      // Assistant message
+      messagesHtml += '<div class="msg-row">';
+      messagesHtml += '<div class="msg-border green"></div>';
+      messagesHtml += '<div class="msg-content">';
+      messagesHtml += '<div class="msg-meta">';
+      messagesHtml += '<span class="msg-role assistant">Assistant</span>';
+      messagesHtml += '<span class="model-tag">' + turn.model + '</span>';
+      messagesHtml += '</div>';
+      messagesHtml += '<div class="msg-text">';
+      messagesHtml += '<span class="msg-tokens mono">' + formatTokens(turn.outputTokens) + '</span>';
+      messagesHtml += formatAssistantText(turn.assistant);
+      messagesHtml += '</div>';
+      messagesHtml += '</div></div>';
+
+      messagesHtml += '</div>'; // .turn-group
+
+      // Actions column
+      if (turn.actions.length > 0) {
+        actionsHtml += '<div class="action-group">';
+        actionsHtml += '<div class="action-turn-label">Turn ' + turn.num + ' Actions</div>';
+        actionsHtml += '<div class="action-items">';
+
+        var toolCounts = {};
+        var editCount = 0;
+        var guidedCount = 0;
+
+        turn.actions.forEach(function(action) {
+          var toolLower = action.tool.toLowerCase();
+          toolCounts[toolLower] = (toolCounts[toolLower] || 0) + 1;
+          if (toolLower === 'edit' || toolLower === 'write') editCount++;
+          if (action.impact) guidedCount++;
+
+          actionsHtml += '<div class="action-item">';
+          actionsHtml += '<span class="tool-chip ' + toolLower + '">' + action.tool + '</span>';
+          actionsHtml += '<span class="action-path">' + escapeHtml(action.path) + '</span>';
+          if (action.impact) {
+            actionsHtml += ' <span class="impact-badge">' + action.impact + '</span>';
+          }
+          actionsHtml += '</div>';
+        });
+
+        actionsHtml += '</div>';
+
+        var totalTools = turn.actions.length;
+        var footerParts = [totalTools + ' tool' + (totalTools !== 1 ? 's' : '')];
+        if (editCount > 0) footerParts.push(editCount + ' edit' + (editCount !== 1 ? 's' : ''));
+        if (guidedCount > 0) footerParts.push(guidedCount + ' guided');
+
+        actionsHtml += '<div class="action-footer">' + footerParts.join(' | ') + '</div>';
+        actionsHtml += '</div>';
+      }
+    });
+
+    // NOW bar
+    messagesHtml += '<div class="now-bar">';
+    messagesHtml += '<span class="now-bar-line"></span>';
+    messagesHtml += '<span class="now-bar-dot"></span>';
+    messagesHtml += '<span class="now-bar-text">NOW</span>';
+    messagesHtml += '<span class="now-bar-line"></span>';
+    messagesHtml += '</div>';
+
+    document.getElementById('messagesCol').innerHTML = messagesHtml;
+    document.getElementById('actionsCol').innerHTML = actionsHtml;
+
+    // Scroll messages to bottom
+    var messagesCol = document.getElementById('messagesCol');
+    messagesCol.scrollTop = messagesCol.scrollHeight;
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function formatAssistantText(text) {
+    // Highlight inline code
+    return escapeHtml(text).replace(/`([^`]+)`/g, '<code style="font-family: \'JetBrains Mono\', monospace; font-size: 12px; padding: 1px 5px; background: var(--card-hover); border: 1px solid var(--border-subtle); border-radius: 3px; color: var(--cyan);">$1</code>');
+  }
+
+  // Expose toggleThinking globally
+  window.toggleThinking = function(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.classList.toggle('expanded');
+    }
+  };
+
+  // ====== INITIAL RENDER ======
+  var currentData = generateSessionData(7);
+  render(currentData);
+
+  // ====== MOCK BUTTON ======
+  document.getElementById('mockBtn').addEventListener('click', function() {
+    var turnCount = randInt(5, 8);
+    currentData = generateSessionData(turnCount);
+    render(currentData);
+
+    // Flash the stats
+    var statEls = document.querySelectorAll('.stat-value');
+    statEls.forEach(function(el) {
+      el.classList.remove('pulse');
+      void el.offsetWidth; // force reflow
+      el.classList.add('pulse');
+    });
+  });
+
+})();
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-18 (Session 47) | **Phase**: Dashboard value metrics & 5-tab restructure
+> **Updated**: 2026-02-19 (Session 48) | **Phase**: Dashboard value metrics & 5-tab restructure
 > **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c (~260 active tests, 291 declared, 88% context)
 
 ---
@@ -71,14 +71,19 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Core engine complete (search, learner, session integration, CLI, dashboard). 315+ tests passing. Now building the value metrics layer and restructuring the dashboard to surface savings.
+**Current**: Core engine complete (search, learner, session integration, CLI, dashboard). ~260 active tests (291 declared). Now building the value metrics layer and restructuring the dashboard to surface savings.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
+
+**Design Decisions Locked** (Session 48):
+- **aOa Score** — Deferred. Not defined until data is flowing. Intel tab cleaned of coverage/confidence/momentum card.
+- **Arsenal = Value Proof Over Time** — Not a config/status page. Session-centric value evidence: actual vs counterfactual token usage, learning curve, per-session savings. System status is compact/secondary.
+- **Session as unit of measurement** — Each session gets a summary record (ID, date, prompts, reads, guided ratio, tokens saved, counterfactual). Multiple sessions per day. Chart is daily rollup, table is individual sessions.
+- **Counterfactual is defensible** — "Without aOa" = sum of full file sizes for guided reads + observed unguided costs. Not fabricated.
 
 **Needs Discussion** (before L1 implementation):
 - **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
 - **Real-time conversation** — Legacy Python showed real-time; Go dashboard with 2s poll should do better. Needs investigation.
-- **Intent score visualization** — Formula `coverage × confidence × momentum` (0-100). Traffic light vs number display?
 
 ---
 
@@ -90,7 +95,7 @@
 | [L0](#layer-0) | [L0.2](#l02) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Context window max lookup — map model tag to window size | Needed for runway projection | Lookup returns correct max for claude-3, gpt-4 |
 | [L0](#layer-0) | [L0.3](#l03) | | | | | | | x | L0.1 | 🟢 | ⚪ | ⚪ | Dual projection — with-aOa vs without-aOa burn rates | The core value comparison | Two projections diverge correctly under test load |
 | [L0](#layer-0) | [L0.4](#l04) | | | | | x | | x | L0.3 | 🟢 | ⚪ | ⚪ | Context runway API — `/api/runway` with both projections | Dashboard and CLI can show runway | API returns JSON with both projections and delta |
-| [L0](#layer-0) | [L0.5](#l05) | | | | | x | | x | L0.3 | 🟡 | ⚪ | ⚪ | Weekly rollup persistence — sessions-extended counter | Survives daemon restart | Counter persists in bbolt, resets weekly |
+| [L0](#layer-0) | [L0.5](#l05) | | | | | x | | x | L0.3 | 🟢 | ⚪ | ⚪ | Session summary persistence — per-session metrics in bbolt | Arsenal value proof, survives restart | Session record persists with tokens saved, guided ratio, counterfactual |
 | [L0](#layer-0) | [L0.6](#l06) | | | | | | x | x | - | 🟢 | ⚪ | ⚪ | Verify autotune fires every 50 prompts | Trust the learning cycle is working | Integration test: 50 prompts → autotune triggers |
 | [L0](#layer-0) | [L0.7](#l07) | | | | | | x | x | L0.6 | 🟢 | ⚪ | ⚪ | Autotune activity event — "cycle N, +P/-D/~X" | Visible learning progress in activity feed | Activity entry appears with correct promote/demote counts |
 | [L0](#layer-0) | [L0.8](#l08) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Write/Edit attrib = "productive" | Credit productive work correctly | Write/Edit tool events get "productive" attrib |
@@ -100,9 +105,9 @@
 | [L0](#layer-0) | [L0.12](#l012) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Target capture — preserve full query syntax, no normalization | Accurate activity display | Target column shows raw query as entered |
 | [L1](#layer-1) | [L1.1](#l11) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Rename tabs: Overview→Live, Learning→Intel, Conversation→Debrief | Brand alignment — tabs named by user intent | Tabs render with new names |
 | [L1](#layer-1) | [L1.2](#l12) | | | | | | | x | L1.1 | 🟢 | ⚪ | ⚪ | Add Recon tab (stub) — dimensional placeholder | Reserve the tab slot for v2 | Tab renders with placeholder content |
-| [L1](#layer-1) | [L1.3](#l13) | | | | | | | x | L1.1 | 🟢 | ⚪ | ⚪ | Add Arsenal tab — daemon status, config, alias instructions | System configuration at a glance | Shows config data from `/api/health` |
+| [L1](#layer-1) | [L1.3](#l13) | | | | | | | x | L1.1 | 🟢 | ⚪ | ⚪ | Add Arsenal tab — value proof over time, session history, savings chart | Prove aOa's ROI across sessions | Shows actual vs counterfactual, learning curve, session table |
 | [L1](#layer-1) | [L1.4](#l14) | | | | | | | | L1.1 | 🟢 | ⚪ | ⚪ | 5-tab header layout — responsive at <800px | Works on all screen sizes | Tabs don't wrap or overflow at narrow width |
-| [L1](#layer-1) | [L1.5](#l15) | | | | | x | | x | L1.3 | 🟢 | ⚪ | ⚪ | Arsenal API — `/api/config` for project root, paths, alias state | Backend for Arsenal tab | API returns project root, DB path, socket, alias status |
+| [L1](#layer-1) | [L1.5](#l15) | | | | | x | | x | L0.5, L1.3 | 🟢 | ⚪ | ⚪ | Arsenal API — `/api/sessions` for session summaries + `/api/config` | Backend for Arsenal charts and system strip | API returns session array with savings data + system config |
 | [L1](#layer-1) | [L1.6](#l16) | x | | | | | | x | L0.4 | 🟢 | ⚪ | ⚪ | Live tab hero — context runway as primary display | Lead with the value prop | Hero shows "47 min remaining" with dual projection |
 | [L1](#layer-1) | [L1.7](#l17) | | | | | | | x | L0.4 | 🟢 | ⚪ | ⚪ | Live tab metrics panel — savings-oriented cards | Replace vanity metrics with value | Cards show rolling avg speed, tokens saved, guided ratio |
 | [L1](#layer-1) | [L1.8](#l18) | | | | | | | x | L0.9, L0.10 | 🟢 | ⚪ | ⚪ | Dashboard: render token cost for Grep/Glob | Show unguided cost inline | Red-coded cost appears in activity impact column |
@@ -176,11 +181,24 @@ Two burn rate projections: with-aOa (actual observed) vs without-aOa (counterfac
 
 #### L0.5
 
-**Weekly rollup persistence**
+**Session summary persistence**
 
-Sessions-extended counter: "aOa gave you 3 extra sessions this week." Must survive daemon restart. Stored in bbolt learner bucket, resets on Monday.
+Per-session metrics record written to bbolt when session ends or daemon stops. Schema:
 
-**Files**: `adapters/bbolt/store.go`
+```
+session_summary {
+  session_id, date, start, end, duration_min,
+  prompts, tool_reads, tool_writes, tool_searches,
+  tool_grep, tool_glob, tool_bash,
+  guided_reads, unguided_reads, guided_ratio,
+  tokens_in, tokens_out, tokens_cache,
+  tokens_actual, tokens_counterfact, tokens_saved,
+}
+```
+
+Stored in `session_summaries` bucket, keyed by session ID. Arsenal reads this for daily rollups, learning curve, and value charts. Replaces the original "weekly counter" concept — individual session records are more flexible.
+
+**Files**: `adapters/bbolt/store.go`, `internal/app/app.go`
 
 #### L0.6
 
@@ -252,11 +270,19 @@ Preserve the full query/path syntax from tool calls as-is in the activity target
 - **Recon** (new) — Dimensional analysis view (stub until L5)
 - **Intel** (was Learning) — Domain rankings, intent score, n-gram metrics
 - **Debrief** (was Conversation) — Two-column conversation feed, tool actions
-- **Arsenal** (new) — Daemon status, config, aliases, performance
+- **Arsenal** (new) — Value proof over time: session savings chart, learning curve, session history table, compact system status
 
-**Design standard:** Hero row 160px min-height, 2:1 flex ratio. Headline pattern: `{Identity} {outcome} . . . {separator} {exclusion}.` Three-tier narrative: Hero (claim) → Stats grid (evidence) → Data (detail).
+**Design standard (locked Session 48):**
+- **Hero row**: `min-height: 160px`, `flex: 2` wrapper + `flex: 1` metrics. `gap: 16px`. Gradient: `conic-gradient(green, blue, purple, green)` rotating at 6s. Card padding: `18px 24px`, gap `8px`. Identity font 22px, headline 17px, support 13px.
+- **Hero metrics**: 2×2 grid with arrows. `font-size: 22px` values, `11px` labels.
+- **Stats grid**: `repeat(N, 1fr)`, `gap: 12px`. Card: `padding: 16px`, `border-radius: 12px`. Value: `26px`. Label: `12px`. Sub: `11px`. N varies by tab (5-6).
+- **Headline pattern**: `{Identity} {outcome} . . . {separator} {exclusion}.`
+- **Three-tier narrative**: Hero (claim) → Stats grid (evidence) → Data (detail).
+- **Nav**: 52px height. **Footer**: 36px height. Both identical across all tabs.
+- **Recon sidebar**: Card-styled (`border-radius: 16px`), grid-aligned with first stat card (`repeat(5, 1fr)` matching stats grid). Pill-based dimension toggles (color-coded by tier, wrapping), toggle switches per tier.
+- **Intel**: Domain table matches embedded dashboard: `#`, `@Domain` (purple), `Hits` (float, green, right-aligned), `Terms` (pills with hot/warm/cold states). N-gram sections: Bigrams (cyan), Cohits KW→Term (green), Cohits Term→Domain (purple).
 
-**Static mockups** (validated): `_throwaway_mockups/{live,recon,intel,debrief,arsenal}.html`
+**Static mockups** (validated Session 48): `_live_mockups/{live,recon,intel,debrief,arsenal}.html`
 
 #### L1.1
 
@@ -276,9 +302,19 @@ Placeholder tab for dimensional analysis. Shows "Dimensional scanning available 
 
 #### L1.3
 
-**Arsenal tab**
+**Arsenal tab — Value Proof Over Time**
 
-Daemon status (running/stopped, uptime, PID), project config (root, DB path, socket), alias setup instructions (`eval "$(aoa shell-init)"`), performance metrics (search speed, index size).
+Arsenal's identity: "Here's the proof aOa is working for you." Session-centric, not config-centric.
+
+Layout (top to bottom):
+1. **Hero** — Cumulative savings headline. Metrics: tokens saved → sessions extended, unguided cost → guided ratio.
+2. **Stats grid** (6 cards) — Tokens Saved, Unguided Cost, Sessions, Extended, Guided Ratio, Read Velocity.
+3. **Savings chart** (full width) — Daily rollup. Dual bars: red (without aOa) + green (with aOa). Gap = savings. Multiple sessions per day aggregated.
+4. **Bottom split** — Session history table (3/5 width, scrollable, individual sessions with hex IDs) | Learning curve canvas + compact system strip (2/5 width).
+
+Session table columns: Session (hex ID), Date+Time, Duration, Prompts, Reads, Guided %, Saved, Waste, Reads/Prompt.
+
+System status is a compact horizontal strip (not a card): running dot, PID, uptime, memory, DB size, files indexed.
 
 **Files**: `static/index.html`
 
@@ -294,7 +330,9 @@ Tabs should not wrap or overflow at <800px. Consider abbreviated labels or icon-
 
 **Arsenal API**
 
-`/api/config` returns: project root, DB path, socket path, alias status, daemon PID, uptime, search speed average.
+Two endpoints:
+- `/api/sessions` — Returns array of session summary records from bbolt. Each has: session_id, date, duration, prompts, reads, guided_ratio, tokens_saved, tokens_actual, tokens_counterfact. Used for savings chart (daily rollup), session history table, and learning curve.
+- `/api/config` — Returns: project root, DB path, socket path, daemon PID, uptime, memory, DB size, files indexed. Used for the compact system strip.
 
 **Files**: `web/server.go`
 
@@ -564,7 +602,7 @@ Append `S:-23 P:0 Q:-4` to search output. Negative = debt. Zero = clean. Visible
 
 **Recon tab**
 
-NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→method drill-down, severity scoring, acknowledge/dismiss per finding. Mockup validated in `_throwaway_mockups/recon.html`.
+NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→method drill-down, severity scoring, acknowledge/dismiss per finding. Mockup validated in `_live_mockups/recon.html`.
 
 **Files**: `static/index.html`
 
@@ -611,4 +649,4 @@ NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→m
 | Socket | `/tmp/aoa-{sha256(root)[:12]}.sock` |
 | Dashboard | `http://localhost:{port}` (port in `.aoa/http.port`) |
 | Session logs | `~/.claude/projects/{encoded-path}/*.jsonl` |
-| Mockups | `_throwaway_mockups/{live,recon,intel,debrief,arsenal}.html` |
+| Mockups | `_live_mockups/{live,recon,intel,debrief,arsenal}.html` |

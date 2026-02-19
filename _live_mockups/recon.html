@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aOa — Recon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+@property --gradient-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+[data-theme="dark"] {
+  --bg: #0c0c0e; --card: #161618; --card-hover: #1c1c1f;
+  --border: #252528; --border-subtle: #1e1e21;
+  --text: #e8e8ec; --text-secondary: #c4c4cc; --dim: #8b8b96; --mute: #55555f;
+  --green: #34d399; --green-dim: rgba(52,211,153,0.12);
+  --blue: #60a5fa; --blue-dim: rgba(96,165,250,0.12);
+  --purple: #c084fc; --purple-dim: rgba(192,132,252,0.12);
+  --cyan: #22d3ee; --cyan-dim: rgba(34,211,238,0.12);
+  --yellow: #fbbf24; --yellow-dim: rgba(251,191,36,0.12);
+  --red: #f87171; --red-dim: rgba(248,113,113,0.12);
+  --shadow: none; --nav-bg: rgba(12,12,14,0.82); --table-hover: rgba(255,255,255,0.03);
+  --sidebar-bg: #111113; --sidebar-hover: #1a1a1d;
+}
+
+[data-theme="light"] {
+  --bg: #f5f5f7; --card: #ffffff; --card-hover: #fafafa;
+  --border: #e5e5ea; --border-subtle: #ececee;
+  --text: #1d1d1f; --text-secondary: #3a3a3c; --dim: #6e6e73; --mute: #aeaeb2;
+  --green: #16a34a; --blue: #2563eb; --purple: #9333ea;
+  --cyan: #0891b2; --yellow: #d97706; --red: #dc2626;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06); --nav-bg: rgba(245,245,247,0.82); --table-hover: rgba(0,0,0,0.02);
+  --green-dim: rgba(22,163,74,0.1); --blue-dim: rgba(37,99,235,0.1);
+  --purple-dim: rgba(147,51,234,0.1); --cyan-dim: rgba(8,145,178,0.1);
+  --yellow-dim: rgba(217,119,6,0.1); --red-dim: rgba(220,38,38,0.1);
+  --sidebar-bg: #eeeef0; --sidebar-hover: #e2e2e5;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.mono { font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; }
+
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* ====== NAV ====== */
+.nav {
+  height: 52px; flex-shrink: 0; position: sticky; top: 0; z-index: 100;
+  background: var(--nav-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border); padding: 0 24px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-left { display: flex; align-items: center; gap: 8px; }
+.nav-brand { display: flex; align-items: center; gap: 6px; margin-right: 20px; text-decoration: none; }
+.nav-brand .angle { font-size: 22px; color: var(--green); font-weight: 700; line-height: 1; }
+.nav-brand .name { font-size: 16px; font-weight: 700; color: var(--cyan); letter-spacing: 0.5px; }
+.nav-tabs { display: flex; gap: 4px; }
+.nav-tab {
+  padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--dim);
+  cursor: pointer; transition: color 0.15s; user-select: none;
+  border: none; background: none; position: relative; text-decoration: none;
+}
+.nav-tab:hover { color: var(--text-secondary); }
+.nav-tab.active { color: var(--green); }
+.nav-tab.active::after {
+  content: ''; position: absolute; bottom: -1px; left: 8px; right: 8px;
+  height: 2px; background: var(--green); border-radius: 1px;
+}
+.nav-right { display: flex; align-items: center; gap: 12px; }
+.status-badge { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+.status-badge .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.status-badge.mock { background: var(--yellow-dim); color: var(--yellow); }
+.status-badge.mock .dot { background: var(--yellow); animation: blink 2s ease-in-out infinite; }
+.theme-toggle {
+  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--card);
+  cursor: pointer; color: var(--dim); transition: all 0.15s; font-size: 16px; line-height: 1;
+}
+.theme-toggle:hover { border-color: var(--mute); color: var(--text); }
+
+/* ====== HERO ROW ====== */
+.hero-row {
+  display: flex; gap: 16px; flex-shrink: 0; min-height: 160px;
+}
+
+.hero-card-wrapper {
+  flex: 2; min-width: 0; position: relative; border-radius: 18px; padding: 2px;
+  background: conic-gradient(from var(--gradient-angle), var(--green), var(--blue), var(--purple), var(--green));
+  animation: gradient-rotate 6s linear infinite;
+}
+
+@keyframes gradient-rotate { 0% { --gradient-angle: 0deg; } 100% { --gradient-angle: 360deg; } }
+
+.hero-card {
+  background: var(--card); border-radius: 16px; padding: 18px 24px;
+  height: 100%; display: flex; flex-direction: column; gap: 8px; border: none;
+}
+
+.hero-label {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--mute);
+}
+
+.hero-headline { line-height: 1.4; font-size: 17px; }
+.hero-identity { font-size: 22px; font-weight: 700; background: linear-gradient(135deg, var(--green), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.hero-outcome { font-weight: 500; color: var(--text-secondary); }
+.hero-pause { font-weight: 700; color: var(--cyan); letter-spacing: 3px; }
+.hero-line2 { display: block; padding-left: 33%; margin-top: 2px; }
+.hero-separator { font-weight: 600; color: var(--cyan); }
+.hero-exclusion { font-weight: 500; color: var(--dim); }
+
+.hero-support { margin-top: auto; font-size: 13px; color: var(--dim); line-height: 1.5; }
+.hero-support .val { font-weight: 600; }
+.hero-support .val.g { color: var(--green); }
+.hero-support .val.c { color: var(--cyan); }
+.hero-support .val.r { color: var(--red); }
+.hero-support .val.y { color: var(--yellow); }
+.hero-support .val.b { color: var(--blue); }
+.hero-support .val.p { color: var(--purple); }
+.hero-support .dot { color: var(--mute); margin: 0 10px; opacity: 0.5; }
+
+.hero-metrics {
+  flex: 1; flex-shrink: 0; background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 16px 20px; box-shadow: var(--shadow);
+  display: grid; grid-template-columns: 1fr auto 1fr; grid-template-rows: 1fr 1fr;
+  gap: 8px 0; align-items: center;
+}
+.hm-cell { display: flex; flex-direction: column; gap: 2px; }
+.hm-cell.right { padding-left: 12px; }
+.hm-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.hm-value.green { color: var(--green); }
+.hm-value.cyan { color: var(--cyan); }
+.hm-value.red { color: var(--red); }
+.hm-value.purple { color: var(--purple); }
+.hm-label { font-size: 11px; color: var(--dim); font-weight: 500; }
+.hm-arrow { color: var(--mute); font-size: 14px; padding: 0 8px; opacity: 0.5; }
+
+/* ====== STATS GRID — identical to live.html ====== */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+
+.stat-card.cyan::before    { background: var(--cyan); }
+.stat-card.green::before   { background: var(--green); }
+.stat-card.blue::before    { background: var(--blue); }
+.stat-card.purple::before  { background: var(--purple); }
+.stat-card.yellow::before  { background: var(--yellow); }
+.stat-card.red::before     { background: var(--red); }
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.stat-card.cyan .stat-value   { color: var(--cyan); }
+.stat-card.green .stat-value  { color: var(--green); }
+.stat-card.blue .stat-value   { color: var(--blue); }
+.stat-card.purple .stat-value { color: var(--purple); }
+.stat-card.yellow .stat-value { color: var(--yellow); }
+.stat-card.red .stat-value    { color: var(--red); }
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dim);
+  margin-bottom: 2px;
+}
+
+.stat-sub {
+  font-size: 11px;
+  color: var(--mute);
+}
+
+/* ====== TOP SECTION — hero + stats above the split ====== */
+.top-section {
+  flex-shrink: 0;
+  padding: 24px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ====== LAYOUT: matches stats-grid columns exactly ====== */
+.layout {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  padding: 0 24px 24px;
+}
+
+/* ====== SIDEBAR — 1 column, aligned with first stat card ====== */
+.sidebar {
+  grid-column: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+  min-height: 0;
+}
+
+.sidebar-header {
+  padding: 14px 16px 8px; font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 600; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--mute);
+}
+
+.sidebar-footer {
+  margin-top: auto; padding: 10px 16px;
+  font-size: 11px; color: var(--mute);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sidebar-footer span { font-weight: 600; color: var(--dim); }
+
+/* Tier group */
+.tier {
+  margin-bottom: 2px;
+}
+
+.tier-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px; cursor: pointer; user-select: none; transition: background 0.1s;
+}
+
+.tier-header:hover { background: var(--card-hover); }
+
+/* Toggle switch */
+.tier-toggle {
+  width: 28px; height: 14px; border-radius: 7px; flex-shrink: 0;
+  position: relative; cursor: pointer; transition: background 0.2s;
+}
+
+.tier-toggle::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #fff; transition: transform 0.2s;
+}
+
+.tier-toggle.on::after { transform: translateX(14px); }
+
+.tier.security .tier-toggle.on { background: var(--red); }
+.tier.performance .tier-toggle.on { background: var(--yellow); }
+.tier.quality .tier-toggle.on { background: var(--blue); }
+.tier.compliance .tier-toggle.on { background: var(--purple); }
+.tier.architecture .tier-toggle.on { background: var(--cyan); }
+.tier.observability .tier-toggle.on { background: var(--green); }
+.tier-toggle.off { background: var(--border); }
+
+.tier-label-group { flex: 1; min-width: 0; }
+
+.tier-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+.tier.security .tier-label { color: var(--red); }
+.tier.performance .tier-label { color: var(--yellow); }
+.tier.quality .tier-label { color: var(--blue); }
+.tier.compliance .tier-label { color: var(--purple); }
+.tier.architecture .tier-label { color: var(--cyan); }
+.tier.observability .tier-label { color: var(--green); }
+
+.tier-desc {
+  font-size: 10px; color: var(--mute); font-weight: 400;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.tier-count {
+  font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums;
+  padding: 1px 6px; border-radius: 8px; min-width: 20px; text-align: center;
+  flex-shrink: 0;
+}
+
+.tier.security .tier-count { background: var(--red-dim); color: var(--red); }
+.tier.performance .tier-count { background: var(--yellow-dim); color: var(--yellow); }
+.tier.quality .tier-count { background: var(--blue-dim); color: var(--blue); }
+.tier.compliance .tier-count { background: var(--purple-dim); color: var(--purple); }
+.tier.architecture .tier-count { background: var(--cyan-dim); color: var(--cyan); }
+.tier.observability .tier-count { background: var(--green-dim); color: var(--green); }
+
+.tier-header.tier-off .tier-label { opacity: 0.4; text-decoration: line-through; }
+.tier-header.tier-off .tier-desc { opacity: 0.3; }
+.tier-header.tier-off + .tier-pills { opacity: 0.25; pointer-events: none; }
+
+/* Dimension pills */
+.tier-pills {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 2px 16px 10px;
+}
+
+.dim-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 500; padding: 3px 8px; border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap; user-select: none;
+}
+
+/* Active pill states — colored */
+.tier.security .dim-pill.active { background: var(--red-dim); color: var(--red); }
+.tier.performance .dim-pill.active { background: var(--yellow-dim); color: var(--yellow); }
+.tier.quality .dim-pill.active { background: var(--blue-dim); color: var(--blue); }
+.tier.compliance .dim-pill.active { background: var(--purple-dim); color: var(--purple); }
+.tier.architecture .dim-pill.active { background: var(--cyan-dim); color: var(--cyan); }
+.tier.observability .dim-pill.active { background: var(--green-dim); color: var(--green); }
+
+.dim-pill.active:hover { filter: brightness(1.15); }
+
+/* Inactive pill — muted */
+.dim-pill.inactive {
+  background: var(--border-subtle); color: var(--mute);
+  text-decoration: line-through; opacity: 0.5;
+}
+
+.dim-pill.inactive:hover { opacity: 0.7; }
+
+.dim-pill .pill-count {
+  font-weight: 700; font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.dim-toggle.active .dim-badge { color: var(--dim); }
+
+/* ====== MAIN CONTENT — spans columns 2-5 ====== */
+.main {
+  grid-column: 2 / 6;
+  overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; gap: 16px;
+  min-width: 0; min-height: 0;
+}
+
+/* Tree */
+.tree-card {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 16px; box-shadow: var(--shadow);
+}
+
+.tree-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; flex-shrink: 0;
+}
+
+.tree-title {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim);
+  display: flex; align-items: center; gap: 0;
+}
+
+.tree-title .bc-sep {
+  margin: 0 6px; color: var(--mute); font-size: 10px; letter-spacing: 0;
+}
+
+.tree-title .bc-link {
+  cursor: pointer; color: var(--mute); transition: color 0.15s; letter-spacing: 0;
+  text-transform: none; font-weight: 500;
+}
+
+.tree-title .bc-link:hover { color: var(--cyan); }
+
+.tree-title .bc-current {
+  color: var(--text-secondary); letter-spacing: 0; text-transform: none; font-weight: 500;
+}
+
+.tree-badge {
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+  background: var(--cyan-dim); color: var(--cyan); font-variant-numeric: tabular-nums;
+}
+
+.tree-wrap {
+  flex: 1; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: 10px;
+}
+
+.tree-row {
+  display: flex; align-items: center; padding: 9px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer; transition: background 0.1s; gap: 8px;
+}
+.tree-row:hover { background: var(--table-hover); }
+.tree-row:last-child { border-bottom: none; }
+
+.tree-icon { flex-shrink: 0; width: 18px; font-size: 12px; color: var(--mute); text-align: center; }
+.tree-icon.folder { color: var(--yellow); }
+.tree-icon.file { color: var(--dim); }
+.tree-icon.method { color: var(--cyan); }
+
+.tree-name {
+  flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; min-width: 0;
+}
+
+.tree-col-header {
+  display: flex; align-items: center; padding: 6px 14px; gap: 8px;
+  border-bottom: 1px solid var(--border); background: var(--card-hover);
+  border-radius: 10px 10px 0 0;
+}
+
+.tree-col-header .col-name { flex: 1; min-width: 0; }
+.tree-col-header .col-dim {
+  width: 36px; text-align: center; font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0;
+}
+
+.col-dim.security { color: var(--red); }
+.col-dim.performance { color: var(--yellow); }
+.col-dim.quality { color: var(--blue); }
+.col-dim.compliance { color: var(--purple); }
+.col-dim.architecture { color: var(--cyan); }
+.col-dim.observability { color: var(--green); }
+.col-dim { cursor: pointer; transition: opacity 0.15s; user-select: none; border-radius: 4px; padding: 2px 4px; }
+.col-dim:hover { opacity: 0.7; }
+.col-dim.off { opacity: 0.25; text-decoration: line-through; }
+
+.tree-dims { display: flex; gap: 8px; flex-shrink: 0; }
+
+.dim-num {
+  width: 36px; text-align: center; font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.dim-num.zero { color: var(--border); }
+.dim-num.security { color: var(--red); }
+.dim-num.performance { color: var(--yellow); }
+.dim-num.quality { color: var(--blue); }
+.dim-num.compliance { color: var(--purple); }
+.dim-num.architecture { color: var(--cyan); }
+.dim-num.observability { color: var(--green); }
+
+.tree-severity { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; }
+.tree-severity.critical { background: var(--red); }
+.tree-severity.warning { background: var(--yellow); }
+.tree-severity.info { background: var(--blue); }
+
+.tree-score { flex-shrink: 0; width: 44px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.tree-score-fill { height: 100%; border-radius: 2px; }
+.tree-score-fill.high { background: var(--red); }
+.tree-score-fill.medium { background: var(--yellow); }
+.tree-score-fill.low { background: var(--green); }
+
+.tree-chevron { flex-shrink: 0; font-size: 10px; color: var(--mute); width: 14px; text-align: center; }
+
+/* Finding detail rows */
+.finding-row {
+  display: flex; align-items: center; padding: 6px 14px 6px 44px;
+  border-bottom: 1px solid var(--border-subtle); gap: 8px; font-size: 12px;
+  background: var(--bg);
+}
+.finding-row:last-child { border-bottom: none; }
+
+.finding-sev {
+  flex-shrink: 0; font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.3px; padding: 1px 5px; border-radius: 3px; white-space: nowrap;
+}
+.finding-sev.critical { background: var(--red-dim); color: var(--red); }
+.finding-sev.warning { background: var(--yellow-dim); color: var(--yellow); }
+.finding-sev.info { background: var(--blue-dim); color: var(--blue); }
+
+.finding-id { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary); font-weight: 500; white-space: nowrap; }
+.finding-desc { flex: 1; color: var(--dim); font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.finding-line { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--mute); white-space: nowrap; flex-shrink: 0; }
+
+/* ====== FOOTER ====== */
+.footer {
+  height: 36px; flex-shrink: 0; background: var(--card);
+  border-top: 1px solid var(--border); padding: 0 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: var(--mute);
+}
+.footer-left { display: flex; align-items: center; gap: 16px; }
+.footer-online { display: flex; align-items: center; gap: 6px; }
+.footer-online .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 2s ease-in-out infinite; }
+.footer-tagline .way { color: var(--yellow); font-weight: 600; }
+.footer-right { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--mute); font-variant-numeric: tabular-nums; }
+
+/* Generate button */
+.gen-btn {
+  position: fixed; bottom: 52px; right: 24px; z-index: 200;
+  padding: 10px 22px; background: var(--cyan); color: #000;
+  font-size: 13px; font-weight: 600; border: none; border-radius: 24px;
+  cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 16px rgba(34,211,238,0.25);
+}
+.gen-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(34,211,238,0.35); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--mute); }
+
+@media (max-width: 1100px) {
+  .stats-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 900px) {
+  .hero-row { flex-direction: column; }
+  .hero-metrics { width: 100%; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 800px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { grid-column: 1; }
+  .main { grid-column: 1; }
+  .tier-pills { padding: 2px 12px 10px; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-left">
+    <a class="nav-brand" href="live.html"><span class="angle">&ang;</span><span class="name">aOa</span></a>
+    <div class="nav-tabs">
+      <a class="nav-tab" href="live.html">Live</a>
+      <a class="nav-tab active" href="recon.html">Recon</a>
+      <a class="nav-tab" href="intel.html">Intel</a>
+      <a class="nav-tab" href="debrief.html">Debrief</a>
+      <a class="nav-tab" href="arsenal.html">Arsenal</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="status-badge mock"><span class="dot"></span> mock</div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme"><span id="themeIcon"></span></button>
+  </div>
+</nav>
+
+<!-- ====== TOP SECTION: Hero + Stats (full width, above split) ====== -->
+<div class="top-section">
+
+  <!-- Hero Row -->
+  <div class="hero-row">
+    <div class="hero-card-wrapper">
+      <div class="hero-card">
+        <div class="hero-label">RECON</div>
+        <div class="hero-headline" id="heroHeadline"></div>
+        <div class="hero-support" id="heroSupport"></div>
+      </div>
+    </div>
+
+    <div class="hero-metrics">
+      <div class="hm-cell">
+        <div class="hm-value green" id="hmFilesScanned">24</div>
+        <div class="hm-label">files scanned</div>
+      </div>
+      <div class="hm-arrow">&rarr;</div>
+      <div class="hm-cell right">
+        <div class="hm-value red" id="hmFindings">43</div>
+        <div class="hm-label">findings</div>
+      </div>
+      <div class="hm-cell">
+        <div class="hm-value red" id="hmCritical">4</div>
+        <div class="hm-label">critical</div>
+      </div>
+      <div class="hm-arrow">&rarr;</div>
+      <div class="hm-cell right">
+        <div class="hm-value green" id="hmClean">14</div>
+        <div class="hm-label">clean files</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card green"><div class="stat-value" id="statFiles">24</div><div class="stat-label">Files Scanned</div><div class="stat-sub">across project</div></div>
+    <div class="stat-card red"><div class="stat-value" id="statFindings">43</div><div class="stat-label">Findings</div><div class="stat-sub">total detections</div></div>
+    <div class="stat-card red"><div class="stat-value" id="statCritical">4</div><div class="stat-label">Critical</div><div class="stat-sub">immediate attention</div></div>
+    <div class="stat-card yellow"><div class="stat-value" id="statWarnings">18</div><div class="stat-label">Warnings</div><div class="stat-sub">should review</div></div>
+    <div class="stat-card purple"><div class="stat-value" id="statDims">14</div><div class="stat-label">Dimensions</div><div class="stat-sub"><span id="activeCount">14</span> of <span id="totalCount">14</span> active</div></div>
+  </div>
+
+</div>
+
+<!-- ====== LAYOUT: SIDEBAR + MAIN ====== -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">Dimensions</div>
+    <div class="sidebar-footer"><span id="activeCount2">14</span> of <span id="totalCount2">14</span> active</div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+    <div class="tree-card">
+      <div class="tree-header">
+        <span class="tree-title"><span class="bc-link" onclick="navigateTo('root')">Root</span></span>
+        <span class="tree-badge" id="treeBadge">10 directories</span>
+      </div>
+      <div class="tree-wrap" id="treeWrap"></div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <div class="footer-left">
+    <span class="footer-online"><span class="dot"></span> Online</span>
+    <span>v1.0.0</span>
+    <span class="footer-tagline">aOa learns &rarr; you build faster. <span class="way">This is the way.</span></span>
+  </div>
+  <div class="footer-right" id="footerClock">00:00:00</div>
+</footer>
+
+<button class="gen-btn" id="genBtn">Generate Mock Data</button>
+
+<script>
+// ====== THEME ======
+const html = document.documentElement;
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  document.getElementById('themeIcon').textContent = next === 'dark' ? '\u263D' : '\u2600';
+  localStorage.setItem('aoa-theme', next);
+});
+(function() {
+  const t = localStorage.getItem('aoa-theme') || 'dark';
+  html.setAttribute('data-theme', t);
+  document.getElementById('themeIcon').textContent = t === 'dark' ? '\u263D' : '\u2600';
+})();
+
+// ====== CLOCK ======
+setInterval(() => {
+  document.getElementById('footerClock').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+}, 1000);
+
+// ====== HELPERS ======
+function randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+function randChoice(a) { return a[Math.floor(Math.random() * a.length)]; }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ====== HERO DATA ======
+var HERO = {
+  identities: ['10x Developers', 'Relentless Builders', 'Precision Engineers', 'Full-Stack Architects', 'High-Velocity Teams'],
+  separators: ['minus the', 'instead of', 'bypassing', 'without'],
+  stories: [
+    { outcome: 'want full visibility into codebase risk', exclusion: 'manual code review that misses what matters' },
+    { outcome: 'need security and quality concerns surfaced before they ship', exclusion: 'audit surprises discovered in production' },
+    { outcome: 'want dimensional intelligence across every file', exclusion: 'blind spots hiding in code nobody reviews' },
+  ],
+};
+
+function renderHeroHeadline() {
+  var identity = randChoice(HERO.identities);
+  var story = randChoice(HERO.stories);
+  var separator = randChoice(HERO.separators);
+  document.getElementById('heroHeadline').innerHTML =
+    '<span class="hero-identity">' + identity + '</span> ' +
+    '<span class="hero-outcome">' + story.outcome + '</span>' +
+    '<span class="hero-pause">\u2009.\u2009.\u2009.</span>' +
+    '<span class="hero-line2">' +
+    '<span class="hero-separator">' + separator + '</span> ' +
+    '<span class="hero-exclusion">' + story.exclusion + '.</span>' +
+    '</span>';
+}
+
+// ====== DIMENSION DEFINITIONS ======
+// Everything here is detectable by AC pattern matching + tree-sitter AST on code files only.
+const TIERS = [
+  {
+    id: 'security', label: 'Security', color: 'red', desc: 'Injection, secrets, auth, crypto',
+    dimensions: [
+      { id: 'injection',  label: 'Injection',      findings: [
+        { id: 'sql_injection', label: 'String concatenation into SQL query', severity: 'critical' },
+        { id: 'command_injection', label: 'Unsanitized input passed to exec/system', severity: 'critical' },
+        { id: 'xss', label: 'Unescaped user input in HTML template', severity: 'critical' },
+        { id: 'ldap_injection', label: 'Unescaped input in LDAP filter', severity: 'critical' },
+      ]},
+      { id: 'secrets',    label: 'Secrets',         findings: [
+        { id: 'hardcoded_password', label: 'Hardcoded password in source', severity: 'critical' },
+        { id: 'hardcoded_api_key', label: 'API key or token literal in code', severity: 'critical' },
+        { id: 'private_key_literal', label: 'Private key material embedded in source', severity: 'critical' },
+        { id: 'secret_in_log', label: 'Sensitive field name written to log output', severity: 'warning' },
+      ]},
+      { id: 'auth',       label: 'Auth Gaps',       findings: [
+        { id: 'missing_auth_guard', label: 'HTTP handler without authentication check', severity: 'warning' },
+        { id: 'weak_session', label: 'Session token without expiry or rotation', severity: 'warning' },
+        { id: 'unvalidated_redirect', label: 'Redirect URL sourced from user input', severity: 'warning' },
+      ]},
+      { id: 'crypto',     label: 'Cryptography',    findings: [
+        { id: 'weak_hash', label: 'MD5 or SHA1 used for security purpose', severity: 'warning' },
+        { id: 'insecure_random', label: 'math/rand used where crypto/rand needed', severity: 'warning' },
+        { id: 'hardcoded_iv', label: 'Hardcoded initialization vector or salt', severity: 'info' },
+        { id: 'ecb_mode', label: 'ECB cipher mode (no diffusion)', severity: 'warning' },
+      ]},
+      { id: 'path',       label: 'Path Traversal',  findings: [
+        { id: 'path_traversal', label: 'User input in file path without sanitization', severity: 'critical' },
+        { id: 'symlink_follow', label: 'File operation follows symlinks without check', severity: 'warning' },
+      ]},
+    ]
+  },
+  {
+    id: 'performance', label: 'Performance', color: 'yellow', desc: 'Queries, memory, concurrency, leaks',
+    dimensions: [
+      { id: 'queries',    label: 'Query Patterns',  findings: [
+        { id: 'n_plus_one', label: 'Database call inside loop body', severity: 'critical' },
+        { id: 'select_star', label: 'SELECT * without column projection', severity: 'info' },
+        { id: 'missing_limit', label: 'Query without LIMIT clause', severity: 'warning' },
+      ]},
+      { id: 'memory',     label: 'Memory',          findings: [
+        { id: 'unbounded_alloc', label: 'Allocation sized from user input without cap', severity: 'warning' },
+        { id: 'large_struct_copy', label: 'Large struct passed by value (>256 bytes)', severity: 'warning' },
+        { id: 'slice_no_prealloc', label: 'Append in loop without preallocated capacity', severity: 'info' },
+      ]},
+      { id: 'concurrency',label: 'Concurrency',     findings: [
+        { id: 'mutex_over_io', label: 'Lock held across I/O or network call', severity: 'warning' },
+        { id: 'goroutine_no_cancel', label: 'Goroutine launched without cancellation path', severity: 'warning' },
+        { id: 'channel_no_close', label: 'Channel created but never closed', severity: 'info' },
+      ]},
+      { id: 'resources',  label: 'Resource Leaks',  findings: [
+        { id: 'unclosed_body', label: 'HTTP response body opened without defer Close', severity: 'warning' },
+        { id: 'unclosed_file', label: 'File opened without defer Close', severity: 'warning' },
+        { id: 'unclosed_conn', label: 'Connection opened without cleanup', severity: 'warning' },
+      ]},
+    ]
+  },
+  {
+    id: 'quality', label: 'Quality', color: 'blue', desc: 'Complexity, errors, dead code',
+    dimensions: [
+      { id: 'complexity', label: 'Complexity',      findings: [
+        { id: 'god_function', label: 'Function exceeds cyclomatic complexity threshold', severity: 'warning' },
+        { id: 'deep_nesting', label: 'Control flow nesting exceeds 4 levels', severity: 'warning' },
+        { id: 'too_many_params', label: 'Function signature has >5 parameters', severity: 'info' },
+        { id: 'long_function', label: 'Function exceeds 100 lines', severity: 'info' },
+      ]},
+      { id: 'errors',     label: 'Error Handling',  findings: [
+        { id: 'ignored_error', label: 'Error return value assigned to blank identifier', severity: 'warning' },
+        { id: 'panic_in_lib', label: 'panic() called in library/non-main package', severity: 'warning' },
+        { id: 'empty_catch', label: 'Empty catch/recover block swallows error', severity: 'warning' },
+        { id: 'bare_return', label: 'Named return with bare return obscures value', severity: 'info' },
+      ]},
+      { id: 'dead_code',  label: 'Dead Code',       findings: [
+        { id: 'unreachable', label: 'Code after return/break/continue', severity: 'info' },
+        { id: 'unused_param', label: 'Function parameter never referenced', severity: 'info' },
+        { id: 'commented_code', label: 'Large block of commented-out code', severity: 'info' },
+      ]},
+      { id: 'conventions',label: 'Conventions',      findings: [
+        { id: 'naming', label: 'Identifier violates language naming convention', severity: 'info' },
+        { id: 'magic_number', label: 'Unexplained numeric literal (not 0/1)', severity: 'info' },
+        { id: 'long_line', label: 'Line exceeds 120 characters', severity: 'info' },
+      ]},
+    ]
+  },
+  {
+    id: 'compliance', label: 'Compliance', color: 'purple', desc: 'CVE patterns, licensing, data handling',
+    dimensions: [
+      { id: 'cve',        label: 'CVE Patterns',    findings: [
+        { id: 'known_vuln_call', label: 'Call matches known CVE exploitation pattern', severity: 'critical' },
+        { id: 'deprecated_api', label: 'API removed/deprecated for security reasons', severity: 'warning' },
+        { id: 'unsafe_deserialize', label: 'Deserialization of untrusted data', severity: 'critical' },
+      ]},
+      { id: 'licensing',  label: 'Licensing',        findings: [
+        { id: 'copyleft_in_permissive', label: 'Copyleft-licensed code in permissive project', severity: 'warning' },
+        { id: 'missing_header', label: 'Source file missing license header', severity: 'info' },
+        { id: 'license_mismatch', label: 'Import from incompatibly-licensed module', severity: 'warning' },
+      ]},
+      { id: 'data',       label: 'Data Handling',    findings: [
+        { id: 'pii_in_log', label: 'PII field name (email, ssn, phone) in log call', severity: 'warning' },
+        { id: 'plaintext_storage', label: 'Sensitive field stored without encryption', severity: 'warning' },
+        { id: 'no_audit_trail', label: 'State mutation without audit log entry', severity: 'info' },
+      ]},
+    ]
+  },
+  {
+    id: 'architecture', label: 'Architecture', color: 'cyan', desc: 'Imports, API surface, anti-patterns',
+    dimensions: [
+      { id: 'imports',    label: 'Import Health',    findings: [
+        { id: 'circular_import', label: 'Circular dependency between packages', severity: 'warning' },
+        { id: 'layer_violation', label: 'Adapter imports domain internals directly', severity: 'warning' },
+        { id: 'excessive_deps', label: 'File imports >15 packages', severity: 'info' },
+      ]},
+      { id: 'api_surface',label: 'API Surface',      findings: [
+        { id: 'exported_no_doc', label: 'Exported symbol missing documentation', severity: 'info' },
+        { id: 'exported_returns_unexported', label: 'Exported function returns unexported type', severity: 'warning' },
+        { id: 'inconsistent_errors', label: 'Public API mixes error return styles', severity: 'info' },
+      ]},
+      { id: 'antipattern', label: 'Anti-patterns',   findings: [
+        { id: 'global_state', label: 'Mutable global variable outside main/init', severity: 'warning' },
+        { id: 'init_side_effect', label: 'init() with I/O or network side effects', severity: 'warning' },
+        { id: 'hardcoded_config', label: 'Configuration value hardcoded instead of parameterized', severity: 'info' },
+        { id: 'string_typed_enum', label: 'String comparison where typed enum/const should be used', severity: 'info' },
+      ]},
+    ]
+  },
+  {
+    id: 'observability', label: 'Observability', color: 'green', desc: 'Silent failures, debug artifacts',
+    dimensions: [
+      { id: 'silent',     label: 'Silent Failures',  findings: [
+        { id: 'catch_no_log', label: 'Error caught with no log or metric emitted', severity: 'warning' },
+        { id: 'empty_default', label: 'Switch/select default case does nothing', severity: 'info' },
+        { id: 'timeout_no_log', label: 'Timeout/context cancellation handled silently', severity: 'warning' },
+      ]},
+      { id: 'debug',      label: 'Debug Artifacts',  findings: [
+        { id: 'print_statement', label: 'fmt.Println/console.log left in production code', severity: 'info' },
+        { id: 'todo_fixme', label: 'TODO/FIXME/HACK/XXX marker in source', severity: 'info' },
+        { id: 'commented_debug', label: 'Commented-out debug/test code block', severity: 'info' },
+      ]},
+    ]
+  },
+];
+
+// Flatten for quick lookup
+const ALL_DIMS = {};
+const TIER_FOR_DIM = {};
+TIERS.forEach(tier => {
+  tier.dimensions.forEach(dim => {
+    ALL_DIMS[dim.id] = dim;
+    TIER_FOR_DIM[dim.id] = tier.id;
+  });
+});
+
+// Active state — load from localStorage
+const activeDims = {};
+const savedDims = JSON.parse(localStorage.getItem('aoa-recon-dims') || '{}');
+TIERS.forEach(t => t.dimensions.forEach(d => {
+  activeDims[d.id] = savedDims.hasOwnProperty(d.id) ? savedDims[d.id] : true;
+}));
+
+function saveDimState() {
+  localStorage.setItem('aoa-recon-dims', JSON.stringify(activeDims));
+}
+
+function isTierActive(tierId) {
+  return TIERS.find(t => t.id === tierId).dimensions.some(d => activeDims[d.id]);
+}
+
+function toggleTier(tierId) {
+  const tier = TIERS.find(t => t.id === tierId);
+  const anyActive = tier.dimensions.some(d => activeDims[d.id]);
+  tier.dimensions.forEach(d => { activeDims[d.id] = !anyActive; });
+  saveDimState();
+  renderSidebar();
+  renderTree();
+  updateSummary();
+}
+
+// ====== PROJECT STRUCTURE ======
+const PROJECT = {
+  'cmd/aoa': { files: {
+    'main.go': ['RunRoot', 'initConfig', 'main'],
+    'commands.go': ['grepCmd', 'egrepCmd', 'findCmd', 'daemonCmd', 'initCmd', 'openCmd'],
+  }},
+  'internal/app': { files: {
+    'app.go': ['App', 'NewApp', 'onSessionEvent', 'searchObserver', 'RebuildIndex', 'WritePID'],
+    'config.go': ['Config', 'DefaultConfig', 'LoadFromFile', 'MergeEnv', 'Validate'],
+  }},
+  'internal/domain/index': { files: {
+    'search.go': ['Index', 'Search', 'AddFile', 'BuildIndex', 'RankResults', 'IndexStats'],
+    'tokenizer.go': ['TokenizeQuery', 'SplitCamelCase', 'normalizeToken'],
+    'format.go': ['FormatResults', 'FormatLine', 'ColorOutput'],
+  }},
+  'internal/domain/learner': { files: {
+    'learner.go': ['Learner', 'Observe', 'CompetitiveDisplace', 'Decay', 'Snapshot', 'CohitDedup', 'CoreDomains'],
+    'autotune.go': ['Autotune', 'decayAll', 'pruneBelow', 'promoteTop'],
+    'bigrams.go': ['ExtractBigrams', 'mergeBigrams', 'topNBigrams'],
+  }},
+  'internal/adapters/web': { files: {
+    'server.go': ['NewServer', 'Start', 'handleHealth', 'handleStats', 'handleSearch', 'handleActivity'],
+    'handler.go': ['ServeHTTP', 'LoginHandler', 'AuthMiddleware', 'SearchHandler', 'corsMiddleware'],
+  }},
+  'internal/adapters/bbolt': { files: {
+    'store.go': ['Store', 'Open', 'Close', 'PersistIndex', 'LoadState', 'SessionCreate', 'SaveMetrics'],
+  }},
+  'internal/adapters/socket': { files: {
+    'server.go': ['StartDaemon', 'HandleConnection', 'DaemonStatus', 'GracefulShutdown', 'handleCommand'],
+  }},
+  'internal/adapters/claude': { files: {
+    'reader.go': ['Reader', 'ParseEvent', 'ValidateToken', 'normalizePayload'],
+  }},
+  'internal/adapters/tailer': { files: {
+    'tailer.go': ['Tailer', 'Tail', 'ParseSessionLog', 'deduplicateUUID'],
+  }},
+  'internal/domain/enricher': { files: {
+    'atlas.go': ['LoadAtlas', 'ResolveDomain', 'EnrichResults', 'Atlas'],
+  }},
+};
+
+// ====== MOCK FINDINGS ======
+let mockFindings = {};
+let dimCounts = {};  // dimId → count
+
+function generateFindings() {
+  mockFindings = {};
+  dimCounts = {};
+  TIERS.forEach(t => t.dimensions.forEach(d => { dimCounts[d.id] = 0; }));
+
+  Object.entries(PROJECT).forEach(([folder, { files }]) => {
+    Object.entries(files).forEach(([file, methods]) => {
+      methods.forEach(method => {
+        const key = folder + '/' + file + '/' + method;
+        const findings = [];
+
+        TIERS.forEach(tier => {
+          tier.dimensions.forEach(dim => {
+            if (Math.random() < 0.12) {
+              const f = randChoice(dim.findings);
+              findings.push({ dimId: dim.id, tierId: tier.id, finding: f, line: randInt(10, 350) });
+              dimCounts[dim.id]++;
+            }
+            if (Math.random() < 0.03) {
+              const f = randChoice(dim.findings);
+              findings.push({ dimId: dim.id, tierId: tier.id, finding: f, line: randInt(10, 350) });
+              dimCounts[dim.id]++;
+            }
+          });
+        });
+
+        if (findings.length > 0) mockFindings[key] = findings;
+      });
+    });
+  });
+}
+
+// ====== SIDEBAR RENDERING ======
+function renderSidebar() {
+  const sb = document.getElementById('sidebar');
+  const header = sb.querySelector('.sidebar-header');
+  const footer = sb.querySelector('.sidebar-footer');
+
+  // Remove old tiers
+  sb.querySelectorAll('.tier').forEach(el => el.remove());
+  sb.querySelectorAll('.tier-pills').forEach(el => el.remove());
+
+  let totalActive = 0;
+  let totalDims = 0;
+
+  TIERS.forEach(tier => {
+    const tierEl = document.createElement('div');
+    tierEl.className = 'tier ' + tier.id;
+
+    let tierTotal = 0;
+    tier.dimensions.forEach(d => { tierTotal += dimCounts[d.id] || 0; });
+
+    // Header — toggle switch + label + description + count
+    const tierActive = isTierActive(tier.id);
+    const hdr = document.createElement('div');
+    hdr.className = 'tier-header' + (tierActive ? '' : ' tier-off');
+    hdr.innerHTML =
+      '<span class="tier-toggle ' + (tierActive ? 'on' : 'off') + '"></span>' +
+      '<span class="tier-label-group">' +
+        '<div class="tier-label">' + esc(tier.label) + '</div>' +
+        '<div class="tier-desc">' + esc(tier.desc || '') + '</div>' +
+      '</span>' +
+      '<span class="tier-count">' + tierTotal + '</span>';
+    hdr.addEventListener('click', () => { toggleTier(tier.id); });
+    tierEl.appendChild(hdr);
+
+    // Pill container
+    const pillsWrap = document.createElement('div');
+    pillsWrap.className = 'tier-pills';
+
+    tier.dimensions.forEach(dim => {
+      totalDims++;
+      const isActive = activeDims[dim.id];
+      if (isActive) totalActive++;
+      const count = dimCounts[dim.id] || 0;
+
+      const pill = document.createElement('span');
+      pill.className = 'dim-pill ' + (isActive ? 'active' : 'inactive');
+      pill.innerHTML = esc(dim.label) + (count > 0 ? ' <span class="pill-count">' + count + '</span>' : '');
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        activeDims[dim.id] = !activeDims[dim.id];
+        saveDimState();
+        renderSidebar();
+        renderTree();
+        updateSummary();
+      });
+      pillsWrap.appendChild(pill);
+    });
+
+    tierEl.appendChild(pillsWrap);
+    sb.insertBefore(tierEl, footer);
+  });
+
+  document.getElementById('activeCount').textContent = totalActive;
+  document.getElementById('totalCount').textContent = totalDims;
+  document.getElementById('activeCount2').textContent = totalActive;
+  document.getElementById('totalCount2').textContent = totalDims;
+}
+
+// ====== AGGREGATION ======
+function aggregateFindings(prefix) {
+  const byCat = {};  // tierId → count
+  const sevs = { critical: 0, warning: 0, info: 0 };
+
+  Object.entries(mockFindings).forEach(([key, findings]) => {
+    if (key.startsWith(prefix)) {
+      findings.forEach(f => {
+        if (activeDims[f.dimId]) {
+          byCat[f.tierId] = (byCat[f.tierId] || 0) + 1;
+          sevs[f.finding.severity]++;
+        }
+      });
+    }
+  });
+
+  let total = 0;
+  Object.values(byCat).forEach(v => { total += v; });
+  return { byCat, sevs, total };
+}
+
+function maxSeverity(s) { return s.critical > 0 ? 'critical' : s.warning > 0 ? 'warning' : s.info > 0 ? 'info' : null; }
+function scorePct(s) { return Math.min(100, s.critical * 30 + s.warning * 12 + s.info * 4); }
+function scoreClass(p) { return p >= 40 ? 'high' : p >= 15 ? 'medium' : 'low'; }
+
+// ====== NAVIGATION ======
+let curLevel = 'root', curFolder = null, curFile = null;
+
+function navigateTo(level, folder, file) {
+  curLevel = level; curFolder = folder || null; curFile = file || null;
+  renderTree();
+}
+
+// ====== TREE RENDERING ======
+const TIER_ABBREV = {
+  security: 'Sec', performance: 'Perf', quality: 'Qual',
+  compliance: 'Comp', architecture: 'Arch', observability: 'Obs'
+};
+
+const DIM_ORDER = ['security', 'performance', 'quality', 'compliance', 'architecture', 'observability'];
+
+function colHeaderHtml() {
+  let h = '<div class="tree-col-header"><span class="col-name"></span>';
+  DIM_ORDER.forEach(tid => {
+    const active = isTierActive(tid);
+    h += '<span class="col-dim ' + tid + (active ? '' : ' off') + '" onclick="toggleTier(\'' + tid + '\')" title="Toggle ' + tid + '">' + TIER_ABBREV[tid] + '</span>';
+  });
+  h += '<span style="width:7px"></span><span style="width:40px"></span><span style="width:14px"></span></div>';
+  return h;
+}
+
+function dimsHtml(byCat) {
+  let h = '';
+  DIM_ORDER.forEach(tid => {
+    const n = byCat[tid] || 0;
+    h += '<span class="dim-num ' + (n > 0 ? tid : 'zero') + '">' + n + '</span>';
+  });
+  return h;
+}
+
+function updateTreeTitle() {
+  const titleEl = document.querySelector('.tree-title');
+  let h = '<span class="bc-link" onclick="navigateTo(\'root\')">Root</span>';
+  if (curFolder) {
+    h += '<span class="bc-sep">\u203A</span>';
+    h += '<span class="bc-link" onclick="navigateTo(\'folder\',\'' + esc(curFolder) + '\')">' + esc(curFolder) + '</span>';
+  }
+  if (curFile) {
+    h += '<span class="bc-sep">\u203A</span>';
+    h += '<span class="bc-link" onclick="navigateTo(\'file\',\'' + esc(curFolder) + '\',\'' + esc(curFile) + '\')">' + esc(curFile) + '</span>';
+  }
+  titleEl.innerHTML = h;
+}
+
+function renderTree() {
+  const wrap = document.getElementById('treeWrap');
+  let h = '';
+
+  updateTreeTitle();
+
+  if (curLevel === 'root') {
+    const items = Object.keys(PROJECT).map(f => ({ name: f, agg: aggregateFindings(f) }));
+    items.sort((a, b) => b.agg.total - a.agg.total);
+    document.getElementById('treeBadge').textContent = items.length + ' directories';
+    h += colHeaderHtml();
+    items.forEach(({ name, agg }) => { h += treeRow('folder', name + '/', agg, "navigateTo('folder','" + esc(name) + "')"); });
+  } else if (curLevel === 'folder') {
+    const files = PROJECT[curFolder]?.files || {};
+    const items = Object.keys(files).map(f => ({ name: f, agg: aggregateFindings(curFolder + '/' + f) }));
+    items.sort((a, b) => b.agg.total - a.agg.total);
+    document.getElementById('treeBadge').textContent = items.length + ' files';
+    h += colHeaderHtml();
+    items.forEach(({ name, agg }) => { h += treeRow('file', name, agg, "navigateTo('file','" + esc(curFolder) + "','" + esc(name) + "')"); });
+  } else if (curLevel === 'file') {
+    const methods = PROJECT[curFolder]?.files?.[curFile] || [];
+    document.getElementById('treeBadge').textContent = methods.length + ' symbols';
+    h += colHeaderHtml();
+    methods.forEach(m => {
+      const key = curFolder + '/' + curFile + '/' + m;
+      const findings = (mockFindings[key] || []).filter(f => activeDims[f.dimId]);
+      h += methodRow(m, findings);
+    });
+  }
+
+  if (!h) h = '<div style="padding:40px;text-align:center;color:var(--mute)">No findings match active dimensions.</div>';
+  wrap.innerHTML = h;
+}
+
+function treeRow(type, name, agg, onclick) {
+  const sev = maxSeverity(agg.sevs);
+  const pct = scorePct(agg.sevs);
+  const icon = type === 'folder' ? '\uD83D\uDCC1' : '\uD83D\uDCC4';
+  return '<div class="tree-row" onclick="' + onclick + '">' +
+    '<span class="tree-icon ' + type + '">' + icon + '</span>' +
+    '<span class="tree-name">' + esc(name) + '</span>' +
+    '<div class="tree-dims">' + dimsHtml(agg.byCat) + '</div>' +
+    (sev ? '<span class="tree-severity ' + sev + '"></span>' : '<span style="width:7px"></span>') +
+    '<div class="tree-score"><div class="tree-score-fill ' + scoreClass(pct) + '" style="width:' + pct + '%"></div></div>' +
+    '<span class="tree-chevron">\u203A</span></div>';
+}
+
+function methodRow(name, findings) {
+  let h = '';
+  if (findings.length === 0) {
+    return '<div class="tree-row" style="cursor:default"><span class="tree-icon method">\u0192</span>' +
+      '<span class="tree-name">' + esc(name) + '</span><div class="tree-dims">' + dimsHtml({}) + '</div>' +
+      '<span style="width:7px"></span><div class="tree-score"><div class="tree-score-fill low" style="width:0"></div></div>' +
+      '<span style="width:14px"></span></div>';
+  }
+
+  const byCat = {}; const sevs = { critical: 0, warning: 0, info: 0 };
+  findings.forEach(f => { byCat[f.tierId] = (byCat[f.tierId] || 0) + 1; sevs[f.finding.severity]++; });
+  const sev = maxSeverity(sevs);
+  const pct = scorePct(sevs);
+
+  h += '<div class="tree-row" style="cursor:default"><span class="tree-icon method">\u0192</span>' +
+    '<span class="tree-name">' + esc(name) + '</span>' +
+    '<div class="tree-dims">' + dimsHtml(byCat) + '</div>' +
+    '<span class="tree-severity ' + sev + '"></span>' +
+    '<div class="tree-score"><div class="tree-score-fill ' + scoreClass(pct) + '" style="width:' + pct + '%"></div></div>' +
+    '<span style="width:14px"></span></div>';
+
+  findings.sort((a, b) => {
+    const o = { critical: 0, warning: 1, info: 2 };
+    return o[a.finding.severity] - o[b.finding.severity];
+  });
+
+  findings.forEach(f => {
+    h += '<div class="finding-row">' +
+      '<span class="finding-sev ' + f.finding.severity + '">' + f.finding.severity + '</span>' +
+      '<span class="finding-id">' + esc(f.finding.id) + '</span>' +
+      '<span class="finding-desc">' + esc(f.finding.label) + '</span>' +
+      '<span class="finding-line">L:' + f.line + '</span></div>';
+  });
+
+  return h;
+}
+
+// ====== SUMMARY ======
+function updateSummary() {
+  let total = 0;
+  let tierTotals = { security: 0, performance: 0, quality: 0, compliance: 0, architecture: 0, observability: 0 };
+  let critTotal = 0;
+  let warnTotal = 0;
+  let critFiles = new Set();
+  let filesWithFindings = new Set();
+
+  Object.entries(mockFindings).forEach(([key, arr]) => {
+    const filePath = key.split('/').slice(0, -1).join('/');
+    arr.forEach(f => {
+      if (activeDims[f.dimId]) {
+        total++;
+        tierTotals[f.tierId]++;
+        filesWithFindings.add(filePath);
+        if (f.finding.severity === 'critical') {
+          critTotal++;
+          critFiles.add(filePath);
+        }
+        if (f.finding.severity === 'warning') {
+          warnTotal++;
+        }
+      }
+    });
+  });
+
+  const fileCount = Object.values(PROJECT).reduce((s, f) => s + Object.keys(f.files).length, 0);
+  const cleanFiles = fileCount - filesWithFindings.size;
+  const activeDimCount = Object.values(activeDims).filter(v => v).length;
+
+  // Stat cards
+  document.getElementById('statFiles').textContent = fileCount;
+  document.getElementById('statFindings').textContent = total;
+  document.getElementById('statCritical').textContent = critTotal;
+  document.getElementById('statWarnings').textContent = warnTotal;
+  document.getElementById('statDims').textContent = activeDimCount;
+
+  // Hero support line
+  document.getElementById('heroSupport').innerHTML =
+    '<span class="val r">' + total + '</span> findings' +
+    '<span class="dot">&middot;</span>' +
+    '<span class="val g">' + fileCount + '</span> files scanned' +
+    '<span class="dot">&middot;</span>' +
+    '<span class="val r">' + critTotal + '</span> critical' +
+    '<span class="dot">&middot;</span>' +
+    '<span class="val g">' + Math.max(0, cleanFiles) + '</span> clean' +
+    '<span class="dot">&middot;</span>' +
+    '<span class="val p">' + activeDimCount + '</span> dimensions';
+
+  // Hero metrics
+  document.getElementById('hmFilesScanned').textContent = fileCount;
+  document.getElementById('hmFindings').textContent = total;
+  document.getElementById('hmCritical').textContent = critTotal;
+  document.getElementById('hmClean').textContent = Math.max(0, cleanFiles);
+}
+
+// ====== GENERATE ======
+function generate() {
+  renderHeroHeadline();
+  generateFindings();
+  renderSidebar();
+  navigateTo('root');
+  updateSummary();
+}
+
+generate();
+document.getElementById('genBtn').addEventListener('click', generate);
+</script>
+</body>
+</html>
