@@ -63,7 +63,7 @@ type TurnAction struct {
 	Target  string // relative path, command, or pattern
 	Range   string // ":offset-limit" for reads, empty otherwise
 	Impact  string // "↓62%", "4 match", "309 pass", "1 fail", etc.
-	Attrib  string // "aOa guided", "unguided", "productive", "-"
+	Attrib  string // "aOa guided", "unguided", "crafted"/"authored"/"forged"/"innovated", "-"
 	Tokens  int    // estimated token cost of this action (0 = unknown)
 	Savings int    // savings percentage when guided (0-99), 0 = none
 }
@@ -142,9 +142,10 @@ type App struct {
 	currentBuilder *turnBuilder            // active exchange builder (all assistant events between user inputs)
 
 	// Activity feed (separate ring buffer for tool actions)
-	activityRing  [50]ActivityEntry // ring buffer of last 50 activity entries
-	activityHead  int
-	activityCount int
+	activityRing    [50]ActivityEntry // ring buffer of last 50 activity entries
+	activityHead    int
+	activityCount   int
+	creativeWordIdx int // cycles through creative attrib words for Write/Edit
 
 	// Burn rate tracking (L0.1)
 	burnRate            *BurnRateTracker // actual token burn rate
@@ -661,7 +662,9 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				if ev.File != nil && ev.File.Path != "" {
 					target = a.relativePath(ev.File.Path)
 				}
-				attrib = "productive"
+				creativeWords := [4]string{"crafted", "authored", "forged", "innovated"}
+				attrib = creativeWords[a.creativeWordIdx%4]
+				a.creativeWordIdx++
 			case "Glob":
 				// Prefer pattern for display (more descriptive than directory)
 				if ev.Tool.Pattern != "" {

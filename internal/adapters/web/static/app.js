@@ -365,7 +365,10 @@ function renderLiveActivity() {
     var actionClass = getActionPillClass(e.action);
     var sourceClass = (e.source === 'aOa') ? 'text-cyan' : 'text-dim';
     var attribClass = getAttribPillClass(e.attrib);
-    var impactHtml = getImpactHtml(e.impact);
+    var isUnguided = e.attrib === 'unguided';
+    var isGuided = e.attrib && e.attrib.indexOf('guided') !== -1 && !isUnguided;
+    var impactHtml = getImpactHtml(e.impact, isUnguided, isGuided);
+    var targetColor = isUnguided ? 'var(--red)' : 'var(--dim)';
 
     html += '<tr>' +
       '<td class="mono text-dim" style="font-size:11px;white-space:nowrap">' + relTime(e.timestamp) + '</td>' +
@@ -373,7 +376,7 @@ function renderLiveActivity() {
       '<td class="' + sourceClass + ' mono" style="font-size:11px">' + escapeHtml(e.source) + '</td>' +
       '<td><span class="pill ' + attribClass + '">' + escapeHtml(e.attrib || '-') + '</span></td>' +
       '<td class="mono" style="font-size:11px">' + impactHtml + '</td>' +
-      '<td class="mono truncate" style="font-size:11px;color:var(--dim)" title="' + escapeHtml(e.target) + '">' + escapeHtml(truncPath(e.target, 50)) + '</td>' +
+      '<td class="mono truncate" style="font-size:11px;color:' + targetColor + '" title="' + escapeHtml(e.target) + '">' + escapeHtml(truncPath(e.target, 50)) + '</td>' +
       '</tr>';
   }
   document.getElementById('activityTbody').innerHTML = html;
@@ -391,23 +394,28 @@ function getActionPillClass(action) {
   return 'pill-dim';
 }
 
+var CREATIVE_WORDS = {'crafted':1,'authored':1,'forged':1,'innovated':1};
 function getAttribPillClass(attrib) {
   if (!attrib || attrib === '-') return 'pill-dim';
   var a = attrib.toLowerCase();
+  if (a === 'unguided') return 'pill-red';
+  if (CREATIVE_WORDS[a]) return 'pill-purple';
   if (a === 'indexed') return 'pill-cyan';
   if (a.indexOf('guided') !== -1) return 'pill-green';
-  if (a === 'productive') return 'pill-green';
-  if (a === 'unguided') return 'pill-red';
   if (a === 'regex') return 'pill-yellow';
   return 'pill-dim';
 }
 
-function getImpactHtml(impact) {
+function getImpactHtml(impact, isUnguided, isGuided) {
   if (!impact) return '<span class="text-mute">-</span>';
   var s = String(impact);
-  if (s.indexOf('saved') !== -1 || s.indexOf('+') !== -1) return '<span class="text-green">' + escapeHtml(s) + '</span>';
-  if (s.indexOf('waste') !== -1 || s.indexOf('-') !== -1) return '<span class="text-red">' + escapeHtml(s) + '</span>';
-  if (s.indexOf('hit') !== -1 || /\d/.test(s)) return '<span class="text-cyan">' + escapeHtml(s) + '</span>';
+  if (s === '-') return '<span class="text-mute">-</span>';
+  // Attrib-driven: unguided = red cost, guided = green savings
+  if (isUnguided) return '<span class="text-red">' + escapeHtml(s) + '</span>';
+  if (isGuided) return '<span class="text-green">' + escapeHtml(s) + '</span>';
+  // Fallback for other attribs (productive, indexed, etc.)
+  if (s.indexOf('+') !== -1) return '<span class="text-cyan">' + escapeHtml(s) + '</span>';
+  if (/\d/.test(s)) return '<span class="text-dim">' + escapeHtml(s) + '</span>';
   return '<span class="text-dim">' + escapeHtml(s) + '</span>';
 }
 
@@ -862,10 +870,11 @@ function renderDebrief() {
         var tokCls = act.attrib === 'aOa guided' ? 'text-green' : (act.attrib === 'unguided' ? 'text-red' : 'text-dim');
         tokVal = '<span class="' + tokCls + '">' + fmtK(act.tokens) + '</span>';
       }
+      var pathStyle = act.attrib === 'unguided' ? ' style="color:var(--red)"' : '';
       ahtml += '<div class="conv-action-item">' +
         '<span class="act-left">' +
           '<span class="conv-tool-chip ' + getToolChipClass(act.tool) + '">' + escapeHtml(act.tool) + '</span>' +
-          '<span class="conv-action-path" title="' + escapeHtml(targetStr) + '">' + escapeHtml(truncPath(targetStr, 30)) + '</span>' +
+          '<span class="conv-action-path"' + pathStyle + ' title="' + escapeHtml(targetStr) + '">' + escapeHtml(truncPath(targetStr, 30)) + '</span>' +
         '</span>' +
         '<span class="act-cell">' + saveVal + '</span>' +
         '<span class="act-cell">' + tokVal + '</span>' +

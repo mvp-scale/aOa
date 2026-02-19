@@ -495,7 +495,7 @@ func TestActivityRubric(t *testing.T) {
 			wantTarget: "src/foo.go",
 		},
 		{
-			// Row 8: Write — L0.8: attrib = "productive"
+			// Row 8: Write — creative attrib (crafted/authored/forged/innovated)
 			name: "write",
 			ev: ports.SessionEvent{
 				Kind:      ports.EventToolInvocation,
@@ -506,12 +506,12 @@ func TestActivityRubric(t *testing.T) {
 			},
 			wantAction: "Write",
 			wantSource: "Claude",
-			wantAttrib: "productive",
+			wantAttrib: "re:^(crafted|authored|forged|innovated)$",
 			wantImpact: "-",
 			wantTarget: "src/bar.go",
 		},
 		{
-			// Row 9: Edit — L0.8: attrib = "productive"
+			// Row 9: Edit — creative attrib (crafted/authored/forged/innovated)
 			name: "edit",
 			ev: ports.SessionEvent{
 				Kind:      ports.EventToolInvocation,
@@ -522,7 +522,7 @@ func TestActivityRubric(t *testing.T) {
 			},
 			wantAction: "Edit",
 			wantSource: "Claude",
-			wantAttrib: "productive",
+			wantAttrib: "re:^(crafted|authored|forged|innovated)$",
 			wantImpact: "-",
 			wantTarget: "src/baz.go",
 		},
@@ -729,10 +729,11 @@ func TestSearchTargetPreservesFlags(t *testing.T) {
 	}
 }
 
-// --- L0.8: Write/Edit productive attrib ---
+// --- L0.8: Write/Edit creative attrib ---
 
-func TestActivityWriteEditProductive(t *testing.T) {
+func TestActivityWriteEditCreative(t *testing.T) {
 	a := newTestApp(t)
+	creativeWords := map[string]bool{"crafted": true, "authored": true, "forged": true, "innovated": true}
 
 	for _, toolName := range []string{"Write", "Edit"} {
 		a.activityRing = [50]ActivityEntry{}
@@ -750,8 +751,29 @@ func TestActivityWriteEditProductive(t *testing.T) {
 
 		entry := lastActivity(a)
 		require.NotNil(t, entry)
-		assert.Equal(t, "productive", entry.Attrib,
-			"L0.8: %s should have attrib 'productive'", toolName)
+		assert.True(t, creativeWords[entry.Attrib],
+			"L0.8: %s should have creative attrib, got %q", toolName, entry.Attrib)
+	}
+}
+
+func TestActivityCreativeWordCycles(t *testing.T) {
+	a := newTestApp(t)
+	expected := []string{"crafted", "authored", "forged", "innovated"}
+
+	for i, want := range expected {
+		ev := ports.SessionEvent{
+			Kind:      ports.EventToolInvocation,
+			TurnID:    fmt.Sprintf("turn-%d", i),
+			Timestamp: time.Now(),
+			Tool:      &ports.ToolEvent{Name: "Write"},
+			File:      &ports.FileRef{Path: "/home/user/project/src/foo.go", Action: "write"},
+		}
+		a.onSessionEvent(ev)
+
+		entry := lastActivity(a)
+		require.NotNil(t, entry)
+		assert.Equal(t, want, entry.Attrib,
+			"creative word %d should be %q", i, want)
 	}
 }
 

@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-19 (Session 52) | **Phase**: L2 complete — Infrastructure gaps closed (invert-match, file watcher, bbolt lock fix)
-> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 (308 active tests)
+> **Updated**: 2026-02-19 (Session 54) | **Phase**: L2 complete — Infrastructure gaps closed (invert-match, file watcher, bbolt lock fix)
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 (380 active tests)
 
 ---
 
@@ -71,7 +71,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: L2 infrastructure gaps complete (Session 52). Three gaps closed: (1) `grep -v` / `--invert-match` flag — inverts symbol and content matches across all 4 search modes (literal, OR, AND, regex), 8 new tests. (2) File watcher wired — `Watch()` called in `Start()`, `onFileChanged()` handles add/modify/delete with `Rebuild()` on the search engine, `removeFileFromIndex()` cleans all 3 index maps, 5 new tests. (3) bbolt lock contention fixed — `BuildIndex()` extracted as shared function, `MethodReindex` socket command with 120s timeout, `aoa init` delegates to daemon when running instead of failing, falls back to direct mode otherwise, 4 new tests. Next: L3 migration and parity proof.
+**Current**: Dashboard UX polish complete (Session 54). Attribution color system validated: unguided = full red chain (pill, impact, target), guided = green savings, creation = purple with cycling creative words (crafted/authored/forged/innovated). Full-file Read and Glob impact estimation fixed — now shows `~N tokens` for all unguided entries. Time savings algorithm reviewed (simple constant + dynamic rate from session logs); implementation planned for next session. Next: time savings implementation, then L3 migration and parity proof.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -106,10 +106,16 @@
 - **Responsive compaction pattern** — At mobile breakpoint (<800px), hero and stats cards shed text and show values only. Hero: remove support text, keep headline + value. Stats cards: value only, no labels (labels visible in desktop view). This pattern repeats across all 5 tabs. Priority is to maximize space for the main value prop content below (domain table, ngrams, conversation feed, session history). Recon is hold-state, acceptable as-is.
 - **Intel mobile** — Domain rankings and ngram sections must remain readable at mobile width. Current layout crowds them below oversized hero+stats. Compaction of hero+stats solves this.
 
+**Design Decisions Locked** (Session 54):
+- **Attribution color system** — Three visual lanes: green = aOa guided (savings), red = unguided (cost), purple = creation. Unguided entries show red across attrib pill, impact text, and target text. Guided entries show green impact (savings display). No time claims on unguided entries — only token cost stated factually; red color communicates "not optimized" without accusing.
+- **Creative words for Write/Edit** — Replaced static "productive" with cycling vocabulary: crafted, authored, forged, innovated. Purple pill, distinct from green (guided) and red (unguided). Each Write/Edit gets one word anchored to that entry; next creation may get a different word. Celebrates the creation moment.
+- **Time savings: celebrate success, don't kick failure** — Time savings only shown on guided reads (provable counterfactual). Unguided reads show token cost only (no time claim). Cumulative savings tell the positive story over time. aOa doesn't claim value for net-new creation (Write/Edit).
+- **Time savings algorithm (approved, not yet implemented)** — Two paths: simple (`tokens_saved * 0.0075s`) as fallback, dynamic (compute `ms/token` from tailer's `DurationMs` + `OutputTokens`, P25 percentile across recency windows, produce a range). Go has infrastructure advantage: tailer already extracts duration and token data in real-time, no separate JSONL re-parse needed.
+- **Glob cost estimation uses `filepath.Match`** — Rewrote `estimateGlobCost`/`estimateGlobTokens` to accept `(dir, pattern)`. Uses `filepath.Match` for glob patterns against relative index paths, falls back to `HasPrefix` for directory-only lookups.
+
 **Needs Discussion** (before L3):
 - **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
 - **Real-time conversation** — Legacy Python showed real-time; Go dashboard with 3s poll should do better. Needs investigation.
-- **Unified value framework** — Data collection across all tabs should use a consistent framework for representing aOa's value prop: token savings (guided vs unguided), time savings (search speed), knowledge savings (learning curve). Live activity, Debrief actions, and Arsenal sessions should all feed from the same metrics pipeline. Partially started in Session 51 (Save/Tok columns, TurnAction enrichment), needs completion across remaining tabs.
 
 ---
 
@@ -124,7 +130,7 @@
 | [L0](#layer-0) | [L0.5](#l05) | | | | | x | | x | L0.3 | 🟢 | 🟢 | 🟢 | Session summary persistence — per-session metrics in bbolt | Arsenal value proof, survives restart | Unit: `bbolt/store_test.go` (4 tests: save/load/list/overwrite) + `session_test.go` (5 tests: boundary detect, flush, restore) |
 | [L0](#layer-0) | [L0.6](#l06) | | | | | | x | x | - | 🟢 | 🟢 | 🟢 | Verify autotune fires every 50 prompts | Trust the learning cycle is working | Unit: `autotune_integration_test.go` — 50 searches → autotune triggers, activity entry emitted |
 | [L0](#layer-0) | [L0.7](#l07) | | | | | | x | x | L0.6 | 🟢 | 🟢 | 🟢 | Autotune activity event — "cycle N, +P/-D/~X" | Visible learning progress in activity feed | Unit: `autotune_integration_test.go` — asserts activity entry with promote/demote/decay counts |
-| [L0](#layer-0) | [L0.8](#l08) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Write/Edit attrib = "productive" | Credit productive work correctly | Unit: `activity_test.go` TestWriteEditAttrib — Write/Edit events tagged `attrib="productive"` |
+| [L0](#layer-0) | [L0.8](#l08) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Write/Edit creative attrib (purple) | Celebrate creation moments | Unit: `activity_test.go` TestWriteEditCreative + TestCreativeWordCycles — cycling crafted/authored/forged/innovated |
 | [L0](#layer-0) | [L0.9](#l09) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Glob attrib = "unguided" + estimated token cost | Show cost of not using aOa | Unit: `activity_test.go` TestGlobAttrib — Glob events tagged `attrib="unguided"`, impact contains token estimate |
 | [L0](#layer-0) | [L0.10](#l010) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Grep (Claude) impact = estimated token cost | Show cost of not using aOa | Unit: `activity_test.go` TestGrepImpact — Claude Grep events show `~Ntok` in impact |
 | [L0](#layer-0) | [L0.11](#l011) | | | | | | x | | - | 🟢 | 🟢 | 🟢 | Learn activity event — observe signals summary | Visible learning in feed | Unit: `activity_test.go` TestLearnEvent + `autotune_integration_test.go` — entry contains "+N keywords, +M terms" |
@@ -233,15 +239,15 @@ After autotune fires in `searchObserver`, pushes `ActivityEntry{Action: "Autotun
 
 **Write/Edit attrib** — 🟢 Complete
 
-Write/Edit tool events now tagged `attrib = "productive"`. Updated rubric rows 8/9 and dedicated test.
+Write/Edit tool events tagged with cycling creative words (`crafted`, `authored`, `forged`, `innovated`) in purple pills. Replaced static "productive" (Session 54). Updated rubric rows 8/9 (regex match), dedicated test `TestActivityWriteEditCreative`, and new `TestActivityCreativeWordCycles` verifying 4-word cycle order.
 
-**Files**: `internal/app/app.go`, `internal/app/activity_test.go`
+**Files**: `internal/app/app.go`, `internal/app/activity_test.go`, `internal/adapters/web/static/app.js`
 
 #### L0.9
 
 **Glob attrib** — 🟢 Complete
 
-Glob tool events tagged `attrib = "unguided"` with estimated token cost via `estimateGlobCost()` (walks index files matching path prefix, `bytes/4`). Updated rubric row 11 and dedicated test.
+Glob tool events tagged `attrib = "unguided"` with estimated token cost. `estimateGlobCost(dir, pattern)` rewritten (Session 54) to use `filepath.Match` for glob patterns against relative index paths, with `HasPrefix` fallback for directory-only lookups. Target display now prefers pattern over directory. Updated rubric row 11, dedicated test `TestActivityGlobUnguided`, and new `TestActivityGlobPattern` for pattern-based matching.
 
 **Files**: `internal/app/app.go`, `internal/app/activity_test.go`
 
@@ -576,7 +582,7 @@ NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→m
 | Tree-sitter parser (28 languages) | Symbol extraction working for Go, Python, JS/TS + 24 generic. Reuse ASTs for L5. |
 | Socket protocol | JSON-over-socket IPC. Concurrent clients. `Reindex` command with extended timeout. Extend, don't replace. |
 | Value engine (L0, 24 new tests) | Burn rate, runway projection, session persistence, activity enrichments. All wired. |
-| Activity rubric (38 tests) | Color-coded attribs, impact formatting. Productive/unguided/Learn/Autotune enrichments. |
+| Activity rubric (41 tests) | Three-lane color system: green (guided savings), red (unguided cost — pill, impact, target), purple (creative words for Write/Edit). Learn/Autotune enrichments. |
 | Dashboard (L1, 5-tab SPA) | 3-file split: `index.html` + `style.css` + `app.js`. Tab-aware polling. Soft glow animations. All tabs render live data. |
 | File watcher (L2, 5 new tests) | `fsnotify` → `onFileChanged` → re-parse → `Rebuild()` → `SaveIndex()`. Add/modify/delete. |
 | Invert-match (L2, 8 new tests) | `-v` flag for grep/egrep. Symbol complement + content matcher flip. All 4 modes. |
