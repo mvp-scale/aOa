@@ -48,7 +48,9 @@ func newTestApp(t *testing.T) *App {
 			BashCommands: make(map[string]int),
 			GrepPatterns: make(map[string]int),
 		},
-		turnBuffer: make(map[string]*turnBuilder),
+		turnBuffer:          make(map[string]*turnBuilder),
+		burnRate:            NewBurnRateTracker(5 * time.Minute),
+		burnRateCounterfact: NewBurnRateTracker(5 * time.Minute),
 	}
 	return a
 }
@@ -493,7 +495,7 @@ func TestActivityRubric(t *testing.T) {
 			wantTarget: "src/foo.go",
 		},
 		{
-			// Row 8: Write
+			// Row 8: Write — L0.8: attrib = "productive"
 			name: "write",
 			ev: ports.SessionEvent{
 				Kind:      ports.EventToolInvocation,
@@ -504,12 +506,12 @@ func TestActivityRubric(t *testing.T) {
 			},
 			wantAction: "Write",
 			wantSource: "Claude",
-			wantAttrib: "-",
+			wantAttrib: "productive",
 			wantImpact: "-",
 			wantTarget: "src/bar.go",
 		},
 		{
-			// Row 9: Edit
+			// Row 9: Edit — L0.8: attrib = "productive"
 			name: "edit",
 			ev: ports.SessionEvent{
 				Kind:      ports.EventToolInvocation,
@@ -520,12 +522,12 @@ func TestActivityRubric(t *testing.T) {
 			},
 			wantAction: "Edit",
 			wantSource: "Claude",
-			wantAttrib: "-",
+			wantAttrib: "productive",
 			wantImpact: "-",
 			wantTarget: "src/baz.go",
 		},
 		{
-			// Row 10: Grep
+			// Row 10: Grep — L0.10: impact = token cost
 			name: "grep",
 			ev: ports.SessionEvent{
 				Kind:      ports.EventToolInvocation,
@@ -536,11 +538,11 @@ func TestActivityRubric(t *testing.T) {
 			wantAction: "Grep",
 			wantSource: "Claude",
 			wantAttrib: "unguided",
-			wantImpact: "-",
+			wantImpact: "re:~.*tokens",
 			wantTarget: "auth.*handler",
 		},
 		{
-			// Row 11: Glob
+			// Row 11: Glob — L0.9: attrib = "unguided", impact = token cost
 			name: "glob",
 			ev: ports.SessionEvent{
 				Kind:      ports.EventToolInvocation,
@@ -551,8 +553,8 @@ func TestActivityRubric(t *testing.T) {
 			},
 			wantAction: "Glob",
 			wantSource: "Claude",
-			wantAttrib: "-",
-			wantImpact: "-",
+			wantAttrib: "unguided",
+			wantImpact: "re:~.*tokens",
 			wantTarget: "src/handlers",
 		},
 		{
@@ -685,4 +687,153 @@ func TestActivityRingBuffer(t *testing.T) {
 	require.NotNil(t, entry)
 	assert.Equal(t, "action-54", entry.Action)
 	assert.Equal(t, "target-54", entry.Target)
+}
+
+// --- L0.12: Target capture preserves full flag syntax ---
+
+func TestSearchTargetPreservesFlags(t *testing.T) {
+	a := newTestApp(t)
+
+	tests := []struct {
+		name       string
+		query      string
+		opts       ports.SearchOptions
+		wantTarget string
+	}{
+		{
+			name:       "all_flags",
+			query:      "auth,login",
+			opts:       ports.SearchOptions{AndMode: true, WordBoundary: true, CountOnly: true, IncludeGlob: "*.go", ExcludeGlob: "*_test.go"},
+			wantTarget: "aOa grep -a -w -c --include *.go --exclude *_test.go auth,login",
+		},
+		{
+			name:       "regex_with_word_boundary",
+			query:      "func.*Handler",
+			opts:       ports.SearchOptions{Mode: "regex", WordBoundary: true},
+			wantTarget: "aOa egrep -w func.*Handler",
+		},
+		{
+			name:       "simple_query_no_flags",
+			query:      "auth",
+			opts:       ports.SearchOptions{},
+			wantTarget: "aOa grep auth",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := a.searchTarget(tc.query, tc.opts)
+			assert.Equal(t, tc.wantTarget, got,
+				"L0.12: searchTarget must preserve full flag syntax verbatim")
+		})
+	}
+}
+
+// --- L0.8: Write/Edit productive attrib ---
+
+func TestActivityWriteEditProductive(t *testing.T) {
+	a := newTestApp(t)
+
+	for _, toolName := range []string{"Write", "Edit"} {
+		a.activityRing = [50]ActivityEntry{}
+		a.activityHead = 0
+		a.activityCount = 0
+
+		ev := ports.SessionEvent{
+			Kind:      ports.EventToolInvocation,
+			TurnID:    fmt.Sprintf("turn-%s", toolName),
+			Timestamp: time.Now(),
+			Tool:      &ports.ToolEvent{Name: toolName},
+			File:      &ports.FileRef{Path: "/home/user/project/src/foo.go", Action: "write"},
+		}
+		a.onSessionEvent(ev)
+
+		entry := lastActivity(a)
+		require.NotNil(t, entry)
+		assert.Equal(t, "productive", entry.Attrib,
+			"L0.8: %s should have attrib 'productive'", toolName)
+	}
+}
+
+// --- L0.9: Glob unguided + cost ---
+
+func TestActivityGlobUnguided(t *testing.T) {
+	a := newTestApp(t)
+	a.activityRing = [50]ActivityEntry{}
+	a.activityHead = 0
+	a.activityCount = 0
+
+	ev := ports.SessionEvent{
+		Kind:      ports.EventToolInvocation,
+		TurnID:    "turn-glob",
+		Timestamp: time.Now(),
+		Tool:      &ports.ToolEvent{Name: "Glob"},
+		File:      &ports.FileRef{Path: "/home/user/project/src/handlers", Action: "glob"},
+	}
+	a.onSessionEvent(ev)
+
+	entry := lastActivity(a)
+	require.NotNil(t, entry)
+	assert.Equal(t, "unguided", entry.Attrib, "L0.9: Glob should have attrib 'unguided'")
+	// The index has auth.go in src/handlers/ (500 bytes → 125 tokens)
+	assert.Contains(t, entry.Impact, "tokens", "L0.9: Glob impact should contain token estimate")
+}
+
+// --- L0.10: Grep token cost ---
+
+func TestActivityGrepTokenCost(t *testing.T) {
+	a := newTestApp(t)
+	a.activityRing = [50]ActivityEntry{}
+	a.activityHead = 0
+	a.activityCount = 0
+
+	ev := ports.SessionEvent{
+		Kind:      ports.EventToolInvocation,
+		TurnID:    "turn-grep",
+		Timestamp: time.Now(),
+		Tool:      &ports.ToolEvent{Name: "Grep", Pattern: "auth.*handler"},
+	}
+	a.onSessionEvent(ev)
+
+	entry := lastActivity(a)
+	require.NotNil(t, entry)
+	assert.Equal(t, "unguided", entry.Attrib)
+	assert.Contains(t, entry.Impact, "tokens", "L0.10: Grep impact should contain token estimate")
+}
+
+// --- L0.11: Learn activity from file read ---
+
+func TestActivityLearnFromFileRead(t *testing.T) {
+	a := newTestApp(t)
+	a.activityRing = [50]ActivityEntry{}
+	a.activityHead = 0
+	a.activityCount = 0
+
+	// Send a range-gated read that triggers learning
+	ev := ports.SessionEvent{
+		Kind:      ports.EventToolInvocation,
+		TurnID:    "turn-learn",
+		Timestamp: time.Now(),
+		Tool:      &ports.ToolEvent{Name: "Read"},
+		File: &ports.FileRef{
+			Path:   "/home/user/project/src/big.go",
+			Action: "read",
+			Offset: 100,
+			Limit:  50,
+		},
+	}
+	a.onSessionEvent(ev)
+
+	// Should have both a Learn entry and a Read entry
+	found := false
+	for i := 0; i < a.activityCount; i++ {
+		idx := (a.activityHead - 1 - i + 50) % 50
+		e := a.activityRing[idx]
+		if e.Action == "Learn" && e.Source == "aOa" {
+			assert.Contains(t, e.Impact, "+1 file:")
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "L0.11: expected a Learn activity entry from range-gated read")
 }

@@ -29,6 +29,18 @@ type Storage interface {
 	// DeleteProject removes all data (index + learner state) for a project.
 	// Idempotent: deleting a nonexistent project is not an error.
 	DeleteProject(projectID string) error
+
+	// SaveSessionSummary persists a session summary for a project.
+	// Overwrites any prior summary with the same session ID.
+	SaveSessionSummary(projectID string, summary *SessionSummary) error
+
+	// LoadSessionSummary retrieves a session summary by session ID.
+	// Returns nil, nil if no summary exists for that session.
+	LoadSessionSummary(projectID string, sessionID string) (*SessionSummary, error)
+
+	// ListSessionSummaries returns all session summaries for a project.
+	// Returns nil if no summaries exist.
+	ListSessionSummaries(projectID string) ([]*SessionSummary, error)
 }
 
 // Index represents the searchable code index
@@ -101,6 +113,25 @@ type DomainMeta struct {
 	HitsLastCycle float64 `json:"hits_last_cycle"` // Snapshot from previous cycle (for stale detection)
 	LastHitAt     uint32  `json:"last_hit_at"`     // Prompt count when domain was last hit
 	CreatedAt     int64   `json:"created_at"`      // Unix timestamp of domain creation
+}
+
+// SessionSummary holds aggregated metrics for a single Claude session.
+// Persisted to bbolt for cross-session analysis and value reporting.
+type SessionSummary struct {
+	SessionID        string  `json:"session_id"`
+	StartTime        int64   `json:"start_time"`
+	EndTime          int64   `json:"end_time"`
+	PromptCount      int     `json:"prompt_count"`
+	ReadCount        int     `json:"read_count"`
+	GuidedReadCount  int     `json:"guided_read_count"`
+	GuidedRatio      float64 `json:"guided_ratio"`
+	TokensSaved      int64   `json:"tokens_saved"`
+	TokensCounterfact int64  `json:"tokens_counterfact"`
+	InputTokens      int     `json:"input_tokens"`
+	OutputTokens     int     `json:"output_tokens"`
+	CacheReadTokens  int     `json:"cache_read_tokens"`
+	CacheWriteTokens int     `json:"cache_write_tokens"`
+	Model            string  `json:"model"`
 }
 
 // SearchOptions controls grep/egrep behavior. Passed through the search path

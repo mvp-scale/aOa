@@ -15,12 +15,13 @@ import (
 
 // Bucket keys
 var (
-	bucketIndex   = []byte("index")
-	bucketLearner = []byte("learner")
-	keyTokens     = []byte("tokens")
-	keyMetadata   = []byte("metadata")
-	keyFiles      = []byte("files")
-	keyState      = []byte("state")
+	bucketIndex    = []byte("index")
+	bucketLearner  = []byte("learner")
+	bucketSessions = []byte("sessions")
+	keyTokens      = []byte("tokens")
+	keyMetadata    = []byte("metadata")
+	keyFiles       = []byte("files")
+	keyState       = []byte("state")
 )
 
 // Store implements ports.Storage backed by bbolt.
@@ -250,6 +251,93 @@ func (s *Store) LoadLearnerState(projectID string) (*ports.LearnerState, error) 
 		return nil, fmt.Errorf("unmarshal learner state: %w", err)
 	}
 	return &state, nil
+}
+
+// SaveSessionSummary persists a session summary for a project.
+func (s *Store) SaveSessionSummary(projectID string, summary *ports.SessionSummary) error {
+	if summary == nil {
+		return fmt.Errorf("nil session summary")
+	}
+
+	data, err := json.Marshal(summary)
+	if err != nil {
+		return fmt.Errorf("marshal session summary: %w", err)
+	}
+
+	return s.db.Update(func(tx *bolt.Tx) error {
+		proj, err := tx.CreateBucketIfNotExists([]byte(projectID))
+		if err != nil {
+			return err
+		}
+		sb, err := proj.CreateBucketIfNotExists(bucketSessions)
+		if err != nil {
+			return err
+		}
+		return sb.Put([]byte(summary.SessionID), data)
+	})
+}
+
+// LoadSessionSummary retrieves a session summary by session ID.
+// Returns nil, nil if no summary exists.
+func (s *Store) LoadSessionSummary(projectID string, sessionID string) (*ports.SessionSummary, error) {
+	var data []byte
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		proj := tx.Bucket([]byte(projectID))
+		if proj == nil {
+			return nil
+		}
+		sb := proj.Bucket(bucketSessions)
+		if sb == nil {
+			return nil
+		}
+		if v := sb.Get([]byte(sessionID)); v != nil {
+			data = make([]byte, len(v))
+			copy(data, v)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if data == nil {
+		return nil, nil
+	}
+
+	var summary ports.SessionSummary
+	if err := json.Unmarshal(data, &summary); err != nil {
+		return nil, fmt.Errorf("unmarshal session summary: %w", err)
+	}
+	return &summary, nil
+}
+
+// ListSessionSummaries returns all session summaries for a project.
+func (s *Store) ListSessionSummaries(projectID string) ([]*ports.SessionSummary, error) {
+	var summaries []*ports.SessionSummary
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		proj := tx.Bucket([]byte(projectID))
+		if proj == nil {
+			return nil
+		}
+		sb := proj.Bucket(bucketSessions)
+		if sb == nil {
+			return nil
+		}
+		return sb.ForEach(func(k, v []byte) error {
+			var summary ports.SessionSummary
+			if err := json.Unmarshal(v, &summary); err != nil {
+				return nil // skip corrupt entries
+			}
+			summaries = append(summaries, &summary)
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return summaries, nil
 }
 
 // DeleteProject removes all data (index + learner state) for a project.

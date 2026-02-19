@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-19 (Session 48) | **Phase**: Dashboard value metrics & 5-tab restructure
-> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c (~260 active tests, 291 declared, 88% context)
+> **Updated**: 2026-02-19 (Session 49) | **Phase**: Dashboard value metrics & 5-tab restructure
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 (~284 active tests, 88% context)
 
 ---
 
@@ -71,7 +71,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Core engine complete (search, learner, session integration, CLI, dashboard). ~260 active tests (291 declared). Now building the value metrics layer and restructuring the dashboard to surface savings.
+**Current**: Core engine complete + L0 Value Engine landed. ~284 active tests. Burn rate tracking, dual runway projection, session persistence, and activity enrichments all implemented. Ready for L1 dashboard implementation.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -80,6 +80,10 @@
 - **Arsenal = Value Proof Over Time** — Not a config/status page. Session-centric value evidence: actual vs counterfactual token usage, learning curve, per-session savings. System status is compact/secondary.
 - **Session as unit of measurement** — Each session gets a summary record (ID, date, prompts, reads, guided ratio, tokens saved, counterfactual). Multiple sessions per day. Chart is daily rollup, table is individual sessions.
 - **Counterfactual is defensible** — "Without aOa" = sum of full file sizes for guided reads + observed unguided costs. Not fabricated.
+
+**Design Decisions Locked** (Session 49):
+- **Token cost heuristic** — `bytes / 4 = estimated tokens`. Standard industry approximation (1 token ≈ 4 characters; code is ASCII so bytes ≈ characters). Used for counterfactual cost of unguided Grep/Glob and for savings calculations. Resolves open question #6.
+- **Session boundary = session ID change** — Each Claude JSONL file carries a session ID. When the reader sees a new session ID, flush the summary for the previous session and start accumulating for the new one. Revisiting an old session loads its existing summary from bbolt and appends. No timeout heuristics.
 
 **Needs Discussion** (before L1 implementation):
 - **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
@@ -91,18 +95,18 @@
 
 | Layer | ID | G0 | G1 | G2 | G3 | G4 | G5 | G6 | Dep | Cf | St | Va | Task | Value | Va Detail |
 |:------|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:----|:--:|:--:|:--:|:-----|:------|:----------|
-| [L0](#layer-0) | [L0.1](#l01) | x | | | | | | x | - | 🟢 | ⚪ | ⚪ | Burn rate accumulator — rolling window tokens/min | Foundation for all savings metrics | Unit test: accumulator tracks rate over 5m window |
-| [L0](#layer-0) | [L0.2](#l02) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Context window max lookup — map model tag to window size | Needed for runway projection | Lookup returns correct max for claude-3, gpt-4 |
-| [L0](#layer-0) | [L0.3](#l03) | | | | | | | x | L0.1 | 🟢 | ⚪ | ⚪ | Dual projection — with-aOa vs without-aOa burn rates | The core value comparison | Two projections diverge correctly under test load |
-| [L0](#layer-0) | [L0.4](#l04) | | | | | x | | x | L0.3 | 🟢 | ⚪ | ⚪ | Context runway API — `/api/runway` with both projections | Dashboard and CLI can show runway | API returns JSON with both projections and delta |
-| [L0](#layer-0) | [L0.5](#l05) | | | | | x | | x | L0.3 | 🟢 | ⚪ | ⚪ | Session summary persistence — per-session metrics in bbolt | Arsenal value proof, survives restart | Session record persists with tokens saved, guided ratio, counterfactual |
-| [L0](#layer-0) | [L0.6](#l06) | | | | | | x | x | - | 🟢 | ⚪ | ⚪ | Verify autotune fires every 50 prompts | Trust the learning cycle is working | Integration test: 50 prompts → autotune triggers |
-| [L0](#layer-0) | [L0.7](#l07) | | | | | | x | x | L0.6 | 🟢 | ⚪ | ⚪ | Autotune activity event — "cycle N, +P/-D/~X" | Visible learning progress in activity feed | Activity entry appears with correct promote/demote counts |
-| [L0](#layer-0) | [L0.8](#l08) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Write/Edit attrib = "productive" | Credit productive work correctly | Write/Edit tool events get "productive" attrib |
-| [L0](#layer-0) | [L0.9](#l09) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Glob attrib = "unguided" + estimated token cost | Show cost of not using aOa | Glob events get "unguided" + token estimate |
-| [L0](#layer-0) | [L0.10](#l010) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Grep (Claude) impact = estimated token cost | Show cost of not using aOa | Claude grep events show estimated tokens |
-| [L0](#layer-0) | [L0.11](#l011) | | | | | | x | | - | 🟢 | ⚪ | ⚪ | Learn activity event — observe signals summary | Visible learning in feed | Activity entry: "+N keywords, +M terms, +K domains" |
-| [L0](#layer-0) | [L0.12](#l012) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Target capture — preserve full query syntax, no normalization | Accurate activity display | Target column shows raw query as entered |
+| [L0](#layer-0) | [L0.1](#l01) | x | | | | | | x | - | 🟢 | 🟢 | 🟢 | Burn rate accumulator — rolling window tokens/min | Foundation for all savings metrics | Unit test: accumulator tracks rate over 5m window |
+| [L0](#layer-0) | [L0.2](#l02) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Context window max lookup — map model tag to window size | Needed for runway projection | Lookup returns correct max for claude-3, gpt-4 |
+| [L0](#layer-0) | [L0.3](#l03) | | | | | | | x | L0.1 | 🟢 | 🟢 | 🟢 | Dual projection — with-aOa vs without-aOa burn rates | The core value comparison | Two projections diverge correctly under test load |
+| [L0](#layer-0) | [L0.4](#l04) | | | | | x | | x | L0.3 | 🟢 | 🟢 | 🟢 | Context runway API — `/api/runway` with both projections | Dashboard and CLI can show runway | API returns JSON with both projections and delta |
+| [L0](#layer-0) | [L0.5](#l05) | | | | | x | | x | L0.3 | 🟢 | 🟢 | 🟢 | Session summary persistence — per-session metrics in bbolt | Arsenal value proof, survives restart | Session record persists with tokens saved, guided ratio, counterfactual |
+| [L0](#layer-0) | [L0.6](#l06) | | | | | | x | x | - | 🟢 | 🟢 | 🟢 | Verify autotune fires every 50 prompts | Trust the learning cycle is working | Integration test: 50 prompts → autotune triggers |
+| [L0](#layer-0) | [L0.7](#l07) | | | | | | x | x | L0.6 | 🟢 | 🟢 | 🟢 | Autotune activity event — "cycle N, +P/-D/~X" | Visible learning progress in activity feed | Activity entry appears with correct promote/demote counts |
+| [L0](#layer-0) | [L0.8](#l08) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Write/Edit attrib = "productive" | Credit productive work correctly | Write/Edit tool events get "productive" attrib |
+| [L0](#layer-0) | [L0.9](#l09) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Glob attrib = "unguided" + estimated token cost | Show cost of not using aOa | Glob events get "unguided" + token estimate |
+| [L0](#layer-0) | [L0.10](#l010) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Grep (Claude) impact = estimated token cost | Show cost of not using aOa | Claude grep events show estimated tokens |
+| [L0](#layer-0) | [L0.11](#l011) | | | | | | x | | - | 🟢 | 🟢 | 🟢 | Learn activity event — observe signals summary | Visible learning in feed | Activity entry: "+N keywords, +M terms, +K domains" |
+| [L0](#layer-0) | [L0.12](#l012) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Target capture — preserve full query syntax, no normalization | Accurate activity display | Target column shows raw query as entered |
 | [L1](#layer-1) | [L1.1](#l11) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Rename tabs: Overview→Live, Learning→Intel, Conversation→Debrief | Brand alignment — tabs named by user intent | Tabs render with new names |
 | [L1](#layer-1) | [L1.2](#l12) | | | | | | | x | L1.1 | 🟢 | ⚪ | ⚪ | Add Recon tab (stub) — dimensional placeholder | Reserve the tab slot for v2 | Tab renders with placeholder content |
 | [L1](#layer-1) | [L1.3](#l13) | | | | | | | x | L1.1 | 🟢 | ⚪ | ⚪ | Add Arsenal tab — value proof over time, session history, savings chart | Prove aOa's ROI across sessions | Shows actual vs counterfactual, learning curve, session table |
@@ -145,116 +149,103 @@
 **Layer 0: Value Engine (Burn rate, context runway, attribution)**
 
 > The metrics backend that powers all value messaging. Without this, the dashboard has data but no story.
-> **Quality Gate**: `/api/runway` returns valid dual projections; all 15 attribution rows produce correct attrib/impact.
+> **Quality Gate**: ✅ `/api/runway` returns valid dual projections; all attribution rows produce correct attrib/impact. 24 new tests, 284 total passing.
 
 #### L0.1
 
-**Burn rate accumulator**
+**Burn rate accumulator** — 🟢 Complete
 
-Rolling window (5-minute) token-per-minute rate tracker. Feeds both the runway projection and the "tokens saved" metric.
+Rolling window (5-minute) `BurnRateTracker` with `Record`, `RecordAt`, `TokensPerMin`, `TotalTokens`, `Reset`. 6 unit tests (empty, single, multi-sample, eviction, partial eviction, reset).
 
-**Files**: `internal/app/app.go`
+**Files**: `internal/app/burnrate.go`, `internal/app/burnrate_test.go`
 
 #### L0.2
 
-**Context window max lookup**
+**Context window max lookup** — 🟢 Complete
 
-Map model tags from session JSONL (e.g., `claude-3-opus-20240229`) to their context window maximum. Used to compute runway as percentage and minutes remaining.
+`ContextWindowSize()` map with Claude 3/3.5/4 family entries, 200k default for unknowns. 2 tests.
 
-**Files**: `internal/app/app.go`
+**Files**: `internal/app/models.go`, `internal/app/models_test.go`
 
 #### L0.3
 
-**Dual projection**
+**Dual projection** — 🟢 Complete
 
-Two burn rate projections: with-aOa (actual observed) vs without-aOa (counterfactual based on unguided tool call costs). The delta between them is the savings story.
+`burnRate` (actual) and `burnRateCounterfact` (what-if) trackers wired into `onSessionEvent`. Counterfactual records the delta from guided reads (savings >= 50%). `sessionReadCount` and `sessionGuidedCount` tracked.
 
 **Files**: `internal/app/app.go`
 
 #### L0.4
 
-**Context runway API**
+**Context runway API** — 🟢 Complete
 
-`/api/runway` returns JSON: `{ with_aoa: { minutes: 47, tokens_remaining: 84200 }, without_aoa: { minutes: 12, tokens_remaining: 84200 }, delta_minutes: 35 }`
+`GET /api/runway` returns `RunwayResult` JSON with model, context window, burn rates, both runway projections, delta, and tokens saved. `RunwayProjection()` on `AppQueries` interface. 3 unit tests + 1 HTTP endpoint test.
 
-**Files**: `web/server.go`, `socket/protocol.go`
+**Files**: `internal/adapters/socket/protocol.go`, `internal/adapters/socket/server.go`, `internal/adapters/web/server.go`, `internal/adapters/web/server_test.go`, `internal/app/app.go`, `internal/app/runway_test.go`
 
 #### L0.5
 
-**Session summary persistence**
+**Session summary persistence** — 🟢 Complete
 
-Per-session metrics record written to bbolt when session ends or daemon stops. Schema:
+`SessionSummary` struct in ports. `SaveSessionSummary`/`LoadSessionSummary`/`ListSessionSummaries` on Storage interface. bbolt `sessions` bucket implementation. Session boundary detection via `handleSessionBoundary()` — flush on session ID change, restore on revisit. Flush in `Stop()`. 4 bbolt tests + 5 session boundary tests.
 
-```
-session_summary {
-  session_id, date, start, end, duration_min,
-  prompts, tool_reads, tool_writes, tool_searches,
-  tool_grep, tool_glob, tool_bash,
-  guided_reads, unguided_reads, guided_ratio,
-  tokens_in, tokens_out, tokens_cache,
-  tokens_actual, tokens_counterfact, tokens_saved,
-}
-```
-
-Stored in `session_summaries` bucket, keyed by session ID. Arsenal reads this for daily rollups, learning curve, and value charts. Replaces the original "weekly counter" concept — individual session records are more flexible.
-
-**Files**: `adapters/bbolt/store.go`, `internal/app/app.go`
+**Files**: `internal/ports/storage.go`, `internal/adapters/bbolt/store.go`, `internal/adapters/bbolt/store_test.go`, `internal/app/app.go`, `internal/app/session_test.go`
 
 #### L0.6
 
-**Autotune verification**
+**Autotune verification** — 🟢 Complete
 
-Verify the 50-prompt autotune cycle fires reliably in the integrated system (not just unit tests). Important for AT-04 and learn event confidence.
+Integration test fires 50 searches through `searchObserver`, confirms autotune triggers and produces activity entry.
 
-**Files**: `internal/app/app.go`
+**Files**: `internal/app/autotune_integration_test.go`
 
 #### L0.7
 
-**Autotune activity event**
+**Autotune activity event** — 🟢 Complete
 
-Activity feed entry: `Autotune | aOa | cycle 3 | +2 promoted, -1 demoted, ~8 decayed`. Visible evidence of the learning system working.
+After autotune fires in `searchObserver`, pushes `ActivityEntry{Action: "Autotune", Attrib: "cycle N", Impact: "+P promoted, -D demoted, ~X decayed"}`. Verified by integration test.
 
 **Files**: `internal/app/app.go`
 
 #### L0.8
 
-**Write/Edit attrib**
+**Write/Edit attrib** — 🟢 Complete
 
-Claude's Write/Edit tool events tagged as "productive" — desired work, aOa not involved. Green in dashboard.
+Write/Edit tool events now tagged `attrib = "productive"`. Updated rubric rows 8/9 and dedicated test.
 
-**Files**: `internal/app/app.go`
+**Files**: `internal/app/app.go`, `internal/app/activity_test.go`
 
 #### L0.9
 
-**Glob attrib**
+**Glob attrib** — 🟢 Complete
 
-Claude's Glob tool events tagged as "unguided" + estimated token cost. Red in dashboard. Heuristic: file size × ~0.25 tokens/byte (pending research on JSONL token exposure — open question #6).
+Glob tool events tagged `attrib = "unguided"` with estimated token cost via `estimateGlobCost()` (walks index files matching path prefix, `bytes/4`). Updated rubric row 11 and dedicated test.
 
-**Files**: `internal/app/app.go`
+**Files**: `internal/app/app.go`, `internal/app/activity_test.go`
 
 #### L0.10
 
-**Grep (Claude) impact**
+**Grep (Claude) impact** — 🟢 Complete
 
-Claude's native Grep tool events show estimated token cost. Same heuristic as L0.9.
+Claude Grep events show estimated scan cost via `estimateGrepCost()` (total indexed bytes / 4). Updated rubric row 10 and dedicated test.
 
-**Files**: `internal/app/app.go`
+**Files**: `internal/app/app.go`, `internal/app/activity_test.go`
 
 #### L0.11
 
-**Learn activity event**
+**Learn activity event** — 🟢 Complete
 
-Activity feed entry: `Learn | aOa | observe | +4 keywords, +2 terms, +1 domain`. Shows learning happening in real time.
+Two sources: (1) `searchObserver` pushes `Learn` with keyword/term/domain counts, (2) range-gated file reads push `Learn` with `+1 file: <path>`. Verified by integration test + dedicated unit test.
 
-**Files**: `internal/app/app.go`
+**Files**: `internal/app/app.go`, `internal/app/activity_test.go`
 
 #### L0.12
 
-**Target capture**
+**Target capture** — 🟢 Complete
 
-Preserve the full query/path syntax from tool calls as-is in the activity target column. No normalization — show exactly what was searched or accessed.
+`searchTarget()` preserves full flag syntax verbatim (already correct). Verification test added with all-flags, regex+boundary, and simple query cases.
 
-**Files**: `internal/app/app.go`
+**Files**: `internal/app/activity_test.go`
 
 ---
 
@@ -617,7 +608,8 @@ NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→m
 | Session Prism (Claude JSONL reader) | Defensive parsing, UUID dedup, compound message decomposition. Battle-tested. |
 | Tree-sitter parser (28 languages) | Symbol extraction working for Go, Python, JS/TS + 24 generic. Reuse ASTs for L5. |
 | Socket protocol | JSON-over-socket IPC. Concurrent clients. Extend, don't replace. |
-| Activity rubric (30 tests) | Color-coded attribs, impact formatting. Extend for new tool types. |
+| Value engine (L0, 24 new tests) | Burn rate, runway projection, session persistence, activity enrichments. All wired. |
+| Activity rubric (38 tests) | Color-coded attribs, impact formatting. Productive/unguided/Learn/Autotune enrichments. |
 
 ### What We're NOT Doing
 

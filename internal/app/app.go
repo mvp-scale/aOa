@@ -138,6 +138,21 @@ type App struct {
 	activityRing  [50]ActivityEntry // ring buffer of last 50 activity entries
 	activityHead  int
 	activityCount int
+
+	// Burn rate tracking (L0.1)
+	burnRate            *BurnRateTracker // actual token burn rate
+	burnRateCounterfact *BurnRateTracker // counterfactual (what burn would be without aOa)
+
+	// Value engine fields (L0.3)
+	currentModel          string // model from most recent event
+	counterfactTokensSaved int64  // lifetime tokens saved by aOa-guided reads
+	sessionReadCount      int    // total range-gated reads this session
+	sessionGuidedCount    int    // reads where savings >= 50%
+
+	// Session boundary tracking (L0.5)
+	currentSessionID    string // active Claude session ID
+	currentSessionStart int64  // unix timestamp of session start
+	sessionPrompts      int    // prompt count within current session
 }
 
 // Config holds initialization parameters for the App.
@@ -241,7 +256,9 @@ func New(cfg Config) (*App, error) {
 			BashCommands: make(map[string]int),
 			GrepPatterns: make(map[string]int),
 		},
-		turnBuffer: make(map[string]*turnBuilder),
+		turnBuffer:          make(map[string]*turnBuilder),
+		burnRate:            NewBurnRateTracker(5 * time.Minute),
+		burnRateCounterfact: NewBurnRateTracker(5 * time.Minute),
 	}
 
 	// Create server with App as query provider (for domains, stats, etc.)
@@ -382,6 +399,24 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 	if tuneResult != nil {
 		_ = a.Store.SaveLearnerState(a.ProjectID, a.Learner.State())
 		a.writeStatus(tuneResult)
+		// L0.7: Autotune activity event
+		a.pushActivity(ActivityEntry{
+			Action:    "Autotune",
+			Source:    "aOa",
+			Attrib:    fmt.Sprintf("cycle %d", a.promptN/50),
+			Impact:    fmt.Sprintf("+%d promoted, -%d demoted, ~%d decayed", tuneResult.Promoted, tuneResult.Demoted, tuneResult.Decayed),
+			Timestamp: time.Now().Unix(),
+		})
+	}
+
+	// L0.11: Learn activity event for search signals
+	if len(sc.Keywords) > 0 || len(sc.Terms) > 0 || len(sc.Domains) > 0 {
+		a.pushActivity(ActivityEntry{
+			Action:    "Learn",
+			Source:    "aOa",
+			Impact:    fmt.Sprintf("+%d keywords, +%d terms, +%d domains", len(sc.Keywords), len(sc.Terms), len(sc.Domains)),
+			Timestamp: time.Now().Unix(),
+		})
 	}
 
 	// Count unique files in results
@@ -428,8 +463,9 @@ func (a *App) Stop() error {
 	a.Watcher.Stop()
 	a.WebServer.Stop()
 	a.Server.Stop()
-	// Persist final learner state before shutdown
+	// Persist final state before shutdown
 	a.mu.Lock()
+	a.flushSessionSummary()
 	_ = a.Store.SaveLearnerState(a.ProjectID, a.Learner.State())
 	a.mu.Unlock()
 	a.Store.Close()
@@ -443,6 +479,14 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	// Track current model from every event
+	if ev.Model != "" {
+		a.currentModel = ev.Model
+	}
+
+	// Session boundary detection (L0.5)
+	a.handleSessionBoundary(ev)
+
 	ts := ev.Timestamp.Unix()
 	if ts == 0 {
 		ts = int64(a.promptN) // fallback if timestamp missing
@@ -453,6 +497,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 		// Flush the current exchange builder before starting new user input
 		a.flushCurrentBuilder()
 		a.promptN++
+		a.sessionPrompts++
 		a.sessionMetrics.TurnCount++
 		a.Learner.ProcessBigrams(ev.Text)
 		a.writeStatus(nil)
@@ -488,6 +533,10 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			a.sessionMetrics.CacheWriteTokens += ev.Usage.CacheWriteTokens
 			tb.InputTokens += ev.Usage.InputTokens
 			tb.OutputTokens += ev.Usage.OutputTokens
+			// L0.1: Record burn rate for both actual and counterfactual
+			total := ev.Usage.InputTokens + ev.Usage.OutputTokens + ev.Usage.CacheReadTokens + ev.Usage.CacheWriteTokens
+			a.burnRate.Record(total)
+			a.burnRateCounterfact.Record(total)
 		}
 		// Buffer AI response text
 		if ev.Text != "" {
@@ -506,6 +555,23 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				FileRead: &learner.FileRead{
 					File: ev.File.Path,
 				},
+			})
+			// L0.3: Track read counts and counterfactual savings
+			a.sessionReadCount++
+			s := a.readSavings(ev.File.Path, ev.File.Limit)
+			if s.pct >= 50 {
+				a.sessionGuidedCount++
+				delta := int(s.fileTokens - s.readTokens)
+				a.counterfactTokensSaved += int64(delta)
+				a.burnRateCounterfact.Record(delta)
+			}
+			// L0.11: Learn activity for file read
+			relPath := a.relativePath(ev.File.Path)
+			a.pushActivity(ActivityEntry{
+				Action:    "Learn",
+				Source:    "aOa",
+				Impact:    fmt.Sprintf("+1 file: %s", relPath),
+				Timestamp: time.Now().Unix(),
 			})
 		}
 		// Accumulate tool metrics
@@ -556,15 +622,30 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				// aOa impact: Claude is using raw grep instead of aOa grep.
 				// Show that aOa indexed search exists as an alternative.
 				attrib = "unguided"
+				// L0.10: estimate grep scan cost
+				impact = a.estimateGrepCost(ev.Tool.Pattern)
 			case "Write", "Edit":
 				if ev.File != nil && ev.File.Path != "" {
 					target = a.relativePath(ev.File.Path)
 				}
+				// L0.8: productive attribution for write/edit
+				attrib = "productive"
 			case "Glob":
 				if ev.File != nil && ev.File.Path != "" {
 					target = a.relativePath(ev.File.Path)
 				} else if ev.Tool.Pattern != "" {
 					target = ev.Tool.Pattern
+				}
+				// L0.9: unguided attribution + token cost
+				attrib = "unguided"
+				globPath := ""
+				if ev.File != nil && ev.File.Path != "" {
+					globPath = ev.File.Path
+				} else if ev.Tool.Pattern != "" {
+					globPath = ev.Tool.Pattern
+				}
+				if globPath != "" {
+					impact = a.estimateGlobCost(globPath)
 				}
 			case "Task":
 				if ev.Tool.Command != "" {
@@ -705,6 +786,44 @@ func (a *App) ActivityFeed() socket.ActivityFeedResult {
 	return socket.ActivityFeedResult{
 		Entries: entries,
 		Count:   len(entries),
+	}
+}
+
+// RunwayProjection computes dual context-runway projections.
+// Implements socket.AppQueries.
+func (a *App) RunwayProjection() socket.RunwayResult {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	model := a.currentModel
+	windowMax := ContextWindowSize(model)
+	tokensUsed := a.burnRate.TotalTokens()
+	burnRate := a.burnRate.TokensPerMin()
+	counterfactRate := a.burnRateCounterfact.TokensPerMin()
+
+	remaining := int64(windowMax) - tokensUsed
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	var runwayMin, counterfactMin float64
+	if burnRate > 0 {
+		runwayMin = float64(remaining) / burnRate
+	}
+	if counterfactRate > 0 {
+		counterfactMin = float64(remaining) / counterfactRate
+	}
+
+	return socket.RunwayResult{
+		Model:              model,
+		ContextWindowMax:   windowMax,
+		TokensUsed:         tokensUsed,
+		BurnRatePerMin:     burnRate,
+		CounterfactPerMin:  counterfactRate,
+		RunwayMinutes:      runwayMin,
+		CounterfactMinutes: counterfactMin,
+		DeltaMinutes:       runwayMin - counterfactMin,
+		TokensSaved:        a.counterfactTokensSaved,
 	}
 }
 
@@ -997,6 +1116,69 @@ func (a *App) flushStaleTurns(activeTurnID string) {
 	}
 }
 
+// handleSessionBoundary detects Claude session changes and flushes/loads session summaries.
+// Must be called with a.mu held.
+func (a *App) handleSessionBoundary(ev ports.SessionEvent) {
+	if ev.SessionID == "" || ev.SessionID == a.currentSessionID {
+		return
+	}
+	// Flush old session if we had one
+	if a.currentSessionID != "" {
+		a.flushSessionSummary()
+	}
+	// Check if revisiting an existing session
+	if a.Store != nil {
+		existing, _ := a.Store.LoadSessionSummary(a.ProjectID, ev.SessionID)
+		if existing != nil {
+			// Restore counters from persisted session
+			a.sessionPrompts = existing.PromptCount
+			a.sessionReadCount = existing.ReadCount
+			a.sessionGuidedCount = existing.GuidedReadCount
+			a.counterfactTokensSaved = existing.TokensSaved
+			a.currentSessionStart = existing.StartTime
+		} else {
+			a.sessionPrompts = 0
+			a.sessionReadCount = 0
+			a.sessionGuidedCount = 0
+			a.currentSessionStart = ev.Timestamp.Unix()
+		}
+	} else {
+		a.sessionPrompts = 0
+		a.sessionReadCount = 0
+		a.sessionGuidedCount = 0
+		a.currentSessionStart = ev.Timestamp.Unix()
+	}
+	a.currentSessionID = ev.SessionID
+}
+
+// flushSessionSummary builds a SessionSummary from current counters and persists it.
+// Must be called with a.mu held.
+func (a *App) flushSessionSummary() {
+	if a.currentSessionID == "" || a.Store == nil {
+		return
+	}
+	var guidedRatio float64
+	if a.sessionReadCount > 0 {
+		guidedRatio = float64(a.sessionGuidedCount) / float64(a.sessionReadCount)
+	}
+	summary := &ports.SessionSummary{
+		SessionID:        a.currentSessionID,
+		StartTime:        a.currentSessionStart,
+		EndTime:          time.Now().Unix(),
+		PromptCount:      a.sessionPrompts,
+		ReadCount:        a.sessionReadCount,
+		GuidedReadCount:  a.sessionGuidedCount,
+		GuidedRatio:      guidedRatio,
+		TokensSaved:      a.counterfactTokensSaved,
+		InputTokens:      a.sessionMetrics.InputTokens,
+		OutputTokens:     a.sessionMetrics.OutputTokens,
+		CacheReadTokens:  a.sessionMetrics.CacheReadTokens,
+		CacheWriteTokens: a.sessionMetrics.CacheWriteTokens,
+		Model:            a.currentModel,
+	}
+	_ = a.Store.SaveSessionSummary(a.ProjectID, summary)
+}
+
 // turnFromBuilder converts a turnBuilder into a ConversationTurn.
 func (a *App) turnFromBuilder(tb *turnBuilder) ConversationTurn {
 	return ConversationTurn{
@@ -1130,6 +1312,45 @@ func formatTokens(tokens int64) string {
 	return fmt.Sprintf("%d", tokens)
 }
 
+// estimateGlobCost estimates the token cost of a glob operation by scanning
+// the index for files matching the given path prefix.
+// Must be called with a.mu held.
+func (a *App) estimateGlobCost(path string) string {
+	if a.Index == nil {
+		return "-"
+	}
+	relPath := a.relativePath(path)
+	var totalBytes int64
+	for _, fm := range a.Index.Files {
+		fmRel := a.relativePath(fm.Path)
+		if strings.HasPrefix(fmRel, relPath) || strings.HasPrefix(fm.Path, path) {
+			totalBytes += fm.Size
+		}
+	}
+	if totalBytes == 0 {
+		return "-"
+	}
+	tokens := totalBytes / 4
+	return fmt.Sprintf("~%s tokens", formatTokens(tokens))
+}
+
+// estimateGrepCost estimates the token cost of a grep scan across indexed files.
+// Must be called with a.mu held.
+func (a *App) estimateGrepCost(pattern string) string {
+	if a.Index == nil || pattern == "" {
+		return "-"
+	}
+	var totalBytes int64
+	for _, fm := range a.Index.Files {
+		totalBytes += fm.Size
+	}
+	if totalBytes == 0 {
+		return "-"
+	}
+	tokens := totalBytes / 4
+	return fmt.Sprintf("~%s tokens", formatTokens(tokens))
+}
+
 // truncate truncates a string to a maximum length.
 func (a *App) truncate(s string, max int) string {
 	if len(s) <= max {
@@ -1259,6 +1480,21 @@ func (a *App) WipeProject() error {
 	a.activityRing = [50]ActivityEntry{}
 	a.activityHead = 0
 	a.activityCount = 0
+
+	// Reset burn rate trackers (L0.1)
+	a.burnRate.Reset()
+	a.burnRateCounterfact.Reset()
+
+	// Reset value engine fields (L0.3)
+	a.currentModel = ""
+	a.counterfactTokensSaved = 0
+	a.sessionReadCount = 0
+	a.sessionGuidedCount = 0
+
+	// Reset session tracking (L0.5)
+	a.currentSessionID = ""
+	a.currentSessionStart = 0
+	a.sessionPrompts = 0
 
 	return nil
 }

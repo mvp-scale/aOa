@@ -450,6 +450,117 @@ func TestStore_StateSurvivesRestart(t *testing.T) {
 }
 
 // =============================================================================
+// Session summary persistence tests
+// =============================================================================
+
+func TestStore_SessionSummary_Roundtrip(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	summary := &ports.SessionSummary{
+		SessionID:        "sess-abc-123",
+		StartTime:        1700000000,
+		EndTime:          1700003600,
+		PromptCount:      42,
+		ReadCount:        15,
+		GuidedReadCount:  8,
+		GuidedRatio:      0.533,
+		TokensSaved:      12000,
+		TokensCounterfact: 5000,
+		InputTokens:      50000,
+		OutputTokens:     20000,
+		CacheReadTokens:  30000,
+		CacheWriteTokens: 10000,
+		Model:            "claude-opus-4-6",
+	}
+
+	err := store.SaveSessionSummary("proj-1", summary)
+	require.NoError(t, err)
+
+	loaded, err := store.LoadSessionSummary("proj-1", "sess-abc-123")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+
+	assert.Equal(t, summary.SessionID, loaded.SessionID)
+	assert.Equal(t, summary.StartTime, loaded.StartTime)
+	assert.Equal(t, summary.EndTime, loaded.EndTime)
+	assert.Equal(t, summary.PromptCount, loaded.PromptCount)
+	assert.Equal(t, summary.ReadCount, loaded.ReadCount)
+	assert.Equal(t, summary.GuidedReadCount, loaded.GuidedReadCount)
+	assert.InDelta(t, summary.GuidedRatio, loaded.GuidedRatio, 0.001)
+	assert.Equal(t, summary.TokensSaved, loaded.TokensSaved)
+	assert.Equal(t, summary.InputTokens, loaded.InputTokens)
+	assert.Equal(t, summary.OutputTokens, loaded.OutputTokens)
+	assert.Equal(t, summary.CacheReadTokens, loaded.CacheReadTokens)
+	assert.Equal(t, summary.CacheWriteTokens, loaded.CacheWriteTokens)
+	assert.Equal(t, summary.Model, loaded.Model)
+}
+
+func TestStore_SessionSummary_ListMultiple(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	s1 := &ports.SessionSummary{SessionID: "sess-1", PromptCount: 10}
+	s2 := &ports.SessionSummary{SessionID: "sess-2", PromptCount: 20}
+	s3 := &ports.SessionSummary{SessionID: "sess-3", PromptCount: 30}
+
+	require.NoError(t, store.SaveSessionSummary("proj-1", s1))
+	require.NoError(t, store.SaveSessionSummary("proj-1", s2))
+	require.NoError(t, store.SaveSessionSummary("proj-1", s3))
+
+	summaries, err := store.ListSessionSummaries("proj-1")
+	require.NoError(t, err)
+	assert.Len(t, summaries, 3)
+
+	ids := make(map[string]bool)
+	for _, s := range summaries {
+		ids[s.SessionID] = true
+	}
+	assert.True(t, ids["sess-1"])
+	assert.True(t, ids["sess-2"])
+	assert.True(t, ids["sess-3"])
+}
+
+func TestStore_SessionSummary_OverwriteSameID(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	s1 := &ports.SessionSummary{SessionID: "sess-1", PromptCount: 10}
+	require.NoError(t, store.SaveSessionSummary("proj-1", s1))
+
+	// Overwrite with updated prompt count
+	s1Updated := &ports.SessionSummary{SessionID: "sess-1", PromptCount: 25}
+	require.NoError(t, store.SaveSessionSummary("proj-1", s1Updated))
+
+	loaded, err := store.LoadSessionSummary("proj-1", "sess-1")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.Equal(t, 25, loaded.PromptCount)
+
+	// Should still be just one entry
+	summaries, err := store.ListSessionSummaries("proj-1")
+	require.NoError(t, err)
+	assert.Len(t, summaries, 1)
+}
+
+func TestStore_SessionSummary_MissingSessions(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	// Non-existent project
+	loaded, err := store.LoadSessionSummary("proj-1", "sess-1")
+	require.NoError(t, err)
+	assert.Nil(t, loaded)
+
+	// Non-existent session
+	require.NoError(t, store.SaveSessionSummary("proj-1", &ports.SessionSummary{SessionID: "sess-1"}))
+	loaded, err = store.LoadSessionSummary("proj-1", "sess-nonexistent")
+	require.NoError(t, err)
+	assert.Nil(t, loaded)
+
+	// Empty project list
+	summaries, err := store.ListSessionSummaries("proj-empty")
+	require.NoError(t, err)
+	assert.Nil(t, summaries)
+}
+
+// =============================================================================
 // Lock contention tests — verify the 1s timeout prevents hangs
 // =============================================================================
 

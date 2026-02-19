@@ -226,3 +226,16 @@ type RankedItem struct {
 	Name  string  `json:"name"`
 	Count float64 `json:"count"`
 }
+
+// RunwayResult is the result of a runway projection request.
+type RunwayResult struct {
+	Model              string  `json:"model"`
+	ContextWindowMax   int     `json:"context_window_max"`
+	TokensUsed         int64   `json:"tokens_used"`
+	BurnRatePerMin     float64 `json:"burn_rate_per_min"`
+	CounterfactPerMin  float64 `json:"counterfact_per_min"`
+	RunwayMinutes      float64 `json:"runway_minutes"`
+	CounterfactMinutes float64 `json:"counterfact_minutes"`
+	DeltaMinutes       float64 `json:"delta_minutes"`
+	TokensSaved        int64   `json:"tokens_saved"`
+}

@@ -30,6 +30,7 @@ type AppQueries interface {
 	TopFiles(limit int) TopItemsResult
 	DomainTermNames(domain string) []string
 	DomainTermHitCounts(domain string) map[string]int
+	RunwayProjection() RunwayResult
 }
 
 // Server is the daemon that listens on a Unix socket and serves search requests.

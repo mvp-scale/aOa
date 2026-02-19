@@ -64,6 +64,14 @@ func (m *mockQueries) DomainTermHitCounts(domain string) map[string]int {
 	return nil
 }
 
+func (m *mockQueries) RunwayProjection() socket.RunwayResult {
+	return socket.RunwayResult{
+		Model:            "claude-opus-4-6",
+		ContextWindowMax: 200000,
+		BurnRatePerMin:   1500.0,
+	}
+}
+
 func newTestState() *ports.LearnerState {
 	return &ports.LearnerState{
 		PromptCount: 42,
@@ -109,6 +117,7 @@ func setupTestServer(t *testing.T) *httptest.Server {
 	mux.HandleFunc("GET /api/top-terms", srv.handleTopTerms)
 	mux.HandleFunc("GET /api/top-files", srv.handleTopFiles)
 	mux.HandleFunc("GET /api/activity/feed", srv.handleActivityFeed)
+	mux.HandleFunc("GET /api/runway", srv.handleRunway)
 
 	return httptest.NewServer(mux)
 }
@@ -306,6 +315,24 @@ func TestTopFilesEndpoint(t *testing.T) {
 
 	var result socket.TopItemsResult
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+}
+
+func TestRunwayEndpoint(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/runway")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var result socket.RunwayResult
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.Equal(t, "claude-opus-4-6", result.Model)
+	assert.Equal(t, 200000, result.ContextWindowMax)
+	assert.InDelta(t, 1500.0, result.BurnRatePerMin, 0.01)
 }
 
 func TestHandleActivityFeed(t *testing.T) {
