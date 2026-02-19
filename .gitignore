@@ -11,3 +11,4 @@
 # Claude Code local settings (per-machine)
 .claude/settings.local.json
 _throwaway_mockups/
+_throwaway_data/

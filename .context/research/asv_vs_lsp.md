@@ -18,7 +18,7 @@ Links:
 
 ## The common ground (what both give you)
 
-Both AST tooling and LSP-backed tooling start from the same core move, parse source into a tree, then walk that tree to answer questions like “where is this symbol defined?” or “what calls this method?”.
+Both Abstract Syntax Tree (AST) tooling and LSP-backed tooling start from the same core move, parse source into a tree, then walk that tree to answer questions like “where is this symbol defined?” or “what calls this method?”.
 
 They both enable:
 
