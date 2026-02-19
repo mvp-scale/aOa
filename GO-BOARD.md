@@ -1,415 +1,614 @@
-# aOa GO-BOARD
+# Work Board
 
-> **Updated**: 2026-02-18 | **Phase**: Phase 8d/8e — Value Metrics & Dashboard Restructure | **Status**: 315+ tests passing, 0 failing | **Context**: 88%
-> **Architecture**: Hexagonal (ports/adapters) + Session Prism | **Target**: Single binary, zero Docker
-> **Module**: `github.com/corey/aoa` | **Binary**: `cmd/aoa/main.go`
-> **Completed work**: See `.context/COMPLETED.md` for Phases 1–8c (all validated)
+[Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
----
-
-## Quick Start
-
-```bash
-./aoa init                      # Index project
-./aoa daemon start              # Returns terminal, prints dashboard URL
-./aoa open                      # Opens http://localhost:{port} in browser
-./aoa grep <query>              # Search (CLI remains operational-only)
-./aoa egrep <pattern>           # Regex search
-./aoa daemon stop               # Graceful shutdown
-# Dashboard: http://localhost:{port}?mock  (mock mode)
-```
-
-**Build & Test:**
-```bash
-go build ./cmd/aoa/              # Build binary
-go vet ./...                     # Static analysis
-go test ./...                    # All tests (315+ passing)
-go test ./test/integration/ -v   # 42 integration tests
-make check                       # Local CI: vet + lint + test
-```
+> **Updated**: 2026-02-18 (Session 47) | **Phase**: Dashboard value metrics & 5-tab restructure
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c (315+ tests, 88% context)
 
 ---
 
-## Design Goals
+## Goals
 
-| ID | Goal | aOa-go Solution | Status |
-|----|------|-----------------|--------|
-| G1 | O(1) Performance | All in-memory, observe() 5ns, autotune 2.5μs, zero hooks | ✅ |
-| G2 | Grep/egrep Parity | Type-safe flag parsing, identical output format | ✅ |
-| G3 | Domain Learning | Compiled binary, universal domains, event log | ✅ |
-| G4 | Hit Tracking | All counters decayed in autotune, noise filter on in-memory maps | ✅ |
-| G5 | Cohesive Architecture | Single binary, typed Go structs, hexagonal ports/adapters | ✅ |
-| G6 | Embedded Storage | bbolt, no network, transactions native | ✅ |
-| G7 | Memory Bounded | Explicit bounds, bbolt with compaction, project-scoped buckets | ✅ |
+> Atomic architectural principles. Every task is evaluated against each goal independently.
 
-## Legend
+| Goal | Statement |
+|------|-----------|
+| **G0** | **Speed** — 50-120x faster than Python. Sub-millisecond search, <200ms startup, <50MB memory. |
+| **G1** | **Parity** — Zero behavioral divergence from Python. Test fixtures are the source of truth. |
+| **G2** | **Single Binary** — One `aoa` binary. Zero Docker, zero runtime deps, zero install friction. |
+| **G3** | **Agent-First** — Replace `grep`/`find` transparently for AI agents. Minimize prompt education tax. |
+| **G4** | **Clean Architecture** — Hexagonal. Domain logic is dependency-free. External concerns behind interfaces. |
+| **G5** | **Self-Learning** — Adaptive pattern recognition. observe(), autotune, competitive displacement. |
+| **G6** | **Value Proof** — Surface measurable savings. Context runway, tokens saved, sessions extended. |
 
-| Symbol | Meaning |
+---
+
+## Board Structure
+
+> Layered architecture. Each layer builds on the one below. TDD — validation gates at every layer.
+
+### Layers
+
+| Layer | Name | Purpose | Gate Method |
+|-------|------|---------|-------------|
+| **L0** | Value Engine | Burn rate, context runway, attribution signals | Runway API returns valid projections; attribution rubric covers all tool actions |
+| **L1** | Dashboard | 5-tab layout, mockup implementation, hero narratives | All 5 tabs render with live data; mockup parity validated in browser |
+| **L2** | Infra Gaps | File watcher wiring, bbolt lock fix, missing CLI flags | `aoa init` works while daemon runs; file changes trigger re-index |
+| **L3** | Migration | Parallel run Python vs Go, parity proof | 100 queries × 5 projects = zero divergence; benchmark confirms speedup |
+| **L4** | Distribution | Goreleaser, grammar loader, install docs | `go install` or binary download works on linux/darwin × amd64/arm64 |
+| **L5** | Dimensional Analysis | Bitmask engine, 6-tier scanning, Recon tab | Security tier catches known vulns in test projects; query time < 10ms |
+
+### Columns
+
+| Column | Purpose |
 |--------|---------|
-| 🟢 | Confident — clear implementation path |
-| 🟡 | Uncertain — may need research |
-| 🔴 | Blocked — needs research first |
+| **Layer** | Layer grouping. Links to layer detail below. |
+| **ID** | Task identifier (layer.step). Links to task reference below. |
+| **G0-G6** | Goal alignment. `x` = serves this goal. Blank = not relevant. |
+| **Dep** | ID of blocking task, or `-` |
+| **Cf** | Confidence — see indicator reference below |
+| **St** | Status — see indicator reference below |
+| **Va** | Validation state — see indicator reference below |
+| **Task** | What we're doing |
+| **Value** | Why we're doing this |
+| **Va Detail** | How we prove it |
+
+### Indicator Reference
+
+| Indicator | Cf (Confidence) | St (Status) | Va (Validation) |
+|:---------:|:----------------|:------------|:----------------|
+| ⚪ | — | Not started | Not yet validated |
+| 🔵 | — | In progress | — |
+| 🟢 | Confident | Complete | Validated |
+| 🟡 | Uncertain | Pending | Needs test strategy |
+| 🔴 | Lost/Blocked | Blocked | Failed |
+
+> 🟢🟢🟢 = done. Task moves to COMPLETED.md.
 
 ---
 
-## Phase 8d: Value Metrics — Context Runway & Savings
+## Mission
 
-**Goal:** Replace vanity metrics (raw token counts, keyword counts) with metrics that communicate real value. Every hero card, stat grid, and metrics panel should answer: *"What did aOa save me?"*
+**North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Guiding principle:** Lead with the metric every Claude Code user has physically felt — context filling up and the model forgetting things.
+**Current**: Core engine complete (search, learner, session integration, CLI, dashboard). 315+ tests passing. Now building the value metrics layer and restructuring the dashboard to surface savings.
 
-**Three metric tiers (ascending perceived value):**
+**Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
-| Tier | Metric | Formula | Display |
-|------|--------|---------|---------|
-| Vanity | Tokens saved | `Σ(full_size - guided_size)` | Small/secondary — keep but de-emphasize |
-| Tangible | Sessions extended | `tokens_saved / avg_session_cost` | Weekly rollup: "aOa gave you 3 extra sessions this week" |
-| **Visceral** | **Context runway** | `(window_max - current_usage) / burn_rate` | **Lead metric:** "47 min remaining. Without aOa: 12 min." |
-
-| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
-|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
-| V-01 | Backend | Burn rate accumulator — rolling window of tokens consumed per minute | Critical | TODO | 🟢 | - | `internal/app/app.go` | Accumulator produces stable rate after 5+ data points |
-| V-02 | Backend | Context window max lookup — map model tag to window size | High | TODO | 🟢 | - | `internal/app/app.go` | opus-4 → 200k, sonnet → 200k, haiku → 200k |
-| V-03 | Backend | Dual projection — with-aOa vs without-aOa burn rates using guided savings delta | Critical | TODO | 🟢 | V-01 | `internal/app/app.go` | Two rates diverge when guided reads occur |
-| V-04 | Backend | Context runway API — expose both projections via `/api/runway` | High | TODO | 🟢 | V-03 | `web/server.go`, `socket/protocol.go` | Returns minutes remaining with and without aOa |
-| V-05 | Backend | Weekly rollup persistence — sessions-extended counter survives daemon restart | Medium | TODO | 🟡 | V-03 | `adapters/bbolt/store.go` | Counter persists across restart, resets weekly |
-| V-06 | Frontend | Live tab hero — context runway as primary display ("47 min remaining") | Critical | TODO | 🟢 | V-04 | `static/index.html` | Hero shows dual projection with visual contrast |
-| V-07 | Frontend | Live tab metrics panel — replace prompts/domains with savings-oriented metrics | High | TODO | 🟢 | V-04 | `static/index.html` | Panel shows token savings, avg query speed, sessions extended |
-| V-08 | Frontend | Stats grid revision — cards show rolling avg speed, tokens saved, guided ratio | High | TODO | 🟢 | V-04 | `static/index.html` | Cards communicate value, not raw counters |
-
-**Kill list:** Time-saved ranges (e.g., "3.9h-9.6h") — ranges communicate uncertainty, undermine trust. Pick one defensible number or drop entirely.
+**Needs Discussion** (before L1 implementation):
+- **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
+- **Real-time conversation** — Legacy Python showed real-time; Go dashboard with 2s poll should do better. Needs investigation.
+- **Intent score visualization** — Formula `coverage × confidence × momentum` (0-100). Traffic light vs number display?
 
 ---
 
-## Phase 8e: Dashboard Restructure — 5-Tab Tactical Layout
+## Board
 
-**Goal:** Expand from 3 tabs to 5. Each tab maps to what the user is *doing* when they click it.
-
-| New Tab | Old Tab | Content | What User Is Doing |
-|---------|---------|---------|-------------------|
-| **Live** | Overview | Real-time intent feed, activity table, context runway, status | "What's happening right now?" |
-| **Recon** | *(new)* | Dimensional intelligence — security/perf/quality/compliance/architecture/observability drill-down | "Where are concerns in my codebase?" |
-| **Intel** | Learning | Domain rankings, n-gram metrics, intent score | "What has aOa learned?" |
-| **Debrief** | Conversation | Session stats, conversation feed, token metrics | "What just happened?" |
-| **Arsenal** | *(new)* | Config, aliases, daemon status, setup, port management | "How is my system configured?" |
-
-| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
-|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
-| T-01 | Frontend | Rename tabs: Overview→Live, Learning→Intel, Conversation→Debrief | High | TODO | 🟢 | - | `static/index.html` | All tab labels, IDs, CSS classes updated |
-| T-02 | Frontend | Add Recon tab (stub) — "use `ag <query>` in your terminal" placeholder | Medium | TODO | 🟢 | T-01 | `static/index.html` | Tab renders, placeholder visible |
-| T-03 | Frontend | Add Arsenal tab — daemon status, config display, alias instructions, port info | Medium | TODO | 🟢 | T-01 | `static/index.html` | Shows config data from `/api/health` |
-| T-04 | Frontend | 5-tab header layout — ensure responsive at smaller widths | Medium | TODO | 🟢 | T-01 | `static/index.html` | Tabs don't overflow at 800px width |
-| T-05 | Backend | Arsenal API — expose config, alias state, daemon info | Low | TODO | 🟢 | T-03 | `web/server.go` | `/api/config` returns project root, paths, alias status |
-| T-06 | Frontend | Relative timestamps — "now", "12s", "3m" (no "ago" suffix) | High | Done | 🟢 | - | `static/index.html` | Timestamps update live, weighted distribution, shared `relativeTime()` helper |
-| T-07 | Frontend | Activity table: fixed columns, no jitter — `table-layout:fixed`, 2/3 left + 1/3 target | High | Done | 🟢 | - | `static/index.html` | Columns: time 8%, action 10%, source 10%, attrib 15%, impact 24%, target 33% |
-| T-08 | Frontend | Activity table: responsive — drop time+target at 900px, keep action/source/attrib/impact (20/20/25/35) | High | Done | 🟢 | T-07 | `static/index.html` | 4-column layout at narrow width, balanced spacing |
-| T-09 | Frontend | Negative feedback loop — unguided Grep/Glob: red pills, red attrib, red target, wasted token estimate in impact | High | Done | 🟢 | - | `static/index.html` | Grep/Glob rows read as costly end-to-end; productive=green, unguided=red |
-
-| T-10 | Frontend | Standardized hero section — 160px min-height, persuasion headline + support line + cause→effect hero metrics | High | Done | 🟢 | - | all mockups | Hero row height, structure, typography consistent across all 5 tabs |
-| T-11 | Frontend | Hero persuasion engine — JSON-driven Identity/Outcome/Separator/Exclusion rotating headlines | High | Done | 🟢 | T-10 | `static/hero.json`, all mockups | 60 combos per tab (5 identities × 3 stories × 4 separators) |
-| T-12 | Frontend | Recon: column-based dimension indicators — tier headers replace per-row pill badges | High | Done | 🟢 | - | `_throwaway_mockups/recon.html` | Column headers with clickable tier toggles |
-| T-13 | Frontend | Recon: tree breadcrumb navigation — Root › folder › file integrated into tree card header | High | Done | 🟢 | T-12 | `_throwaway_mockups/recon.html` | Every segment clickable, "Root" always links back |
-| T-14 | Frontend | Recon: tier toggle persistence — click column header or sidebar tier to toggle on/off, persists in localStorage | High | Done | 🟢 | T-12 | `_throwaway_mockups/recon.html` | Toggle state survives page reload |
-
-**Dashboard design standard (v2):**
-- **Hero row**: 160px min-height, 2:1 flex ratio (hero card + hero metrics)
-- **Hero card**: gradient-border wrapper → label (static) → hero headline (persuasion, rotates) → hero support (single data line, dot separators)
-- **Hero headline pattern**: `{Identity} {outcome} . . . {separator} {exclusion}.` — Identity 22px bold gradient, outcome 17px semi-bold, separator cyan, exclusion dim. Line 2 indented 33%.
-- **Hero metrics**: 2×2 cause→effect grid with arrows. Shows how one metric drives the next.
-- **Hero data**: `static/hero.json` — shared identities/separators, 3 outcome/exclusion story pairs per tab
-- **Support line**: single flowing line with `·` dot separators, colored value numbers. Data-driven, not persuasion.
-- **Three-tier page narrative**: Hero row (claim) → Stats grid (evidence) → Data (operational detail)
-- **Padding**: 24px all sides, gap 20px between sections. Responsive stacks at 900px.
-
-**Mockup status:**
-- `live.html` — persuasion hero, cause→effect metrics (guided→savings→tokens→sessions), flowing support line, autotune moved to stats grid
-- `recon.html` — hero row inside .main (sidebar-aligned), column-based dim indicators, tree breadcrumb, tier toggle on/off with localStorage persistence
-- `intel.html` — hero row added above traffic card, cause→effect metrics (score→coverage, core→confidence)
-- `debrief.html` — hero row with wrapper, cause→effect metrics (input→output, cache→saved)
-- `arsenal.html` — hero row with wrapper, cause→effect metrics (files→symbols, latency→autotune)
-
-**Arsenal — future scope:** Interactive `aoa init` in browser, alias toggle, .gitignore exception editor. Start read-only.
-
----
-
-## Phase 8 — Remaining Attribution Work
-
-**Attribution Philosophy:**
-- **aOa gets credit** when it saves tokens or provides indexed speed
-- **"productive"** for Write/Edit — desired development work, aOa not involved
-- **"unguided"** for Claude's Grep/Glob — expensive operations where aOa indexed search is the alternative
-- **System events** (Autotune, Learn) — aOa working in the background
-
-### TODO Attribution Rows
-
-| # | Action | Source | Attrib | aOa Impact | Target | Status |
-|---|--------|--------|--------|------------|--------|--------|
-| 8 | Write | Claude | `productive` | `-` | file | TODO |
-| 9 | Edit | Claude | `productive` | `-` | file | TODO |
-| 10 | Grep (Claude's) | Claude | `unguided` | est. Nk tokens | pattern | Partial — no token cost |
-| 11 | Glob (Claude's) | Claude | `unguided` | est. Nk tokens | path/pattern | TODO |
-| 14 | Autotune | aOa | `cycle N` | +P promoted, -D demoted, ~X decayed | — | TODO |
-| 15 | Learn | aOa | `observe` | +N keywords, +M terms, +K domains | — | TODO |
-
-### Tasks
-
-| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
-|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
-| AT-06 | Backend | Verify autotune is firing correctly every 50 prompts | Critical | TODO | 🟢 | - | `internal/app/app.go` | Instrument autotune, confirm via session log |
-| AT-04 | Backend | Autotune activity event: "Autotune \| aOa \| cycle N \| +P/-D/~X" | High | TODO | 🟢 | AT-06 | `internal/app/app.go` | Autotune emits activity entry |
-| AT-02 | Backend | Glob attrib = "unguided" + estimated token cost | High | TODO | 🟢 | - | `internal/app/app.go` | Glob tool calls show token estimate |
-| AT-01 | Backend | Write/Edit attrib = "productive" | Medium | TODO | 🟢 | - | `internal/app/app.go` | Write/Edit tool calls get attrib |
-| AT-03 | Backend | Grep (Claude) impact = estimated token cost | Medium | TODO | 🟢 | - | `internal/app/app.go` | Grep tool calls show token estimate |
-| AT-05 | Backend | Learn activity event (observe signals summary) | Low | TODO | 🟢 | - | `internal/app/app.go` | Observe emits summary activity entry |
-| AT-07 | Frontend | Dashboard: color-code attribs — green for "productive", **red for "unguided"** (negative feedback loop) | Medium | Done | 🟢 | AT-01 | `static/index.html` | Productive=green, unguided=red, Grep/Glob pills red, mock data updated |
-| AT-08 | Frontend | Dashboard: render token cost impact for Grep/Glob | Medium | TODO | 🟢 | AT-02, AT-03 | `static/index.html` | Token cost rendered in impact column |
-| AT-09 | Backend | Target capture — preserve full query syntax as-is, no normalization (regex, multi-arg, etc.) | High | TODO | 🟢 | - | `internal/app/app.go` | Regex queries stored verbatim, not normalized |
-
-### Flag Gap
-
-| Flag | Short | Status |
-|------|-------|--------|
-| `--invert-match` | `-v` | Not implemented |
+| Layer | ID | G0 | G1 | G2 | G3 | G4 | G5 | G6 | Dep | Cf | St | Va | Task | Value | Va Detail |
+|:------|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:----|:--:|:--:|:--:|:-----|:------|:----------|
+| [L0](#layer-0) | [L0.1](#l01) | x | | | | | | x | - | 🟢 | ⚪ | ⚪ | Burn rate accumulator — rolling window tokens/min | Foundation for all savings metrics | Unit test: accumulator tracks rate over 5m window |
+| [L0](#layer-0) | [L0.2](#l02) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Context window max lookup — map model tag to window size | Needed for runway projection | Lookup returns correct max for claude-3, gpt-4 |
+| [L0](#layer-0) | [L0.3](#l03) | | | | | | | x | L0.1 | 🟢 | ⚪ | ⚪ | Dual projection — with-aOa vs without-aOa burn rates | The core value comparison | Two projections diverge correctly under test load |
+| [L0](#layer-0) | [L0.4](#l04) | | | | | x | | x | L0.3 | 🟢 | ⚪ | ⚪ | Context runway API — `/api/runway` with both projections | Dashboard and CLI can show runway | API returns JSON with both projections and delta |
+| [L0](#layer-0) | [L0.5](#l05) | | | | | x | | x | L0.3 | 🟡 | ⚪ | ⚪ | Weekly rollup persistence — sessions-extended counter | Survives daemon restart | Counter persists in bbolt, resets weekly |
+| [L0](#layer-0) | [L0.6](#l06) | | | | | | x | x | - | 🟢 | ⚪ | ⚪ | Verify autotune fires every 50 prompts | Trust the learning cycle is working | Integration test: 50 prompts → autotune triggers |
+| [L0](#layer-0) | [L0.7](#l07) | | | | | | x | x | L0.6 | 🟢 | ⚪ | ⚪ | Autotune activity event — "cycle N, +P/-D/~X" | Visible learning progress in activity feed | Activity entry appears with correct promote/demote counts |
+| [L0](#layer-0) | [L0.8](#l08) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Write/Edit attrib = "productive" | Credit productive work correctly | Write/Edit tool events get "productive" attrib |
+| [L0](#layer-0) | [L0.9](#l09) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Glob attrib = "unguided" + estimated token cost | Show cost of not using aOa | Glob events get "unguided" + token estimate |
+| [L0](#layer-0) | [L0.10](#l010) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Grep (Claude) impact = estimated token cost | Show cost of not using aOa | Claude grep events show estimated tokens |
+| [L0](#layer-0) | [L0.11](#l011) | | | | | | x | | - | 🟢 | ⚪ | ⚪ | Learn activity event — observe signals summary | Visible learning in feed | Activity entry: "+N keywords, +M terms, +K domains" |
+| [L0](#layer-0) | [L0.12](#l012) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Target capture — preserve full query syntax, no normalization | Accurate activity display | Target column shows raw query as entered |
+| [L1](#layer-1) | [L1.1](#l11) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Rename tabs: Overview→Live, Learning→Intel, Conversation→Debrief | Brand alignment — tabs named by user intent | Tabs render with new names |
+| [L1](#layer-1) | [L1.2](#l12) | | | | | | | x | L1.1 | 🟢 | ⚪ | ⚪ | Add Recon tab (stub) — dimensional placeholder | Reserve the tab slot for v2 | Tab renders with placeholder content |
+| [L1](#layer-1) | [L1.3](#l13) | | | | | | | x | L1.1 | 🟢 | ⚪ | ⚪ | Add Arsenal tab — daemon status, config, alias instructions | System configuration at a glance | Shows config data from `/api/health` |
+| [L1](#layer-1) | [L1.4](#l14) | | | | | | | | L1.1 | 🟢 | ⚪ | ⚪ | 5-tab header layout — responsive at <800px | Works on all screen sizes | Tabs don't wrap or overflow at narrow width |
+| [L1](#layer-1) | [L1.5](#l15) | | | | | x | | x | L1.3 | 🟢 | ⚪ | ⚪ | Arsenal API — `/api/config` for project root, paths, alias state | Backend for Arsenal tab | API returns project root, DB path, socket, alias status |
+| [L1](#layer-1) | [L1.6](#l16) | x | | | | | | x | L0.4 | 🟢 | ⚪ | ⚪ | Live tab hero — context runway as primary display | Lead with the value prop | Hero shows "47 min remaining" with dual projection |
+| [L1](#layer-1) | [L1.7](#l17) | | | | | | | x | L0.4 | 🟢 | ⚪ | ⚪ | Live tab metrics panel — savings-oriented cards | Replace vanity metrics with value | Cards show rolling avg speed, tokens saved, guided ratio |
+| [L1](#layer-1) | [L1.8](#l18) | | | | | | | x | L0.9, L0.10 | 🟢 | ⚪ | ⚪ | Dashboard: render token cost for Grep/Glob | Show unguided cost inline | Red-coded cost appears in activity impact column |
+| [L2](#layer-2) | [L2.1](#l21) | x | | | | x | x | | - | 🟢 | ⚪ | ⚪ | Wire file watcher — `Watch()` in app.go, change→reparse→reindex | Dynamic re-indexing without restart | File edit triggers re-index within 2s |
+| [L2](#layer-2) | [L2.2](#l22) | x | | | | x | | | - | 🟢 | ⚪ | ⚪ | Fix bbolt lock contention — in-process reindex via socket command | `aoa init` works while daemon runs | Init succeeds with daemon running |
+| [L2](#layer-2) | [L2.3](#l23) | | x | | x | | | | - | 🟢 | ⚪ | ⚪ | Implement `--invert-match` / `-v` flag for grep/egrep | Complete grep flag parity | `-v` excludes matching lines, parity test passes |
+| [L3](#layer-3) | [L3.1](#l31) | | x | | | | | | - | 🟢 | ⚪ | ⚪ | Parallel run on 5 test projects — Python and Go side-by-side | Prove equivalence at scale | Both systems produce identical output |
+| [L3](#layer-3) | [L3.2](#l32) | | x | | | | | | L3.1 | 🟢 | ⚪ | ⚪ | Diff search results: 100 queries/project, zero divergence | Search parity proof | `diff` output = 0 for all 500 queries |
+| [L3](#layer-3) | [L3.3](#l33) | | x | | | | | | L3.1 | 🟡 | ⚪ | ⚪ | Diff learner state: 200 intents, zero tolerance | Learner parity proof | JSON diff of state = empty |
+| [L3](#layer-3) | [L3.4](#l34) | x | | | | | | | L3.1 | 🟢 | ⚪ | ⚪ | Benchmark comparison — search, autotune, startup, memory | Confirm 50-120x speedup targets | Go beats Python on all 4 metrics |
+| [L3](#layer-3) | [L3.5](#l35) | | | x | | | | | L3.1 | 🟢 | ⚪ | ⚪ | Migration docs — stop Python, install Go, migrate data | Clean upgrade path | Existing user migrates without data loss |
+| [L4](#layer-4) | [L4.1](#l41) | | | x | | | | | - | 🟢 | ⚪ | ⚪ | Purego .so loader for runtime grammar loading | Extend language coverage without recompile | Load .so, parse file, identical to compiled-in |
+| [L4](#layer-4) | [L4.2](#l42) | | | x | | | | | L4.1 | 🟡 | ⚪ | ⚪ | Grammar downloader CI — compile .so, host on GitHub Releases | Easy grammar distribution | Download + load 20 grammars from releases |
+| [L4](#layer-4) | [L4.3](#l43) | | | x | | | | | - | 🟢 | ⚪ | ⚪ | Goreleaser — linux/darwin × amd64/arm64 | Cross-platform binaries | Binaries build for all 4 platforms |
+| [L4](#layer-4) | [L4.4](#l44) | | | x | x | | | | L4.3 | 🟢 | ⚪ | ⚪ | Installation docs — `go install` or download binary | Friction-free onboarding | New user installs and runs in <2 minutes |
+| [L5](#layer-5) | [L5.1](#l51) | | | | | x | | | - | 🟢 | ⚪ | ⚪ | Design structural query YAML schema (AST + lang_map + AC text) | Foundation for all dimensional patterns | Schema validates structural and text definitions |
+| [L5](#layer-5) | [L5.2](#l52) | x | | | | x | | | L5.1 | 🟢 | ⚪ | ⚪ | Tree-sitter AST walker — match patterns against parsed AST | Structural detection engine | Walks AST, returns bit positions, ~100-500μs/file |
+| [L5](#layer-5) | [L5.3](#l53) | x | | | | x | | | L5.1 | 🟢 | ⚪ | ⚪ | AC text scanner — compile patterns, scan raw source | Text detection engine | Single-pass AC, returns bit positions, ~15μs/file |
+| [L5](#layer-5) | [L5.4](#l54) | | | | | x | | | L5.2 | 🟡 | ⚪ | ⚪ | Language mapping layer — normalize node names across 28 langs | Cross-language uniformity | Same query matches Go + Python + JS + Rust |
+| [L5](#layer-5) | [L5.5](#l55) | x | | | | x | | | L5.2, L5.3 | 🟢 | ⚪ | ⚪ | Bitmask composer — merge structural + text bits, weighted severity | The scoring engine | Bitmask per method, score = weighted sum of set bits |
+| [L5](#layer-5) | [L5.6](#l56) | | | | | | | | L5.1 | 🟡 | ⚪ | ⚪ | Security tier — 5 dims, 67 questions (injection, secrets, auth, crypto, path) | First dimensional tier | Catches known vulns in test projects |
+| [L5](#layer-5) | [L5.7](#l57) | | | | | | | | L5.1 | 🟡 | ⚪ | ⚪ | Performance tier — 4 dims (queries, memory, concurrency, resource leaks) | Second tier | Flags N+1, unbounded allocs |
+| [L5](#layer-5) | [L5.8](#l58) | | | | | | | | L5.1 | 🟡 | ⚪ | ⚪ | Quality tier — 4 dims (complexity, error handling, dead code, conventions) | Third tier | God functions, ignored errors |
+| [L5](#layer-5) | [L5.9](#l59) | | | | | | | | L5.5 | 🟢 | ⚪ | ⚪ | Wire analyzer into `aoa init` — scan all files, store bitmasks in bbolt | Connect engine to pipeline | Bitmasks persist, available to search + dashboard |
+| [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
+| [L5](#layer-5) | [L5.11](#l511) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Dimension query support — `--dimension=security --risk=high` | Filter by dimension | CLI filters by tier and severity |
+| [L5](#layer-5) | [L5.12](#l512) | | | | | | | x | L5.9 | 🟢 | ⚪ | ⚪ | Recon tab — NER-style dimensional view, drill-down, severity scoring | Dashboard dimensional view | Mockup parity validated in browser |
 
 ---
 
-## Known Gaps
+## Supporting Detail
 
-| Gap | Description | Priority |
-|-----|-------------|----------|
-| **File watcher not wired** | `fsnotify.Watcher` built and tested, `treesitter.Parser` built and tested, but `Watch()` never called in `app.go`. No dynamic re-indexing pipeline. | High |
-| **bbolt lock contention** | `aoa init` fails while daemon holds the bbolt lock. Need in-process reindex command (socket command or `aoa daemon reindex`). | High |
-| **Aho-Corasick stubbed** | `ports.PatternMatcher` interface exists, adapter dir exists, tests skipped. Future use for dimensional analysis bitmask scanning. | Low |
+### Layer 0
 
----
+**Layer 0: Value Engine (Burn rate, context runway, attribution)**
 
-## Open Questions (Pending Discussion)
+> The metrics backend that powers all value messaging. Without this, the dashboard has data but no story.
+> **Quality Gate**: `/api/runway` returns valid dual projections; all 15 attribution rows produce correct attrib/impact.
 
-Items from feedback session that need alignment before becoming board tasks:
+#### L0.1
 
-| # | Topic | Status | Summary |
-|---|-------|--------|---------|
-| 3 | **Alias strategy** | Needs answer | Goal: replace `grep` itself (not shortcuts). `grep auth` → `aoa grep auth` transparently. Eliminates 250-token prompt education tax. Graceful degradation on unsupported flags? |
-| 4 | **Real-time conversation** | Needs investigation | Legacy Python showed real-time conversation despite shell/curl limitations. Go dashboard with 2s poll should do better — why isn't it? User to provide more direction. |
-| 5 | **Intent score visualization** | Needs discussion | Formula: `coverage × confidence × momentum` (0-100). Lives in domain rankings (Intel tab) as the sorting/scoring mechanism. Traffic light vs number display. |
-| 6 | **Glob token cost visibility** | Needs research | Claude's Glob/Read operations consume large token counts (entire files read into context). Do the JSONL session logs expose the token count for each tool result? If yes, we can show actual cost in the "unguided" impact column. If no, we need a heuristic (file size × ~0.25 tokens/byte). This research unblocks AT-02 and AT-08 with real numbers instead of estimates. |
+**Burn rate accumulator**
 
----
+Rolling window (5-minute) token-per-minute rate tracker. Feeds both the runway projection and the "tokens saved" metric.
 
-## Phase 9: Migration & Validation
+**Files**: `internal/app/app.go`
 
-**Goal:** Run both systems in parallel, prove equivalence
+#### L0.2
 
-| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
-|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
-| M-01 | Migrate | Parallel run on 5 test projects (Python and Go side-by-side) | Critical | TODO | 🟢 | - | `test/migration/*.sh` | Both produce identical output |
-| M-02 | Search | Diff search results: 100 queries/project, zero divergence | Critical | TODO | 🟢 | M-01 | `test/migration/search-diff.sh` | `diff` output = 0 for all queries |
-| M-03 | Learner | Diff learner state: 200 intents, zero tolerance | Critical | TODO | 🟡 | M-01 | `test/migration/state-diff.sh` | JSON diff of state = empty |
-| M-04 | Bench | Benchmark comparison (search, autotune, startup, memory) | High | TODO | 🟢 | M-01 | `test/benchmarks/compare.sh` | Confirm 50-120x speedup targets |
-| M-05 | Docs | Migration path (stop Python, install Go, migrate data) | High | TODO | 🟢 | M-01 | `MIGRATION.md` | Existing user migrates cleanly |
+**Context window max lookup**
 
-## Phase 10: Distribution
+Map model tags from session JSONL (e.g., `claude-3-opus-20240229`) to their context window maximum. Used to compute runway as percentage and minutes remaining.
 
-**Goal:** Single binary, zero Docker, instant install
+**Files**: `internal/app/app.go`
 
-| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
-|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
-| R-01 | Parser | Purego .so loader for runtime grammar loading | Medium | TODO | 🟢 | - | `adapters/treesitter/loader.go` | Load .so, parse file, identical to compiled-in |
-| R-02 | Build | Grammar downloader (CI: compile .so, host on GitHub Releases) | High | TODO | 🟡 | R-01 | `.github/workflows/build-grammars.yml` | Download+load 20 grammars from releases |
-| R-03 | Build | Goreleaser (linux/darwin × amd64/arm64) | High | TODO | 🟢 | - | `.goreleaser.yml` | Binaries build for all 4 platforms |
-| R-04 | Docs | Installation docs (`go install` or download binary) | Medium | TODO | 🟢 | R-03 | `README.md` | New user installs and runs cleanly |
+#### L0.3
 
-## v2: Dimensional Analysis — Recon
+**Dual projection**
 
-**Goal:** Structural code analysis via tree-sitter AST pattern matching + AC text scanning. Surfaces concerns as navigable dimension tags (NER-style entity detection applied to code). 6 tiers, 22 dimensions — all detectable by scanning code files only.
+Two burn rate projections: with-aOa (actual observed) vs without-aOa (counterfactual based on unguided tool call costs). The delta between them is the savings story.
 
-**6 Tiers:**
+**Files**: `internal/app/app.go`
 
-| Tier | Color | Dimensions | What it catches |
-|------|-------|-----------|----------------|
-| **Security** | Red | Injection, Secrets, Auth Gaps, Cryptography, Path Traversal | SQL/cmd/XSS injection, hardcoded keys, missing auth, weak hash, symlink |
-| **Performance** | Yellow | Query Patterns, Memory, Concurrency, Resource Leaks | N+1, unbounded alloc, mutex over I/O, unclosed handles |
-| **Quality** | Blue | Complexity, Error Handling, Dead Code, Conventions | God functions, ignored errors, unreachable code, magic numbers |
-| **Compliance** | Purple | CVE Patterns, Licensing, Data Handling | Known vuln patterns, copyleft conflicts, PII in logs |
-| **Architecture** | Cyan | Import Health, API Surface, Anti-patterns | Circular deps, layer violations, global state, hardcoded config |
-| **Observability** | Green | Silent Failures, Debug Artifacts | Swallowed errors, leftover print statements, TODO markers |
+#### L0.4
 
-**Detection architecture (dual engine):**
+**Context runway API**
 
-| Layer | Engine | Detects | Speed | Example |
-|-------|--------|---------|-------|---------|
-| **Structural** | Tree-sitter AST walker | Patterns that require code structure | ~100-500μs/file | SQL injection (concat → query call), N+1 (loop → db call), god function (branch count) |
-| **Text** | Aho-Corasick automaton | Simple literal patterns | ~15μs/file | Hardcoded secrets, known-bad function names, TODO markers |
+`/api/runway` returns JSON: `{ with_aoa: { minutes: 47, tokens_remaining: 84200 }, without_aoa: { minutes: 12, tokens_remaining: 84200 }, delta_minutes: 35 }`
 
-Both engines produce bits in the same bitmask. The Recon tab doesn't care which engine found it.
+**Files**: `web/server.go`, `socket/protocol.go`
 
-**Structural query format** — one definition per detection, language-agnostic with a thin node-name mapping:
+#### L0.5
 
-```yaml
-- id: sql_injection
-  severity: critical
-  dimension: security
-  query:
-    match: call_expression
-    receiver_contains: [db, query, exec, prepare]
-    has_arg:
-      type: binary_expression
-      contains_string: ["SELECT", "INSERT", "UPDATE", "DELETE"]
-      contains_identifier: true
-  lang_map:
-    go: { call: call_expression, string: interpreted_string_literal }
-    python: { call: call, string: string }
-    javascript: { call: call_expression, string: template_string }
-```
+**Weekly rollup persistence**
 
-**Tree-sitter is already built** — 28 languages compiled in, tested. ASTs are already produced at `aoa init` for symbol extraction. The detection engine reuses those ASTs — no re-parse cost.
+Sessions-extended counter: "aOa gave you 3 extra sessions this week." Must survive daemon restart. Stored in bbolt learner bucket, resets on Monday.
 
-### Tasks
+**Files**: `adapters/bbolt/store.go`
 
-| ID | Area | Task | Priority | Status | Conf | Deps | Files | Test Strategy |
-|----|------|------|:--------:|:------:|:----:|------|-------|---------------|
-| D-01 | Schema | Design structural query YAML schema (AST patterns + lang_map + AC text patterns) | Critical | TODO | 🟢 | - | `dimensions/schema.yaml` | Schema validates both structural and text detection definitions |
-| D-02 | Engine | Tree-sitter AST walker — match structural patterns against parsed AST | Critical | TODO | 🟢 | D-01 | `internal/domain/analyzer/walker.go` | Walks AST, matches query definitions, returns bit positions |
-| D-03 | Engine | AC text scanner — compile text patterns into automaton, scan raw source | High | TODO | 🟢 | D-01 | `internal/domain/analyzer/text_scan.go` | Reuses `adapters/ahocorasick/`, returns bit positions |
-| D-04 | Engine | Language mapping layer — normalize AST node names across 28 languages | High | TODO | 🟡 | D-02 | `internal/domain/analyzer/lang_map.go` | Same structural query matches Go + Python + JS + Rust |
-| D-05 | Analyzer | Bitmask composer — merge structural + text bits, compute weighted severity score | Critical | TODO | 🟢 | D-02, D-03 | `internal/domain/analyzer/score.go` | Bitmask per file/method, score = weighted sum of set bits |
-| D-06 | Dimensions | Security tier (5 dims: injection, secrets, auth, crypto, path traversal) | High | TODO | 🟡 | D-01 | `dimensions/security/*.yaml` | Catches known vulns in test projects |
-| D-07 | Dimensions | Performance tier (4 dims: queries, memory, concurrency, resource leaks) | High | TODO | 🟡 | D-01 | `dimensions/performance/*.yaml` | Flags structural perf issues |
-| D-08 | Dimensions | Quality tier (4 dims: complexity, error handling, dead code, conventions) | Medium | TODO | 🟡 | D-01 | `dimensions/quality/*.yaml` | Scores correlate with code review findings |
-| D-08b | Dimensions | Compliance tier (3 dims: CVE patterns, licensing, data handling) | Medium | TODO | 🟡 | D-01 | `dimensions/compliance/*.yaml` | CVE matches, license conflicts, PII exposure |
-| D-08c | Dimensions | Architecture tier (3 dims: import health, API surface, anti-patterns) | Medium | TODO | 🟡 | D-01 | `dimensions/architecture/*.yaml` | Circular deps, layer violations, global state |
-| D-08d | Dimensions | Observability tier (2 dims: silent failures, debug artifacts) | Low | TODO | 🟡 | D-01 | `dimensions/observability/*.yaml` | Swallowed errors, leftover debug statements |
-| D-09 | Integration | Wire analyzer into `aoa init` — scan all files, store bitmasks in bbolt | High | TODO | 🟢 | D-05 | `internal/app/app.go` | Bitmasks persist, available to search + dashboard |
-| D-10 | Format | Add dimension scores to search results (`S:-1 P:0 C:+2`) | High | TODO | 🟢 | D-05 | `internal/domain/index/format.go` | Scores in output |
-| D-11 | Query | Dimension query support (`--dimension=security --risk=high`) | High | TODO | 🟢 | D-05 | `cmd/aoa/cmd/grep.go` | Filter by dimension |
-| D-12 | Frontend | Recon tab — NER-style dimensional view: dimension toggle sidebar, file→method drill-down, severity scoring | High | TODO | 🟢 | D-09 | `static/index.html` | Mockup validated in `_throwaway_mockups/recon.html` |
+#### L0.6
 
-**Extensibility:** New dimensions are just new YAML directories. Add `dimensions/testing/*.yaml` or `dimensions/accessibility/*.yaml` — the engine picks them up. No code changes. New tiers appear in the sidebar automatically.
+**Autotune verification**
 
-**Research — Neural 1-bit embeddings (deferred):**
-Investigated and deprioritized. Pre-trained embedding models (nomic-embed 137M, mxbai-embed 335M) encode semantic similarity, not security/quality properties — signal-to-noise ratio is poor for vulnerability detection. Probing the embedding space (XOR + popcount) showed vocabulary changes fire the same magnitude of signal as structural changes. A fine-tuned classifier would work but requires thousands of labeled examples per detection. The deterministic tree-sitter + AC approach gives better signal with full interpretability. Revisit only if the AC/AST pattern library hits a ceiling on novel code shapes.
+Verify the 50-prompt autotune cycle fires reliably in the integrated system (not just unit tests). Important for AT-04 and learn event confidence.
+
+**Files**: `internal/app/app.go`
+
+#### L0.7
+
+**Autotune activity event**
+
+Activity feed entry: `Autotune | aOa | cycle 3 | +2 promoted, -1 demoted, ~8 decayed`. Visible evidence of the learning system working.
+
+**Files**: `internal/app/app.go`
+
+#### L0.8
+
+**Write/Edit attrib**
+
+Claude's Write/Edit tool events tagged as "productive" — desired work, aOa not involved. Green in dashboard.
+
+**Files**: `internal/app/app.go`
+
+#### L0.9
+
+**Glob attrib**
+
+Claude's Glob tool events tagged as "unguided" + estimated token cost. Red in dashboard. Heuristic: file size × ~0.25 tokens/byte (pending research on JSONL token exposure — open question #6).
+
+**Files**: `internal/app/app.go`
+
+#### L0.10
+
+**Grep (Claude) impact**
+
+Claude's native Grep tool events show estimated token cost. Same heuristic as L0.9.
+
+**Files**: `internal/app/app.go`
+
+#### L0.11
+
+**Learn activity event**
+
+Activity feed entry: `Learn | aOa | observe | +4 keywords, +2 terms, +1 domain`. Shows learning happening in real time.
+
+**Files**: `internal/app/app.go`
+
+#### L0.12
+
+**Target capture**
+
+Preserve the full query/path syntax from tool calls as-is in the activity target column. No normalization — show exactly what was searched or accessed.
+
+**Files**: `internal/app/app.go`
 
 ---
 
-## Architecture
+### Layer 1
 
-```
-cmd/aoa/              Cobra CLI (grep, egrep, find, locate, tree, config,
-                      health, wipe, daemon, init, open)
+**Layer 1: Dashboard (5-tab layout, mockup implementation)**
 
-internal/
-  ports/              Interfaces + shared data types
-  domain/
-    index/            Search engine: O(1) token lookup, OR/AND/regex
-    learner/          Learning system: observe(), 21-step autotune
-    enricher/         Atlas keyword→term→domain resolution
-    status/           Status line generation + file write
-  adapters/
-    bbolt/            Persistence (project-scoped buckets)
-    socket/           Unix socket daemon (JSON-over-socket)
-    web/              HTTP dashboard (embedded HTML, JSON API)
-    tailer/           Session log tailer (defensive JSONL parser)
-    claude/           Claude Code adapter (Session Prism)
-    treesitter/       28-language structural parser (CGo)
-    fsnotify/         File watcher (recursive, debounced)
-    ahocorasick/      Multi-pattern string matching
-  app/                Wiring: App struct, Config, lifecycle
+> Transform the dashboard from data display to value narrative. Each tab tells a story.
+> **Quality Gate**: All 5 tabs render with live data, hero sections drive value messaging, mockup parity confirmed.
 
-atlas/v1/             134 semantic domains (15 JSON files, go:embed)
-test/fixtures/        Behavioral parity data
-hooks/                Status line hook
-research/             Legacy CLI reference docs
-```
+**Tab structure:**
+- **Live** (was Overview) — Context runway hero, savings stats, activity feed
+- **Recon** (new) — Dimensional analysis view (stub until L5)
+- **Intel** (was Learning) — Domain rankings, intent score, n-gram metrics
+- **Debrief** (was Conversation) — Two-column conversation feed, tool actions
+- **Arsenal** (new) — Daemon status, config, aliases, performance
 
-### Key Paths
+**Design standard:** Hero row 160px min-height, 2:1 flex ratio. Headline pattern: `{Identity} {outcome} . . . {separator} {exclusion}.` Three-tier narrative: Hero (claim) → Stats grid (evidence) → Data (detail).
 
-| Purpose | Path |
-|---------|------|
+**Static mockups** (validated): `_throwaway_mockups/{live,recon,intel,debrief,arsenal}.html`
+
+#### L1.1
+
+**Tab rename**
+
+Overview→Live, Learning→Intel, Conversation→Debrief. Update nav bar, tab click handlers, active state.
+
+**Files**: `static/index.html`
+
+#### L1.2
+
+**Recon tab stub**
+
+Placeholder tab for dimensional analysis. Shows "Dimensional scanning available in v2" with link to research docs. Reserve the slot so Arsenal isn't the last tab.
+
+**Files**: `static/index.html`
+
+#### L1.3
+
+**Arsenal tab**
+
+Daemon status (running/stopped, uptime, PID), project config (root, DB path, socket), alias setup instructions (`eval "$(aoa shell-init)"`), performance metrics (search speed, index size).
+
+**Files**: `static/index.html`
+
+#### L1.4
+
+**5-tab responsive header**
+
+Tabs should not wrap or overflow at <800px. Consider abbreviated labels or icon-only at narrow widths.
+
+**Files**: `static/index.html`
+
+#### L1.5
+
+**Arsenal API**
+
+`/api/config` returns: project root, DB path, socket path, alias status, daemon PID, uptime, search speed average.
+
+**Files**: `web/server.go`
+
+#### L1.6
+
+**Live tab hero — context runway**
+
+Primary display: "47 min remaining." Secondary: "Without aOa: 12 min." The delta IS the value prop. Replaces current hero that shows prompt/domain counts.
+
+**Files**: `static/index.html`
+
+#### L1.7
+
+**Live tab metrics panel**
+
+Replace prompts/domains cards with: Rolling avg search speed, Tokens saved (session), Guided ratio (%), Sessions extended (week). Value-oriented, not vanity.
+
+**Files**: `static/index.html`
+
+#### L1.8
+
+**Token cost display for unguided tools**
+
+When Claude uses Grep/Glob, show estimated token cost in the activity impact column. Red-coded. Makes the cost of NOT using aOa visible.
+
+**Files**: `static/index.html`
+
+---
+
+### Layer 2
+
+**Layer 2: Infrastructure Gaps (File watcher, bbolt lock, CLI completeness)**
+
+> Fix the known gaps that prevent production-grade operation.
+> **Quality Gate**: `aoa init` works while daemon runs; file changes trigger re-index within 2s; `grep -v` works.
+
+#### L2.1
+
+**Wire file watcher**
+
+`fsnotify.Watcher` and `treesitter.Parser` are both built and tested. The pipeline (file change → re-parse → update index in bbolt) needs to be connected in `app.go`. `Watch()` is never called today.
+
+**Files**: `internal/app/app.go`, `internal/adapters/fsnotify/watcher.go`
+
+#### L2.2
+
+**Fix bbolt lock contention**
+
+`aoa init` fails while daemon holds the bbolt lock. Solution: in-process reindex command via socket (`aoa daemon reindex`). Daemon receives command, re-indexes while holding the lock, reports progress.
+
+**Files**: `internal/adapters/socket/server.go`, `cmd/aoa/cmd/daemon.go`
+
+#### L2.3
+
+**Implement --invert-match**
+
+The `-v` flag for grep/egrep is the last missing flag from the parity table. Exclude matching lines from results.
+
+**Files**: `cmd/aoa/cmd/grep.go`, `cmd/aoa/cmd/egrep.go`, `internal/domain/index/search.go`
+
+---
+
+### Layer 3
+
+**Layer 3: Migration & Validation (Parallel run, parity proof)**
+
+> Run both systems side-by-side and prove equivalence before the Python version is retired.
+> **Quality Gate**: 500 queries across 5 projects = zero divergence. Go beats Python on all benchmarks.
+
+#### L3.1
+
+**Parallel run on 5 projects**
+
+Select 5 diverse test projects (varying size, language mix, domain spread). Run both Python and Go in parallel, capture all outputs.
+
+**Files**: `test/migration/*.sh`
+
+#### L3.2
+
+**Search diff**
+
+100 queries per project, automated diff of results. Cover all search modes: literal, OR, AND, regex, case-insensitive, word-boundary, count, include/exclude.
+
+**Files**: `test/migration/search-diff.sh`
+
+#### L3.3
+
+**Learner state diff**
+
+After 200 intents of observation, diff the learner state (domains, terms, keywords, hits, bigrams). Zero tolerance for divergence. DomainMeta.Hits is float64 — the precision rule matters here.
+
+**Files**: `test/migration/state-diff.sh`
+
+#### L3.4
+
+**Benchmark comparison**
+
+Head-to-head: search latency, autotune latency, startup time, memory footprint. Confirm 50-120x speedup and 8x memory reduction.
+
+**Files**: `test/benchmarks/compare.sh`
+
+#### L3.5
+
+**Migration docs**
+
+Step-by-step: stop Python daemon, install Go binary, migrate bbolt data (or re-index), verify. Cover rollback if needed.
+
+**Files**: `MIGRATION.md`
+
+---
+
+### Layer 4
+
+**Layer 4: Distribution (Single binary for all platforms)**
+
+> Ship it. One binary per platform, instant install, zero friction.
+> **Quality Gate**: Binary works on linux/darwin × amd64/arm64. `go install` path works. Grammar download is optional.
+
+#### L4.1
+
+**Purego .so loader**
+
+Runtime grammar loading via purego (no CGo at load time). Allows extending language coverage without recompiling the binary.
+
+**Files**: `internal/adapters/treesitter/loader.go`
+
+#### L4.2
+
+**Grammar downloader CI**
+
+CI pipeline: compile .so files for each grammar, host on GitHub Releases. `aoa grammar download <lang>` fetches and installs.
+
+**Files**: `.github/workflows/build-grammars.yml`
+
+#### L4.3
+
+**Goreleaser**
+
+Cross-compilation for 4 platforms. GitHub Release automation. Checksum files.
+
+**Files**: `.goreleaser.yml`
+
+#### L4.4
+
+**Installation docs**
+
+Two paths: `go install github.com/corey/aoa/cmd/aoa@latest` or download binary from releases. Include post-install: `aoa init`, `aoa daemon start`, alias setup.
+
+**Files**: `README.md`
+
+---
+
+### Layer 5
+
+**Layer 5: Dimensional Analysis (Bitmask engine, Recon tab)**
+
+> Early warning system — yellow flags, not verdicts. Surfaces concerns via per-line bitmask scanning using tree-sitter AST + Aho-Corasick. Users can acknowledge, dismiss, or ignore findings.
+>
+> **Prerequisite**: Multi-language tree-sitter integration must be mature (L4 grammar loader working, validated across languages).
+>
+> **Quality Gate**: Security tier catches known vulns in test projects. Full project query < 10ms. ~250-290 questions across 6 tiers.
+>
+> **Research**: [Bitmask analysis](.context/research/bitmask-dimensional-analysis.md) | [AST vs LSP viability](.context/research/asv_vs_lsp.md)
+
+**6 Tiers (22 dimensions):**
+
+| Tier | Color | Dimensions |
+|------|-------|-----------|
+| Security | Red | Injection, Secrets, Auth Gaps, Cryptography, Path Traversal |
+| Performance | Yellow | Query Patterns, Memory, Concurrency, Resource Leaks |
+| Quality | Blue | Complexity, Error Handling, Dead Code, Conventions |
+| Compliance | Purple | CVE Patterns, Licensing, Data Handling |
+| Architecture | Cyan | Import Health, API Surface, Anti-patterns |
+| Observability | Green | Silent Failures, Debug Artifacts |
+
+**Execution pipeline**: Compute at index time (tree-sitter parse + AC scan + regex → bitmask → bbolt). Query time reads pre-computed bitmasks (< 10ms for entire project). See research doc for full pipeline detail.
+
+#### L5.1
+
+**Structural query YAML schema**
+
+Define the format for detection patterns: AST structural rules, AC text patterns, lang_map entries, severity weights, bit positions.
+
+**Files**: `dimensions/schema.yaml`
+
+#### L5.2
+
+**Tree-sitter AST walker**
+
+Walk the already-parsed AST for structural patterns (call_with_arg, call_inside_loop, assignment_with_literal, etc.). ~8-10 parameterized pattern types cover the majority of questions.
+
+**Files**: `internal/domain/analyzer/walker.go`
+
+#### L5.3
+
+**AC text scanner**
+
+Compile ~115 text patterns into single AC automaton at startup. One pass per file over raw source bytes. Returns (pattern_id, byte_offset) pairs mapped to bit positions.
+
+**Files**: `internal/domain/analyzer/text_scan.go`
+
+#### L5.4
+
+**Language mapping layer**
+
+Normalize AST node names across 28 languages. ~280 entries (28 langs × 10 concepts). Most are identical or near-identical. ~20% of questions need per-language overrides.
+
+**Files**: `internal/domain/analyzer/lang_map.go`
+
+#### L5.5
+
+**Bitmask composer**
+
+Merge structural + text + regex bits into per-method bitmask. Compute weighted severity score (critical=3, high=2, medium=1). ~38 bytes per method across all dimensions.
+
+**Files**: `internal/domain/analyzer/score.go`
+
+#### L5.6
+
+**Security tier**
+
+67 questions across 5 categories: injection (16), secrets (13), auth gaps (14), cryptography (12), path traversal (12). Full question set defined in research doc.
+
+**Files**: `dimensions/security/*.yaml`
+
+#### L5.7
+
+**Performance tier**
+
+~50-60 questions: query patterns, memory, concurrency, resource leaks. N+1, unbounded alloc, mutex over I/O, unclosed handles.
+
+**Files**: `dimensions/performance/*.yaml`
+
+#### L5.8
+
+**Quality tier**
+
+~45-55 questions: complexity, error handling, dead code, conventions. God functions, ignored errors, deep nesting, magic numbers.
+
+**Files**: `dimensions/quality/*.yaml`
+
+#### L5.9
+
+**Wire analyzer into init**
+
+During `aoa init` (and file-watch re-index), run the dimensional engine alongside symbol extraction. Store per-method bitmasks and scores in bbolt "dimensions" bucket. ~0.2-0.6ms overhead per file.
+
+**Files**: `internal/app/app.go`
+
+#### L5.10
+
+**Dimension scores in search results**
+
+Append `S:-23 P:0 Q:-4` to search output. Negative = debt. Zero = clean. Visible in every grep/egrep result.
+
+**Files**: `internal/domain/index/format.go`
+
+#### L5.11
+
+**Dimension query support**
+
+`aoa grep --dimension=security --risk=high <query>` filters results to only show methods with security findings above threshold.
+
+**Files**: `cmd/aoa/cmd/grep.go`
+
+#### L5.12
+
+**Recon tab**
+
+NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→method drill-down, severity scoring, acknowledge/dismiss per finding. Mockup validated in `_throwaway_mockups/recon.html`.
+
+**Files**: `static/index.html`
+
+---
+
+### What Works (Preserve)
+
+| Component | Notes |
+|-----------|-------|
+| Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, content scanning. Do not change search logic. |
+| Learner (21-step autotune) | 5/5 fixture parity, float64 precision on DomainMeta.Hits. Do not change decay/prune constants. |
+| Session Prism (Claude JSONL reader) | Defensive parsing, UUID dedup, compound message decomposition. Battle-tested. |
+| Tree-sitter parser (28 languages) | Symbol extraction working for Go, Python, JS/TS + 24 generic. Reuse ASTs for L5. |
+| Socket protocol | JSON-over-socket IPC. Concurrent clients. Extend, don't replace. |
+| Activity rubric (30 tests) | Color-coded attribs, impact formatting. Extend for new tool types. |
+
+### What We're NOT Doing
+
+| Item | Rationale |
+|------|-----------|
+| Neural 1-bit embeddings | Investigated, deprioritized. Deterministic AST+AC gives better signal with full interpretability. |
+| WebSocket push (dashboard) | 2s poll is sufficient. Upgrade deferred — complexity not justified yet. |
+| Multi-project simultaneous daemon | Single-project scope per daemon instance. Multi-project is a v3 concern. |
+| LSP integration | AST is sufficient for early warning. LSP adds 100x cost for 20% more precision. See research. |
+
+### Key Documents
+
+| Document | Purpose |
+|----------|---------|
+| [COMPLETED.md](.context/COMPLETED.md) | Archived phases 1-8c with validation notes |
+| [Bitmask Analysis](.context/research/bitmask-dimensional-analysis.md) | Security worked example, execution pipeline, cross-language uniformity |
+| [AST vs LSP](.context/research/asv_vs_lsp.md) | Viability assessment, per-dimension confidence ratings |
+| [Feedback Outline](research/feedback/OUTLINE.md) | User feedback on all system components |
+| [CLAUDE.md](CLAUDE.md) | Agent instructions, architecture reference, build commands |
+
+### Quick Reference
+
+| Resource | Location |
+|----------|----------|
+| Build | `go build ./cmd/aoa/` |
+| Test | `go test ./...` |
+| CI check | `make check` |
 | Database | `{ProjectRoot}/.aoa/aoa.db` |
-| Status line | `{ProjectRoot}/.aoa/status.json` |
 | Socket | `/tmp/aoa-{sha256(root)[:12]}.sock` |
-| HTTP port | `{ProjectRoot}/.aoa/http.port` |
-| Dashboard | `http://localhost:{port}` |
+| Dashboard | `http://localhost:{port}` (port in `.aoa/http.port`) |
 | Session logs | `~/.claude/projects/{encoded-path}/*.jsonl` |
-
----
-
-## Session Log
-
-### 2026-02-18: Hero Section Standardization & Recon UX Polish
-
-**Scope:** Dashboard UX design system. All 5 mockups updated. No production code changes.
-
-**Hero persuasion engine designed and implemented:**
-- Defined copywriting framework for hero cards: Identity / Outcome / Pause / Separator / Exclusion
-- Created `static/hero.json` — shared identity pool (10x Developers, Relentless Builders, Precision Engineers, Full-Stack Architects, High-Velocity Teams), 4 separators (minus the, instead of, bypassing, without), 3 curated outcome/exclusion story pairs per tab
-- Typography hierarchy: identity 22px bold gradient, outcome 17px semi-bold, cyan pause dots, separator cyan 17px, exclusion dim. Line 2 indented 33% from left
-- Randomized composition: 60 unique combinations per tab on each page load
-
-**Hero row standardized across all 5 tabs:**
-- 160px min-height, 2:1 flex ratio (hero card + hero metrics)
-- Hero card: label (static) → headline (persuasion, rotates) → support (single flowing data line with dot separators)
-- Hero metrics: 2×2 cause→effect grid with arrows — each tab tells its own causal story
-- Three-tier page narrative established: Hero (claim) → Stats grid (evidence) → Data (operational detail)
-
-**Live tab hero refactored:**
-- Removed runway block and old narrative, replaced with persuasion headline + single support line
-- Hero metrics panel: replaced vertical metric list with cause→effect grid (guided reads → avg savings, tokens saved → sessions extended)
-- Autotune moved from hero metrics to stats grid (replaced Active Domains)
-- Padding/gap standardized to 24px/20px
-
-**Recon UX polish:**
-- Moved hero row inside `.main` to align with sidebar (was outside `.layout`)
-- Column-based dimension indicators: replaced per-row pill badges (11 Sec, 7 Perf...) with header columns + number-only rows
-- Tree breadcrumb integrated into card header: Root › folder › file — every segment clickable
-- Tier toggle on column headers and sidebar: click to toggle entire tier on/off
-- localStorage persistence for all dimension toggle state
-- Removed redundant "project root" breadcrumb element
-- Fixed padding/gap inconsistency (was 20px/16px, now 24px/20px)
-
-**Intel spacing fixed:**
-- Removed stacked margin-bottom on hero-row, traffic-card, stat-grid that was doubling the gap from `.main`'s `gap: 20px`
-
----
-
-### 2026-02-18: Strategy Session — Feedback, Value Metrics, Dashboard Restructure, Mockups
-
-**Scope:** Product direction alignment. No code changes to production. New tasks added to board. Static mockups created.
-
-**Feedback captured:**
-- Created `research/feedback/OUTLINE.md` — full system map (dashboard tabs/sections, CLI commands, backend systems) with founder notes on each section
-- Legacy system responses ingested for 5 strategic questions: value metrics, tab naming, alias strategy, conversation feed, intent score
-
-**Decisions made and added to board:**
-
-*Phase 8d — Value Metrics:*
-- Lead metric: **context runway** — `(window_max - current_usage) / burn_rate` → "47 min remaining. Without aOa: 12 min."
-- Secondary: **sessions extended** weekly rollup — `tokens_saved / avg_session_cost`
-- Kill: time-saved ranges (undermine trust). Token counts stay but de-emphasized.
-- 8 tasks added (V-01 through V-08)
-
-*Phase 8e — 5-Tab Tactical Layout:*
-- Tabs renamed: **Live** (was Overview) / **Recon** (new) / **Intel** (was Learning) / **Debrief** (was Conversation) / **Arsenal** (new)
-- Each tab named after what the user is doing when they click it
-- 5 tasks added (T-01 through T-05)
-
-**Open questions (on board, pending next session):**
-- **#3 Alias strategy** — goal is replacing `grep` itself, not adding shortcuts. `grep auth` → `aoa grep auth` transparently. Eliminates 250-token prompt education tax in sub-agents.
-- **#4 Real-time conversation** — legacy Python showed real-time despite shell/curl limits; Go dashboard with 2s poll should do better. Needs investigation.
-- **#5 Intent score visualization** — formula `coverage × confidence × momentum` (0-100). Lives in domain rankings (Intel tab) as the sorting mechanism. Traffic light vs number display still open.
-
-**Board cleanup:**
-- Moved all completed phases (1–8c) to `.context/COMPLETED.md` with expanded why/validation notes
-- Board trimmed from ~545 lines to ~251 lines
-- Added "Open Questions" section for unresolved strategic items
-
-**Static mockups created** (`_throwaway_mockups/`):
-- `live.html` — context runway hero, value-oriented stats grid, full activity table
-- `recon.html` — command reference, interactive search demo with 70 symbols across 10 query categories
-- `intel.html` — intent score traffic light, domain rankings with composite score, n-gram metrics
-- `debrief.html` — two-column conversation feed (no yellow border), NOW bar, tool action chips
-- `arsenal.html` — daemon status, project config, alias checklist with `eval "$(aoa shell-init)"`, perf metrics
-- All 5 pages: correct nav (Live/Recon/Intel/Debrief/Arsenal), consistent width (`padding: 24px`, `gap: 20px`), dark/light theme, "Generate Mock Data" button, inter-page links
-- Old mockups archived to `_throwaway_mockups/_remove/`
-
-**Next session focus:** Review mockups in browser, give feedback on layout/content, then begin implementation starting with tab rename (T-01) or value metrics backend (V-01).
+| Mockups | `_throwaway_mockups/{live,recon,intel,debrief,arsenal}.html` |
