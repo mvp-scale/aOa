@@ -1,6 +1,6 @@
 # aOa GO-BOARD
 
-> **Updated**: 2026-02-18 | **Phase**: Phase 8d/8e — Value Metrics & Dashboard Restructure | **Status**: 315+ tests passing, 0 failing
+> **Updated**: 2026-02-18 | **Phase**: Phase 8d/8e — Value Metrics & Dashboard Restructure | **Status**: 315+ tests passing, 0 failing | **Context**: 88%
 > **Architecture**: Hexagonal (ports/adapters) + Session Prism | **Target**: Single binary, zero Docker
 > **Module**: `github.com/corey/aoa` | **Binary**: `cmd/aoa/main.go`
 > **Completed work**: See `.context/COMPLETED.md` for Phases 1–8c (all validated)
@@ -105,13 +105,28 @@ make check                       # Local CI: vet + lint + test
 | T-08 | Frontend | Activity table: responsive — drop time+target at 900px, keep action/source/attrib/impact (20/20/25/35) | High | Done | 🟢 | T-07 | `static/index.html` | 4-column layout at narrow width, balanced spacing |
 | T-09 | Frontend | Negative feedback loop — unguided Grep/Glob: red pills, red attrib, red target, wasted token estimate in impact | High | Done | 🟢 | - | `static/index.html` | Grep/Glob rows read as costly end-to-end; productive=green, unguided=red |
 
-| T-10 | Frontend | Standardized hero section — 150px min-height, 2/3 hero card + 1/3 metrics panel, consistent across all tabs | High | Done | 🟢 | - | all mockups | Hero row height, padding, flex ratio matches Live and Recon |
+| T-10 | Frontend | Standardized hero section — 160px min-height, persuasion headline + support line + cause→effect hero metrics | High | Done | 🟢 | - | all mockups | Hero row height, structure, typography consistent across all 5 tabs |
+| T-11 | Frontend | Hero persuasion engine — JSON-driven Identity/Outcome/Separator/Exclusion rotating headlines | High | Done | 🟢 | T-10 | `static/hero.json`, all mockups | 60 combos per tab (5 identities × 3 stories × 4 separators) |
+| T-12 | Frontend | Recon: column-based dimension indicators — tier headers replace per-row pill badges | High | Done | 🟢 | - | `_throwaway_mockups/recon.html` | Column headers with clickable tier toggles |
+| T-13 | Frontend | Recon: tree breadcrumb navigation — Root › folder › file integrated into tree card header | High | Done | 🟢 | T-12 | `_throwaway_mockups/recon.html` | Every segment clickable, "Root" always links back |
+| T-14 | Frontend | Recon: tier toggle persistence — click column header or sidebar tier to toggle on/off, persists in localStorage | High | Done | 🟢 | T-12 | `_throwaway_mockups/recon.html` | Toggle state survives page reload |
 
-**Live mockup locked** (`_throwaway_mockups/live.html`): Context runway hero, value metrics panel, fixed-column activity table with negative feedback loop, responsive 900px breakpoint.
+**Dashboard design standard (v2):**
+- **Hero row**: 160px min-height, 2:1 flex ratio (hero card + hero metrics)
+- **Hero card**: gradient-border wrapper → label (static) → hero headline (persuasion, rotates) → hero support (single data line, dot separators)
+- **Hero headline pattern**: `{Identity} {outcome} . . . {separator} {exclusion}.` — Identity 22px bold gradient, outcome 17px semi-bold, separator cyan, exclusion dim. Line 2 indented 33%.
+- **Hero metrics**: 2×2 cause→effect grid with arrows. Shows how one metric drives the next.
+- **Hero data**: `static/hero.json` — shared identities/separators, 3 outcome/exclusion story pairs per tab
+- **Support line**: single flowing line with `·` dot separators, colored value numbers. Data-driven, not persuasion.
+- **Three-tier page narrative**: Hero row (claim) → Stats grid (evidence) → Data (operational detail)
+- **Padding**: 24px all sides, gap 20px between sections. Responsive stacks at 900px.
 
-**Recon mockup in progress** (`_throwaway_mockups/recon.html`): Sidebar-driven dimensional intelligence. 6 tiers / 22 dimensions, all detectable by AC + tree-sitter on code files. Collapsible tier groups with per-dimension toggles. Folder → file → method drill-down with severity scoring and bubble-up aggregation. Hero card + metrics panel standardized to 150px.
-
-**Dashboard design standard:** All tabs use the same hero row layout — 150px min-height, gradient-border hero card (2/3 width) telling the tab's story + metrics panel (1/3 width) with key numbers. Padding 18px vertical, 24px horizontal. Metric values 20-22px. Responsive: stacks at 900px.
+**Mockup status:**
+- `live.html` — persuasion hero, cause→effect metrics (guided→savings→tokens→sessions), flowing support line, autotune moved to stats grid
+- `recon.html` — hero row inside .main (sidebar-aligned), column-based dim indicators, tree breadcrumb, tier toggle on/off with localStorage persistence
+- `intel.html` — hero row added above traffic card, cause→effect metrics (score→coverage, core→confidence)
+- `debrief.html` — hero row with wrapper, cause→effect metrics (input→output, cache→saved)
+- `arsenal.html` — hero row with wrapper, cause→effect metrics (files→symbols, latency→autotune)
 
 **Arsenal — future scope:** Interactive `aoa init` in browser, alias toggle, .gitignore exception editor. Start read-only.
 
@@ -320,6 +335,42 @@ research/             Legacy CLI reference docs
 ---
 
 ## Session Log
+
+### 2026-02-18: Hero Section Standardization & Recon UX Polish
+
+**Scope:** Dashboard UX design system. All 5 mockups updated. No production code changes.
+
+**Hero persuasion engine designed and implemented:**
+- Defined copywriting framework for hero cards: Identity / Outcome / Pause / Separator / Exclusion
+- Created `static/hero.json` — shared identity pool (10x Developers, Relentless Builders, Precision Engineers, Full-Stack Architects, High-Velocity Teams), 4 separators (minus the, instead of, bypassing, without), 3 curated outcome/exclusion story pairs per tab
+- Typography hierarchy: identity 22px bold gradient, outcome 17px semi-bold, cyan pause dots, separator cyan 17px, exclusion dim. Line 2 indented 33% from left
+- Randomized composition: 60 unique combinations per tab on each page load
+
+**Hero row standardized across all 5 tabs:**
+- 160px min-height, 2:1 flex ratio (hero card + hero metrics)
+- Hero card: label (static) → headline (persuasion, rotates) → support (single flowing data line with dot separators)
+- Hero metrics: 2×2 cause→effect grid with arrows — each tab tells its own causal story
+- Three-tier page narrative established: Hero (claim) → Stats grid (evidence) → Data (operational detail)
+
+**Live tab hero refactored:**
+- Removed runway block and old narrative, replaced with persuasion headline + single support line
+- Hero metrics panel: replaced vertical metric list with cause→effect grid (guided reads → avg savings, tokens saved → sessions extended)
+- Autotune moved from hero metrics to stats grid (replaced Active Domains)
+- Padding/gap standardized to 24px/20px
+
+**Recon UX polish:**
+- Moved hero row inside `.main` to align with sidebar (was outside `.layout`)
+- Column-based dimension indicators: replaced per-row pill badges (11 Sec, 7 Perf...) with header columns + number-only rows
+- Tree breadcrumb integrated into card header: Root › folder › file — every segment clickable
+- Tier toggle on column headers and sidebar: click to toggle entire tier on/off
+- localStorage persistence for all dimension toggle state
+- Removed redundant "project root" breadcrumb element
+- Fixed padding/gap inconsistency (was 20px/16px, now 24px/20px)
+
+**Intel spacing fixed:**
+- Removed stacked margin-bottom on hero-row, traffic-card, stat-grid that was doubling the gap from `.main`'s `gap: 20px`
+
+---
 
 ### 2026-02-18: Strategy Session — Feedback, Value Metrics, Dashboard Restructure, Mockups
 
