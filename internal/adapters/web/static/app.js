@@ -23,6 +23,23 @@ function setHtml(id, val) {
   var el = document.getElementById(id);
   if (el) el.innerHTML = val;
 }
+/* Change-detecting value setter: if the displayed text differs,
+   update it and fire a color-matched glow that fades over 2s.
+   Skips glow on first render (prev was empty or placeholder). */
+function setGlow(id, val) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var str = String(val);
+  var prev = el.textContent;
+  if (prev === str) return;
+  el.textContent = str;
+  if (prev && prev !== '-') {
+    el.classList.remove('num-glow');
+    void el.offsetWidth;
+    el.classList.add('num-glow');
+    setTimeout(function() { el.classList.remove('num-glow'); }, 60);
+  }
+}
 function escapeHtml(s) {
   if (!s) return '';
   var d = document.createElement('div');
@@ -293,10 +310,10 @@ function renderLive() {
   var st = cache.stats || {};
 
   // Hero metrics
-  setText('hm-live-0', fmtPct(rw.tokens_saved && rw.tokens_used ? (rw.tokens_saved / (rw.tokens_used + rw.tokens_saved)) : 0));
-  setText('hm-live-1', rw.tokens_saved ? fmtK(rw.tokens_saved) : '-');
-  setText('hm-live-2', fmtK(rw.tokens_saved || 0));
-  setText('hm-live-3', rw.delta_minutes ? fmtMin(rw.delta_minutes) : '-');
+  setGlow('hm-live-0', fmtPct(rw.tokens_saved && rw.tokens_used ? (rw.tokens_saved / (rw.tokens_used + rw.tokens_saved)) : 0));
+  setGlow('hm-live-1', rw.tokens_saved ? fmtK(rw.tokens_saved) : '-');
+  setGlow('hm-live-2', fmtK(rw.tokens_saved || 0));
+  setGlow('hm-live-3', rw.delta_minutes ? fmtMin(rw.delta_minutes) : '-');
 
   // Hero support line
   var parts = [];
@@ -310,10 +327,10 @@ function renderLive() {
   // Stats grid
   var promptN = st.prompt_count || 0;
   var autotuneProgress = promptN % 50;
-  setText('ls-searches', st.prompt_count || 0);
-  setText('ls-files', st.index_files || 0);
-  setText('ls-autotune', autotuneProgress + '/50');
-  setText('ls-burn', rw.burn_rate_per_min ? fmtK(Math.round(rw.burn_rate_per_min)) + '/min' : '-');
+  setGlow('ls-searches', st.prompt_count || 0);
+  setGlow('ls-files', st.index_files || 0);
+  setGlow('ls-autotune', autotuneProgress + '/50');
+  setGlow('ls-burn', rw.burn_rate_per_min ? fmtK(Math.round(rw.burn_rate_per_min)) + '/min' : '-');
 
   // Guided ratio and savings need session data
   safeFetch('/api/sessions').then(function(d) {
@@ -327,11 +344,11 @@ function renderLive() {
     }
     totalSaved += (rw.tokens_saved || 0);
     var ratio = totalReads > 0 ? totalGuided / totalReads : 0;
-    setText('ls-guided', fmtPct(ratio));
-    setText('hm-live-0', fmtPct(ratio));
+    setGlow('ls-guided', fmtPct(ratio));
+    setGlow('hm-live-0', fmtPct(ratio));
     if (totalGuided > 0) {
-      setText('ls-savings', fmtK(Math.round(totalSaved / totalGuided)));
-      setText('hm-live-1', fmtK(Math.round(totalSaved / totalGuided)));
+      setGlow('ls-savings', fmtK(Math.round(totalSaved / totalGuided)));
+      setGlow('hm-live-1', fmtK(Math.round(totalSaved / totalGuided)));
     }
   }).catch(function() {});
 }
@@ -407,10 +424,10 @@ function renderIntel() {
   var bg = cache.bigrams || {};
 
   // Hero metrics
-  setText('hm-intel-0', st.domain_count || 0);
-  setText('hm-intel-1', st.core_count || 0);
-  setText('hm-intel-2', st.term_count || 0);
-  setText('hm-intel-3', st.bigram_count || 0);
+  setGlow('hm-intel-0', st.domain_count || 0);
+  setGlow('hm-intel-1', st.core_count || 0);
+  setGlow('hm-intel-2', st.term_count || 0);
+  setGlow('hm-intel-3', st.bigram_count || 0);
 
   // Hero support
   var totalHits = 0;
@@ -427,12 +444,12 @@ function renderIntel() {
   setHtml('heroSupport-intel', sup.join(' &middot; '));
 
   // Stats
-  setText('is-domains', st.domain_count || 0);
-  setText('is-core', st.core_count || 0);
-  setText('is-terms', st.term_count || 0);
-  setText('is-keywords', st.keyword_count || 0);
-  setText('is-bigrams', st.bigram_count || 0);
-  setText('is-totalhits', totalHits ? totalHits.toFixed(1) : '0');
+  setGlow('is-domains', st.domain_count || 0);
+  setGlow('is-core', st.core_count || 0);
+  setGlow('is-terms', st.term_count || 0);
+  setGlow('is-keywords', st.keyword_count || 0);
+  setGlow('is-bigrams', st.bigram_count || 0);
+  setGlow('is-totalhits', totalHits ? totalHits.toFixed(1) : '0');
 
   // Domain Rankings (with change-tracking visual effects)
   renderDomains(dm);
@@ -705,10 +722,10 @@ function renderDebrief() {
   var cf = cache.convFeed || {};
 
   // Hero metrics
-  setText('hm-debrief-0', fmtK(cm.input_tokens || 0));
-  setText('hm-debrief-1', fmtK(cm.output_tokens || 0));
-  setText('hm-debrief-2', fmtK(cm.cache_read_tokens || 0));
-  setText('hm-debrief-3', fmtK(cm.cache_read_tokens || 0));
+  setGlow('hm-debrief-0', fmtK(cm.input_tokens || 0));
+  setGlow('hm-debrief-1', fmtK(cm.output_tokens || 0));
+  setGlow('hm-debrief-2', fmtK(cm.cache_read_tokens || 0));
+  setGlow('hm-debrief-3', fmtK(cm.cache_read_tokens || 0));
 
   // Hero support
   var totalTokens = (cm.input_tokens || 0) + (cm.output_tokens || 0);
@@ -720,11 +737,11 @@ function renderDebrief() {
   setHtml('heroSupport-debrief', sup.join(' &middot; '));
 
   // Stats
-  setText('ds-input', fmtK(cm.input_tokens || 0));
-  setText('ds-output', fmtK(cm.output_tokens || 0));
-  setText('ds-cread', fmtK(cm.cache_read_tokens || 0));
-  setText('ds-cwrite', fmtK(cm.cache_write_tokens || 0));
-  setText('ds-hitrate', fmtPct(cm.cache_hit_rate || 0));
+  setGlow('ds-input', fmtK(cm.input_tokens || 0));
+  setGlow('ds-output', fmtK(cm.output_tokens || 0));
+  setGlow('ds-cread', fmtK(cm.cache_read_tokens || 0));
+  setGlow('ds-cwrite', fmtK(cm.cache_write_tokens || 0));
+  setGlow('ds-hitrate', fmtPct(cm.cache_hit_rate || 0));
   setText('convCount', (cf.count || 0) + ' turns');
 
   // Conversation Feed — reverse to chronological, pair user+assistant into exchanges
@@ -900,10 +917,10 @@ function renderArsenal() {
   var readVelocity = totalPrompts > 0 ? (totalReads / totalPrompts).toFixed(1) : '-';
 
   // Hero metrics
-  setText('hm-arsenal-0', fmtK(totalSaved));
-  setText('hm-arsenal-1', rw.delta_minutes ? fmtMin(rw.delta_minutes) : '-');
-  setText('hm-arsenal-2', fmtK(totalUnguided * 200));
-  setText('hm-arsenal-3', fmtPct(overallRatio));
+  setGlow('hm-arsenal-0', fmtK(totalSaved));
+  setGlow('hm-arsenal-1', rw.delta_minutes ? fmtMin(rw.delta_minutes) : '-');
+  setGlow('hm-arsenal-2', fmtK(totalUnguided * 200));
+  setGlow('hm-arsenal-3', fmtPct(overallRatio));
 
   // Hero support
   var sup = [];
@@ -915,12 +932,12 @@ function renderArsenal() {
   setHtml('heroSupport-arsenal', sup.join(' &middot; '));
 
   // Stats
-  setText('as-saved', fmtK(totalSaved));
-  setText('as-cost', fmtK(totalUnguided * 200));
-  setText('as-sessions', sessionCount);
-  setText('as-extended', rw.delta_minutes ? fmtMin(rw.delta_minutes) : '-');
-  setText('as-ratio', fmtPct(overallRatio));
-  setText('as-velocity', readVelocity);
+  setGlow('as-saved', fmtK(totalSaved));
+  setGlow('as-cost', fmtK(totalUnguided * 200));
+  setGlow('as-sessions', sessionCount);
+  setGlow('as-extended', rw.delta_minutes ? fmtMin(rw.delta_minutes) : '-');
+  setGlow('as-ratio', fmtPct(overallRatio));
+  setGlow('as-velocity', readVelocity);
   setText('sessionCount', sessionCount + ' sessions');
   setText('savingsLabel', fmtK(totalSaved) + ' saved');
 

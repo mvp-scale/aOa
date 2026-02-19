@@ -208,7 +208,7 @@ func TestActivityReadNoSavings(t *testing.T) {
 	entry := lastActivity(a)
 	require.NotNil(t, entry, "activity ring should have an entry")
 	assert.Equal(t, "unguided", entry.Attrib, "whole-file read should have attrib 'unguided'")
-	assert.Equal(t, "-", entry.Impact, "whole-file read should have impact '-'")
+	assert.Equal(t, "~500 tokens", entry.Impact, "whole-file read should show estimated token cost")
 }
 
 // --- Path stripping (A-05, A-06) ---
@@ -476,7 +476,7 @@ func TestActivityRubric(t *testing.T) {
 			wantTarget: "src/small.go:10-80",
 		},
 		{
-			// Row 7: Read, whole file (no offset/limit) — now classified as unguided
+			// Row 7: Read, whole file (no offset/limit) — unguided with estimated token cost
 			name: "read_whole_file",
 			ev: ports.SessionEvent{
 				Kind:      ports.EventToolInvocation,
@@ -491,7 +491,7 @@ func TestActivityRubric(t *testing.T) {
 			wantAction: "Read",
 			wantSource: "Claude",
 			wantAttrib: "unguided",
-			wantImpact: "-",
+			wantImpact: "~500 tokens",
 			wantTarget: "src/foo.go",
 		},
 		{
@@ -777,6 +777,31 @@ func TestActivityGlobUnguided(t *testing.T) {
 	assert.Equal(t, "unguided", entry.Attrib, "L0.9: Glob should have attrib 'unguided'")
 	// The index has auth.go in src/handlers/ (500 bytes → 125 tokens)
 	assert.Contains(t, entry.Impact, "tokens", "L0.9: Glob impact should contain token estimate")
+}
+
+func TestActivityGlobPattern(t *testing.T) {
+	a := newTestApp(t)
+	// Change index to use relative paths for pattern matching
+	a.Index.Files[6] = &ports.FileMeta{Path: "src/handlers/auth.go", Size: 500, Language: "go"}
+
+	a.activityRing = [50]ActivityEntry{}
+	a.activityHead = 0
+	a.activityCount = 0
+
+	ev := ports.SessionEvent{
+		Kind:      ports.EventToolInvocation,
+		TurnID:    "turn-glob-pattern",
+		Timestamp: time.Now(),
+		Tool:      &ports.ToolEvent{Name: "Glob", Pattern: "src/handlers/*.go"},
+		File:      &ports.FileRef{Path: "/home/user/project", Action: "glob"},
+	}
+	a.onSessionEvent(ev)
+
+	entry := lastActivity(a)
+	require.NotNil(t, entry)
+	assert.Equal(t, "src/handlers/*.go", entry.Target, "Glob target should be the pattern")
+	assert.Equal(t, "unguided", entry.Attrib)
+	assert.Contains(t, entry.Impact, "tokens", "Glob pattern match should estimate token cost")
 }
 
 // --- L0.10: Grep token cost ---

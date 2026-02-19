@@ -815,6 +815,55 @@ body {
   }
 }
 
+/* ====== MOBILE COMPACTION (<= 520px) ====== */
+@media (max-width: 520px) {
+  .nav { padding: 0 12px; height: 44px; }
+  .nav-brand { margin-right: 10px; }
+  .nav-brand .angle { font-size: 18px; }
+  .nav-brand .name { font-size: 13px; }
+  .nav-tab { padding: 6px 8px; font-size: 11px; }
+  .nav-tabs { gap: 1px; }
+  .status-badge { font-size: 10px; padding: 3px 8px; }
+  .theme-toggle { width: 28px; height: 28px; }
+  .theme-toggle svg { width: 13px; height: 13px; }
+
+  .main { padding: 12px; gap: 10px; }
+
+  .hero-row { flex-direction: column; min-height: auto; gap: 8px; }
+  .hero-card-wrapper { display: none; }
+  .hero-metrics {
+    display: flex; flex-direction: row; align-items: center;
+    justify-content: space-around; padding: 8px 12px;
+    border-radius: 12px; gap: 0;
+  }
+  .hm-cell { align-items: center; }
+  .hm-cell.right { padding-left: 0; }
+  .hm-value { font-size: 18px; }
+  .hm-label { font-size: 9px; }
+  .hm-arrow { font-size: 11px; padding: 0 4px; }
+
+  .stat-grid { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .stat-card { padding: 8px 4px; border-radius: 8px; text-align: center; }
+  .stat-card .stat-value { font-size: 16px; }
+  .stat-card .stat-label { display: none; }
+  .stat-card .stat-sub { display: none; }
+
+  .feed-header { padding: 10px 14px; }
+  .feed-title { font-size: 9px; }
+  .msg-row { padding: 5px 12px; gap: 8px; }
+  .msg-text { font-size: 12px; }
+  .msg-role { font-size: 10px; }
+  .turn-sep { padding: 8px 12px 4px; }
+  .turn-sep-label { font-size: 9px; }
+  .actions-col { display: none; }
+  .feed-body { grid-template-columns: 1fr; }
+
+  .footer { height: 30px; padding: 0 12px; font-size: 10px; }
+  .footer-motto { font-size: 9px; }
+  .footer-clock { font-size: 9px; }
+  .mock-btn { bottom: 40px; right: 12px; padding: 8px 14px; font-size: 11px; }
+}
+
 /* Thinking expand */
 .thinking-full {
   display: none;

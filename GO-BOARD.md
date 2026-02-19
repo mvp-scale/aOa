@@ -3,7 +3,7 @@
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
 > **Updated**: 2026-02-19 (Session 52) | **Phase**: L2 complete — Infrastructure gaps closed (invert-match, file watcher, bbolt lock fix)
-> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 (302 active tests)
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 (308 active tests)
 
 ---
 
@@ -59,8 +59,8 @@
 |:---------:|:----------------|:------------|:----------------|
 | ⚪ | — | Not started | Not yet validated |
 | 🔵 | — | In progress | — |
-| 🟢 | Confident | Complete | Validated |
-| 🟡 | Uncertain | Pending | Needs test strategy |
+| 🟢 | Confident | Complete | Automated test proves it (unit or integration) |
+| 🟡 | Uncertain | Pending | Partial — manual/browser only, or unit but no integration. See Va Detail for gap. |
 | 🔴 | Lost/Blocked | Blocked | Failed |
 
 > 🟢🟢🟢 = done. Task moves to COMPLETED.md.
@@ -102,7 +102,11 @@
 - **Full-file reads classified as unguided** — Read with limit=0 now gets `attrib="unguided"` and `tokens=fileSize/4` from index. Previously had no classification.
 - **TurnAction carries Attrib/Tokens/Savings** — Backend `TurnAction` and `TurnActionResult` now include `attrib` (string), `tokens` (int), `savings` (int). Same data flows to both Live activity and Debrief actions.
 
-**Needs Discussion** (before L2):
+**Design Decisions Locked** (Session 52):
+- **Responsive compaction pattern** — At mobile breakpoint (<800px), hero and stats cards shed text and show values only. Hero: remove support text, keep headline + value. Stats cards: value only, no labels (labels visible in desktop view). This pattern repeats across all 5 tabs. Priority is to maximize space for the main value prop content below (domain table, ngrams, conversation feed, session history). Recon is hold-state, acceptable as-is.
+- **Intel mobile** — Domain rankings and ngram sections must remain readable at mobile width. Current layout crowds them below oversized hero+stats. Compaction of hero+stats solves this.
+
+**Needs Discussion** (before L3):
 - **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
 - **Real-time conversation** — Legacy Python showed real-time; Go dashboard with 3s poll should do better. Needs investigation.
 - **Unified value framework** — Data collection across all tabs should use a consistent framework for representing aOa's value prop: token savings (guided vs unguided), time savings (search speed), knowledge savings (learning curve). Live activity, Debrief actions, and Arsenal sessions should all feed from the same metrics pipeline. Partially started in Session 51 (Save/Tok columns, TurnAction enrichment), needs completion across remaining tabs.
@@ -113,29 +117,29 @@
 
 | Layer | ID | G0 | G1 | G2 | G3 | G4 | G5 | G6 | Dep | Cf | St | Va | Task | Value | Va Detail |
 |:------|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:----|:--:|:--:|:--:|:-----|:------|:----------|
-| [L0](#layer-0) | [L0.1](#l01) | x | | | | | | x | - | 🟢 | 🟢 | 🟢 | Burn rate accumulator — rolling window tokens/min | Foundation for all savings metrics | Unit test: accumulator tracks rate over 5m window |
-| [L0](#layer-0) | [L0.2](#l02) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Context window max lookup — map model tag to window size | Needed for runway projection | Lookup returns correct max for claude-3, gpt-4 |
-| [L0](#layer-0) | [L0.3](#l03) | | | | | | | x | L0.1 | 🟢 | 🟢 | 🟢 | Dual projection — with-aOa vs without-aOa burn rates | The core value comparison | Two projections diverge correctly under test load |
-| [L0](#layer-0) | [L0.4](#l04) | | | | | x | | x | L0.3 | 🟢 | 🟢 | 🟢 | Context runway API — `/api/runway` with both projections | Dashboard and CLI can show runway | API returns JSON with both projections and delta |
-| [L0](#layer-0) | [L0.5](#l05) | | | | | x | | x | L0.3 | 🟢 | 🟢 | 🟢 | Session summary persistence — per-session metrics in bbolt | Arsenal value proof, survives restart | Session record persists with tokens saved, guided ratio, counterfactual |
-| [L0](#layer-0) | [L0.6](#l06) | | | | | | x | x | - | 🟢 | 🟢 | 🟢 | Verify autotune fires every 50 prompts | Trust the learning cycle is working | Integration test: 50 prompts → autotune triggers |
-| [L0](#layer-0) | [L0.7](#l07) | | | | | | x | x | L0.6 | 🟢 | 🟢 | 🟢 | Autotune activity event — "cycle N, +P/-D/~X" | Visible learning progress in activity feed | Activity entry appears with correct promote/demote counts |
-| [L0](#layer-0) | [L0.8](#l08) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Write/Edit attrib = "productive" | Credit productive work correctly | Write/Edit tool events get "productive" attrib |
-| [L0](#layer-0) | [L0.9](#l09) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Glob attrib = "unguided" + estimated token cost | Show cost of not using aOa | Glob events get "unguided" + token estimate |
-| [L0](#layer-0) | [L0.10](#l010) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Grep (Claude) impact = estimated token cost | Show cost of not using aOa | Claude grep events show estimated tokens |
-| [L0](#layer-0) | [L0.11](#l011) | | | | | | x | | - | 🟢 | 🟢 | 🟢 | Learn activity event — observe signals summary | Visible learning in feed | Activity entry: "+N keywords, +M terms, +K domains" |
-| [L0](#layer-0) | [L0.12](#l012) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Target capture — preserve full query syntax, no normalization | Accurate activity display | Target column shows raw query as entered |
-| [L1](#layer-1) | [L1.1](#l11) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Rename tabs: Overview→Live, Learning→Intel, Conversation→Debrief | Brand alignment — tabs named by user intent | Tabs render with new names |
-| [L1](#layer-1) | [L1.2](#l12) | | | | | | | x | L1.1 | 🟢 | 🟢 | 🟢 | Add Recon tab (stub) — dimensional placeholder | Reserve the tab slot for v2 | Tab renders with hero + placeholder content |
-| [L1](#layer-1) | [L1.3](#l13) | | | | | | | x | L1.1 | 🟢 | 🟢 | 🟢 | Add Arsenal tab — value proof over time, session history, savings chart | Prove aOa's ROI across sessions | Shows actual vs counterfactual, learning curve, session table |
-| [L1](#layer-1) | [L1.4](#l14) | | | | | | | | L1.1 | 🟢 | 🟢 | 🟢 | 5-tab header layout — responsive at <800px | Works on all screen sizes | Tabs switch via JS, URL hash persisted |
-| [L1](#layer-1) | [L1.5](#l15) | | | | | x | | x | L0.5, L1.3 | 🟢 | 🟢 | 🟢 | Arsenal API — `/api/sessions` + `/api/config` | Backend for Arsenal charts and system strip | 2 endpoints, 2 passing tests |
-| [L1](#layer-1) | [L1.6](#l16) | x | | | | | | x | L0.4 | 🟢 | 🟢 | 🟢 | Live tab hero — context runway as primary display | Lead with the value prop | Hero shows runway + dual projection support line |
-| [L1](#layer-1) | [L1.7](#l17) | | | | | | | x | L0.4 | 🟢 | 🟢 | 🟢 | Live tab metrics panel — savings-oriented cards | Replace vanity metrics with value | 6 cards: guided ratio, avg savings, searches, files, autotune, burn rate |
-| [L1](#layer-1) | [L1.8](#l18) | | | | | | | x | L0.9, L0.10 | 🟢 | 🟢 | 🟢 | Dashboard: render token cost for Grep/Glob | Show unguided cost inline | Red-coded cost in activity impact column |
-| [L2](#layer-2) | [L2.1](#l21) | x | | | | x | x | | - | 🟢 | 🟢 | 🟢 | Wire file watcher — `Watch()` in app.go, change→reparse→reindex | Dynamic re-indexing without restart | File edit triggers re-index within 2s |
-| [L2](#layer-2) | [L2.2](#l22) | x | | | | x | | | - | 🟢 | 🟢 | 🟢 | Fix bbolt lock contention — in-process reindex via socket command | `aoa init` works while daemon runs | Init succeeds with daemon running |
-| [L2](#layer-2) | [L2.3](#l23) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | Implement `--invert-match` / `-v` flag for grep/egrep | Complete grep flag parity | `-v` excludes matching lines, parity test passes |
+| [L0](#layer-0) | [L0.1](#l01) | x | | | | | | x | - | 🟢 | 🟢 | 🟢 | Burn rate accumulator — rolling window tokens/min | Foundation for all savings metrics | Unit: `burnrate_test.go` — 6 tests (empty, single, multi, eviction, partial, reset) |
+| [L0](#layer-0) | [L0.2](#l02) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Context window max lookup — map model tag to window size | Needed for runway projection | Unit: `models_test.go` — 2 tests (known models, unknown default) |
+| [L0](#layer-0) | [L0.3](#l03) | | | | | | | x | L0.1 | 🟢 | 🟢 | 🟢 | Dual projection — with-aOa vs without-aOa burn rates | The core value comparison | Unit: `runway_test.go` — 3 tests (divergence under load, zero-rate edge, model lookup) |
+| [L0](#layer-0) | [L0.4](#l04) | | | | | x | | x | L0.3 | 🟢 | 🟢 | 🟢 | Context runway API — `/api/runway` with both projections | Dashboard and CLI can show runway | Unit: `runway_test.go` + HTTP: `web/server_test.go` TestRunwayEndpoint — JSON shape with both projections |
+| [L0](#layer-0) | [L0.5](#l05) | | | | | x | | x | L0.3 | 🟢 | 🟢 | 🟢 | Session summary persistence — per-session metrics in bbolt | Arsenal value proof, survives restart | Unit: `bbolt/store_test.go` (4 tests: save/load/list/overwrite) + `session_test.go` (5 tests: boundary detect, flush, restore) |
+| [L0](#layer-0) | [L0.6](#l06) | | | | | | x | x | - | 🟢 | 🟢 | 🟢 | Verify autotune fires every 50 prompts | Trust the learning cycle is working | Unit: `autotune_integration_test.go` — 50 searches → autotune triggers, activity entry emitted |
+| [L0](#layer-0) | [L0.7](#l07) | | | | | | x | x | L0.6 | 🟢 | 🟢 | 🟢 | Autotune activity event — "cycle N, +P/-D/~X" | Visible learning progress in activity feed | Unit: `autotune_integration_test.go` — asserts activity entry with promote/demote/decay counts |
+| [L0](#layer-0) | [L0.8](#l08) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Write/Edit attrib = "productive" | Credit productive work correctly | Unit: `activity_test.go` TestWriteEditAttrib — Write/Edit events tagged `attrib="productive"` |
+| [L0](#layer-0) | [L0.9](#l09) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Glob attrib = "unguided" + estimated token cost | Show cost of not using aOa | Unit: `activity_test.go` TestGlobAttrib — Glob events tagged `attrib="unguided"`, impact contains token estimate |
+| [L0](#layer-0) | [L0.10](#l010) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Grep (Claude) impact = estimated token cost | Show cost of not using aOa | Unit: `activity_test.go` TestGrepImpact — Claude Grep events show `~Ntok` in impact |
+| [L0](#layer-0) | [L0.11](#l011) | | | | | | x | | - | 🟢 | 🟢 | 🟢 | Learn activity event — observe signals summary | Visible learning in feed | Unit: `activity_test.go` TestLearnEvent + `autotune_integration_test.go` — entry contains "+N keywords, +M terms" |
+| [L0](#layer-0) | [L0.12](#l012) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Target capture — preserve full query syntax, no normalization | Accurate activity display | Unit: `activity_test.go` TestTargetCapture — all-flags, regex+boundary, simple query preserved verbatim |
+| [L1](#layer-1) | [L1.1](#l11) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Rename tabs: Overview→Live, Learning→Intel, Conversation→Debrief | Brand alignment — tabs named by user intent | Manual: user confirmed (Session 52) — Live/Recon/Intel/Debrief/Arsenal tabs visible in browser |
+| [L1](#layer-1) | [L1.2](#l12) | | | | | | | x | L1.1 | 🟢 | 🟢 | 🟢 | Add Recon tab (stub) — dimensional placeholder | Reserve the tab slot for v2 | Manual: user confirmed (Session 52) — `#recon` tab renders hero + placeholder stub |
+| [L1](#layer-1) | [L1.3](#l13) | | | | | | | x | L1.1 | 🟢 | 🟢 | 🟢 | Add Arsenal tab — value proof over time, session history, savings chart | Prove aOa's ROI across sessions | Manual: user confirmed (Session 52) — `#arsenal` tab visible, framing up. Backend: `web/server_test.go` TestSessionsEndpoint |
+| [L1](#layer-1) | [L1.4](#l14) | | | | | | | | L1.1 | 🟢 | 🟢 | 🟢 | 5-tab responsive layout — mobile compaction at <=520px | Works on all screen sizes | Manual: user confirmed (Session 53) — hero card hidden, stats as value-only chips, glow consistent across breakpoints. CSS: `style.css` @media 520px block. Mockups validated first in `_live_mockups/`. |
+| [L1](#layer-1) | [L1.5](#l15) | | | | | x | | x | L0.5, L1.3 | 🟢 | 🟢 | 🟢 | Arsenal API — `/api/sessions` + `/api/config` | Backend for Arsenal charts and system strip | Unit: `web/server_test.go` TestSessionsEndpoint + TestConfigEndpoint — JSON shape validated |
+| [L1](#layer-1) | [L1.6](#l16) | x | | | | | | x | L0.4 | 🟢 | 🟢 | 🟢 | Live tab hero — context runway as primary display | Lead with the value prop | Manual: user confirmed (Session 53) — hero + metrics panel render correctly with data, consistent across responsive breakpoints. Backend: `runway_test.go`. |
+| [L1](#layer-1) | [L1.7](#l17) | | | | | | | x | L0.4 | 🟢 | 🟢 | 🟢 | Live tab metrics panel — savings-oriented cards | Replace vanity metrics with value | Manual: user confirmed (Session 53) — 6 stats cards render, glow effect consistent across breakpoints. Backend: API tests. |
+| [L1](#layer-1) | [L1.8](#l18) | | | | | | | x | L0.9, L0.10 | 🟢 | 🟢 | 🟢 | Dashboard: render token cost for unguided Read/Grep/Glob | Show unguided cost inline | Pipeline proven live (Session 53): tailer→activity→API→dashboard confirmed with guided Read showing `↓99% (12.1k → 100)`. Unit: `activity_test.go` TestActivityReadNoSavings (full-file Read shows `~500 tokens`), TestActivityRubric rows 7/10/11 (Read/Grep/Glob all show `~N tokens`). Fixed: full-file Read impact was `-`, now shows estimated cost. |
+| [L2](#layer-2) | [L2.1](#l21) | x | | | | x | x | | - | 🟢 | 🟢 | 🟡 | Wire file watcher — `Watch()` in app.go, change→reparse→reindex | Dynamic re-indexing without restart | Unit: `watcher_test.go` (4 tests: new/modify/delete/unsupported call `onFileChanged` directly) + `rebuild_test.go` (1 test). **Gap**: no integration test through fsnotify event pipeline — needs `TestDaemon_FileWatcher_ReindexOnEdit` |
+| [L2](#layer-2) | [L2.2](#l22) | x | | | | x | | | - | 🟢 | 🟢 | 🟢 | Fix bbolt lock contention — in-process reindex via socket command | `aoa init` works while daemon runs | Integration: `TestInit_DaemonRunning_DelegatesToReindex` (init succeeds via socket), `TestInit_DaemonRunning_ReportsStats` (output has file/symbol/token counts), `TestInit_DaemonRunning_ThenSearchFindsNewSymbol` (new file found after reindex). Unit: `indexer_test.go` (3), `reindex_test.go` (1) |
+| [L2](#layer-2) | [L2.3](#l23) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | Implement `--invert-match` / `-v` flag for grep/egrep | Complete grep flag parity | Integration: `TestGrep_InvertMatch` (CLI `-v` via daemon), `TestGrep_InvertMatch_CountOnly` (`-v -c`), `TestEgrep_InvertMatch` (`-v` regex). Unit: `invert_test.go` (8 tests: literal/regex/OR/AND/content/count/quiet/glob) |
 | [L3](#layer-3) | [L3.1](#l31) | | x | | | | | | - | 🟢 | ⚪ | ⚪ | Parallel run on 5 test projects — Python and Go side-by-side | Prove equivalence at scale | Both systems produce identical output |
 | [L3](#layer-3) | [L3.2](#l32) | | x | | | | | | L3.1 | 🟢 | ⚪ | ⚪ | Diff search results: 100 queries/project, zero divergence | Search parity proof | `diff` output = 0 for all 500 queries |
 | [L3](#layer-3) | [L3.3](#l33) | | x | | | | | | L3.1 | 🟡 | ⚪ | ⚪ | Diff learner state: 200 intents, zero tolerance | Learner parity proof | JSON diff of state = empty |
@@ -321,7 +325,7 @@ Full dashboard rewrite delivered as 3 files in `internal/adapters/web/static/`:
 **Layer 2: Infrastructure Gaps (File watcher, bbolt lock, CLI completeness)**
 
 > Fix the known gaps that prevent production-grade operation.
-> **Quality Gate**: ✅ `aoa init` works while daemon runs; file changes trigger re-index; `grep -v` works. 17 new tests, 302 total passing.
+> **Quality Gate**: ✅ `aoa init` works while daemon runs; file changes trigger re-index; `grep -v` works. 22 new tests (17 unit + 6 integration − 1 replaced), 308 total passing. Integration tests: `TestInit_DaemonRunning_DelegatesToReindex`, `TestInit_DaemonRunning_ThenSearchFindsNewSymbol`, `TestGrep_InvertMatch`, `TestGrep_InvertMatch_CountOnly`, `TestEgrep_InvertMatch`.
 
 #### L2.1
 

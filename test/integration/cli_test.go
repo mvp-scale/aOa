@@ -282,29 +282,23 @@ func TestInit_Reinit(t *testing.T) {
 	}
 }
 
-func TestInit_DaemonBlocks_FastFail(t *testing.T) {
+func TestInit_DaemonRunning_DelegatesToReindex(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
 
 	cleanup := startDaemon(t, dir)
 	defer cleanup()
 
-	start := time.Now()
-	_, stderr, exit := runAOA(t, dir, "init")
-	elapsed := time.Since(start)
-
-	if exit == 0 {
-		t.Fatal("init should fail when daemon is running")
+	// Init while daemon is running should succeed by delegating reindex via socket.
+	stdout, _, exit := runAOA(t, dir, "init")
+	if exit != 0 {
+		t.Fatalf("init should succeed when daemon is running (delegates via socket), exit %d", exit)
 	}
-	if elapsed > 3*time.Second {
-		t.Errorf("should fail fast (<3s), took %v", elapsed)
+	if !strings.Contains(stdout, "indexed") {
+		t.Errorf("should say 'indexed':\n%s", stdout)
 	}
-	// Error must be actionable — tell the user exactly what to do.
-	if !strings.Contains(stderr, "daemon") {
-		t.Errorf("error should mention 'daemon':\n%s", stderr)
-	}
-	if !strings.Contains(stderr, "aoa daemon stop") {
-		t.Errorf("error should include remediation 'aoa daemon stop':\n%s", stderr)
+	if !strings.Contains(stdout, "Daemon running") {
+		t.Errorf("should indicate delegation to daemon:\n%s", stdout)
 	}
 }
 
@@ -932,22 +926,23 @@ func TestNoDaemon_AllCommands(t *testing.T) {
 // V-12: Error message quality — verify actionable remediation
 // =============================================================================
 
-func TestErrorMsg_InitDaemonRunning(t *testing.T) {
+func TestInit_DaemonRunning_ReportsStats(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
 
 	cleanup := startDaemon(t, dir)
 	defer cleanup()
 
-	_, stderr, exit := runAOA(t, dir, "init")
-	if exit == 0 {
-		t.Fatal("should fail")
+	// Init delegates to daemon; output should include file/symbol/token counts.
+	stdout, _, exit := runAOA(t, dir, "init")
+	if exit != 0 {
+		t.Fatalf("init should succeed via daemon, exit %d", exit)
 	}
 
-	// Must include all three: what happened, command to fix, retry instruction.
-	for _, want := range []string{"daemon", "aoa daemon stop", "aoa init"} {
-		if !strings.Contains(stderr, want) {
-			t.Errorf("init error should contain %q:\n%s", want, stderr)
+	// Must report indexing stats (files, symbols, tokens).
+	for _, want := range []string{"files", "symbols", "tokens"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("init output should contain %q:\n%s", want, stdout)
 		}
 	}
 }
@@ -1029,5 +1024,100 @@ func TestTiming_AllLockedOperations_FastFail(t *testing.T) {
 				t.Errorf("%s completed in %v — suspiciously fast, timeout may not be working", op.name, elapsed)
 			}
 		})
+	}
+}
+
+// =============================================================================
+// V-13: L2 feature integration tests
+// =============================================================================
+
+func TestGrep_InvertMatch(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// Normal search for "hello" should find it.
+	stdout, _, exit := runAOA(t, dir, "grep", "hello")
+	if exit != 0 {
+		t.Fatalf("grep exit %d", exit)
+	}
+	if !strings.Contains(stdout, "hello") {
+		t.Errorf("grep should find 'hello':\n%s", stdout)
+	}
+
+	// Inverted: -v hello should return hits that do NOT include "hello".
+	stdout, _, exit = runAOA(t, dir, "grep", "-v", "hello")
+	if exit != 0 {
+		t.Fatalf("grep -v exit %d", exit)
+	}
+	if !strings.Contains(stdout, "hits") {
+		t.Errorf("grep -v should show hits:\n%s", stdout)
+	}
+}
+
+func TestGrep_InvertMatch_CountOnly(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// -v -c should count non-matching symbols.
+	stdout, _, exit := runAOA(t, dir, "grep", "-v", "-c", "hello")
+	if exit != 0 {
+		t.Fatalf("grep -v -c exit %d", exit)
+	}
+	if !strings.Contains(stdout, "hits") {
+		t.Errorf("grep -v -c should show hit count:\n%s", stdout)
+	}
+}
+
+func TestEgrep_InvertMatch(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// egrep -v with regex.
+	stdout, _, exit := runAOA(t, dir, "egrep", "-v", "hel.*")
+	if exit != 0 {
+		t.Fatalf("egrep -v exit %d", exit)
+	}
+	if !strings.Contains(stdout, "hits") {
+		t.Errorf("egrep -v should show hits:\n%s", stdout)
+	}
+}
+
+func TestInit_DaemonRunning_ThenSearchFindsNewSymbol(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// Add a new file with a unique symbol.
+	writeFile(t, filepath.Join(dir, "newfile.go"), `package main
+
+func UniqueNewSymbol() {
+	return
+}
+`)
+
+	// Reindex via init (delegates to daemon).
+	stdout, _, exit := runAOA(t, dir, "init")
+	if exit != 0 {
+		t.Fatalf("init reindex exit %d: %s", exit, stdout)
+	}
+
+	// Search should now find the new symbol.
+	stdout, _, exit = runAOA(t, dir, "grep", "uniquenewsymbol")
+	if exit != 0 {
+		t.Fatalf("grep exit %d", exit)
+	}
+	if !strings.Contains(strings.ToLower(stdout), "uniquenewsymbol") {
+		t.Errorf("grep should find UniqueNewSymbol after reindex:\n%s", stdout)
 	}
 }

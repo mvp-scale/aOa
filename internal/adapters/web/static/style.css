@@ -22,6 +22,8 @@
   --yellow: #fbbf24; --yellow-dim: rgba(251,191,36,0.12);
   --red: #f87171; --red-dim: rgba(248,113,113,0.12);
   --shadow: none; --nav-bg: rgba(12,12,14,0.82); --table-hover: rgba(255,255,255,0.03);
+  --green-rgb: 52,211,153; --blue-rgb: 96,165,250; --purple-rgb: 192,132,252;
+  --cyan-rgb: 34,211,238; --yellow-rgb: 251,191,36; --red-rgb: 248,113,113;
 }
 
 /* ── CSS Variables: Light Theme ── */
@@ -36,6 +38,8 @@
   --yellow: #d97706; --yellow-dim: rgba(217,119,6,0.1);
   --red: #dc2626; --red-dim: rgba(220,38,38,0.1);
   --shadow: 0 1px 3px rgba(0,0,0,0.06); --nav-bg: rgba(245,245,247,0.82); --table-hover: rgba(0,0,0,0.02);
+  --green-rgb: 22,163,74; --blue-rgb: 37,99,235; --purple-rgb: 147,51,234;
+  --cyan-rgb: 8,145,178; --yellow-rgb: 217,119,6; --red-rgb: 220,38,38;
 }
 
 /* ── Reset & Body ── */
@@ -208,6 +212,33 @@ body {
 .stat-card.red .stat-value    { color: var(--red); }
 .stat-label { font-size: 12px; font-weight: 500; color: var(--dim); margin-bottom: 2px; }
 .stat-sub { font-size: 11px; color: var(--mute); }
+
+/* ── Numeric change glow system ──
+   When a value changes, JS adds .num-glow (instant on),
+   then removes it after 60ms — the base 2s transition fades the shadow out.
+   Color-matched via --glow-rgb cascading from parent color class.
+*/
+.stat-card.cyan   { --glow-rgb: var(--cyan-rgb); }
+.stat-card.green  { --glow-rgb: var(--green-rgb); }
+.stat-card.blue   { --glow-rgb: var(--blue-rgb); }
+.stat-card.purple { --glow-rgb: var(--purple-rgb); }
+.stat-card.yellow { --glow-rgb: var(--yellow-rgb); }
+.stat-card.red    { --glow-rgb: var(--red-rgb); }
+.hm-value.cyan   { --glow-rgb: var(--cyan-rgb); }
+.hm-value.green  { --glow-rgb: var(--green-rgb); }
+.hm-value.blue   { --glow-rgb: var(--blue-rgb); }
+.hm-value.purple { --glow-rgb: var(--purple-rgb); }
+.hm-value.yellow { --glow-rgb: var(--yellow-rgb); }
+.hm-value.red    { --glow-rgb: var(--red-rgb); }
+
+.stat-value, .hm-value {
+  transition: text-shadow 2s ease-out;
+  text-shadow: none;
+}
+.num-glow {
+  text-shadow: 0 0 8px rgba(var(--glow-rgb), 0.55), 0 0 18px rgba(var(--glow-rgb), 0.2) !important;
+  transition: none !important;
+}
 
 /* ══════════════════════════════════════════════════════════
    CARD (shared)
@@ -588,4 +619,100 @@ body {
   .activity-table .col-source { width: 20%; }
   .activity-table .col-attrib { width: 25%; }
   .activity-table .col-impact { width: 35%; }
+}
+
+/* ── Mobile Compaction (<= 520px) ──
+   Hero card hidden (static text), stats as value-only chips,
+   all content areas get maximum space.
+   ── */
+@media (max-width: 520px) {
+  /* -- Nav -- */
+  .nav { padding: 0 12px; height: 44px; }
+  .nav-brand { margin-right: 10px; }
+  .nav-brand .angle { font-size: 18px; }
+  .nav-brand .name { font-size: 13px; }
+  .nav-tab { padding: 6px 8px; font-size: 11px; }
+  .nav-tabs { gap: 1px; }
+  .status-badge { font-size: 10px; padding: 3px 8px; }
+  .theme-toggle { width: 28px; height: 28px; font-size: 13px; }
+
+  /* -- Main area -- */
+  .main { padding: 12px; gap: 10px; }
+
+  /* -- Hero: hide card, compact metrics strip -- */
+  .hero-row { flex-direction: column; min-height: auto; gap: 8px; }
+  .hero-card-wrapper { display: none; }
+  .hero-metrics {
+    display: flex; flex-direction: row; align-items: center;
+    justify-content: space-around; padding: 8px 12px;
+    border-radius: 12px; gap: 0; width: auto;
+  }
+  .hm-cell { align-items: center; }
+  .hm-cell.right { padding-left: 0; }
+  .hm-value { font-size: 18px; }
+  .hm-label { font-size: 9px; }
+  .hm-arrow { font-size: 11px; padding: 0 4px; }
+
+  /* -- Stats: 6-col value chips, no labels -- */
+  .stats-grid { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .stat-card { padding: 8px 4px; border-radius: 8px; text-align: center; overflow: visible; }
+  .stat-value { font-size: 16px; margin-bottom: 0; transition: text-shadow 2s ease-out; text-shadow: none; }
+  .stat-label { display: none; }
+  .stat-sub { display: none; }
+
+  /* -- Glow: scaled for compact text sizes -- */
+  .hm-value { transition: text-shadow 2s ease-out; text-shadow: none; }
+  .num-glow {
+    text-shadow: 0 0 5px rgba(var(--glow-rgb), 0.5), 0 0 12px rgba(var(--glow-rgb), 0.2) !important;
+    transition: none !important;
+  }
+
+  /* -- Live: activity table -- */
+  .activity-table { font-size: 11px; }
+  .activity-table th { padding: 6px 8px; font-size: 9px; }
+  .activity-table td { padding: 5px 8px; }
+  .pill { font-size: 10px; padding: 1px 7px; }
+
+  /* -- Intel: domain table + ngrams -- */
+  .learning-grid { grid-template-columns: 1fr; gap: 10px; }
+  .card-header { padding: 10px 14px; }
+  .card-title { font-size: 9px; }
+  .domain-table th { padding: 4px 8px; font-size: 9px; }
+  .domain-table td { padding: 4px 8px; }
+  .domain-name { font-size: 11px; }
+  .domain-hits { font-size: 11px; }
+  .d-terms { max-width: none; }
+  .term-pill { font-size: 9px; padding: 1px 5px; }
+  .domain-footer { padding: 8px; font-size: 10px; }
+  .ngram-wrap { padding: 10px 14px; }
+  .ngram-section-title { font-size: 9px; margin-bottom: 6px; }
+  .ngram-name { font-size: 10px; width: 100px; min-width: 100px; }
+  .ngram-count { font-size: 10px; min-width: 28px; }
+  .ngram-row { gap: 6px; padding: 3px 0; margin-bottom: 2px; }
+
+  /* -- Debrief: conversation feed -- */
+  .conv-grid { grid-template-columns: 1fr; }
+  .conv-actions { display: none; }
+  .conv-messages { padding: 10px; gap: 6px; }
+  .conv-turn-sep { font-size: 9px; padding: 6px 0 3px; }
+  .conv-msg { padding: 6px 10px; }
+  .conv-msg-text { font-size: 11px; }
+  .conv-msg-role { font-size: 10px; }
+  .conv-thought-line { font-size: 10px; }
+
+  /* -- Arsenal: chart + session table -- */
+  .chart-area { min-height: 120px; padding: 10px 14px; gap: 4px; }
+  .chart-bar { width: 12px; }
+  .chart-label { font-size: 8px; }
+  .chart-legend { font-size: 9px; padding: 6px 14px; gap: 8px; }
+  .arsenal-bottom { grid-template-columns: 1fr; gap: 10px; min-height: auto; }
+  .session-table th { padding: 4px 6px; font-size: 8px; }
+  .session-table td { padding: 4px 6px; font-size: 10px; }
+  .sys-strip { padding: 8px 12px; gap: 8px; font-size: 10px; }
+  .curve-canvas-wrap { padding: 8px; }
+
+  /* -- Footer -- */
+  .footer { height: 30px; padding: 0 12px; font-size: 10px; }
+  .footer-motto { font-size: 9px; }
+  .footer-clock { font-size: 9px; }
 }

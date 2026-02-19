@@ -794,6 +794,50 @@ body {
   .activity-table .col-attrib  { width: 25%; }
   .activity-table .col-impact  { width: 35%; }
 }
+
+/* ====== MOBILE COMPACTION (<= 520px) ====== */
+@media (max-width: 520px) {
+  .nav { padding: 0 12px; height: 44px; }
+  .nav-brand { margin-right: 10px; }
+  .nav-brand .angle { font-size: 18px; }
+  .nav-brand .name { font-size: 13px; }
+  .nav-tab { padding: 6px 8px; font-size: 11px; }
+  .nav-tabs { gap: 1px; }
+  .status-badge { font-size: 10px; padding: 3px 8px; }
+  .theme-toggle { width: 28px; height: 28px; font-size: 13px; }
+
+  .main { padding: 12px; gap: 10px; }
+
+  .hero-row { flex-direction: column; min-height: auto; gap: 8px; }
+  .hero-card-wrapper { display: none; }
+  .hero-metrics {
+    display: flex; flex-direction: row; align-items: center;
+    justify-content: space-around; padding: 8px 12px;
+    border-radius: 12px; gap: 0;
+  }
+  .hm-cell { align-items: center; }
+  .hm-cell.right { padding-left: 0; }
+  .hm-value { font-size: 18px; }
+  .hm-label { font-size: 9px; }
+  .hm-arrow { font-size: 11px; padding: 0 4px; }
+
+  .stats-grid { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .stat-card { padding: 8px 4px; border-radius: 8px; text-align: center; }
+  .stat-value { font-size: 16px; margin-bottom: 0; }
+  .stat-label { display: none; }
+  .stat-sub { display: none; }
+
+  .activity-header { margin-bottom: 8px; }
+  .activity-title { font-size: 10px; }
+  .activity-table { font-size: 11px; }
+  .activity-table th { padding: 6px 8px; font-size: 9px; }
+  .activity-table td { padding: 5px 8px; }
+  .pill { font-size: 10px; padding: 1px 7px; }
+
+  .footer { height: 30px; padding: 0 12px; font-size: 10px; }
+  .footer-tagline { display: none; }
+  .gen-btn { bottom: 40px; right: 12px; padding: 8px 14px; font-size: 11px; }
+}
 </style>
 </head>
 <body>

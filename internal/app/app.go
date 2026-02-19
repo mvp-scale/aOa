@@ -626,11 +626,17 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 							// Partial read but no savings data — estimate from lines
 							tokens = ev.File.Limit * 20 // ~80 bytes/line ÷ 4
 							attrib = "unguided"
+							if tokens > 0 {
+								impact = fmt.Sprintf("~%s tokens", formatTokens(int64(tokens)))
+							}
 						}
 					} else {
 						// Full file read — estimate cost from index
 						attrib = "unguided"
 						tokens = a.estimateFileTokens(ev.File.Path)
+						if tokens > 0 {
+							impact = fmt.Sprintf("~%s tokens", formatTokens(int64(tokens)))
+						}
 					}
 				}
 			case "Bash":
@@ -657,21 +663,21 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				}
 				attrib = "productive"
 			case "Glob":
-				if ev.File != nil && ev.File.Path != "" {
-					target = a.relativePath(ev.File.Path)
-				} else if ev.Tool.Pattern != "" {
+				// Prefer pattern for display (more descriptive than directory)
+				if ev.Tool.Pattern != "" {
 					target = ev.Tool.Pattern
+				} else if ev.File != nil && ev.File.Path != "" {
+					target = a.relativePath(ev.File.Path)
 				}
 				attrib = "unguided"
-				globPath := ""
-				if ev.File != nil && ev.File.Path != "" {
-					globPath = ev.File.Path
-				} else if ev.Tool.Pattern != "" {
-					globPath = ev.Tool.Pattern
+				globPattern := ev.Tool.Pattern
+				globDir := ""
+				if ev.File != nil {
+					globDir = ev.File.Path
 				}
-				if globPath != "" {
-					impact = a.estimateGlobCost(globPath)
-					tokens = a.estimateGlobTokens(globPath)
+				if globPattern != "" || globDir != "" {
+					impact = a.estimateGlobCost(globDir, globPattern)
+					tokens = a.estimateGlobTokens(globDir, globPattern)
 				}
 			case "Task":
 				if ev.Tool.Command != "" {
@@ -1425,25 +1431,51 @@ func formatTokens(tokens int64) string {
 }
 
 // estimateGlobCost estimates the token cost of a glob operation by scanning
-// the index for files matching the given path prefix.
+// the index for files matching the given pattern within a directory.
 // Must be called with a.mu held.
-func (a *App) estimateGlobCost(path string) string {
-	if a.Index == nil {
-		return "-"
-	}
-	relPath := a.relativePath(path)
-	var totalBytes int64
-	for _, fm := range a.Index.Files {
-		fmRel := a.relativePath(fm.Path)
-		if strings.HasPrefix(fmRel, relPath) || strings.HasPrefix(fm.Path, path) {
-			totalBytes += fm.Size
-		}
-	}
+func (a *App) estimateGlobCost(dir, pattern string) string {
+	totalBytes := a.matchGlobFiles(dir, pattern)
 	if totalBytes == 0 {
 		return "-"
 	}
 	tokens := totalBytes / 4
 	return fmt.Sprintf("~%s tokens", formatTokens(tokens))
+}
+
+// matchGlobFiles sums the size of indexed files matching a glob pattern.
+// Handles both: pattern-only (e.g., "internal/**/*.go") and dir+pattern combos.
+func (a *App) matchGlobFiles(dir, pattern string) int64 {
+	if a.Index == nil {
+		return 0
+	}
+	// Build the effective glob by combining dir and pattern
+	effectiveGlob := pattern
+	if effectiveGlob == "" && dir != "" {
+		// Directory-only: match all files under it
+		relDir := a.relativePath(dir)
+		var totalBytes int64
+		for _, fm := range a.Index.Files {
+			fmRel := a.relativePath(fm.Path)
+			if strings.HasPrefix(fmRel, relDir) || strings.HasPrefix(fm.Path, dir) {
+				totalBytes += fm.Size
+			}
+		}
+		return totalBytes
+	}
+	// Try filepath.Match against relative paths in the index
+	var totalBytes int64
+	for _, fm := range a.Index.Files {
+		fmRel := a.relativePath(fm.Path)
+		if matched, _ := filepath.Match(effectiveGlob, fmRel); matched {
+			totalBytes += fm.Size
+			continue
+		}
+		// Also try with absolute path
+		if matched, _ := filepath.Match(effectiveGlob, fm.Path); matched {
+			totalBytes += fm.Size
+		}
+	}
+	return totalBytes
 }
 
 // estimateGrepCost estimates the token cost of a grep scan across indexed files.
@@ -1494,19 +1526,8 @@ func (a *App) estimateGrepTokens() int {
 
 // estimateGlobTokens returns the estimated token count for a glob match.
 // Must be called with a.mu held.
-func (a *App) estimateGlobTokens(path string) int {
-	if a.Index == nil {
-		return 0
-	}
-	relPath := a.relativePath(path)
-	var totalBytes int64
-	for _, fm := range a.Index.Files {
-		fmRel := a.relativePath(fm.Path)
-		if strings.HasPrefix(fmRel, relPath) || strings.HasPrefix(fm.Path, path) {
-			totalBytes += fm.Size
-		}
-	}
-	return int(totalBytes / 4)
+func (a *App) estimateGlobTokens(dir, pattern string) int {
+	return int(a.matchGlobFiles(dir, pattern) / 4)
 }
 
 // truncate truncates a string to a maximum length.
