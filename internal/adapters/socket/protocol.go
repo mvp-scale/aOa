@@ -191,10 +191,13 @@ type ConversationTurnResult struct {
 
 // TurnActionResult describes a single tool action within a conversation turn.
 type TurnActionResult struct {
-	Tool   string `json:"tool"`
-	Target string `json:"target"`
-	Range  string `json:"range,omitempty"`
-	Impact string `json:"impact,omitempty"`
+	Tool    string `json:"tool"`
+	Target  string `json:"target"`
+	Range   string `json:"range,omitempty"`
+	Impact  string `json:"impact,omitempty"`
+	Attrib  string `json:"attrib,omitempty"`
+	Tokens  int    `json:"tokens,omitempty"`
+	Savings int    `json:"savings,omitempty"`
 }
 
 // ActivityEntryResult describes a single action in the activity feed.

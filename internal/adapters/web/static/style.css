@@ -53,6 +53,23 @@ body {
 /* ── Animations ── */
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 @keyframes gradient-rotate { 0%{--gradient-angle:0deg} 100%{--gradient-angle:360deg} }
+@keyframes fade-in { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+
+/* Soft green diffuse glow — used on term pills and ngram counts */
+@keyframes soft-glow {
+  0%   { box-shadow: 0 0 6px rgba(52,211,153,0.5), 0 0 14px rgba(52,211,153,0.25); }
+  40%  { box-shadow: 0 0 4px rgba(52,211,153,0.35), 0 0 10px rgba(52,211,153,0.15); }
+  100% { box-shadow: none; }
+}
+.soft-glow { animation: soft-glow 2.5s ease-out; }
+
+/* Soft green text glow for hit counts */
+@keyframes text-glow {
+  0%   { text-shadow: 0 0 6px rgba(52,211,153,0.6), 0 0 12px rgba(52,211,153,0.3); }
+  40%  { text-shadow: 0 0 4px rgba(52,211,153,0.3), 0 0 8px rgba(52,211,153,0.15); }
+  100% { text-shadow: none; }
+}
+.text-glow { animation: text-glow 2.5s ease-out; }
 
 /* ══════════════════════════════════════════════════════════
    NAV
@@ -295,33 +312,46 @@ body {
 .aoa-brand { color: var(--cyan); font-weight: 600; font-style: normal; }
 
 /* ── Term pills ── */
+.d-terms {
+  display: flex; flex-wrap: wrap; align-items: center;
+  max-width: 500px; max-height: 24px; overflow: hidden;
+}
 .term-pill {
   display: inline-flex; align-items: center; font-size: 10px; font-weight: 500;
   padding: 2px 7px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;
   margin: 1px 2px 1px 0; background: var(--border-subtle); color: var(--mute); white-space: nowrap;
+  transition: background 2.5s ease-out, color 2.5s ease-out, box-shadow 2.5s ease-out;
 }
-.term-hot  { background: var(--green); color: #000; }
-.term-warm { background: var(--green-dim); color: var(--green); }
-.term-cold { background: var(--border-subtle); color: var(--mute); }
+/* .lit — soft green glow on just the pill, fades over 2.5s via CSS transition */
+.term-pill.lit {
+  background: var(--green-dim); color: var(--green);
+  box-shadow: 0 0 8px rgba(52,211,153,0.4), 0 0 16px rgba(52,211,153,0.15);
+  transition: none;
+}
 
 /* ── N-gram metrics ── */
-.ngram-wrap { flex: 1; overflow-y: auto; min-height: 0; padding: 16px 20px; }
-.ngram-section { margin-bottom: 16px; }
+.ngram-wrap { flex: 1; overflow: hidden; padding: 16px 20px; }
+.ngram-section { margin-bottom: 24px; }
 .ngram-section:last-child { margin-bottom: 0; }
 .ngram-section-title {
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
   color: var(--mute); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-subtle);
 }
-.ngram-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; margin-bottom: 3px; }
+.ngram-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; margin-bottom: 2px; border-radius: 4px; }
 .ngram-name {
   font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary);
   width: 130px; min-width: 130px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.ngram-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.ngram-bar { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
-.ngram-bar.cyan   { background: var(--cyan); }
-.ngram-bar.green  { background: var(--green); }
-.ngram-bar.purple { background: var(--purple); }
+.ngram-bar-track {
+  flex: 1; height: 6px; background: var(--border); border-radius: 3px;
+  overflow: hidden; display: block;
+}
+.ngram-bar-fill {
+  height: 100%; border-radius: 3px; transition: width 0.5s ease; display: block;
+}
+.ngram-bar-fill.bar-cyan   { background: var(--cyan); }
+.ngram-bar-fill.bar-green  { background: var(--green); }
+.ngram-bar-fill.bar-purple { background: var(--purple); }
 .ngram-count {
   font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
   font-variant-numeric: tabular-nums; color: var(--text-secondary); min-width: 32px; text-align: right;
@@ -344,19 +374,41 @@ body {
   background: var(--card-hover);
 }
 .conv-msg.user { border-left-color: var(--yellow); }
-.conv-msg.thinking {
-  border-left-color: var(--purple); cursor: pointer;
+/* Thinking: nested block with individual thought lines */
+.conv-thinking-block {
+  margin-left: 16px; padding: 6px 0 6px 12px;
+  border-left: 2px solid var(--purple); opacity: 0.85;
 }
-.conv-msg.thinking .conv-msg-text { max-height: 0; overflow: hidden; transition: max-height 0.3s; }
-.conv-msg.thinking.expanded .conv-msg-text { max-height: 2000px; }
+.conv-thinking-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 11px;
+}
+.conv-thought-line {
+  font-size: 11px; font-style: italic; color: var(--dim); line-height: 1.5;
+  padding: 3px 0; border-bottom: 1px solid var(--border-subtle); word-break: break-word;
+}
+.conv-thought-line:last-child { border-bottom: none; }
 .conv-msg.assistant { border-left-color: var(--green); }
 .conv-msg-header {
   display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 11px;
 }
 .conv-msg-role { font-weight: 700; font-size: 11px; }
 .conv-msg-meta { font-size: 10px; color: var(--mute); }
-.think-toggle { font-size: 10px; color: var(--mute); margin-left: auto; }
-.conv-msg-text { font-size: 12px; color: var(--text-secondary); line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.conv-msg-text { font-size: 12px; color: var(--text-secondary); line-height: 1.5; word-break: break-word; }
+/* Markdown rendered elements */
+.conv-msg-text .md-inline-code {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 1px 5px;
+  background: var(--border-subtle); border-radius: 3px; color: var(--cyan);
+}
+.conv-msg-text .md-code-block {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 8px 12px;
+  background: var(--border-subtle); border-radius: 6px; margin: 6px 0; overflow-x: auto;
+  line-height: 1.4;
+}
+.conv-msg-text .md-code-block code { color: var(--text-secondary); }
+.conv-thought-line .md-inline-code {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 1px 4px;
+  background: var(--border-subtle); border-radius: 3px; color: var(--purple); font-style: normal;
+}
 .conv-now {
   font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--green);
   text-align: center; padding: 12px; animation: blink 2s ease-in-out infinite;
@@ -386,7 +438,27 @@ body {
   font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;
 }
-.conv-action-impact { font-size: 10px; font-weight: 600; margin-left: auto; }
+/* Action header with column labels */
+.conv-action-header {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+}
+.conv-action-header .conv-action-turn { flex: 1; }
+.act-col-head {
+  font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600;
+  color: var(--mute); text-align: right; width: 38px; flex-shrink: 0;
+  letter-spacing: 0.5px; text-transform: uppercase; cursor: default;
+}
+/* Left side: chip + path wrapped together as flex:1 */
+.act-left {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden;
+}
+.conv-action-path { flex: 1; }
+/* Fixed cells aligned under column headers */
+.act-cell {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
+  width: 38px; text-align: right; flex-shrink: 0; overflow: hidden;
+  white-space: nowrap;
+}
 
 /* ══════════════════════════════════════════════════════════
    ARSENAL TAB: Charts + Session Table

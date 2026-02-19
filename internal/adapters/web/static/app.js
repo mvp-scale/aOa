@@ -87,6 +87,26 @@ function safeFetch(url) {
   });
 }
 
+// Lightweight markdown renderer for assistant/thinking text
+function renderMd(text) {
+  if (!text) return '';
+  // Escape HTML first
+  var s = escapeHtml(text);
+  // Code blocks: ```lang\n...\n```
+  s = s.replace(/```(\w*)\n([\s\S]*?)```/g, function(m, lang, code) {
+    return '<pre class="md-code-block"><code>' + code + '</code></pre>';
+  });
+  // Inline code: `text`
+  s = s.replace(/`([^`\n]+)`/g, '<code class="md-inline-code">$1</code>');
+  // Bold: **text**
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Italic: *text* (but not inside **)
+  s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+  // Line breaks
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
 /* ══════════════════════════════════════════════════════════
    THEME
    ══════════════════════════════════════════════════════════ */
@@ -142,12 +162,6 @@ for (var i = 0; i < tabs.length; i++) {
   tabs[i].addEventListener('click', function() {
     switchTab(this.getAttribute('data-tab'));
   });
-}
-
-// Restore tab from URL hash
-var hashTab = location.hash.replace('#', '');
-if (hashTab && document.getElementById('tab-' + hashTab)) {
-  switchTab(hashTab);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -215,6 +229,12 @@ function renderHero(tab) {
 
 // Render initial heroes for all tabs
 ['live', 'recon', 'intel', 'debrief', 'arsenal'].forEach(function(t) { renderHero(t); });
+
+// Restore tab from URL hash (must be after HERO_STORIES is defined)
+var hashTab = location.hash.replace('#', '');
+if (hashTab && document.getElementById('tab-' + hashTab)) {
+  switchTab(hashTab);
+}
 
 /* ══════════════════════════════════════════════════════════
    POLLING
@@ -377,6 +397,10 @@ function getImpactHtml(impact) {
 /* ══════════════════════════════════════════════════════════
    RENDER: INTEL TAB
    ══════════════════════════════════════════════════════════ */
+var prevDomainData = null;
+var prevTermHitsMap = {};
+var prevBigramData = null;
+
 function renderIntel() {
   var st = cache.stats || {};
   var dm = cache.domains || {};
@@ -410,67 +434,267 @@ function renderIntel() {
   setText('is-bigrams', st.bigram_count || 0);
   setText('is-totalhits', totalHits ? totalHits.toFixed(1) : '0');
 
-  // Domain Rankings
-  var domains = dm.domains || [];
-  setText('domainCount', domains.length + ' domains');
-  var dhtml = '';
-  for (var d = 0; d < domains.length; d++) {
-    var dom = domains[d];
-    var termPills = '';
-    if (dom.terms) {
-      for (var t = 0; t < dom.terms.length; t++) {
-        var tname = dom.terms[t];
-        var thits = (dom.term_hits && dom.term_hits[tname]) || 0;
-        var tclass = thits >= 10 ? 'term-hot' : (thits >= 3 ? 'term-warm' : 'term-cold');
-        termPills += '<span class="term-pill ' + tclass + '">' + escapeHtml(tname) + '</span>';
-      }
-    }
-    var tierClass = dom.tier === 'core' ? 'pill-green' : (dom.tier === 'context' ? 'pill-cyan' : 'pill-dim');
-    dhtml += '<tr>' +
-      '<td class="text-dim mono" style="font-size:11px">' + (d + 1) + '</td>' +
-      '<td class="domain-name">@' + escapeHtml(dom.name) + '</td>' +
-      '<td class="domain-hits">' + (dom.hits !== undefined ? dom.hits.toFixed(1) : '0') + '</td>' +
-      '<td><span class="pill ' + tierClass + '">' + escapeHtml(dom.tier || '-') + '</span></td>' +
-      '<td>' + termPills + '</td>' +
-      '</tr>';
-  }
-  document.getElementById('domainTbody').innerHTML = dhtml;
+  // Domain Rankings (with change-tracking visual effects)
+  renderDomains(dm);
 
-  // N-gram Metrics
-  renderNgramSection('ngramBigrams', bg.bigrams || {}, 'cyan');
-  renderNgramSection('ngramCohitKw', bg.cohit_kw_term || {}, 'green');
-  renderNgramSection('ngramCohitTd', bg.cohit_term_domain || {}, 'purple');
+  // N-gram Metrics (with change-tracking visual effects)
+  renderBigrams(bg);
   var totalNgrams = (bg.count || 0) + (bg.cohit_kw_count || 0) + (bg.cohit_td_count || 0);
   setText('ngramCount', totalNgrams + ' total');
 }
 
-function renderNgramSection(containerId, data, colorClass) {
-  var container = document.getElementById(containerId);
-  if (!container) return;
-
-  var items = [];
-  for (var key in data) {
-    if (data.hasOwnProperty(key)) items.push({ name: key, count: data[key] });
+/* ── Domain rendering with flash/glow effects ── */
+function detectTermChanges(domainName, termHits) {
+  var changed = [];
+  var th = termHits || {};
+  for (var term in th) {
+    var key = domainName + ':' + term;
+    var prev = prevTermHitsMap[key] || 0;
+    if (th[term] > prev) changed.push(term);
   }
-  items.sort(function(a, b) { return b.count - a.count; });
-  items = items.slice(0, 15);
+  return changed;
+}
 
-  var maxVal = items.length > 0 ? items[0].count : 1;
+function updateTermHitsCache(domains) {
+  prevTermHitsMap = {};
+  for (var i = 0; i < domains.length; i++) {
+    var d = domains[i];
+    var th = d.term_hits || {};
+    for (var term in th) {
+      prevTermHitsMap[d.name + ':' + term] = th[term];
+    }
+  }
+}
+
+function glowTermPills(container, domainName, changedTerms) {
+  var row = container.querySelector('[data-dname="' + CSS.escape(domainName) + '"]');
+  if (!row) return;
+  // Soft text glow on the hits cell
+  var hitsCell = row.querySelector('.domain-hits');
+  if (hitsCell) {
+    hitsCell.classList.remove('text-glow'); void hitsCell.offsetWidth;
+    hitsCell.classList.add('text-glow');
+  }
+  // Soft diffuse glow on each changed term pill — .lit adds glow + green tint,
+  // then removing it after a frame lets the 2.5s CSS transition fade it back
+  for (var i = 0; i < changedTerms.length; i++) {
+    var pill = row.querySelector('[data-term="' + CSS.escape(changedTerms[i]) + '"]');
+    if (pill) {
+      pill.classList.add('lit');
+      setTimeout((function(p) { return function() { p.classList.remove('lit'); }; })(pill), 60);
+    }
+  }
+}
+
+function renderDomains(domainsResult) {
+  var list = (domainsResult.domains || []).slice(0, 24);
+  setText('domainCount', list.length + ' domains');
+
+  if (list.length === 0) {
+    document.getElementById('domainTbody').innerHTML =
+      '<tr><td colspan="4" class="text-mute" style="text-align:center;padding:20px">No domains yet</td></tr>';
+    prevDomainData = domainsResult;
+    return;
+  }
+
+  var prevList = prevDomainData ? (prevDomainData.domains || []) : [];
+  var structureChanged = !prevDomainData || list.length !== prevList.length;
+  if (!structureChanged) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].name !== prevList[i].name) { structureChanged = true; break; }
+    }
+  }
+
+  var prevHitsMap = {};
+  for (var p = 0; p < prevList.length; p++) prevHitsMap[prevList[p].name] = prevList[p].hits;
+
+  var tbody = document.getElementById('domainTbody');
+
+  if (structureChanged) {
+    // Full rebuild
+    var dhtml = '';
+    for (var d = 0; d < list.length; d++) {
+      var dom = list[d];
+      var termsHtml = '';
+      if (dom.terms && dom.terms.length > 0) {
+        var shown = dom.terms.slice(0, 10);
+        for (var t = 0; t < shown.length; t++) {
+          termsHtml += '<span class="term-pill" data-term="' + escapeHtml(shown[t]) + '">' + escapeHtml(shown[t]) + '</span>';
+        }
+        if (dom.terms.length > 10) {
+          termsHtml += '<span class="term-pill" style="background:var(--border-subtle);color:var(--dim)">+' + (dom.terms.length - 10) + '</span>';
+        }
+      }
+      dhtml += '<tr data-dname="' + escapeHtml(dom.name) + '">' +
+        '<td class="text-dim mono" style="font-size:11px">' + (d + 1) + '</td>' +
+        '<td class="domain-name">@' + escapeHtml(dom.name) + '</td>' +
+        '<td class="domain-hits" data-dhits="' + escapeHtml(dom.name) + '">' + (dom.hits !== undefined ? dom.hits.toFixed(1) : '0') + '</td>' +
+        '<td class="d-terms">' + termsHtml + '</td>' +
+        '</tr>';
+    }
+    tbody.innerHTML = dhtml;
+
+    // Flash terms that changed
+    for (var f = 0; f < list.length; f++) {
+      var changed = detectTermChanges(list[f].name, list[f].term_hits);
+      if (changed.length > 0) {
+        glowTermPills(tbody, list[f].name, changed);
+      } else if (prevHitsMap[list[f].name] !== undefined && prevHitsMap[list[f].name] !== list[f].hits) {
+        var row = tbody.querySelector('[data-dname="' + CSS.escape(list[f].name) + '"]');
+        if (row) {
+          var hc = row.querySelector('.domain-hits');
+          if (hc) { hc.classList.remove('text-glow'); void hc.offsetWidth; hc.classList.add('text-glow'); }
+        }
+      }
+    }
+  } else {
+    // Surgical update — only update changed hits + flash specific terms
+    for (var u = 0; u < list.length; u++) {
+      var udom = list[u];
+      var urow = tbody.querySelector('[data-dname="' + CSS.escape(udom.name) + '"]');
+      if (!urow) continue;
+      var uhc = urow.querySelector('[data-dhits="' + CSS.escape(udom.name) + '"]');
+      if (uhc) {
+        var newVal = udom.hits !== undefined ? udom.hits.toFixed(1) : '0';
+        if (uhc.textContent !== newVal) uhc.textContent = newVal;
+      }
+      var uchanged = detectTermChanges(udom.name, udom.term_hits);
+      if (uchanged.length > 0) glowTermPills(tbody, udom.name, uchanged);
+    }
+  }
+
+  updateTermHitsCache(list);
+  prevDomainData = domainsResult;
+}
+
+/* ── N-gram rendering with flash/glow effects ── */
+function buildNgramSection(title, sorted, barClass, prefix) {
+  var maxVal = sorted.length > 0 ? sorted[0][1] : 1;
   if (maxVal === 0) maxVal = 1;
+  var html = '<div class="ngram-section"><div class="ngram-section-title">' + title + '</div>';
+  for (var i = 0; i < sorted.length; i++) {
+    var pct = (sorted[i][1] / maxVal * 100).toFixed(1);
+    var key = prefix + ':' + sorted[i][0];
+    html += '<div class="ngram-row" data-ngkey="' + escapeHtml(key) + '">' +
+      '<span class="ngram-name">' + escapeHtml(sorted[i][0]) + '</span>' +
+      '<span class="ngram-bar-track"><span class="ngram-bar-fill ' + barClass + '" style="width:' + pct + '%"></span></span>' +
+      '<span class="ngram-count">' + sorted[i][1] + '</span></div>';
+  }
+  if (sorted.length === 0) {
+    html += '<div class="ngram-row"><span class="ngram-name text-mute">no data</span></div>';
+  }
+  html += '</div>';
+  return html;
+}
 
-  var html = '';
-  for (var i = 0; i < items.length; i++) {
-    var pct = Math.round((items[i].count / maxVal) * 100);
-    html += '<div class="ngram-row">' +
-      '<span class="ngram-name">' + escapeHtml(items[i].name) + '</span>' +
-      '<span class="ngram-bar-wrap"><span class="ngram-bar ' + colorClass + '" style="width:' + pct + '%"></span></span>' +
-      '<span class="ngram-count">' + items[i].count + '</span>' +
-      '</div>';
+function renderBigrams(bigramsResult) {
+  var bg = bigramsResult.bigrams || {};
+  var ckw = bigramsResult.cohit_kw_term || {};
+  var ctd = bigramsResult.cohit_term_domain || {};
+
+  var bgSorted = Object.keys(bg).map(function(k) { return [k, bg[k]]; })
+    .sort(function(a, b) { return b[1] - a[1]; }).slice(0, 10);
+  var ckSorted = Object.keys(ckw).map(function(k) { return [k, ckw[k]]; })
+    .sort(function(a, b) { return b[1] - a[1]; }).slice(0, 5);
+  var ctSorted = Object.keys(ctd).map(function(k) { return [k, ctd[k]]; })
+    .sort(function(a, b) { return b[1] - a[1]; }).slice(0, 5);
+
+  // Signature to detect structural changes
+  var sig = bgSorted.map(function(e) { return e[0]; }).join(',') + '|' +
+    ckSorted.map(function(e) { return e[0]; }).join(',') + '|' +
+    ctSorted.map(function(e) { return e[0]; }).join(',');
+  var prevSig = prevBigramData ? prevBigramData._sig : null;
+
+  // Previous value map for pulse detection
+  var prevMap = {};
+  if (prevBigramData) {
+    var pb = prevBigramData.bigrams || {};
+    var pck = prevBigramData.cohit_kw_term || {};
+    var pct = prevBigramData.cohit_term_domain || {};
+    for (var k1 in pb) prevMap['bg:' + k1] = pb[k1];
+    for (var k2 in pck) prevMap['ck:' + k2] = pck[k2];
+    for (var k3 in pct) prevMap['ct:' + k3] = pct[k3];
   }
-  if (items.length === 0) {
-    html = '<div class="ngram-row"><span class="ngram-name text-mute">no data</span></div>';
+
+  // Target the three containers
+  var containers = [
+    { id: 'ngramBigrams', sorted: bgSorted, bar: 'bar-cyan', prefix: 'bg', title: 'BIGRAMS' },
+    { id: 'ngramCohitKw', sorted: ckSorted, bar: 'bar-green', prefix: 'ck', title: 'COHITS: KW \u2192 TERM' },
+    { id: 'ngramCohitTd', sorted: ctSorted, bar: 'bar-purple', prefix: 'ct', title: 'COHITS: TERM \u2192 DOMAIN' }
+  ];
+
+  if (sig !== prevSig) {
+    // Full rebuild — write HTML into each container
+    for (var c = 0; c < containers.length; c++) {
+      var ct = containers[c];
+      var el = document.getElementById(ct.id);
+      if (!el) continue;
+      // buildNgramSection returns a wrapping div, extract the inner rows
+      var maxVal = ct.sorted.length > 0 ? ct.sorted[0][1] : 1;
+      if (maxVal === 0) maxVal = 1;
+      var html = '';
+      for (var r = 0; r < ct.sorted.length; r++) {
+        var pct2 = (ct.sorted[r][1] / maxVal * 100).toFixed(1);
+        var ngkey = ct.prefix + ':' + ct.sorted[r][0];
+        html += '<div class="ngram-row" data-ngkey="' + escapeHtml(ngkey) + '">' +
+          '<span class="ngram-name">' + escapeHtml(ct.sorted[r][0]) + '</span>' +
+          '<span class="ngram-bar-track"><span class="ngram-bar-fill ' + ct.bar + '" style="width:' + pct2 + '%"></span></span>' +
+          '<span class="ngram-count">' + ct.sorted[r][1] + '</span></div>';
+      }
+      if (ct.sorted.length === 0) {
+        html = '<div class="ngram-row"><span class="ngram-name text-mute">no data</span></div>';
+      }
+      el.innerHTML = html;
+    }
+
+    // Pulse changed values
+    var allSorted = [bgSorted, ckSorted, ctSorted];
+    var prefixes = ['bg', 'ck', 'ct'];
+    var parentIds = ['ngramBigrams', 'ngramCohitKw', 'ngramCohitTd'];
+    for (var si = 0; si < allSorted.length; si++) {
+      var parent = document.getElementById(parentIds[si]);
+      if (!parent) continue;
+      for (var ri = 0; ri < allSorted[si].length; ri++) {
+        var nkey = prefixes[si] + ':' + allSorted[si][ri][0];
+        if (prevMap[nkey] !== undefined && prevMap[nkey] !== allSorted[si][ri][1]) {
+          var nrow = parent.querySelector('[data-ngkey="' + CSS.escape(nkey) + '"]');
+          if (nrow) {
+            var ncnt = nrow.querySelector('.ngram-count');
+            if (ncnt) { ncnt.classList.remove('soft-glow'); void ncnt.offsetWidth; ncnt.classList.add('soft-glow'); }
+            var nname = nrow.querySelector('.ngram-name');
+            if (nname) { nname.classList.remove('text-glow'); void nname.offsetWidth; nname.classList.add('text-glow'); }
+          }
+        }
+      }
+    }
+  } else {
+    // Surgical update — only update changed counts + flash
+    var allSorted2 = [bgSorted, ckSorted, ctSorted];
+    var prefixes2 = ['bg', 'ck', 'ct'];
+    var parentIds2 = ['ngramBigrams', 'ngramCohitKw', 'ngramCohitTd'];
+    for (var si2 = 0; si2 < allSorted2.length; si2++) {
+      var parent2 = document.getElementById(parentIds2[si2]);
+      if (!parent2) continue;
+      var maxV = allSorted2[si2].length > 0 ? allSorted2[si2][0][1] : 1;
+      for (var ri2 = 0; ri2 < allSorted2[si2].length; ri2++) {
+        var nkey2 = prefixes2[si2] + ':' + allSorted2[si2][ri2][0];
+        var nrow2 = parent2.querySelector('[data-ngkey="' + CSS.escape(nkey2) + '"]');
+        if (!nrow2) continue;
+        var cntEl = nrow2.querySelector('.ngram-count');
+        if (cntEl && cntEl.textContent !== String(allSorted2[si2][ri2][1])) {
+          cntEl.textContent = allSorted2[si2][ri2][1];
+          cntEl.classList.remove('soft-glow'); void cntEl.offsetWidth; cntEl.classList.add('soft-glow');
+          var nname2 = nrow2.querySelector('.ngram-name');
+          if (nname2) { nname2.classList.remove('text-glow'); void nname2.offsetWidth; nname2.classList.add('text-glow'); }
+        }
+        var barEl = nrow2.querySelector('.ngram-bar-fill');
+        if (barEl) barEl.style.width = (allSorted2[si2][ri2][1] / maxV * 100).toFixed(1) + '%';
+      }
+    }
   }
-  container.innerHTML = html;
+
+  bigramsResult._sig = sig;
+  prevBigramData = bigramsResult;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -503,36 +727,75 @@ function renderDebrief() {
   setText('ds-hitrate', fmtPct(cm.cache_hit_rate || 0));
   setText('convCount', (cf.count || 0) + ' turns');
 
-  // Conversation Feed
-  var turns = cf.turns || [];
+  // Conversation Feed — reverse to chronological, pair user+assistant into exchanges
+  var rawTurns = cf.turns || [];
+  var turns = rawTurns.slice().reverse();
   var shouldScroll = (turns.length !== lastConvCount);
   lastConvCount = turns.length;
 
+  // Group into exchanges: each exchange is { user: turn|null, assistant: turn|null }
+  var exchanges = [];
+  var i = 0;
+  while (i < turns.length) {
+    var ex = { user: null, assistant: null };
+    if (turns[i].role === 'user') {
+      ex.user = turns[i];
+      i++;
+      if (i < turns.length && turns[i].role === 'assistant') {
+        ex.assistant = turns[i];
+        i++;
+      }
+    } else if (turns[i].role === 'assistant') {
+      ex.assistant = turns[i];
+      i++;
+    } else {
+      i++;
+      continue;
+    }
+    exchanges.push(ex);
+  }
+
+  setText('convCount', exchanges.length + ' turns');
+
   // Messages column
   var mhtml = '';
-  for (var i = 0; i < turns.length; i++) {
-    var turn = turns[i];
-    mhtml += '<div class="conv-turn-sep">Turn ' + (i + 1) + '</div>';
+  for (var e = 0; e < exchanges.length; e++) {
+    var ex = exchanges[e];
+    var turnNum = e + 1;
+    mhtml += '<div class="conv-turn-sep">Turn ' + turnNum + '</div>';
 
-    if (turn.role === 'user') {
+    // User message — estimate tokens from text length (bytes/4)
+    if (ex.user) {
+      var userTokEst = ex.user.text ? Math.ceil(ex.user.text.length / 4) : 0;
+      var userTokTag = userTokEst > 0 ? '<span class="conv-msg-meta" style="margin-left:auto">~' + fmtK(userTokEst) + ' tok</span>' : '';
       mhtml += '<div class="conv-msg user">' +
         '<div class="conv-msg-header"><span class="conv-msg-role text-yellow">User</span>' +
-        '<span class="conv-msg-meta">' + relTime(turn.timestamp) + '</span></div>' +
-        '<div class="conv-msg-text">' + escapeHtml(truncText(turn.text, 500)) + '</div></div>';
-    } else if (turn.role === 'assistant') {
-      if (turn.thinking_text) {
-        mhtml += '<div class="conv-msg thinking" onclick="this.classList.toggle(\'expanded\')">' +
-          '<div class="conv-msg-header"><span class="conv-msg-role text-purple">Thinking</span>' +
-          '<span class="think-toggle">click to expand</span></div>' +
-          '<div class="conv-msg-text">' + escapeHtml(truncText(turn.thinking_text, 2000)) + '</div></div>';
+        userTokTag +
+        '<span class="conv-msg-meta">' + relTime(ex.user.timestamp) + '</span></div>' +
+        '<div class="conv-msg-text">' + escapeHtml(truncText(ex.user.text, 500)) + '</div></div>';
+    }
+
+    // Assistant: thinking (nested lines, always visible) + response
+    if (ex.assistant) {
+      if (ex.assistant.thinking_text) {
+        var thinkTokEst = Math.ceil(ex.assistant.thinking_text.length / 4);
+        var thoughts = ex.assistant.thinking_text.split('\n').filter(function(t) { return t.trim(); });
+        mhtml += '<div class="conv-thinking-block">' +
+          '<div class="conv-thinking-header"><span class="conv-msg-role text-purple">Thinking</span>' +
+          '<span class="conv-msg-meta">' + thoughts.length + ' thought' + (thoughts.length !== 1 ? 's' : '') + '</span>' +
+          '<span class="conv-msg-meta" style="margin-left:auto">~' + fmtK(thinkTokEst) + ' tok</span></div>';
+        for (var th = 0; th < thoughts.length; th++) {
+          mhtml += '<div class="conv-thought-line">' + renderMd(truncText(thoughts[th], 500)) + '</div>';
+        }
+        mhtml += '</div>';
       }
-      var modelTag = turn.model ? '<span class="pill pill-dim" style="margin-left:6px">' + escapeHtml(turn.model) + '</span>' : '';
-      var tokenTag = turn.output_tokens ? '<span class="conv-msg-meta" style="margin-left:auto">' + fmtK(turn.output_tokens) + ' tok</span>' : '';
+      var modelTag = ex.assistant.model ? '<span class="pill pill-dim" style="margin-left:6px">' + escapeHtml(ex.assistant.model) + '</span>' : '';
+      var tokenTag = ex.assistant.output_tokens ? '<span class="conv-msg-meta" style="margin-left:auto">' + fmtK(ex.assistant.output_tokens) + ' tok</span>' : '';
       mhtml += '<div class="conv-msg assistant">' +
         '<div class="conv-msg-header"><span class="conv-msg-role text-green">Assistant</span>' +
         modelTag + tokenTag +
-        '<span class="conv-msg-meta" style="margin-left:8px">' + relTime(turn.timestamp) + '</span></div>' +
-        '<div class="conv-msg-text">' + escapeHtml(truncText(turn.text, 500)) + '</div></div>';
+        '<span class="conv-msg-meta" style="margin-left:8px">' + relTime(ex.assistant.timestamp) + '</span></div>' +
+        '<div class="conv-msg-text">' + renderMd(truncText(ex.assistant.text, 500)) + '</div></div>';
     }
   }
   mhtml += '<div class="conv-now">NOW</div>';
@@ -543,31 +806,52 @@ function renderDebrief() {
     msgContainer.scrollTop = msgContainer.scrollHeight;
   }
 
-  // Actions column
+  // Actions column — keyed by exchange number
   var ahtml = '';
-  for (var j = 0; j < turns.length; j++) {
-    var t = turns[j];
-    var actions = t.actions || [];
-    var toolNames = t.tool_names || [];
+  for (var e2 = 0; e2 < exchanges.length; e2++) {
+    var asTurn = exchanges[e2].assistant;
+    if (!asTurn) continue;
+    var actions = asTurn.actions || [];
+    var toolNames = asTurn.tool_names || [];
     if (actions.length === 0 && toolNames.length === 0) continue;
 
     ahtml += '<div class="conv-action-group">';
-    ahtml += '<div class="conv-action-turn">Turn ' + (j + 1) + '</div>';
+    ahtml += '<div class="conv-action-header">' +
+      '<span class="conv-action-turn">Turn ' + (e2 + 1) + '</span>' +
+      '<span class="act-col-head" title="aOa savings">Save</span>' +
+      '<span class="act-col-head" title="Estimated tokens">Tok</span>' +
+      '</div>';
 
     if (actions.length === 0 && toolNames.length > 0) {
       for (var tn = 0; tn < toolNames.length; tn++) {
         ahtml += '<div class="conv-action-item">' +
-          '<span class="conv-tool-chip ' + getToolChipClass(toolNames[tn]) + '">' + escapeHtml(toolNames[tn]) + '</span></div>';
+          '<span class="act-left"><span class="conv-tool-chip ' + getToolChipClass(toolNames[tn]) + '">' + escapeHtml(toolNames[tn]) + '</span></span>' +
+          '<span class="act-cell"></span><span class="act-cell"></span></div>';
       }
     }
 
     for (var a = 0; a < actions.length; a++) {
       var act = actions[a];
-      var impCls = act.impact && (act.impact.indexOf('+') !== -1 || act.impact.indexOf('saved') !== -1) ? 'text-green' : 'text-dim';
+      var targetStr = act.target || '';
+      if (act.range) targetStr += act.range;
+      // Savings cell: compact 4-char max (e.g. ↓88%)
+      var saveVal = '';
+      if (act.savings > 0) {
+        saveVal = '<span class="text-green">\u2193' + act.savings + '%</span>';
+      }
+      // Tokens cell: compact 4-char max (e.g. 1.2k, 11k, 340)
+      var tokVal = '';
+      if (act.tokens > 0) {
+        var tokCls = act.attrib === 'aOa guided' ? 'text-green' : (act.attrib === 'unguided' ? 'text-red' : 'text-dim');
+        tokVal = '<span class="' + tokCls + '">' + fmtK(act.tokens) + '</span>';
+      }
       ahtml += '<div class="conv-action-item">' +
-        '<span class="conv-tool-chip ' + getToolChipClass(act.tool) + '">' + escapeHtml(act.tool) + '</span>' +
-        '<span class="conv-action-path" title="' + escapeHtml(act.target) + '">' + escapeHtml(truncPath(act.target, 30)) + '</span>' +
-        (act.impact ? '<span class="conv-action-impact ' + impCls + '">' + escapeHtml(act.impact) + '</span>' : '') +
+        '<span class="act-left">' +
+          '<span class="conv-tool-chip ' + getToolChipClass(act.tool) + '">' + escapeHtml(act.tool) + '</span>' +
+          '<span class="conv-action-path" title="' + escapeHtml(targetStr) + '">' + escapeHtml(truncPath(targetStr, 30)) + '</span>' +
+        '</span>' +
+        '<span class="act-cell">' + saveVal + '</span>' +
+        '<span class="act-cell">' + tokVal + '</span>' +
         '</div>';
     }
     ahtml += '</div>';

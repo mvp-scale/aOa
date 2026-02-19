@@ -841,7 +841,7 @@ func TestDashboard_HTMLServed(t *testing.T) {
 		t.Fatalf("read http.port: %v", err)
 	}
 	port := strings.TrimSpace(string(portData))
-	url := fmt.Sprintf("http://localhost:%s/static/index.html", port)
+	url := fmt.Sprintf("http://localhost:%s/index.html", port)
 
 	resp, err := http.Get(url)
 	if err != nil {

@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-19 (Session 49) | **Phase**: Dashboard value metrics & 5-tab restructure
-> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 (~284 active tests, 88% context)
+> **Updated**: 2026-02-19 (Session 50) | **Phase**: L1 dashboard complete — 5-tab SPA live-wired
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 (~286 active tests)
 
 ---
 
@@ -71,7 +71,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Core engine complete + L0 Value Engine landed. ~284 active tests. Burn rate tracking, dual runway projection, session persistence, and activity enrichments all implemented. Ready for L1 dashboard implementation.
+**Current**: L1 dashboard complete. ~286 active tests. All 5 tabs (Live, Recon, Intel, Debrief, Arsenal) implemented as a live-wired 3-file SPA (`index.html` + `style.css` + `app.js`). `/api/sessions` and `/api/config` endpoints added. Intel tab has change-tracking visual effects (soft glow on term pills and ngram counts). Ready for L2 infrastructure gaps.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -85,9 +85,17 @@
 - **Token cost heuristic** — `bytes / 4 = estimated tokens`. Standard industry approximation (1 token ≈ 4 characters; code is ASCII so bytes ≈ characters). Used for counterfactual cost of unguided Grep/Glob and for savings calculations. Resolves open question #6.
 - **Session boundary = session ID change** — Each Claude JSONL file carries a session ID. When the reader sees a new session ID, flush the summary for the previous session and start accumulating for the new one. Revisiting an old session loads its existing summary from bbolt and appends. No timeout heuristics.
 
-**Needs Discussion** (before L1 implementation):
+**Design Decisions Locked** (Session 50):
+- **Dashboard split into 3 files** — `index.html` (354 lines, HTML shell), `style.css` (552 lines, all CSS), `app.js` (1022 lines, all logic). `embed.go` uses `//go:embed static` to pick up all three. Monolithic single-file approach abandoned after agent reliability issues with large files.
+- **Soft glow animation system** — Replaced all harsh flash/glow animations with CSS transition-based diffuse effects. `soft-glow` (box-shadow, 2.5s ease-out) on ngram counts; `text-glow` (text-shadow, 2.5s ease-out) on hit values and ngram names; `.lit` class on term pills triggers a CSS `transition: background/color/box-shadow 2.5s ease-out` fade. No harsh instant-on effects anywhere.
+- **Ngram limits: 10/5/5** — Bigrams capped at 10, Cohit KW→Term at 5, Cohit Term→Domain at 5. Fits the card without scroll. Total 20 rows + 3 headers in the ngram card.
+- **Domain table: no Tier column** — Removed. Table is `#`, `@Domain`, `Hits`, `Terms`. Tier is surfaced via the domain name and stats grid (Core count), not a separate column.
+- **Tab state in URL hash** — `#live`, `#recon`, `#intel`, `#debrief`, `#arsenal`. Restored on page load. Direct links to tabs work.
+- **Tab-aware polling** — Each tab only fetches its relevant endpoints. Live: runway + stats + activity. Intel: stats + domains + bigrams. Debrief: conv/metrics + conv/feed. Arsenal: sessions + config + runway. Recon: health only. 3s interval.
+
+**Needs Discussion** (before L2):
 - **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
-- **Real-time conversation** — Legacy Python showed real-time; Go dashboard with 2s poll should do better. Needs investigation.
+- **Real-time conversation** — Legacy Python showed real-time; Go dashboard with 3s poll should do better. Needs investigation.
 
 ---
 
@@ -107,14 +115,14 @@
 | [L0](#layer-0) | [L0.10](#l010) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Grep (Claude) impact = estimated token cost | Show cost of not using aOa | Claude grep events show estimated tokens |
 | [L0](#layer-0) | [L0.11](#l011) | | | | | | x | | - | 🟢 | 🟢 | 🟢 | Learn activity event — observe signals summary | Visible learning in feed | Activity entry: "+N keywords, +M terms, +K domains" |
 | [L0](#layer-0) | [L0.12](#l012) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Target capture — preserve full query syntax, no normalization | Accurate activity display | Target column shows raw query as entered |
-| [L1](#layer-1) | [L1.1](#l11) | | | | | | | x | - | 🟢 | ⚪ | ⚪ | Rename tabs: Overview→Live, Learning→Intel, Conversation→Debrief | Brand alignment — tabs named by user intent | Tabs render with new names |
-| [L1](#layer-1) | [L1.2](#l12) | | | | | | | x | L1.1 | 🟢 | ⚪ | ⚪ | Add Recon tab (stub) — dimensional placeholder | Reserve the tab slot for v2 | Tab renders with placeholder content |
-| [L1](#layer-1) | [L1.3](#l13) | | | | | | | x | L1.1 | 🟢 | ⚪ | ⚪ | Add Arsenal tab — value proof over time, session history, savings chart | Prove aOa's ROI across sessions | Shows actual vs counterfactual, learning curve, session table |
-| [L1](#layer-1) | [L1.4](#l14) | | | | | | | | L1.1 | 🟢 | ⚪ | ⚪ | 5-tab header layout — responsive at <800px | Works on all screen sizes | Tabs don't wrap or overflow at narrow width |
-| [L1](#layer-1) | [L1.5](#l15) | | | | | x | | x | L0.5, L1.3 | 🟢 | ⚪ | ⚪ | Arsenal API — `/api/sessions` for session summaries + `/api/config` | Backend for Arsenal charts and system strip | API returns session array with savings data + system config |
-| [L1](#layer-1) | [L1.6](#l16) | x | | | | | | x | L0.4 | 🟢 | ⚪ | ⚪ | Live tab hero — context runway as primary display | Lead with the value prop | Hero shows "47 min remaining" with dual projection |
-| [L1](#layer-1) | [L1.7](#l17) | | | | | | | x | L0.4 | 🟢 | ⚪ | ⚪ | Live tab metrics panel — savings-oriented cards | Replace vanity metrics with value | Cards show rolling avg speed, tokens saved, guided ratio |
-| [L1](#layer-1) | [L1.8](#l18) | | | | | | | x | L0.9, L0.10 | 🟢 | ⚪ | ⚪ | Dashboard: render token cost for Grep/Glob | Show unguided cost inline | Red-coded cost appears in activity impact column |
+| [L1](#layer-1) | [L1.1](#l11) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Rename tabs: Overview→Live, Learning→Intel, Conversation→Debrief | Brand alignment — tabs named by user intent | Tabs render with new names |
+| [L1](#layer-1) | [L1.2](#l12) | | | | | | | x | L1.1 | 🟢 | 🟢 | 🟢 | Add Recon tab (stub) — dimensional placeholder | Reserve the tab slot for v2 | Tab renders with hero + placeholder content |
+| [L1](#layer-1) | [L1.3](#l13) | | | | | | | x | L1.1 | 🟢 | 🟢 | 🟢 | Add Arsenal tab — value proof over time, session history, savings chart | Prove aOa's ROI across sessions | Shows actual vs counterfactual, learning curve, session table |
+| [L1](#layer-1) | [L1.4](#l14) | | | | | | | | L1.1 | 🟢 | 🟢 | 🟢 | 5-tab header layout — responsive at <800px | Works on all screen sizes | Tabs switch via JS, URL hash persisted |
+| [L1](#layer-1) | [L1.5](#l15) | | | | | x | | x | L0.5, L1.3 | 🟢 | 🟢 | 🟢 | Arsenal API — `/api/sessions` + `/api/config` | Backend for Arsenal charts and system strip | 2 endpoints, 2 passing tests |
+| [L1](#layer-1) | [L1.6](#l16) | x | | | | | | x | L0.4 | 🟢 | 🟢 | 🟢 | Live tab hero — context runway as primary display | Lead with the value prop | Hero shows runway + dual projection support line |
+| [L1](#layer-1) | [L1.7](#l17) | | | | | | | x | L0.4 | 🟢 | 🟢 | 🟢 | Live tab metrics panel — savings-oriented cards | Replace vanity metrics with value | 6 cards: guided ratio, avg savings, searches, files, autotune, burn rate |
+| [L1](#layer-1) | [L1.8](#l18) | | | | | | | x | L0.9, L0.10 | 🟢 | 🟢 | 🟢 | Dashboard: render token cost for Grep/Glob | Show unguided cost inline | Red-coded cost in activity impact column |
 | [L2](#layer-2) | [L2.1](#l21) | x | | | | x | x | | - | 🟢 | ⚪ | ⚪ | Wire file watcher — `Watch()` in app.go, change→reparse→reindex | Dynamic re-indexing without restart | File edit triggers re-index within 2s |
 | [L2](#layer-2) | [L2.2](#l22) | x | | | | x | | | - | 🟢 | ⚪ | ⚪ | Fix bbolt lock contention — in-process reindex via socket command | `aoa init` works while daemon runs | Init succeeds with daemon running |
 | [L2](#layer-2) | [L2.3](#l23) | | x | | x | | | | - | 🟢 | ⚪ | ⚪ | Implement `--invert-match` / `-v` flag for grep/egrep | Complete grep flag parity | `-v` excludes matching lines, parity test passes |
@@ -254,7 +262,7 @@ Two sources: (1) `searchObserver` pushes `Learn` with keyword/term/domain counts
 **Layer 1: Dashboard (5-tab layout, mockup implementation)**
 
 > Transform the dashboard from data display to value narrative. Each tab tells a story.
-> **Quality Gate**: All 5 tabs render with live data, hero sections drive value messaging, mockup parity confirmed.
+> **Quality Gate**: ✅ All 5 tabs render with live API data. `/api/sessions` and `/api/config` both tested. 286 tests passing.
 
 **Tab structure:**
 - **Live** (was Overview) — Context runway hero, savings stats, activity feed
@@ -275,81 +283,26 @@ Two sources: (1) `searchObserver` pushes `Learn` with keyword/term/domain counts
 
 **Static mockups** (validated Session 48): `_live_mockups/{live,recon,intel,debrief,arsenal}.html`
 
-#### L1.1
+#### L1.1–L1.8
 
-**Tab rename**
+**5-tab SPA** — 🟢 Complete
 
-Overview→Live, Learning→Intel, Conversation→Debrief. Update nav bar, tab click handlers, active state.
+Full dashboard rewrite delivered as 3 files in `internal/adapters/web/static/`:
 
-**Files**: `static/index.html`
+- **`index.html`** (354 lines) — HTML shell. Nav with 5 button-tabs, tab content divs (`tab-live`, `tab-recon`, `tab-intel`, `tab-debrief`, `tab-arsenal`), footer.
+- **`style.css`** (552 lines) — Unified CSS. Dark/light themes, hero gradient animation, stats grid, activity table, domain table, n-gram bars, conversation feed, arsenal charts, recon placeholder, responsive breakpoints. Soft glow animation system (`soft-glow`, `text-glow`, `.lit` on term pills).
+- **`app.js`** (1022 lines) — Tab switching (URL hash), tab-aware 3s polling, hero story rotation, per-tab renderers with change-tracking visual effects.
 
-#### L1.2
+**Per-tab**:
+- **Live**: Runway projection hero (dual projection), 6 stats cards, activity feed table with colored pills
+- **Recon**: Hero + stats placeholders + "available in future release" card
+- **Intel**: Domain rankings (no Tier column, term pills with `.lit` glow on hit, surgical DOM updates), N-gram metrics (6 bigrams / 4 cohit KW→Term / 4 cohit Term→Domain, no scroll, soft-glow on count changes)
+- **Debrief**: Conversation feed (user/thinking/assistant messages, expandable thinking blocks), actions column with tool chips
+- **Arsenal**: Savings chart (div-based dual bars), session history table (mini guided-ratio bar), learning curve canvas (HiDPI), system status strip
 
-**Recon tab stub**
+**New backend** (`L1.5`): `SessionSummaryResult`, `SessionListResult`, `ProjectConfigResult` types. `SessionList()` + `ProjectConfig()` on `AppQueries`. `GET /api/sessions` + `GET /api/config` on web server. `dbPath` and `started` fields added to App struct. 2 new endpoint tests.
 
-Placeholder tab for dimensional analysis. Shows "Dimensional scanning available in v2" with link to research docs. Reserve the slot so Arsenal isn't the last tab.
-
-**Files**: `static/index.html`
-
-#### L1.3
-
-**Arsenal tab — Value Proof Over Time**
-
-Arsenal's identity: "Here's the proof aOa is working for you." Session-centric, not config-centric.
-
-Layout (top to bottom):
-1. **Hero** — Cumulative savings headline. Metrics: tokens saved → sessions extended, unguided cost → guided ratio.
-2. **Stats grid** (6 cards) — Tokens Saved, Unguided Cost, Sessions, Extended, Guided Ratio, Read Velocity.
-3. **Savings chart** (full width) — Daily rollup. Dual bars: red (without aOa) + green (with aOa). Gap = savings. Multiple sessions per day aggregated.
-4. **Bottom split** — Session history table (3/5 width, scrollable, individual sessions with hex IDs) | Learning curve canvas + compact system strip (2/5 width).
-
-Session table columns: Session (hex ID), Date+Time, Duration, Prompts, Reads, Guided %, Saved, Waste, Reads/Prompt.
-
-System status is a compact horizontal strip (not a card): running dot, PID, uptime, memory, DB size, files indexed.
-
-**Files**: `static/index.html`
-
-#### L1.4
-
-**5-tab responsive header**
-
-Tabs should not wrap or overflow at <800px. Consider abbreviated labels or icon-only at narrow widths.
-
-**Files**: `static/index.html`
-
-#### L1.5
-
-**Arsenal API**
-
-Two endpoints:
-- `/api/sessions` — Returns array of session summary records from bbolt. Each has: session_id, date, duration, prompts, reads, guided_ratio, tokens_saved, tokens_actual, tokens_counterfact. Used for savings chart (daily rollup), session history table, and learning curve.
-- `/api/config` — Returns: project root, DB path, socket path, daemon PID, uptime, memory, DB size, files indexed. Used for the compact system strip.
-
-**Files**: `web/server.go`
-
-#### L1.6
-
-**Live tab hero — context runway**
-
-Primary display: "47 min remaining." Secondary: "Without aOa: 12 min." The delta IS the value prop. Replaces current hero that shows prompt/domain counts.
-
-**Files**: `static/index.html`
-
-#### L1.7
-
-**Live tab metrics panel**
-
-Replace prompts/domains cards with: Rolling avg search speed, Tokens saved (session), Guided ratio (%), Sessions extended (week). Value-oriented, not vanity.
-
-**Files**: `static/index.html`
-
-#### L1.8
-
-**Token cost display for unguided tools**
-
-When Claude uses Grep/Glob, show estimated token cost in the activity impact column. Red-coded. Makes the cost of NOT using aOa visible.
-
-**Files**: `static/index.html`
+**Files**: `internal/adapters/web/static/index.html`, `style.css`, `app.js`, `embed.go`, `internal/adapters/socket/protocol.go`, `server.go`, `internal/adapters/web/server.go`, `server_test.go`, `internal/app/app.go`
 
 ---
 
@@ -610,6 +563,7 @@ NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→m
 | Socket protocol | JSON-over-socket IPC. Concurrent clients. Extend, don't replace. |
 | Value engine (L0, 24 new tests) | Burn rate, runway projection, session persistence, activity enrichments. All wired. |
 | Activity rubric (38 tests) | Color-coded attribs, impact formatting. Productive/unguided/Learn/Autotune enrichments. |
+| Dashboard (L1, 5-tab SPA) | 3-file split: `index.html` + `style.css` + `app.js`. Tab-aware polling. Soft glow animations. All tabs render live data. |
 
 ### What We're NOT Doing
 

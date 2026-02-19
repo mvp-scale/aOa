@@ -58,10 +58,13 @@ type ToolMetrics struct {
 
 // TurnAction describes a single tool action within a conversation turn.
 type TurnAction struct {
-	Tool   string // "Read", "Edit", "Bash", "Grep", "Glob", "Task", etc.
-	Target string // relative path, command, or pattern
-	Range  string // ":offset-limit" for reads, empty otherwise
-	Impact string // "↓62%", "4 match", "309 pass", "1 fail", etc.
+	Tool    string // "Read", "Edit", "Bash", "Grep", "Glob", "Task", etc.
+	Target  string // relative path, command, or pattern
+	Range   string // ":offset-limit" for reads, empty otherwise
+	Impact  string // "↓62%", "4 match", "309 pass", "1 fail", etc.
+	Attrib  string // "aOa guided", "unguided", "productive", "-"
+	Tokens  int    // estimated token cost of this action (0 = unknown)
+	Savings int    // savings percentage when guided (0-99), 0 = none
 }
 
 // ConversationTurn describes a single turn in the conversation feed.
@@ -519,7 +522,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			a.Learner.ProcessBigrams(ev.Text)
 			tb := a.ensureTurnBuilder(ev.TurnID, ts, ev.Model)
 			if tb.ThinkingText.Len() > 0 {
-				tb.ThinkingText.WriteString(" ")
+				tb.ThinkingText.WriteString("\n")
 			}
 			tb.ThinkingText.WriteString(ev.Text)
 		}
@@ -585,12 +588,14 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			tb := a.ensureTurnBuilder(ev.TurnID, ts, ev.Model)
 			tb.ToolNames = append(tb.ToolNames, ev.Tool.Name)
 
-			// Build target, range, impact, and attrib for activity + turn action
+			// Build target, range, impact, attrib, tokens, savings for activity + turn action
 			action := ev.Tool.Name
 			attrib := "-"
 			target := ""
 			rangeStr := ""
 			impact := "-"
+			tokens := 0
+			savings := 0
 			skipActivity := false
 
 			switch action {
@@ -598,14 +603,25 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				if ev.File != nil && ev.File.Path != "" {
 					target = a.relativePath(ev.File.Path)
 					if ev.File.Offset > 0 || ev.File.Limit > 0 {
+						// Partial read — check for guided savings
 						rangeStr = fmt.Sprintf(":%d-%d", ev.File.Offset, ev.File.Offset+ev.File.Limit)
 						s := a.readSavings(ev.File.Path, ev.File.Limit)
 						if s.display != "" {
 							impact = s.display
+							tokens = int(s.readTokens)
 							if s.pct >= 50 {
 								attrib = "aOa guided"
+								savings = s.pct
 							}
+						} else {
+							// Partial read but no savings data — estimate from lines
+							tokens = ev.File.Limit * 20 // ~80 bytes/line ÷ 4
+							attrib = "unguided"
 						}
+					} else {
+						// Full file read — estimate cost from index
+						attrib = "unguided"
+						tokens = a.estimateFileTokens(ev.File.Path)
 					}
 				}
 			case "Bash":
@@ -623,16 +639,13 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				if ev.Tool.Pattern != "" {
 					target = ev.Tool.Pattern
 				}
-				// aOa impact: Claude is using raw grep instead of aOa grep.
-				// Show that aOa indexed search exists as an alternative.
 				attrib = "unguided"
-				// L0.10: estimate grep scan cost
+				tokens = a.estimateGrepTokens()
 				impact = a.estimateGrepCost(ev.Tool.Pattern)
 			case "Write", "Edit":
 				if ev.File != nil && ev.File.Path != "" {
 					target = a.relativePath(ev.File.Path)
 				}
-				// L0.8: productive attribution for write/edit
 				attrib = "productive"
 			case "Glob":
 				if ev.File != nil && ev.File.Path != "" {
@@ -640,7 +653,6 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				} else if ev.Tool.Pattern != "" {
 					target = ev.Tool.Pattern
 				}
-				// L0.9: unguided attribution + token cost
 				attrib = "unguided"
 				globPath := ""
 				if ev.File != nil && ev.File.Path != "" {
@@ -650,6 +662,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				}
 				if globPath != "" {
 					impact = a.estimateGlobCost(globPath)
+					tokens = a.estimateGlobTokens(globPath)
 				}
 			case "Task":
 				if ev.Tool.Command != "" {
@@ -659,10 +672,13 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 
 			// Append structured action to turn builder
 			tb.Actions = append(tb.Actions, TurnAction{
-				Tool:   action,
-				Target: target,
-				Range:  rangeStr,
-				Impact: impact,
+				Tool:    action,
+				Target:  target,
+				Range:   rangeStr,
+				Impact:  impact,
+				Attrib:  attrib,
+				Tokens:  tokens,
+				Savings: savings,
 			})
 
 			// Activity feed target includes range for reads
@@ -994,10 +1010,13 @@ func (a *App) ConversationTurns() socket.ConversationFeedResult {
 		var actions []socket.TurnActionResult
 		for _, act := range inProgress.Actions {
 			actions = append(actions, socket.TurnActionResult{
-				Tool:   act.Tool,
-				Target: act.Target,
-				Range:  act.Range,
-				Impact: act.Impact,
+				Tool:    act.Tool,
+				Target:  act.Target,
+				Range:   act.Range,
+				Impact:  act.Impact,
+				Attrib:  act.Attrib,
+				Tokens:  act.Tokens,
+				Savings: act.Savings,
 			})
 		}
 		turns = append(turns, socket.ConversationTurnResult{
@@ -1022,10 +1041,13 @@ func (a *App) ConversationTurns() socket.ConversationFeedResult {
 		var actions []socket.TurnActionResult
 		for _, act := range turn.Actions {
 			actions = append(actions, socket.TurnActionResult{
-				Tool:   act.Tool,
-				Target: act.Target,
-				Range:  act.Range,
-				Impact: act.Impact,
+				Tool:    act.Tool,
+				Target:  act.Target,
+				Range:   act.Range,
+				Impact:  act.Impact,
+				Attrib:  act.Attrib,
+				Tokens:  act.Tokens,
+				Savings: act.Savings,
 			})
 		}
 		turns = append(turns, socket.ConversationTurnResult{
@@ -1263,7 +1285,7 @@ func (a *App) turnFromBuilder(tb *turnBuilder) ConversationTurn {
 		TurnID:       tb.TurnID,
 		Role:         "assistant",
 		Text:         a.truncate(tb.Text.String(), 500),
-		ThinkingText: a.truncate(tb.ThinkingText.String(), 500),
+		ThinkingText: a.truncate(tb.ThinkingText.String(), 2000),
 		DurationMs:   tb.DurationMs,
 		ToolNames:    tb.ToolNames,
 		Actions:      tb.Actions,
@@ -1427,6 +1449,52 @@ func (a *App) estimateGrepCost(pattern string) string {
 	}
 	tokens := totalBytes / 4
 	return fmt.Sprintf("~%s tokens", formatTokens(tokens))
+}
+
+// estimateFileTokens estimates the token cost of reading an entire file.
+// Returns 0 if the file is not in the index.
+// Must be called with a.mu held.
+func (a *App) estimateFileTokens(path string) int {
+	if a.Index == nil {
+		return 0
+	}
+	relPath := a.relativePath(path)
+	for _, fm := range a.Index.Files {
+		if fm.Path == path || fm.Path == relPath {
+			return int(fm.Size / 4)
+		}
+	}
+	return 0
+}
+
+// estimateGrepTokens returns the estimated token count for a grep scan.
+// Must be called with a.mu held.
+func (a *App) estimateGrepTokens() int {
+	if a.Index == nil {
+		return 0
+	}
+	var totalBytes int64
+	for _, fm := range a.Index.Files {
+		totalBytes += fm.Size
+	}
+	return int(totalBytes / 4)
+}
+
+// estimateGlobTokens returns the estimated token count for a glob match.
+// Must be called with a.mu held.
+func (a *App) estimateGlobTokens(path string) int {
+	if a.Index == nil {
+		return 0
+	}
+	relPath := a.relativePath(path)
+	var totalBytes int64
+	for _, fm := range a.Index.Files {
+		fmRel := a.relativePath(fm.Path)
+		if strings.HasPrefix(fmRel, relPath) || strings.HasPrefix(fm.Path, path) {
+			totalBytes += fm.Size
+		}
+	}
+	return int(totalBytes / 4)
 }
 
 // truncate truncates a string to a maximum length.

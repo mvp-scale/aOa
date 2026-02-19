@@ -207,7 +207,7 @@ func TestActivityReadNoSavings(t *testing.T) {
 
 	entry := lastActivity(a)
 	require.NotNil(t, entry, "activity ring should have an entry")
-	assert.Equal(t, "-", entry.Attrib, "whole-file read should have attrib '-'")
+	assert.Equal(t, "unguided", entry.Attrib, "whole-file read should have attrib 'unguided'")
 	assert.Equal(t, "-", entry.Impact, "whole-file read should have impact '-'")
 }
 
@@ -476,7 +476,7 @@ func TestActivityRubric(t *testing.T) {
 			wantTarget: "src/small.go:10-80",
 		},
 		{
-			// Row 7: Read, whole file (no offset/limit)
+			// Row 7: Read, whole file (no offset/limit) — now classified as unguided
 			name: "read_whole_file",
 			ev: ports.SessionEvent{
 				Kind:      ports.EventToolInvocation,
@@ -490,7 +490,7 @@ func TestActivityRubric(t *testing.T) {
 			},
 			wantAction: "Read",
 			wantSource: "Claude",
-			wantAttrib: "-",
+			wantAttrib: "unguided",
 			wantImpact: "-",
 			wantTarget: "src/foo.go",
 		},
