@@ -279,23 +279,35 @@ function poll() {
 
   switch (activeTab) {
     case 'live':
-      safeFetch('/api/runway').then(function(d) { cache.runway = d; renderLive(); }).catch(function() {});
-      safeFetch('/api/stats').then(function(d) { cache.stats = d; renderLive(); }).catch(function() {});
-      safeFetch('/api/activity/feed').then(function(d) { cache.activity = d; renderLiveActivity(); }).catch(function() {});
+      Promise.all([
+        safeFetch('/api/runway').then(function(d) { cache.runway = d; }).catch(function() {}),
+        safeFetch('/api/stats').then(function(d) { cache.stats = d; }).catch(function() {}),
+        safeFetch('/api/sessions').then(function(d) { cache.sessions = d; }).catch(function() {}),
+        safeFetch('/api/activity/feed').then(function(d) { cache.activity = d; }).catch(function() {})
+      ]).then(function() {
+        renderLive();
+        renderLiveActivity();
+      });
       break;
     case 'intel':
-      safeFetch('/api/stats').then(function(d) { cache.stats = d; renderIntel(); }).catch(function() {});
-      safeFetch('/api/domains').then(function(d) { cache.domains = d; renderIntel(); }).catch(function() {});
-      safeFetch('/api/bigrams').then(function(d) { cache.bigrams = d; renderIntel(); }).catch(function() {});
+      Promise.all([
+        safeFetch('/api/stats').then(function(d) { cache.stats = d; }).catch(function() {}),
+        safeFetch('/api/domains').then(function(d) { cache.domains = d; }).catch(function() {}),
+        safeFetch('/api/bigrams').then(function(d) { cache.bigrams = d; }).catch(function() {})
+      ]).then(function() { renderIntel(); });
       break;
     case 'debrief':
-      safeFetch('/api/conversation/metrics').then(function(d) { cache.convMetrics = d; renderDebrief(); }).catch(function() {});
-      safeFetch('/api/conversation/feed').then(function(d) { cache.convFeed = d; renderDebrief(); }).catch(function() {});
+      Promise.all([
+        safeFetch('/api/conversation/metrics').then(function(d) { cache.convMetrics = d; }).catch(function() {}),
+        safeFetch('/api/conversation/feed').then(function(d) { cache.convFeed = d; }).catch(function() {})
+      ]).then(function() { renderDebrief(); });
       break;
     case 'arsenal':
-      safeFetch('/api/sessions').then(function(d) { cache.sessions = d; renderArsenal(); }).catch(function() {});
-      safeFetch('/api/config').then(function(d) { cache.config = d; renderArsenal(); }).catch(function() {});
-      safeFetch('/api/runway').then(function(d) { cache.runway = d; renderArsenal(); }).catch(function() {});
+      Promise.all([
+        safeFetch('/api/sessions').then(function(d) { cache.sessions = d; }).catch(function() {}),
+        safeFetch('/api/config').then(function(d) { cache.config = d; }).catch(function() {}),
+        safeFetch('/api/runway').then(function(d) { cache.runway = d; }).catch(function() {})
+      ]).then(function() { renderArsenal(); });
       break;
     case 'recon':
       // No data endpoints yet
@@ -315,17 +327,29 @@ function renderLive() {
   var rw = cache.runway || {};
   var st = cache.stats || {};
 
-  // Hero metrics
-  setGlow('hm-live-0', fmtPct(rw.tokens_saved && rw.tokens_used ? (rw.tokens_saved / (rw.tokens_used + rw.tokens_saved)) : 0));
-  setGlow('hm-live-1', rw.tokens_saved ? fmtK(rw.tokens_saved) : '-');
-  setGlow('hm-live-2', fmtK(rw.tokens_saved || 0));
+  // Compute all-time totals from cached sessions + current session runway
+  var ss = cache.sessions || {};
+  var sessions = ss.sessions || [];
+  var totalReads = 0, totalGuided = 0, totalSaved = 0, totalTimeSavedMs = 0;
+  for (var i = 0; i < sessions.length; i++) {
+    totalReads += (sessions[i].read_count || 0);
+    totalGuided += (sessions[i].guided_read_count || 0);
+    totalSaved += (sessions[i].tokens_saved || 0);
+    totalTimeSavedMs += (sessions[i].time_saved_ms || 0);
+  }
+  totalSaved += (rw.tokens_saved || 0);
+  totalTimeSavedMs += (rw.time_saved_ms || 0);
+  var ratio = totalReads > 0 ? totalGuided / totalReads : 0;
+
+  // Hero metrics — all-time totals
+  setGlow('hm-live-0', totalTimeSavedMs > 0 ? fmtTime(totalTimeSavedMs) : '-');
+  setGlow('hm-live-1', totalSaved > 0 ? fmtK(totalSaved) : '-');
+  setGlow('hm-live-2', fmtPct(ratio));
   setGlow('hm-live-3', rw.delta_minutes ? fmtMin(rw.delta_minutes) : '-');
 
   // Hero support line
   var parts = [];
   parts.push('<span class="g">' + fmtMin(rw.runway_minutes) + '</span> runway');
-  parts.push('<span class="g">' + fmtK(rw.tokens_saved || 0) + '</span> tokens saved');
-  if (rw.time_saved_ms > 0) parts.push('saved <span class="g">' + fmtTime(rw.time_saved_ms) + '</span>');
   parts.push('<span class="c">' + (st.domain_count || 0) + '</span> domains');
   parts.push('<span class="c">' + (st.prompt_count || 0) + '</span> prompts');
   if (rw.counterfact_minutes) parts.push('without aOa: <span class="r">' + fmtMin(rw.counterfact_minutes) + '</span>');
@@ -338,26 +362,10 @@ function renderLive() {
   setGlow('ls-files', st.index_files || 0);
   setGlow('ls-autotune', autotuneProgress + '/50');
   setGlow('ls-burn', rw.burn_rate_per_min ? fmtK(Math.round(rw.burn_rate_per_min)) + '/min' : '-');
-
-  // Guided ratio and savings need session data
-  safeFetch('/api/sessions').then(function(d) {
-    cache.sessions = d;
-    var sessions = d.sessions || [];
-    var totalReads = 0, totalGuided = 0, totalSaved = 0;
-    for (var i = 0; i < sessions.length; i++) {
-      totalReads += (sessions[i].read_count || 0);
-      totalGuided += (sessions[i].guided_read_count || 0);
-      totalSaved += (sessions[i].tokens_saved || 0);
-    }
-    totalSaved += (rw.tokens_saved || 0);
-    var ratio = totalReads > 0 ? totalGuided / totalReads : 0;
-    setGlow('ls-guided', fmtPct(ratio));
-    setGlow('hm-live-0', fmtPct(ratio));
-    if (totalGuided > 0) {
-      setGlow('ls-savings', fmtK(Math.round(totalSaved / totalGuided)));
-      setGlow('hm-live-1', fmtK(Math.round(totalSaved / totalGuided)));
-    }
-  }).catch(function() {});
+  setGlow('ls-guided', fmtPct(ratio));
+  if (totalGuided > 0) {
+    setGlow('ls-savings', fmtK(Math.round(totalSaved / totalGuided)));
+  }
 }
 
 /* ── Live: Activity Table ── */

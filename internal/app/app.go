@@ -631,10 +631,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 							if s.pct >= 50 {
 								attrib = "aOa guided"
 								savings = s.pct
-								timeDisplay, tsMs := a.timeSavedForTokens(int(s.fileTokens - s.readTokens))
-								if timeDisplay != "" {
-									impact = s.display + " · " + timeDisplay
-								}
+								_, tsMs := a.timeSavedForTokens(int(s.fileTokens - s.readTokens))
 								timeSavedMs = tsMs
 							}
 						} else {

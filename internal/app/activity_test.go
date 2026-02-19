@@ -892,7 +892,7 @@ func TestActivityGuidedReadShowsTimeSaved(t *testing.T) {
 	a := newTestApp(t)
 
 	// 176KB file → 44000 tokens. Reading 200 lines → 4000 tokens.
-	// Savings: 90% → guided → should show "saved ~" in impact
+	// Savings: 90% → guided → TimeSavedMs set but NOT shown in per-action impact
 	ev := ports.SessionEvent{
 		Kind:      ports.EventToolInvocation,
 		TurnID:    "turn-ts-1",
@@ -911,8 +911,8 @@ func TestActivityGuidedReadShowsTimeSaved(t *testing.T) {
 	require.NotNil(t, a.currentBuilder, "should have a current builder")
 	require.NotEmpty(t, a.currentBuilder.Actions, "should have actions")
 	act := a.currentBuilder.Actions[len(a.currentBuilder.Actions)-1]
-	assert.Contains(t, act.Impact, "saved ~",
-		"guided read impact should contain time saved display")
+	assert.NotContains(t, act.Impact, "saved ~",
+		"per-action impact should NOT contain time saved (shown in hero metrics instead)")
 	assert.Greater(t, act.TimeSavedMs, int64(0),
 		"guided read TimeSavedMs should be > 0")
 }
