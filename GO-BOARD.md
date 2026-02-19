@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-19 (Session 54) | **Phase**: L2 complete — Infrastructure gaps closed (invert-match, file watcher, bbolt lock fix)
-> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 (380 active tests)
+> **Updated**: 2026-02-19 (Session 55) | **Phase**: L2 complete — Infrastructure gaps closed (invert-match, file watcher, bbolt lock fix)
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 (388 active tests)
 
 ---
 
@@ -71,7 +71,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Dashboard UX polish complete (Session 54). Attribution color system validated: unguided = full red chain (pill, impact, target), guided = green savings, creation = purple with cycling creative words (crafted/authored/forged/innovated). Full-file Read and Glob impact estimation fixed — now shows `~N tokens` for all unguided entries. Time savings algorithm reviewed (simple constant + dynamic rate from session logs); implementation planned for next session. Next: time savings implementation, then L3 migration and parity proof.
+**Current**: Hot file cache + version display (Session 55). FileCache pre-reads all indexed files into memory at startup, eliminating disk I/O from the search path. `aoa --version` and daemon start/stop now show git version + build date via ldflags. `make build` target added. Search observer cascade identified: re-tokenizing content hit text through enricher produced 137 keywords/89 terms/76 domains from a single-token query — observer patched to use pre-resolved Tags instead of re-tokenizing. Next: refactor search observer to use correct signal pipeline (direct-increment domains/terms from hits, content text through ProcessBigrams with threshold gating, same pipeline for session log grep results).
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -105,6 +105,11 @@
 **Design Decisions Locked** (Session 52):
 - **Responsive compaction pattern** — At mobile breakpoint (<800px), hero and stats cards shed text and show values only. Hero: remove support text, keep headline + value. Stats cards: value only, no labels (labels visible in desktop view). This pattern repeats across all 5 tabs. Priority is to maximize space for the main value prop content below (domain table, ngrams, conversation feed, session history). Recon is hold-state, acceptable as-is.
 - **Intel mobile** — Domain rankings and ngram sections must remain readable at mobile width. Current layout crowds them below oversized hero+stats. Compaction of hero+stats solves this.
+
+**Design Decisions Locked** (Session 55):
+- **Hot file cache** — `FileCache` in `internal/domain/index/filecache.go`. Pre-reads all eligible indexed files into `[]string` lines at startup via `WarmFromIndex()`. Binary filtering: extension blocklist + null byte check + MIME detection. 512KB per-file limit, 250MB configurable budget. `GetLines()` under RLock for concurrent searches. Re-warms on `Rebuild()` (file watcher triggers). 8 tests.
+- **Version display via ldflags** — `internal/version/version.go` with `Version` + `BuildDate` vars, injected by `make build` via `-ldflags -X`. `aoa --version`, daemon start/stop all show version.
+- **Search observer signal pipeline (approved, not yet fully implemented)** — Two paths, same analysis: (1) CLI search: top N hits → direct-increment domains/terms already on hits, content text → `ProcessBigrams` for bigram/cohit threshold gating (count ≥ 6 before promotion). (2) Session log: Claude's grep/egrep/search tool results → same pipeline, non-blocking via tailer goroutine. Current observer patched to stop re-tokenizing content through enricher; full pipeline refactor is next.
 
 **Design Decisions Locked** (Session 54):
 - **Attribution color system** — Three visual lanes: green = aOa guided (savings), red = unguided (cost), purple = creation. Unguided entries show red across attrib pill, impact text, and target text. Guided entries show green impact (savings display). No time claims on unguided entries — only token cost stated factually; red color communicates "not optimized" without accusing.
@@ -576,7 +581,7 @@ NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→m
 
 | Component | Notes |
 |-----------|-------|
-| Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, content scanning, `Rebuild()` for live mutation. Do not change search logic. |
+| Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, content scanning, `Rebuild()` for live mutation. Hot file cache (8 tests). `fileSpans` precomputed. Do not change search logic. |
 | Learner (21-step autotune) | 5/5 fixture parity, float64 precision on DomainMeta.Hits. Do not change decay/prune constants. |
 | Session Prism (Claude JSONL reader) | Defensive parsing, UUID dedup, compound message decomposition. Battle-tested. |
 | Tree-sitter parser (28 languages) | Symbol extraction working for Go, Python, JS/TS + 24 generic. Reuse ASTs for L5. |
@@ -611,7 +616,7 @@ NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→m
 
 | Resource | Location |
 |----------|----------|
-| Build | `go build ./cmd/aoa/` |
+| Build | `make build` (with version ldflags) or `go build ./cmd/aoa/` |
 | Test | `go test ./...` |
 | CI check | `make check` |
 | Database | `{ProjectRoot}/.aoa/aoa.db` |

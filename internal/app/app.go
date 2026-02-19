@@ -170,10 +170,11 @@ type App struct {
 
 // Config holds initialization parameters for the App.
 type Config struct {
-	ProjectRoot string
-	ProjectID   string
-	DBPath      string // path to bbolt file (default: .aoa/aoa.db)
-	HTTPPort    int    // preferred HTTP port (default: computed from project root)
+	ProjectRoot   string
+	ProjectID     string
+	DBPath        string // path to bbolt file (default: .aoa/aoa.db)
+	HTTPPort      int    // preferred HTTP port (default: computed from project root)
+	CacheMaxBytes int64  // file cache memory budget (default: 250MB if 0)
 }
 
 // New creates an App with all dependencies wired. Does not start services.
@@ -231,6 +232,10 @@ func New(cfg Config) (*App, error) {
 	parser := treesitter.NewParser()
 
 	engine := index.NewSearchEngine(idx, domains, cfg.ProjectRoot)
+
+	// Create file cache and attach to search engine
+	cache := index.NewFileCache(cfg.CacheMaxBytes)
+	engine.SetCache(cache)
 
 	// Load existing learner state or create fresh
 	ls, err := store.LoadLearnerState(cfg.ProjectID)
@@ -387,7 +392,7 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 		sc.addKeyword(tok, a.Enricher)
 	}
 
-	// 2. Top result hits → hit domains, hit tags (terms), hit content keywords
+	// 2. Top result hits → hit domains, hit tags (terms), symbol keywords
 	topN := len(result.Hits)
 	if topN > 10 {
 		topN = 10
@@ -397,8 +402,15 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 		for _, term := range hit.Tags {
 			sc.addTerm(term, a.Enricher)
 		}
-		for _, tok := range index.Tokenize(hit.Symbol + " " + hit.Content) {
-			sc.addKeyword(tok, a.Enricher)
+		// Only tokenize structured symbol names, not raw content lines.
+		// Content hits already have their terms resolved in Tags via
+		// generateContentTags — re-tokenizing Content floods the learner
+		// with noise (every word in matching markdown lines) and wastes
+		// ~10ms on redundant enricher lookups per search.
+		if hit.Kind != "content" && hit.Symbol != "" {
+			for _, tok := range index.Tokenize(hit.Symbol) {
+				sc.addKeyword(tok, a.Enricher)
+			}
 		}
 	}
 

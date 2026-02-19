@@ -35,6 +35,13 @@ type SearchEngine struct {
 	// Used to resolve raw tokens to atlas terms for tag generation.
 	keywordToTerms map[string][]string
 
+	// fileSpans caches per-file symbol spans for content scanning.
+	// Rebuilt in NewSearchEngine() and Rebuild() instead of per-search.
+	fileSpans map[uint32][]symbolSpan
+
+	// cache holds pre-read file contents to avoid disk I/O during search.
+	cache *FileCache
+
 	// observer is called after each search to emit learning signals.
 	observer SearchObserver
 }
@@ -98,7 +105,19 @@ func NewSearchEngine(idx *ports.Index, domains map[string]Domain, projectRoot st
 		}
 	}
 
+	// Pre-compute file spans for content scanning
+	e.fileSpans = e.buildFileSpans()
+
 	return e
+}
+
+// SetCache attaches a FileCache for content scanning and performs
+// the initial cache warm from the current index.
+func (e *SearchEngine) SetCache(c *FileCache) {
+	e.cache = c
+	if c != nil && e.projectRoot != "" {
+		c.WarmFromIndex(e.idx.Files, e.projectRoot)
+	}
 }
 
 // Rebuild reconstructs derived maps (refToTokens, tokenDocFreq, keywordToTerms)
@@ -129,6 +148,14 @@ func (e *SearchEngine) Rebuild() {
 				}
 			}
 		}
+	}
+
+	// Rebuild file spans for content scanning
+	e.fileSpans = e.buildFileSpans()
+
+	// Re-warm file cache if attached
+	if e.cache != nil {
+		e.cache.WarmFromIndex(e.idx.Files, e.projectRoot)
 	}
 }
 

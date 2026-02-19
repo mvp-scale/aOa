@@ -1,8 +1,6 @@
 package index
 
 import (
-	"bufio"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -47,10 +45,6 @@ func (e *SearchEngine) scanFileContents(query string, opts ports.SearchOptions, 
 		return nil
 	}
 
-	// Build per-file symbol spans from the index metadata.
-	// Used to find enclosing symbol(s) for each content hit.
-	fileSpans := e.buildFileSpans()
-
 	var hits []Hit
 
 	for fileID, file := range e.idx.Files {
@@ -64,19 +58,22 @@ func (e *SearchEngine) scanFileContents(query string, opts ports.SearchOptions, 
 			continue
 		}
 
-		absPath := filepath.Join(e.projectRoot, file.Path)
-		f, err := os.Open(absPath)
-		if err != nil {
-			continue // silently skip missing/unreadable files
+		// Try cache first, fall back to disk
+		var lines []string
+		if e.cache != nil {
+			lines = e.cache.GetLines(fileID)
+		}
+		if lines == nil {
+			lines = readFileLines(filepath.Join(e.projectRoot, file.Path))
+			if lines == nil {
+				continue
+			}
 		}
 
-		spans := fileSpans[fileID]
+		spans := e.fileSpans[fileID]
 
-		scanner := bufio.NewScanner(f)
-		lineNum := 0
-		for scanner.Scan() {
-			lineNum++
-			line := scanner.Text()
+		for lineIdx, line := range lines {
+			lineNum := lineIdx + 1
 			matched := matcher(line)
 			if opts.InvertMatch {
 				matched = !matched
@@ -107,7 +104,6 @@ func (e *SearchEngine) scanFileContents(query string, opts ports.SearchOptions, 
 
 			hits = append(hits, hit)
 		}
-		f.Close()
 	}
 
 	sort.SliceStable(hits, func(i, j int) bool {

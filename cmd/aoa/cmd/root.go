@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/corey/aoa/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +30,7 @@ func Execute() error {
 }
 
 func init() {
+	rootCmd.Version = version.String()
 	rootCmd.AddCommand(grepCmd)
 	rootCmd.AddCommand(egrepCmd)
 	rootCmd.AddCommand(healthCmd)

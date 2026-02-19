@@ -1,7 +1,16 @@
 # aOa-go — local quality gates
 # Run `make check` before committing. That's the CI.
 
-.PHONY: test lint bench coverage check vet
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -X github.com/corey/aoa/internal/version.Version=$(VERSION) \
+           -X github.com/corey/aoa/internal/version.BuildDate=$(BUILD_DATE)
+
+.PHONY: build test lint bench coverage check vet
+
+# Build the binary with version info
+build:
+	go build -ldflags "$(LDFLAGS)" -o aoa ./cmd/aoa/
 
 # Run all tests (skipped tests are expected during development)
 test:

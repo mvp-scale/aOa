@@ -13,6 +13,7 @@ import (
 
 	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/app"
+	"github.com/corey/aoa/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -141,7 +142,7 @@ func spawnDaemon(root, sockPath string) error {
 		default:
 		}
 		if client.Ping() {
-			fmt.Printf("⚡ daemon started (pid %d)\n", pid)
+			fmt.Printf("⚡ daemon started (pid %d) — aOa %s\n", pid, version.String())
 			fmt.Printf("  log: %s\n", logPath)
 			// Show dashboard URL if HTTP port file exists
 			httpPortPath := filepath.Join(aoaDir, "http.port")
@@ -230,7 +231,7 @@ func runDaemonStop(cmd *cobra.Command, args []string) error {
 		// Verify the daemon actually stopped.
 		for i := 0; i < 30; i++ {
 			if !client.Ping() {
-				fmt.Println("⚡ daemon stopped")
+				fmt.Printf("⚡ daemon stopped — aOa %s\n", version.String())
 				return nil
 			}
 			time.Sleep(100 * time.Millisecond)
@@ -257,7 +258,7 @@ func runDaemonStop(cmd *cobra.Command, args []string) error {
 			}
 			os.Remove(pidPath)
 			os.Remove(sockPath)
-			fmt.Printf("⚡ daemon stopped (pid %d)\n", pid)
+			fmt.Printf("⚡ daemon stopped (pid %d) — aOa %s\n", pid, version.String())
 			return nil
 		}
 		// PID file exists but process is dead — clean up stale files.
