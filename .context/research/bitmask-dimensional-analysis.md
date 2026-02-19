@@ -482,30 +482,282 @@ It is simpler than it looks. The structural patterns are parameterized, not besp
 
 ---
 
-## Architecture Summary
+## Execution Pipeline — When Does What Run?
+
+### The key thing to understand about tree-sitter
+
+Tree-sitter is **not a service**. It's a library. You call it, it parses source bytes into a tree in memory, you walk the tree, then the tree is gone. There's no daemon to query, no server to ask questions of, no persistent AST sitting in memory. It's:
 
 ```
-Source file
-    │
-    ▼
-Tree-sitter parse (already done at index time — zero re-parse cost)
-    │
-    ├──► Structural engine (AST walker)     ──► bits requiring code structure
-    │                                              │
-    ├──► Text engine (AC automaton + regex)  ──► bits requiring pattern match
-    │                                              │
-    ▼                                              ▼
-Per-line bitmask (67 bits for security, ~300+ across all 6 tiers)
-    │
-    ▼
-Method-level rollup (bitwise OR of all lines in method)
-    │
-    ▼
-Weighted severity score (sum of triggered bit weights)
-    │
-    ▼
-Stored in bbolt → available to search results + Recon tab
+bytes in → parse() → tree in memory → walk it → done, tree freed
 ```
+
+aOa already calls tree-sitter at `aoa init` time to extract symbols (functions, methods, classes) for the search index. Today that parse produces symbols and throws the tree away. The dimensional engine **piggybacks on that same parse** — same tree, same moment in time, no re-parse.
+
+### Two-phase architecture: Compute once, query forever
+
+**Phase 1: Index time (compute) — runs during `aoa init` and file-watch re-index**
+
+This is where ALL the work happens. For each file in the project:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     INDEX TIME (per file)                            │
+│                                                                     │
+│  Source bytes ──► tree-sitter parse() ──► AST in memory             │
+│       │                                       │                     │
+│       │                                       ├──► Symbol extraction │
+│       │                                       │    (existing today)  │
+│       │                                       │                     │
+│       │                                       └──► Structural walker │
+│       │                                            walks AST once,   │
+│       │                                            answers all       │
+│       │                                            structural        │
+│       │                                            questions,        │
+│       │                                            produces bits     │
+│       │                                                 │            │
+│       └──► AC automaton scan (single pass over raw bytes)            │
+│            matches all ~115 text patterns simultaneously             │
+│            produces bits                                             │
+│                 │                                                    │
+│                 └──► Regex confirmation (only on AC candidate lines) │
+│                      ~15-20 regexes, targeted, not full-file         │
+│                      produces bits                                   │
+│                           │                                          │
+│                           ▼                                          │
+│            ┌─────────────────────────────────┐                       │
+│            │  MERGE: structural | AC | regex  │                       │
+│            │  Per-line bitmasks (all dims)    │                       │
+│            │  Method-level rollup (OR)        │                       │
+│            │  Weighted severity scores        │                       │
+│            └──────────────┬──────────────────┘                       │
+│                           │                                          │
+│                           ▼                                          │
+│                    Write to bbolt:                                    │
+│                    • per-method bitmask ([]byte)                      │
+│                    • per-method scores (S:-23 P:0 Q:-4)              │
+│                    • per-file summary bitmask                         │
+│                    • triggered question IDs for drill-down            │
+│                                                                     │
+│            AST freed. Source bytes no longer needed.                  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**What's stored in bbolt (the persistent result):**
+
+```
+bucket: "dimensions"
+  key: "file:internal/app/app.go"
+  val: {
+    methods: {
+      "handleTransfer:1-16": {
+        bitmask: [0x05, 0x02, 0x40, 0x01, 0x00, 0xC0, 0x01, 0x00, 0x01],  // 67 bits packed
+        scores: { security: -23, performance: 0, quality: -4, ... },
+        triggered: [0, 2, 11, 17, 35, 42, 43, 55, 56, 64]
+      },
+      "handleHealth:18-25": {
+        bitmask: [0x00, 0x00, 0x00, ...],
+        scores: { security: 0, performance: 0, quality: 0, ... },
+        triggered: []
+      }
+    },
+    summary: { security: -23, performance: 0, quality: -4, ... }
+  }
+```
+
+The bitmask itself is tiny — 67 bits = 9 bytes for security, ~300 bits across all dimensions = ~38 bytes per method. A project with 5,000 methods stores ~190KB of dimensional data. Negligible.
+
+**Phase 2: Query time (read) — runs when you search, view dashboard, or check Recon tab**
+
+This is where the 10ms target lives. There's **no parsing, no scanning, no tree-sitter, no AC**. It's pure bbolt reads:
+
+```
+┌────────────────────────────────────────────────────┐
+│                  QUERY TIME                         │
+│                                                     │
+│  aoa grep "handleTransfer"                          │
+│       │                                             │
+│       ├──► Search index (existing) → symbol hits    │
+│       │                                             │
+│       └──► bbolt "dimensions" bucket                │
+│            read bitmask for matched methods          │
+│            already computed, just bytes on disk      │
+│                 │                                    │
+│                 ▼                                    │
+│  Search result + dimensional scores:                │
+│  handleTransfer()  S:-23  P:0  Q:-4                 │
+│                                                     │
+│  Dashboard Recon tab:                               │
+│  Read all file summaries from dimensions bucket     │
+│  Sort by severity, group by tier, render            │
+│                                                     │
+│  Time: < 1ms per method lookup                      │
+│  Full project Recon tab: < 10ms for 5,000 methods   │
+└────────────────────────────────────────────────────┘
+```
+
+### Answering the specific questions
+
+**"Can we ask tree-sitter questions as a service?"**
+
+No. Tree-sitter is a parser, not a server. It has no query API you can call after the fact. You parse, you get a tree in memory, you walk it, it's gone. There is a tree-sitter query language (S-expressions for pattern matching within a tree), but the tree has to be in memory to query it. We don't persist the tree — it would be massive and there's no serialization format for it.
+
+**"Do we persist tree-sitter's view of the code?"**
+
+Not the AST itself — it's too large and not serializable in a useful way. We persist **the answers to our questions** — the bitmasks. The bitmask IS the persisted view. It's tree-sitter's structural understanding compressed into 38 bytes per method. We asked 290 yes/no questions and stored the answers. That's what we keep.
+
+Think of it this way: we don't save the X-ray image, we save the radiologist's report. The report is tiny and tells you everything you need to act on.
+
+**"Can we run AC across the persisted view?"**
+
+AC doesn't run against the AST — it runs against **raw source bytes**. AC and the structural walker run in parallel at index time against different representations of the same file:
+
+| Engine | Input | When | Output |
+|--------|-------|------|--------|
+| Structural walker | AST (tree in memory) | Index time, during parse | Bits for structural questions |
+| AC automaton | Raw source bytes | Index time, same moment | Bits for text questions |
+| Regex | Raw source bytes (targeted lines only) | Index time, after AC flags candidates | Bits for complex text questions |
+
+All three engines run **once per file at index time**. Their outputs merge into the bitmask. The bitmask gets stored. After that, nobody touches the source again until the file changes.
+
+**"Can we scan the entire codebase across 6-7 dimensions in 10ms?"**
+
+Yes, but the 10ms is **query time, not compute time**. Here's the split:
+
+| Operation | What happens | Time (1,000 files) |
+|-----------|-------------|-------------------|
+| **Index time** (compute) | Parse + walk + AC + regex + merge + store | ~3-8 seconds total |
+| **Per-file index** | tree-sitter parse (~1-5ms) + walker (~0.1-0.5ms) + AC (~0.01ms) | ~2-6ms per file |
+| **Query time** (read bitmasks) | bbolt key lookup, return pre-computed scores | **< 10ms for entire project** |
+| **Single method lookup** | One bbolt read | **< 0.1ms** |
+
+The index time cost is ~2-6ms per file, which for 1,000 files is 2-6 seconds. That happens once at `aoa init` and incrementally on file changes (file watcher re-indexes only changed files — one file at a time, 2-6ms, invisible).
+
+The query time cost is negligible because we're reading pre-computed bytes, not re-analyzing anything. The Recon tab loads all file summaries from bbolt, sorts them, and renders. That's a sequential scan of the dimensions bucket — thousands of small reads, well under 10ms with bbolt's B+ tree.
+
+### How file changes trigger re-scan
+
+When the file watcher detects a change:
+
+```
+File changed: internal/app/app.go
+    │
+    ▼
+1. Read new source bytes
+2. tree-sitter parse (1-5ms)
+3. Extract symbols (existing pipeline)
+4. Walk AST for dimensional patterns (0.1-0.5ms)
+5. AC scan source bytes (0.01ms)
+6. Regex on candidates (0.01ms)
+7. Merge bits → method bitmasks
+8. Write updated bitmasks to bbolt
+9. Update search index
+    │
+    ▼
+Total: ~2-6ms per changed file
+Dashboard auto-refreshes, Recon tab shows new scores
+```
+
+One file changed, one file re-scanned. The rest of the project's bitmasks are untouched in bbolt. This is why the file watcher pipeline (currently unwired — the known gap in GO-BOARD.md) matters for dimensional analysis: it keeps bitmasks current without re-indexing the entire project.
+
+### The AC automaton lifecycle
+
+The AC automaton is compiled **once at daemon startup**, not per file:
+
+```
+Daemon starts
+    │
+    ▼
+1. Load all YAML dimension definitions
+2. Extract all ~115 text patterns across all dimensions
+3. Compile into single AC automaton (~1ms, done once)
+4. Automaton lives in memory for daemon lifetime (~50KB)
+    │
+    ▼
+For each file at index time:
+    feed source bytes through the automaton
+    get back: [(pattern_id, byte_offset), ...]
+    map pattern_id → bit position
+    map byte_offset → line number
+    set bits in per-line bitmask
+```
+
+The automaton doesn't care what language the file is. It's matching byte sequences. `MD5` is `MD5` whether it's in Go, Python, or Java. `eval(` is `eval(` everywhere. This is why the text engine is the cheapest layer — one compiled automaton, one pass per file, all patterns simultaneously.
+
+### The structural walker lifecycle
+
+The structural walker uses the **compiled pattern definitions** (loaded once at startup from YAML) and the **lang_map** to know what node kinds to look for in each language:
+
+```
+Daemon starts
+    │
+    ▼
+1. Load all YAML dimension definitions
+2. For each structural pattern, pre-resolve the lang_map:
+   "call" in Go → "call_expression"
+   "call" in Python → "call"
+   etc.
+3. Store as lookup tables in memory (~10KB)
+    │
+    ▼
+For each file at index time:
+    detect language from extension
+    select the pre-resolved pattern set for that language
+    walk the AST once:
+      at each node, check against all structural patterns
+      if node kind matches a pattern's expected kind:
+        check children/siblings/text against pattern criteria
+        if match: set the bit
+```
+
+The walker visits each AST node once. At each node, it checks against the structural patterns relevant to that node kind. Because patterns are grouped by node kind (all `call_expression` patterns in one bucket), the check is a hash lookup + criteria evaluation. Not a tree traversal per pattern.
+
+### Full pipeline summary
+
+```
+STARTUP (once):
+  Load YAML definitions → compile AC automaton + pre-resolve lang_maps
+
+INDEX TIME (per file, during init or file-watch):
+  source bytes ──┬──► tree-sitter parse ──► AST ──► structural walker ──► structural bits
+                 │                                                              │
+                 └──► AC automaton scan ──► text bits ──► regex confirm ──► text bits
+                                                                                │
+                                                              merge all bits ◄──┘
+                                                                   │
+                                                          per-method bitmask
+                                                          severity scores
+                                                                   │
+                                                          write to bbolt
+
+QUERY TIME (on search, dashboard, Recon tab):
+  read bitmask from bbolt ──► display scores
+  No parsing. No scanning. Just bytes from disk.
+```
+
+**Index time budget (1,000 files):**
+
+| Step | Per file | 1,000 files | Notes |
+|------|----------|-------------|-------|
+| tree-sitter parse | 1-5ms | 1-5s | Already happening today for symbol extraction |
+| Structural walker | 0.1-0.5ms | 100-500ms | Walks the already-parsed tree |
+| AC scan | 0.01-0.05ms | 10-50ms | Single pass, all patterns |
+| Regex confirm | 0.01ms | 10ms | Only on AC candidate lines |
+| Merge + write bbolt | 0.05ms | 50ms | Small writes |
+| **Total dimensional overhead** | **0.2-0.6ms** | **170-610ms** | Added on top of existing parse time |
+
+The dimensional analysis adds **~0.2-0.6ms per file** on top of the tree-sitter parse that already happens. For a 1,000-file project, that's ~170-610ms of additional index time. The existing parse is 1-5 seconds. So total index time goes from ~3s to ~3.5s. Not doubling. Not even close.
+
+**Query time budget (5,000 methods, full Recon tab):**
+
+| Step | Cost | Notes |
+|------|------|-------|
+| bbolt sequential scan of dimensions bucket | ~2-5ms | B+ tree range scan, small values |
+| Sort by severity | ~0.5ms | In-memory sort of 5,000 entries |
+| JSON serialize for API response | ~1-2ms | |
+| **Total** | **< 10ms** | |
+
+That's the 10ms target. It's achievable because the heavy work (parsing, scanning, pattern matching) already happened at index time. Query time is just reading pre-computed answers.
 
 ---
 
@@ -513,10 +765,12 @@ Stored in bbolt → available to search results + Recon tab
 
 1. **Deterministic** — Same code always produces same bitmask. No ML model variance.
 2. **Interpretable** — Every set bit maps to a specific yes/no question. You can explain every finding.
-3. **Fast** — AC + tree-sitter reuse = ~100ns/line for bitmask computation. A 1000-line file takes ~100μs.
+3. **Fast** — The heavy work happens at index time (~0.5ms per file overhead). Query time is < 10ms for the entire project.
 4. **Cross-language** — Tree-sitter's 28 grammars + lang_map = one question set works everywhere.
 5. **Extensible** — New question = new bit position + new YAML pattern. No engine changes.
 6. **Composable** — Security is one dimension. Performance, Quality, Compliance, Architecture, Observability each get their own bitmask. Stack them for a full dimensional profile.
+7. **Tiny footprint** — ~38 bytes per method across all dimensions. 5,000 methods = ~190KB in bbolt.
+8. **Incremental** — File watcher re-scans only changed files. One file = 2-6ms, invisible to the user.
 
 ---
 
