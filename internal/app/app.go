@@ -392,26 +392,24 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 		sc.addKeyword(tok, a.Enricher)
 	}
 
-	// 2. Top result hits → hit domains, hit tags (terms), symbol keywords
-	topN := len(result.Hits)
-	if topN > 10 {
-		topN = 10
+	// 2. Top result hits → direct-increment domains, terms, term-domain pairs
+	//    No enricher re-resolution — signals come directly from index metadata.
+	sig := collectHitSignals(result.Hits, 10)
+	for _, d := range sig.Domains {
+		sc.addDomain(d)
 	}
-	for _, hit := range result.Hits[:topN] {
-		sc.addDomain(hit.Domain)
-		for _, term := range hit.Tags {
-			sc.addTerm(term, a.Enricher)
+	for _, term := range sig.Terms {
+		if !sc.seenTerms[term] {
+			sc.seenTerms[term] = true
+			sc.Terms = append(sc.Terms, term)
 		}
-		// Only tokenize structured symbol names, not raw content lines.
-		// Content hits already have their terms resolved in Tags via
-		// generateContentTags — re-tokenizing Content floods the learner
-		// with noise (every word in matching markdown lines) and wastes
-		// ~10ms on redundant enricher lookups per search.
-		if hit.Kind != "content" && hit.Symbol != "" {
-			for _, tok := range index.Tokenize(hit.Symbol) {
-				sc.addKeyword(tok, a.Enricher)
-			}
-		}
+	}
+	for _, td := range sig.TermDomains {
+		sc.addTermDomain(td[0], td[1])
+	}
+	// Feed content hit text through bigram extraction
+	for _, text := range sig.ContentText {
+		a.Learner.ProcessBigrams(text)
 	}
 
 	event := learner.ObserveEvent{
@@ -681,6 +679,10 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				attrib = "unguided"
 				tokens = a.estimateGrepTokens()
 				impact = a.estimateGrepCost(ev.Tool.Pattern)
+				// Session-log Grep → learning signals
+				if ev.Tool.Pattern != "" {
+					a.processGrepSignal(ev.Tool.Pattern)
+				}
 			case "Write", "Edit":
 				if ev.File != nil && ev.File.Path != "" {
 					target = a.relativePath(ev.File.Path)
