@@ -7,2762 +7,348 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-/* ====== @property for gradient angle ====== */
-@property --gradient-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-
-/* ====== CSS VARIABLES ====== */
-[data-theme="dark"] {
-  --bg: #0c0c0e;
-  --card: #161618;
-  --card-hover: #1c1c1f;
-  --border: #252528;
-  --border-subtle: #1e1e21;
-  --text: #e8e8ec;
-  --text-secondary: #c4c4cc;
-  --dim: #8b8b96;
-  --mute: #55555f;
-  --green: #34d399;
-  --green-dim: rgba(52,211,153,0.12);
-  --blue: #60a5fa;
-  --blue-dim: rgba(96,165,250,0.12);
-  --purple: #c084fc;
-  --purple-dim: rgba(192,132,252,0.12);
-  --cyan: #22d3ee;
-  --cyan-dim: rgba(34,211,238,0.12);
-  --yellow: #fbbf24;
-  --yellow-dim: rgba(251,191,36,0.12);
-  --red: #f87171;
-  --shadow: none;
-  --nav-bg: rgba(12,12,14,0.82);
-  --table-hover: rgba(255,255,255,0.03);
-}
-
-[data-theme="light"] {
-  --bg: #f5f5f7;
-  --card: #ffffff;
-  --card-hover: #fafafa;
-  --border: #e5e5ea;
-  --border-subtle: #ececee;
-  --text: #1d1d1f;
-  --text-secondary: #3a3a3c;
-  --dim: #6e6e73;
-  --mute: #aeaeb2;
-  --green: #16a34a;
-  --blue: #2563eb;
-  --purple: #9333ea;
-  --cyan: #0891b2;
-  --yellow: #d97706;
-  --red: #dc2626;
-  --shadow: 0 1px 3px rgba(0,0,0,0.06);
-  --nav-bg: rgba(245,245,247,0.82);
-  --table-hover: rgba(0,0,0,0.02);
-  --green-dim: rgba(22,163,74,0.1);
-  --blue-dim: rgba(37,99,235,0.1);
-  --purple-dim: rgba(147,51,234,0.1);
-  --cyan-dim: rgba(8,145,178,0.1);
-  --yellow-dim: rgba(217,119,6,0.1);
-}
-
-/* ====== RESET & BODY ====== */
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.mono {
-  font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
-}
-
-.tabnum {
-  font-variant-numeric: tabular-nums;
-}
-
-/* ====== ANIMATIONS ====== */
-@keyframes value-pulse {
-  0% { color: var(--green); }
-  100% { color: inherit; }
-}
-
-.pulse {
-  animation: value-pulse 0.8s ease-out;
-}
-
-@keyframes term-flash {
-  0%   { background: var(--green); color: #000; }
-  25%  { background: var(--green); color: #000; }
-  100% { background: var(--green-dim); color: var(--green); }
-}
-.term-flash { animation: term-flash 1.2s ease-out; }
-
-@keyframes row-glow {
-  0%   { background: rgba(52,211,153,0.08); }
-  100% { background: transparent; }
-}
-
-@keyframes num-glow {
-  0%   { text-shadow: 0 0 8px rgba(37,99,235,0.6), 0 0 16px rgba(37,99,235,0.3); }
-  100% { text-shadow: none; }
-}
-.num-glow { animation: num-glow 4s ease-out; }
-
-@keyframes ngram-flash {
-  0%   { background: rgba(22,163,74,0.15); }
-  20%  { background: rgba(22,163,74,0.15); }
-  100% { background: transparent; }
-}
-.ngram-flash { animation: ngram-flash 3s ease-out; }
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
-@keyframes gradient-rotate {
-  0% { --gradient-angle: 0deg; }
-  100% { --gradient-angle: 360deg; }
-}
-
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ====== NAV ====== */
-.nav {
-  height: 52px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: var(--nav-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border);
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.nav-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-right: 20px;
-}
-
-.nav-brand .angle {
-  font-size: 22px;
-  color: var(--green);
-  font-weight: 700;
-  line-height: 1;
-}
-
-.nav-brand .name {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--cyan);
-  letter-spacing: 0.5px;
-}
-
-.nav-tabs {
-  display: flex;
-  gap: 4px;
-}
-
-.nav-tab {
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--dim);
-  cursor: pointer;
-  transition: color 0.15s;
-  user-select: none;
-  border: none;
-  background: none;
-  position: relative;
-}
-
-.nav-tab:hover {
-  color: var(--text-secondary);
-}
-
-.nav-tab.active {
-  color: var(--green);
-}
-
-.nav-tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 8px;
-  right: 8px;
-  height: 2px;
-  background: var(--green);
-  border-radius: 1px;
-}
-
-.nav-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.status-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 4px 12px;
-  border-radius: 20px;
-}
-
-.status-badge .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.status-badge.connected {
-  background: var(--green-dim);
-  color: var(--green);
-}
-
-.status-badge.connected .dot {
-  background: var(--green);
-  animation: blink 2s ease-in-out infinite;
-}
-
-.status-badge.disconnected {
-  background: rgba(248,113,113,0.12);
-  color: var(--red);
-}
-
-.status-badge.disconnected .dot {
-  background: var(--red);
-}
-
-.status-badge.mock {
-  background: var(--yellow-dim);
-  color: var(--yellow);
-}
-
-.status-badge.mock .dot {
-  background: var(--yellow);
-  animation: blink 2s ease-in-out infinite;
-}
-
-.theme-toggle {
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card);
-  cursor: pointer;
-  color: var(--dim);
-  transition: all 0.15s;
-}
-
-.theme-toggle:hover {
-  border-color: var(--mute);
-  color: var(--text);
-}
-
-.theme-toggle svg {
-  width: 16px;
-  height: 16px;
-}
-
-/* ====== MAIN CONTENT ====== */
-.main {
-  flex: 1;
-  overflow: hidden;
-}
-
-.tab-content {
-  display: none;
-  height: 100%;
-}
-
-.tab-content.active {
-  display: flex;
-  flex-direction: column;
-}
-
-/* ====== DISCONNECTED BANNER ====== */
-.disconnected-banner {
-  display: none;
-  padding: 8px 24px;
-  background: rgba(248,113,113,0.08);
-  border-bottom: 1px solid rgba(248,113,113,0.2);
-  color: var(--red);
-  text-align: center;
-  font-size: 12px;
-  font-weight: 500;
-  flex-shrink: 0;
-}
-
-.disconnected-banner.show {
-  display: block;
-}
-
-/* ====== CARDS ====== */
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: var(--shadow);
-}
-
-.card-accent {
-  position: relative;
-}
-
-.card-accent::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 16px;
-  right: 16px;
-  height: 2px;
-  border-radius: 0 0 2px 2px;
-}
-
-.card-accent.accent-cyan::before { background: var(--cyan); }
-.card-accent.accent-green::before { background: var(--green); }
-.card-accent.accent-purple::before { background: var(--purple); }
-.card-accent.accent-yellow::before { background: var(--yellow); }
-.card-accent.accent-blue::before { background: var(--blue); }
-.card-accent.accent-red::before { background: var(--red); }
-
-/* ====== HERO CARD (gradient border) ====== */
-.hero-card {
-  position: relative;
-  background: var(--card);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: var(--shadow);
-  overflow: hidden;
-}
-
-.hero-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 16px;
-  padding: 1px;
-  background: conic-gradient(from var(--gradient-angle, 0deg), var(--green), var(--blue), var(--purple), var(--green));
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  animation: gradient-rotate 6s linear infinite;
-  pointer-events: none;
-}
-
-.hero-label {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--mute);
-  font-family: 'JetBrains Mono', monospace;
-  margin-bottom: 8px;
-}
-
-.hero-headline {
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.3;
-  background: linear-gradient(135deg, var(--text) 0%, var(--green) 50%, var(--blue) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 10px;
-}
-
-.hero-narrative {
-  font-size: 14px;
-  color: var(--dim);
-  line-height: 1.6;
-}
-
-.hero-narrative .n-green { color: var(--green); font-weight: 600; font-variant-numeric: tabular-nums; }
-.hero-narrative .n-cyan { color: var(--cyan); font-weight: 600; font-variant-numeric: tabular-nums; }
-.hero-narrative .n-blue { color: var(--blue); font-weight: 600; font-variant-numeric: tabular-nums; }
-
-/* ====== METRICS PANEL ====== */
-.metrics-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.metrics-row {
-  display: flex;
-  gap: 20px;
-}
-
-.metric-big {
-  flex: 1;
-  text-align: center;
-}
-
-.metric-big .value {
-  font-size: 36px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-}
-
-.metric-big .label {
-  font-size: 11px;
-  color: var(--dim);
-  margin-top: 2px;
-}
-
-.autotune-section {
-  width: 100%;
-}
-
-.autotune-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.autotune-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.autotune-label .num {
-  color: var(--yellow);
-  font-variant-numeric: tabular-nums;
-}
-
-.autotune-track {
-  width: 100%;
-  height: 6px;
-  background: var(--border);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.autotune-fill {
-  height: 100%;
-  background: var(--yellow);
-  border-radius: 3px;
-  transition: width 0.4s ease;
-}
-
-.autotune-sub {
-  font-size: 11px;
-  color: var(--mute);
-  margin-top: 4px;
-}
-
-.uptime-chip {
-  font-size: 11px;
-  color: var(--mute);
-  margin-top: 8px;
-  text-align: center;
-}
-
-/* ====== MINI STAT CARDS ====== */
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 12px;
-}
-
-.stat-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px 16px;
-  position: relative;
-  overflow: hidden;
-  box-shadow: var(--shadow);
-}
-
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-}
-
-.stat-card.sc-cyan::before { background: var(--cyan); }
-.stat-card.sc-green::before { background: var(--green); }
-.stat-card.sc-purple::before { background: var(--purple); }
-.stat-card.sc-yellow::before { background: var(--yellow); }
-.stat-card.sc-blue::before { background: var(--blue); }
-.stat-card.sc-red::before { background: var(--red); }
-
-.stat-card .stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-card .stat-label {
-  font-size: 11px;
-  color: var(--dim);
-  margin-top: 2px;
-}
-
-.stat-card .stat-sub {
-  font-size: 10px;
-  color: var(--mute);
-  margin-top: 1px;
-}
-
-/* ====== ACTIVITY CARD ====== */
-.activity-card {
-  display: flex;
-  flex-direction: column;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: var(--shadow);
-  overflow: hidden;
-  width: 100%;
-}
-
-.activity-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.activity-title {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--dim);
-}
-
-.badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 10px;
-}
-
-.badge-live {
-  background: var(--green-dim);
-  color: var(--green);
-}
-
-.badge-soon {
-  background: rgba(139,139,150,0.1);
-  color: var(--mute);
-}
-
-.activity-body {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
-  max-height: 400px;
-}
-
-/* Activity table */
-.activity-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.activity-table thead {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.activity-table th {
-  padding: 8px 16px;
-  text-align: left;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--mute);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-}
-
-.activity-table td {
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border-subtle);
-  font-variant-numeric: tabular-nums;
-}
-
-.activity-table tr:hover td {
-  background: var(--table-hover);
-}
-
-.activity-table tr {
-  animation: fade-in 0.3s ease-out;
-}
-
-.action-pill {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 6px;
-}
-
-.pill-read { background: var(--green-dim); color: var(--green); }
-.pill-write { background: var(--purple-dim); color: var(--purple); }
-.pill-edit { background: var(--yellow-dim); color: var(--yellow); }
-.pill-bash { background: var(--cyan-dim); color: var(--cyan); }
-.pill-grep { background: var(--blue-dim); color: var(--blue); }
-.pill-glob { background: var(--blue-dim); color: var(--blue); }
-.pill-search { background: var(--cyan-dim); color: var(--cyan); }
-.pill-learn { background: var(--purple-dim); color: var(--purple); }
-.pill-prompt { background: var(--yellow-dim); color: var(--yellow); }
-.pill-response { background: var(--green-dim); color: var(--green); }
-
-.impact-text { font-weight: 600; font-size: 11px; }
-.impact-green { color: var(--green); }
-.impact-cyan { color: var(--cyan); }
-.impact-purple { color: var(--purple); }
-.impact-files { color: var(--dim); font-size: 11px; }
-.impact-savings { color: var(--green); font-weight: 600; font-size: 11px; }
-
-.target-text {
-  color: var(--dim);
-  font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 0;
-  width: 100%;
-}
-
-.attrib-indexed { color: var(--cyan); }
-.attrib-regex { color: var(--yellow); }
-.attrib-multi { color: var(--green); }
-
-.time-text {
-  color: var(--mute);
-  font-size: 11px;
-}
-
-.source-text {
-  color: var(--dim);
-  font-size: 11px;
-}
-
-.source-aoa {
-  color: var(--cyan);
-  font-weight: 600;
-  font-size: 11px;
-}
-
-.aoa-highlight {
-  color: #4fc3f7;
-  font-weight: 600;
-}
-
-.aoa-brand {
-  color: var(--cyan);
-  font-weight: 600;
-}
-
-.target-cmd {
-  color: var(--green);
-}
-
-.attrib-guided {
-  color: var(--green);
-  font-weight: 500;
-}
-
-.attrib-text {
-  color: var(--mute);
-  font-size: 11px;
-}
-
-.impact-hits {
-  color: var(--cyan);
-  font-weight: 600;
-  font-size: 11px;
-}
-
-.impact-timing {
-  color: var(--green);
-  font-size: 11px;
-}
-
-.impact-sep {
-  color: var(--dim);
-  font-size: 11px;
-}
-
-.impact-zero {
-  color: var(--mute);
-  font-size: 11px;
-}
-
-.tags-text {
-  color: var(--mute);
-  font-size: 11px;
-}
-
-.placeholder-msg {
-  padding: 40px 20px;
-  text-align: center;
-  color: var(--mute);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-/* ====== OVERVIEW TAB LAYOUT ====== */
-.overview-content {
-  height: 100%;
-  overflow-y: auto;
-  padding: 16px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.overview-hero-row {
-  flex-shrink: 0;
-  display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 14px;
-}
-
-.overview-stats-row {
-  flex-shrink: 0;
-}
-
-.overview-activity-row {
-  flex-shrink: 0;
-}
-
-/* ====== LEARNING TAB ====== */
-.learning-content {
-  height: 100%;
-  overflow-y: auto;
-  padding: 16px 24px;
-}
-
-.learning-stats {
-  margin-bottom: 16px;
-}
-
-.learning-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 16px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.card-title {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--dim);
-}
-
-.card-subtitle {
-  font-size: 11px;
-  color: var(--mute);
-  margin-top: 2px;
-}
-
-/* Domain table */
-.domain-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.domain-table th {
-  padding: 6px 12px;
-  text-align: left;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--mute);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  border-bottom: 1px solid var(--border);
-}
-
-.domain-table th:nth-child(3) { text-align: right; }
-
-.domain-table td {
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border-subtle);
-  font-variant-numeric: tabular-nums;
-}
-
-.domain-table tr:hover td {
-  background: var(--table-hover);
-}
-
-.d-rank { color: var(--mute); font-size: 10px; width: 28px; }
-.d-name {
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--purple);
-  font-weight: 500;
-  font-size: 12px;
-}
-.d-hits {
-  text-align: right;
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--green);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.d-tier { }
-
-.tier-pill {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 8px;
-  border-radius: 8px;
-}
-
-.tier-core { background: var(--green-dim); color: var(--green); }
-.tier-ctx { background: rgba(139,139,150,0.08); color: var(--mute); }
-
-.d-state { color: var(--dim); font-size: 11px; }
-
-.domain-footer {
-  padding: 12px;
-  font-size: 11px;
-  font-style: italic;
-  color: var(--mute);
-  border-top: 1px solid var(--border-subtle);
-  text-align: center;
-}
-
-/* N-gram metrics */
-.ngram-section {
-  margin-bottom: 16px;
-}
-
-.ngram-section:last-child {
-  margin-bottom: 0;
-}
-
-.ngram-section-title {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--mute);
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.ngram-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  margin-bottom: 3px;
-}
-
-.ngram-name {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--text-secondary);
-  width: 130px;
-  min-width: 130px;
-  flex-shrink: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ngram-bar-track {
-  flex: 1;
-  height: 6px;
-  background: var(--border);
-  border-radius: 3px;
-  overflow: hidden;
-  display: block;
-}
-
-.ngram-bar-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.5s ease;
-  display: block;
-}
-
-.ngram-bar-fill.bar-cyan { background: var(--cyan); }
-.ngram-bar-fill.bar-green { background: var(--green); }
-.ngram-bar-fill.bar-purple { background: var(--purple); }
-
-.ngram-count {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-  min-width: 32px;
-  text-align: right;
-}
-
-.awaiting-data {
-  padding: 30px 16px;
-  text-align: center;
-  color: var(--mute);
-  font-size: 12px;
-}
-
-/* ====== CONVERSATION TAB ====== */
-.conversation-content {
-  height: 100%;
-  overflow-y: auto;
-  padding: 16px 24px;
-  display: flex;
-  flex-direction: column;
-}
-
-.conversation-stats {
-  margin-bottom: 16px;
-  flex-shrink: 0;
-}
-
-.conv-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-}
-
-/* ── Conversation Feed Card (yellow-bordered) ── */
-.conv-feed-card {
-  flex: 1;
-  min-height: 0;
-  background: var(--card);
-  border: 1px solid var(--yellow);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
-}
-
-.conv-feed-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.conv-feed-title {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--dim);
-}
-.conv-feed-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--bg);
-  padding: 2px 10px;
-  border-radius: 10px;
-}
-
-/* Feed scroll area — bottom-anchored */
-.conv-feed-scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 16px 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-}
-
-/* Bold yellow scrollbar inside the feed */
-.conv-feed-scroll::-webkit-scrollbar { width: 8px; }
-.conv-feed-scroll::-webkit-scrollbar-track { background: var(--bg); border-radius: 4px; margin: 4px; }
-.conv-feed-scroll::-webkit-scrollbar-thumb {
-  background: var(--yellow);
-  border-radius: 4px;
-  border: 2px solid var(--bg);
-}
-.conv-feed-scroll::-webkit-scrollbar-thumb:hover { background: var(--green); }
-
-/* Scroll-to-now button */
-.scroll-now-btn {
-  display: none;
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  padding: 6px 18px;
-  border-radius: 20px;
-  border: 1px solid var(--yellow);
-  background: var(--card);
-  color: var(--yellow);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-  font-family: 'Inter', sans-serif;
-}
-.scroll-now-btn:hover { background: var(--card-hover); color: var(--green); border-color: var(--green); }
-.scroll-now-btn.visible { display: flex; align-items: center; gap: 6px; }
-
-/* ── Turn elements inside the feed ── */
-.cv-sep {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 0 3px;
-}
-.cv-sep .n { font-size: 10px; font-weight: 600; color: var(--mute); letter-spacing: 0.3px; }
-.cv-sep .l { flex:1; height:1px; background: var(--border-subtle); }
-.cv-sep .t { font-size: 10px; color: var(--mute); font-family: 'JetBrains Mono', monospace; }
-
-.cv-row {
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 8px;
-  margin-bottom: 1px;
-  align-items: start;
-  animation: fade-in 0.15s ease-out;
-}
-@media (max-width: 1100px) {
-  .cv-row { grid-template-columns: 1fr; }
-  .cv-right.empty { display: none; }
-}
-
-/* Messages */
-.cv-left { display: flex; flex-direction: column; gap: 0; }
-
-.cv-user {
-  padding: 5px 12px; border-radius: 6px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-left: 3px solid var(--yellow);
-  font-size: 13px; line-height: 1.5;
-}
-.cv-user .rl { color: var(--yellow); font-weight: 600; font-size: 12px; margin-right: 8px; }
-
-.cv-think {
-  padding: 3px 12px; margin-top: 1px;
-  border-radius: 4px;
-  background: var(--bg); border: 1px solid var(--border-subtle);
-  border-left: 3px solid var(--purple);
-  font-size: 12px; line-height: 1.35; cursor: pointer;
-}
-.cv-think .tl { color: var(--purple); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; margin-right: 6px; }
-.cv-think .tp { color: var(--dim); font-style: italic; }
-.cv-think .td { color: var(--mute); font-size: 10px; float: right; margin-left: 8px; font-family: 'JetBrains Mono', monospace; }
-.cv-think .tf {
-  display: none; margin-top: 3px; padding-top: 3px;
-  border-top: 1px solid var(--border-subtle);
-  color: var(--dim); font-style: italic; white-space: pre-wrap; line-height: 1.4;
-}
-.cv-think.open .tp { display: none; }
-.cv-think.open .tf { display: block; }
-
-.cv-assistant {
-  padding: 5px 12px; margin-top: 1px;
-  border-radius: 6px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-left: 3px solid var(--green);
-  font-size: 13px; line-height: 1.5;
-}
-.cv-assistant .rl { color: var(--green); font-weight: 600; font-size: 12px; margin-right: 5px; }
-.cv-assistant .ml { font-size: 9px; color: var(--mute); background: var(--card); padding: 1px 5px; border-radius: 3px; margin-right: 4px; }
-.cv-assistant .mt { float: right; font-size: 10px; color: var(--mute); font-family: 'JetBrains Mono', monospace; margin-left: 8px; }
-
-/* Actions panel */
-.cv-right { display: flex; flex-direction: column; }
-.cv-right.empty { visibility: hidden; height: 0; overflow: hidden; }
-
-.cv-actions {
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 6px; padding: 5px 8px; font-size: 11px;
-}
-.cv-ah {
-  font-size: 9px; font-weight: 600; color: var(--mute);
-  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px;
-}
-
-.cv-tr {
-  display: flex; align-items: flex-start; gap: 5px;
-  padding: 2px 0; border-bottom: 1px solid var(--border-subtle);
-}
-.cv-tr:last-of-type { border-bottom: none; }
-
-.cv-chip {
-  display: inline-flex; padding: 0px 5px; border-radius: 3px;
-  font-size: 10px; font-weight: 600; white-space: nowrap; flex-shrink: 0;
-}
-.cv-chip.read  { background: var(--blue-dim); color: var(--blue); }
-.cv-chip.write { background: var(--green-dim); color: var(--green); }
-.cv-chip.edit  { background: var(--green-dim); color: var(--green); }
-.cv-chip.bash  { background: var(--cyan-dim); color: var(--cyan); }
-.cv-chip.grep  { background: var(--purple-dim); color: var(--purple); }
-.cv-chip.glob  { background: var(--purple-dim); color: var(--purple); }
-.cv-chip.task  { background: var(--cyan-dim); color: var(--cyan); }
-
-.cv-tgt {
-  font-family: 'JetBrains Mono', monospace; font-size: 10px;
-  color: var(--mute); word-break: break-all; line-height: 1.3;
-  flex: 1; min-width: 0;
-}
-.cv-tgt .f { color: var(--text-secondary); font-weight: 500; }
-.cv-tgt .r { color: var(--dim); }
-.cv-tgt .c { color: var(--cyan); }
-.cv-tgt .p { color: var(--purple); }
-
-.cv-imp {
-  margin-left: auto; font-size: 10px; white-space: nowrap;
-  flex-shrink: 0; color: var(--mute); font-family: 'JetBrains Mono', monospace;
-}
-.cv-imp.guided { color: var(--green); font-weight: 600; }
-.cv-imp.hits   { color: var(--cyan); font-weight: 600; }
-.cv-imp.pass   { color: var(--green); font-weight: 600; }
-.cv-imp.fail   { color: var(--red); font-weight: 600; }
-
-.cv-ft {
-  display: flex; gap: 8px; margin-top: 3px; padding-top: 3px;
-  border-top: 1px solid var(--border-subtle);
-  font-size: 10px; color: var(--mute);
-}
-.cv-ft .v { color: var(--cyan); font-weight: 600; }
-
-/* NOW bar */
-.cv-now { display: flex; align-items: center; gap: 8px; padding: 6px 0 2px; }
-.cv-now .nl { flex:1; height:1px; background: var(--green); opacity: 0.25; }
-.cv-now .nw {
-  font-size: 10px; font-weight: 700; color: var(--green);
-  display: flex; align-items: center; gap: 4px;
-  font-family: 'JetBrains Mono', monospace;
-}
-.cv-now .dot-live { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 2s ease-in-out infinite; }
-
-/* ====== FOOTER ====== */
-.footer {
-  height: 32px;
-  flex-shrink: 0;
-  border-top: 1px solid var(--border);
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--mute);
-}
-
-.footer-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.footer-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--green);
-}
-
-.footer-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.footer-motto {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-}
-
-.footer-motto .way {
-  color: var(--yellow);
-  font-weight: 600;
-}
-
-.footer-clock {
-  font-family: 'JetBrains Mono', monospace;
-  font-variant-numeric: tabular-nums;
-  font-size: 10px;
-}
-
-/* ====== SCROLLBAR ====== */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--mute); }
-
-/* ====== RESPONSIVE ====== */
-@media (max-width: 900px) {
-  .stat-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .conv-stat-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .overview-hero-row {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 1000px) {
-  .learning-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 600px) {
-  .stat-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .conv-stat-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-/* (old conv-feed, conv-turn, tool-dist styles removed — replaced by cv-* styles above) */
-
-/* ====== TOP LISTS ====== */
-.top-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.top-list-item {
-  display: grid;
-  grid-template-columns: 28px 1fr auto;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background: var(--card-hover);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  transition: all 0.15s;
-}
-
-.top-list-item:hover {
-  background: var(--card);
-  border-color: var(--border);
-}
-
-.top-list-rank {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--dim);
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.top-list-name {
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-family: 'JetBrains Mono', monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.top-list-bar-track {
-  position: relative;
-  width: 100%;
-  height: 6px;
-  background: var(--border-subtle);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.top-list-bar-fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  background: linear-gradient(90deg, var(--purple), var(--blue));
-  border-radius: 3px;
-  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.top-list-count {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  min-width: 40px;
-  text-align: right;
-}
-
-.top-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-top: 20px;
-}
-
-@media (max-width: 900px) {
-  .top-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ====== CONVERSATION HERO ====== */
-.conv-hero {
-  padding: 24px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  margin-bottom: 20px;
-}
-
-.conv-hero-headline {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-
-.conv-hero-narrative {
-  font-size: 14px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
-.conv-hero-live {
-  color: var(--green);
-  font-weight: 600;
-}
-
-/* ====== TOP SECTION STYLES ====== */
-.top-section-header {
-  margin-bottom: 16px;
-}
-
-.top-section-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 4px;
-}
-
-.top-section-subtitle {
-  font-size: 13px;
-  color: var(--dim);
-}
-
-.awaiting-top {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--dim);
-  font-size: 14px;
-}
-
-/* ====== TERM PILLS (Domain Table) ====== */
-.term-pill {
-  display: inline-flex;
-  align-items: center;
-  font-size: 10px;
-  font-weight: 500;
-  padding: 2px 7px;
-  border-radius: 4px;
-  font-family: 'JetBrains Mono', monospace;
-  margin: 1px 2px 1px 0;
-  background: var(--border-subtle);
-  color: var(--mute);
-  white-space: nowrap;
-  transition: background 30s ease-out, color 30s ease-out;
-}
-
-/* Term that has been hit — starts green, CSS transition fades it back to gray over 30s */
-.term-pill.hot {
-  background: var(--green);
-  color: #000;
-  transition: none;
-}
-
-.d-terms {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  max-width: 500px;
-  max-height: 24px;
-  overflow: hidden;
-}
-
-
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<!-- ====== NAV ====== -->
-<div class="nav">
+<!-- ══════ NAV ══════ -->
+<nav class="nav">
   <div class="nav-left">
-    <div class="nav-brand">
+    <span class="nav-brand">
       <span class="angle">&ang;</span>
       <span class="name">aOa</span>
-    </div>
+    </span>
     <div class="nav-tabs">
-      <button class="nav-tab active" data-tab="overview">Overview</button>
-      <button class="nav-tab" data-tab="learning">Learning</button>
-      <button class="nav-tab" data-tab="conversation">Conversation</button>
+      <button class="nav-tab active" data-tab="live">Live</button>
+      <button class="nav-tab" data-tab="recon">Recon</button>
+      <button class="nav-tab" data-tab="intel">Intel</button>
+      <button class="nav-tab" data-tab="debrief">Debrief</button>
+      <button class="nav-tab" data-tab="arsenal">Arsenal</button>
     </div>
   </div>
   <div class="nav-right">
-    <div class="status-badge connected" id="statusBadge">
+    <div class="status-badge offline" id="statusBadge">
       <span class="dot"></span>
-      <span id="statusLabel">connected</span>
+      <span id="statusText">...</span>
     </div>
-    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
-      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="5"></circle>
-        <line x1="12" y1="1" x2="12" y2="3"></line>
-        <line x1="12" y1="21" x2="12" y2="23"></line>
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-        <line x1="1" y1="12" x2="3" y2="12"></line>
-        <line x1="21" y1="12" x2="23" y2="12"></line>
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-      </svg>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+      <span id="themeIcon"></span>
     </button>
   </div>
-</div>
+</nav>
 
-<!-- ====== DISCONNECTED BANNER ====== -->
-<div class="disconnected-banner" id="discoBanner">Daemon unreachable — polling paused. Reconnecting...</div>
-
-<!-- ====== MAIN ====== -->
+<!-- ══════ MAIN ══════ -->
 <div class="main">
 
-  <!-- ====== TAB: OVERVIEW ====== -->
-  <div class="tab-content active" id="tab-overview">
-    <div class="overview-content">
-
-      <!-- Row 1: Hero -->
-      <div class="overview-hero-row">
+  <!-- ════════════════════════════════════════════════════
+       LIVE TAB
+       ════════════════════════════════════════════════════ -->
+  <div class="tab-content active" id="tab-live">
+    <div class="hero-row">
+      <div class="hero-card-wrapper">
         <div class="hero-card">
           <div class="hero-label">ANGLE OF ATTACK</div>
-          <div class="hero-headline">Agentic work, optimized to O(1).</div>
-          <div class="hero-narrative">
-            <span class="n-green" id="h-domains">&mdash;</span> domains discovered from
-            <span class="n-cyan" id="h-prompts">&mdash;</span> prompts across
-            <span class="n-blue" id="h-files">&mdash;</span> indexed files.
-          </div>
-        </div>
-        <div class="card">
-          <div class="metrics-panel">
-            <div class="metrics-row">
-              <div class="metric-big">
-                <div class="value tabnum" id="m-prompts">&mdash;</div>
-                <div class="label">prompts</div>
-              </div>
-              <div class="metric-big">
-                <div class="value tabnum" style="color: var(--green)" id="m-domains">&mdash;</div>
-                <div class="label">active</div>
-              </div>
-            </div>
-            <div class="autotune-section">
-              <div class="autotune-header">
-                <span class="autotune-label">Autotune <span class="num" id="at-num">0</span>/50</span>
-              </div>
-              <div class="autotune-track">
-                <div class="autotune-fill" id="at-fill" style="width: 0%"></div>
-              </div>
-              <div class="autotune-sub" id="at-sub">next cycle in 50</div>
-            </div>
-            <div class="uptime-chip">Up: <span id="s-uptime">&mdash;</span></div>
-          </div>
+          <div class="hero-headline" id="heroHeadline-live"></div>
+          <div class="hero-support" id="heroSupport-live">-</div>
         </div>
       </div>
-
-      <!-- Row 2: Stats -->
-      <div class="overview-stats-row">
-        <div class="stat-grid">
-          <div class="stat-card sc-cyan">
-            <div class="stat-value tabnum" id="s-keywords">&mdash;</div>
-            <div class="stat-label">Keywords</div>
-          </div>
-          <div class="stat-card sc-green">
-            <div class="stat-value tabnum" id="s-terms">&mdash;</div>
-            <div class="stat-label">Terms</div>
-          </div>
-          <div class="stat-card sc-purple">
-            <div class="stat-value tabnum" id="s-bigrams">&mdash;</div>
-            <div class="stat-label">Bigrams</div>
-          </div>
-          <div class="stat-card sc-yellow">
-            <div class="stat-value tabnum" id="s-filehits">&mdash;</div>
-            <div class="stat-label">File Hits</div>
-          </div>
-          <div class="stat-card sc-blue">
-            <div class="stat-value tabnum" id="s-files">&mdash;</div>
-            <div class="stat-label">Files Indexed</div>
-          </div>
-          <div class="stat-card sc-cyan">
-            <div class="stat-value tabnum" id="s-tokens">&mdash;</div>
-            <div class="stat-label">Tokens</div>
-          </div>
-        </div>
+      <div class="hero-metrics">
+        <div class="hm-cell"><div class="hm-value cyan" id="hm-live-0">-</div><div class="hm-label">guided reads</div></div>
+        <div class="hm-arrow">&rarr;</div>
+        <div class="hm-cell right"><div class="hm-value green" id="hm-live-1">-</div><div class="hm-label">avg savings</div></div>
+        <div class="hm-cell"><div class="hm-value green" id="hm-live-2">-</div><div class="hm-label">tokens saved</div></div>
+        <div class="hm-arrow">&rarr;</div>
+        <div class="hm-cell right"><div class="hm-value blue" id="hm-live-3">-</div><div class="hm-label">sessions extended</div></div>
       </div>
+    </div>
 
-      <!-- Row 3: Activity -->
-      <div class="overview-activity-row">
-        <div class="activity-card">
-          <div class="activity-header">
-            <span class="activity-title">Activity &amp; Impact</span>
-            <span class="badge" id="activityBadge"></span>
-          </div>
-          <div class="activity-body" id="activityBody">
-          </div>
-        </div>
+    <div class="stats-grid">
+      <div class="stat-card cyan"><div class="stat-value" id="ls-guided">-</div><div class="stat-label">Guided Ratio</div><div class="stat-sub">of reads guided</div></div>
+      <div class="stat-card green"><div class="stat-value" id="ls-savings">-</div><div class="stat-label">Avg Savings</div><div class="stat-sub">per guided read</div></div>
+      <div class="stat-card blue"><div class="stat-value" id="ls-searches">-</div><div class="stat-label">Searches</div><div class="stat-sub">indexed queries</div></div>
+      <div class="stat-card purple"><div class="stat-value" id="ls-files">-</div><div class="stat-label">Files Indexed</div><div class="stat-sub">symbols tracked</div></div>
+      <div class="stat-card yellow"><div class="stat-value" id="ls-autotune">-</div><div class="stat-label">Autotune</div><div class="stat-sub">next cycle</div></div>
+      <div class="stat-card red"><div class="stat-value" id="ls-burn">-</div><div class="stat-label">Context Burn</div><div class="stat-sub">token burn rate</div></div>
+    </div>
+
+    <div class="card activity-card">
+      <div class="card-header">
+        <span class="card-title">Activity &amp; Impact</span>
+        <span class="card-badge" id="activityCount">0</span>
       </div>
-
+      <div class="activity-table-wrap">
+        <table class="activity-table">
+          <thead><tr>
+            <th class="col-time">Time</th>
+            <th class="col-action">Action</th>
+            <th class="col-source">Source</th>
+            <th class="col-attrib">Attrib</th>
+            <th class="col-impact">Impact</th>
+            <th class="col-target">Target</th>
+          </tr></thead>
+          <tbody id="activityTbody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
-  <!-- ====== TAB: LEARNING ====== -->
-  <div class="tab-content" id="tab-learning">
-    <div class="learning-content">
-
-      <!-- Row 1: Stats -->
-      <div class="learning-stats">
-        <div class="stat-grid">
-          <div class="stat-card sc-purple">
-            <div class="stat-value tabnum" id="l-domains">&mdash;</div>
-            <div class="stat-label">Domains</div>
-          </div>
-          <div class="stat-card sc-green">
-            <div class="stat-value tabnum" id="l-core">&mdash;</div>
-            <div class="stat-label">Core</div>
-          </div>
-          <div class="stat-card sc-cyan">
-            <div class="stat-value tabnum" id="l-terms">&mdash;</div>
-            <div class="stat-label">Terms</div>
-          </div>
-          <div class="stat-card sc-blue">
-            <div class="stat-value tabnum" id="l-keywords">&mdash;</div>
-            <div class="stat-label">Keywords</div>
-          </div>
-          <div class="stat-card sc-yellow">
-            <div class="stat-value tabnum" id="l-bigrams">&mdash;</div>
-            <div class="stat-label">Bigrams</div>
-          </div>
-          <div class="stat-card sc-red">
-            <div class="stat-value tabnum" id="l-hits">&mdash;</div>
-            <div class="stat-label">Total Hits</div>
-          </div>
+  <!-- ════════════════════════════════════════════════════
+       RECON TAB (Stub)
+       ════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-recon">
+    <div class="hero-row">
+      <div class="hero-card-wrapper">
+        <div class="hero-card">
+          <div class="hero-label">RECON</div>
+          <div class="hero-headline" id="heroHeadline-recon"></div>
+          <div class="hero-support" id="heroSupport-recon">Dimensional analysis across security, quality, complexity, and architecture</div>
         </div>
       </div>
+      <div class="hero-metrics">
+        <div class="hm-cell"><div class="hm-value purple" id="hm-recon-0">-</div><div class="hm-label">dimensions</div></div>
+        <div class="hm-arrow">&rarr;</div>
+        <div class="hm-cell right"><div class="hm-value yellow" id="hm-recon-1">-</div><div class="hm-label">risk score</div></div>
+        <div class="hm-cell"><div class="hm-value cyan" id="hm-recon-2">-</div><div class="hm-label">coverage</div></div>
+        <div class="hm-arrow">&rarr;</div>
+        <div class="hm-cell right"><div class="hm-value red" id="hm-recon-3">-</div><div class="hm-label">findings</div></div>
+      </div>
+    </div>
 
-      <!-- Row 2: Domains + Bigrams -->
-      <div class="learning-grid">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">Domain Rankings <span style="font-weight:400; color:var(--dim); font-size:12px">&mdash; sorted by learning signal strength</span></div>
-          </div>
-          <div id="domainTableContainer">
-            <div class="awaiting-data" id="domainPlaceholder">Awaiting domain data...</div>
-          </div>
-          <div class="domain-footer"><span class="aoa-brand">aOa</span> learns your workflow &rarr; Claude reads only what it needs.</div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">N-gram Metrics</div>
-              <div class="card-subtitle">Frequency patterns from session analysis</div>
-            </div>
-          </div>
-          <div id="ngramContainer">
-            <div class="awaiting-data" id="ngramPlaceholder">Awaiting bigram data...</div>
-          </div>
+    <div class="stats-grid">
+      <div class="stat-card purple"><div class="stat-value">-</div><div class="stat-label">Dimensions</div><div class="stat-sub">analysis axes</div></div>
+      <div class="stat-card yellow"><div class="stat-value">-</div><div class="stat-label">Risk Score</div><div class="stat-sub">composite</div></div>
+      <div class="stat-card cyan"><div class="stat-value">-</div><div class="stat-label">Coverage</div><div class="stat-sub">files scanned</div></div>
+      <div class="stat-card red"><div class="stat-value">-</div><div class="stat-label">Findings</div><div class="stat-sub">issues detected</div></div>
+    </div>
+
+    <div class="recon-placeholder">
+      <div class="recon-placeholder-card">
+        <div class="recon-placeholder-icon">&#x1F50D;</div>
+        <div class="recon-placeholder-title">Dimensional Scanning</div>
+        <div class="recon-placeholder-text">
+          Available in a future release.<br>
+          Recon will provide multi-dimensional code analysis across
+          security, quality, complexity, and architecture.
         </div>
       </div>
-
     </div>
   </div>
 
-  <!-- ====== TAB: CONVERSATION ====== -->
-  <div class="tab-content" id="tab-conversation">
-    <div class="conversation-content">
-
-      <!-- Hero Narrative -->
-      <div class="conv-hero">
-        <div class="conv-hero-headline">Session Activity</div>
-        <div class="conv-hero-narrative">
-          <span class="conv-hero-live" id="convNarrativeTurns">0 turns</span> exchanged,
-          <span class="conv-hero-live" id="convNarrativeTokens">0 tokens</span> processed,
-          <span class="conv-hero-live" id="convNarrativeCache">0%</span> cache efficiency.
+  <!-- ════════════════════════════════════════════════════
+       INTEL TAB
+       ════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-intel">
+    <div class="hero-row">
+      <div class="hero-card-wrapper">
+        <div class="hero-card">
+          <div class="hero-label">INTEL</div>
+          <div class="hero-headline" id="heroHeadline-intel"></div>
+          <div class="hero-support" id="heroSupport-intel">-</div>
         </div>
       </div>
+      <div class="hero-metrics">
+        <div class="hm-cell"><div class="hm-value purple" id="hm-intel-0">-</div><div class="hm-label">domains</div></div>
+        <div class="hm-arrow">&rarr;</div>
+        <div class="hm-cell right"><div class="hm-value green" id="hm-intel-1">-</div><div class="hm-label">core</div></div>
+        <div class="hm-cell"><div class="hm-value cyan" id="hm-intel-2">-</div><div class="hm-label">terms matched</div></div>
+        <div class="hm-arrow">&rarr;</div>
+        <div class="hm-cell right"><div class="hm-value yellow" id="hm-intel-3">-</div><div class="hm-label">bigrams</div></div>
+      </div>
+    </div>
 
-      <!-- Row 1: Stats -->
-      <div class="conversation-stats">
-        <div class="conv-stat-grid">
-          <div class="stat-card sc-cyan">
-            <div class="stat-value tabnum" id="conv-input">&mdash;</div>
-            <div class="stat-label">Input Tokens</div>
+    <div class="stats-grid">
+      <div class="stat-card purple"><div class="stat-value" id="is-domains">-</div><div class="stat-label">Domains</div><div class="stat-sub">semantic domains</div></div>
+      <div class="stat-card green"><div class="stat-value" id="is-core">-</div><div class="stat-label">Core</div><div class="stat-sub">top ranked</div></div>
+      <div class="stat-card cyan"><div class="stat-value" id="is-terms">-</div><div class="stat-label">Terms</div><div class="stat-sub">atlas terms matched</div></div>
+      <div class="stat-card blue"><div class="stat-value" id="is-keywords">-</div><div class="stat-label">Keywords</div><div class="stat-sub">unique keywords</div></div>
+      <div class="stat-card yellow"><div class="stat-value" id="is-bigrams">-</div><div class="stat-label">Bigrams</div><div class="stat-sub">conversation patterns</div></div>
+      <div class="stat-card red"><div class="stat-value" id="is-totalhits">-</div><div class="stat-label">Total Hits</div><div class="stat-sub">learning signals</div></div>
+    </div>
+
+    <div class="learning-grid">
+      <div class="card">
+        <div class="card-header">
+          <div><span class="card-title">Domain Rankings</span><span style="font-weight:400;color:var(--dim);font-size:12px"> &mdash; sorted by learning signal strength</span></div>
+          <span class="card-badge" id="domainCount">0</span>
+        </div>
+        <div class="domain-table-wrap">
+          <table class="domain-table">
+            <thead><tr><th>#</th><th>Domain</th><th>Hits</th><th>Tier</th><th>Terms</th></tr></thead>
+            <tbody id="domainTbody"></tbody>
+          </table>
+        </div>
+        <div class="domain-footer"><span class="aoa-brand">aOa</span> learns your workflow &rarr; Claude reads only what it needs.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div><span class="card-title">N-gram Metrics</span></div>
+          <span class="card-badge" id="ngramCount">0</span>
+        </div>
+        <div class="ngram-wrap">
+          <div class="ngram-section">
+            <div class="ngram-section-title">Bigrams <span class="text-cyan">&bull;</span></div>
+            <div id="ngramBigrams"></div>
           </div>
-          <div class="stat-card sc-blue">
-            <div class="stat-value tabnum" id="conv-output">&mdash;</div>
-            <div class="stat-label">Output Tokens</div>
+          <div class="ngram-section">
+            <div class="ngram-section-title">Cohits KW &rarr; Term <span class="text-green">&bull;</span></div>
+            <div id="ngramCohitKw"></div>
           </div>
-          <div class="stat-card sc-green">
-            <div class="stat-value tabnum" id="conv-cache-read">&mdash;</div>
-            <div class="stat-label">Cache Read</div>
-          </div>
-          <div class="stat-card sc-purple">
-            <div class="stat-value tabnum" id="conv-cache-write">&mdash;</div>
-            <div class="stat-label">Cache Write</div>
-          </div>
-          <div class="stat-card sc-yellow">
-            <div class="stat-value tabnum" id="conv-cache-pct">&mdash;</div>
-            <div class="stat-label">Cache Hit %</div>
+          <div class="ngram-section">
+            <div class="ngram-section-title">Cohits Term &rarr; Domain <span class="text-purple">&bull;</span></div>
+            <div id="ngramCohitTd"></div>
           </div>
         </div>
       </div>
+    </div>
+  </div>
 
-      <!-- Conversation Feed Card (yellow-bordered, bottom-anchored) -->
-      <div class="conv-feed-card">
-        <div class="conv-feed-header">
-          <span class="conv-feed-title">Conversation Feed</span>
-          <span class="conv-feed-badge" id="convFeedCount">0</span>
+  <!-- ════════════════════════════════════════════════════
+       DEBRIEF TAB
+       ════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-debrief">
+    <div class="hero-row">
+      <div class="hero-card-wrapper">
+        <div class="hero-card">
+          <div class="hero-label">DEBRIEF</div>
+          <div class="hero-headline" id="heroHeadline-debrief"></div>
+          <div class="hero-support" id="heroSupport-debrief">-</div>
         </div>
-        <div class="conv-feed-scroll" id="convFeedScroll">
-          <div style="flex:1;"></div><!-- spacer pushes content to bottom -->
-          <div id="convFeedBody"></div>
-          <!-- NOW bar -->
-          <div class="cv-now" id="convNowBar" style="display:none">
-            <div class="nl"></div>
-            <div class="nw"><span class="dot-live"></span> NOW</div>
-            <div class="nl"></div>
+      </div>
+      <div class="hero-metrics">
+        <div class="hm-cell"><div class="hm-value cyan" id="hm-debrief-0">-</div><div class="hm-label">input tokens</div></div>
+        <div class="hm-arrow">&rarr;</div>
+        <div class="hm-cell right"><div class="hm-value green" id="hm-debrief-1">-</div><div class="hm-label">output tokens</div></div>
+        <div class="hm-cell"><div class="hm-value blue" id="hm-debrief-2">-</div><div class="hm-label">cache reused</div></div>
+        <div class="hm-arrow">&rarr;</div>
+        <div class="hm-cell right"><div class="hm-value purple" id="hm-debrief-3">-</div><div class="hm-label">tokens saved</div></div>
+      </div>
+    </div>
+
+    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr)">
+      <div class="stat-card cyan"><div class="stat-value" id="ds-input">-</div><div class="stat-label">Input Tokens</div><div class="stat-sub">prompt tokens</div></div>
+      <div class="stat-card green"><div class="stat-value" id="ds-output">-</div><div class="stat-label">Output Tokens</div><div class="stat-sub">response tokens</div></div>
+      <div class="stat-card blue"><div class="stat-value" id="ds-cread">-</div><div class="stat-label">Cache Read</div><div class="stat-sub">tokens reused</div></div>
+      <div class="stat-card purple"><div class="stat-value" id="ds-cwrite">-</div><div class="stat-label">Cache Write</div><div class="stat-sub">tokens cached</div></div>
+      <div class="stat-card yellow"><div class="stat-value" id="ds-hitrate">-</div><div class="stat-label">Cache Hit %</div><div class="stat-sub">reuse rate</div></div>
+    </div>
+
+    <div class="conv-grid">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Conversation Feed</span>
+          <span class="card-badge" id="convCount">0</span>
+        </div>
+        <div class="conv-messages" id="convMessages"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Actions</span>
+        </div>
+        <div class="conv-actions" id="convActions"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       ARSENAL TAB
+       ════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-arsenal">
+    <div class="hero-row">
+      <div class="hero-card-wrapper">
+        <div class="hero-card">
+          <div class="hero-label">ARSENAL</div>
+          <div class="hero-headline" id="heroHeadline-arsenal"></div>
+          <div class="hero-support" id="heroSupport-arsenal">-</div>
+        </div>
+      </div>
+      <div class="hero-metrics">
+        <div class="hm-cell"><div class="hm-value green" id="hm-arsenal-0">-</div><div class="hm-label">tokens saved</div></div>
+        <div class="hm-arrow">&rarr;</div>
+        <div class="hm-cell right"><div class="hm-value blue" id="hm-arsenal-1">-</div><div class="hm-label">sessions extended</div></div>
+        <div class="hm-cell"><div class="hm-value red" id="hm-arsenal-2">-</div><div class="hm-label">unguided cost</div></div>
+        <div class="hm-arrow">&rarr;</div>
+        <div class="hm-cell right"><div class="hm-value cyan" id="hm-arsenal-3">-</div><div class="hm-label">guided ratio</div></div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card green"><div class="stat-value" id="as-saved">-</div><div class="stat-label">Tokens Saved</div><div class="stat-sub">cumulative</div></div>
+      <div class="stat-card red"><div class="stat-value" id="as-cost">-</div><div class="stat-label">Unguided Cost</div><div class="stat-sub">waste tokens</div></div>
+      <div class="stat-card blue"><div class="stat-value" id="as-sessions">-</div><div class="stat-label">Sessions</div><div class="stat-sub">tracked</div></div>
+      <div class="stat-card purple"><div class="stat-value" id="as-extended">-</div><div class="stat-label">Sessions Extended</div><div class="stat-sub">delta minutes</div></div>
+      <div class="stat-card cyan"><div class="stat-value" id="as-ratio">-</div><div class="stat-label">Guided Ratio</div><div class="stat-sub">overall</div></div>
+      <div class="stat-card yellow"><div class="stat-value" id="as-velocity">-</div><div class="stat-label">Read Velocity</div><div class="stat-sub">reads per prompt</div></div>
+    </div>
+
+    <!-- Savings Chart -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Daily Savings</span>
+        <span class="card-badge" id="savingsLabel">-</span>
+      </div>
+      <div class="chart-area" id="savingsChartArea"></div>
+      <div class="chart-legend">
+        <span><span class="chart-legend-dot green"></span>Actual</span>
+        <span><span class="chart-legend-dot red"></span>Counterfactual (without aOa)</span>
+      </div>
+    </div>
+
+    <!-- Bottom split: Session table + Learning curve + System status -->
+    <div class="arsenal-bottom">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Session History</span>
+          <span class="card-badge" id="sessionCount">0</span>
+        </div>
+        <div class="domain-table-wrap">
+          <table class="session-table">
+            <thead><tr>
+              <th>ID</th><th>Date</th><th>Dur</th><th>P</th><th>R</th><th>Guided</th><th>Saved</th><th>Waste</th><th>R/P</th>
+            </tr></thead>
+            <tbody id="sessionTbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;min-height:0">
+        <div class="card" style="flex:0 0 auto">
+          <div class="card-header">
+            <span class="card-title">Learning Curve</span>
+          </div>
+          <div class="curve-canvas-wrap">
+            <canvas id="learningCurveCanvas" height="120"></canvas>
           </div>
         </div>
-        <button class="scroll-now-btn" id="scrollNowBtn">&darr; Jump to now</button>
+        <div class="card" style="flex:0 0 auto">
+          <div class="card-header">
+            <span class="card-title">System Status</span>
+          </div>
+          <div class="sys-strip">
+            <div class="sys-pair"><span class="sys-key">PID</span><span class="sys-val" id="sys-pid">-</span></div>
+            <div class="sys-pair"><span class="sys-key">Uptime</span><span class="sys-val" id="sys-uptime">-</span></div>
+            <div class="sys-pair"><span class="sys-key">DB</span><span class="sys-val" id="sys-db">-</span></div>
+            <div class="sys-pair"><span class="sys-key">Files</span><span class="sys-val" id="sys-files">-</span></div>
+            <div class="sys-pair"><span class="sys-key">Tokens</span><span class="sys-val" id="sys-tokens">-</span></div>
+          </div>
+        </div>
       </div>
-
     </div>
   </div>
 
 </div>
 
-<!-- ====== FOOTER ====== -->
-<div class="footer">
+<!-- ══════ FOOTER ══════ -->
+<footer class="footer">
   <div class="footer-left">
-    <span class="footer-dot" id="footerDot"></span>
-    <span>Online &middot; v1.0.0</span>
+    <span class="footer-online"><span class="dot"></span> <span id="footerStatus">Online</span></span>
+    <span>v1.0.0</span>
   </div>
   <div class="footer-right">
     <span class="footer-motto"><span class="aoa-brand">aOa</span> learns &rarr; you build faster. <span class="way">This is the way.</span></span>
-    <span class="footer-clock" id="clock"></span>
+    <span class="footer-clock" id="clock">00:00:00</span>
   </div>
-</div>
+</footer>
 
-<script>
-(function() {
-  'use strict';
-
-  // ====== CONFIG ======
-  var MOCK = new URLSearchParams(window.location.search).has('mock');
-  var prev = {};
-  var connected = false;
-  var retryDelay = 2000;
-
-  // ====== THEME ======
-  var savedTheme = localStorage.getItem('aoa-theme');
-  if (savedTheme) {
-    document.documentElement.dataset.theme = savedTheme;
-  }
-  updateThemeIcon();
-
-  document.getElementById('themeToggle').addEventListener('click', function() {
-    var html = document.documentElement;
-    var isDark = html.dataset.theme === 'dark';
-    html.dataset.theme = isDark ? 'light' : 'dark';
-    localStorage.setItem('aoa-theme', html.dataset.theme);
-    updateThemeIcon();
-  });
-
-  function updateThemeIcon() {
-    var isDark = document.documentElement.dataset.theme === 'dark';
-    var icon = document.getElementById('themeIcon');
-    if (isDark) {
-      // Sun icon for dark mode (click to switch to light)
-      icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle>' +
-        '<line x1="12" y1="1" x2="12" y2="3"></line>' +
-        '<line x1="12" y1="21" x2="12" y2="23"></line>' +
-        '<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>' +
-        '<line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>' +
-        '<line x1="1" y1="12" x2="3" y2="12"></line>' +
-        '<line x1="21" y1="12" x2="23" y2="12"></line>' +
-        '<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>' +
-        '<line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
-    } else {
-      // Moon icon for light mode (click to switch to dark)
-      icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
-    }
-  }
-
-  // ====== TAB SWITCHING ======
-  var tabs = document.querySelectorAll('.nav-tab');
-  var tabContents = document.querySelectorAll('.tab-content');
-
-  tabs.forEach(function(tab) {
-    tab.addEventListener('click', function() {
-      tabs.forEach(function(t) { t.classList.remove('active'); });
-      tabContents.forEach(function(tc) { tc.classList.remove('active'); });
-      tab.classList.add('active');
-      var target = document.getElementById('tab-' + tab.dataset.tab);
-      if (target) target.classList.add('active');
-    });
-  });
-
-  // ====== SET VALUE WITH GLOW ======
-  function set(id, val) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    var str = String(val);
-    if (el.textContent === str) return;
-    var hadValue = prev[id] !== undefined && prev[id] !== '\u2014';
-    el.textContent = str;
-    if (hadValue) {
-      el.classList.remove('num-glow');
-      void el.offsetWidth;
-      el.classList.add('num-glow');
-    }
-    prev[id] = str;
-  }
-
-  // ====== CONNECTION STATE ======
-  function setConnected(ok) {
-    connected = ok;
-    var badge = document.getElementById('statusBadge');
-    var label = document.getElementById('statusLabel');
-    var banner = document.getElementById('discoBanner');
-    var footerDot = document.getElementById('footerDot');
-
-    if (MOCK) {
-      badge.className = 'status-badge mock';
-      label.textContent = 'mock data';
-      banner.classList.remove('show');
-      footerDot.style.background = 'var(--yellow)';
-    } else if (ok) {
-      badge.className = 'status-badge connected';
-      label.textContent = 'connected';
-      banner.classList.remove('show');
-      footerDot.style.background = 'var(--green)';
-    } else {
-      badge.className = 'status-badge disconnected';
-      label.textContent = 'disconnected';
-      banner.classList.add('show');
-      footerDot.style.background = 'var(--red)';
-    }
-  }
-
-  // ====== MOCK DATA ======
-  var mockDomainNames = [
-    'concurrency', 'error_handling', 'testing', 'persistence', 'http_server',
-    'cli', 'search', 'file_io', 'json_parsing', 'logging',
-    'config', 'socket', 'parsing', 'crypto', 'regex',
-    'authentication', 'monitoring', 'caching', 'validation', 'serialization',
-    'networking', 'templates', 'middleware', 'database'
-  ];
-
-  var mockBigramNames = [
-    'error:handling', 'file:read', 'test:assert', 'mutex:lock',
-    'json:parse', 'http:server', 'search:index', 'domain:learning',
-    'config:yaml', 'socket:listen', 'autotune:decay', 'batch:process',
-    'token:count', 'cache:write', 'signal:handler', 'context:cancel',
-    'goroutine:channel', 'struct:embed'
-  ];
-
-  var mockState = {
-    promptCount: 142,
-    domainHits: {},
-    bigrams: {},
-    cohitKw: {
-      'login:auth': 12, 'session:session_mgmt': 7, 'queue:batch_processing': 15,
-      'upload:storage_ops': 9, 'wrangler:cloudflare': 5, 'retry:resilience': 11,
-      'scrape:content_capture': 8
-    },
-    cohitTd: {
-      'auth:@authentication': 20, 'session_mgmt:@websocket': 14, 'batch_processing:@queue': 18,
-      'storage_ops:@r2': 12, 'cloudflare:@cloudflare': 6, 'resilience:@resilience': 16
-    },
-    keywords: 312,
-    terms: 145,
-    fileHits: 156,
-    idxFiles: 525,
-    idxTokens: 48291
-  };
-
-  // Initialize mock domain hits
-  mockDomainNames.forEach(function(n, i) {
-    if (i < 6) mockState.domainHits[n] = 20 - i * 2;
-    else if (i < 12) mockState.domainHits[n] = 8 - (i - 6);
-    else if (i < 18) mockState.domainHits[n] = 2;
-    else mockState.domainHits[n] = 0;
-  });
-
-  // Initialize mock bigrams
-  mockBigramNames.forEach(function(n, i) {
-    mockState.bigrams[n] = 50 - i * 2;
-  });
-
-  function mockTick() {
-    if (Math.random() < 0.4) mockState.promptCount++;
-    if (Math.random() < 0.3) {
-      var di = Math.floor(Math.random() * 12);
-      mockState.domainHits[mockDomainNames[di]] = (mockState.domainHits[mockDomainNames[di]] || 0) + 1;
-    }
-    if (Math.random() < 0.3) {
-      var bkeys = Object.keys(mockState.bigrams);
-      mockState.bigrams[bkeys[Math.floor(Math.random() * bkeys.length)]]++;
-    }
-    if (Math.random() < 0.2) {
-      var ck = Object.keys(mockState.cohitKw);
-      mockState.cohitKw[ck[Math.floor(Math.random() * ck.length)]]++;
-    }
-    if (Math.random() < 0.2) {
-      var tk = Object.keys(mockState.cohitTd);
-      mockState.cohitTd[tk[Math.floor(Math.random() * tk.length)]]++;
-    }
-    if (Math.random() < 0.15) mockState.keywords++;
-    if (Math.random() < 0.1) mockState.terms++;
-    if (Math.random() < 0.2) mockState.fileHits++;
-  }
-
-  function mockData() {
-    mockTick();
-    var s = mockState;
-    var domains = mockDomainNames.map(function(n) {
-      var mockTerms = {
-        'concurrency': ['mutex', 'goroutine', 'channel', 'sync'],
-        'error_handling': ['error', 'panic', 'recover', 'wrap'],
-        'testing': ['assert', 'require', 'mock', 'benchmark'],
-        'persistence': ['bbolt', 'store', 'serialize', 'bucket'],
-        'http_server': ['handler', 'router', 'middleware', 'request'],
-        'cli': ['cobra', 'flag', 'command', 'argument'],
-        'search': ['index', 'token', 'query', 'match'],
-        'file_io': ['read', 'write', 'path', 'walk'],
-        'authentication': ['jwt', 'oauth', 'session', 'token']
-      };
-      return { name: n, hits: s.domainHits[n] || 0, tier: (s.domainHits[n] || 0) >= 2 ? 'core' : 'context', state: 'active', source: 'search', terms: mockTerms[n] || [] };
-    }).sort(function(a, b) { return b.hits - a.hits || a.name.localeCompare(b.name); });
-
-    var coreCount = domains.filter(function(d) { return d.tier === 'core'; }).length;
-
-    return {
-      health: { status: 'ok', file_count: s.idxFiles, token_count: s.idxTokens, uptime: '1h23m' },
-      stats: {
-        prompt_count: s.promptCount,
-        domain_count: domains.length,
-        core_count: coreCount,
-        context_count: domains.length - coreCount,
-        keyword_count: s.keywords,
-        term_count: s.terms,
-        bigram_count: Object.keys(s.bigrams).length,
-        file_hit_count: s.fileHits,
-        index_files: s.idxFiles,
-        index_tokens: s.idxTokens
-      },
-      domains: { domains: domains, count: domains.length, core_count: coreCount },
-      bigrams: {
-        bigrams: Object.assign({}, s.bigrams),
-        count: Object.keys(s.bigrams).length,
-        cohit_kw_term: Object.assign({}, s.cohitKw),
-        cohit_term_domain: Object.assign({}, s.cohitTd),
-        cohit_kw_count: Object.keys(s.cohitKw).length,
-        cohit_td_count: Object.keys(s.cohitTd).length
-      },
-      convMetrics: {
-        input_tokens: 12500 + (s.promptCount * 100),
-        output_tokens: 8300 + (s.promptCount * 50),
-        cache_read_tokens: 45000 + (s.promptCount * 200),
-        cache_write_tokens: 15000 + (s.promptCount * 80),
-        turn_count: s.promptCount,
-        cache_hit_rate: 78.5
-      },
-      convFeed: {
-        turns: [
-          { turn_id: 't4', role: 'assistant', text: 'All 309 tests pass. No regressions from the retry changes.',
-            thinking_text: 'Running the full test suite to verify nothing broke.',
-            timestamp: Date.now() / 1000 - 120, model: 'claude-opus-4', duration_ms: 8700,
-            tool_names: ['Bash'], input_tokens: 1200, output_tokens: 95,
-            actions: [
-              { tool: 'Bash', target: 'go test ./... -count=1', range: '', impact: '309 pass' }
-            ]
-          },
-          { turn_id: 't3', role: 'user', text: 'Run the tests to make sure nothing broke.',
-            timestamp: Date.now() / 1000 - 130, model: '', duration_ms: 0,
-            tool_names: [], actions: [] },
-          { turn_id: 't2', role: 'assistant', text: 'Done. Retry config updated — max 4 attempts, backoff 2x.',
-            thinking_text: 'Change maxRetries 3 to 4, backoff multiplier 1.5 to 2.0. Read the code and edit.',
-            timestamp: Date.now() / 1000 - 200, model: 'claude-opus-4', duration_ms: 2100,
-            tool_names: ['Read', 'Edit', 'Bash'], input_tokens: 4500, output_tokens: 185,
-            actions: [
-              { tool: 'Read', target: 'adapters/socket/server.go', range: ':690-710', impact: '\u219385%' },
-              { tool: 'Edit', target: 'adapters/socket/server.go', range: ':695-698', impact: '' },
-              { tool: 'Bash', target: 'go vet ./...', range: '', impact: 'clean' }
-            ]
-          },
-          { turn_id: 't1', role: 'user', text: 'Add a 4th retry attempt and increase the backoff multiplier to 2x.',
-            timestamp: Date.now() / 1000 - 220, model: '', duration_ms: 0,
-            tool_names: [], actions: [] }
-        ],
-        count: 4
-      },
-      topKw: { items: [{ name: 'session', count: 42 }, { name: 'metrics', count: 38 }, { name: 'tool', count: 35 }], count: 3, kind: 'keywords' },
-      topTerms: { items: [{ name: 'observability', count: 28 }, { name: 'analytics', count: 24 }, { name: 'instrumentation', count: 18 }], count: 3, kind: 'terms' },
-      topFiles: { items: [{ name: 'app.go', count: 12 }, { name: 'server.go', count: 9 }], count: 2, kind: 'files' },
-      activityFeed: { entries: mockActivityEntries, count: mockActivityEntries.length }
-    };
-  }
-
-  // ====== DOMAIN RENDERING ======
-  var prevDomainData = null;
-  var prevTermHitsMap = {}; // "domain:term" -> hit count
-
-  // Flash specific term pills that had a hit increase
-  function flashTermPills(container, domainName, changedTerms) {
-    var row = container.querySelector('[data-dname="' + CSS.escape(domainName) + '"]');
-    if (!row) return;
-    // Hits cell — blue glow shadow
-    var hitsCell = row.querySelector('.d-hits');
-    if (hitsCell) {
-      hitsCell.classList.remove('num-glow');
-      void hitsCell.offsetWidth;
-      hitsCell.classList.add('num-glow');
-    }
-    // Row background glow
-    row.style.animation = 'none';
-    void row.offsetWidth;
-    row.style.animation = 'row-glow 1s ease-out';
-    // Only flash the specific terms that changed
-    changedTerms.forEach(function(termName) {
-      var pill = row.querySelector('[data-term="' + CSS.escape(termName) + '"]');
-      if (pill) {
-        // Add .hot (green, no transition), then remove it after a frame
-        // so the CSS transition kicks in and fades back to gray
-        pill.classList.add('hot');
-        setTimeout(function() { pill.classList.remove('hot'); }, 80);
-      }
-    });
-  }
-
-  // Detect which terms had hit count changes for a domain
-  function detectTermChanges(domainName, termHits) {
-    var changed = [];
-    var th = termHits || {};
-    for (var term in th) {
-      var key = domainName + ':' + term;
-      var prev = prevTermHitsMap[key] || 0;
-      if (th[term] > prev) {
-        changed.push(term);
-      }
-    }
-    return changed;
-  }
-
-  // Update the prevTermHitsMap after rendering
-  function updateTermHitsCache(domains) {
-    prevTermHitsMap = {};
-    domains.forEach(function(d) {
-      var th = d.term_hits || {};
-      for (var term in th) {
-        prevTermHitsMap[d.name + ':' + term] = th[term];
-      }
-    });
-  }
-
-  function renderDomains(domainsResult) {
-    var list = (domainsResult.domains || []).slice(0, 24);
-    var container = document.getElementById('domainTableContainer');
-    var placeholder = document.getElementById('domainPlaceholder');
-
-    if (list.length === 0) {
-      if (placeholder) placeholder.style.display = 'block';
-      return;
-    }
-    if (placeholder) placeholder.style.display = 'none';
-
-    // Check if structure changed
-    var prevList = prevDomainData ? (prevDomainData.domains || []) : [];
-    var structureChanged = !prevDomainData || list.length !== prevList.length;
-    if (!structureChanged) {
-      for (var i = 0; i < list.length; i++) {
-        if (list[i].name !== prevList[i].name) {
-          structureChanged = true;
-          break;
-        }
-      }
-    }
-
-    var prevHitsMap = {};
-    prevList.forEach(function(d) { prevHitsMap[d.name] = d.hits; });
-
-    if (structureChanged) {
-      // Full rebuild
-      var html = '<table class="domain-table"><thead><tr>' +
-        '<th>#</th><th>Domain</th><th style="text-align:right">Hits</th><th>Terms</th>' +
-        '</tr></thead><tbody id="domainTbody">';
-      list.forEach(function(d, idx) {
-        var termsHtml = '';
-        if (d.terms && d.terms.length > 0) {
-          d.terms.slice(0, 10).forEach(function(t) {
-            termsHtml += '<span class="term-pill" data-term="' + esc(t) + '">' + esc(t) + '</span>';
-          });
-          if (d.terms.length > 10) {
-            termsHtml += '<span class="term-pill" style="background:var(--border-subtle); color:var(--dim)">+' + (d.terms.length - 10) + '</span>';
-          }
-        }
-        html += '<tr data-dname="' + esc(d.name) + '">' +
-          '<td class="d-rank">' + (idx + 1) + '</td>' +
-          '<td class="d-name">@' + esc(d.name) + '</td>' +
-          '<td class="d-hits" data-dhits="' + esc(d.name) + '">' + d.hits.toFixed(1) + '</td>' +
-          '<td class="d-terms">' + termsHtml + '</td>' +
-          '</tr>';
-      });
-      html += '</tbody></table>';
-      container.innerHTML = html;
-
-      // Flash only terms that had actual hit increases
-      list.forEach(function(d) {
-        var changed = detectTermChanges(d.name, d.term_hits);
-        if (changed.length > 0) {
-          flashTermPills(container, d.name, changed);
-        } else if (prevHitsMap[d.name] !== undefined && prevHitsMap[d.name] !== d.hits) {
-          // Domain hits changed but no specific term detected — pulse hits cell only
-          var row = container.querySelector('[data-dname="' + CSS.escape(d.name) + '"]');
-          if (row) {
-            var hitsCell = row.querySelector('.d-hits');
-            if (hitsCell) { hitsCell.classList.remove('pulse'); void hitsCell.offsetWidth; hitsCell.classList.add('pulse'); }
-          }
-        }
-      });
-    } else {
-      // Surgical update — only update changed hits, flash specific terms
-      list.forEach(function(d, idx) {
-        var row = container.querySelector('[data-dname="' + CSS.escape(d.name) + '"]');
-        if (!row) return;
-        var hitsCell = row.querySelector('[data-dhits="' + CSS.escape(d.name) + '"]');
-        if (hitsCell) {
-          var newVal = d.hits.toFixed(1);
-          if (hitsCell.textContent !== newVal) {
-            hitsCell.textContent = newVal;
-          }
-        }
-        var changed = detectTermChanges(d.name, d.term_hits);
-        if (changed.length > 0) {
-          flashTermPills(container, d.name, changed);
-        }
-      });
-    }
-
-    updateTermHitsCache(list);
-    prevDomainData = domainsResult;
-  }
-
-  // ====== BIGRAM RENDERING ======
-  var prevBigramData = null;
-
-  function renderBigrams(bigramsResult) {
-    var bg = bigramsResult.bigrams || {};
-    var ckw = bigramsResult.cohit_kw_term || {};
-    var ctd = bigramsResult.cohit_term_domain || {};
-
-    var container = document.getElementById('ngramContainer');
-    var placeholder = document.getElementById('ngramPlaceholder');
-
-    var bgKeys = Object.keys(bg);
-    var ckwKeys = Object.keys(ckw);
-    var ctdKeys = Object.keys(ctd);
-
-    if (bgKeys.length === 0 && ckwKeys.length === 0 && ctdKeys.length === 0) {
-      if (placeholder) placeholder.style.display = 'block';
-      return;
-    }
-    if (placeholder) placeholder.style.display = 'none';
-
-    var bgSorted = bgKeys.map(function(k) { return [k, bg[k]]; })
-      .sort(function(a, b) { return b[1] - a[1]; }).slice(0, 10);
-    var ckSorted = ckwKeys.map(function(k) { return [k, ckw[k]]; })
-      .sort(function(a, b) { return b[1] - a[1]; }).slice(0, 8);
-    var ctSorted = ctdKeys.map(function(k) { return [k, ctd[k]]; })
-      .sort(function(a, b) { return b[1] - a[1]; }).slice(0, 8);
-
-    // Build signature to detect structural changes
-    var sig = bgSorted.map(function(e) { return e[0]; }).join(',') + '|' +
-      ckSorted.map(function(e) { return e[0]; }).join(',') + '|' +
-      ctSorted.map(function(e) { return e[0]; }).join(',');
-
-    var prevSig = prevBigramData ? prevBigramData._sig : null;
-
-    // Build previous value map for pulse detection
-    var prevMap = {};
-    if (prevBigramData) {
-      var pb = prevBigramData.bigrams || {};
-      var pck = prevBigramData.cohit_kw_term || {};
-      var pct = prevBigramData.cohit_term_domain || {};
-      Object.keys(pb).forEach(function(k) { prevMap['bg:' + k] = pb[k]; });
-      Object.keys(pck).forEach(function(k) { prevMap['ck:' + k] = pck[k]; });
-      Object.keys(pct).forEach(function(k) { prevMap['ct:' + k] = pct[k]; });
-    }
-
-    if (sig !== prevSig) {
-      // Full rebuild
-      var html = '';
-      html += buildNgramSection('BIGRAMS', bgSorted, 'bar-cyan', 'bg', prevMap);
-      if (ckSorted.length > 0) {
-        html += buildNgramSection('COHITS: KW \u2192 TERM', ckSorted, 'bar-green', 'ck', prevMap);
-      }
-      if (ctSorted.length > 0) {
-        html += buildNgramSection('COHITS: TERM \u2192 DOMAIN', ctSorted, 'bar-purple', 'ct', prevMap);
-      }
-      container.innerHTML = html;
-
-      // Pulse changed values — glow on count + flash on row
-      [bgSorted, ckSorted, ctSorted].forEach(function(sorted, si) {
-        var prefix = ['bg', 'ck', 'ct'][si];
-        sorted.forEach(function(pair) {
-          var key = prefix + ':' + pair[0];
-          if (prevMap[key] !== undefined && prevMap[key] !== pair[1]) {
-            var row = container.querySelector('[data-ngkey="' + CSS.escape(key) + '"]');
-            if (row) {
-              row.classList.remove('ngram-flash'); void row.offsetWidth; row.classList.add('ngram-flash');
-              var el = row.querySelector('.ngram-count');
-              if (el) { el.classList.remove('num-glow'); void el.offsetWidth; el.classList.add('num-glow'); }
-            }
-          }
-        });
-      });
-    } else {
-      // Surgical update
-      [bgSorted, ckSorted, ctSorted].forEach(function(sorted, si) {
-        var prefix = ['bg', 'ck', 'ct'][si];
-        var maxVal = sorted.length > 0 ? sorted[0][1] : 1;
-        sorted.forEach(function(pair) {
-          var key = prefix + ':' + pair[0];
-          var row = container.querySelector('[data-ngkey="' + CSS.escape(key) + '"]');
-          if (!row) return;
-          var cntEl = row.querySelector('.ngram-count');
-          if (cntEl && cntEl.textContent !== String(pair[1])) {
-            cntEl.textContent = pair[1];
-            cntEl.classList.remove('num-glow');
-            void cntEl.offsetWidth;
-            cntEl.classList.add('num-glow');
-            row.classList.remove('ngram-flash');
-            void row.offsetWidth;
-            row.classList.add('ngram-flash');
-          }
-          var bar = row.querySelector('.ngram-bar-fill');
-          if (bar) {
-            bar.style.width = (pair[1] / maxVal * 100).toFixed(1) + '%';
-          }
-        });
-      });
-    }
-
-    bigramsResult._sig = sig;
-    prevBigramData = bigramsResult;
-  }
-
-  function buildNgramSection(title, sorted, barClass, prefix, prevMap) {
-    var maxVal = sorted.length > 0 ? sorted[0][1] : 1;
-    var html = '<div class="ngram-section">';
-    html += '<div class="ngram-section-title">' + title + '</div>';
-    sorted.forEach(function(pair) {
-      var pct = (pair[1] / maxVal * 100).toFixed(1);
-      var key = prefix + ':' + pair[0];
-      html += '<div class="ngram-row" data-ngkey="' + esc(key) + '">' +
-        '<span class="ngram-name">' + esc(pair[0]) + '</span>' +
-        '<span class="ngram-bar-track"><span class="ngram-bar-fill ' + barClass + '" style="width:' + pct + '%"></span></span>' +
-        '<span class="ngram-count">' + pair[1] + '</span>' +
-        '</div>';
-    });
-    html += '</div>';
-    return html;
-  }
-
-  // ====== ACTIVITY FEED ======
-  var activityInitialized = false;
-  var mockActivityEntries = [];
-
-  var mockTargetsRead = [
-    'internal/domain/learner/learner.go',
-    'internal/adapters/bbolt/store.go',
-    'internal/domain/index/engine.go',
-    'cmd/aoa/main.go',
-    'internal/app/app.go',
-    'internal/ports/interfaces.go',
-    'internal/adapters/socket/server.go',
-    'internal/domain/enricher/atlas.go'
-  ];
-
-  var mockTargetsSearch = [
-    'func.*Observe', 'SearchEngine', 'autotune', 'DomainMeta',
-    'Bigrams', 'TokenRef', 'mutex.*lock', 'bbolt.*bucket'
-  ];
-
-  var mockTargetsLearn = [
-    '@concurrency', '@error_handling', '@testing', '@persistence',
-    '@http_server', '@search', '@file_io', '@logging'
-  ];
-
-  function initActivityFeed() {
-    var body = document.getElementById('activityBody');
-    var badge = document.getElementById('activityBadge');
-
-    badge.className = 'badge badge-live';
-    badge.textContent = 'live';
-    body.innerHTML = '<table class="activity-table"><thead><tr>' +
-      '<th>Time</th><th>Action</th><th>Source</th><th>Attrib</th><th><span class="aoa-brand">aOa</span> Impact</th><th>Target</th>' +
-      '</tr></thead><tbody id="activityTbody"></tbody></table>';
-    activityInitialized = true;
-  }
-
-  function addMockActivity() {
-    if (!MOCK) return;
-
-    var roll = Math.random();
-    var entry = {};
-    var nowSec = Math.floor(Date.now() / 1000);
-
-    if (roll < 0.35) {
-      entry = {
-        action: 'Search', source: 'aOa',
-        attrib: ['indexed', 'multi-or', 'regex', 'multi-and'][Math.floor(Math.random() * 4)],
-        impact: (Math.floor(Math.random() * 20) + 1) + ' hits | ' + (Math.random() * 5).toFixed(2) + 'ms',
-        tags: '', target: 'aOa grep ' + mockTargetsSearch[Math.floor(Math.random() * mockTargetsSearch.length)],
-        timestamp: nowSec - Math.floor(Math.random() * 60)
-      };
-    } else if (roll < 0.6) {
-      var file = mockTargetsRead[Math.floor(Math.random() * mockTargetsRead.length)];
-      entry = {
-        action: 'Read', source: 'Claude',
-        attrib: Math.random() < 0.4 ? 'aOa guided' : '-',
-        impact: '-', tags: '', target: file,
-        timestamp: nowSec - Math.floor(Math.random() * 120)
-      };
-    } else if (roll < 0.75) {
-      entry = {
-        action: 'Edit', source: 'Claude', attrib: '-',
-        impact: '-', tags: '', target: mockTargetsRead[Math.floor(Math.random() * mockTargetsRead.length)],
-        timestamp: nowSec - Math.floor(Math.random() * 180)
-      };
-    } else if (roll < 0.9) {
-      entry = {
-        action: 'Bash', source: 'Claude', attrib: '-',
-        impact: '-', tags: '', target: ['go test ./...', 'go build ./cmd/aoa/', 'git status'][Math.floor(Math.random() * 3)],
-        timestamp: nowSec - Math.floor(Math.random() * 120)
-      };
-    } else {
-      entry = {
-        action: 'Grep', source: 'Claude', attrib: '-',
-        impact: '-', tags: '', target: mockTargetsSearch[Math.floor(Math.random() * mockTargetsSearch.length)],
-        timestamp: nowSec - Math.floor(Math.random() * 60)
-      };
-    }
-
-    mockActivityEntries.unshift(entry);
-    if (mockActivityEntries.length > 20) mockActivityEntries = mockActivityEntries.slice(0, 20);
-  }
-
-  // ====== APPLY DATA ======
-  function applyData(health, stats, domains, bigrams, convMetrics, convFeed, topKw, topTerms, topFiles, activityFeed) {
-    // Overview hero
-    set('h-prompts', stats.prompt_count.toLocaleString());
-    set('h-domains', String(stats.domain_count));
-    set('h-files', String(health.file_count));
-
-    // Metrics panel
-    set('m-prompts', stats.prompt_count.toLocaleString());
-    set('m-domains', String(stats.domain_count));
-
-    // Autotune
-    var progress = stats.prompt_count % 50;
-    var remaining = 50 - progress;
-    set('at-num', String(progress));
-    var fillEl = document.getElementById('at-fill');
-    if (fillEl) fillEl.style.width = (progress / 50 * 100).toFixed(1) + '%';
-    set('at-sub', 'next cycle in ' + remaining);
-
-    // Uptime
-    set('s-uptime', health.uptime || '\u2014');
-
-    // Overview stats
-    set('s-keywords', stats.keyword_count.toLocaleString());
-    set('s-terms', String(stats.term_count));
-    set('s-bigrams', String(stats.bigram_count));
-    set('s-filehits', String(stats.file_hit_count));
-    set('s-files', String(health.file_count));
-    set('s-tokens', stats.index_tokens.toLocaleString());
-
-    // Learning stats
-    set('l-domains', String(stats.domain_count));
-    set('l-core', String(stats.core_count));
-    set('l-terms', String(stats.term_count));
-    set('l-keywords', stats.keyword_count.toLocaleString());
-    set('l-bigrams', String(stats.bigram_count));
-
-    // Total hits computed from domains
-    var totalHits = 0;
-    (domains.domains || []).forEach(function(d) { totalHits += d.hits; });
-    set('l-hits', totalHits.toFixed(0));
-
-    // Dynamic rendering
-    renderDomains(domains);
-    renderBigrams(bigrams);
-    applyConvMetrics(convMetrics);
-    applyConvFeed(convFeed);
-    // Activity feed (from dedicated endpoint)
-    applyActivityFeed(activityFeed);
-  }
-
-  // ====== CONVERSATION METRICS ======
-  function applyConvMetrics(m) {
-    if (!m) return;
-
-    // Update stat cards
-    set('conv-input', m.input_tokens.toLocaleString());
-    set('conv-output', m.output_tokens.toLocaleString());
-    set('conv-cache-read', m.cache_read_tokens.toLocaleString());
-    set('conv-cache-write', m.cache_write_tokens.toLocaleString());
-    set('conv-cache-pct', m.cache_hit_rate.toFixed(1) + '%');
-
-    // Update hero narrative
-    var totalTokens = m.input_tokens + m.output_tokens + m.cache_read_tokens + m.cache_write_tokens;
-    set('convNarrativeTurns', m.turn_count + (m.turn_count === 1 ? ' turn' : ' turns'));
-    set('convNarrativeTokens', totalTokens.toLocaleString() + ' tokens');
-    set('convNarrativeCache', m.cache_hit_rate.toFixed(1) + '%');
-  }
-
-  // ====== CONVERSATION FEED (two-column) ======
-  var prevFeedKey = '';
-  var feedAutoScroll = true;
-
-  function initFeedScroll() {
-    var scroll = document.getElementById('convFeedScroll');
-    var btn = document.getElementById('scrollNowBtn');
-    if (!scroll || !btn) return;
-
-    scroll.addEventListener('scroll', function() {
-      var gap = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight;
-      if (gap < 40) {
-        btn.classList.remove('visible');
-        feedAutoScroll = true;
-      } else {
-        btn.classList.add('visible');
-        feedAutoScroll = false;
-      }
-    });
-
-    btn.addEventListener('click', function() {
-      scroll.scrollTop = scroll.scrollHeight;
-      btn.classList.remove('visible');
-      feedAutoScroll = true;
-    });
-  }
-  initFeedScroll();
-
-  function applyConvFeed(feed) {
-    if (!feed || !feed.turns) return;
-
-    var body = document.getElementById('convFeedBody');
-    var badge = document.getElementById('convFeedCount');
-    var nowBar = document.getElementById('convNowBar');
-    var scroll = document.getElementById('convFeedScroll');
-    if (!body) return;
-
-    if (feed.count === 0) {
-      body.innerHTML = '<div class="awaiting-data" style="padding:40px 20px;text-align:center;color:var(--mute);">Waiting for session data...</div>';
-      if (badge) badge.textContent = '0';
-      if (nowBar) nowBar.style.display = 'none';
-      return;
-    }
-
-    if (badge) badge.textContent = feed.count.toLocaleString();
-    if (nowBar) nowBar.style.display = 'flex';
-
-    // Detect change
-    var key = feed.turns.map(function(t) { return t.turn_id + t.role; }).join(',');
-    if (key === prevFeedKey) return;
-    prevFeedKey = key;
-
-    // Turns come newest-first from API; reverse to get chronological order
-    var turns = feed.turns.slice().reverse();
-
-    // Group turns by conversation exchange (user turns start a new group)
-    var html = '';
-    var turnNum = 0;
-    for (var i = 0; i < turns.length; i++) {
-      var turn = turns[i];
-
-      if (turn.role === 'user') {
-        turnNum++;
-        var time = '';
-        if (turn.timestamp > 0) {
-          time = new Date(turn.timestamp * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-        }
-        // Turn separator
-        html += '<div class="cv-sep"><span class="n">' + turnNum + '</span><div class="l"></div><span class="t">' + time + '</span></div>';
-        // User message row (no actions on right)
-        html += '<div class="cv-row">';
-        html += '<div class="cv-left">';
-        html += '<div class="cv-user"><span class="rl">You</span> ' + esc(turn.text || '') + '</div>';
-        html += '</div>';
-        html += '<div class="cv-right empty"></div>';
-        html += '</div>';
-      } else {
-        // Assistant turn — show thinking + response on left, actions on right
-        html += '<div class="cv-row">';
-        html += '<div class="cv-left">';
-
-        // Thinking line (if present)
-        if (turn.thinking_text) {
-          var preview = turn.thinking_text.length > 120 ? turn.thinking_text.substring(0, 120) + '...' : turn.thinking_text;
-          html += '<div class="cv-think" onclick="this.classList.toggle(\'open\')">';
-          html += '<span class="tl">Thinking</span>';
-          html += '<span class="tp">' + esc(preview) + '</span>';
-          html += '<div class="tf">' + esc(turn.thinking_text) + '</div>';
-          html += '</div>';
-        }
-
-        // Assistant response
-        html += '<div class="cv-assistant">';
-        // Timing + tokens info on right
-        var meta = '';
-        if (turn.duration_ms > 0) meta += (turn.duration_ms / 1000).toFixed(1) + 's';
-        if (turn.output_tokens > 0) {
-          if (meta) meta += ' \u00B7 ';
-          meta += turn.output_tokens + ' tok';
-        }
-        if (meta) html += '<span class="mt">' + meta + '</span>';
-        html += '<span class="rl">Assistant</span>';
-        if (turn.model) {
-          var shortModel = turn.model.replace(/^claude-/, '').replace(/-\d{8}$/, '');
-          html += '<span class="ml">' + esc(shortModel) + '</span>';
-        }
-        html += esc(turn.text || '');
-        html += '</div>';
-        html += '</div>';
-
-        // Actions panel (right column)
-        var actions = turn.actions || [];
-        if (actions.length > 0) {
-          html += '<div class="cv-right">';
-          html += '<div class="cv-actions">';
-          html += '<div class="cv-ah">Tools</div>';
-          var guidedCount = 0;
-          var editCount = 0;
-          actions.forEach(function(act) {
-            var chipCls = act.tool.toLowerCase();
-            html += '<div class="cv-tr">';
-            html += '<span class="cv-chip ' + chipCls + '">' + esc(act.tool) + '</span>';
-            // Target with formatting
-            html += '<span class="cv-tgt">';
-            if (act.tool === 'Read' || act.tool === 'Write' || act.tool === 'Edit' || act.tool === 'Glob') {
-              html += '<span class="f">' + esc(act.target) + '</span>';
-              if (act.range) html += '<span class="r">' + esc(act.range) + '</span>';
-            } else if (act.tool === 'Bash') {
-              html += '<span class="c">' + esc(act.target) + '</span>';
-            } else if (act.tool === 'Grep') {
-              html += '<span class="p">' + esc(act.target) + '</span>';
-            } else {
-              html += esc(act.target);
-            }
-            html += '</span>';
-            // Impact badge
-            if (act.impact) {
-              var impCls = '';
-              if (act.impact.indexOf('\u2193') === 0) impCls = 'guided';
-              else if (act.impact.indexOf('match') >= 0 || act.impact.indexOf('hits') >= 0) impCls = 'hits';
-              else if (act.impact.indexOf('pass') >= 0 || act.impact === 'clean') impCls = 'pass';
-              else if (act.impact.indexOf('fail') >= 0) impCls = 'fail';
-              html += '<span class="cv-imp ' + impCls + '">' + esc(act.impact) + '</span>';
-              if (act.impact.indexOf('\u2193') === 0) guidedCount++;
-            }
-            html += '</div>';
-            if (act.tool === 'Edit') editCount++;
-          });
-          // Footer summary
-          html += '<div class="cv-ft">';
-          html += '<span><span class="v">' + actions.length + '</span> tool' + (actions.length !== 1 ? 's' : '') + '</span>';
-          if (editCount > 0) html += '<span><span class="v">' + editCount + '</span> edit' + (editCount !== 1 ? 's' : '') + '</span>';
-          if (guidedCount > 0) html += '<span><span class="v">' + guidedCount + '</span> guided</span>';
-          html += '</div>';
-          html += '</div>';
-          html += '</div>';
-        } else {
-          html += '<div class="cv-right empty"></div>';
-        }
-
-        html += '</div>';
-      }
-    }
-
-    body.innerHTML = html;
-
-    // Auto-scroll to bottom if user hasn't scrolled up
-    if (feedAutoScroll && scroll) {
-      scroll.scrollTop = scroll.scrollHeight;
-    }
-  }
-
-  // ====== TOP LIST RENDERING ======
-  function renderTopList(containerId, data) {
-    var container = document.getElementById(containerId);
-    if (!container) return;
-
-    if (!data || !data.items || data.items.length === 0) {
-      container.innerHTML = '<div class="awaiting-top">No data yet...</div>';
-      return;
-    }
-
-    var maxCount = Math.max.apply(null, data.items.map(function(it) { return it.count; }));
-
-    var html = '<div class="top-list">';
-    data.items.forEach(function(item, idx) {
-      var pct = (item.count / maxCount * 100).toFixed(0);
-      html += '<div class="top-list-item">' +
-        '<div class="top-list-rank">' + (idx + 1) + '</div>' +
-        '<div class="top-list-name">' + esc(item.name) + '</div>' +
-        '<div class="top-list-count">' + (item.count % 1 === 0 ? item.count : item.count.toFixed(1)) + '</div>' +
-        '</div>';
-    });
-    html += '</div>';
-
-    container.innerHTML = html;
-  }
-
-  // ====== ACTIVITY FEED (OVERVIEW) ======
-  var prevActivityKey = '';
-
-  function applyActivityFeed(activityFeed) {
-    var tbody = document.getElementById('activityTbody');
-    if (!tbody) return;
-
-    var entries = (activityFeed && activityFeed.entries) ? activityFeed.entries : [];
-    var now = Date.now();
-
-    if (entries.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--mute); padding:40px;">Awaiting session activity...</td></tr>';
-      return;
-    }
-
-    // Avoid thrashing if nothing changed
-    var key = JSON.stringify(entries.map(function(e) { return e.action + e.target + e.timestamp; }));
-    if (key === prevActivityKey) return;
-    prevActivityKey = key;
-
-    var html = '';
-    entries.forEach(function(entry) {
-      var elapsed = now - (entry.timestamp * 1000);
-      var timeStr;
-      if (elapsed < 5000) timeStr = 'now';
-      else if (elapsed < 60000) timeStr = Math.floor(elapsed / 1000) + 's ago';
-      else if (elapsed < 3600000) timeStr = Math.floor(elapsed / 60000) + 'm ago';
-      else timeStr = Math.floor(elapsed / 3600000) + 'h ago';
-
-      // Action pill
-      var pillClass = 'pill-' + entry.action.toLowerCase();
-      var actionHtml = '<span class="action-pill ' + pillClass + '">' + esc(entry.action) + '</span>';
-
-      // Source styling
-      var sourceHtml;
-      if (entry.source === 'aOa') {
-        sourceHtml = '<span class="source-aoa">aOa</span>';
-      } else {
-        sourceHtml = '<span class="source-text">' + esc(entry.source) + '</span>';
-      }
-
-      // Attrib styling — highlight search modes, two-tone for "aOa guided"
-      var attribHtml;
-      if (entry.attrib === 'aOa guided') {
-        attribHtml = '<span class="aoa-brand">aOa</span> <span class="attrib-guided">guided</span>';
-      } else if (entry.attrib === 'indexed') {
-        attribHtml = '<span class="attrib-indexed">' + esc(entry.attrib) + '</span>';
-      } else if (entry.attrib === 'regex') {
-        attribHtml = '<span class="attrib-regex">' + esc(entry.attrib) + '</span>';
-      } else if (entry.attrib === 'multi-or' || entry.attrib === 'multi-and') {
-        attribHtml = '<span class="attrib-multi">' + esc(entry.attrib) + '</span>';
-      } else {
-        attribHtml = '<span class="attrib-text">' + esc(entry.attrib) + '</span>';
-      }
-
-      // Impact styling — parse "N hits, M files | Xms" or savings "↓N% (Xk → Yk)"
-      var impactHtml;
-      if (entry.impact && entry.impact !== '-') {
-        var hitMatch = entry.impact.match(/^(\d+ hits),\s*(\d+ files?)\s*\|\s*(.+)$/);
-        if (hitMatch) {
-          var hitPart = hitMatch[1];
-          var filePart = hitMatch[2];
-          var timePart = hitMatch[3];
-          var hitClass = hitPart === '0 hits' ? 'impact-zero' : 'impact-hits';
-          impactHtml = '<span class="' + hitClass + '">' + esc(hitPart) + '</span>' +
-            ', <span class="impact-files">' + esc(filePart) + '</span>' +
-            ' <span class="impact-sep">\u2502</span> ' +
-            '<span class="impact-timing">' + esc(timePart) + '</span>';
-        } else if (entry.impact.indexOf('\u2193') === 0 || entry.impact.indexOf('↓') === 0) {
-          // Savings format: ↓N% (Xk → Yk)
-          impactHtml = '<span class="impact-savings">' + esc(entry.impact) + '</span>';
-        } else {
-          impactHtml = '<span class="impact-hits">' + esc(entry.impact) + '</span>';
-        }
-      } else {
-        impactHtml = '<span class="attrib-text">-</span>';
-      }
-
-      // Target with aOa highlight — A-11: three-part color
-      var targetHtml;
-      if (entry.target && (entry.target.indexOf('aOa grep') === 0 || entry.target.indexOf('aOa egrep') === 0)) {
-        // Parse: "aOa grep" or "aOa egrep" then flags and query
-        var rest = entry.target.substring(4); // after "aOa "
-        var spaceIdx = rest.indexOf(' ');
-        var cmd = rest.substring(0, spaceIdx);
-        var args = rest.substring(spaceIdx + 1);
-        targetHtml = '<span class="aoa-brand">aOa</span> <span class="target-cmd">' + esc(cmd) + '</span> ' + esc(args);
-      } else {
-        targetHtml = esc(entry.target || '-');
-      }
-
-      // Time highlight: "now" gets brighter color
-      var timeHtml = timeStr === 'now'
-        ? '<span style="color:var(--cyan)">' + timeStr + '</span>'
-        : timeStr;
-
-      html += '<tr>' +
-        '<td class="time-text">' + timeHtml + '</td>' +
-        '<td>' + actionHtml + '</td>' +
-        '<td>' + sourceHtml + '</td>' +
-        '<td>' + attribHtml + '</td>' +
-        '<td>' + impactHtml + '</td>' +
-        '<td class="target-text">' + targetHtml + '</td>' +
-        '</tr>';
-    });
-    tbody.innerHTML = html;
-
-    // Update badge
-    var badge = document.getElementById('activityBadge');
-    if (badge) {
-      badge.className = 'badge badge-live';
-      badge.textContent = entries.length + ' events';
-    }
-  }
-
-  // ====== POLL LOOP ======
-  async function poll() {
-    if (!activityInitialized) initActivityFeed();
-
-    if (MOCK) {
-      addMockActivity();
-      var d = mockData();
-      setConnected(true);
-      applyData(d.health, d.stats, d.domains, d.bigrams, d.convMetrics, d.convFeed, d.topKw, d.topTerms, d.topFiles, d.activityFeed);
-      setTimeout(poll, 1500);
-      return;
-    }
-
-    try {
-      var responses = await Promise.all([
-        fetch('/api/health'),
-        fetch('/api/stats'),
-        fetch('/api/domains'),
-        fetch('/api/bigrams'),
-        fetch('/api/conversation/metrics'),
-        fetch('/api/conversation/feed'),
-        fetch('/api/top-keywords'),
-        fetch('/api/top-terms'),
-        fetch('/api/top-files'),
-        fetch('/api/activity/feed')
-      ]);
-      for (var i = 0; i < responses.length; i++) {
-        if (!responses[i].ok) throw new Error('HTTP ' + responses[i].status);
-      }
-      var data = await Promise.all(responses.map(function(r) { return r.json(); }));
-      setConnected(true);
-      retryDelay = 2000;
-      applyData(data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9]);
-    } catch (e) {
-      setConnected(false);
-      retryDelay = Math.min(retryDelay * 1.5, 10000);
-    }
-
-    setTimeout(poll, connected ? 2000 : retryDelay);
-  }
-
-  // ====== HELPERS ======
-  function esc(s) {
-    var d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
-  }
-
-  // ====== CLOCK ======
-  function tickClock() {
-    var el = document.getElementById('clock');
-    if (el) el.textContent = new Date().toLocaleTimeString();
-    setTimeout(tickClock, 1000);
-  }
-  tickClock();
-
-  // ====== START ======
-  if (MOCK) setConnected(true);
-  poll();
-
-})();
-</script>
+<script src="app.js"></script>
 </body>
 </html>

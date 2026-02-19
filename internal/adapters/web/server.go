@@ -88,6 +88,8 @@ func (s *Server) Start(preferredPort int) error {
 	mux.HandleFunc("GET /api/top-files", s.handleTopFiles)
 	mux.HandleFunc("GET /api/activity/feed", s.handleActivityFeed)
 	mux.HandleFunc("GET /api/runway", s.handleRunway)
+	mux.HandleFunc("GET /api/sessions", s.handleSessions)
+	mux.HandleFunc("GET /api/config", s.handleConfig)
 
 	s.httpSrv = &http.Server{Handler: mux}
 
@@ -318,6 +320,26 @@ func (s *Server) handleRunway(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result := s.queries.RunwayProjection()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	result := s.queries.SessionList()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	result := s.queries.ProjectConfig()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }

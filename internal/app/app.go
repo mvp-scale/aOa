@@ -124,6 +124,8 @@ type App struct {
 	lastAutotune   *learner.AutotuneResult // most recent autotune result (for status line)
 	statusLinePath string                 // project-local path for status line file
 	httpPort       int                    // preferred HTTP port (0 = auto from project root)
+	dbPath         string                 // path to bbolt database file
+	started        time.Time              // daemon start time
 
 	// Session metrics accumulators (ephemeral, reset on daemon restart)
 	sessionMetrics SessionMetrics
@@ -251,6 +253,7 @@ func New(cfg Config) (*App, error) {
 		promptN:        lrn.PromptCount(),
 		statusLinePath: statusPath,
 		httpPort:       cfg.HTTPPort,
+		dbPath:         cfg.DBPath,
 		toolMetrics: ToolMetrics{
 			FileReads:    make(map[string]int),
 			BashCommands: make(map[string]int),
@@ -437,6 +440,7 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 
 // Start begins the daemon (socket server + HTTP server + session reader).
 func (a *App) Start() error {
+	a.started = time.Now()
 	if err := a.Server.Start(); err != nil {
 		return fmt.Errorf("start server: %w", err)
 	}
@@ -824,6 +828,80 @@ func (a *App) RunwayProjection() socket.RunwayResult {
 		CounterfactMinutes: counterfactMin,
 		DeltaMinutes:       runwayMin - counterfactMin,
 		TokensSaved:        a.counterfactTokensSaved,
+	}
+}
+
+// SessionList returns all persisted session summaries, sorted by start time descending.
+// Implements socket.AppQueries.
+func (a *App) SessionList() socket.SessionListResult {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.Store == nil {
+		return socket.SessionListResult{Sessions: []socket.SessionSummaryResult{}}
+	}
+
+	summaries, err := a.Store.ListSessionSummaries(a.ProjectID)
+	if err != nil || len(summaries) == 0 {
+		return socket.SessionListResult{Sessions: []socket.SessionSummaryResult{}}
+	}
+
+	// Sort by start time descending (most recent first)
+	sort.Slice(summaries, func(i, j int) bool {
+		return summaries[i].StartTime > summaries[j].StartTime
+	})
+
+	results := make([]socket.SessionSummaryResult, len(summaries))
+	for i, s := range summaries {
+		results[i] = socket.SessionSummaryResult{
+			SessionID:        s.SessionID,
+			StartTime:        s.StartTime,
+			EndTime:          s.EndTime,
+			PromptCount:      s.PromptCount,
+			ReadCount:        s.ReadCount,
+			GuidedReadCount:  s.GuidedReadCount,
+			GuidedRatio:      s.GuidedRatio,
+			TokensSaved:      s.TokensSaved,
+			InputTokens:      s.InputTokens,
+			OutputTokens:     s.OutputTokens,
+			CacheReadTokens:  s.CacheReadTokens,
+			CacheWriteTokens: s.CacheWriteTokens,
+			Model:            s.Model,
+		}
+	}
+
+	return socket.SessionListResult{
+		Sessions: results,
+		Count:    len(results),
+	}
+}
+
+// ProjectConfig returns project metadata and runtime configuration.
+// Implements socket.AppQueries.
+func (a *App) ProjectConfig() socket.ProjectConfigResult {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	indexFiles := 0
+	indexTokens := 0
+	if a.Index != nil {
+		indexFiles = len(a.Index.Files)
+		indexTokens = len(a.Index.Tokens)
+	}
+
+	var uptimeSeconds int64
+	if !a.started.IsZero() {
+		uptimeSeconds = int64(time.Since(a.started).Seconds())
+	}
+
+	return socket.ProjectConfigResult{
+		ProjectRoot:   a.ProjectRoot,
+		ProjectID:     a.ProjectID,
+		DBPath:        a.dbPath,
+		SocketPath:    socket.SocketPath(a.ProjectRoot),
+		IndexFiles:    indexFiles,
+		IndexTokens:   indexTokens,
+		UptimeSeconds: uptimeSeconds,
 	}
 }
 

@@ -239,3 +239,37 @@ type RunwayResult struct {
 	DeltaMinutes       float64 `json:"delta_minutes"`
 	TokensSaved        int64   `json:"tokens_saved"`
 }
+
+// SessionSummaryResult describes a single persisted session in the API response.
+type SessionSummaryResult struct {
+	SessionID        string  `json:"session_id"`
+	StartTime        int64   `json:"start_time"`
+	EndTime          int64   `json:"end_time"`
+	PromptCount      int     `json:"prompt_count"`
+	ReadCount        int     `json:"read_count"`
+	GuidedReadCount  int     `json:"guided_read_count"`
+	GuidedRatio      float64 `json:"guided_ratio"`
+	TokensSaved      int64   `json:"tokens_saved"`
+	InputTokens      int     `json:"input_tokens"`
+	OutputTokens     int     `json:"output_tokens"`
+	CacheReadTokens  int     `json:"cache_read_tokens"`
+	CacheWriteTokens int     `json:"cache_write_tokens"`
+	Model            string  `json:"model"`
+}
+
+// SessionListResult is the result of a sessions list request.
+type SessionListResult struct {
+	Sessions []SessionSummaryResult `json:"sessions"`
+	Count    int                    `json:"count"`
+}
+
+// ProjectConfigResult is the result of a config request.
+type ProjectConfigResult struct {
+	ProjectRoot   string `json:"project_root"`
+	ProjectID     string `json:"project_id"`
+	DBPath        string `json:"db_path"`
+	SocketPath    string `json:"socket_path"`
+	IndexFiles    int    `json:"index_files"`
+	IndexTokens   int    `json:"index_tokens"`
+	UptimeSeconds int64  `json:"uptime_seconds"`
+}

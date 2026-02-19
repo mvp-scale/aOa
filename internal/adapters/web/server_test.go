@@ -72,6 +72,37 @@ func (m *mockQueries) RunwayProjection() socket.RunwayResult {
 	}
 }
 
+func (m *mockQueries) SessionList() socket.SessionListResult {
+	return socket.SessionListResult{
+		Sessions: []socket.SessionSummaryResult{
+			{
+				SessionID:   "abc123",
+				StartTime:   1700000000,
+				EndTime:     1700003600,
+				PromptCount: 15,
+				ReadCount:   10,
+				GuidedReadCount: 7,
+				GuidedRatio: 0.7,
+				TokensSaved: 5000,
+				Model:       "claude-opus-4-6",
+			},
+		},
+		Count: 1,
+	}
+}
+
+func (m *mockQueries) ProjectConfig() socket.ProjectConfigResult {
+	return socket.ProjectConfigResult{
+		ProjectRoot:   "/test/project",
+		ProjectID:     "project",
+		DBPath:        "/test/project/.aoa/aoa.db",
+		SocketPath:    "/tmp/aoa-test.sock",
+		IndexFiles:    42,
+		IndexTokens:   100,
+		UptimeSeconds: 3600,
+	}
+}
+
 func newTestState() *ports.LearnerState {
 	return &ports.LearnerState{
 		PromptCount: 42,
@@ -118,6 +149,8 @@ func setupTestServer(t *testing.T) *httptest.Server {
 	mux.HandleFunc("GET /api/top-files", srv.handleTopFiles)
 	mux.HandleFunc("GET /api/activity/feed", srv.handleActivityFeed)
 	mux.HandleFunc("GET /api/runway", srv.handleRunway)
+	mux.HandleFunc("GET /api/sessions", srv.handleSessions)
+	mux.HandleFunc("GET /api/config", srv.handleConfig)
 
 	return httptest.NewServer(mux)
 }
@@ -350,4 +383,44 @@ func TestHandleActivityFeed(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 	assert.NotNil(t, result.Entries)
 	assert.Equal(t, 0, result.Count)
+}
+
+func TestSessionsEndpoint(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/sessions")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var result socket.SessionListResult
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.Equal(t, 1, result.Count)
+	require.Len(t, result.Sessions, 1)
+	assert.Equal(t, "abc123", result.Sessions[0].SessionID)
+	assert.Equal(t, 15, result.Sessions[0].PromptCount)
+	assert.Equal(t, int64(5000), result.Sessions[0].TokensSaved)
+	assert.InDelta(t, 0.7, result.Sessions[0].GuidedRatio, 0.01)
+}
+
+func TestConfigEndpoint(t *testing.T) {
+	ts := setupTestServer(t)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/config")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var result socket.ProjectConfigResult
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.Equal(t, "/test/project", result.ProjectRoot)
+	assert.Equal(t, "project", result.ProjectID)
+	assert.Equal(t, 42, result.IndexFiles)
+	assert.Equal(t, int64(3600), result.UptimeSeconds)
 }

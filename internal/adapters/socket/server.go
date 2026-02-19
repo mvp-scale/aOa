@@ -31,6 +31,8 @@ type AppQueries interface {
 	DomainTermNames(domain string) []string
 	DomainTermHitCounts(domain string) map[string]int
 	RunwayProjection() RunwayResult
+	SessionList() SessionListResult
+	ProjectConfig() ProjectConfigResult
 }
 
 // Server is the daemon that listens on a Unix socket and serves search requests.

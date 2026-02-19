@@ -4,5 +4,5 @@ package web
 
 import "embed"
 
-//go:embed static/index.html
+//go:embed static
 var staticFS embed.FS
