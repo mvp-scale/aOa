@@ -345,13 +345,15 @@ body {
 
 /* ── Term pills ── */
 .d-terms {
-  display: flex; flex-wrap: wrap; align-items: center;
-  max-width: 500px; max-height: 24px; overflow: hidden;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 4px;
+  overflow: hidden;
+  padding: 8px 4px; margin: -8px -4px;
 }
 .term-pill {
   display: inline-flex; align-items: center; font-size: 10px; font-weight: 500;
   padding: 2px 7px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;
-  margin: 1px 2px 1px 0; background: var(--border-subtle); color: var(--mute); white-space: nowrap;
+  background: var(--border-subtle); color: var(--mute); white-space: nowrap;
+  flex-shrink: 0;
   transition: background 2.5s ease-out, color 2.5s ease-out, box-shadow 2.5s ease-out;
 }
 /* .lit — soft green glow on just the pill, fades over 2.5s via CSS transition */
@@ -912,7 +914,7 @@ body {
   .domain-table td { padding: 4px 8px; }
   .domain-name { font-size: 11px; }
   .domain-hits { font-size: 11px; }
-  .d-terms { max-width: none; }
+  .d-terms { padding: 6px 3px; margin: -6px -3px; }
   .term-pill { font-size: 9px; padding: 1px 5px; }
   .domain-footer { padding: 8px; font-size: 10px; }
   .ngram-wrap { padding: 10px 14px; }

@@ -1055,3 +1055,38 @@ created by net/http.(*connReader).startBackgroundRead in goroutine 66
 [2026-02-20T07:26:09-05:00] daemon starting
 [2026-02-20T07:26:09-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
 [2026-02-20T07:26:09-05:00] dashboard at http://localhost:19270
+[2026-02-20T16:44:53-05:00] remote stop, shutting down
+[2026-02-20T16:44:53-05:00] daemon stopped
+[2026-02-20T16:44:53-05:00] daemon starting
+[2026-02-20T16:44:54-05:00] aoa-recon found at /home/corey/aOa-go/aoa-recon
+[2026-02-20T16:44:54-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T16:44:54-05:00] dashboard at http://localhost:19270
+[2026-02-20T16:53:29-05:00] recon enhance failed: aoa-recon enhance: exit status 1
+Error: open database: bbolt open: timeout
+Usage:
+  aoa-recon enhance [flags]
+
+Flags:
+      --db string     path to bbolt database (required)
+  -h, --help          help for enhance
+      --root string   project root directory (required)
+
+
+[2026-02-20T17:00:23-05:00] remote stop, shutting down
+[2026-02-20T17:00:23-05:00] daemon stopped
+[2026-02-20T17:00:24-05:00] daemon starting
+[2026-02-20T17:00:25-05:00] aoa-recon found at /home/corey/aOa-go/aoa-recon
+[2026-02-20T17:00:25-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T17:00:25-05:00] dashboard at http://localhost:19270
+[2026-02-20T17:02:48-05:00] remote stop, shutting down
+[2026-02-20T17:02:48-05:00] daemon stopped
+[2026-02-20T17:02:49-05:00] daemon starting
+[2026-02-20T17:02:50-05:00] aoa-recon found at /home/corey/aOa-go/aoa-recon
+[2026-02-20T17:02:50-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T17:02:50-05:00] dashboard at http://localhost:19270
+[2026-02-20T17:15:39-05:00] remote stop, shutting down
+[2026-02-20T17:15:39-05:00] daemon stopped
+[2026-02-20T17:15:39-05:00] daemon starting
+[2026-02-20T17:15:40-05:00] aoa-recon found at /home/corey/aOa-go/aoa-recon
+[2026-02-20T17:15:40-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T17:15:40-05:00] dashboard at http://localhost:19270

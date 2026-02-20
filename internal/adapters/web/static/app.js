@@ -632,7 +632,11 @@ function renderDomains(domainsResult) {
       var uhc = urow.querySelector('[data-dhits="' + CSS.escape(udom.name) + '"]');
       if (uhc) {
         var newVal = udom.hits !== undefined ? udom.hits.toFixed(1) : '0';
-        if (uhc.textContent !== newVal) uhc.textContent = newVal;
+        if (uhc.textContent !== newVal) {
+          uhc.textContent = newVal;
+          uhc.classList.remove('text-glow'); void uhc.offsetWidth;
+          uhc.classList.add('text-glow');
+        }
       }
       var uchanged = detectTermChanges(udom.name, udom.term_hits);
       if (uchanged.length > 0) glowTermPills(tbody, udom.name, uchanged);
@@ -1418,9 +1422,29 @@ function reconMethodRowHtml(name, findings) {
   return h;
 }
 
+function renderReconInstallPrompt() {
+  var wrap = document.getElementById('reconTreeWrap');
+  if (!wrap) return;
+  wrap.innerHTML =
+    '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px;line-height:1.8">' +
+    '<div style="font-size:24px;margin-bottom:12px;opacity:0.6">&#x1F50D;</div>' +
+    '<div style="color:#e0e0e0;font-size:16px;margin-bottom:8px">aoa-recon not installed</div>' +
+    '<div>Install the companion binary to unlock full scanning:</div>' +
+    '<div style="margin:16px auto;max-width:400px;background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:12px 16px;font-family:monospace;font-size:13px;color:#4fc3f7;text-align:left">' +
+    'npm install -g aoa-recon</div>' +
+    '<div style="color:#888;font-size:12px;margin-top:8px">Adds tree-sitter parsing + security scanning. Restart the daemon after installing.</div>' +
+    '</div>';
+}
+
 function renderRecon() {
   var data = cache.recon;
   if (!data) return;
+
+  // Show install prompt when aoa-recon is not available and no scan data
+  if (!data.recon_available && (data.total_findings || 0) === 0 && (data.files_scanned || 0) === 0) {
+    renderReconInstallPrompt();
+    return;
+  }
 
   // Hero metrics
   setGlow('hm-recon-0', data.files_scanned || 0);
@@ -1436,6 +1460,9 @@ function renderRecon() {
   sup.push('<span class="g">' + (data.clean_files || 0) + '</span> clean');
   var activeDimCount = Object.values(reconActiveDims).filter(function(v) { return v; }).length;
   sup.push('<span class="p">' + activeDimCount + '</span> dimensions');
+  if (!data.recon_available) {
+    sup.push('<span class="p" title="Install aoa-recon for symbol-level scanning">lite mode</span>');
+  }
   setHtml('heroSupport-recon', sup.join(' &middot; '));
 
   // Stats grid

@@ -16,7 +16,14 @@ func (a *App) onFileChanged(absPath string) {
 	defer a.mu.Unlock()
 
 	ext := strings.ToLower(filepath.Ext(absPath))
-	if ext == "" || !a.Parser.SupportsExtension(ext) {
+	if ext == "" {
+		return
+	}
+	// When parser is nil (tokenization-only mode), use the default code extensions list.
+	if a.Parser != nil && !a.Parser.SupportsExtension(ext) {
+		return
+	}
+	if a.Parser == nil && !defaultCodeExtensions[ext] {
 		return
 	}
 
@@ -86,9 +93,26 @@ func (a *App) onFileChanged(absPath string) {
 		Size:         info.Size(),
 	}
 
-	metas, err := a.Parser.ParseFileToMeta(absPath, source)
-	if err != nil || len(metas) == 0 {
-		// File added but no symbols — still keep in Files for content scanning
+	// When parser is available, extract symbols; otherwise tokenize file content only.
+	var metas []*ports.SymbolMeta
+	if a.Parser != nil {
+		var parseErr error
+		metas, parseErr = a.Parser.ParseFileToMeta(absPath, source)
+		if parseErr != nil {
+			metas = nil
+		}
+	}
+
+	if len(metas) == 0 {
+		// No symbols (parser nil or no matches) — tokenize file content for file-level search.
+		lines := strings.Split(string(source), "\n")
+		for _, line := range lines {
+			tokens := index.TokenizeContentLine(line)
+			for _, tok := range tokens {
+				ref := ports.TokenRef{FileID: fileID, Line: 0}
+				a.Index.Tokens[tok] = append(a.Index.Tokens[tok], ref)
+			}
+		}
 		a.Engine.Rebuild()
 		if a.Store != nil {
 			_ = a.Store.SaveIndex(a.ProjectID, a.Index)
@@ -114,6 +138,12 @@ func (a *App) onFileChanged(absPath string) {
 	a.Engine.Rebuild()
 	if a.Store != nil {
 		_ = a.Store.SaveIndex(a.ProjectID, a.Index)
+	}
+
+	// If aoa-recon is available and parser is nil, trigger incremental enhancement.
+	// When parser is non-nil, symbols are already extracted above.
+	if a.Parser == nil {
+		a.TriggerReconEnhanceFile(absPath)
 	}
 }
 

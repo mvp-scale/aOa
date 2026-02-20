@@ -1,0 +1,16 @@
+{
+  "name": "aoa",
+  "version": "0.0.0",
+  "description": "aOa — semantic code search engine",
+  "bin": { "aoa": "bin/aoa" },
+  "scripts": { "postinstall": "node install.js" },
+  "optionalDependencies": {
+    "@aoa/linux-x64": "0.0.0",
+    "@aoa/linux-arm64": "0.0.0",
+    "@aoa/darwin-x64": "0.0.0",
+    "@aoa/darwin-arm64": "0.0.0"
+  },
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/corey/aoa" },
+  "keywords": ["code-search", "semantic-search", "developer-tools"]
+}

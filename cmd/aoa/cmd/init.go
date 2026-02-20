@@ -7,7 +7,6 @@ import (
 
 	"github.com/corey/aoa/internal/adapters/bbolt"
 	"github.com/corey/aoa/internal/adapters/socket"
-	"github.com/corey/aoa/internal/adapters/treesitter"
 	"github.com/corey/aoa/internal/app"
 	"github.com/spf13/cobra"
 )
@@ -54,7 +53,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	defer store.Close()
 
-	parser := treesitter.NewParser()
+	parser := newParser()
 
 	fmt.Println("⚡ Scanning project...")
 

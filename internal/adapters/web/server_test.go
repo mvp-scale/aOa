@@ -95,6 +95,10 @@ func (m *mockQueries) SessionList() socket.SessionListResult {
 	}
 }
 
+func (m *mockQueries) ReconAvailable() bool {
+	return false
+}
+
 func (m *mockQueries) ProjectConfig() socket.ProjectConfigResult {
 	return socket.ProjectConfigResult{
 		ProjectRoot:   "/test/project",

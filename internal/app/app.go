@@ -16,7 +16,6 @@ import (
 	claude "github.com/corey/aoa/internal/adapters/claude"
 	fsw "github.com/corey/aoa/internal/adapters/fsnotify"
 	"github.com/corey/aoa/internal/adapters/socket"
-	"github.com/corey/aoa/internal/adapters/treesitter"
 	"github.com/corey/aoa/internal/adapters/web"
 	"github.com/corey/aoa/internal/domain/enricher"
 	"github.com/corey/aoa/internal/domain/index"
@@ -120,12 +119,13 @@ type App struct {
 	Enricher  *enricher.Enricher
 	Engine    *index.SearchEngine
 	Learner   *learner.Learner
-	Parser    *treesitter.Parser
+	Parser    ports.Parser // nil = tokenization-only mode (no tree-sitter)
 	Server    *socket.Server
 	WebServer *web.Server
 	Reader    *claude.Reader
 	Index     *ports.Index
 
+	reconBridge    *ReconBridge            // discovers and invokes aoa-recon companion binary
 	mu             sync.Mutex             // serializes learner access (searches are concurrent)
 	promptN        uint32                 // prompt counter (incremented on each user input)
 	lastAutotune   *learner.AutotuneResult // most recent autotune result (for status line)
@@ -175,9 +175,10 @@ type App struct {
 type Config struct {
 	ProjectRoot   string
 	ProjectID     string
-	DBPath        string // path to bbolt file (default: .aoa/aoa.db)
-	HTTPPort      int    // preferred HTTP port (default: computed from project root)
-	CacheMaxBytes int64  // file cache memory budget (default: 250MB if 0)
+	DBPath        string      // path to bbolt file (default: .aoa/aoa.db)
+	HTTPPort      int         // preferred HTTP port (default: computed from project root)
+	CacheMaxBytes int64       // file cache memory budget (default: 250MB if 0)
+	Parser        ports.Parser // optional: nil = tokenization-only mode (no tree-sitter)
 }
 
 // New creates an App with all dependencies wired. Does not start services.
@@ -232,8 +233,6 @@ func New(cfg Config) (*App, error) {
 		domains[d.Domain] = index.Domain{Terms: d.Terms}
 	}
 
-	parser := treesitter.NewParser()
-
 	engine := index.NewSearchEngine(idx, domains, cfg.ProjectRoot)
 
 	// Create file cache and attach to search engine
@@ -269,7 +268,7 @@ func New(cfg Config) (*App, error) {
 		Enricher:       enr,
 		Engine:         engine,
 		Learner:        lrn,
-		Parser:         parser,
+		Parser:         cfg.Parser, // nil = tokenization-only mode
 		Reader:         reader,
 		Index:          idx,
 		promptN:        lrn.PromptCount(),
@@ -297,6 +296,9 @@ func New(cfg Config) (*App, error) {
 
 	// Wire search observer: search results → learning signals
 	engine.SetObserver(a.searchObserver)
+
+	// Discover aoa-recon companion binary (non-fatal if not found)
+	a.initReconBridge()
 
 	return a, nil
 }
@@ -1749,6 +1751,11 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 		if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
 			return socket.ReindexResult{}, fmt.Errorf("save index: %w", err)
 		}
+	}
+
+	// If parser is nil and aoa-recon is available, trigger enhancement in background.
+	if a.Parser == nil {
+		a.TriggerReconEnhance()
 	}
 
 	elapsed := time.Since(start)

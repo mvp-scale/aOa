@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/corey/aoa/internal/adapters/treesitter"
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/ports"
 )
@@ -35,10 +34,52 @@ var skipDirs = map[string]bool{
 	".claude":      true,
 }
 
-// BuildIndex walks a project root, parses source files with tree-sitter,
-// and builds a fresh search index. This is the shared logic used by both
-// `aoa init` (no daemon) and daemon-side reindex.
-func BuildIndex(root string, parser *treesitter.Parser) (*ports.Index, *IndexResult, error) {
+// defaultCodeExtensions is the set of file extensions indexed when no parser is
+// available (tokenization-only mode). Mirrors the core set from treesitter/extensions.go
+// so that file discovery works identically with or without CGo.
+var defaultCodeExtensions = map[string]bool{
+	// Core languages
+	".go": true, ".py": true, ".pyw": true,
+	".js": true, ".jsx": true, ".mjs": true, ".cjs": true,
+	".ts": true, ".mts": true, ".tsx": true,
+	".rs": true, ".java": true,
+	".c": true, ".h": true, ".cpp": true, ".hpp": true, ".cc": true, ".cxx": true, ".hxx": true,
+	".cs": true, ".rb": true, ".php": true, ".swift": true,
+	".kt": true, ".kts": true, ".scala": true, ".sc": true,
+	// Scripting
+	".sh": true, ".bash": true, ".zsh": true, ".lua": true,
+	".pl": true, ".pm": true, ".r": true, ".R": true, ".jl": true,
+	".ex": true, ".exs": true, ".erl": true, ".hrl": true,
+	// Functional
+	".hs": true, ".lhs": true, ".ml": true, ".mli": true,
+	".gleam": true, ".elm": true,
+	".clj": true, ".cljs": true, ".cljc": true,
+	".purs": true, ".fnl": true,
+	// Systems & Emerging
+	".zig": true, ".d": true, ".cu": true, ".cuh": true,
+	".odin": true, ".v": true, ".nim": true,
+	".m": true, ".mm": true,
+	".ada": true, ".adb": true, ".ads": true,
+	".f90": true, ".f95": true, ".f03": true, ".f": true,
+	".sv": true, ".vhd": true, ".vhdl": true,
+	// Web & Frontend
+	".html": true, ".htm": true, ".css": true, ".scss": true, ".less": true,
+	".vue": true, ".svelte": true, ".dart": true,
+	// Data & Config
+	".json": true, ".jsonc": true, ".yaml": true, ".yml": true, ".toml": true,
+	".sql": true, ".md": true, ".mdx": true,
+	".graphql": true, ".gql": true,
+	".tf": true, ".hcl": true, ".nix": true,
+	// Build
+	".cmake": true, ".mk": true, ".groovy": true, ".gradle": true,
+	".glsl": true, ".vert": true, ".frag": true, ".hlsl": true,
+}
+
+// BuildIndex walks a project root, parses source files (when parser is non-nil),
+// and builds a fresh search index. When parser is nil, it operates in
+// tokenization-only mode: discovers files by extension, tokenizes content,
+// but produces no symbol metadata.
+func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return nil, nil, err
@@ -56,8 +97,19 @@ func BuildIndex(root string, parser *treesitter.Parser) (*ports.Index, *IndexRes
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(path))
-		if ext != "" && parser.SupportsExtension(ext) {
-			files = append(files, path)
+		if ext == "" {
+			return nil
+		}
+		// When parser is available, use its extension support; otherwise fall back
+		// to the built-in defaultCodeExtensions list for tokenization-only mode.
+		if parser != nil {
+			if parser.SupportsExtension(ext) {
+				files = append(files, path)
+			}
+		} else {
+			if defaultCodeExtensions[ext] {
+				files = append(files, path)
+			}
 		}
 		return nil
 	})
@@ -103,24 +155,36 @@ func BuildIndex(root string, parser *treesitter.Parser) (*ports.Index, *IndexRes
 			Size:         info.Size(),
 		}
 
-		metas, err := parser.ParseFileToMeta(path, source)
-		if err != nil || len(metas) == 0 {
-			continue
+		// When parser is available, extract symbols; otherwise tokenize file content.
+		if parser != nil {
+			metas, parseErr := parser.ParseFileToMeta(path, source)
+			if parseErr == nil && len(metas) > 0 {
+				for _, meta := range metas {
+					ref := ports.TokenRef{FileID: fileID, Line: meta.StartLine}
+					idx.Metadata[ref] = meta
+					totalSymbols++
+
+					tokens := index.Tokenize(meta.Name)
+					for _, tok := range tokens {
+						idx.Tokens[tok] = append(idx.Tokens[tok], ref)
+					}
+
+					lower := strings.ToLower(meta.Name)
+					if lower != "" {
+						idx.Tokens[lower] = append(idx.Tokens[lower], ref)
+					}
+				}
+				continue
+			}
 		}
 
-		for _, meta := range metas {
-			ref := ports.TokenRef{FileID: fileID, Line: meta.StartLine}
-			idx.Metadata[ref] = meta
-			totalSymbols++
-
-			tokens := index.Tokenize(meta.Name)
+		// Tokenization-only fallback: tokenize file content line-by-line for file-level search.
+		lines := strings.Split(string(source), "\n")
+		for _, line := range lines {
+			tokens := index.TokenizeContentLine(line)
 			for _, tok := range tokens {
+				ref := ports.TokenRef{FileID: fileID, Line: 0}
 				idx.Tokens[tok] = append(idx.Tokens[tok], ref)
-			}
-
-			lower := strings.ToLower(meta.Name)
-			if lower != "" {
-				idx.Tokens[lower] = append(idx.Tokens[lower], ref)
 			}
 		}
 	}

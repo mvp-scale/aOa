@@ -8,11 +8,29 @@ before:
     - go vet ./...
 
 builds:
-  - id: aoa-lean
+  # aoa — pure Go binary (~7-12 MB, no CGo required)
+  # File-level search works out of the box; symbol search requires aoa-recon.
+  - id: aoa
     main: ./cmd/aoa/
     binary: aoa
-    tags:
-      - lean
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/corey/aoa/internal/version.Version={{.Version}}
+      - -X github.com/corey/aoa/internal/version.BuildDate={{.Date}}
+
+  # aoa-recon — CGo binary with tree-sitter grammars (~80 MB)
+  # Adds symbol-level parsing and security scanning to the aoa index.
+  - id: aoa-recon
+    main: ./cmd/aoa-recon/
+    binary: aoa-recon
     env:
       - CGO_ENABLED=1
     goos:
@@ -32,9 +50,14 @@ builds:
           - CC=aarch64-linux-gnu-gcc
 
 archives:
-  - id: default
+  - id: aoa-archive
+    builds: [aoa]
     formats: ['tar.gz']
-    name_template: '{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}'
+    name_template: 'aoa-{{ .Version }}-{{ .Os }}-{{ .Arch }}'
+  - id: aoa-recon-archive
+    builds: [aoa-recon]
+    formats: ['tar.gz']
+    name_template: 'aoa-recon-{{ .Version }}-{{ .Os }}-{{ .Arch }}'
 
 checksum:
   name_template: 'checksums.txt'
@@ -55,12 +78,18 @@ release:
   prerelease: auto
   name_template: "aOa {{.Version}}"
   header: |
-    ## aOa {{.Version}} — Lean Binary Release
+    ## aOa {{.Version}} — Two-Binary Release
 
-    Binary size: ~12 MB (grammars loaded dynamically)
-
-    ### Install grammars after downloading:
+    ### aoa (pure Go, ~8 MB)
+    Search, learning, dashboard — works standalone. No CGo required.
     ```bash
-    aoa grammar install core     # P1: Python, JS, TS, Go, Rust, Java, C, C++, Bash, JSON
-    aoa grammar install common   # P2: C#, Ruby, PHP, Kotlin, YAML, HTML, CSS, TOML, ...
+    npm install -g aoa
     ```
+
+    ### aoa-recon (CGo, ~80 MB)
+    Tree-sitter parsing + security scanning. Enhances the aoa index with symbols.
+    ```bash
+    npm install -g aoa-recon
+    ```
+
+    aoa auto-discovers aoa-recon when both are installed.

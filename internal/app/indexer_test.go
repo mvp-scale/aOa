@@ -85,3 +85,40 @@ func TestBuildIndex_SkipsIgnoredDirs(t *testing.T) {
 	assert.Equal(t, 1, result.FileCount, "node_modules should be skipped")
 	assert.Equal(t, 1, result.SymbolCount)
 }
+
+// TestBuildIndex_NilParser_TokenizationOnly verifies that BuildIndex works
+// without a parser (tokenization-only mode). Files are discovered via
+// defaultCodeExtensions, and content is tokenized for file-level search.
+func TestBuildIndex_NilParser_TokenizationOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create Go files — should be discovered by defaultCodeExtensions
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmpDir, "main.go"),
+		[]byte("package main\n\nfunc SearchEngine() {\n\treturn\n}\n"),
+		0644,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmpDir, "util.py"),
+		[]byte("def helper_function():\n    pass\n"),
+		0644,
+	))
+
+	// nil parser = tokenization-only mode
+	idx, result, err := BuildIndex(tmpDir, nil)
+	require.NoError(t, err)
+
+	// Files should be indexed
+	assert.Equal(t, 2, result.FileCount, "should discover files via defaultCodeExtensions")
+
+	// No symbols (no parser)
+	assert.Equal(t, 0, result.SymbolCount, "no symbols without parser")
+	assert.Equal(t, 0, len(idx.Metadata), "no metadata without parser")
+
+	// But tokens should exist from content tokenization
+	assert.Greater(t, result.TokenCount, 0, "should have tokens from content")
+
+	// Check specific tokens exist — Tokenize("SearchEngine") → ["search", "engine"]
+	assert.Greater(t, len(idx.Tokens["search"]), 0, "should tokenize 'search' from content")
+	assert.Greater(t, len(idx.Tokens["engine"]), 0, "should tokenize 'engine' from content")
+}

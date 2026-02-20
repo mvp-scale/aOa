@@ -34,6 +34,7 @@ type AppQueries interface {
 	RunwayProjection() RunwayResult
 	SessionList() SessionListResult
 	ProjectConfig() ProjectConfigResult
+	ReconAvailable() bool
 }
 
 // Server is the daemon that listens on a Unix socket and serves search requests.

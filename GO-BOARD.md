@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-20 (Session 62) | **Phase**: L5.12 interim — Recon tab wired with lightweight pattern scanner, sidebar+tree UI. Bug fixes: CacheHitRate (100x inflation), fmtTime/fmtMin unit scaling.
-> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 + L3.2–L3.14 + L4.1–L4.3 (470+ active tests, 32 skipped)
+> **Updated**: 2026-02-20 (Session 63) | **Phase**: L6 — Two-binary distribution (aoa + aoa-recon). Parser interface decoupled, pure Go binary (CGO_ENABLED=0), tokenization-only fallback, recon bridge (git-lfs model), npm packaging, CI/release pipeline.
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 + L3.2–L3.14 + L4.1–L4.3 + L6.1–L6.10 (470+ active tests, 32 skipped)
 
 ---
 
@@ -37,6 +37,7 @@
 | **L3** | Migration | Parallel run Python vs Go, parity proof | 100 queries × 5 projects = zero divergence; benchmark confirms speedup |
 | **L4** | Distribution | Goreleaser, grammar loader, install docs | `go install` or binary download works on linux/darwin × amd64/arm64 |
 | **L5** | Dimensional Analysis | Bitmask engine, 6-tier scanning, Recon tab | Security tier catches known vulns in test projects; query time < 10ms |
+| **L6** | Distribution v2 | Two-binary split, npm packaging, zero-friction install | `npm install -g aoa` works; `npm install -g aoa-recon` lights up Recon tab |
 
 ### Columns
 
@@ -71,7 +72,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Session 62 delivered L5.12 interim (Recon tab). Full sidebar+tree layout ported from mockup into live dashboard. Backend scanner (`recon.go`) iterates FileCache lines with ~10 pattern detectors, maps findings to enclosing symbols via Index metadata. API at `GET /api/recon` returns tree structure with per-file/per-symbol findings. JS renders navigable tree (root→folder→file→symbol), sidebar dimension toggles with localStorage persistence, tier-colored pills, finding detail rows. **Not the full bitmask engine** — uses `strings.Contains`/regex as interim. False positive tuning applied (code-only file filter, tightened secret/global patterns). Also fixed: `CacheHitRate()` was returning percentage instead of fraction (100x inflation on dashboard), `fmtTime()`/`fmtMin()` now scale through hours and days instead of capping at minutes.
+**Current**: Session 63 delivered L6 (Two-binary distribution). aOa now ships as two binaries: `aoa` (pure Go, 7.5 MB, CGO_ENABLED=0) for search + learning + dashboard, and `aoa-recon` (CGo, 73 MB) for tree-sitter parsing + security scanning. `ports.Parser` interface decouples domain from adapter. Tokenization-only fallback enables file-level search without any CGo. `ReconBridge` discovers `aoa-recon` on PATH and invokes as subprocess (git-lfs model). Dashboard shows install prompt when recon not available. npm package structure follows esbuild/turbo pattern (wrapper + platform packages). CI workflow builds 8 binaries and publishes to npm on tag push. Scanner logic extracted to shared `internal/adapters/recon/` package.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -135,6 +136,13 @@
 - **Graceful degradation on dynamic load failure** — `ParseFile()` returns `nil, nil` if grammar `.so` not found. Same behavior as extension-mapped-but-no-grammar today. No errors surfaced to user — just falls back to tokenization-only indexing.
 - **57-language manifest with priority tiers** — `BuiltinManifest()` embedded in binary. P1 Core (11 langs every dev uses), P2 Common (11 langs most devs use), P3 Extended (17 niche but real), P4 Specialist (18 domain-specific). `aoa grammar list` shows tier/status at a glance.
 - **Individual .so files, not regional bundles** — Simpler to build, simpler to download individually. Pack tarballs (core/common/extended/specialist) for bulk download.
+
+**Design Decisions Locked** (Session 63):
+- **Two-binary distribution** — `aoa` (pure Go, CGO_ENABLED=0, ~8 MB) for search + learning + dashboard. `aoa-recon` (CGo, ~80 MB) for tree-sitter parsing + security scanning. Users who want fast search get a tiny binary; users who want scanning install the companion. npm packages for zero-friction install.
+- **`cgo` build constraint for parser switching** — `parser_cgo.go` (CGO_ENABLED=1) returns `treesitter.NewParser()`, `parser_nocgo.go` (CGO_ENABLED=0) returns nil. Clean compile-time switching without custom tags. Same pattern for `grammar_cgo.go`/`grammar_nocgo.go`.
+- **git-lfs discovery model** — `aoa` discovers `aoa-recon` via `exec.LookPath` → `.aoa/bin/` → sibling binary. Zero configuration. Auto-triggers `enhance` after reindex when parser is nil. Non-blocking (goroutine). Graceful skip when not found.
+- **Scanner extracted to shared package** — `internal/adapters/recon/scanner.go` with `recon.Scan(idx, lines)` and `LineGetter` interface. Both web handler and aoa-recon CLI call the same scanning logic. No code duplication.
+- **npm esbuild/turbo pattern** — Wrapper packages (`aoa`, `aoa-recon`) with `optionalDependencies` pointing to platform-specific packages (`@aoa/linux-x64`, etc.) with `os`/`cpu` constraints. JS postinstall shim resolves platform binary and creates symlink. npm only downloads the matching platform package.
 
 **Design Decisions Locked** (Session 62):
 - **Recon interim scanner** — Pattern-based text scanner using `strings.Contains`/regex on FileCache lines. Not the full bitmask engine (L5.1-L5.5). Demonstrates the UX and proves the data pipeline works. 10 pattern types: `hardcoded_secret`, `command_injection`, `weak_hash`, `insecure_random`, `defer_in_loop`, `ignored_error`, `panic_in_lib`, `print_statement`, `todo_fixme`, `global_state`, plus `long_function` from symbol metadata.
@@ -221,6 +229,16 @@
 | [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
 | [L5](#layer-5) | [L5.11](#l511) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Dimension query support — `--dimension=security --risk=high` | Filter by dimension | CLI filters by tier and severity |
 | [L5](#layer-5) | [L5.12](#l512) | | | | | | | x | L5.9 | 🟡 | 🔵 | 🟡 | Recon tab — NER-style dimensional view, drill-down, severity scoring | Dashboard dimensional view | Interim: pattern scanner + UI working. **Gap**: full bitmask engine (L5.1-L5.5), false positive tuning, test coverage |
+| [L6](#layer-6) | [L6.1](#l61) | | | x | | x | | | - | 🟢 | 🟢 | 🟢 | Parser interface in ports — decouple app from concrete treesitter type | Clean architecture: domain doesn't depend on adapter | `ports.Parser` interface accepted everywhere; nil = no parser |
+| [L6](#layer-6) | [L6.2](#l62) | | | x | | x | | | L6.1 | 🟢 | 🟢 | 🟢 | Make App.Parser optional — nil-guard indexer, watcher, init | Core aoa works without any parser | `CGO_ENABLED=0 go build ./cmd/aoa/` produces 7.5 MB binary; `go test ./...` passes |
+| [L6](#layer-6) | [L6.3](#l63) | | | x | | | | | L6.2 | 🟢 | 🟢 | 🟢 | Tokenization-only indexer fallback — search works without symbols | File-level search with zero CGo | `TestBuildIndex_NilParser_TokenizationOnly` — 2 files, 0 symbols, tokens from content |
+| [L6](#layer-6) | [L6.4](#l64) | | | | | x | | | L6.2 | 🟢 | 🟢 | 🟢 | Create `cmd/aoa-recon/` entry point — enhance + enhance-file subcommands | Separate binary owns all tree-sitter + scanning | `go build ./cmd/aoa-recon/` compiles (73 MB); enhance/enhance-file/version commands |
+| [L6](#layer-6) | [L6.5](#l65) | | | | | x | | | L6.4 | 🟢 | 🟢 | 🟢 | Extract scanner to shared package `internal/adapters/recon/` | Both web handler and recon binary can call scanner | `recon.Scan()` callable from web API and CLI; no code duplication |
+| [L6](#layer-6) | [L6.6](#l66) | | | x | x | | | | L6.4 | 🟢 | 🟢 | 🟢 | Recon bridge — aoa detects aoa-recon on PATH, invokes as subprocess | git-lfs model: zero config, auto-discovery | `ReconBridge` discovery: PATH → .aoa/bin/ → sibling; TriggerReconEnhance after reindex |
+| [L6](#layer-6) | [L6.7](#l67) | | | | | | | x | L6.6 | 🟢 | 🟢 | 🟡 | Dashboard Recon tab install prompt — show "npm install aoa-recon" when not detected | Users know exactly what to do to unlock Recon | `recon_available` field in API; JS renders install prompt when false; "lite mode" indicator |
+| [L6](#layer-6) | [L6.8](#l68) | | | x | | | | | L6.2 | 🟢 | 🟢 | 🟡 | npm package structure — wrapper packages + platform packages + JS shims | Zero-friction install via npm | `npm/aoa/` + `npm/aoa-{platform}/` with postinstall shim; esbuild/turbo pattern |
+| [L6](#layer-6) | [L6.9](#l69) | | | x | | | | | L6.4, L6.8 | 🟢 | 🟢 | 🟡 | npm recon package structure — wrapper + platform packages for aoa-recon | Zero-friction recon install | `npm/aoa-recon/` + `npm/aoa-recon-{platform}/` — same pattern as L6.8 |
+| [L6](#layer-6) | [L6.10](#l610) | | | x | | | | | L6.8, L6.9 | 🟡 | 🟢 | 🟡 | CI/Release — goreleaser builds both binaries, workflow publishes to npm | Tag → build → publish, fully automated | `.goreleaser.yml` (2 builds), `.github/workflows/release.yml` (8 matrix jobs + npm publish) |
 
 ---
 
@@ -716,7 +734,93 @@ NER-style dimensional view: tier toggle sidebar (5 tiers, color-coded), file→f
 
 **Gap**: Full bitmask engine (L5.1–L5.5), AST-based structural patterns, AC text scanner, cross-language uniformity, acknowledge/dismiss per finding, unit tests for scanner.
 
-**Files**: `internal/adapters/web/recon.go` (new), `internal/domain/index/search.go` (Cache accessor), `internal/adapters/web/server.go` (route), `internal/adapters/web/static/index.html`, `style.css`, `app.js`
+**Files**: `internal/adapters/recon/scanner.go` (extracted from web/recon.go), `internal/adapters/web/recon.go` (thin handler calling shared scanner), `internal/domain/index/search.go` (Cache accessor), `internal/adapters/web/server.go` (route), `internal/adapters/web/static/index.html`, `style.css`, `app.js`
+
+---
+
+### Layer 6
+
+**Layer 6: Distribution v2 (Two-binary split, npm packaging)**
+
+> aOa ships as two binaries: `aoa` (pure Go, ~8 MB) for search + learning + dashboard, and `aoa-recon` (CGo, ~80 MB) for tree-sitter parsing + security scanning. Distributed via npm. `aoa` auto-discovers `aoa-recon` when both are installed (git-lfs model).
+>
+> **Quality Gate**: `CGO_ENABLED=0 go build ./cmd/aoa/` produces a working binary. `go build ./cmd/aoa-recon/` produces a CGo binary with all grammars. `aoa` discovers and invokes `aoa-recon` as subprocess. Dashboard shows install prompt when recon not available.
+
+#### L6.1
+
+**Parser interface in ports** — 🟢 Complete
+
+`ports.Parser` interface with `ParseFileToMeta(path, source) ([]*SymbolMeta, error)` and `SupportsExtension(ext) bool`. Decouples `app.go` from concrete `treesitter.Parser` — hexagonal violation fixed.
+
+**Files**: `internal/ports/parser.go` (new)
+
+#### L6.2
+
+**Make App.Parser optional** — 🟢 Complete
+
+Changed `App.Parser` from `*treesitter.Parser` to `ports.Parser` interface. `Config.Parser` field accepts optional parser (nil = tokenization-only). All parser usage nil-guarded in `watcher.go` and `indexer.go`. Build-tag-guarded files: `parser_cgo.go` returns `treesitter.NewParser()`, `parser_nocgo.go` returns nil. `grammar.go` split into CGo/non-CGo variants.
+
+**Gate**: `CGO_ENABLED=0 go build ./cmd/aoa/` → 7.5 MB statically linked binary. All existing tests pass.
+
+**Files**: `internal/app/app.go`, `internal/app/indexer.go`, `internal/app/watcher.go`, `cmd/aoa/cmd/parser_cgo.go` (new), `cmd/aoa/cmd/parser_nocgo.go` (new), `cmd/aoa/cmd/grammar_cgo.go` (renamed from grammar.go), `cmd/aoa/cmd/grammar_nocgo.go` (new), `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/daemon.go`
+
+#### L6.3
+
+**Tokenization-only indexer fallback** — 🟢 Complete
+
+`defaultCodeExtensions` map (97 extensions matching `treesitter/extensions.go`) enables file discovery without parser. `BuildIndex` tokenizes file content line-by-line via `TokenizeContentLine()` when parser is nil. Search works at file level (no symbol names/lines).
+
+**Gate**: `TestBuildIndex_NilParser_TokenizationOnly` — 2 files discovered, 0 symbols, tokens from content.
+
+**Files**: `internal/app/indexer.go` (defaultCodeExtensions + tokenization fallback)
+
+#### L6.4
+
+**Create cmd/aoa-recon/ entry point** — 🟢 Complete
+
+Separate binary with Cobra CLI: `enhance --db <path> --root <project>` (full project scan), `enhance-file --db <path> --file <path>` (incremental), `version`. Opens bbolt, loads existing index, creates treesitter.Parser, walks files, writes enhanced symbol metadata back. 73 MB binary with all grammars.
+
+**Files**: `cmd/aoa-recon/main.go` (new)
+
+#### L6.5
+
+**Extract scanner to shared package** — 🟢 Complete
+
+Scanner logic extracted from `web/recon.go` to `internal/adapters/recon/scanner.go`. Exports `recon.Scan(idx, lines)` with `LineGetter` interface. Web handler is now a thin adapter that calls the shared scanner. Both web handler and aoa-recon binary can call the same scanning logic.
+
+**Files**: `internal/adapters/recon/scanner.go` (new), `internal/adapters/web/recon.go` (refactored to thin handler)
+
+#### L6.6
+
+**Recon bridge** — 🟢 Complete
+
+`ReconBridge` in `internal/app/recon_bridge.go` discovers aoa-recon binary (PATH → .aoa/bin/ → sibling). `Enhance()` and `EnhanceFile()` invoke subprocess with appropriate flags. Integrated into App lifecycle: `initReconBridge()` in `New()`, `TriggerReconEnhance()` after reindex (when parser is nil), `TriggerReconEnhanceFile()` after file change (when parser is nil). `ReconAvailable()` exposed for dashboard API.
+
+**Files**: `internal/app/recon_bridge.go` (new), `internal/app/app.go` (wiring), `internal/app/watcher.go` (trigger)
+
+#### L6.7
+
+**Dashboard Recon tab install prompt** — 🟢 Complete
+
+Added `ReconAvailable() bool` to `AppQueries` interface. Recon API response includes `recon_available` field. When `recon_available: false` and no scan data, dashboard renders install prompt with `npm install -g aoa-recon` command. When scan data present but recon not available, shows "lite mode" indicator in hero support text.
+
+**Files**: `internal/adapters/socket/server.go` (interface), `internal/adapters/web/recon.go` (API field), `internal/adapters/web/static/app.js` (install prompt UI)
+
+#### L6.8 + L6.9
+
+**npm package structures** — 🟢 Complete
+
+10 npm packages following esbuild/turbo pattern: 2 wrapper packages (`aoa`, `aoa-recon`) with ~30-line JS shims that detect platform, resolve binary from optional dependency, and create symlinks. 8 platform-specific packages (`@aoa/linux-x64`, `@aoa/darwin-arm64`, etc.) with `os`/`cpu` constraints so npm only downloads the matching binary.
+
+**Files**: `npm/aoa/package.json`, `npm/aoa/install.js`, `npm/aoa-recon/package.json`, `npm/aoa-recon/install.js`, 8× `npm/aoa-{platform}/package.json`
+
+#### L6.10
+
+**CI/Release** — 🟢 Complete
+
+`.goreleaser.yml` updated with two build targets: `aoa` (CGO_ENABLED=0) and `aoa-recon` (CGO_ENABLED=1). Release workflow builds 8 binaries (2 binaries × 4 platforms), creates GitHub release, then publishes to npm: populate platform packages with binaries, set versions from git tag, publish platform packages first, then wrapper packages.
+
+**Files**: `.goreleaser.yml`, `.github/workflows/release.yml`
 
 ---
 
@@ -727,7 +831,8 @@ NER-style dimensional view: tier toggle sidebar (5 tiers, color-coded), file→f
 | Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, content scanning, `Rebuild()` for live mutation. Hot file cache (22 tests incl. trigram). Trigram index for sub-ms content search (~60µs on 500 files). Case-sensitive by default (G1). `fileSpans` precomputed. |
 | Learner (21-step autotune) | 5/5 fixture parity, float64 precision on DomainMeta.Hits. Do not change decay/prune constants. |
 | Session Prism (Claude JSONL reader) | Defensive parsing, UUID dedup, compound message decomposition. Battle-tested. |
-| Tree-sitter parser (28 languages) | Symbol extraction working for Go, Python, JS/TS + 24 generic. Reuse ASTs for L5. |
+| Tree-sitter parser (28 languages) | Symbol extraction working for Go, Python, JS/TS + 24 generic. Reuse ASTs for L5. Now behind `ports.Parser` interface; lives in `aoa-recon` binary. |
+| Two-binary distribution (L6, 10 tasks) | `aoa` (pure Go, 7.5 MB) + `aoa-recon` (CGo, 73 MB). ReconBridge auto-discovery. npm packaging. CI/release pipeline. |
 | Socket protocol | JSON-over-socket IPC. Concurrent clients. `Reindex` command with extended timeout. Extend, don't replace. |
 | Value engine (L0, 24 new tests) | Burn rate, runway projection, session persistence, activity enrichments. All wired. |
 | Activity rubric (41 tests) | Three-lane color system: green (guided savings), red (unguided cost — pill, impact, target), purple (creative words for Write/Edit). Learned column with cycling AI vocabulary. Autotune enrichments. Target: `aOa` blue, `grep`/`egrep` green. Impact: numbers cyan. |
@@ -760,7 +865,9 @@ NER-style dimensional view: tier toggle sidebar (5 tiers, color-coded), file→f
 
 | Resource | Location |
 |----------|----------|
-| Build | `make build` (with version ldflags) or `go build ./cmd/aoa/` |
+| Build (full) | `make build` — CGo, all grammars (~76 MB) |
+| Build (pure) | `make build-pure` or `CGO_ENABLED=0 go build ./cmd/aoa/` — pure Go (~8 MB) |
+| Build (recon) | `make build-recon` or `go build ./cmd/aoa-recon/` — CGo, tree-sitter (~73 MB) |
 | Test | `go test ./...` |
 | CI check | `make check` |
 | Database | `{ProjectRoot}/.aoa/aoa.db` |

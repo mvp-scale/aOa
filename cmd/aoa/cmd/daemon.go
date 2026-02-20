@@ -176,7 +176,7 @@ func readLogTail(path string, n int) string {
 func runDaemonLoop(root, sockPath string) error {
 	fmt.Printf("[%s] daemon starting\n", time.Now().Format(time.RFC3339))
 
-	a, err := app.New(app.Config{ProjectRoot: root})
+	a, err := app.New(app.Config{ProjectRoot: root, Parser: newParser()})
 	if err != nil {
 		if isDBLockError(err) {
 			fmt.Printf("[%s] error: %s\n", time.Now().Format(time.RFC3339), diagnoseDBLock(root))

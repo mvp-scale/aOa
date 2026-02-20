@@ -1,0 +1,16 @@
+{
+  "name": "aoa-recon",
+  "version": "0.0.0",
+  "description": "aOa Recon — tree-sitter parsing and security scanning companion",
+  "bin": { "aoa-recon": "bin/aoa-recon" },
+  "scripts": { "postinstall": "node install.js" },
+  "optionalDependencies": {
+    "@aoa/recon-linux-x64": "0.0.0",
+    "@aoa/recon-linux-arm64": "0.0.0",
+    "@aoa/recon-darwin-x64": "0.0.0",
+    "@aoa/recon-darwin-arm64": "0.0.0"
+  },
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/corey/aoa" },
+  "keywords": ["code-search", "security-scanning", "tree-sitter"]
+}

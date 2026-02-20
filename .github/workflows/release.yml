@@ -10,29 +10,72 @@ permissions:
 
 jobs:
   build:
-    name: Build (${{ matrix.goos }}-${{ matrix.goarch }})
+    name: Build (${{ matrix.binary }}-${{ matrix.suffix }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - goos: linux
+          # aoa — pure Go (CGO_ENABLED=0)
+          - binary: aoa
+            cmd: ./cmd/aoa/
+            goos: linux
             goarch: amd64
             runner: ubuntu-latest
             suffix: linux-amd64
-          - goos: linux
+            cgo: "0"
+          - binary: aoa
+            cmd: ./cmd/aoa/
+            goos: linux
             goarch: arm64
             runner: ubuntu-latest
             suffix: linux-arm64
-            cc: aarch64-linux-gnu-gcc
-          - goos: darwin
+            cgo: "0"
+          - binary: aoa
+            cmd: ./cmd/aoa/
+            goos: darwin
             goarch: amd64
             runner: macos-13
             suffix: darwin-amd64
-          - goos: darwin
+            cgo: "0"
+          - binary: aoa
+            cmd: ./cmd/aoa/
+            goos: darwin
             goarch: arm64
             runner: macos-14
             suffix: darwin-arm64
+            cgo: "0"
+
+          # aoa-recon — CGo (CGO_ENABLED=1, tree-sitter grammars)
+          - binary: aoa-recon
+            cmd: ./cmd/aoa-recon/
+            goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+            suffix: linux-amd64
+            cgo: "1"
+          - binary: aoa-recon
+            cmd: ./cmd/aoa-recon/
+            goos: linux
+            goarch: arm64
+            runner: ubuntu-latest
+            suffix: linux-arm64
+            cgo: "1"
+            cc: aarch64-linux-gnu-gcc
+          - binary: aoa-recon
+            cmd: ./cmd/aoa-recon/
+            goos: darwin
+            goarch: amd64
+            runner: macos-13
+            suffix: darwin-amd64
+            cgo: "1"
+          - binary: aoa-recon
+            cmd: ./cmd/aoa-recon/
+            goos: darwin
+            goarch: arm64
+            runner: macos-14
+            suffix: darwin-arm64
+            cgo: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -44,32 +87,32 @@ jobs:
           go-version-file: go.mod
 
       - name: Install cross-compiler
-        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64' && matrix.cgo == '1'
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
 
-      - name: Build lean binary
+      - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "1"
+          CGO_ENABLED: ${{ matrix.cgo }}
           CC: ${{ matrix.cc || 'gcc' }}
         run: |
           VERSION=${GITHUB_REF_NAME}
           BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           LDFLAGS="-s -w -X github.com/corey/aoa/internal/version.Version=${VERSION} -X github.com/corey/aoa/internal/version.BuildDate=${BUILD_DATE}"
 
-          go build -tags lean -ldflags "${LDFLAGS}" -o aoa-${{ matrix.suffix }} ./cmd/aoa/
+          go build -ldflags "${LDFLAGS}" -o ${{ matrix.binary }}-${{ matrix.suffix }} ${{ matrix.cmd }}
 
       - name: Show binary info
         run: |
-          ls -lh aoa-${{ matrix.suffix }}
-          file aoa-${{ matrix.suffix }}
+          ls -lh ${{ matrix.binary }}-${{ matrix.suffix }}
+          file ${{ matrix.binary }}-${{ matrix.suffix }}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: aoa-${{ matrix.suffix }}
-          path: aoa-${{ matrix.suffix }}
+          name: ${{ matrix.binary }}-${{ matrix.suffix }}
+          path: ${{ matrix.binary }}-${{ matrix.suffix }}
 
   release:
     name: Create release
@@ -86,12 +129,12 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release
-          for dir in dist/aoa-*/; do
+          for dir in dist/*/; do
             cp "$dir"/* release/ 2>/dev/null || true
           done
 
           cd release
-          sha256sum aoa-* > checksums.txt
+          sha256sum aoa-* aoa-recon-* > checksums.txt
           cat checksums.txt
 
       - name: Create GitHub release
@@ -99,7 +142,82 @@ jobs:
         with:
           files: |
             release/aoa-*
+            release/aoa-recon-*
             release/checksums.txt
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') }}
+
+  publish-npm:
+    name: Publish to npm
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Set version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Populate npm packages with binaries
+        run: |
+          # Map platform suffixes to npm package directories
+          declare -A AOA_MAP=(
+            [linux-amd64]=aoa-linux-x64
+            [linux-arm64]=aoa-linux-arm64
+            [darwin-amd64]=aoa-darwin-x64
+            [darwin-arm64]=aoa-darwin-arm64
+          )
+          declare -A RECON_MAP=(
+            [linux-amd64]=aoa-recon-linux-x64
+            [linux-arm64]=aoa-recon-linux-arm64
+            [darwin-amd64]=aoa-recon-darwin-x64
+            [darwin-arm64]=aoa-recon-darwin-arm64
+          )
+
+          for suffix in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+            # aoa binary
+            pkg_dir="npm/${AOA_MAP[$suffix]}"
+            mkdir -p "$pkg_dir/bin"
+            cp "dist/aoa-${suffix}/aoa-${suffix}" "$pkg_dir/bin/aoa"
+            chmod +x "$pkg_dir/bin/aoa"
+
+            # aoa-recon binary
+            recon_dir="npm/${RECON_MAP[$suffix]}"
+            mkdir -p "$recon_dir/bin"
+            cp "dist/aoa-recon-${suffix}/aoa-recon-${suffix}" "$recon_dir/bin/aoa-recon"
+            chmod +x "$recon_dir/bin/aoa-recon"
+          done
+
+      - name: Set versions in all package.json files
+        run: |
+          for pkg in npm/*/package.json; do
+            sed -i "s/\"version\": \"0.0.0\"/\"version\": \"$VERSION\"/" "$pkg"
+            # Update optionalDependencies versions too
+            sed -i "s/\"0.0.0\"/\"$VERSION\"/g" "$pkg"
+          done
+
+      - name: Publish platform packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for dir in npm/aoa-linux-* npm/aoa-darwin-* npm/aoa-recon-linux-* npm/aoa-recon-darwin-*; do
+            echo "Publishing $(basename $dir)..."
+            cd "$dir" && npm publish --access public && cd ../..
+          done
+
+      - name: Publish wrapper packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd npm/aoa && npm publish --access public && cd ../..
+          cd npm/aoa-recon && npm publish --access public && cd ../..
