@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-19 (Session 59) | **Phase**: L3 in progress — grep/egrep parity test (55 tests), 7 benchmarks wired, MIGRATION.md written.
-> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 + L3.2/L3.4/L3.5 (429+ active tests, 32 skipped)
+> **Updated**: 2026-02-20 (Session 60) | **Phase**: L3 complete — L3.6–L3.14 delivered (9 new flags, 25 new tests, 80 migration tests), dashboard Learned column + learning UX overhaul.
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 + L3.2–L3.14 (454+ active tests, 32 skipped)
 
 ---
 
@@ -71,7 +71,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Session 59 delivered L3 grep/egrep parity proof, benchmark wiring, and migration docs. Grep parity test (`test/migration/grep_parity_test.go`): 55 tests covering every flag exposed by `aoa grep` and `aoa egrep` — individual flags, flag combinations, edge cases, and coverage matrix vs GNU grep (16 implemented, 8 not implemented = 67% surface). Benchmarks: all 7 unskipped and wired with real data — search 59µs, observe 78µs/50events, autotune 24µs, index-file 9ms, startup 8ms, memory 0.4MB. All targets crushed (search 135-254x faster, autotune 10,000-25,000x, memory 975x reduction). MIGRATION.md written with step-by-step migration guide, rollback instructions, and flag coverage reference. L3.3 (learner parity) already green via `TestAutotuneParity_FullReplay` (200-intent, 5 checkpoints). Next: L3.1 project selection (user picks 5 real projects for manual validation), then L4 distribution.
+**Current**: Session 60 delivered L3.6–L3.14 (all 9 remaining grep/egrep parity items) plus a dashboard learning UX overhaul. GNU grep parity: 100% agent-critical (15/15), 96% overall (23/24 relevant flags). New flags: egrep `-i` (case-insensitive regex), `-A/-B/-C` (context lines), `--exclude-dir`, `-o`/`--only-matching`, egrep `-w` (word boundary), `-L`/`--files-without-match`, `--no-filename`, `--no-color`, egrep `-a` (AND mode). Engine: `matchesAllGlobs()` for directory exclusion, `filesWithoutMatch()`, `applyOnlyMatching()`/`extractMatch()`, `attachContextLines()` from FileCache, `\b`-wrapping for regex+`-w`. Socket protocol: `ContextLines map[int]string` on `SearchHit`. 25 new migration tests (80 total). Dashboard: removed separate Learn action rows — learning signal now appears as a dedicated **Learned** column (green cycling AI vocabulary: trained/fine-tuned/calibrated/converged/reinforced/optimized/weighted/adapted) on Search and Read rows when signals are absorbed. Attribution column redesigned: `multi-and`/`multi-or` now yellow (parity with `regex`). Target column: `aOa` blue, `grep`/`egrep` green, flags+query gray. Impact: numbers pop cyan, text gray. Target gets most column width (39%). `searchTarget()` updated to include all new flags in command reconstruction. 454+ tests passing.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -123,6 +123,11 @@
 - **grep case-sensitivity parity (G1)** — `aoa grep` must be case-sensitive by default, matching Unix grep. `-i` flag enables case-insensitive. Current `buildContentMatcher` default path uses `containsFold` (always case-insensitive) — this is a G1 violation that must be fixed as part of L2.5 wiring. Symbol search already case-insensitive by design (token index is lowered); content search must respect the flag.
 - **Trigram memory budget** — 17MB additional on top of existing 8MB cache (6MB original lines + 2MB token index). Breakdown: 6MB lowered lines + 11MB trigram posting lists = 17MB. Total after: ~25MB. 250MB budget has 225MB headroom. Scales linearly with corpus size. 500-file project ≈ 35MB total.
 
+**Design Decisions Locked** (Session 60):
+- **Learned column (not Learn action rows)** — Learning signal moved from a separate activity row into a dedicated `Learned` column between Impact and Target. Green pill, cycling AI vocabulary (trained/fine-tuned/calibrated/converged/reinforced/optimized/weighted/adapted). Empty when no learning. Cleaner feed, no row doubling. Session-log grep signals retain separate Learn entries (different signal path, not paired with a user action row).
+- **Activity table color system (finalized)** — Source: `aOa` = blue, Claude = dim. Attrib pills: `indexed` = cyan, `regex`/`multi-and`/`multi-or` = yellow, `aOa guided` = green, `unguided` = red, creative words = purple, learn words = green. Impact: numbers in cyan, text in gray (via `highlightNumbers()`). Target: `aOa` blue, `grep`/`egrep` green, rest gray. Learned: green pill. Column widths: Target gets 39% (longest content).
+- **L3.6–L3.14 parity complete** — 100% agent-critical (15/15), 96% overall (23/24). Remaining 1 gap (`-x`/`--line-regexp`) is not agent-critical. `searchTarget()` reconstructs full command with all new flags for activity feed display.
+
 **Needs Discussion** (before L3):
 - **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
 - **Real-time conversation** — ✅ Resolved (Session 58). Debrief tab now polls at 1s (vs 3s for other tabs). Auto-scroll sticks to bottom when user is near the live edge. Floating "Now ↓" button for jump-back after scrolling up. Thinking text appears within ~1s of generation.
@@ -165,15 +170,15 @@
 | [L3](#layer-3) | [L3.3](#l33) | | x | | | | | | - | 🟢 | 🟢 | 🟢 | Learner parity: 200 intents, 5 checkpoints, zero tolerance | Learner parity proof | `TestAutotuneParity_FullReplay` — 200-intent replay, all fields match |
 | [L3](#layer-3) | [L3.4](#l34) | x | | | | | | | - | 🟢 | 🟢 | 🟢 | 7 benchmarks: search 59µs, autotune 24µs, startup 8ms, 0.4MB | Confirm speedup targets | `test/benchmark_test.go` — all 7 passing, all targets exceeded |
 | [L3](#layer-3) | [L3.5](#l35) | | | x | | | | | - | 🟢 | 🟢 | 🟢 | MIGRATION.md — install, migrate, verify, rollback | Clean upgrade path | Step-by-step guide with flag reference and perf comparison |
-| [L3](#layer-3) | [L3.6](#l36) | | x | | x | | | | - | 🟢 | ⚪ | ⚪ | egrep `-i` — case-insensitive regex | Agent-critical gap: 93%→100% | Add flag to egrep cmd, wire `Mode: "case_insensitive"`. ~20 lines |
-| [L3](#layer-3) | [L3.7](#l37) | | x | | x | | | | - | 🟡 | ⚪ | ⚪ | `-A/-B/-C` context lines for grep/egrep | Agents use `-A 3` for context | Return surrounding lines from FileCache. ~100 lines engine + CLI |
-| [L3](#layer-3) | [L3.8](#l38) | | x | | x | | | | - | 🟢 | ⚪ | ⚪ | `--exclude-dir` glob for directory exclusion | More precise than `--exclude` | Extend glob filter to match dir prefixes. ~30 lines |
-| [L3](#layer-3) | [L3.9](#l39) | | x | | x | | | | - | 🟢 | ⚪ | ⚪ | `-o` / `--only-matching` — print matching part only | Pipeline extraction use case | Extract matching substring from hits. ~40 lines |
-| [L3](#layer-3) | [L3.10](#l310) | | x | | x | | | | - | 🟢 | ⚪ | ⚪ | egrep `-w` — word boundary regex | Parity with grep `-w` | Add flag to egrep cmd, wire `WordBoundary: true`. ~20 lines |
-| [L3](#layer-3) | [L3.11](#l311) | | x | | x | | | | - | 🟢 | ⚪ | ⚪ | `-L` / `--files-without-match` | Inverse of `-l` | Collect files with zero hits. ~30 lines |
-| [L3](#layer-3) | [L3.12](#l312) | | x | | x | | | | - | 🟢 | ⚪ | ⚪ | `-h` / `--no-filename` — suppress filename | Script/pipeline mode | Omit file prefix in output. ~10 lines |
-| [L3](#layer-3) | [L3.13](#l313) | | x | | x | | | | - | 🟢 | ⚪ | ⚪ | `--color=never` / `--no-color` | Pipeline mode (no ANSI) | Strip ANSI codes when flag set. ~15 lines |
-| [L3](#layer-3) | [L3.14](#l314) | | x | | x | | | | - | 🟢 | ⚪ | ⚪ | egrep `-a` / `--and` — AND mode for regex | Parity with grep `-a` | Add flag to egrep cmd, wire `AndMode: true`. ~20 lines |
+| [L3](#layer-3) | [L3.6](#l36) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | egrep `-i` — case-insensitive regex | Agent-critical gap: 93%→100% | `TestEgrep_Flag_i`, `TestEgrep_Flag_i_Regex` — case-insensitive mode wired, parity with grep `-i` |
+| [L3](#layer-3) | [L3.7](#l37) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | `-A/-B/-C` context lines for grep/egrep | Agents use `-A 3` for context | `TestGrep_Flag_A/B/C`, `TestGrep_Combo_A_B`, `TestGrep_Flag_C_OverridesAB` — `attachContextLines()` from FileCache; nil for symbol-only hits |
+| [L3](#layer-3) | [L3.8](#l38) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | `--exclude-dir` glob for directory exclusion | More precise than `--exclude` | `TestGrep_Flag_excludeDir`, `TestEgrep_Flag_excludeDir`, `TestGrep_Flag_excludeDir_Nested` — `matchesAllGlobs()` checks `filepath.Dir(path)` |
+| [L3](#layer-3) | [L3.9](#l39) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | `-o` / `--only-matching` — print matching part only | Pipeline extraction use case | `TestGrep_Flag_o`, `TestEgrep_Flag_o` — `extractMatch()` for literal/regex/case-insensitive modes |
+| [L3](#layer-3) | [L3.10](#l310) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | egrep `-w` — word boundary regex | Parity with grep `-w` | `TestEgrep_Flag_w` — `\b`-wrapping in `searchRegex()` when `WordBoundary` set |
+| [L3](#layer-3) | [L3.11](#l311) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | `-L` / `--files-without-match` | Inverse of `-l` | `TestGrep_Flag_L`, `TestGrep_Flag_L_NoResults` — `filesWithoutMatch()` respects glob filters |
+| [L3](#layer-3) | [L3.12](#l312) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | `--no-filename` — suppress filename | Script/pipeline mode | `TestGrep_Flag_noFilename` — output-only flag, omits file prefix in `formatSearchResult()` |
+| [L3](#layer-3) | [L3.13](#l313) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | `--no-color` | Pipeline mode (no ANSI) | `TestGrep_Flag_noColor` — all ANSI constants empty when set |
+| [L3](#layer-3) | [L3.14](#l314) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | egrep `-a` / `--and` — AND mode for regex | Parity with grep `-a` | `TestEgrep_Flag_a_ANDMode` — `AndMode: true` wired to egrep `-a` flag |
 | [L4](#layer-4) | [L4.1](#l41) | | | x | | | | | - | 🟢 | ⚪ | ⚪ | Purego .so loader for runtime grammar loading | Extend language coverage without recompile | Load .so, parse file, identical to compiled-in |
 | [L4](#layer-4) | [L4.2](#l42) | | | x | | | | | L4.1 | 🟡 | ⚪ | ⚪ | Grammar downloader CI — compile .so, host on GitHub Releases | Easy grammar distribution | Download + load 20 grammars from releases |
 | [L4](#layer-4) | [L4.3](#l43) | | | x | | | | | - | 🟢 | ⚪ | ⚪ | Goreleaser — linux/darwin × amd64/arm64 | Cross-platform binaries | Binaries build for all 4 platforms |
@@ -284,11 +289,11 @@ Claude Grep events show estimated scan cost via `estimateGrepCost()` (total inde
 
 #### L0.11
 
-**Learn activity event** — 🟢 Complete
+**Learn activity event** — 🟢 Complete (redesigned Session 60)
 
-Two sources: (1) `searchObserver` pushes `Learn` with keyword/term/domain counts, (2) range-gated file reads push `Learn` with `+1 file: <path>`. Verified by integration test + dedicated unit test.
+Learning signal redesigned: no longer a separate "Learn" action row. Two sources emit a cycling AI vocabulary word into the **Learned** field of their parent row: (1) `searchObserver` — when keywords/terms/domains are absorbed, the Search row gets `Learned = nextLearnWord()`. (2) Range-gated file reads — Read row gets `Learned` set. Words cycle: trained → fine-tuned → calibrated → converged → reinforced → optimized → weighted → adapted. Dashboard renders as a green pill in the dedicated **Learned** column (between Impact and Target). Session-log grep signals still emit separate Learn activity entries (different path, less frequent).
 
-**Files**: `internal/app/app.go`, `internal/app/activity_test.go`
+**Files**: `internal/app/app.go`, `internal/app/activity_test.go`, `internal/adapters/socket/protocol.go`, `internal/adapters/web/static/app.js`, `internal/adapters/web/static/index.html`, `internal/adapters/web/static/style.css`
 
 #### L0.12
 
@@ -651,7 +656,7 @@ NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→m
 | Tree-sitter parser (28 languages) | Symbol extraction working for Go, Python, JS/TS + 24 generic. Reuse ASTs for L5. |
 | Socket protocol | JSON-over-socket IPC. Concurrent clients. `Reindex` command with extended timeout. Extend, don't replace. |
 | Value engine (L0, 24 new tests) | Burn rate, runway projection, session persistence, activity enrichments. All wired. |
-| Activity rubric (41 tests) | Three-lane color system: green (guided savings), red (unguided cost — pill, impact, target), purple (creative words for Write/Edit). Learn/Autotune enrichments. |
+| Activity rubric (41 tests) | Three-lane color system: green (guided savings), red (unguided cost — pill, impact, target), purple (creative words for Write/Edit). Learned column with cycling AI vocabulary. Autotune enrichments. Target: `aOa` blue, `grep`/`egrep` green. Impact: numbers cyan. |
 | Dashboard (L1, 5-tab SPA) | 3-file split: `index.html` + `style.css` + `app.js`. Tab-aware polling. Soft glow animations. All tabs render live data. |
 | File watcher (L2, 5 new tests) | `fsnotify` → `onFileChanged` → re-parse → `Rebuild()` → `SaveIndex()`. Add/modify/delete. |
 | Invert-match (L2, 8 new tests) | `-v` flag for grep/egrep. Symbol complement + content matcher flip. All 4 modes. |
