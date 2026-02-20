@@ -121,6 +121,7 @@ func TestSearchObserver_DirectIncrement(t *testing.T) {
 
 	// Run a single search
 	engine.Search("auth", ports.SearchOptions{})
+	engine.WaitObservers()
 
 	state := a.Learner.State()
 
@@ -185,6 +186,7 @@ func TestSearchObserver_QueryTokensUseEnricher(t *testing.T) {
 	engine.SetObserver(a.searchObserver)
 
 	engine.Search("auth", ports.SearchOptions{})
+	engine.WaitObservers()
 
 	state := a.Learner.State()
 

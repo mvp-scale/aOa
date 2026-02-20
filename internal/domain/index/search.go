@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/corey/aoa/internal/ports"
@@ -43,7 +44,8 @@ type SearchEngine struct {
 	cache *FileCache
 
 	// observer is called after each search to emit learning signals.
-	observer SearchObserver
+	observer   SearchObserver
+	observerWg sync.WaitGroup
 }
 
 // SearchResult holds the output of a search operation.
@@ -64,7 +66,8 @@ type Hit struct {
 	Kind    string   `json:"kind,omitempty"`    // "symbol" or "content"
 	Content string   `json:"content,omitempty"` // matching line text (content hits only)
 
-	fileID uint32 // internal, for deterministic sorting
+	fileID uint32         // internal, for deterministic sorting
+	ref    ports.TokenRef // internal, for deferred enrichment
 }
 
 // NewSearchEngine creates an engine from an existing index + domain map.
@@ -164,6 +167,12 @@ func (e *SearchEngine) SetObserver(obs SearchObserver) {
 	e.observer = obs
 }
 
+// WaitObservers blocks until all in-flight observer goroutines complete.
+// Used by tests to avoid races between async observers and assertions.
+func (e *SearchEngine) WaitObservers() {
+	e.observerWg.Wait()
+}
+
 // Search executes a query with the given options.
 func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchResult {
 	start := time.Now()
@@ -181,12 +190,14 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 	case opts.AndMode:
 		hits = e.searchAND(query, opts)
 	default:
-		// Case insensitive: lowercase the query before tokenizing
-		q := query
+		// Tokenize original query (preserves camelCase splits), then lowercase
+		// tokens for index lookup. The token index is already lowered.
+		tokens := Tokenize(query)
 		if opts.Mode == "case_insensitive" {
-			q = strings.ToLower(q)
+			for i, t := range tokens {
+				tokens[i] = strings.ToLower(t)
+			}
 		}
-		tokens := Tokenize(q)
 		if len(tokens) == 0 {
 			return e.buildResult(nil, opts, maxCount)
 		}
@@ -210,13 +221,20 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 
 	result := e.buildResult(hits, opts, maxCount)
 
+	// Enrich symbol hits (domain + tags) only for survivors after truncation
+	e.enrichHits(result.Hits)
+
 	// Generate tags for content hits that deferred tag generation (indexed paths)
 	e.fillContentTags(result.Hits)
 
 	elapsed := time.Since(start)
 
 	if e.observer != nil {
-		e.observer(query, opts, result, elapsed)
+		e.observerWg.Add(1)
+		go func() {
+			defer e.observerWg.Done()
+			e.observer(query, opts, result, elapsed)
+		}()
 	}
 
 	return result
@@ -487,10 +505,21 @@ func (e *SearchEngine) buildHit(ref ports.TokenRef, sym *ports.SymbolMeta, file 
 		Line:   int(ref.Line),
 		Symbol: FormatSymbol(sym),
 		Range:  [2]int{int(sym.StartLine), int(sym.EndLine)},
-		Domain: e.assignDomain(ref),
-		Tags:   e.generateTags(ref),
 		Kind:   "symbol",
 		fileID: ref.FileID,
+		ref:    ref,
+	}
+}
+
+// enrichHits fills in Domain and Tags for symbol hits that survived truncation.
+// Called after buildResult to avoid enriching hundreds of hits that get discarded.
+func (e *SearchEngine) enrichHits(hits []Hit) {
+	for i := range hits {
+		if hits[i].Kind != "symbol" {
+			continue
+		}
+		hits[i].Domain = e.assignDomain(hits[i].ref)
+		hits[i].Tags = e.generateTags(hits[i].ref)
 	}
 }
 

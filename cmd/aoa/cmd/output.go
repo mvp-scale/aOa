@@ -33,27 +33,15 @@ func formatSearchResult(result *socket.SearchResult, countOnly, quiet bool) stri
 		return fmt.Sprintf("%s⚡ %d hits%s │ %s", colorBold, result.Count, colorReset, result.Elapsed)
 	}
 
-	// Count symbol vs content hits
-	symbolCount := 0
-	contentCount := 0
+	// Count unique files
+	fileSet := make(map[string]struct{})
 	for _, hit := range result.Hits {
-		if hit.Kind == "content" {
-			contentCount++
-		} else {
-			symbolCount++
-		}
+		fileSet[hit.File] = struct{}{}
 	}
 
 	var sb strings.Builder
-
-	// Header with breakdown when content hits exist
-	if contentCount > 0 {
-		sb.WriteString(fmt.Sprintf("%s⚡ %d hits%s (%d symbol, %d content) │ %s\n",
-			colorBold, len(result.Hits), colorReset, symbolCount, contentCount, result.Elapsed))
-	} else {
-		sb.WriteString(fmt.Sprintf("%s⚡ %d hits%s │ %s\n",
-			colorBold, len(result.Hits), colorReset, result.Elapsed))
-	}
+	sb.WriteString(fmt.Sprintf("%s⚡ %d hits%s │ %d files │ %s\n",
+		colorBold, len(result.Hits), colorReset, len(fileSet), result.Elapsed))
 
 	for _, hit := range result.Hits {
 		if hit.Kind == "content" {

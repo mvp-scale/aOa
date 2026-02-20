@@ -105,20 +105,20 @@ func executeSearch(query string, opts ports.SearchOptions) error {
 	sockPath := socket.SocketPath(root)
 	client := socket.NewClient(sockPath)
 
-	// Try daemon mode first
-	if client.Ping() {
-		result, err := client.Search(query, opts)
-		if err != nil {
-			return err
+	result, err := client.Search(query, opts)
+	if err != nil {
+		if isConnectError(err) {
+			return fmt.Errorf("daemon not running. Start with: aoa daemon start")
 		}
-		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet))
-		if opts.Quiet {
-			os.Exit(result.ExitCode)
-		}
-		return nil
+		return err
 	}
+	fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet))
+	if opts.Quiet {
+		os.Exit(result.ExitCode)
+	}
+	return nil
+}
 
-	// No daemon running — direct mode would go here once app.go wiring is complete.
-	// For now, report that daemon isn't running.
-	return fmt.Errorf("daemon not running. Start with: aoa daemon start")
+func isConnectError(err error) bool {
+	return strings.Contains(err.Error(), "connect:")
 }

@@ -39,6 +39,7 @@ func TestAutotuneFiresViaSearchObserver(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		engine.Search("auth", ports.SearchOptions{})
 	}
+	engine.WaitObservers()
 
 	// After 50 searches, promptN should be >= 50 and autotune should have fired
 	assert.GreaterOrEqual(t, a.promptN, uint32(50))

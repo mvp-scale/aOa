@@ -951,3 +951,37 @@ created by net/http.(*connReader).startBackgroundRead in goroutine 66
 [2026-02-19T21:43:57-05:00] daemon starting
 [2026-02-19T21:43:58-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
 [2026-02-19T21:43:58-05:00] dashboard at http://localhost:19270
+[2026-02-19T22:09:21-05:00] remote stop, shutting down
+[2026-02-19T22:09:21-05:00] daemon stopped
+[2026-02-19T22:09:21-05:00] daemon starting
+[2026-02-19T22:09:22-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T22:09:22-05:00] dashboard at http://localhost:19270
+[2026-02-19T22:10:35-05:00] remote stop, shutting down
+[2026-02-19T22:10:35-05:00] daemon stopped
+[2026-02-19T22:10:35-05:00] daemon starting
+[2026-02-19T22:10:36-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T22:10:36-05:00] dashboard at http://localhost:19270
+2026/02/19 22:10:43 [search] q="SearchEngine" symbol=21.28513ms content=245.835µs build=309ns tags=182ns total=21.53207ms hits=20
+2026/02/19 22:10:43 [search] q="searchengine" symbol=318.722µs content=226.386µs build=352ns tags=417.08µs total=962.93µs hits=20
+2026/02/19 22:10:43 [search] q="autotune" symbol=11.798925ms content=903.566µs build=2.381µs tags=256ns total=12.705738ms hits=20
+2026/02/19 22:10:43 [search] q="onSessionEvent" symbol=19.967626ms content=257.719µs build=581ns tags=207ns total=20.226984ms hits=20
+2026/02/19 22:10:43 [search] q="mu" symbol=10.471µs content=7.352043ms build=550ns tags=996.401µs total=8.360811ms hits=20
+2026/02/19 22:10:43 [search] q="func.*Trigram" symbol=270.777µs content=10.888055ms build=387ns tags=364.845µs total=11.52474ms hits=19
+2026/02/19 22:10:59 [search] q="SearchEngine" symbol=20.332103ms content=200.956µs build=490ns tags=431ns total=20.534697ms hits=20
+2026/02/19 22:11:14 [search] q="search" symbol=22.185924ms content=2.53955ms build=410ns tags=281ns total=24.727646ms hits=0
+2026/02/19 22:11:14 [search] q="engine" symbol=575.053µs content=283.819µs build=238ns tags=132ns total=859.545µs hits=0
+[2026-02-19T22:12:43-05:00] remote stop, shutting down
+[2026-02-19T22:12:43-05:00] daemon stopped
+[2026-02-19T22:12:44-05:00] daemon starting
+[2026-02-19T22:12:45-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T22:12:45-05:00] dashboard at http://localhost:19270
+[2026-02-19T22:16:00-05:00] remote stop, shutting down
+[2026-02-19T22:16:00-05:00] daemon stopped
+[2026-02-19T22:16:01-05:00] daemon starting
+[2026-02-19T22:16:01-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T22:16:01-05:00] dashboard at http://localhost:19270
+[2026-02-19T22:22:36-05:00] remote stop, shutting down
+[2026-02-19T22:22:36-05:00] daemon stopped
+[2026-02-19T22:22:36-05:00] daemon starting
+[2026-02-19T22:22:37-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T22:22:37-05:00] dashboard at http://localhost:19270

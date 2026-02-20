@@ -70,19 +70,18 @@ func runEgrepSearch(pattern string) error {
 	sockPath := socket.SocketPath(root)
 	client := socket.NewClient(sockPath)
 
-	if client.Ping() {
-		result, err := client.Search(pattern, opts)
-		if err != nil {
-			return err
+	result, err := client.Search(pattern, opts)
+	if err != nil {
+		if isConnectError(err) {
+			return fmt.Errorf("daemon not running. Start with: aoa daemon start")
 		}
-		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet))
-		if opts.Quiet {
-			os.Exit(result.ExitCode)
-		}
-		return nil
+		return err
 	}
-
-	return fmt.Errorf("daemon not running. Start with: aoa daemon start")
+	fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet))
+	if opts.Quiet {
+		os.Exit(result.ExitCode)
+	}
+	return nil
 }
 
 // buildEgrepPattern combines args and -e patterns into a single regex.

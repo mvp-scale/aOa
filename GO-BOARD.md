@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-19 (Session 57) | **Phase**: L2 complete — Sub-ms content search, case-sensitivity fix, all edge cases validated
+> **Updated**: 2026-02-19 (Session 58) | **Phase**: L2 complete — Debrief UX polish (Now button, auto-scroll, 1s polling)
 > **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 (374 active tests, 32 skipped)
 
 ---
@@ -71,7 +71,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Sub-ms content search complete (Session 57). Trigram index in FileCache: one lowered index serves both case-sensitive and case-insensitive search modes (~56-64µs per query on 500 files, target was <500µs). Case-sensitivity G1 fix: `aoa grep` is now case-sensitive by default (matching Unix grep), `-i` flag enables case-insensitive. Pre-lowered line cache for faster brute-force fallback. All edge cases validated: short queries (<3 chars), regex, InvertMatch, AND mode, word boundary, glob filters. 30 new tests added across L2.4-L2.7. Next: L3 (parallel run Python vs Go) or search observer signal pipeline refactor.
+**Current**: Debrief UX polish (Session 58). Now button + auto-scroll + 1s polling for live thinking updates. Subtle green NOW separator bar at live edge of both conversation and actions feeds (matching mockup pattern: green line + pulsing dot + "NOW" text). Floating "Now ↓" button appears when user scrolls up, click to jump back. Action path truncation widened from 30→80 chars, removed CSS `max-width: 200px` constraint so paths fill available space. Sub-ms content search remains green (all 42 trigram/content tests passing). Next: L3 (parallel run Python vs Go) or search observer signal pipeline refactor.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -125,7 +125,7 @@
 
 **Needs Discussion** (before L3):
 - **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
-- **Real-time conversation** — Legacy Python showed real-time; Go dashboard with 3s poll should do better. Needs investigation.
+- **Real-time conversation** — ✅ Resolved (Session 58). Debrief tab now polls at 1s (vs 3s for other tabs). Auto-scroll sticks to bottom when user is near the live edge. Floating "Now ↓" button for jump-back after scrolling up. Thinking text appears within ~1s of generation.
 
 ---
 
