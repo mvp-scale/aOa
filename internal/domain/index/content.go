@@ -25,19 +25,26 @@ type symbolSpan struct {
 	endLine   int
 }
 
-// scanFileContents scans indexed file contents for grep-style matches.
-// It deduplicates against existing symbol hits (same file+line) and returns
-// content-only hits sorted by fileID/line. Each content hit includes the
-// enclosing symbol(s) from the tree-sitter index for structural context.
+// contentFileLine is used for deduplicating content hits by file+line.
+type contentFileLine struct {
+	fileID uint32
+	line   int
+}
+
+// scanFileContents scans all cached/on-disk files for grep-style substring matches.
+// Always uses brute-force substring matching to preserve full grep semantics —
+// "tree" matches "btree", "subtree", etc. Tags are deferred (nil) and filled
+// after MaxCount truncation by fillContentTags to avoid wasted work.
 func (e *SearchEngine) scanFileContents(query string, opts ports.SearchOptions, symbolHits []Hit) []Hit {
-	// Build dedup set from symbol hits: {fileID, line}
-	type fileLine struct {
-		fileID uint32
-		line   int
-	}
-	dedup := make(map[fileLine]bool, len(symbolHits))
+	return e.scanContentBruteForce(query, opts, symbolHits)
+}
+
+// scanContentBruteForce is the original full-scan path: iterates every line of
+// every cached/on-disk file running a matcher function per line.
+func (e *SearchEngine) scanContentBruteForce(query string, opts ports.SearchOptions, symbolHits []Hit) []Hit {
+	dedup := make(map[contentFileLine]bool, len(symbolHits))
 	for _, h := range symbolHits {
-		dedup[fileLine{h.fileID, h.Line}] = true
+		dedup[contentFileLine{h.fileID, h.Line}] = true
 	}
 
 	matcher := buildContentMatcher(query, opts)
@@ -48,17 +55,13 @@ func (e *SearchEngine) scanFileContents(query string, opts ports.SearchOptions, 
 	var hits []Hit
 
 	for fileID, file := range e.idx.Files {
-		// Skip large files
 		if file.Size > maxContentFileSize {
 			continue
 		}
-
-		// Apply glob filters
 		if !matchesGlobs(file.Path, opts.IncludeGlob, opts.ExcludeGlob) {
 			continue
 		}
 
-		// Try cache first, fall back to disk
 		var lines []string
 		if e.cache != nil {
 			lines = e.cache.GetLines(fileID)
@@ -81,39 +84,36 @@ func (e *SearchEngine) scanFileContents(query string, opts ports.SearchOptions, 
 			if !matched {
 				continue
 			}
-			fl := fileLine{fileID, lineNum}
+			fl := contentFileLine{fileID, lineNum}
 			if dedup[fl] {
 				continue
 			}
 			dedup[fl] = true
 
-			hit := Hit{
-				File:    file.Path,
-				Line:    lineNum,
-				Kind:    "content",
-				Content: strings.TrimSpace(line),
-				Tags:    e.generateContentTags(line),
-				fileID:  fileID,
-			}
-
-			// Find enclosing symbol(s) — innermost wins for Symbol/Range
-			if enclosing := findEnclosingSymbol(spans, lineNum); enclosing != nil {
-				hit.Symbol = FormatSymbol(enclosing.sym)
-				hit.Range = [2]int{enclosing.startLine, enclosing.endLine}
-			}
-
+			hit := e.buildContentHit(fileID, file.Path, lineNum, line, spans)
 			hits = append(hits, hit)
 		}
 	}
 
-	sort.SliceStable(hits, func(i, j int) bool {
-		if hits[i].fileID != hits[j].fileID {
-			return hits[i].fileID < hits[j].fileID
-		}
-		return hits[i].Line < hits[j].Line
-	})
-
+	sortByFileIDLine(hits)
 	return hits
+}
+
+// buildContentHit constructs a content Hit with enclosing symbol context.
+// Tags are deferred (nil) and filled after MaxCount truncation by fillContentTags.
+func (e *SearchEngine) buildContentHit(fileID uint32, path string, lineNum int, line string, spans []symbolSpan) Hit {
+	hit := Hit{
+		File:    path,
+		Line:    lineNum,
+		Kind:    "content",
+		Content: strings.TrimSpace(line),
+		fileID:  fileID,
+	}
+	if enclosing := findEnclosingSymbol(spans, lineNum); enclosing != nil {
+		hit.Symbol = FormatSymbol(enclosing.sym)
+		hit.Range = [2]int{enclosing.startLine, enclosing.endLine}
+	}
+	return hit
 }
 
 // buildFileSpans groups all indexed symbols by file and sorts by range size
@@ -159,12 +159,18 @@ func findEnclosingSymbol(spans []symbolSpan, lineNum int) *symbolSpan {
 // Tokenizes the line and resolves tokens through the keyword→term lookup.
 // No domain is assigned — domains only apply to symbol declarations.
 func (e *SearchEngine) generateContentTags(line string) []string {
-	// Normalize: replace syntax characters with spaces so the tokenizer can split
-	// on word boundaries. The tokenizer only splits on [/_\-.\s]+ and camelCase,
-	// missing parens, braces, operators, etc. found in source code.
-	normalized := nonAlnumRe.ReplaceAllString(line, " ")
-	tokens := Tokenize(normalized)
+	tokens := TokenizeContentLine(line)
 	return e.resolveTerms(tokens)
+}
+
+// fillContentTags populates Tags for any content hits that have nil Tags.
+// Called after truncation so tags are only generated for the final result set.
+func (e *SearchEngine) fillContentTags(hits []Hit) {
+	for i := range hits {
+		if hits[i].Kind == "content" && hits[i].Tags == nil {
+			hits[i].Tags = e.generateContentTags(hits[i].Content)
+		}
+	}
 }
 
 // buildContentMatcher returns a function that tests whether a line matches the query.
@@ -215,9 +221,8 @@ func buildContentMatcher(query string, opts ports.SearchOptions) func(string) bo
 			return nil
 		}
 		return func(line string) bool {
-			lower := strings.ToLower(line)
 			for _, t := range terms {
-				if !strings.Contains(lower, t) {
+				if !containsFold(line, t) {
 					return false
 				}
 			}
@@ -225,10 +230,53 @@ func buildContentMatcher(query string, opts ports.SearchOptions) func(string) bo
 		}
 
 	default:
-		// Case-insensitive substring match
+		// Case-insensitive substring match (allocation-free)
 		lowerQuery := strings.ToLower(query)
 		return func(line string) bool {
-			return strings.Contains(strings.ToLower(line), lowerQuery)
+			return containsFold(line, lowerQuery)
 		}
 	}
+}
+
+// containsFold reports whether s contains substr (which must be lowercase).
+// Equivalent to strings.Contains(strings.ToLower(s), substr) but avoids
+// allocating a lowercased copy of s on each call. Critical for the content
+// scan hot path (~74K lines per search).
+func containsFold(s, lowerSubstr string) bool {
+	n := len(lowerSubstr)
+	if n == 0 {
+		return true
+	}
+	if n > len(s) {
+		return false
+	}
+	// Byte-at-a-time scan for ASCII case-insensitive match.
+	// Works because query tokens in this codebase are ASCII identifiers.
+	first := lowerSubstr[0]
+	for i := 0; i <= len(s)-n; i++ {
+		c := s[i]
+		// Fast lowercase for ASCII letters
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if c != first {
+			continue
+		}
+		// Check rest of substr
+		match := true
+		for j := 1; j < n; j++ {
+			c2 := s[i+j]
+			if c2 >= 'A' && c2 <= 'Z' {
+				c2 += 'a' - 'A'
+			}
+			if c2 != lowerSubstr[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }

@@ -209,6 +209,10 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 	}
 
 	result := e.buildResult(hits, opts, maxCount)
+
+	// Generate tags for content hits that deferred tag generation (indexed paths)
+	e.fillContentTags(result.Hits)
+
 	elapsed := time.Since(start)
 
 	if e.observer != nil {

@@ -30,11 +30,18 @@ var binaryExtensions = map[string]bool{
 	".db": true, ".sqlite": true, ".class": true, ".pyc": true,
 }
 
+// contentRef is a posting list entry in the content token inverted index.
+type contentRef struct {
+	FileID  uint32
+	LineNum uint16 // 1-based
+}
+
 // FileCache holds pre-read file contents in memory to eliminate disk I/O
 // from the search path. Thread-safe via internal RWMutex.
 type FileCache struct {
 	mu            sync.RWMutex
 	entries       map[uint32]*cacheEntry
+	contentIndex  map[string][]contentRef // token → posting list
 	totalMem      int64
 	maxTotalBytes int64
 	atCapacity    bool
@@ -53,6 +60,7 @@ func NewFileCache(maxBytes int64) *FileCache {
 	}
 	return &FileCache{
 		entries:       make(map[uint32]*cacheEntry),
+		contentIndex:  make(map[string][]contentRef),
 		maxTotalBytes: maxBytes,
 	}
 }
@@ -93,6 +101,7 @@ func (fc *FileCache) WarmFromIndex(files map[uint32]*ports.FileMeta, projectRoot
 
 	// Reset
 	fc.entries = make(map[uint32]*cacheEntry, len(files))
+	fc.contentIndex = make(map[string][]contentRef)
 	fc.totalMem = 0
 	fc.atCapacity = false
 
@@ -149,6 +158,50 @@ func (fc *FileCache) WarmFromIndex(files map[uint32]*ports.FileMeta, projectRoot
 	if !fc.atCapacity && fc.maxTotalBytes > 0 {
 		fc.atCapacity = fc.totalMem >= (fc.maxTotalBytes*9/10)
 	}
+
+	// Build content token inverted index from cached entries
+	fc.buildContentIndex()
+}
+
+// buildContentIndex tokenizes every cached line and builds an inverted index
+// mapping each token to its (fileID, lineNum) posting list. Must be called
+// with fc.mu held (write lock).
+func (fc *FileCache) buildContentIndex() {
+	for fileID, entry := range fc.entries {
+		for lineIdx, line := range entry.lines {
+			tokens := TokenizeContentLine(line)
+			if len(tokens) == 0 {
+				continue
+			}
+			lineNum := uint16(lineIdx + 1)
+			// Deduplicate tokens within the same line
+			seen := make(map[string]bool, len(tokens))
+			for _, tok := range tokens {
+				if seen[tok] {
+					continue
+				}
+				seen[tok] = true
+				fc.contentIndex[tok] = append(fc.contentIndex[tok], contentRef{
+					FileID:  fileID,
+					LineNum: lineNum,
+				})
+			}
+		}
+	}
+}
+
+// ContentLookup returns the posting list for a content token.
+func (fc *FileCache) ContentLookup(token string) []contentRef {
+	fc.mu.RLock()
+	defer fc.mu.RUnlock()
+	return fc.contentIndex[token]
+}
+
+// HasContentIndex returns true if the content inverted index is populated.
+func (fc *FileCache) HasContentIndex() bool {
+	fc.mu.RLock()
+	defer fc.mu.RUnlock()
+	return len(fc.contentIndex) > 0
 }
 
 // readAndValidateFile reads a file, validates it's text content, and returns

@@ -43,26 +43,21 @@ func TestFileCache_WarmAndGet(t *testing.T) {
 	fc := NewFileCache(0)
 	fc.WarmFromIndex(files, dir)
 
-	// main.go should be cached
-	lines := fc.GetLines(1)
-	if lines == nil {
-		// The map iteration order might assign different IDs
-		// Find the ID for main.go
-		for id, fm := range files {
-			if fm.Path == "main.go" {
-				lines = fc.GetLines(id)
-				break
-			}
+	// main.go should be cached (find by path since map iteration order is random)
+	for id, fm := range files {
+		if fm.Path == "main.go" {
+			lines := fc.GetLines(id)
+			require.NotNil(t, lines, "main.go should be cached")
+			assert.Equal(t, "package main", lines[0])
+			assert.Contains(t, lines[3], "Println")
+			break
 		}
 	}
-	require.NotNil(t, lines, "main.go should be cached")
-	assert.Equal(t, "package main", lines[0])
-	assert.Contains(t, lines[3], "Println")
 
 	// util.go should be cached
 	for id, fm := range files {
 		if fm.Path == "util.go" {
-			lines = fc.GetLines(id)
+			lines := fc.GetLines(id)
 			require.NotNil(t, lines, "util.go should be cached")
 			assert.Equal(t, "package util", lines[0])
 			break
@@ -220,4 +215,115 @@ func TestFileCache_Stats(t *testing.T) {
 func TestFileCache_MissReturnsNil(t *testing.T) {
 	fc := NewFileCache(0)
 	assert.Nil(t, fc.GetLines(999), "cache miss should return nil")
+}
+
+func TestFileCache_ContentIndex_SingleToken(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"auth.go": "package auth\n\nfunc Login() {\n}\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	assert.True(t, fc.HasContentIndex(), "content index should be populated")
+
+	refs := fc.ContentLookup("login")
+	require.NotEmpty(t, refs, "should find 'login' token")
+
+	// "Login" on line 3 → token "login"
+	found := false
+	for _, ref := range refs {
+		if ref.LineNum == 3 {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "should find 'login' on line 3")
+}
+
+func TestFileCache_ContentIndex_CamelCase(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"parser.go": "package parser\n\n// TreeSitter parser\nfunc Parse() {}\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	// "TreeSitter" on line 3 should split into "tree" and "sitter"
+	treeRefs := fc.ContentLookup("tree")
+	sitterRefs := fc.ContentLookup("sitter")
+
+	require.NotEmpty(t, treeRefs, "'tree' should have posting entries")
+	require.NotEmpty(t, sitterRefs, "'sitter' should have posting entries")
+
+	// Both should reference line 3
+	var treeOnLine3, sitterOnLine3 bool
+	for _, ref := range treeRefs {
+		if ref.LineNum == 3 {
+			treeOnLine3 = true
+		}
+	}
+	for _, ref := range sitterRefs {
+		if ref.LineNum == 3 {
+			sitterOnLine3 = true
+		}
+	}
+	assert.True(t, treeOnLine3, "'tree' should be on line 3")
+	assert.True(t, sitterOnLine3, "'sitter' should be on line 3")
+}
+
+func TestFileCache_ContentIndex_DedupPerLine(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"dup.go": "login login login\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	refs := fc.ContentLookup("login")
+	// Should have exactly 1 entry (deduplicated within the same line)
+	count := 0
+	for _, ref := range refs {
+		if ref.LineNum == 1 {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "should have single posting entry per line despite repeated token")
+}
+
+func TestFileCache_ContentIndex_ResetOnRewarm(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"old.go": "package old\nfunc OldFunc() {}\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	require.NotEmpty(t, fc.ContentLookup("old"), "'old' should exist after first warm")
+
+	// Re-warm with different content
+	files2 := makeTestFiles(t, dir, map[string]string{
+		"new.go": "package fresh\nfunc NewFunc() {}\n",
+	})
+	fc.WarmFromIndex(files2, dir)
+
+	assert.Empty(t, fc.ContentLookup("old"), "'old' should be gone after rewarm")
+	assert.NotEmpty(t, fc.ContentLookup("fresh"), "'fresh' should exist after rewarm")
+}
+
+func TestFileCache_ContentLookup_Miss(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"a.go": "package a\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	refs := fc.ContentLookup("nonexistent")
+	assert.Nil(t, refs, "unknown token should return nil")
 }

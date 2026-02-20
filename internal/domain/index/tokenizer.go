@@ -104,6 +104,35 @@ func splitCamelCase(s string) []string {
 	return parts
 }
 
+// TokenizeContentLine normalizes a source code line by replacing non-alphanumeric
+// characters with spaces, then tokenizes the result. Used for both content index
+// building and content tag generation.
+func TokenizeContentLine(line string) []string {
+	normalized := normalizeNonAlnum(line)
+	return Tokenize(normalized)
+}
+
+// normalizeNonAlnum replaces non-alphanumeric bytes with spaces.
+// Equivalent to nonAlnumRe.ReplaceAllString(line, " ") but avoids regex overhead.
+func normalizeNonAlnum(s string) string {
+	b := make([]byte, len(s))
+	inNonAlnum := false
+	j := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+			inNonAlnum = false
+			b[j] = c
+			j++
+		} else if !inNonAlnum {
+			inNonAlnum = true
+			b[j] = ' '
+			j++
+		}
+	}
+	return string(b[:j])
+}
+
 // stripNonASCII removes non-ASCII runes, keeping only printable ASCII.
 func stripNonASCII(s string) string {
 	var b strings.Builder
