@@ -54,48 +54,57 @@ type reconPattern struct {
 	tierID   string
 	dimID    string
 	severity string
+	// codeOnly: if true, skip non-code files (md, json, html, txt, yaml, etc.)
+	codeOnly bool
 	match    func(line string, lineNum int, isTest bool, isMain bool) bool
 }
 
+// scannable languages — only scan these for code-quality patterns.
+var reconCodeExts = map[string]bool{
+	".go": true, ".py": true, ".js": true, ".ts": true, ".jsx": true, ".tsx": true,
+	".rs": true, ".c": true, ".cpp": true, ".h": true, ".java": true, ".rb": true,
+	".sh": true, ".bash": true, ".cs": true, ".swift": true, ".kt": true, ".scala": true,
+	".zig": true, ".lua": true, ".php": true, ".pl": true, ".r": true,
+}
+
 var (
-	reDeferInFor  = regexp.MustCompile(`^\s*defer\s`)
-	reForLoop     = regexp.MustCompile(`^\s*for\s`)
-	reIgnoredErr  = regexp.MustCompile(`_\s*[:=]=?\s*`)
-	rePkgVar      = regexp.MustCompile(`^var\s+\w+`)
-	reTodoFixme   = regexp.MustCompile(`(?i)\b(TODO|FIXME|HACK|XXX)\b`)
+	reDeferInFor = regexp.MustCompile(`^\s*defer\s`)
+	reForLoop    = regexp.MustCompile(`^\s*for\s`)
+	rePkgVar     = regexp.MustCompile(`^var\s+\w+`)
+	reTodoFixme  = regexp.MustCompile(`(?i)\b(TODO|FIXME|HACK|XXX)\b`)
+	// hardcoded_secret: string literal assignment with secret-like name
+	reSecretAssign = regexp.MustCompile(`(?i)(password|secret|api_key|apikey|private_key)\s*[:=].*["` + "`" + `']`)
+	// ignored_error: specifically blank identifier discarding a function return
+	reIgnoredErrCall = regexp.MustCompile(`_\s*[:=]=\s*\w+[\.(]`)
 )
 
 func buildReconPatterns() []reconPattern {
 	return []reconPattern{
-		// Security — secrets
+		// Security — hardcoded secrets (code files only, require string literal assignment)
 		{
 			id: "hardcoded_secret", label: "Potential hardcoded secret or credential",
-			tierID: "security", dimID: "secrets", severity: "critical",
+			tierID: "security", dimID: "secrets", severity: "critical", codeOnly: true,
 			match: func(line string, _ int, isTest, _ bool) bool {
 				if isTest {
 					return false
 				}
-				lower := strings.ToLower(line)
-				// Look for assignment patterns with secret-like variable names
-				for _, kw := range []string{"password", "secret", "api_key", "apikey", "private_key"} {
-					if strings.Contains(lower, kw) && (strings.Contains(line, "=") || strings.Contains(line, ":")) {
-						// Skip comments
-						trimmed := strings.TrimSpace(line)
-						if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
-							return false
-						}
-						return true
-					}
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "*") {
+					return false
 				}
-				return false
+				return reSecretAssign.MatchString(line)
 			},
 		},
-		// Security — command injection
+		// Security — command injection (code files only)
 		{
 			id: "command_injection", label: "Potential command injection via exec/system call",
-			tierID: "security", dimID: "injection", severity: "critical",
+			tierID: "security", dimID: "injection", severity: "critical", codeOnly: true,
 			match: func(line string, _ int, isTest, _ bool) bool {
 				if isTest {
+					return false
+				}
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "//") {
 					return false
 				}
 				for _, pat := range []string{"exec.Command(", "os.system(", "eval("} {
@@ -106,21 +115,25 @@ func buildReconPatterns() []reconPattern {
 				return false
 			},
 		},
-		// Security — weak hash
+		// Security — weak hash (code files only)
 		{
 			id: "weak_hash", label: "MD5 or SHA1 used (weak for security purposes)",
-			tierID: "security", dimID: "crypto", severity: "warning",
+			tierID: "security", dimID: "crypto", severity: "warning", codeOnly: true,
 			match: func(line string, _ int, isTest, _ bool) bool {
 				if isTest {
+					return false
+				}
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "//") {
 					return false
 				}
 				return strings.Contains(line, "md5.") || strings.Contains(line, "sha1.")
 			},
 		},
-		// Security — insecure random
+		// Security — insecure random (code files only)
 		{
 			id: "insecure_random", label: "math/rand used where crypto/rand may be needed",
-			tierID: "security", dimID: "crypto", severity: "warning",
+			tierID: "security", dimID: "crypto", severity: "warning", codeOnly: true,
 			match: func(line string, _ int, isTest, _ bool) bool {
 				if isTest {
 					return false
@@ -128,32 +141,39 @@ func buildReconPatterns() []reconPattern {
 				return strings.Contains(line, `"math/rand"`)
 			},
 		},
-		// Performance — defer in loop
+		// Performance — defer in loop (code files only, Go-specific)
 		{
 			id: "defer_in_loop", label: "defer inside loop body",
-			tierID: "performance", dimID: "resources", severity: "warning",
+			tierID: "performance", dimID: "resources", severity: "warning", codeOnly: true,
 			match: func(line string, _ int, _, _ bool) bool {
-				// Heuristic: line has defer — the for-loop context check
-				// would require multi-line analysis; we flag defer statements
-				// and let the user review.
 				return reDeferInFor.MatchString(line)
 			},
 		},
-		// Quality — ignored error
+		// Quality — ignored error (code files only)
 		{
 			id: "ignored_error", label: "Error return value assigned to blank identifier",
-			tierID: "quality", dimID: "errors", severity: "warning",
+			tierID: "quality", dimID: "errors", severity: "warning", codeOnly: true,
 			match: func(line string, _ int, _, _ bool) bool {
 				trimmed := strings.TrimSpace(line)
-				// Match "_ = something" or "_ := something" patterns
-				return strings.HasPrefix(trimmed, "_ =") || strings.HasPrefix(trimmed, "_ :=") ||
-					strings.Contains(trimmed, ", _ =") || strings.Contains(trimmed, ", _ :=")
+				if strings.HasPrefix(trimmed, "//") {
+					return false
+				}
+				// Must look like discarding a function call result: _ = foo( or _, _ := bar(
+				// or multi-return: x, _ = foo( or x, _ := foo(
+				if strings.HasPrefix(trimmed, "_ =") || strings.HasPrefix(trimmed, "_ :=") {
+					// Verify it's a function call, not just `_ = true` or assignment
+					return strings.Contains(trimmed, "(") || strings.Contains(trimmed, ".")
+				}
+				if strings.Contains(trimmed, ", _ =") || strings.Contains(trimmed, ", _ :=") {
+					return strings.Contains(trimmed, "(")
+				}
+				return false
 			},
 		},
-		// Quality — panic in library
+		// Quality — panic in library (code files only)
 		{
 			id: "panic_in_lib", label: "panic() called in library/non-main package",
-			tierID: "quality", dimID: "errors", severity: "warning",
+			tierID: "quality", dimID: "errors", severity: "warning", codeOnly: true,
 			match: func(line string, _ int, _, isMain bool) bool {
 				if isMain {
 					return false
@@ -162,13 +182,13 @@ func buildReconPatterns() []reconPattern {
 				if strings.HasPrefix(trimmed, "//") {
 					return false
 				}
-				return strings.Contains(line, "panic(")
+				return strings.Contains(trimmed, "panic(")
 			},
 		},
-		// Observability — print statements
+		// Observability — print statements (code files only)
 		{
 			id: "print_statement", label: "Debug print statement left in code",
-			tierID: "observability", dimID: "debug", severity: "info",
+			tierID: "observability", dimID: "debug", severity: "info", codeOnly: true,
 			match: func(line string, _ int, isTest, _ bool) bool {
 				if isTest {
 					return false
@@ -182,28 +202,40 @@ func buildReconPatterns() []reconPattern {
 					strings.Contains(line, "console.log(")
 			},
 		},
-		// Observability — TODO/FIXME markers
+		// Observability — TODO/FIXME markers (all file types)
 		{
 			id: "todo_fixme", label: "TODO/FIXME/HACK/XXX marker in source",
-			tierID: "observability", dimID: "debug", severity: "info",
+			tierID: "observability", dimID: "debug", severity: "info", codeOnly: false,
 			match: func(line string, _ int, _, _ bool) bool {
 				return reTodoFixme.MatchString(line)
 			},
 		},
-		// Architecture — mutable global state
+		// Architecture — mutable global state (code files only, Go-specific)
 		{
 			id: "global_state", label: "Mutable global variable at package level",
-			tierID: "architecture", dimID: "antipattern", severity: "warning",
+			tierID: "architecture", dimID: "antipattern", severity: "warning", codeOnly: true,
 			match: func(line string, _ int, isTest, isMain bool) bool {
 				if isTest || isMain {
 					return false
 				}
-				trimmed := strings.TrimSpace(line)
-				if strings.HasPrefix(trimmed, "//") {
+				// Must start at column 0 with "var " (no indentation = package level)
+				if !strings.HasPrefix(line, "var ") {
 					return false
 				}
-				// Only match package-level var declarations (no leading whitespace)
-				return rePkgVar.MatchString(line) && !strings.HasPrefix(line, "\t") && !strings.HasPrefix(line, " ")
+				// Skip var blocks opener "var ("
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "var (" {
+					return false
+				}
+				// Skip embedded FS and constants-like patterns
+				if strings.Contains(line, "embed.FS") || strings.Contains(line, "//go:embed") {
+					return false
+				}
+				// Skip regexp.MustCompile — compile-time constant, not mutable state
+				if strings.Contains(line, "regexp.MustCompile") || strings.Contains(line, "regexp.Compile") {
+					return false
+				}
+				return true
 			},
 		},
 	}
@@ -237,7 +269,7 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 			endLine:   meta.EndLine,
 		})
 	}
-	// Sort symbols by start line for binary search
+	// Sort symbols by start line for enclosing-symbol lookup
 	for fid := range fileSymbols {
 		syms := fileSymbols[fid]
 		sort.Slice(syms, func(i, j int) bool {
@@ -245,7 +277,7 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Check for long functions from symbol metadata
+	// Pre-check long functions from symbol metadata
 	type longFunc struct {
 		fileID uint32
 		sym    reconSymbolInfo
@@ -264,7 +296,9 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 
 		dir := filepath.Dir(fileMeta.Path)
 		base := filepath.Base(fileMeta.Path)
+		ext := filepath.Ext(base)
 
+		isCodeFile := reconCodeExts[ext]
 		isTest := strings.HasSuffix(base, "_test.go") ||
 			strings.HasSuffix(base, "_test.py") ||
 			strings.HasSuffix(base, ".test.js") ||
@@ -287,10 +321,9 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 		if fc != nil {
 			lines := fc.GetLines(fileID)
 			if lines != nil {
-				// Track if we're inside a for loop for defer detection
 				forLoopDepth := 0
 				for lineIdx, line := range lines {
-					lineNum := lineIdx + 1 // 1-based
+					lineNum := lineIdx + 1
 
 					// Track for-loop depth for defer-in-loop detection
 					if reForLoop.MatchString(line) {
@@ -298,6 +331,11 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 					}
 
 					for _, pat := range patterns {
+						// Skip code-only patterns on non-code files
+						if pat.codeOnly && !isCodeFile {
+							continue
+						}
+
 						// Special handling for defer_in_loop: only flag if inside a for loop
 						if pat.id == "defer_in_loop" {
 							if forLoopDepth > 0 && reDeferInFor.MatchString(line) {
@@ -329,7 +367,7 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 
-					// Reset for-loop tracking at function boundaries (rough heuristic)
+					// Reset for-loop depth on closing braces (rough heuristic)
 					trimmed := strings.TrimSpace(line)
 					if trimmed == "}" && !strings.Contains(line, "\t\t") {
 						if forLoopDepth > 0 {
@@ -340,18 +378,20 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Add long_function findings from symbol metadata
-		for _, lf := range longFuncs {
-			if lf.fileID == fileID {
-				findings = append(findings, reconFinding{
-					Symbol:   lf.sym.name,
-					DimID:    "complexity",
-					TierID:   "quality",
-					ID:       "long_function",
-					Label:    "Function exceeds 100 lines",
-					Severity: "info",
-					Line:     int(lf.sym.startLine),
-				})
+		// Add long_function findings from symbol metadata (code files only)
+		if isCodeFile {
+			for _, lf := range longFuncs {
+				if lf.fileID == fileID {
+					findings = append(findings, reconFinding{
+						Symbol:   lf.sym.name,
+						DimID:    "complexity",
+						TierID:   "quality",
+						ID:       "long_function",
+						Label:    "Function exceeds 100 lines",
+						Severity: "info",
+						Line:     int(lf.sym.startLine),
+					})
+				}
 			}
 		}
 
@@ -395,7 +435,7 @@ func findEnclosingSymbol(syms []reconSymbolInfo, lineNum int) string {
 			return syms[i].name
 		}
 	}
-	// If no enclosing symbol, try to find the nearest symbol above
+	// If no enclosing symbol, find the nearest symbol above
 	for i := len(syms) - 1; i >= 0; i-- {
 		if uint16(lineNum) >= syms[i].startLine {
 			return syms[i].name

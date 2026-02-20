@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-20 (Session 61) | **Phase**: L4.1–L4.3 delivered — purego grammar loader, lean binary (80→12 MB), grammar CLI, CI/release workflows.
+> **Updated**: 2026-02-20 (Session 62) | **Phase**: L5.12 interim — Recon tab wired with lightweight pattern scanner, sidebar+tree UI. Bug fixes: CacheHitRate (100x inflation), fmtTime/fmtMin unit scaling.
 > **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 + L3.2–L3.14 + L4.1–L4.3 (470+ active tests, 32 skipped)
 
 ---
@@ -71,7 +71,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Session 61 delivered L4.1–L4.3 (Distribution). Binary drops from 80 MB → 12 MB via build tag split (`-tags lean`). Purego-based `DynamicLoader` loads grammar `.so`/`.dylib` files at runtime from `.aoa/grammars/` (project-local then global). End-to-end verified: Python grammar compiled to 478 KB `.so`, loaded via purego, parsed Python source → identical symbols to compiled-in parser. `aoa grammar list/info/install/path` CLI commands. 57-language manifest with priority tiers (P1 Core through P4 Specialist). CI workflows for grammar compilation (4 platforms) and release (lean binary + version injection). 19 new tests (18 unit + 1 E2E), 470+ total passing.
+**Current**: Session 62 delivered L5.12 interim (Recon tab). Full sidebar+tree layout ported from mockup into live dashboard. Backend scanner (`recon.go`) iterates FileCache lines with ~10 pattern detectors, maps findings to enclosing symbols via Index metadata. API at `GET /api/recon` returns tree structure with per-file/per-symbol findings. JS renders navigable tree (root→folder→file→symbol), sidebar dimension toggles with localStorage persistence, tier-colored pills, finding detail rows. **Not the full bitmask engine** — uses `strings.Contains`/regex as interim. False positive tuning applied (code-only file filter, tightened secret/global patterns). Also fixed: `CacheHitRate()` was returning percentage instead of fraction (100x inflation on dashboard), `fmtTime()`/`fmtMin()` now scale through hours and days instead of capping at minutes.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -135,6 +135,24 @@
 - **Graceful degradation on dynamic load failure** — `ParseFile()` returns `nil, nil` if grammar `.so` not found. Same behavior as extension-mapped-but-no-grammar today. No errors surfaced to user — just falls back to tokenization-only indexing.
 - **57-language manifest with priority tiers** — `BuiltinManifest()` embedded in binary. P1 Core (11 langs every dev uses), P2 Common (11 langs most devs use), P3 Extended (17 niche but real), P4 Specialist (18 domain-specific). `aoa grammar list` shows tier/status at a glance.
 - **Individual .so files, not regional bundles** — Simpler to build, simpler to download individually. Pack tarballs (core/common/extended/specialist) for bulk download.
+
+**Design Decisions Locked** (Session 62):
+- **Recon interim scanner** — Pattern-based text scanner using `strings.Contains`/regex on FileCache lines. Not the full bitmask engine (L5.1-L5.5). Demonstrates the UX and proves the data pipeline works. 10 pattern types: `hardcoded_secret`, `command_injection`, `weak_hash`, `insecure_random`, `defer_in_loop`, `ignored_error`, `panic_in_lib`, `print_statement`, `todo_fixme`, `global_state`, plus `long_function` from symbol metadata.
+- **Code-only file filtering** — Patterns marked `codeOnly: true` skip non-code files (.md, .json, .html, .yaml, .txt). `todo_fixme` scans all files. Prevents 45% false positive rate from documentation and mockup files.
+- **Dashboard time formatting** — `fmtTime(ms)` and `fmtMin(min)` now scale: `≥1d` → `Xd Yh`, `≥1h` → `Xh Ym`, `≥1m` → `Xm Ys`, `≥1s` → `X.Ys`, else `Xms`. Previously capped at minutes.
+- **CacheHitRate as fraction** — `SessionMetrics.CacheHitRate()` returns 0.0–1.0 (matching `ports.TokenUsage.CacheHitRate()`). JS `fmtPct()` multiplies by 100. Previously returned percentage (87.0), causing 8700% display.
+
+**Design Decision Locked** (Session 62 — Architecture):
+- **Two-binary distribution: aoa + aoa-recon** — Clean separation of concerns. `aoa` ships lean (12 MB): search, indexing (tokenization-only), learning, dashboard (all 5 tabs), context savings. No tree-sitter grammars needed. Recon tab shows "install aoa-recon" prompt when scanner not detected. `aoa-recon` ships separately (~350 MB): all 490 languages via [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest), YAML-driven bitmask engine, AC automaton, AST structural walker, per-method scoring. When installed, it lights up the Recon tab and enhances the search index with symbol-level results (function names, signatures, line ranges). Connection mechanism TBD (sidecar binary on PATH or `.aoa/bin/`, shared bbolt database, or Unix socket IPC).
+- **aoa-recon uses go-sitter-forest** — Single dependency for 490+ tree-sitter grammars with Go bindings, uniform API, MIT licensed, daily upstream updates. Eliminates the 57-grammar manifest, the dynamic `.so` loader, and the `aoa grammar install` step. Users who want recon get everything. 350 MB binary is smaller than VS Code (400 MB), Chrome (500 MB), or a typical `node_modules`. Binary size has zero impact on runtime performance — only the grammar for the file being parsed is loaded into memory.
+- **Universal lang_map ships in aoa-recon** — All 490 languages mapped to the ~10 unified AST concepts (call, assignment, if, for, return, etc.). YAML rules reference unified concepts, lang_map resolves per language. One rule works across all languages. Adding a new language = adding 10 entries to the map (data, not code).
+- **Three-tier rule engine** — `engine: text` (AC only, fires on ALL files including .env/.ini/.xml/unknown), `engine: structural` (AST walker, fires where grammar exists), `engine: text+structural` (AC finds candidate, AST confirms — degrades gracefully to text-only with lower confidence where no grammar available). Eliminates the gap where config files / dotenv / unknown formats miss basic secret detection.
+- **Lean build tag stays** — `go build -tags lean` still produces the 12 MB binary for `go install` from source (avoids CGo compilation). This IS the default `aoa` distribution binary. The full/fat build path moves to `aoa-recon`.
+
+**Known Issues / UX Gaps** (Session 62):
+- **Debrief tab: markdown rendering** — Assistant thinking and user messages appear to be truncated. Markdown tables, code blocks, and other structured content don't render properly in the conversation view. Need to parse markdown into HTML (at minimum: tables, code fences, inline code, bold/italic, lists, headers) instead of displaying raw text. Current coloring is good — just missing the formatting pass.
+- **Actions tab: web search/fetch token costs** — Web search and web fetch activities show data size (~200 KB download) but don't display associated token costs. These API calls consume tokens and should be accounted for in the savings metrics. Need to capture token usage from web search/fetch events in the JSONL session log and surface it in the actions table.
+- **Actions tab: agent/subagent activity** — When Claude Code spawns subagents (Task tool), the actions table doesn't reflect their activity. Should at minimum show a summary row for agent invocations (agent type, task description, duration, token cost) rather than listing every individual tool call the agent makes — otherwise the table gets too noisy.
 
 **Needs Discussion** (before L3):
 - **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
@@ -202,7 +220,7 @@
 | [L5](#layer-5) | [L5.9](#l59) | | | | | | | | L5.5 | 🟢 | ⚪ | ⚪ | Wire analyzer into `aoa init` — scan all files, store bitmasks in bbolt | Connect engine to pipeline | Bitmasks persist, available to search + dashboard |
 | [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
 | [L5](#layer-5) | [L5.11](#l511) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Dimension query support — `--dimension=security --risk=high` | Filter by dimension | CLI filters by tier and severity |
-| [L5](#layer-5) | [L5.12](#l512) | | | | | | | x | L5.9 | 🟢 | ⚪ | ⚪ | Recon tab — NER-style dimensional view, drill-down, severity scoring | Dashboard dimensional view | Mockup parity validated in browser |
+| [L5](#layer-5) | [L5.12](#l512) | | | | | | | x | L5.9 | 🟡 | 🔵 | 🟡 | Recon tab — NER-style dimensional view, drill-down, severity scoring | Dashboard dimensional view | Interim: pattern scanner + UI working. **Gap**: full bitmask engine (L5.1-L5.5), false positive tuning, test coverage |
 
 ---
 
@@ -690,11 +708,15 @@ Append `S:-23 P:0 Q:-4` to search output. Negative = debt. Zero = clean. Visible
 
 #### L5.12
 
-**Recon tab**
+**Recon tab** — 🔵 In progress (interim scanner)
 
-NER-style dimensional view: tier toggle sidebar (6 tiers, color-coded), file→method drill-down, severity scoring, acknowledge/dismiss per finding. Mockup validated in `_live_mockups/recon.html`.
+NER-style dimensional view: tier toggle sidebar (5 tiers, color-coded), file→folder→symbol drill-down, severity scoring. Mockup validated in `_live_mockups/recon.html`.
 
-**Files**: `static/index.html`
+**Interim implementation (Session 62)**: Backend `recon.go` scans FileCache lines with 10 pattern detectors + `long_function` from symbol metadata. `GET /api/recon` returns JSON tree keyed by `folder → file → {language, symbols, findings}`. Frontend: sidebar with tier toggles + dimension pills (localStorage-persisted), breadcrumb-navigated tree (root→folder→file→symbol), finding detail rows with severity/id/label/line. Code-only file filter prevents non-code false positives.
+
+**Gap**: Full bitmask engine (L5.1–L5.5), AST-based structural patterns, AC text scanner, cross-language uniformity, acknowledge/dismiss per finding, unit tests for scanner.
+
+**Files**: `internal/adapters/web/recon.go` (new), `internal/domain/index/search.go` (Cache accessor), `internal/adapters/web/server.go` (route), `internal/adapters/web/static/index.html`, `style.css`, `app.js`
 
 ---
 
