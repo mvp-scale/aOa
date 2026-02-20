@@ -274,12 +274,13 @@ body {
   font-size: 11px; font-weight: 600; color: var(--mute); text-transform: uppercase;
   letter-spacing: 0.5px; border-bottom: 1px solid var(--border); white-space: nowrap;
 }
-.activity-table .col-time   { width: 8%; }
-.activity-table .col-action { width: 10%; }
-.activity-table .col-source { width: 10%; }
-.activity-table .col-attrib { width: 15%; }
-.activity-table .col-impact { width: 24%; }
-.activity-table .col-target { width: 33%; }
+.activity-table .col-time    { width: 7%; }
+.activity-table .col-action  { width: 8%; }
+.activity-table .col-source  { width: 6%; }
+.activity-table .col-attrib  { width: 10%; }
+.activity-table .col-impact  { width: 20%; }
+.activity-table .col-learned { width: 10%; }
+.activity-table .col-target  { width: 39%; }
 .activity-table td {
   padding: 7px 12px; border-bottom: 1px solid var(--border-subtle);
   vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -639,11 +640,12 @@ body {
   .hero-metrics { width: 100%; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .activity-table .col-time, .activity-table td:nth-child(1) { display: none; }
-  .activity-table .col-target, .activity-table td:nth-child(6) { display: none; }
+  .activity-table .col-target, .activity-table td:nth-child(7) { display: none; }
+  .activity-table .col-learned, .activity-table td:nth-child(6) { display: none; }
   .activity-table .col-action { width: 20%; }
-  .activity-table .col-source { width: 20%; }
+  .activity-table .col-source { width: 15%; }
   .activity-table .col-attrib { width: 25%; }
-  .activity-table .col-impact { width: 35%; }
+  .activity-table .col-impact { width: 40%; }
 }
 
 /* ── Mobile Compaction (<= 520px) ──

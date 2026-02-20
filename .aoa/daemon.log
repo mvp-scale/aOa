@@ -985,3 +985,58 @@ created by net/http.(*connReader).startBackgroundRead in goroutine 66
 [2026-02-19T22:22:36-05:00] daemon starting
 [2026-02-19T22:22:37-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
 [2026-02-19T22:22:37-05:00] dashboard at http://localhost:19270
+[2026-02-19T23:44:18-05:00] remote stop, shutting down
+[2026-02-19T23:44:18-05:00] daemon stopped
+[2026-02-19T23:44:19-05:00] daemon starting
+[2026-02-19T23:44:19-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T23:44:19-05:00] dashboard at http://localhost:19270
+[2026-02-19T23:46:12-05:00] remote stop, shutting down
+[2026-02-19T23:46:12-05:00] daemon stopped
+[2026-02-19T23:46:12-05:00] daemon starting
+[2026-02-19T23:46:13-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T23:46:13-05:00] dashboard at http://localhost:19270
+[2026-02-19T23:49:49-05:00] remote stop, shutting down
+[2026-02-19T23:49:49-05:00] daemon stopped
+[2026-02-19T23:49:50-05:00] daemon starting
+[2026-02-19T23:49:50-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T23:49:50-05:00] dashboard at http://localhost:19270
+[2026-02-19T23:50:20-05:00] remote stop, shutting down
+[2026-02-19T23:50:20-05:00] daemon stopped
+[2026-02-19T23:50:21-05:00] daemon starting
+[2026-02-19T23:50:21-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T23:50:21-05:00] dashboard at http://localhost:19270
+[2026-02-19T23:55:05-05:00] remote stop, shutting down
+[2026-02-19T23:55:05-05:00] daemon stopped
+[2026-02-19T23:55:06-05:00] daemon starting
+[2026-02-19T23:55:07-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T23:55:07-05:00] dashboard at http://localhost:19270
+[2026-02-20T00:04:41-05:00] remote stop, shutting down
+[2026-02-20T00:04:41-05:00] daemon stopped
+[2026-02-20T00:04:43-05:00] daemon starting
+[2026-02-20T00:04:43-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T00:04:43-05:00] dashboard at http://localhost:19270
+[2026-02-20T00:07:04-05:00] remote stop, shutting down
+[2026-02-20T00:07:04-05:00] daemon stopped
+[2026-02-20T00:07:05-05:00] daemon starting
+[2026-02-20T00:07:06-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T00:07:06-05:00] dashboard at http://localhost:19270
+[2026-02-20T00:11:31-05:00] remote stop, shutting down
+[2026-02-20T00:11:31-05:00] daemon stopped
+[2026-02-20T00:11:32-05:00] daemon starting
+[2026-02-20T00:11:33-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T00:11:33-05:00] dashboard at http://localhost:19270
+[2026-02-20T00:17:06-05:00] remote stop, shutting down
+[2026-02-20T00:17:06-05:00] daemon stopped
+[2026-02-20T00:17:06-05:00] daemon starting
+[2026-02-20T00:17:07-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T00:17:07-05:00] dashboard at http://localhost:19270
+[2026-02-20T00:22:34-05:00] remote stop, shutting down
+[2026-02-20T00:22:34-05:00] daemon stopped
+[2026-02-20T00:22:35-05:00] daemon starting
+[2026-02-20T00:22:36-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T00:22:36-05:00] dashboard at http://localhost:19270
+[2026-02-20T00:34:38-05:00] remote stop, shutting down
+[2026-02-20T00:34:38-05:00] daemon stopped
+[2026-02-20T00:34:38-05:00] daemon starting
+[2026-02-20T00:34:39-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T00:34:39-05:00] dashboard at http://localhost:19270

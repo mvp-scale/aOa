@@ -60,14 +60,14 @@ func TestAutotuneFiresViaSearchObserver(t *testing.T) {
 	}
 	require.True(t, found, "L0.6/L0.7: expected Autotune activity entry after 50 searches")
 
-	// Also check for Learn activity entries
+	// L0.11: Learn signals appear as cycling learn words in the Learned field
 	learnCount := 0
 	for i := 0; i < a.activityCount; i++ {
 		aidx := (a.activityHead - 1 - i + 50) % 50
 		e := a.activityRing[aidx]
-		if e.Action == "Learn" && e.Source == "aOa" {
+		if e.Action == "Search" && e.Learned != "" {
 			learnCount++
 		}
 	}
-	assert.Greater(t, learnCount, 0, "L0.11: expected Learn activity entries from search signals")
+	assert.Greater(t, learnCount, 0, "L0.11: expected Search rows with Learned field set")
 }

@@ -872,18 +872,17 @@ func TestActivityLearnFromFileRead(t *testing.T) {
 	}
 	a.onSessionEvent(ev)
 
-	// Should have both a Learn entry and a Read entry
+	// L0.11: Learn signal appears as a cycling learn word in the Learned field
 	found := false
 	for i := 0; i < a.activityCount; i++ {
 		idx := (a.activityHead - 1 - i + 50) % 50
 		e := a.activityRing[idx]
-		if e.Action == "Learn" && e.Source == "aOa" {
-			assert.Contains(t, e.Impact, "+1 file:")
+		if e.Action == "Read" && e.Learned != "" {
 			found = true
 			break
 		}
 	}
-	assert.True(t, found, "L0.11: expected a Learn activity entry from range-gated read")
+	assert.True(t, found, "L0.11: expected a Read row with Learned field set")
 }
 
 // --- Time Savings Tests ---

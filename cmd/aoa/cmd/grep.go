@@ -22,6 +22,14 @@ var (
 	grepPatterns     []string
 	grepIncludeGlob  string
 	grepExcludeGlob  string
+	grepExcludeDir   string
+	grepOnlyMatch    bool
+	grepFilesNoMatch bool
+	grepNoFilename   bool
+	grepNoColor      bool
+	grepAfterCtx     int
+	grepBeforeCtx    int
+	grepContext      int
 )
 
 var grepCmd = &cobra.Command{
@@ -45,6 +53,14 @@ func init() {
 	f.StringArrayVarP(&grepPatterns, "regexp", "e", nil, "Multiple patterns (OR)")
 	f.StringVar(&grepIncludeGlob, "include", "", "File glob filter (include)")
 	f.StringVar(&grepExcludeGlob, "exclude", "", "File glob filter (exclude)")
+	f.StringVar(&grepExcludeDir, "exclude-dir", "", "Directory glob filter (exclude)")
+	f.BoolVarP(&grepOnlyMatch, "only-matching", "o", false, "Print only the matching part")
+	f.BoolVarP(&grepFilesNoMatch, "files-without-match", "L", false, "Print files without matches")
+	f.BoolVar(&grepNoFilename, "no-filename", false, "Suppress filename prefix")
+	f.BoolVar(&grepNoColor, "no-color", false, "Suppress color output")
+	f.IntVarP(&grepAfterCtx, "after-context", "A", 0, "Lines of context after match")
+	f.IntVarP(&grepBeforeCtx, "before-context", "B", 0, "Lines of context before match")
+	f.IntVarP(&grepContext, "context", "C", 0, "Lines of context (overrides -A/-B)")
 
 	// No-op flags for grep compatibility
 	f.BoolP("recursive", "r", false, "Always recursive (no-op)")
@@ -72,14 +88,20 @@ func runGrep(cmd *cobra.Command, args []string) error {
 	}
 
 	opts := ports.SearchOptions{
-		AndMode:      grepAndMode,
-		CountOnly:    grepCountOnly,
-		WordBoundary: grepWordBound,
-		Quiet:        grepQuiet,
-		InvertMatch:  grepInvertMatch,
-		MaxCount:     grepMaxCount,
-		IncludeGlob:  grepIncludeGlob,
-		ExcludeGlob:  grepExcludeGlob,
+		AndMode:           grepAndMode,
+		CountOnly:         grepCountOnly,
+		WordBoundary:      grepWordBound,
+		Quiet:             grepQuiet,
+		InvertMatch:       grepInvertMatch,
+		MaxCount:          grepMaxCount,
+		IncludeGlob:       grepIncludeGlob,
+		ExcludeGlob:       grepExcludeGlob,
+		ExcludeDirGlob:    grepExcludeDir,
+		OnlyMatching:      grepOnlyMatch,
+		FilesWithoutMatch: grepFilesNoMatch,
+		AfterContext:       grepAfterCtx,
+		BeforeContext:      grepBeforeCtx,
+		Context:            grepContext,
 	}
 	if grepCaseInsens {
 		opts.Mode = "case_insensitive"
@@ -112,7 +134,7 @@ func executeSearch(query string, opts ports.SearchOptions) error {
 		}
 		return err
 	}
-	fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet))
+	fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, grepNoFilename, grepNoColor))
 	if opts.Quiet {
 		os.Exit(result.ExitCode)
 	}

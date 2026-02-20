@@ -64,14 +64,15 @@ type SearchResult struct {
 
 // SearchHit is a single hit in search results (wire format).
 type SearchHit struct {
-	File    string   `json:"file"`
-	Line    int      `json:"line"`
-	Symbol  string   `json:"symbol"`
-	Range   [2]int   `json:"range"`
-	Domain  string   `json:"domain"`
-	Tags    []string `json:"tags"`
-	Kind    string   `json:"kind,omitempty"`
-	Content string   `json:"content,omitempty"`
+	File         string         `json:"file"`
+	Line         int            `json:"line"`
+	Symbol       string         `json:"symbol"`
+	Range        [2]int         `json:"range"`
+	Domain       string         `json:"domain"`
+	Tags         []string       `json:"tags"`
+	Kind         string         `json:"kind,omitempty"`
+	Content      string         `json:"content,omitempty"`
+	ContextLines map[int]string `json:"context_lines,omitempty"`
 }
 
 // HealthResult is the result of a health request.
@@ -208,6 +209,7 @@ type ActivityEntryResult struct {
 	Source    string `json:"source"`
 	Attrib    string `json:"attrib"`
 	Impact    string `json:"impact"`
+	Learned   string `json:"learned,omitempty"`
 	Tags      string `json:"tags"`
 	Target    string `json:"target"`
 	Timestamp int64  `json:"timestamp"`

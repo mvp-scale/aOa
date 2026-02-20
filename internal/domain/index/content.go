@@ -103,7 +103,7 @@ func (e *SearchEngine) scanContentTrigram(query string, opts ports.SearchOptions
 		if file == nil || file.Size > maxContentFileSize {
 			continue
 		}
-		if !matchesGlobs(file.Path, opts.IncludeGlob, opts.ExcludeGlob) {
+		if !matchesAllGlobs(file.Path, opts) {
 			continue
 		}
 
@@ -161,7 +161,7 @@ func (e *SearchEngine) scanContentBruteForce(query string, opts ports.SearchOpti
 		if file.Size > maxContentFileSize {
 			continue
 		}
-		if !matchesGlobs(file.Path, opts.IncludeGlob, opts.ExcludeGlob) {
+		if !matchesAllGlobs(file.Path, opts) {
 			continue
 		}
 

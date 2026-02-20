@@ -385,20 +385,23 @@ function renderLiveActivity() {
   for (var i = 0; i < entries.length; i++) {
     var e = entries[i];
     var actionClass = getActionPillClass(e.action);
-    var sourceClass = (e.source === 'aOa') ? 'text-cyan' : 'text-dim';
-    var attribClass = getAttribPillClass(e.attrib);
+    var sourceClass = (e.source === 'aOa') ? 'text-blue' : 'text-dim';
     var isUnguided = e.attrib === 'unguided';
     var isGuided = e.attrib && e.attrib.indexOf('guided') !== -1 && !isUnguided;
-    var impactHtml = getImpactHtml(e.impact, isUnguided, isGuided);
-    var targetColor = isUnguided ? 'var(--red)' : 'var(--dim)';
+    var isSearch = e.action === 'Search';
+    var impactHtml = getImpactHtml(e.impact, isUnguided, isGuided, isSearch);
+    var targetHtml = renderTarget(e.target, isUnguided);
+
+    var learnedHtml = e.learned ? '<span class="pill pill-green">' + escapeHtml(e.learned) + '</span>' : '';
 
     html += '<tr>' +
       '<td class="mono text-dim" style="font-size:11px;white-space:nowrap">' + relTime(e.timestamp) + '</td>' +
       '<td><span class="pill ' + actionClass + '">' + escapeHtml(e.action) + '</span></td>' +
       '<td class="' + sourceClass + ' mono" style="font-size:11px">' + escapeHtml(e.source) + '</td>' +
-      '<td><span class="pill ' + attribClass + '">' + escapeHtml(e.attrib || '-') + '</span></td>' +
+      '<td>' + renderAttribPills(e.attrib) + '</td>' +
       '<td class="mono" style="font-size:11px">' + impactHtml + '</td>' +
-      '<td class="mono truncate" style="font-size:11px;color:' + targetColor + '" title="' + escapeHtml(e.target) + '">' + escapeHtml(truncPath(e.target, 50)) + '</td>' +
+      '<td>' + learnedHtml + '</td>' +
+      '<td class="mono truncate" style="font-size:11px" title="' + escapeHtml(e.target) + '">' + targetHtml + '</td>' +
       '</tr>';
   }
   document.getElementById('activityTbody').innerHTML = html;
@@ -417,28 +420,48 @@ function getActionPillClass(action) {
 }
 
 var CREATIVE_WORDS = {'crafted':1,'authored':1,'forged':1,'innovated':1};
+var LEARN_WORDS = {'trained':1,'fine-tuned':1,'calibrated':1,'converged':1,'reinforced':1,'optimized':1,'weighted':1,'adapted':1};
 function getAttribPillClass(attrib) {
   if (!attrib || attrib === '-') return 'pill-dim';
   var a = attrib.toLowerCase();
   if (a === 'unguided') return 'pill-red';
   if (CREATIVE_WORDS[a]) return 'pill-purple';
+  if (LEARN_WORDS[a]) return 'pill-green';
   if (a === 'indexed') return 'pill-cyan';
   if (a.indexOf('guided') !== -1) return 'pill-green';
-  if (a === 'regex') return 'pill-yellow';
+  if (a === 'regex' || a === 'multi-and' || a === 'multi-or') return 'pill-yellow';
   return 'pill-dim';
 }
+function renderAttribPills(attrib) {
+  if (!attrib || attrib === '-') return '<span class="pill pill-dim">-</span>';
+  return '<span class="pill ' + getAttribPillClass(attrib) + '">' + escapeHtml(attrib) + '</span>';
+}
 
-function getImpactHtml(impact, isUnguided, isGuided) {
+function getImpactHtml(impact, isUnguided, isGuided, isSearch) {
   if (!impact) return '<span class="text-mute">-</span>';
   var s = String(impact);
   if (s === '-') return '<span class="text-mute">-</span>';
   // Attrib-driven: unguided = red cost, guided = green savings
   if (isUnguided) return '<span class="text-red">' + escapeHtml(s) + '</span>';
   if (isGuided) return '<span class="text-green">' + escapeHtml(s) + '</span>';
-  // Fallback for other attribs (productive, indexed, etc.)
-  if (s.indexOf('+') !== -1) return '<span class="text-cyan">' + escapeHtml(s) + '</span>';
-  if (/\d/.test(s)) return '<span class="text-dim">' + escapeHtml(s) + '</span>';
-  return '<span class="text-dim">' + escapeHtml(s) + '</span>';
+  // Highlight numbers, keep the rest dim
+  return highlightNumbers(s);
+}
+function highlightNumbers(s) {
+  return '<span class="text-dim">' + s.replace(/(\d+\.?\d*)/g, '</span><span class="text-cyan">$1</span><span class="text-dim">') + '</span>';
+}
+function renderTarget(target, isUnguided) {
+  if (!target) return '<span class="text-dim">-</span>';
+  var t = truncPath(target, 50);
+  if (isUnguided) return '<span style="color:var(--red)">' + escapeHtml(t) + '</span>';
+  // aOa grep/egrep: "aOa" blue, "grep"/"egrep" green, rest dim
+  var m = t.match(/^(aOa)\s+(e?grep)(.*)$/);
+  if (m) {
+    return '<span style="color:var(--blue)">' + escapeHtml(m[1]) + '</span> ' +
+           '<span style="color:var(--green)">' + escapeHtml(m[2]) + '</span>' +
+           '<span class="text-dim">' + escapeHtml(m[3]) + '</span>';
+  }
+  return '<span class="text-dim">' + escapeHtml(t) + '</span>';
 }
 
 /* ══════════════════════════════════════════════════════════

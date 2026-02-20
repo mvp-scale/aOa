@@ -1,6 +1,7 @@
 package index
 
 import (
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -57,14 +58,15 @@ type SearchResult struct {
 
 // Hit represents a single search result entry.
 type Hit struct {
-	File    string   `json:"file"`
-	Line    int      `json:"line"`
-	Symbol  string   `json:"symbol"`
-	Range   [2]int   `json:"range"`
-	Domain  string   `json:"domain"`
-	Tags    []string `json:"tags"`
-	Kind    string   `json:"kind,omitempty"`    // "symbol" or "content"
-	Content string   `json:"content,omitempty"` // matching line text (content hits only)
+	File         string         `json:"file"`
+	Line         int            `json:"line"`
+	Symbol       string         `json:"symbol"`
+	Range        [2]int         `json:"range"`
+	Domain       string         `json:"domain"`
+	Tags         []string       `json:"tags"`
+	Kind         string         `json:"kind,omitempty"`          // "symbol" or "content"
+	Content      string         `json:"content,omitempty"`       // matching line text (content hits only)
+	ContextLines map[int]string `json:"context_lines,omitempty"` // lineNum → text (surrounding context)
 
 	fileID uint32         // internal, for deterministic sorting
 	ref    ports.TokenRef // internal, for deferred enrichment
@@ -219,6 +221,16 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 		hits = append(hits, contentHits...)
 	}
 
+	// -L: files-without-match — return files NOT in the matched set
+	if opts.FilesWithoutMatch {
+		hits = e.filesWithoutMatch(hits, opts)
+	}
+
+	// -o: only-matching — replace content with just the matching substring
+	if opts.OnlyMatching {
+		e.applyOnlyMatching(hits, query, opts)
+	}
+
 	result := e.buildResult(hits, opts, maxCount)
 
 	// Enrich symbol hits (domain + tags) only for survivors after truncation
@@ -226,6 +238,9 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 
 	// Generate tags for content hits that deferred tag generation (indexed paths)
 	e.fillContentTags(result.Hits)
+
+	// Attach context lines for -A/-B/-C (after enrichment, on final result set only)
+	e.attachContextLines(result.Hits, opts)
 
 	elapsed := time.Since(start)
 
@@ -265,7 +280,7 @@ func (e *SearchEngine) searchLiteral(token string, opts ports.SearchOptions) []H
 			}
 		}
 
-		if !matchesGlobs(file.Path, opts.IncludeGlob, opts.ExcludeGlob) {
+		if !matchesAllGlobs(file.Path, opts) {
 			continue
 		}
 
@@ -351,7 +366,7 @@ func (e *SearchEngine) searchOR(tokens []string, opts ports.SearchOptions) []Hit
 			}
 		}
 
-		if !matchesGlobs(file.Path, opts.IncludeGlob, opts.ExcludeGlob) {
+		if !matchesAllGlobs(file.Path, opts) {
 			continue
 		}
 
@@ -420,7 +435,7 @@ func (e *SearchEngine) searchAND(query string, opts ports.SearchOptions) []Hit {
 			continue
 		}
 
-		if !matchesGlobs(file.Path, opts.IncludeGlob, opts.ExcludeGlob) {
+		if !matchesAllGlobs(file.Path, opts) {
 			continue
 		}
 
@@ -433,6 +448,9 @@ func (e *SearchEngine) searchAND(query string, opts ports.SearchOptions) []Hit {
 
 // searchRegex compiles a regex and scans all symbols.
 func (e *SearchEngine) searchRegex(pattern string, opts ports.SearchOptions) []Hit {
+	if opts.WordBoundary {
+		pattern = `\b` + pattern + `\b`
+	}
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil
@@ -452,7 +470,7 @@ func (e *SearchEngine) searchRegex(pattern string, opts ports.SearchOptions) []H
 			continue
 		}
 
-		if !matchesGlobs(file.Path, opts.IncludeGlob, opts.ExcludeGlob) {
+		if !matchesAllGlobs(file.Path, opts) {
 			continue
 		}
 
@@ -488,7 +506,7 @@ func (e *SearchEngine) invertSymbolHits(matched []Hit, opts ports.SearchOptions)
 		if file == nil {
 			continue
 		}
-		if !matchesGlobs(file.Path, opts.IncludeGlob, opts.ExcludeGlob) {
+		if !matchesAllGlobs(file.Path, opts) {
 			continue
 		}
 		inverted = append(inverted, e.buildHit(ref, sym, file))
@@ -554,6 +572,20 @@ func (e *SearchEngine) refHasToken(ref ports.TokenRef, token string) bool {
 	return false
 }
 
+// matchesAllGlobs applies include/exclude glob filters and directory exclusion on the file path.
+func matchesAllGlobs(path string, opts ports.SearchOptions) bool {
+	if !matchesGlobs(path, opts.IncludeGlob, opts.ExcludeGlob) {
+		return false
+	}
+	if opts.ExcludeDirGlob != "" {
+		dir := filepath.Dir(path)
+		if fnmatchGlob(opts.ExcludeDirGlob, dir) {
+			return false
+		}
+	}
+	return true
+}
+
 // matchesGlobs applies include/exclude glob filters on the file path.
 // Uses fnmatch-like semantics where * matches path separators (unlike filepath.Match).
 func matchesGlobs(path, include, exclude string) bool {
@@ -594,6 +626,124 @@ func fnmatchGlob(pattern, path string) bool {
 		return false
 	}
 	return re.MatchString(path)
+}
+
+// filesWithoutMatch returns one hit per indexed file that is NOT in the matched set.
+// Respects include/exclude/exclude-dir glob filters from opts.
+func (e *SearchEngine) filesWithoutMatch(matched []Hit, opts ports.SearchOptions) []Hit {
+	matchedFiles := make(map[uint32]bool, len(matched))
+	for _, h := range matched {
+		matchedFiles[h.fileID] = true
+	}
+
+	var hits []Hit
+	for fileID, file := range e.idx.Files {
+		if matchedFiles[fileID] {
+			continue
+		}
+		if !matchesAllGlobs(file.Path, opts) {
+			continue
+		}
+		hits = append(hits, Hit{
+			File:   file.Path,
+			Kind:   "file",
+			fileID: fileID,
+		})
+	}
+	sortByFileIDLine(hits)
+	return hits
+}
+
+// applyOnlyMatching replaces hit content with just the matching substring.
+func (e *SearchEngine) applyOnlyMatching(hits []Hit, query string, opts ports.SearchOptions) {
+	for i := range hits {
+		h := &hits[i]
+		if h.Kind == "content" && h.Content != "" {
+			match := extractMatch(h.Content, query, opts)
+			if match != "" {
+				h.Content = match
+			}
+		} else if h.Kind == "symbol" && h.Symbol != "" {
+			match := extractMatch(h.Symbol, query, opts)
+			if match != "" {
+				h.Symbol = match
+			}
+		}
+	}
+}
+
+// extractMatch finds the matching substring within text for the given query/opts.
+func extractMatch(text, query string, opts ports.SearchOptions) string {
+	if opts.Mode == "regex" {
+		re, err := regexp.Compile(query)
+		if err != nil {
+			return ""
+		}
+		return re.FindString(text)
+	}
+	if opts.Mode == "case_insensitive" {
+		lowerText := strings.ToLower(text)
+		lowerQuery := strings.ToLower(query)
+		idx := strings.Index(lowerText, lowerQuery)
+		if idx >= 0 {
+			return text[idx : idx+len(query)]
+		}
+		return ""
+	}
+	idx := strings.Index(text, query)
+	if idx >= 0 {
+		return text[idx : idx+len(query)]
+	}
+	return ""
+}
+
+// attachContextLines populates ContextLines for content hits that have FileCache data.
+func (e *SearchEngine) attachContextLines(hits []Hit, opts ports.SearchOptions) {
+	before := opts.BeforeContext
+	after := opts.AfterContext
+	if opts.Context > 0 {
+		before = opts.Context
+		after = opts.Context
+	}
+	if before == 0 && after == 0 {
+		return
+	}
+	if e.cache == nil {
+		return
+	}
+
+	for i := range hits {
+		h := &hits[i]
+		if h.Kind != "content" || h.fileID == 0 {
+			continue
+		}
+
+		lines := e.cache.GetLines(h.fileID)
+		if lines == nil {
+			continue
+		}
+
+		ctx := make(map[int]string)
+		totalLines := len(lines)
+
+		// Before context
+		for j := h.Line - before; j < h.Line; j++ {
+			if j >= 1 && j <= totalLines {
+				ctx[j] = lines[j-1] // lines is 0-based, j is 1-based
+			}
+		}
+
+		// After context
+		for j := h.Line + 1; j <= h.Line+after; j++ {
+			if j >= 1 && j <= totalLines {
+				ctx[j] = lines[j-1]
+			}
+		}
+
+		if len(ctx) > 0 {
+			h.ContextLines = ctx
+		}
+	}
 }
 
 // sortByFileIDLine sorts hits by file_id ascending, then line ascending.

@@ -90,6 +90,7 @@ type ActivityEntry struct {
 	Source    string
 	Attrib    string
 	Impact    string
+	Learned   string
 	Tags      string
 	Target    string
 	Timestamp int64
@@ -146,7 +147,9 @@ type App struct {
 	activityRing    [50]ActivityEntry // ring buffer of last 50 activity entries
 	activityHead    int
 	activityCount   int
-	creativeWordIdx int // cycles through creative attrib words for Write/Edit
+	creativeWordIdx  int  // cycles through creative attrib words for Write/Edit
+	learnWordIdx     int  // cycles through learn attrib words for Search/Read signals
+	lastReadLearned  bool // set by range-gated read, consumed by Read activity row
 
 	// Burn rate tracking (L0.1)
 	burnRate            *BurnRateTracker // actual token burn rate
@@ -437,30 +440,24 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 		})
 	}
 
-	// L0.11: Learn activity event for search signals
-	if len(sc.Keywords) > 0 || len(sc.Terms) > 0 || len(sc.Domains) > 0 {
-		a.pushActivity(ActivityEntry{
-			Action:    "Learn",
-			Source:    "aOa",
-			Impact:    fmt.Sprintf("+%d keywords, +%d terms, +%d domains", len(sc.Keywords), len(sc.Terms), len(sc.Domains)),
-			Timestamp: time.Now().Unix(),
-		})
-	}
-
 	// Count unique files in results
 	fileSet := make(map[string]bool)
 	for _, hit := range result.Hits {
 		fileSet[hit.File] = true
 	}
 
-	a.pushActivity(ActivityEntry{
+	entry := ActivityEntry{
 		Action:    "Search",
 		Source:    "aOa",
 		Attrib:    a.searchAttrib(query, opts),
 		Impact:    fmt.Sprintf("%d hits, %d files | %.2fms", len(result.Hits), len(fileSet), elapsed.Seconds()*1000),
 		Target:    a.searchTarget(query, opts),
 		Timestamp: time.Now().Unix(),
-	})
+	}
+	if len(sc.Keywords) > 0 || len(sc.Terms) > 0 || len(sc.Domains) > 0 {
+		entry.Learned = a.nextLearnWord()
+	}
+	a.pushActivity(entry)
 }
 
 // Start begins the daemon (socket server + HTTP server + session reader).
@@ -600,14 +597,8 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				_, tsMs := a.timeSavedForTokens(delta)
 				a.sessionTimeSavedMs += tsMs
 			}
-			// L0.11: Learn activity for file read
-			relPath := a.relativePath(ev.File.Path)
-			a.pushActivity(ActivityEntry{
-				Action:    "Learn",
-				Source:    "aOa",
-				Impact:    fmt.Sprintf("+1 file: %s", relPath),
-				Timestamp: time.Now().Unix(),
-			})
+			// L0.11: Mark that learning occurred (attrib pill added to Read row below)
+			a.lastReadLearned = true
 		}
 		// Accumulate tool metrics
 		a.accumulateTool(ev)
@@ -660,6 +651,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 							impact = fmt.Sprintf("~%s tokens", formatTokens(int64(tokens)))
 						}
 					}
+					// lastReadLearned consumed below when building activity entry
 				}
 			case "Bash":
 				if ev.Tool.Command != "" {
@@ -732,14 +724,19 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			}
 
 			if !skipActivity {
-				a.pushActivity(ActivityEntry{
+				entry := ActivityEntry{
 					Action:    action,
 					Source:    "Claude",
 					Attrib:    attrib,
 					Impact:    impact,
 					Target:    actTarget,
 					Timestamp: time.Now().Unix(),
-				})
+				}
+				if action == "Read" && a.lastReadLearned {
+					entry.Learned = a.nextLearnWord()
+					a.lastReadLearned = false
+				}
+				a.pushActivity(entry)
 			}
 		}
 
@@ -788,6 +785,20 @@ func (a *App) searchAttrib(query string, opts ports.SearchOptions) string {
 	return "indexed"
 }
 
+// learnWords are cycling attrib words that signal learning occurred.
+var learnWords = [8]string{
+	"trained", "fine-tuned", "calibrated", "converged",
+	"reinforced", "optimized", "weighted", "adapted",
+}
+
+// nextLearnWord returns the next cycling learn word for attrib pills.
+// Must be called with a.mu held.
+func (a *App) nextLearnWord() string {
+	w := learnWords[a.learnWordIdx%len(learnWords)]
+	a.learnWordIdx++
+	return w
+}
+
 // searchTarget returns the target label for a search query.
 // Preserves the actual command with flags as the user typed it.
 func (a *App) searchTarget(query string, opts ports.SearchOptions) string {
@@ -796,6 +807,9 @@ func (a *App) searchTarget(query string, opts ports.SearchOptions) string {
 		parts = append(parts, "aOa egrep")
 	} else {
 		parts = append(parts, "aOa grep")
+	}
+	if opts.Mode == "case_insensitive" {
+		parts = append(parts, "-i")
 	}
 	if opts.InvertMatch {
 		parts = append(parts, "-v")
@@ -809,11 +823,30 @@ func (a *App) searchTarget(query string, opts ports.SearchOptions) string {
 	if opts.CountOnly {
 		parts = append(parts, "-c")
 	}
+	if opts.OnlyMatching {
+		parts = append(parts, "-o")
+	}
+	if opts.FilesWithoutMatch {
+		parts = append(parts, "-L")
+	}
 	if opts.IncludeGlob != "" {
 		parts = append(parts, "--include", opts.IncludeGlob)
 	}
 	if opts.ExcludeGlob != "" {
 		parts = append(parts, "--exclude", opts.ExcludeGlob)
+	}
+	if opts.ExcludeDirGlob != "" {
+		parts = append(parts, "--exclude-dir", opts.ExcludeDirGlob)
+	}
+	if opts.Context > 0 {
+		parts = append(parts, fmt.Sprintf("-C %d", opts.Context))
+	} else {
+		if opts.BeforeContext > 0 {
+			parts = append(parts, fmt.Sprintf("-B %d", opts.BeforeContext))
+		}
+		if opts.AfterContext > 0 {
+			parts = append(parts, fmt.Sprintf("-A %d", opts.AfterContext))
+		}
 	}
 	parts = append(parts, query)
 	return strings.Join(parts, " ")
@@ -844,6 +877,7 @@ func (a *App) ActivityFeed() socket.ActivityFeedResult {
 			Source:    e.Source,
 			Attrib:    e.Attrib,
 			Impact:    e.Impact,
+			Learned:   e.Learned,
 			Tags:      e.Tags,
 			Target:    e.Target,
 			Timestamp: e.Timestamp,

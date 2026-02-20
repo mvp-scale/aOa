@@ -208,14 +208,15 @@ func (s *Server) handleSearch(req Request) Response {
 	hits := make([]SearchHit, len(result.Hits))
 	for i, h := range result.Hits {
 		hits[i] = SearchHit{
-			File:    h.File,
-			Line:    h.Line,
-			Symbol:  h.Symbol,
-			Range:   h.Range,
-			Domain:  h.Domain,
-			Tags:    h.Tags,
-			Kind:    h.Kind,
-			Content: h.Content,
+			File:         h.File,
+			Line:         h.Line,
+			Symbol:       h.Symbol,
+			Range:        h.Range,
+			Domain:       h.Domain,
+			Tags:         h.Tags,
+			Kind:         h.Kind,
+			Content:      h.Content,
+			ContextLines: h.ContextLines,
 		}
 	}
 

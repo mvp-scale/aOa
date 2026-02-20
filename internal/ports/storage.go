@@ -149,4 +149,12 @@ type SearchOptions struct {
 	ExcludeGlob  string // --exclude: file pattern filter
 	Since        int64  // --since: unix timestamp, files modified after
 	Before       int64  // --before: unix timestamp, files modified before
+
+	// L3.6-L3.14: additional GNU grep parity flags
+	ExcludeDirGlob   string // --exclude-dir: directory pattern filter
+	OnlyMatching     bool   // -o: print only the matching part
+	FilesWithoutMatch bool  // -L: print names of files with no matches
+	AfterContext     int    // -A: lines of context after match
+	BeforeContext    int    // -B: lines of context before match
+	Context          int    // -C: lines of context (overrides -A and -B)
 }
