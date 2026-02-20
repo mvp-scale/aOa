@@ -10,7 +10,6 @@ var activeTab = 'live';
 var pollTimer = null;
 var cache = {};
 var heroData = null;
-var lastConvCount = 0;
 
 /* ══════════════════════════════════════════════════════════
    HELPERS
@@ -109,6 +108,9 @@ function safeFetch(url) {
     return r.json();
   });
 }
+function isNearBottom(el) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+}
 
 // Lightweight markdown renderer for assistant/thinking text
 function renderMd(text) {
@@ -178,6 +180,10 @@ function switchTab(name) {
   }
   location.hash = name;
   renderHero(name);
+  // Restart poll timer: 1s for debrief (live thinking), 3s for others
+  if (pollTimer) clearInterval(pollTimer);
+  var interval = (name === 'debrief') ? 1000 : 3000;
+  pollTimer = setInterval(poll, interval);
   poll(); // immediate fetch for new tab
 }
 
@@ -317,7 +323,8 @@ function poll() {
 
 function startPolling() {
   poll();
-  pollTimer = setInterval(poll, 3000);
+  var interval = (activeTab === 'debrief') ? 1000 : 3000;
+  pollTimer = setInterval(poll, interval);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -770,8 +777,12 @@ function renderDebrief() {
   // Conversation Feed — reverse to chronological, pair user+assistant into exchanges
   var rawTurns = cf.turns || [];
   var turns = rawTurns.slice().reverse();
-  var shouldScroll = (turns.length !== lastConvCount);
-  lastConvCount = turns.length;
+
+  // Check if containers are near bottom before re-rendering
+  var msgContainer = document.getElementById('convMessages');
+  var actContainer = document.getElementById('convActions');
+  var msgWasNear = msgContainer ? isNearBottom(msgContainer) : true;
+  var actWasNear = actContainer ? isNearBottom(actContainer) : true;
 
   // Group into exchanges: each exchange is { user: turn|null, assistant: turn|null }
   var exchanges = [];
@@ -838,11 +849,11 @@ function renderDebrief() {
         '<div class="conv-msg-text">' + renderMd(truncText(ex.assistant.text, 500)) + '</div></div>';
     }
   }
-  mhtml += '<div class="conv-now">NOW</div>';
+  mhtml += '<div class="conv-now"><span class="conv-now-line"></span><span class="conv-now-dot"></span><span class="conv-now-text">NOW</span><span class="conv-now-line"></span></div>';
   document.getElementById('convMessages').innerHTML = mhtml;
 
-  if (shouldScroll) {
-    var msgContainer = document.getElementById('convMessages');
+  // Auto-scroll if user was near bottom
+  if (msgWasNear && msgContainer) {
     msgContainer.scrollTop = msgContainer.scrollHeight;
   }
 
@@ -889,7 +900,7 @@ function renderDebrief() {
       ahtml += '<div class="conv-action-item">' +
         '<span class="act-left">' +
           '<span class="conv-tool-chip ' + getToolChipClass(act.tool) + '">' + escapeHtml(act.tool) + '</span>' +
-          '<span class="conv-action-path"' + pathStyle + ' title="' + escapeHtml(targetStr) + '">' + escapeHtml(truncPath(targetStr, 30)) + '</span>' +
+          '<span class="conv-action-path"' + pathStyle + ' title="' + escapeHtml(targetStr) + '">' + escapeHtml(truncPath(targetStr, 80)) + '</span>' +
         '</span>' +
         '<span class="act-cell">' + saveVal + '</span>' +
         '<span class="act-cell">' + tokVal + '</span>' +
@@ -897,7 +908,13 @@ function renderDebrief() {
     }
     ahtml += '</div>';
   }
+  ahtml += '<div class="conv-now"><span class="conv-now-line"></span><span class="conv-now-dot"></span><span class="conv-now-text">NOW</span><span class="conv-now-line"></span></div>';
   document.getElementById('convActions').innerHTML = ahtml;
+
+  // Auto-scroll actions if user was near bottom
+  if (actWasNear && actContainer) {
+    actContainer.scrollTop = actContainer.scrollHeight;
+  }
 }
 
 function getToolChipClass(tool) {
@@ -1143,6 +1160,32 @@ function renderLearningCurve(sessions) {
     ctx.fillText('S' + (n + 1), tx, h - 4);
   }
 }
+
+/* ── Now button: scroll listeners + global handler ── */
+window.scrollToNow = function(id) {
+  var el = document.getElementById(id);
+  if (el) el.scrollTop = el.scrollHeight;
+  var btnId = (id === 'convMessages') ? 'nowBtnMsg' : 'nowBtnAct';
+  var btn = document.getElementById(btnId);
+  if (btn) btn.style.display = 'none';
+};
+
+(function initScrollListeners() {
+  var msgEl = document.getElementById('convMessages');
+  var actEl = document.getElementById('convActions');
+  if (msgEl) {
+    msgEl.addEventListener('scroll', function() {
+      var btn = document.getElementById('nowBtnMsg');
+      if (btn) btn.style.display = isNearBottom(msgEl) ? 'none' : 'block';
+    });
+  }
+  if (actEl) {
+    actEl.addEventListener('scroll', function() {
+      var btn = document.getElementById('nowBtnAct');
+      if (btn) btn.style.display = isNearBottom(actEl) ? 'none' : 'block';
+    });
+  }
+})();
 
 /* ── Start ── */
 startPolling();

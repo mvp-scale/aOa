@@ -234,18 +234,20 @@
     </div>
 
     <div class="conv-grid">
-      <div class="card">
+      <div class="card conv-col">
         <div class="card-header">
           <span class="card-title">Conversation Feed</span>
           <span class="card-badge" id="convCount">0</span>
         </div>
         <div class="conv-messages" id="convMessages"></div>
+        <button id="nowBtnMsg" class="now-btn" onclick="scrollToNow('convMessages')" style="display:none">Now ↓</button>
       </div>
-      <div class="card">
+      <div class="card conv-col">
         <div class="card-header">
           <span class="card-title">Actions</span>
         </div>
         <div class="conv-actions" id="convActions"></div>
+        <button id="nowBtnAct" class="now-btn" onclick="scrollToNow('convActions')" style="display:none">Now ↓</button>
       </div>
     </div>
   </div>
