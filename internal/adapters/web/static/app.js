@@ -55,7 +55,9 @@ function fmtK(n) {
 }
 function fmtTime(ms) {
   if (!ms || ms <= 0) return '-';
-  if (ms >= 60000) return (ms / 60000).toFixed(1) + 'min';
+  if (ms >= 86400000) { var d = Math.floor(ms / 86400000); var h = Math.round((ms % 86400000) / 3600000); return d + 'd ' + h + 'h'; }
+  if (ms >= 3600000) { var h2 = Math.floor(ms / 3600000); var m = Math.round((ms % 3600000) / 60000); return h2 + 'h ' + m + 'm'; }
+  if (ms >= 60000) { var m2 = Math.floor(ms / 60000); var s = Math.round((ms % 60000) / 1000); return m2 + 'm ' + s + 's'; }
   if (ms >= 1000) return (ms / 1000).toFixed(1) + 's';
   return ms + 'ms';
 }
@@ -65,8 +67,9 @@ function fmtPct(n) {
 }
 function fmtMin(min) {
   if (!min || min <= 0) return '-';
+  if (min >= 1440) { var d = Math.floor(min / 1440); var h = Math.round((min % 1440) / 60); return d + 'd ' + h + 'h'; }
   if (min >= 60) return Math.floor(min / 60) + 'h ' + Math.round(min % 60) + 'm';
-  return Math.round(min) + ' min';
+  return Math.round(min) + 'm';
 }
 function relTime(ts) {
   if (!ts) return '-';

@@ -34,13 +34,13 @@ type SessionMetrics struct {
 	TurnCount        int
 }
 
-// CacheHitRate returns the percentage of cache read tokens vs total input tokens.
+// CacheHitRate returns the fraction of cache read tokens vs total input tokens (0.0–1.0).
 func (s *SessionMetrics) CacheHitRate() float64 {
 	total := s.InputTokens + s.CacheReadTokens
 	if total == 0 {
 		return 0.0
 	}
-	return float64(s.CacheReadTokens) / float64(total) * 100.0
+	return float64(s.CacheReadTokens) / float64(total)
 }
 
 // ToolMetrics holds per-tool counters and top targets.
