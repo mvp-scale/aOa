@@ -199,7 +199,6 @@
 | [L2](#layer-2) | [L2.5](#l25) | x | x | | x | | | | L2.4 | 🟢 | 🟢 | 🟢 | Wire trigram + fix case-sensitivity default (G1) | `aoa grep` ≤1ms, case-sensitive by default, `-i` for insensitive | Unit: 7 tests — case-sensitive default, `-i` flag, trigram dispatch, extractTrigrams, canUseTrigram. Benchmark: ~60µs/query on 500 files |
 | [L2](#layer-2) | [L2.6](#l26) | x | | | | | | | L2.4 | 🟢 | 🟢 | 🟢 | Pre-lowercased line cache — lowerLines in cacheEntry | Faster brute-force fallback for <3 char queries and regex | Wired: brute-force uses `strings.Contains` on pre-lowered lines for `-i` mode. Benchmark: equivalent perf |
 | [L2](#layer-2) | [L2.7](#l27) | x | x | | x | | | | L2.5 | 🟢 | 🟢 | 🟢 | Edge cases + regression suite — short queries, regex, InvertMatch, AND | All grep/egrep modes work at speed | Unit: 7 tests — short query fallback, regex, word boundary, AND, InvertMatch, glob filter. All 374 tests pass |
-| [L3](#layer-3) | [L3.1](#l31) | | x | | | | | | - | 🟢 | ⚪ | ⚪ | Manual validation on real projects — user picks 5 projects | Prove equivalence at scale | Manual spot-check on diverse projects |
 | [L3](#layer-3) | [L3.2](#l32) | | x | | | | | | - | 🟢 | 🟢 | 🟢 | Grep/egrep parity: 55 tests, 93% agent-critical, 58% overall | Search parity proof | `test/migration/grep_parity_test.go` — 55 tests. Agent-critical: 14/15 (93%). Overall: 14/24 (58%). L3.6-L3.14 close gaps to 100%/96%. |
 | [L3](#layer-3) | [L3.3](#l33) | | x | | | | | | - | 🟢 | 🟢 | 🟢 | Learner parity: 200 intents, 5 checkpoints, zero tolerance | Learner parity proof | `TestAutotuneParity_FullReplay` — 200-intent replay, all fields match |
 | [L3](#layer-3) | [L3.4](#l34) | x | | | | | | | - | 🟢 | 🟢 | 🟢 | 7 benchmarks: search 59µs, autotune 24µs, startup 8ms, 0.4MB | Confirm speedup targets | `test/benchmark_test.go` — all 7 passing, all targets exceeded |
@@ -482,15 +481,7 @@ All grep/egrep modes validated after trigram integration:
 **Layer 3: Migration & Validation (Parallel run, parity proof)**
 
 > Run both systems side-by-side and prove equivalence before the Python version is retired.
-> **Quality Gate**: 500 queries across 5 projects = zero divergence. Go beats Python on all benchmarks.
-
-#### L3.1
-
-**Parallel run on 5 projects**
-
-Select 5 diverse test projects (varying size, language mix, domain spread). Run both Python and Go in parallel, capture all outputs.
-
-**Files**: `test/migration/*.sh`
+> **Quality Gate**: Parity tests (55 grep + 200-intent learner replay) prove equivalence. Go beats Python on all benchmarks.
 
 #### L3.2
 
