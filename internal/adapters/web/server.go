@@ -90,6 +90,7 @@ func (s *Server) Start(preferredPort int) error {
 	mux.HandleFunc("GET /api/runway", s.handleRunway)
 	mux.HandleFunc("GET /api/sessions", s.handleSessions)
 	mux.HandleFunc("GET /api/config", s.handleConfig)
+	mux.HandleFunc("GET /api/recon", s.handleRecon)
 
 	s.httpSrv = &http.Server{Handler: mux}
 

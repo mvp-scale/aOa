@@ -6,11 +6,16 @@ BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X github.com/corey/aoa/internal/version.Version=$(VERSION) \
            -X github.com/corey/aoa/internal/version.BuildDate=$(BUILD_DATE)
 
-.PHONY: build test lint bench coverage check vet
+.PHONY: build build-lean test lint bench coverage check vet
 
-# Build the binary with version info
+# Build the binary with version info (all grammars compiled in, ~80 MB)
 build:
 	go build -ldflags "$(LDFLAGS)" -o aoa ./cmd/aoa/
+
+# Build lean binary (no grammars compiled in, ~12 MB)
+# Grammars loaded dynamically from .aoa/grammars/*.so at runtime
+build-lean:
+	go build -tags lean -ldflags "-s -w $(LDFLAGS)" -o aoa ./cmd/aoa/
 
 # Run all tests (skipped tests are expected during development)
 test:

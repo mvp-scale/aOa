@@ -116,6 +116,9 @@ func NewSearchEngine(idx *ports.Index, domains map[string]Domain, projectRoot st
 	return e
 }
 
+// Cache returns the attached FileCache (may be nil).
+func (e *SearchEngine) Cache() *FileCache { return e.cache }
+
 // SetCache attaches a FileCache for content scanning and performs
 // the initial cache warm from the current index.
 func (e *SearchEngine) SetCache(c *FileCache) {

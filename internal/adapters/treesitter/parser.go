@@ -29,6 +29,7 @@ type Symbol struct {
 type Parser struct {
 	languages map[string]*tree_sitter.Language // lang name -> language
 	extToLang map[string]string                // extension -> lang name
+	loader    *DynamicLoader                   // optional: loads grammars from .so/.dylib
 }
 
 // NewParser creates a parser with all built-in grammars registered.
@@ -65,8 +66,15 @@ func (p *Parser) ParseFile(filePath string, source []byte) ([]Symbol, error) {
 	}
 
 	lang, ok := p.languages[langName]
-	if !ok {
-		return nil, nil // extension mapped but grammar not compiled in
+	if !ok && p.loader != nil {
+		loaded, err := p.loader.LoadGrammar(langName)
+		if err != nil {
+			return nil, nil // dynamic loading failed, degrade gracefully
+		}
+		p.languages[langName] = loaded
+		lang = loaded
+	} else if !ok {
+		return nil, nil // extension mapped but grammar not available
 	}
 
 	if len(source) == 0 {
@@ -120,9 +128,34 @@ func (p *Parser) SupportedExtensions() []string {
 	return exts
 }
 
+// SetGrammarPaths configures the parser to load grammars dynamically from
+// shared libraries found in the given directories. Project-local paths should
+// come first, global paths last. This enables parsing of languages that don't
+// have compiled-in grammars.
+func (p *Parser) SetGrammarPaths(paths []string) {
+	p.loader = NewDynamicLoader(paths)
+}
+
+// Loader returns the dynamic grammar loader, or nil if not configured.
+func (p *Parser) Loader() *DynamicLoader {
+	return p.loader
+}
+
 // LanguageCount returns the number of languages with compiled-in grammars.
 func (p *Parser) LanguageCount() int {
 	return len(p.languages)
+}
+
+// HasLanguage returns true if a grammar is available (compiled-in or dynamically loaded)
+// for the given language name.
+func (p *Parser) HasLanguage(lang string) bool {
+	if _, ok := p.languages[lang]; ok {
+		return true
+	}
+	if p.loader != nil {
+		return p.loader.GrammarPath(lang) != ""
+	}
+	return false
 }
 
 // detectLanguage determines the language from the file path.

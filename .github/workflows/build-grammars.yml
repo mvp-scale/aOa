@@ -1,0 +1,197 @@
+name: Build Grammar Packs
+
+on:
+  workflow_dispatch:
+    inputs:
+      grammars:
+        description: 'Comma-separated grammar names, or "all"'
+        default: 'all'
+        required: true
+  push:
+    paths:
+      - 'grammars/manifest.json'
+      - '.github/workflows/build-grammars.yml'
+    branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  TS_VERSION: "0.25.0"
+
+jobs:
+  build-matrix:
+    name: Build grammars (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+            cc: gcc
+            ext: .so
+            cflags: "-fPIC -shared"
+          - os: linux
+            arch: arm64
+            runner: ubuntu-latest
+            cc: aarch64-linux-gnu-gcc
+            ext: .so
+            cflags: "-fPIC -shared"
+          - os: darwin
+            arch: amd64
+            runner: macos-13
+            cc: clang
+            ext: .dylib
+            cflags: "-fPIC -shared -target x86_64-apple-macos11"
+          - os: darwin
+            arch: arm64
+            runner: macos-14
+            cc: clang
+            ext: .dylib
+            cflags: "-fPIC -shared"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cross-compiler (linux-arm64)
+        if: matrix.os == 'linux' && matrix.arch == 'arm64'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Clone tree-sitter grammars
+        run: |
+          mkdir -p grammars/src
+          cd grammars/src
+
+          # Read grammar list from manifest or build all known
+          cat > grammars.txt << 'GRAMMARS'
+          python|tree-sitter/tree-sitter-python|src/parser.c src/scanner.c
+          javascript|tree-sitter/tree-sitter-javascript|src/parser.c src/scanner.c
+          typescript|tree-sitter/tree-sitter-typescript|typescript/src/parser.c typescript/src/scanner.c
+          tsx|tree-sitter/tree-sitter-typescript|tsx/src/parser.c tsx/src/scanner.c
+          go|tree-sitter/tree-sitter-go|src/parser.c
+          rust|tree-sitter/tree-sitter-rust|src/parser.c src/scanner.c
+          java|tree-sitter/tree-sitter-java|src/parser.c
+          c|tree-sitter/tree-sitter-c|src/parser.c
+          cpp|tree-sitter/tree-sitter-cpp|src/parser.c src/scanner.c
+          bash|tree-sitter/tree-sitter-bash|src/parser.c src/scanner.c
+          json|tree-sitter/tree-sitter-json|src/parser.c
+          c_sharp|tree-sitter/tree-sitter-c-sharp|src/parser.c src/scanner.c
+          ruby|tree-sitter/tree-sitter-ruby|src/parser.c src/scanner.c
+          php|tree-sitter/tree-sitter-php|php/src/parser.c php/src/scanner.c
+          kotlin|tree-sitter-grammars/tree-sitter-kotlin|src/parser.c src/scanner.c
+          yaml|tree-sitter-grammars/tree-sitter-yaml|src/parser.c src/scanner.c
+          html|tree-sitter/tree-sitter-html|src/parser.c src/scanner.c
+          css|tree-sitter/tree-sitter-css|src/parser.c src/scanner.c
+          toml|tree-sitter-grammars/tree-sitter-toml|src/parser.c src/scanner.c
+          scala|tree-sitter/tree-sitter-scala|src/parser.c src/scanner.c
+          lua|tree-sitter-grammars/tree-sitter-lua|src/parser.c src/scanner.c
+          svelte|tree-sitter-grammars/tree-sitter-svelte|src/parser.c src/scanner.c
+          hcl|tree-sitter-grammars/tree-sitter-hcl|src/parser.c src/scanner.c
+          zig|tree-sitter-grammars/tree-sitter-zig|src/parser.c
+          haskell|tree-sitter/tree-sitter-haskell|src/parser.c src/scanner.c
+          ocaml|tree-sitter/tree-sitter-ocaml|grammars/ocaml/src/parser.c grammars/ocaml/src/scanner.c
+          cuda|tree-sitter-grammars/tree-sitter-cuda|src/parser.c src/scanner.c
+          verilog|tree-sitter/tree-sitter-verilog|src/parser.c
+          GRAMMARS
+
+          # Clone each grammar repo
+          while IFS='|' read -r name repo sources; do
+            name=$(echo "$name" | xargs)
+            repo=$(echo "$repo" | xargs)
+            if [ -z "$name" ] || [ -z "$repo" ]; then continue; fi
+            echo "Cloning $name from $repo..."
+            git clone --depth 1 "https://github.com/$repo" "$name" 2>/dev/null || true
+          done < grammars.txt
+
+      - name: Build grammar shared libraries
+        run: |
+          mkdir -p grammars/out
+          cd grammars/src
+          FAILED=""
+
+          while IFS='|' read -r name repo sources; do
+            name=$(echo "$name" | xargs)
+            sources=$(echo "$sources" | xargs)
+            if [ -z "$name" ] || [ -z "$sources" ]; then continue; fi
+
+            echo "Building $name..."
+            SRC_FILES=""
+            INCLUDE_FLAGS="-I$name/src"
+
+            for src in $sources; do
+              if [ -f "$name/$src" ]; then
+                SRC_FILES="$SRC_FILES $name/$src"
+              else
+                echo "  WARNING: $name/$src not found, skipping"
+              fi
+            done
+
+            if [ -z "$SRC_FILES" ]; then
+              echo "  SKIP: no source files found for $name"
+              FAILED="$FAILED $name"
+              continue
+            fi
+
+            ${{ matrix.cc }} ${{ matrix.cflags }} $INCLUDE_FLAGS \
+              -o ../out/${name}${{ matrix.ext }} \
+              $SRC_FILES 2>&1 || {
+                echo "  FAILED: $name"
+                FAILED="$FAILED $name"
+              }
+          done < grammars.txt
+
+          echo ""
+          echo "=== Build Summary ==="
+          ls -lh ../out/ 2>/dev/null || echo "No outputs"
+          if [ -n "$FAILED" ]; then
+            echo "Failed:$FAILED"
+          fi
+
+      - name: Generate checksums
+        run: |
+          cd grammars/out
+          sha256sum *${{ matrix.ext }} > checksums.txt 2>/dev/null || \
+          shasum -a 256 *${{ matrix.ext }} > checksums.txt 2>/dev/null || true
+          cat checksums.txt
+
+      - name: Create pack tarballs
+        run: |
+          cd grammars/out
+
+          # Core pack (P1)
+          CORE="python javascript typescript tsx go rust java c cpp bash json"
+          tar czf grammars-core-${{ matrix.os }}-${{ matrix.arch }}.tar.gz \
+            $(for g in $CORE; do [ -f "${g}${{ matrix.ext }}" ] && echo "${g}${{ matrix.ext }}"; done) \
+            2>/dev/null || true
+
+          # Common pack (P2)
+          COMMON="c_sharp ruby php kotlin yaml html css toml"
+          tar czf grammars-common-${{ matrix.os }}-${{ matrix.arch }}.tar.gz \
+            $(for g in $COMMON; do [ -f "${g}${{ matrix.ext }}" ] && echo "${g}${{ matrix.ext }}"; done) \
+            2>/dev/null || true
+
+          # Extended pack (P3)
+          EXTENDED="scala lua svelte hcl"
+          tar czf grammars-extended-${{ matrix.os }}-${{ matrix.arch }}.tar.gz \
+            $(for g in $EXTENDED; do [ -f "${g}${{ matrix.ext }}" ] && echo "${g}${{ matrix.ext }}"; done) \
+            2>/dev/null || true
+
+          # Specialist pack (P4)
+          SPECIALIST="zig haskell ocaml cuda verilog"
+          tar czf grammars-specialist-${{ matrix.os }}-${{ matrix.arch }}.tar.gz \
+            $(for g in $SPECIALIST; do [ -f "${g}${{ matrix.ext }}" ] && echo "${g}${{ matrix.ext }}"; done) \
+            2>/dev/null || true
+
+          ls -lh *.tar.gz 2>/dev/null || echo "No tarballs"
+
+      - name: Upload grammar artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: grammars-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            grammars/out/*${{ matrix.ext }}
+            grammars/out/*.tar.gz
+            grammars/out/checksums.txt
+          retention-days: 30

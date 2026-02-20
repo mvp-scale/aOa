@@ -17,6 +17,7 @@ require (
 	github.com/briot/tree-sitter-ada v0.0.0-20251216194615-6b58259a08b1 // indirect
 	github.com/camdencheek/tree-sitter-dockerfile v0.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/ebitengine/purego v0.9.1 // indirect
 	github.com/elm-tooling/tree-sitter-elm v5.7.0+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gdamore/tree-sitter-d v0.8.2 // indirect

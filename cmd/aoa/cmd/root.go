@@ -42,4 +42,5 @@ func init() {
 	rootCmd.AddCommand(wipeCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(openCmd)
+	rootCmd.AddCommand(grammarCmd)
 }

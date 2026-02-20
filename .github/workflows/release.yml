@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.goos }}-${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-latest
+            suffix: linux-arm64
+            cc: aarch64-linux-gnu-gcc
+          - goos: darwin
+            goarch: amd64
+            runner: macos-13
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            runner: macos-14
+            suffix: darwin-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install cross-compiler
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build lean binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "1"
+          CC: ${{ matrix.cc || 'gcc' }}
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LDFLAGS="-s -w -X github.com/corey/aoa/internal/version.Version=${VERSION} -X github.com/corey/aoa/internal/version.BuildDate=${BUILD_DATE}"
+
+          go build -tags lean -ldflags "${LDFLAGS}" -o aoa-${{ matrix.suffix }} ./cmd/aoa/
+
+      - name: Show binary info
+        run: |
+          ls -lh aoa-${{ matrix.suffix }}
+          file aoa-${{ matrix.suffix }}
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aoa-${{ matrix.suffix }}
+          path: aoa-${{ matrix.suffix }}
+
+  release:
+    name: Create release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          for dir in dist/aoa-*/; do
+            cp "$dir"/* release/ 2>/dev/null || true
+          done
+
+          cd release
+          sha256sum aoa-* > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/aoa-*
+            release/checksums.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') }}

@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-20 (Session 60) | **Phase**: L3 complete — L3.6–L3.14 delivered (9 new flags, 25 new tests, 80 migration tests), dashboard Learned column + learning UX overhaul.
-> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 + L3.2–L3.14 (454+ active tests, 32 skipped)
+> **Updated**: 2026-02-20 (Session 61) | **Phase**: L4.1–L4.3 delivered — purego grammar loader, lean binary (80→12 MB), grammar CLI, CI/release workflows.
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 + L3.2–L3.14 + L4.1–L4.3 (470+ active tests, 32 skipped)
 
 ---
 
@@ -71,7 +71,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Session 60 delivered L3.6–L3.14 (all 9 remaining grep/egrep parity items) plus a dashboard learning UX overhaul. GNU grep parity: 100% agent-critical (15/15), 96% overall (23/24 relevant flags). New flags: egrep `-i` (case-insensitive regex), `-A/-B/-C` (context lines), `--exclude-dir`, `-o`/`--only-matching`, egrep `-w` (word boundary), `-L`/`--files-without-match`, `--no-filename`, `--no-color`, egrep `-a` (AND mode). Engine: `matchesAllGlobs()` for directory exclusion, `filesWithoutMatch()`, `applyOnlyMatching()`/`extractMatch()`, `attachContextLines()` from FileCache, `\b`-wrapping for regex+`-w`. Socket protocol: `ContextLines map[int]string` on `SearchHit`. 25 new migration tests (80 total). Dashboard: removed separate Learn action rows — learning signal now appears as a dedicated **Learned** column (green cycling AI vocabulary: trained/fine-tuned/calibrated/converged/reinforced/optimized/weighted/adapted) on Search and Read rows when signals are absorbed. Attribution column redesigned: `multi-and`/`multi-or` now yellow (parity with `regex`). Target column: `aOa` blue, `grep`/`egrep` green, flags+query gray. Impact: numbers pop cyan, text gray. Target gets most column width (39%). `searchTarget()` updated to include all new flags in command reconstruction. 454+ tests passing.
+**Current**: Session 61 delivered L4.1–L4.3 (Distribution). Binary drops from 80 MB → 12 MB via build tag split (`-tags lean`). Purego-based `DynamicLoader` loads grammar `.so`/`.dylib` files at runtime from `.aoa/grammars/` (project-local then global). End-to-end verified: Python grammar compiled to 478 KB `.so`, loaded via purego, parsed Python source → identical symbols to compiled-in parser. `aoa grammar list/info/install/path` CLI commands. 57-language manifest with priority tiers (P1 Core through P4 Specialist). CI workflows for grammar compilation (4 platforms) and release (lean binary + version injection). 19 new tests (18 unit + 1 E2E), 470+ total passing.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -128,9 +128,17 @@
 - **Activity table color system (finalized)** — Source: `aOa` = blue, Claude = dim. Attrib pills: `indexed` = cyan, `regex`/`multi-and`/`multi-or` = yellow, `aOa guided` = green, `unguided` = red, creative words = purple, learn words = green. Impact: numbers in cyan, text in gray (via `highlightNumbers()`). Target: `aOa` blue, `grep`/`egrep` green, rest gray. Learned: green pill. Column widths: Target gets 39% (longest content).
 - **L3.6–L3.14 parity complete** — 100% agent-critical (15/15), 96% overall (23/24). Remaining 1 gap (`-x`/`--line-regexp`) is not agent-critical. `searchTarget()` reconstructs full command with all new flags for activity feed display.
 
+**Design Decisions Locked** (Session 61):
+- **Build tags for lean binary** — `//go:build !lean` (default, all grammars) vs `//go:build lean` (empty `registerBuiltinLanguages()`). Clean split: `extensions.go` (always), `languages_builtin.go` (`!lean`), `languages_lean.go` (`lean`). No runtime cost for default builds.
+- **Purego over Go plugin** — `github.com/ebitengine/purego` for `Dlopen`/`RegisterLibFunc`. No Go version matching needed. Works CGo-free on Linux/macOS. The `tree_sitter_{lang}()` C function returns `uintptr` via purego, converted to `unsafe.Pointer` for `tree_sitter.NewLanguage()`.
+- **Grammar search path: project-local first** — `.aoa/grammars/` (per-project) takes priority over `~/.aoa/grammars/` (global). Same grammar `.so` can be shared globally or overridden per-project.
+- **Graceful degradation on dynamic load failure** — `ParseFile()` returns `nil, nil` if grammar `.so` not found. Same behavior as extension-mapped-but-no-grammar today. No errors surfaced to user — just falls back to tokenization-only indexing.
+- **57-language manifest with priority tiers** — `BuiltinManifest()` embedded in binary. P1 Core (11 langs every dev uses), P2 Common (11 langs most devs use), P3 Extended (17 niche but real), P4 Specialist (18 domain-specific). `aoa grammar list` shows tier/status at a glance.
+- **Individual .so files, not regional bundles** — Simpler to build, simpler to download individually. Pack tarballs (core/common/extended/specialist) for bulk download.
+
 **Needs Discussion** (before L3):
 - **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
-- **Real-time conversation** — ✅ Resolved (Session 58). Debrief tab now polls at 1s (vs 3s for other tabs). Auto-scroll sticks to bottom when user is near the live edge. Floating "Now ↓" button for jump-back after scrolling up. Thinking text appears within ~1s of generation.
+- **Real-time conversation** — Resolved (Session 58). Debrief tab now polls at 1s (vs 3s for other tabs). Auto-scroll sticks to bottom when user is near the live edge. Floating "Now ↓" button for jump-back after scrolling up. Thinking text appears within ~1s of generation.
 
 ---
 
@@ -179,9 +187,9 @@
 | [L3](#layer-3) | [L3.12](#l312) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | `--no-filename` — suppress filename | Script/pipeline mode | `TestGrep_Flag_noFilename` — output-only flag, omits file prefix in `formatSearchResult()` |
 | [L3](#layer-3) | [L3.13](#l313) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | `--no-color` | Pipeline mode (no ANSI) | `TestGrep_Flag_noColor` — all ANSI constants empty when set |
 | [L3](#layer-3) | [L3.14](#l314) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | egrep `-a` / `--and` — AND mode for regex | Parity with grep `-a` | `TestEgrep_Flag_a_ANDMode` — `AndMode: true` wired to egrep `-a` flag |
-| [L4](#layer-4) | [L4.1](#l41) | | | x | | | | | - | 🟢 | ⚪ | ⚪ | Purego .so loader for runtime grammar loading | Extend language coverage without recompile | Load .so, parse file, identical to compiled-in |
-| [L4](#layer-4) | [L4.2](#l42) | | | x | | | | | L4.1 | 🟡 | ⚪ | ⚪ | Grammar downloader CI — compile .so, host on GitHub Releases | Easy grammar distribution | Download + load 20 grammars from releases |
-| [L4](#layer-4) | [L4.3](#l43) | | | x | | | | | - | 🟢 | ⚪ | ⚪ | Goreleaser — linux/darwin × amd64/arm64 | Cross-platform binaries | Binaries build for all 4 platforms |
+| [L4](#layer-4) | [L4.1](#l41) | | | x | | | | | - | 🟢 | 🟢 | 🟢 | Purego .so loader for runtime grammar loading | Extend language coverage without recompile | E2E: compile Python .so, load via purego, parse → identical to compiled-in. 18 unit + 1 E2E test |
+| [L4](#layer-4) | [L4.2](#l42) | | | x | | | | | L4.1 | 🟡 | 🟢 | 🟡 | Grammar CLI + build CI — `aoa grammar list/install/info`, manifest, CI workflow | Easy grammar distribution | `aoa grammar list` shows 57 langs by tier. CI workflow defined. **Gap**: actual download not yet implemented |
+| [L4](#layer-4) | [L4.3](#l43) | | | x | | | | | L4.1 | 🟢 | 🟢 | 🟢 | Lean binary via build tags + goreleaser config | 80MB→12MB binary, cross-platform | `go build -tags lean` produces 12MB binary. `.goreleaser.yml` + release workflow defined |
 | [L4](#layer-4) | [L4.4](#l44) | | | x | x | | | | L4.3 | 🟢 | ⚪ | ⚪ | Installation docs — `go install` or download binary | Friction-free onboarding | New user installs and runs in <2 minutes |
 | [L5](#layer-5) | [L5.1](#l51) | | | | | x | | | - | 🟢 | ⚪ | ⚪ | Design structural query YAML schema (AST + lang_map + AC text) | Foundation for all dimensional patterns | Schema validates structural and text definitions |
 | [L5](#layer-5) | [L5.2](#l52) | x | | | | x | | | L5.1 | 🟢 | ⚪ | ⚪ | Tree-sitter AST walker — match patterns against parsed AST | Structural detection engine | Walks AST, returns bit positions, ~100-500μs/file |
@@ -484,40 +492,84 @@ Step-by-step: stop Python daemon, install Go binary, migrate bbolt data (or re-i
 
 ### Layer 4
 
-**Layer 4: Distribution (Single binary for all platforms)**
+**Layer 4: Distribution — Lean Binary + Grammar Packs**
 
-> Ship it. One binary per platform, instant install, zero friction.
-> **Quality Gate**: Binary works on linux/darwin × amd64/arm64. `go install` path works. Grammar download is optional.
+> Ship it. 80MB→12MB binary. 57 languages via dynamic grammar loading. Four platforms.
+> **Quality Gate**: Lean binary works on linux/darwin × amd64/arm64. `go install` compiles all grammars in. Dynamic loader produces identical results to compiled-in.
+
+**Architecture (Session 61)**:
+```
+┌──────────────────────────────────────┐
+│  aoa binary (~12 MB lean, ~80 MB full)│
+│  Go code + tree-sitter core (CGo)     │
+│  -tags lean: no grammars compiled in  │
+│  default: all 28 grammars compiled in │
+│                                       │
+│  DynamicLoader: purego loads .so/.dylib│
+│  from .aoa/grammars/ at runtime       │
+└──────────────────────────────────────┘
+          ↓ loads on demand
+┌──────────────────────────────────────┐
+│  .aoa/grammars/                       │
+│  ├── python.so        (0.5 MB)       │
+│  ├── javascript.so    (0.4 MB)       │
+│  ├── ...                              │
+│  Search: project/.aoa/grammars/ first │
+│          ~/.aoa/grammars/ fallback    │
+└──────────────────────────────────────┘
+```
+
+**Priority Tiers**: P1 Core (11 langs, ~12 MB), P2 Common (11, ~16 MB), P3 Extended (17, ~10 MB), P4 Specialist (18, ~60 MB).
+
+**Key Decisions**:
+- **Build tags, not separate binaries**: `//go:build !lean` vs `//go:build lean`. Default = all grammars. Release = lean.
+- **Purego, not Go plugin**: CGo-free loading from `.so`/`.dylib`. No Go version matching needed.
+- **Individual .so files**: One per grammar. Pack tarballs for bulk download.
+- **Graceful fallback**: Parser tries compiled-in first, then dynamic loader. Unknown languages silently skip.
 
 #### L4.1
 
-**Purego .so loader**
+**Purego .so loader** — 🟢 Complete
 
-Runtime grammar loading via purego (no CGo at load time). Allows extending language coverage without recompiling the binary.
+`DynamicLoader` using `github.com/ebitengine/purego`. `LoadGrammar(langName)` searches `.aoa/grammars/` paths, `Dlopen`s the `.so`/`.dylib`, calls `tree_sitter_{lang}()` via `RegisterLibFunc`, wraps result with `tree_sitter.NewLanguage()`. Platform-aware (`.so` on Linux, `.dylib` on macOS). Caches loaded languages. `Parser.SetGrammarPaths()` enables dynamic loading as fallback. Build tag split: `languages_builtin.go` (`!lean`, all 28 grammars), `languages_lean.go` (`lean`, empty), `extensions.go` (always, 97 extensions + symbolRules).
 
-**Files**: `internal/adapters/treesitter/loader.go`
+**E2E verified**: compile Python grammar from Go module cache to `.so` → load via purego → parse Python → symbols identical to compiled-in parser output.
+
+**Files**: `internal/adapters/treesitter/loader.go` (new), `loader_test.go` (18 tests), `loader_e2e_test.go` (1 E2E test), `parser.go` (modified — dynamic fallback), `extensions.go` (new — split from languages.go), `languages_builtin.go` (new — `!lean` tag), `languages_lean.go` (new — `lean` tag)
 
 #### L4.2
 
-**Grammar downloader CI**
+**Grammar CLI + Build CI** — 🟢 Code complete, 🟡 Download not implemented
 
-CI pipeline: compile .so files for each grammar, host on GitHub Releases. `aoa grammar download <lang>` fetches and installs.
+`aoa grammar list` — shows all 57 grammars by priority tier, marks built-in (B) vs dynamic (D). `aoa grammar info <lang>` — version, extensions, repo URL, C symbol name, install status. `aoa grammar install <lang|pack>` — resolves pack names (core/common/extended/specialist/all) to grammar lists, shows what needs installing. `aoa grammar path` — shows search paths with existence indicators.
 
-**Files**: `.github/workflows/build-grammars.yml`
+`grammars/manifest.json` — registry with 57 grammars: name, version, priority, extensions, repo URL, source files. `BuiltinManifest()` embedded in binary.
+
+`.github/workflows/build-grammars.yml` — 4-platform matrix (linux/darwin × amd64/arm64). Clones 28 grammar repos, compiles to `.so`/`.dylib`, generates checksums, creates pack tarballs (core/common/extended/specialist). Uploads artifacts.
+
+**Gap**: `aoa grammar install` doesn't yet download from GitHub Releases — shows what would be installed and manual build instructions.
+
+**Files**: `cmd/aoa/cmd/grammar.go` (new), `internal/adapters/treesitter/manifest.go` (new), `grammars/manifest.json` (new), `.github/workflows/build-grammars.yml` (new)
 
 #### L4.3
 
-**Goreleaser**
+**Lean binary + Goreleaser** — 🟢 Complete
 
-Cross-compilation for 4 platforms. GitHub Release automation. Checksum files.
+`go build -tags lean` produces 12MB binary (vs 80MB full). 85% reduction. All grammar imports excluded, only tree-sitter core compiled in. `make build-lean` target added.
 
-**Files**: `.goreleaser.yml`
+`.goreleaser.yml` — builds lean binary for 4 platforms with version ldflags. `.github/workflows/release.yml` — triggered on tag push, builds + checksums + GitHub Release.
+
+**Binary sizes** (measured):
+- Full (default): 80 MB — all 28 grammars compiled in
+- Lean (`-tags lean`): 12 MB — no grammars, loads from `.so` at runtime
+
+**Files**: `.goreleaser.yml` (new), `.github/workflows/release.yml` (new), `Makefile` (updated — `build-lean` target), `internal/adapters/treesitter/languages_lean.go` (new)
 
 #### L4.4
 
-**Installation docs**
+**Installation docs** — ⚪ Not started
 
-Two paths: `go install github.com/corey/aoa/cmd/aoa@latest` or download binary from releases. Include post-install: `aoa init`, `aoa daemon start`, alias setup.
+Two install paths: `go install github.com/corey/aoa/cmd/aoa@latest` (builds from source with all grammars) vs binary download (lean + grammar packs). Post-install: `aoa init`, `aoa daemon start`, grammar install.
 
 **Files**: `README.md`
 

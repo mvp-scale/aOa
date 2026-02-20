@@ -1,0 +1,66 @@
+version: 2
+
+project_name: aoa
+
+before:
+  hooks:
+    - go mod tidy
+    - go vet ./...
+
+builds:
+  - id: aoa-lean
+    main: ./cmd/aoa/
+    binary: aoa
+    tags:
+      - lean
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/corey/aoa/internal/version.Version={{.Version}}
+      - -X github.com/corey/aoa/internal/version.BuildDate={{.Date}}
+    overrides:
+      - goos: linux
+        goarch: arm64
+        env:
+          - CC=aarch64-linux-gnu-gcc
+
+archives:
+  - id: default
+    formats: ['tar.gz']
+    name_template: '{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}'
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+
+release:
+  github:
+    owner: corey
+    name: aoa
+  draft: false
+  prerelease: auto
+  name_template: "aOa {{.Version}}"
+  header: |
+    ## aOa {{.Version}} — Lean Binary Release
+
+    Binary size: ~12 MB (grammars loaded dynamically)
+
+    ### Install grammars after downloading:
+    ```bash
+    aoa grammar install core     # P1: Python, JS, TS, Go, Rust, Java, C, C++, Bash, JSON
+    aoa grammar install common   # P2: C#, Ruby, PHP, Kotlin, YAML, HTML, CSS, TOML, ...
+    ```

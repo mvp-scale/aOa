@@ -1040,3 +1040,8 @@ created by net/http.(*connReader).startBackgroundRead in goroutine 66
 [2026-02-20T00:34:38-05:00] daemon starting
 [2026-02-20T00:34:39-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
 [2026-02-20T00:34:39-05:00] dashboard at http://localhost:19270
+[2026-02-20T02:45:18-05:00] remote stop, shutting down
+[2026-02-20T02:45:19-05:00] daemon stopped
+[2026-02-20T02:45:19-05:00] daemon starting
+[2026-02-20T02:45:19-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T02:45:19-05:00] dashboard at http://localhost:19270

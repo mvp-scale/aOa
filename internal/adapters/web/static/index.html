@@ -106,30 +106,35 @@
         </div>
       </div>
       <div class="hero-metrics">
-        <div class="hm-cell"><div class="hm-value purple" id="hm-recon-0">-</div><div class="hm-label">dimensions</div></div>
+        <div class="hm-cell"><div class="hm-value green" id="hm-recon-0">-</div><div class="hm-label">files scanned</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value yellow" id="hm-recon-1">-</div><div class="hm-label">risk score</div></div>
-        <div class="hm-cell"><div class="hm-value cyan" id="hm-recon-2">-</div><div class="hm-label">coverage</div></div>
+        <div class="hm-cell right"><div class="hm-value red" id="hm-recon-1">-</div><div class="hm-label">findings</div></div>
+        <div class="hm-cell"><div class="hm-value red" id="hm-recon-2">-</div><div class="hm-label">critical</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value red" id="hm-recon-3">-</div><div class="hm-label">findings</div></div>
+        <div class="hm-cell right"><div class="hm-value green" id="hm-recon-3">-</div><div class="hm-label">clean files</div></div>
       </div>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-card purple"><div class="stat-value">-</div><div class="stat-label">Dimensions</div><div class="stat-sub">analysis axes</div></div>
-      <div class="stat-card yellow"><div class="stat-value">-</div><div class="stat-label">Risk Score</div><div class="stat-sub">composite</div></div>
-      <div class="stat-card cyan"><div class="stat-value">-</div><div class="stat-label">Coverage</div><div class="stat-sub">files scanned</div></div>
-      <div class="stat-card red"><div class="stat-value">-</div><div class="stat-label">Findings</div><div class="stat-sub">issues detected</div></div>
+    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr)">
+      <div class="stat-card green"><div class="stat-value" id="rs-files">-</div><div class="stat-label">Files Scanned</div><div class="stat-sub">across project</div></div>
+      <div class="stat-card red"><div class="stat-value" id="rs-findings">-</div><div class="stat-label">Findings</div><div class="stat-sub">total detections</div></div>
+      <div class="stat-card red"><div class="stat-value" id="rs-critical">-</div><div class="stat-label">Critical</div><div class="stat-sub">immediate attention</div></div>
+      <div class="stat-card yellow"><div class="stat-value" id="rs-warnings">-</div><div class="stat-label">Warnings</div><div class="stat-sub">should review</div></div>
+      <div class="stat-card purple"><div class="stat-value" id="rs-dims">-</div><div class="stat-label">Dimensions</div><div class="stat-sub"><span id="rs-active-count">-</span> active</div></div>
     </div>
 
-    <div class="recon-placeholder">
-      <div class="recon-placeholder-card">
-        <div class="recon-placeholder-icon">&#x1F50D;</div>
-        <div class="recon-placeholder-title">Dimensional Scanning</div>
-        <div class="recon-placeholder-text">
-          Available in a future release.<br>
-          Recon will provide multi-dimensional code analysis across
-          security, quality, complexity, and architecture.
+    <div class="recon-layout">
+      <div class="recon-sidebar" id="reconSidebar">
+        <div class="recon-sidebar-header">Dimensions</div>
+        <div class="recon-sidebar-footer"><span id="rs-sidebar-active">-</span> of <span id="rs-sidebar-total">-</span> active</div>
+      </div>
+      <div class="recon-main">
+        <div class="tree-card">
+          <div class="tree-header">
+            <span class="tree-title" id="reconBreadcrumb"><span class="bc-link" data-nav="root">Root</span></span>
+            <span class="tree-badge" id="reconTreeBadge">-</span>
+          </div>
+          <div class="tree-wrap" id="reconTreeWrap"></div>
         </div>
       </div>
     </div>
