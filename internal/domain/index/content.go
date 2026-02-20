@@ -32,15 +32,113 @@ type contentFileLine struct {
 }
 
 // scanFileContents scans all cached/on-disk files for grep-style substring matches.
-// Always uses brute-force substring matching to preserve full grep semantics —
-// "tree" matches "btree", "subtree", etc. Tags are deferred (nil) and filled
-// after MaxCount truncation by fillContentTags to avoid wasted work.
+// Uses trigram index when available for queries >= 3 chars (O(1) candidate lookup),
+// falls back to brute-force for short queries, regex, InvertMatch, etc.
+// Tags are deferred (nil) and filled after MaxCount truncation by fillContentTags.
 func (e *SearchEngine) scanFileContents(query string, opts ports.SearchOptions, symbolHits []Hit) []Hit {
+	if e.cache != nil && e.cache.HasTrigramIndex() && canUseTrigram(query, opts) {
+		return e.scanContentTrigram(query, opts, symbolHits)
+	}
 	return e.scanContentBruteForce(query, opts, symbolHits)
 }
 
-// scanContentBruteForce is the original full-scan path: iterates every line of
+// canUseTrigram returns true if the query/options combination can use the trigram index.
+func canUseTrigram(query string, opts ports.SearchOptions) bool {
+	if opts.InvertMatch || opts.WordBoundary || opts.AndMode || opts.Mode == "regex" {
+		return false
+	}
+	return len(query) >= 3
+}
+
+// extractTrigrams extracts unique 3-byte substrings from a lowered query string.
+func extractTrigrams(lowerQuery string) [][3]byte {
+	n := len(lowerQuery)
+	if n < 3 {
+		return nil
+	}
+	seen := make(map[[3]byte]bool)
+	var trigrams [][3]byte
+	for i := 0; i <= n-3; i++ {
+		key := [3]byte{lowerQuery[i], lowerQuery[i+1], lowerQuery[i+2]}
+		if !seen[key] {
+			seen[key] = true
+			trigrams = append(trigrams, key)
+		}
+	}
+	return trigrams
+}
+
+// scanContentTrigram uses the trigram index to find candidate lines, then verifies
+// each candidate with the appropriate matcher (case-sensitive or case-insensitive).
+func (e *SearchEngine) scanContentTrigram(query string, opts ports.SearchOptions, symbolHits []Hit) []Hit {
+	lowerQuery := strings.ToLower(query)
+	trigrams := extractTrigrams(lowerQuery)
+	if len(trigrams) == 0 {
+		return e.scanContentBruteForce(query, opts, symbolHits)
+	}
+
+	candidates := e.cache.TrigramLookup(trigrams)
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	dedup := make(map[contentFileLine]bool, len(symbolHits))
+	for _, h := range symbolHits {
+		dedup[contentFileLine{h.fileID, h.Line}] = true
+	}
+
+	caseSensitive := opts.Mode != "case_insensitive"
+
+	var hits []Hit
+	for _, cand := range candidates {
+		lineNum := int(cand.LineNum)
+		lineIdx := lineNum - 1
+
+		fl := contentFileLine{cand.FileID, lineNum}
+		if dedup[fl] {
+			continue
+		}
+
+		file := e.idx.Files[cand.FileID]
+		if file == nil || file.Size > maxContentFileSize {
+			continue
+		}
+		if !matchesGlobs(file.Path, opts.IncludeGlob, opts.ExcludeGlob) {
+			continue
+		}
+
+		lines := e.cache.GetLines(cand.FileID)
+		if lines == nil || lineIdx >= len(lines) {
+			continue
+		}
+
+		// Verify candidate: trigram index is case-insensitive, so we need exact check
+		if caseSensitive {
+			if !strings.Contains(lines[lineIdx], query) {
+				continue
+			}
+		} else {
+			lowerLines := e.cache.GetLowerLines(cand.FileID)
+			if lowerLines == nil || lineIdx >= len(lowerLines) || !strings.Contains(lowerLines[lineIdx], lowerQuery) {
+				continue
+			}
+		}
+
+		dedup[fl] = true
+
+		spans := e.fileSpans[cand.FileID]
+		hit := e.buildContentHit(cand.FileID, file.Path, lineNum, lines[lineIdx], spans)
+		hits = append(hits, hit)
+	}
+
+	sortByFileIDLine(hits)
+	return hits
+}
+
+// scanContentBruteForce is the full-scan path: iterates every line of
 // every cached/on-disk file running a matcher function per line.
+// When pre-lowered lines are available and mode is case-insensitive,
+// uses strings.Contains on lowered lines instead of per-byte case folding.
 func (e *SearchEngine) scanContentBruteForce(query string, opts ports.SearchOptions, symbolHits []Hit) []Hit {
 	dedup := make(map[contentFileLine]bool, len(symbolHits))
 	for _, h := range symbolHits {
@@ -51,6 +149,11 @@ func (e *SearchEngine) scanContentBruteForce(query string, opts ports.SearchOpti
 	if matcher == nil {
 		return nil
 	}
+
+	// Pre-lowered line optimization: for case-insensitive literal search,
+	// use strings.Contains on pre-lowered lines (benefits from SIMD-optimized Index)
+	useLowerOpt := opts.Mode == "case_insensitive" && !opts.WordBoundary && !opts.AndMode && e.cache != nil
+	lowerQuery := strings.ToLower(query)
 
 	var hits []Hit
 
@@ -73,11 +176,22 @@ func (e *SearchEngine) scanContentBruteForce(query string, opts ports.SearchOpti
 			}
 		}
 
+		// Get pre-lowered lines when available for faster case-insensitive matching
+		var lowerLines []string
+		if useLowerOpt {
+			lowerLines = e.cache.GetLowerLines(fileID)
+		}
+
 		spans := e.fileSpans[fileID]
 
 		for lineIdx, line := range lines {
 			lineNum := lineIdx + 1
-			matched := matcher(line)
+			var matched bool
+			if lowerLines != nil && lineIdx < len(lowerLines) {
+				matched = strings.Contains(lowerLines[lineIdx], lowerQuery)
+			} else {
+				matched = matcher(line)
+			}
 			if opts.InvertMatch {
 				matched = !matched
 			}
@@ -208,7 +322,7 @@ func buildContentMatcher(query string, opts ports.SearchOptions) func(string) bo
 		}
 
 	case opts.AndMode:
-		// Comma-separated terms, all must appear
+		// Comma-separated terms, all must appear (case-insensitive)
 		termStrs := strings.Split(query, ",")
 		var terms []string
 		for _, t := range termStrs {
@@ -229,11 +343,17 @@ func buildContentMatcher(query string, opts ports.SearchOptions) func(string) bo
 			return true
 		}
 
-	default:
+	case opts.Mode == "case_insensitive":
 		// Case-insensitive substring match (allocation-free)
 		lowerQuery := strings.ToLower(query)
 		return func(line string) bool {
 			return containsFold(line, lowerQuery)
+		}
+
+	default:
+		// Case-sensitive substring match (grep default behavior)
+		return func(line string) bool {
+			return strings.Contains(line, query)
 		}
 	}
 }

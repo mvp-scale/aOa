@@ -327,3 +327,239 @@ func TestFileCache_ContentLookup_Miss(t *testing.T) {
 	refs := fc.ContentLookup("nonexistent")
 	assert.Nil(t, refs, "unknown token should return nil")
 }
+
+// --- Trigram index tests ---
+
+func TestFileCache_TrigramIndex_Build(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"main.go": "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	assert.True(t, fc.HasTrigramIndex(), "trigram index should be populated")
+
+	// "pac" trigram should exist from "package"
+	tri := [3]byte{'p', 'a', 'c'}
+	fc.mu.RLock()
+	refs := fc.trigramIndex[tri]
+	fc.mu.RUnlock()
+	assert.NotEmpty(t, refs, "trigram 'pac' should have postings from 'package'")
+}
+
+func TestFileCache_TrigramLookup_SingleTrigram(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"a.go": "func hello() {}\nfunc world() {}\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	// "hel" should find line 1 ("func hello() {}")
+	refs := fc.TrigramLookup([][3]byte{{'h', 'e', 'l'}})
+	require.NotEmpty(t, refs)
+	found := false
+	for _, r := range refs {
+		if r.LineNum == 1 {
+			found = true
+		}
+	}
+	assert.True(t, found, "'hel' should match line 1")
+}
+
+func TestFileCache_TrigramLookup_Intersection(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"a.go": "tree\nfree\ntreehouse\ngreen\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	// "tre"+"ree" should find "tree" (line 1) and "treehouse" (line 3),
+	// but NOT "free" (has "ree" but not "tre") or "green" (has "ree" but not "tre")
+	refs := fc.TrigramLookup([][3]byte{{'t', 'r', 'e'}, {'r', 'e', 'e'}})
+	require.NotEmpty(t, refs)
+
+	lineNums := make(map[uint16]bool)
+	for _, r := range refs {
+		lineNums[r.LineNum] = true
+	}
+	assert.True(t, lineNums[1], "should find 'tree' on line 1")
+	assert.True(t, lineNums[3], "should find 'treehouse' on line 3")
+	assert.False(t, lineNums[2], "should NOT find 'free' on line 2")
+	assert.False(t, lineNums[4], "should NOT find 'green' on line 4")
+}
+
+func TestFileCache_TrigramLookup_SubstringMatch(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"code.go": "use btree index\nsubtreeOf(node)\nTreeSitter parser\nexact tree match\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	// Trigrams for "tree": "tre" + "ree"
+	// Should find ALL lines containing "tree" as a substring (case-insensitive at index level)
+	refs := fc.TrigramLookup([][3]byte{{'t', 'r', 'e'}, {'r', 'e', 'e'}})
+	require.NotEmpty(t, refs)
+
+	lineNums := make(map[uint16]bool)
+	for _, r := range refs {
+		lineNums[r.LineNum] = true
+	}
+	assert.True(t, lineNums[1], "should find 'btree' on line 1")
+	assert.True(t, lineNums[2], "should find 'subtreeOf' on line 2")
+	assert.True(t, lineNums[3], "should find 'TreeSitter' on line 3 (lowered index)")
+	assert.True(t, lineNums[4], "should find 'tree' on line 4")
+}
+
+func TestFileCache_TrigramLookup_Miss(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"a.go": "hello world\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	// "xyz" trigram shouldn't exist
+	refs := fc.TrigramLookup([][3]byte{{'x', 'y', 'z'}})
+	assert.Nil(t, refs, "non-existent trigram should return nil")
+}
+
+func TestFileCache_TrigramLookup_DedupPerLine(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"dup.go": "tree tree tree\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	// "tre" should have exactly 1 posting for line 1 despite "tree" appearing 3 times
+	tri := [3]byte{'t', 'r', 'e'}
+	fc.mu.RLock()
+	refs := fc.trigramIndex[tri]
+	fc.mu.RUnlock()
+
+	count := 0
+	for _, r := range refs {
+		if r.LineNum == 1 {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "should have single posting per line despite repeated trigram")
+}
+
+func TestFileCache_TrigramIndex_CaseInsensitive(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"mixed.go": "SessionID handler\nsessionid lower\nSESSIONID upper\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	// Trigrams from lowered "sessionid": "ses","ess","ssi","sio","ion","oni","nid"
+	// All three lines should be candidates (index is case-insensitive)
+	refs := fc.TrigramLookup([][3]byte{{'s', 'e', 's'}, {'n', 'i', 'd'}})
+	require.NotEmpty(t, refs)
+
+	lineNums := make(map[uint16]bool)
+	for _, r := range refs {
+		lineNums[r.LineNum] = true
+	}
+	assert.True(t, lineNums[1], "line 1 (mixed case) should be candidate")
+	assert.True(t, lineNums[2], "line 2 (lower) should be candidate")
+	assert.True(t, lineNums[3], "line 3 (upper) should be candidate")
+}
+
+func TestFileCache_TrigramIndex_VerifyCaseSensitive(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"mixed.go": "SessionID handler\nsessionid lower\nSESSIONID upper\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	// Trigram lookup returns all 3 lines as candidates
+	refs := fc.TrigramLookup([][3]byte{{'s', 'e', 's'}, {'n', 'i', 'd'}})
+	require.NotEmpty(t, refs)
+
+	// Case-sensitive verification: only line 1 has exact "SessionID"
+	var caseSensitiveMatches []uint16
+	for _, r := range refs {
+		lines := fc.GetLines(r.FileID)
+		if lines != nil && int(r.LineNum-1) < len(lines) {
+			if strings.Contains(lines[r.LineNum-1], "SessionID") {
+				caseSensitiveMatches = append(caseSensitiveMatches, r.LineNum)
+			}
+		}
+	}
+	assert.Equal(t, []uint16{1}, caseSensitiveMatches, "case-sensitive verify should only match line 1")
+
+	// Case-insensitive verification: all 3 lines match
+	var caseInsensitiveMatches []uint16
+	for _, r := range refs {
+		lowerLines := fc.GetLowerLines(r.FileID)
+		if lowerLines != nil && int(r.LineNum-1) < len(lowerLines) {
+			if strings.Contains(lowerLines[r.LineNum-1], "sessionid") {
+				caseInsensitiveMatches = append(caseInsensitiveMatches, r.LineNum)
+			}
+		}
+	}
+	assert.Equal(t, []uint16{1, 2, 3}, caseInsensitiveMatches, "case-insensitive verify should match all 3 lines")
+}
+
+func TestFileCache_GetLowerLines(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"upper.go": "Package Main\nFunc Hello() {}\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	for id := range files {
+		lower := fc.GetLowerLines(id)
+		require.NotNil(t, lower, "should return lower lines")
+		assert.Equal(t, "package main", lower[0])
+		assert.Equal(t, "func hello() {}", lower[1])
+	}
+
+	// Cache miss
+	assert.Nil(t, fc.GetLowerLines(999), "cache miss should return nil")
+}
+
+func TestFileCache_TrigramIndex_ResetOnRewarm(t *testing.T) {
+	dir := t.TempDir()
+	files := makeTestFiles(t, dir, map[string]string{
+		"old.go": "authentication handler\n",
+	})
+
+	fc := NewFileCache(0)
+	fc.WarmFromIndex(files, dir)
+
+	// "aut" trigram should exist from "authentication"
+	refs := fc.TrigramLookup([][3]byte{{'a', 'u', 't'}})
+	require.NotEmpty(t, refs, "'aut' should exist after first warm")
+
+	// Re-warm with different content
+	files2 := makeTestFiles(t, dir, map[string]string{
+		"new.go": "database connection\n",
+	})
+	fc.WarmFromIndex(files2, dir)
+
+	// "aut" should be gone, "dat" should exist
+	refs = fc.TrigramLookup([][3]byte{{'a', 'u', 't'}})
+	assert.Nil(t, refs, "'aut' should be gone after rewarm")
+
+	refs = fc.TrigramLookup([][3]byte{{'d', 'a', 't'}})
+	assert.NotEmpty(t, refs, "'dat' should exist after rewarm")
+}

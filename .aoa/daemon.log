@@ -916,3 +916,13 @@ created by net/http.(*connReader).startBackgroundRead in goroutine 66
 [2026-02-19T19:30:42-05:00] daemon starting
 [2026-02-19T19:30:42-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
 [2026-02-19T19:30:42-05:00] dashboard at http://localhost:19270
+[2026-02-19T21:15:51-05:00] remote stop, shutting down
+[2026-02-19T21:15:51-05:00] daemon stopped
+[2026-02-19T21:15:51-05:00] daemon starting
+[2026-02-19T21:15:52-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T21:15:52-05:00] dashboard at http://localhost:19270
+[2026-02-19T21:17:55-05:00] remote stop, shutting down
+[2026-02-19T21:17:55-05:00] daemon stopped
+[2026-02-19T21:17:55-05:00] daemon starting
+[2026-02-19T21:17:56-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-19T21:17:56-05:00] dashboard at http://localhost:19270

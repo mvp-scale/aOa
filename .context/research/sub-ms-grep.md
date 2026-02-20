@@ -216,6 +216,10 @@ enhance it to support substring matching by indexing all substrings of each toke
 
 ## Recommended Approach: Trigram Index + Pre-Lowercased Lines
 
+> **UPDATED (Session 56 post-review)**: One lowered trigram index serves both case-sensitive
+> (grep default) and case-insensitive (`grep -i`) modes. The verification function — not the
+> index — determines case behavior. See "Dual-Mode Verification" below.
+
 ### Architecture
 
 ```
@@ -223,28 +227,55 @@ Cache Warm (one-time, on WarmFromIndex):
   for each file:
     for each line:
       lowerLine = strings.ToLower(line)
-      store lowerLine in parallel array
+      store lowerLine in parallel array (cacheEntry.lowerLines)
       for i := 0; i <= len(lowerLine)-3; i++:
         trigram = lowerLine[i:i+3]
         trigramIndex[trigram] = append(..., {fileID, lineNum})
 
-Query "tree" (default case-insensitive substring):
-  1. lowerQuery = strings.ToLower("tree")
-  2. Extract trigrams: ["tre", "ree"]
-  3. Intersect posting lists for "tre" and "ree" -> candidate set
+Query "SessionID" (case-sensitive, grep default):
+  1. lowerQuery = strings.ToLower("SessionID") → "sessionid"
+  2. Extract trigrams: ["ses","ess","ssi","sio","ion","oni","nid"]
+  3. Intersect posting lists → ~20 candidate lines
+     (lines containing "sessionid" in ANY case — conservative superset)
   4. For each candidate (fileID, lineNum):
-       verify containsFold(originalLine, lowerQuery)
-       if match: build Hit
-  5. Return verified hits
+       verify strings.Contains(originalLine, "SessionID")  ← exact case
+       REJECT lines with "sessionid" or "SESSIONID"
+  5. Return only exact-case matches
+
+Query "SessionID" with -i flag (case-insensitive):
+  1-3. Same trigram lookup (same index, same candidates)
+  4. For each candidate (fileID, lineNum):
+       verify strings.Contains(lowerLine, "sessionid")  ← lowered comparison
+       ACCEPT all case variants
+  5. Return all matches
 
 Query "tr" (< 3 chars, fallback):
-  Fall back to brute-force scan with pre-lowercased lines
-  (still faster than current: strings.Contains on pre-lowered vs containsFold)
+  Case-sensitive: brute-force with strings.Contains(originalLine, "tr")
+  Case-insensitive: brute-force with strings.Contains(lowerLine, "tr")
 
 Query in regex mode:
-  Extract literal trigrams from regex if possible (optimization)
-  Otherwise fall back to brute-force scan
+  Extract literal segments from regex, trigram on those if >= 3 chars
+  Verify candidates with full regexp.MatchString(originalLine, pattern)
+  No extractable literals → brute-force fallback
 ```
+
+### Dual-Mode Verification (Decision Locked, Session 56)
+
+The trigram index is built from lowercased text. This makes it inherently a superset
+filter — for case-sensitive search, it may return candidates that match case-insensitively
+but not case-sensitively. These are false positives, not false negatives. The verification
+step eliminates them.
+
+| Mode | Trigram lookup | Verification function | False positives? |
+|------|---------------|----------------------|-----------------|
+| Case-sensitive (default) | Lowered query trigrams | `strings.Contains(originalLine, query)` | Yes, a few extra candidates — rejected by verify |
+| Case-insensitive (`-i`) | Lowered query trigrams | `strings.Contains(lowerLine, lowerQuery)` | Minimal (near-exact candidate set) |
+| Regex with literals | Lowered literal trigrams | `regexp.MatchString(originalLine, pattern)` | Yes, extra candidates — rejected by regex |
+
+**Key invariant**: One index, one build cost, one memory footprint. The verification
+function is the only thing that changes between modes. This was decided after identifying
+that the original plan's assumption of case-insensitive-by-default was a G1 parity
+violation — Unix grep is case-sensitive by default.
 
 ### Why Trigram Intersection Hits <1ms
 
