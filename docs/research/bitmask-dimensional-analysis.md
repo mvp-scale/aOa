@@ -2,7 +2,7 @@
 
 > Research artifact. Demonstrates the per-line bitmask technique using tree-sitter + AC pattern matching for security dimensional scoring.
 
-> See also: [AST vs LSP — Viability Assessment](.context/research/asv_vs_lsp.md) for the full comparison of why tree-sitter ASTs are sufficient for early warning dimensional analysis.
+> See also: [AST vs LSP — Viability Assessment](asv-vs-lsp.md) for the full comparison of why tree-sitter ASTs are sufficient for early warning dimensional analysis.
 
 ---
 

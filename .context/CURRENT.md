@@ -35,8 +35,8 @@ Validate the L6 two-binary integration end-to-end. aoa-pure is built and running
 6. **L6.6** — `ReconBridge` auto-discovers aoa-recon (PATH → .aoa/bin/ → sibling)
 7. **L6.7** — Dashboard Recon tab shows install prompt when recon not available
 8. **L6.8–L6.9** — npm packages (wrapper + 8 platform packages, esbuild/turbo pattern)
-9. **L6.10** — `.goreleaser.yml` (2 builds) + release workflow (8 matrix jobs + npm publish)
-10. **BUILD.md** — Full build, test, and distribution guide
+9. **L6.10** — Release workflow (8 matrix jobs + npm publish)
+10. **docs/build.md** — Full build, test, and distribution guide
 
 ## Key Decisions (This Session)
 
@@ -69,9 +69,8 @@ cmd/aoa/cmd/grammar_cgo.go              -- Grammar commands (CGo only)
 cmd/aoa/cmd/grammar_nocgo.go            -- Grammar stub (no CGo)
 cmd/aoa-recon/main.go                   -- aoa-recon binary (new)
 npm/                                     -- 10 npm packages (new)
-.goreleaser.yml                          -- Two build targets
 .github/workflows/release.yml            -- 8-matrix build + npm publish
-BUILD.md                                 -- Build & distribution guide (new)
+docs/build.md                            -- Build & distribution guide
 Makefile                                 -- build-pure, build-recon targets
 ```
 
@@ -79,7 +78,7 @@ Makefile                                 -- build-pure, build-recon targets
 
 ```
 Read .context/CURRENT.md
-Read BUILD.md
+Read docs/build.md
 ```
 
 Then validate the integration: build-pure, init, grep, build-recon, enhance, grep again, daemon with auto-discovery.

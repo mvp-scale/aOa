@@ -1,6 +1,7 @@
 # Binaries
 /aoa
 /aoa-recon
+/main
 
 # Runtime state (project-local, not committed)
 .aoa/

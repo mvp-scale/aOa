@@ -1,6 +1,0 @@
-[2026-02-20T17:14:37-05:00] daemon starting
-[2026-02-20T17:14:37-05:00] aoa-recon found at /home/corey/aOa-go/aoa-recon
-[2026-02-20T17:14:37-05:00] daemon ready at /tmp/aoa-a270ab86b9a7.sock
-[2026-02-20T17:14:37-05:00] dashboard at http://localhost:19934
-[2026-02-20T17:15:35-05:00] remote stop, shutting down
-[2026-02-20T17:15:35-05:00] daemon stopped

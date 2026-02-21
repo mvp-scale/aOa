@@ -207,7 +207,7 @@ Python, JavaScript, TypeScript, Go, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, S
 
 R, Julia, Markdown, Elixir, Erlang, Dart, Nim, Clojure, D, Gleam, Elm, PureScript, Odin, V, Ada, Fortran, Fennel, Groovy, GraphQL, CMake, Make, Nix, Objective-C, VHDL, GLSL, HLSL, SQL, Dockerfile, Vue
 
-**101 file extensions** mapped total. See [LANGUAGES.md](LANGUAGES.md) for the full breakdown.
+**101 file extensions** mapped total. See [languages.md](docs/languages.md) for the full breakdown.
 
 ---
 

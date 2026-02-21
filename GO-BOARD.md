@@ -194,7 +194,7 @@
 | [L1](#layer-1) | [L1.1](#l11) | | | | | | | x | - | 🟢 | 🟢 | 🟢 | Rename tabs: Overview→Live, Learning→Intel, Conversation→Debrief | Brand alignment — tabs named by user intent | Manual: user confirmed (Session 52) — Live/Recon/Intel/Debrief/Arsenal tabs visible in browser |
 | [L1](#layer-1) | [L1.2](#l12) | | | | | | | x | L1.1 | 🟢 | 🟢 | 🟢 | Add Recon tab (stub) — dimensional placeholder | Reserve the tab slot for v2 | Manual: user confirmed (Session 52) — `#recon` tab renders hero + placeholder stub |
 | [L1](#layer-1) | [L1.3](#l13) | | | | | | | x | L1.1 | 🟢 | 🟢 | 🟢 | Add Arsenal tab — value proof over time, session history, savings chart | Prove aOa's ROI across sessions | Manual: user confirmed (Session 52) — `#arsenal` tab visible, framing up. Backend: `web/server_test.go` TestSessionsEndpoint |
-| [L1](#layer-1) | [L1.4](#l14) | | | | | | | | L1.1 | 🟢 | 🟢 | 🟢 | 5-tab responsive layout — mobile compaction at <=520px | Works on all screen sizes | Manual: user confirmed (Session 53) — hero card hidden, stats as value-only chips, glow consistent across breakpoints. CSS: `style.css` @media 520px block. Mockups validated first in `_live_mockups/`. |
+| [L1](#layer-1) | [L1.4](#l14) | | | | | | | | L1.1 | 🟢 | 🟢 | 🟢 | 5-tab responsive layout — mobile compaction at <=520px | Works on all screen sizes | Manual: user confirmed (Session 53) — hero card hidden, stats as value-only chips, glow consistent across breakpoints. CSS: `style.css` @media 520px block. Mockups validated first in `docs/mockups/`. |
 | [L1](#layer-1) | [L1.5](#l15) | | | | | x | | x | L0.5, L1.3 | 🟢 | 🟢 | 🟢 | Arsenal API — `/api/sessions` + `/api/config` | Backend for Arsenal charts and system strip | Unit: `web/server_test.go` TestSessionsEndpoint + TestConfigEndpoint — JSON shape validated |
 | [L1](#layer-1) | [L1.6](#l16) | x | | | | | | x | L0.4 | 🟢 | 🟢 | 🟢 | Live tab hero — context runway as primary display | Lead with the value prop | Manual: user confirmed (Session 53) — hero + metrics panel render correctly with data, consistent across responsive breakpoints. Backend: `runway_test.go`. |
 | [L1](#layer-1) | [L1.7](#l17) | | | | | | | x | L0.4 | 🟢 | 🟢 | 🟢 | Live tab metrics panel — savings-oriented cards | Replace vanity metrics with value | Manual: user confirmed (Session 53) — 6 stats cards render, glow effect consistent across breakpoints. Backend: API tests. |
@@ -209,7 +209,7 @@
 | [L3](#layer-3) | [L3.2](#l32) | | x | | | | | | - | 🟢 | 🟢 | 🟢 | Grep/egrep parity: 55 tests, 93% agent-critical, 58% overall | Search parity proof | `test/migration/grep_parity_test.go` — 55 tests. Agent-critical: 14/15 (93%). Overall: 14/24 (58%). L3.6-L3.14 close gaps to 100%/96%. |
 | [L3](#layer-3) | [L3.3](#l33) | | x | | | | | | - | 🟢 | 🟢 | 🟢 | Learner parity: 200 intents, 5 checkpoints, zero tolerance | Learner parity proof | `TestAutotuneParity_FullReplay` — 200-intent replay, all fields match |
 | [L3](#layer-3) | [L3.4](#l34) | x | | | | | | | - | 🟢 | 🟢 | 🟢 | 7 benchmarks: search 59µs, autotune 24µs, startup 8ms, 0.4MB | Confirm speedup targets | `test/benchmark_test.go` — all 7 passing, all targets exceeded |
-| [L3](#layer-3) | [L3.5](#l35) | | | x | | | | | - | 🟢 | 🟢 | 🟢 | MIGRATION.md — install, migrate, verify, rollback | Clean upgrade path | Step-by-step guide with flag reference and perf comparison |
+| [L3](#layer-3) | [L3.5](#l35) | | | x | | | | | - | 🟢 | 🟢 | 🟢 | `docs/migration.md` — install, migrate, verify, rollback | Clean upgrade path | Step-by-step guide with flag reference and perf comparison |
 | [L3](#layer-3) | [L3.6](#l36) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | egrep `-i` — case-insensitive regex | Agent-critical gap: 93%→100% | `TestEgrep_Flag_i`, `TestEgrep_Flag_i_Regex` — case-insensitive mode wired, parity with grep `-i` |
 | [L3](#layer-3) | [L3.7](#l37) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | `-A/-B/-C` context lines for grep/egrep | Agents use `-A 3` for context | `TestGrep_Flag_A/B/C`, `TestGrep_Combo_A_B`, `TestGrep_Flag_C_OverridesAB` — `attachContextLines()` from FileCache; nil for symbol-only hits |
 | [L3](#layer-3) | [L3.8](#l38) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | `--exclude-dir` glob for directory exclusion | More precise than `--exclude` | `TestGrep_Flag_excludeDir`, `TestEgrep_Flag_excludeDir`, `TestGrep_Flag_excludeDir_Nested` — `matchesAllGlobs()` checks `filepath.Dir(path)` |
@@ -221,7 +221,7 @@
 | [L3](#layer-3) | [L3.14](#l314) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | egrep `-a` / `--and` — AND mode for regex | Parity with grep `-a` | `TestEgrep_Flag_a_ANDMode` — `AndMode: true` wired to egrep `-a` flag |
 | [L4](#layer-4) | [L4.1](#l41) | | | x | | | | | - | 🟢 | 🟢 | 🟢 | Purego .so loader for runtime grammar loading | Extend language coverage without recompile | E2E: compile Python .so, load via purego, parse → identical to compiled-in. 18 unit + 1 E2E test |
 | [L4](#layer-4) | [L4.2](#l42) | | | x | | | | | L4.1 | 🟡 | 🟢 | 🟡 | Grammar CLI + build CI — `aoa grammar list/install/info`, manifest, CI workflow | Easy grammar distribution | `aoa grammar list` shows 57 langs by tier. CI workflow defined. **Gap**: actual download not yet implemented |
-| [L4](#layer-4) | [L4.3](#l43) | | | x | | | | | L4.1 | 🟢 | 🟢 | 🟢 | Lean binary via build tags + goreleaser config | 80MB→12MB binary, cross-platform | `go build -tags lean` produces 12MB binary. `.goreleaser.yml` + release workflow defined |
+| [L4](#layer-4) | [L4.3](#l43) | | | x | | | | | L4.1 | 🟢 | 🟢 | 🟢 | Lean binary via build tags + goreleaser config | 80MB→12MB binary, cross-platform | `go build -tags lean` produces 12MB binary. Release workflow defined |
 | [L4](#layer-4) | [L4.4](#l44) | | | x | x | | | | L4.3 | 🟢 | ⚪ | ⚪ | Installation docs — `go install` or download binary | Friction-free onboarding | New user installs and runs in <2 minutes |
 | [L5](#layer-5) | [L5.1](#l51) | | | | | x | | | - | 🟢 | 🟢 | 🟢 | Rule schema as Go structs — Bitmask, Rule, Severity, FileAnalysis types | Foundation for all dimensional patterns | Unit: `types_test.go` — 7 tests (Set/Has/Or/PopCount, tier isolation, overflow guard) |
 | [L5](#layer-5) | [L5.2](#l52) | x | | | | x | | | L5.1 | 🟢 | 🟢 | 🟢 | Tree-sitter AST walker — structural pattern matching on parsed AST | Structural detection engine | Unit: `walker_test.go` — 9 tests (defer_in_loop, ignored_error, panic, sql_concat, clean_code) |
@@ -244,7 +244,7 @@
 | [L6](#layer-6) | [L6.7](#l67) | | | | | | | x | L6.6 | 🟢 | 🟢 | 🟡 | Dashboard Recon tab install prompt — show "npm install aoa-recon" when not detected | Users know exactly what to do to unlock Recon | `recon_available` field in API; JS renders install prompt when false; "lite mode" indicator |
 | [L6](#layer-6) | [L6.8](#l68) | | | x | | | | | L6.2 | 🟢 | 🟢 | 🟡 | npm package structure — wrapper packages + platform packages + JS shims | Zero-friction install via npm | `npm/aoa/` + `npm/aoa-{platform}/` with postinstall shim; esbuild/turbo pattern |
 | [L6](#layer-6) | [L6.9](#l69) | | | x | | | | | L6.4, L6.8 | 🟢 | 🟢 | 🟡 | npm recon package structure — wrapper + platform packages for aoa-recon | Zero-friction recon install | `npm/aoa-recon/` + `npm/aoa-recon-{platform}/` — same pattern as L6.8 |
-| [L6](#layer-6) | [L6.10](#l610) | | | x | | | | | L6.8, L6.9 | 🟡 | 🟢 | 🟡 | CI/Release — goreleaser builds both binaries, workflow publishes to npm | Tag → build → publish, fully automated | `.goreleaser.yml` (2 builds), `.github/workflows/release.yml` (8 matrix jobs + npm publish) |
+| [L6](#layer-6) | [L6.10](#l610) | | | x | | | | | L6.8, L6.9 | 🟡 | 🟢 | 🟡 | CI/Release — workflow builds both binaries, publishes to npm | Tag → build → publish, fully automated | `.github/workflows/release.yml` (8 matrix jobs + npm publish) |
 
 ---
 
@@ -379,7 +379,7 @@ Learning signal redesigned: no longer a separate "Learn" action row. Two sources
 - **Recon sidebar**: Card-styled (`border-radius: 16px`), grid-aligned with first stat card (`repeat(5, 1fr)` matching stats grid). Pill-based dimension toggles (color-coded by tier, wrapping), toggle switches per tier.
 - **Intel**: Domain table matches embedded dashboard: `#`, `@Domain` (purple), `Hits` (float, green, right-aligned), `Terms` (pills with hot/warm/cold states). N-gram sections: Bigrams (cyan), Cohits KW→Term (green), Cohits Term→Domain (purple).
 
-**Static mockups** (validated Session 48): `_live_mockups/{live,recon,intel,debrief,arsenal}.html`
+**Static mockups** (validated Session 48): `docs/mockups/{live,recon,intel,debrief,arsenal}.html`
 
 #### L1.1–L1.8
 
@@ -409,7 +409,7 @@ Full dashboard rewrite delivered as 3 files in `internal/adapters/web/static/`:
 **Layer 2: Infrastructure Gaps (File watcher, bbolt lock, CLI completeness, sub-ms search)**
 
 > Fix the known gaps that prevent production-grade operation. L2.4-L2.7 extend with trigram-indexed content search to hit the G0 sub-millisecond target while preserving full grep/egrep parity (G1/G3).
-> **Quality Gate**: ✅ All L2 tasks complete. `aoa init` works while daemon runs; file changes trigger re-index; `grep -v` works; `aoa grep` ≤1ms via trigram index (~60µs on 500 files); case-sensitive by default (G1 parity). 30 new tests in L2.4-L2.7, 374 total passing. Research: [sub-ms-grep.md](.context/research/sub-ms-grep.md).
+> **Quality Gate**: ✅ All L2 tasks complete. `aoa init` works while daemon runs; file changes trigger re-index; `grep -v` works; `aoa grep` ≤1ms via trigram index (~60µs on 500 files); case-sensitive by default (G1 parity). 30 new tests in L2.4-L2.7, 374 total passing. Research: [sub-ms-grep.md](docs/research/sub-ms-grep.md).
 
 #### L2.1
 
@@ -479,7 +479,7 @@ All grep/egrep modes validated after trigram integration:
 
 **Files**: `internal/domain/index/content_test.go` (7 tests), `test/benchmark_test.go` (BenchmarkSearch_E2E_CaseInsensitive)
 
-**Research**: [Sub-millisecond grep analysis](.context/research/sub-ms-grep.md)
+**Research**: [Sub-millisecond grep analysis](docs/research/sub-ms-grep.md)
 
 ---
 
@@ -520,7 +520,7 @@ Head-to-head: search latency, autotune latency, startup time, memory footprint. 
 
 Step-by-step: stop Python daemon, install Go binary, migrate bbolt data (or re-index), verify. Cover rollback if needed.
 
-**Files**: `MIGRATION.md`
+**Files**: `docs/migration.md`
 
 ---
 
@@ -591,13 +591,13 @@ Step-by-step: stop Python daemon, install Go binary, migrate bbolt data (or re-i
 
 `go build -tags lean` produces 12MB binary (vs 80MB full). 85% reduction. All grammar imports excluded, only tree-sitter core compiled in. `make build-lean` target added.
 
-`.goreleaser.yml` — builds lean binary for 4 platforms with version ldflags. `.github/workflows/release.yml` — triggered on tag push, builds + checksums + GitHub Release.
+`.github/workflows/release.yml` — triggered on tag push, builds + checksums + GitHub Release.
 
 **Binary sizes** (measured):
 - Full (default): 80 MB — all 28 grammars compiled in
 - Lean (`-tags lean`): 12 MB — no grammars, loads from `.so` at runtime
 
-**Files**: `.goreleaser.yml` (new), `.github/workflows/release.yml` (new), `Makefile` (updated — `build-lean` target), `internal/adapters/treesitter/languages_lean.go` (new)
+**Files**: `.github/workflows/release.yml`, `Makefile` (updated — `build-lean` target), `internal/adapters/treesitter/languages_lean.go`
 
 #### L4.4
 
@@ -619,7 +619,7 @@ Two install paths: `go install github.com/corey/aoa/cmd/aoa@latest` (builds from
 >
 > **Quality Gate**: Security tier catches known vulns in test projects. Full project query < 10ms. ~250-290 questions across 6 tiers.
 >
-> **Research**: [Bitmask analysis](.context/research/bitmask-dimensional-analysis.md) | [AST vs LSP viability](.context/research/asv_vs_lsp.md)
+> **Research**: [Bitmask analysis](docs/research/bitmask-dimensional-analysis.md) | [AST vs LSP viability](docs/research/asv-vs-lsp.md)
 
 **6 Tiers (22 dimensions):**
 
@@ -726,7 +726,7 @@ Append `S:-23 P:0 Q:-4` to search output. Negative = debt. Zero = clean. Visible
 
 **Recon tab** — 🔵 In progress (interim scanner)
 
-NER-style dimensional view: tier toggle sidebar (5 tiers, color-coded), file→folder→symbol drill-down, severity scoring. Mockup validated in `_live_mockups/recon.html`.
+NER-style dimensional view: tier toggle sidebar (5 tiers, color-coded), file→folder→symbol drill-down, severity scoring. Mockup validated in `docs/mockups/recon.html`.
 
 **Interim implementation (Session 62)**: Backend `recon.go` scans FileCache lines with 10 pattern detectors + `long_function` from symbol metadata. `GET /api/recon` returns JSON tree keyed by `folder → file → {language, symbols, findings}`. Frontend: sidebar with tier toggles + dimension pills (localStorage-persisted), breadcrumb-navigated tree (root→folder→file→symbol), finding detail rows with severity/id/label/line. Code-only file filter prevents non-code false positives.
 
@@ -816,9 +816,9 @@ Added `ReconAvailable() bool` to `AppQueries` interface. Recon API response incl
 
 **CI/Release** — 🟢 Complete
 
-`.goreleaser.yml` updated with two build targets: `aoa` (CGO_ENABLED=0) and `aoa-recon` (CGO_ENABLED=1). Release workflow builds 8 binaries (2 binaries × 4 platforms), creates GitHub release, then publishes to npm: populate platform packages with binaries, set versions from git tag, publish platform packages first, then wrapper packages.
+Release workflow builds 8 binaries (2 binaries × 4 platforms), creates GitHub release, then publishes to npm: populate platform packages with binaries, set versions from git tag, publish platform packages first, then wrapper packages.
 
-**Files**: `.goreleaser.yml`, `.github/workflows/release.yml`
+**Files**: `.github/workflows/release.yml`
 
 ---
 
@@ -853,10 +853,10 @@ Added `ReconAvailable() bool` to `AppQueries` interface. Recon API response incl
 | Document | Purpose |
 |----------|---------|
 | [COMPLETED.md](.context/COMPLETED.md) | Archived phases 1-8c with validation notes |
-| [Bitmask Analysis](.context/research/bitmask-dimensional-analysis.md) | Security worked example, execution pipeline, cross-language uniformity |
-| [AST vs LSP](.context/research/asv_vs_lsp.md) | Viability assessment, per-dimension confidence ratings |
-| [Sub-ms grep research](.context/research/sub-ms-grep.md) | Trigram index approach, 5 alternatives evaluated, implementation plan |
-| [Feedback Outline](research/feedback/OUTLINE.md) | User feedback on all system components |
+| [Bitmask Analysis](docs/research/bitmask-dimensional-analysis.md) | Security worked example, execution pipeline, cross-language uniformity |
+| [AST vs LSP](docs/research/asv-vs-lsp.md) | Viability assessment, per-dimension confidence ratings |
+| [Sub-ms grep research](docs/research/sub-ms-grep.md) | Trigram index approach, 5 alternatives evaluated, implementation plan |
+| [Feedback Outline](docs/research/feedback/OUTLINE.md) | User feedback on all system components |
 | [CLAUDE.md](CLAUDE.md) | Agent instructions, architecture reference, build commands |
 
 ### Quick Reference
@@ -872,4 +872,4 @@ Added `ReconAvailable() bool` to `AppQueries` interface. Recon API response incl
 | Socket | `/tmp/aoa-{sha256(root)[:12]}.sock` |
 | Dashboard | `http://localhost:{port}` (port in `.aoa/http.port`) |
 | Session logs | `~/.claude/projects/{encoded-path}/*.jsonl` |
-| Mockups | `_live_mockups/{live,recon,intel,debrief,arsenal}.html` |
+| Mockups | `docs/mockups/{live,recon,intel,debrief,arsenal}.html` |
