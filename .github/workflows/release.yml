@@ -35,7 +35,7 @@ jobs:
             cmd: ./cmd/aoa/
             goos: darwin
             goarch: amd64
-            runner: macos-13
+            runner: macos-14
             suffix: darwin-amd64
             cgo: "0"
           - binary: aoa
@@ -66,7 +66,7 @@ jobs:
             cmd: ./cmd/aoa-recon/
             goos: darwin
             goarch: amd64
-            runner: macos-13
+            runner: macos-15-intel
             suffix: darwin-amd64
             cgo: "1"
           - binary: aoa-recon

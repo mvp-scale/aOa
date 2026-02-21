@@ -41,7 +41,7 @@ jobs:
             cflags: "-fPIC -shared"
           - os: darwin
             arch: amd64
-            runner: macos-13
+            runner: macos-15-intel
             cc: clang
             ext: .dylib
             cflags: "-fPIC -shared -target x86_64-apple-macos11"
