@@ -35,6 +35,7 @@ type AppQueries interface {
 	SessionList() SessionListResult
 	ProjectConfig() ProjectConfigResult
 	ReconAvailable() bool
+	DimensionalResults() map[string]*DimensionalFileResult
 }
 
 // Server is the daemon that listens on a Unix socket and serves search requests.

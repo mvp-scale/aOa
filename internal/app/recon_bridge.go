@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/corey/aoa/internal/adapters/socket"
 )
 
 // ReconBridge discovers and invokes the aoa-recon companion binary.
@@ -120,6 +122,61 @@ func (a *App) TriggerReconEnhance() {
 			fmt.Printf("[%s] %s\n", time.Now().Format(time.RFC3339), output)
 		}
 	}()
+}
+
+// DimensionalResults returns persisted dimensional analysis results from bbolt.
+// Returns nil if no dimensional data exists (aoa-recon hasn't run yet).
+// Implements socket.AppQueries.
+func (a *App) DimensionalResults() map[string]*socket.DimensionalFileResult {
+	if a.Store == nil {
+		return nil
+	}
+	analyses, err := a.Store.LoadAllDimensions(a.ProjectID)
+	if err != nil || analyses == nil {
+		return nil
+	}
+
+	results := make(map[string]*socket.DimensionalFileResult, len(analyses))
+	for path, fa := range analyses {
+		methods := make([]socket.DimensionalMethodResult, len(fa.Methods))
+		for i, m := range fa.Methods {
+			findings := make([]socket.DimensionalFindingResult, len(m.Findings))
+			for j, f := range m.Findings {
+				findings[j] = socket.DimensionalFindingResult{
+					RuleID:   f.RuleID,
+					Line:     f.Line,
+					Symbol:   f.Symbol,
+					Severity: int(f.Severity),
+				}
+			}
+			methods[i] = socket.DimensionalMethodResult{
+				Name:     m.Name,
+				Line:     m.Line,
+				EndLine:  m.EndLine,
+				Bitmask:  m.Bitmask,
+				Score:    m.Score,
+				Findings: findings,
+			}
+		}
+		fileFindings := make([]socket.DimensionalFindingResult, len(fa.Findings))
+		for j, f := range fa.Findings {
+			fileFindings[j] = socket.DimensionalFindingResult{
+				RuleID:   f.RuleID,
+				Line:     f.Line,
+				Symbol:   f.Symbol,
+				Severity: int(f.Severity),
+			}
+		}
+		results[path] = &socket.DimensionalFileResult{
+			Path:     fa.Path,
+			Language: fa.Language,
+			Bitmask:  fa.Bitmask,
+			Methods:  methods,
+			Findings: fileFindings,
+			ScanTime: fa.ScanTime,
+		}
+	}
+	return results
 }
 
 // TriggerReconEnhanceFile runs aoa-recon enhance-file in the background after a file change.

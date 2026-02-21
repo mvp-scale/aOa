@@ -9,19 +9,21 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/corey/aoa/internal/domain/analyzer"
 	"github.com/corey/aoa/internal/ports"
 	bolt "go.etcd.io/bbolt"
 )
 
 // Bucket keys
 var (
-	bucketIndex    = []byte("index")
-	bucketLearner  = []byte("learner")
-	bucketSessions = []byte("sessions")
-	keyTokens      = []byte("tokens")
-	keyMetadata    = []byte("metadata")
-	keyFiles       = []byte("files")
-	keyState       = []byte("state")
+	bucketIndex      = []byte("index")
+	bucketLearner    = []byte("learner")
+	bucketSessions   = []byte("sessions")
+	bucketDimensions = []byte("dimensions")
+	keyTokens        = []byte("tokens")
+	keyMetadata      = []byte("metadata")
+	keyFiles         = []byte("files")
+	keyState         = []byte("state")
 )
 
 // Store implements ports.Storage backed by bbolt.
@@ -350,4 +352,62 @@ func (s *Store) DeleteProject(projectID string) error {
 			return err
 		}
 	})
+}
+
+// SaveAllDimensions persists all dimensional analysis results for a project.
+// Keys are relative file paths, values are JSON-serialized FileAnalysis.
+// Overwrites any prior dimensions for this projectID.
+func (s *Store) SaveAllDimensions(projectID string, analyses map[string]*analyzer.FileAnalysis) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		proj, err := tx.CreateBucketIfNotExists([]byte(projectID))
+		if err != nil {
+			return err
+		}
+		// Delete existing dimensions bucket to replace all data
+		_ = proj.DeleteBucket(bucketDimensions)
+		db, err := proj.CreateBucket(bucketDimensions)
+		if err != nil {
+			return err
+		}
+		for path, analysis := range analyses {
+			data, err := json.Marshal(analysis)
+			if err != nil {
+				return fmt.Errorf("marshal dimensions for %s: %w", path, err)
+			}
+			if err := db.Put([]byte(path), data); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// LoadAllDimensions retrieves all dimensional analysis results for a project.
+// Returns nil, nil if no dimensions exist.
+func (s *Store) LoadAllDimensions(projectID string) (map[string]*analyzer.FileAnalysis, error) {
+	var results map[string]*analyzer.FileAnalysis
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		proj := tx.Bucket([]byte(projectID))
+		if proj == nil {
+			return nil
+		}
+		db := proj.Bucket(bucketDimensions)
+		if db == nil {
+			return nil
+		}
+		results = make(map[string]*analyzer.FileAnalysis)
+		return db.ForEach(func(k, v []byte) error {
+			var analysis analyzer.FileAnalysis
+			if err := json.Unmarshal(v, &analysis); err != nil {
+				return nil // skip corrupt entries
+			}
+			results[string(k)] = &analysis
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
 }

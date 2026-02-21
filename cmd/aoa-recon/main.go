@@ -16,7 +16,9 @@ import (
 	"strings"
 
 	"github.com/corey/aoa/internal/adapters/bbolt"
+	"github.com/corey/aoa/internal/adapters/recon"
 	"github.com/corey/aoa/internal/adapters/treesitter"
+	"github.com/corey/aoa/internal/domain/analyzer"
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/ports"
 	"github.com/corey/aoa/internal/version"
@@ -199,9 +201,54 @@ func runEnhance(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("save index: %w", err)
 	}
 
-	fmt.Printf("aoa-recon enhanced %d files (%d skipped), %d total files in index\n",
-		enhanced, skipped, len(idx.Files))
+	// Dimensional analysis: run AC + AST + bitmask compose on all files
+	rules := analyzer.AllRules()
+	engine := recon.NewEngine(rules, parser)
+	analyses := map[string]*analyzer.FileAnalysis{}
+	dimFindings := 0
+
+	for _, path := range files {
+		source, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		relPath, _ := filepath.Rel(absRoot, path)
+		base := filepath.Base(relPath)
+		isTest := isTestFile(base)
+		isMain := isMainFile(relPath, base)
+		analysis := engine.AnalyzeFile(path, source, isTest, isMain)
+		if analysis != nil {
+			analysis.Path = relPath // store relative path
+			analyses[relPath] = analysis
+			dimFindings += len(analysis.Findings)
+		}
+	}
+
+	if len(analyses) > 0 {
+		if err := store.SaveAllDimensions(projectID, analyses); err != nil {
+			return fmt.Errorf("save dimensions: %w", err)
+		}
+	}
+
+	fmt.Printf("aoa-recon enhanced %d files (%d skipped), %d total files in index, %d dimensional findings\n",
+		enhanced, skipped, len(idx.Files), dimFindings)
 	return nil
+}
+
+// isTestFile returns true if the filename looks like a test file.
+func isTestFile(base string) bool {
+	return strings.HasSuffix(base, "_test.go") ||
+		strings.HasSuffix(base, "_test.py") ||
+		strings.HasSuffix(base, ".test.js") ||
+		strings.HasSuffix(base, ".test.ts") ||
+		strings.HasSuffix(base, "_test.rs") ||
+		strings.Contains(base, "test_")
+}
+
+// isMainFile returns true if the file is in a cmd/ directory or is named main.go/main.py.
+func isMainFile(relPath, base string) bool {
+	return strings.Contains(relPath, "cmd/") ||
+		base == "main.go" || base == "main.py"
 }
 
 func runEnhanceFile(cmd *cobra.Command, args []string) error {

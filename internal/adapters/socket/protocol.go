@@ -290,3 +290,33 @@ type ReindexResult struct {
 	TokenCount  int    `json:"token_count"`
 	ElapsedMs   int64  `json:"elapsed_ms"`
 }
+
+// DimensionalFileResult holds dimensional analysis results for a single file.
+// This is the DTO exposed via the AppQueries interface; it mirrors analyzer.FileAnalysis
+// without importing the domain package.
+type DimensionalFileResult struct {
+	Path     string                       `json:"path"`
+	Language string                       `json:"language"`
+	Bitmask  [4]uint64                    `json:"bitmask"`
+	Methods  []DimensionalMethodResult    `json:"methods"`
+	Findings []DimensionalFindingResult   `json:"findings"`
+	ScanTime int64                        `json:"scan_time_us"`
+}
+
+// DimensionalMethodResult holds per-method dimensional analysis.
+type DimensionalMethodResult struct {
+	Name     string                      `json:"name"`
+	Line     int                         `json:"line"`
+	EndLine  int                         `json:"end_line"`
+	Bitmask  [4]uint64                   `json:"bitmask"`
+	Score    int                         `json:"score"`
+	Findings []DimensionalFindingResult  `json:"findings"`
+}
+
+// DimensionalFindingResult holds a single dimensional finding.
+type DimensionalFindingResult struct {
+	RuleID   string `json:"rule_id"`
+	Line     int    `json:"line"`
+	Symbol   string `json:"symbol"`
+	Severity int    `json:"severity"`
+}

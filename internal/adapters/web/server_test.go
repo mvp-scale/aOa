@@ -99,6 +99,10 @@ func (m *mockQueries) ReconAvailable() bool {
 	return false
 }
 
+func (m *mockQueries) DimensionalResults() map[string]*socket.DimensionalFileResult {
+	return nil
+}
+
 func (m *mockQueries) ProjectConfig() socket.ProjectConfigResult {
 	return socket.ProjectConfigResult{
 		ProjectRoot:   "/test/project",

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/corey/aoa/internal/domain/analyzer"
 	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -662,4 +663,115 @@ func TestStore_OpenTimeout_ConcurrentAttempts(t *testing.T) {
 		assert.Contains(t, err.Error(), "timeout")
 		assert.Less(t, d, 3*time.Second, "concurrent open %d should not hang", i)
 	}
+}
+
+// =============================================================================
+// Dimensional analysis persistence tests (L5)
+// =============================================================================
+
+func makeTestDimensions() map[string]*analyzer.FileAnalysis {
+	var mask1 analyzer.Bitmask
+	mask1.Set(analyzer.TierSecurity, 0)
+	mask1.Set(analyzer.TierSecurity, 1)
+
+	var mask2 analyzer.Bitmask
+	mask2.Set(analyzer.TierQuality, 5)
+
+	return map[string]*analyzer.FileAnalysis{
+		"handler.go": {
+			Path:     "handler.go",
+			Language: "go",
+			Bitmask:  mask1,
+			Findings: []analyzer.RuleFinding{
+				{RuleID: "hardcoded_secret", Line: 10, Severity: analyzer.SevCritical},
+				{RuleID: "command_injection", Line: 15, Severity: analyzer.SevCritical},
+			},
+			Methods: []analyzer.MethodAnalysis{
+				{
+					Name:    "processInput",
+					Line:    5,
+					EndLine: 20,
+					Bitmask: mask1,
+					Score:   20,
+					Findings: []analyzer.RuleFinding{
+						{RuleID: "hardcoded_secret", Line: 10, Severity: analyzer.SevCritical},
+					},
+				},
+			},
+			ScanTime: 150,
+		},
+		"util.go": {
+			Path:     "util.go",
+			Language: "go",
+			Bitmask:  mask2,
+			Findings: []analyzer.RuleFinding{
+				{RuleID: "ignored_error", Line: 22, Severity: analyzer.SevWarning},
+			},
+			ScanTime: 80,
+		},
+	}
+}
+
+func TestStore_Dimensions_Roundtrip(t *testing.T) {
+	store, _ := newTestStore(t)
+	original := makeTestDimensions()
+
+	err := store.SaveAllDimensions("proj-1", original)
+	require.NoError(t, err)
+
+	loaded, err := store.LoadAllDimensions("proj-1")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.Equal(t, len(original), len(loaded))
+
+	for path, orig := range original {
+		got, ok := loaded[path]
+		require.True(t, ok, "missing file %s", path)
+		assert.Equal(t, orig.Path, got.Path)
+		assert.Equal(t, orig.Language, got.Language)
+		assert.Equal(t, orig.Bitmask, got.Bitmask)
+		assert.Equal(t, len(orig.Findings), len(got.Findings))
+		assert.Equal(t, len(orig.Methods), len(got.Methods))
+		assert.Equal(t, orig.ScanTime, got.ScanTime)
+	}
+}
+
+func TestStore_Dimensions_Overwrite(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	orig := makeTestDimensions()
+	require.NoError(t, store.SaveAllDimensions("proj-1", orig))
+
+	// Overwrite with smaller set
+	updated := map[string]*analyzer.FileAnalysis{
+		"new.go": {Path: "new.go", Language: "go"},
+	}
+	require.NoError(t, store.SaveAllDimensions("proj-1", updated))
+
+	loaded, err := store.LoadAllDimensions("proj-1")
+	require.NoError(t, err)
+	assert.Len(t, loaded, 1)
+	assert.Contains(t, loaded, "new.go")
+	assert.NotContains(t, loaded, "handler.go")
+}
+
+func TestStore_Dimensions_EmptyProject(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	loaded, err := store.LoadAllDimensions("nonexistent")
+	require.NoError(t, err)
+	assert.Nil(t, loaded)
+}
+
+func TestStore_Dimensions_EmptyAnalyses(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	err := store.SaveAllDimensions("proj-1", map[string]*analyzer.FileAnalysis{})
+	require.NoError(t, err)
+
+	loaded, err := store.LoadAllDimensions("proj-1")
+	require.NoError(t, err)
+	// Empty bucket still returns a valid map
+	assert.NotNil(t, loaded)
+	assert.Len(t, loaded, 0)
 }

@@ -158,6 +158,41 @@ func (p *Parser) HasLanguage(lang string) bool {
 	return false
 }
 
+// ParseToTree parses source code and returns the raw tree-sitter tree
+// along with the detected language name. The caller must call tree.Close().
+// Returns nil, "", nil for unknown languages.
+func (p *Parser) ParseToTree(filePath string, source []byte) (*tree_sitter.Tree, string, error) {
+	langName := p.detectLanguage(filePath)
+	if langName == "" {
+		return nil, "", nil
+	}
+
+	lang, ok := p.languages[langName]
+	if !ok && p.loader != nil {
+		loaded, err := p.loader.LoadGrammar(langName)
+		if err != nil {
+			return nil, "", nil
+		}
+		p.languages[langName] = loaded
+		lang = loaded
+	} else if !ok {
+		return nil, "", nil
+	}
+
+	if len(source) == 0 {
+		return nil, langName, nil
+	}
+
+	parser := tree_sitter.NewParser()
+	defer parser.Close()
+	if err := parser.SetLanguage(lang); err != nil {
+		return nil, "", err
+	}
+
+	tree := parser.Parse(source, nil)
+	return tree, langName, nil
+}
+
 // detectLanguage determines the language from the file path.
 func (p *Parser) detectLanguage(filePath string) string {
 	base := filepath.Base(filePath)
