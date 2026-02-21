@@ -19,8 +19,10 @@ build-lean:
 
 # Build pure Go binary (~12 MB, no CGo, no tree-sitter)
 # Tokenization-only: file-level search works; symbol search requires aoa-recon
+# Uses -tags lean to exclude engine.go/walker.go/languages_forest.go (all //go:build !lean)
+# which would otherwise drag in CGo tree-sitter bindings via the recon import chain.
 build-pure:
-	CGO_ENABLED=0 go build -ldflags "-s -w $(LDFLAGS)" -o aoa ./cmd/aoa/
+	CGO_ENABLED=0 go build -tags lean -ldflags "-s -w $(LDFLAGS)" -o aoa ./cmd/aoa/
 
 # Build the aoa-recon binary (all grammars + scanning, ~80 MB)
 build-recon:
@@ -56,10 +58,10 @@ coverage:
 	go tool cover -func=coverage.out
 	@rm -f coverage.out
 
-# The local CI: vet + lint + test
-check: vet lint test
+# The local CI: vet + lint + test + verify pure build compiles
+check: vet lint test build-pure
 	@echo ""
-	@echo "✓ All checks passed"
+	@echo "✓ All checks passed (including pure-build gate)"
 
 # Count test status
 status:

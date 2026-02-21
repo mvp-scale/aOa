@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Vet + Test + Pure Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Verify pure build (CGO_ENABLED=0)
+        run: |
+          CGO_ENABLED=0 go build -tags lean -ldflags "-s -w" -o aoa ./cmd/aoa/
+          ls -lh aoa
+          file aoa
