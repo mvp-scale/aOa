@@ -1,0 +1,35 @@
+name: Cleanup old runs
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # daily at 6am UTC
+  workflow_dispatch:       # manual trigger
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete failed and cancelled runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+
+          # Delete all failed runs
+          gh run list --repo "$REPO" --status failure --limit 100 --json databaseId -q '.[].databaseId' | \
+            xargs -I{} gh run delete {} --repo "$REPO" 2>/dev/null || true
+
+          # Delete all cancelled runs
+          gh run list --repo "$REPO" --status cancelled --limit 100 --json databaseId -q '.[].databaseId' | \
+            xargs -I{} gh run delete {} --repo "$REPO" 2>/dev/null || true
+
+          # Delete successful CI runs older than 1 day (keep release runs)
+          gh run list --repo "$REPO" --workflow ci.yml --status success --limit 100 \
+            --json databaseId,createdAt -q \
+            "[.[] | select(.createdAt < (now - 86400 | strftime(\"%Y-%m-%dT%H:%M:%SZ\")))] | .[].databaseId" | \
+            xargs -I{} gh run delete {} --repo "$REPO" 2>/dev/null || true
+
+          echo "Cleanup complete"
