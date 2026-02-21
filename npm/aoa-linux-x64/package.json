@@ -1,5 +1,5 @@
 {
-  "name": "@aoa/linux-x64",
+  "name": "@mvpscale/aoa-linux-x64",
   "version": "0.0.0",
   "os": ["linux"],
   "cpu": ["x64"],

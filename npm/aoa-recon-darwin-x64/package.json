@@ -1,5 +1,5 @@
 {
-  "name": "@aoa/recon-darwin-x64",
+  "name": "@mvpscale/aoa-recon-darwin-x64",
   "version": "0.0.0",
   "os": ["darwin"],
   "cpu": ["x64"],

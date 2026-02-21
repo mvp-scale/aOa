@@ -6,10 +6,10 @@ const fs = require("fs");
 const path = require("path");
 
 const PLATFORM_MAP = {
-  "linux-x64": "@aoa/linux-x64",
-  "linux-arm64": "@aoa/linux-arm64",
-  "darwin-x64": "@aoa/darwin-x64",
-  "darwin-arm64": "@aoa/darwin-arm64",
+  "linux-x64": "@mvpscale/aoa-linux-x64",
+  "linux-arm64": "@mvpscale/aoa-linux-arm64",
+  "darwin-x64": "@mvpscale/aoa-darwin-x64",
+  "darwin-arm64": "@mvpscale/aoa-darwin-arm64",
 };
 
 const key = `${os.platform()}-${os.arch()}`;

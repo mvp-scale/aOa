@@ -226,5 +226,5 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd npm/aoa && npm publish --access public && cd ../..
-          cd npm/aoa-recon && npm publish --access public && cd ../..
+          cd npm/aoa && npm publish --access public --tag latest && cd ../..
+          cd npm/aoa-recon && npm publish --access public --tag latest && cd ../..

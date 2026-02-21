@@ -1,5 +1,5 @@
 {
-  "name": "@aoa/recon-linux-arm64",
+  "name": "@mvpscale/aoa-recon-linux-arm64",
   "version": "0.0.0",
   "os": ["linux"],
   "cpu": ["arm64"],
