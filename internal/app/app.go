@@ -109,6 +109,41 @@ type turnBuilder struct {
 	OutputTokens int
 }
 
+// UsageQuotaTier holds parsed data for one usage tier (session, weekly-all, weekly-sonnet).
+type UsageQuotaTier struct {
+	Label      string `json:"label"`       // "session", "weekly_all", "weekly_sonnet"
+	UsedPct    int    `json:"used_pct"`    // 0-100
+	ResetsAt   string `json:"resets_at"`   // raw from /usage: "Feb 22, 8pm" or "3pm"
+	ResetEpoch int64  `json:"reset_epoch"` // best-effort parsed to unix timestamp (0 if unparseable)
+	Timezone   string `json:"timezone"`    // "America/New_York"
+}
+
+// UsageQuota holds the full parsed /usage output.
+type UsageQuota struct {
+	Session      *UsageQuotaTier `json:"session,omitempty"`
+	WeeklyAll    *UsageQuotaTier `json:"weekly_all,omitempty"`
+	WeeklySonnet *UsageQuotaTier `json:"weekly_sonnet,omitempty"`
+	CapturedAt   int64           `json:"captured_at"`
+}
+
+// ContextSnapshot holds a single status line data point from Claude Code.
+// Written by the hook script to .aoa/context.jsonl, read by the daemon.
+type ContextSnapshot struct {
+	Timestamp          int64   `json:"ts"`
+	CtxUsed            int64   `json:"ctx_used"`
+	CtxMax             int64   `json:"ctx_max"`
+	UsedPct            float64 `json:"used_pct"`
+	RemainingPct       float64 `json:"remaining_pct"`
+	TotalCostUSD       float64 `json:"total_cost_usd"`
+	TotalDurationMs    int64   `json:"total_duration_ms"`
+	TotalApiDurationMs int64   `json:"total_api_duration_ms"`
+	TotalLinesAdded    int     `json:"total_lines_added"`
+	TotalLinesRemoved  int     `json:"total_lines_removed"`
+	Model              string  `json:"model"`
+	SessionID          string  `json:"session_id"`
+	Version            string  `json:"version"`
+}
+
 // App is the top-level container wiring all components together.
 type App struct {
 	ProjectRoot string
@@ -169,6 +204,14 @@ type App struct {
 	currentSessionID    string // active Claude session ID
 	currentSessionStart int64  // unix timestamp of session start
 	sessionPrompts      int    // prompt count within current session
+
+	// Context snapshot ring buffer (from status line hook via .aoa/context.jsonl)
+	ctxSnapshots [5]ContextSnapshot // ring buffer of last 5 snapshots
+	ctxSnapHead  int                // write index
+	ctxSnapCount int                // fill count (0-5)
+
+	// Usage quota (from pasted /usage output via .aoa/usage.txt)
+	usageQuota *UsageQuota
 }
 
 // Config holds initialization parameters for the App.
@@ -917,7 +960,12 @@ func (a *App) RunwayProjection() socket.RunwayResult {
 		counterfactMin = float64(remaining) / counterfactRate
 	}
 
-	return socket.RunwayResult{
+	var msPerToken float64
+	if a.rateTracker != nil && a.rateTracker.HasData() {
+		msPerToken = a.rateTracker.MsPerToken()
+	}
+
+	result := socket.RunwayResult{
 		Model:              model,
 		ContextWindowMax:   windowMax,
 		TokensUsed:         tokensUsed,
@@ -928,7 +976,31 @@ func (a *App) RunwayProjection() socket.RunwayResult {
 		DeltaMinutes:       runwayMin - counterfactMin,
 		TokensSaved:        a.counterfactTokensSaved,
 		TimeSavedMs:        a.sessionTimeSavedMs,
+		MsPerToken:         msPerToken,
+		ReadCount:          a.sessionReadCount,
+		GuidedReadCount:    a.sessionGuidedCount,
+		CacheHitRate:       a.sessionMetrics.CacheHitRate(),
 	}
+
+	// Overlay real context data from status line hook if available
+	if snap := a.latestContextSnapshot(); snap != nil {
+		result.CtxUsed = snap.CtxUsed
+		result.CtxMax = snap.CtxMax
+		result.CtxUsedPct = snap.UsedPct
+		result.CtxRemainingPct = snap.RemainingPct
+		result.TotalCostUSD = snap.TotalCostUSD
+		result.TotalDurationMs = snap.TotalDurationMs
+		result.TotalApiDurationMs = snap.TotalApiDurationMs
+		result.TotalLinesAdded = snap.TotalLinesAdded
+		result.TotalLinesRemoved = snap.TotalLinesRemoved
+		result.CtxSnapshotAge = time.Now().Unix() - snap.Timestamp
+		// Override context window max with real value if available
+		if snap.CtxMax > 0 {
+			result.ContextWindowMax = int(snap.CtxMax)
+		}
+	}
+
+	return result
 }
 
 // SessionList returns all persisted session summaries, sorted by start time descending.
@@ -1004,6 +1076,42 @@ func (a *App) ProjectConfig() socket.ProjectConfigResult {
 		IndexTokens:   indexTokens,
 		UptimeSeconds: uptimeSeconds,
 	}
+}
+
+// UsageQuota returns the parsed /usage output, or nil if not available.
+// Implements socket.AppQueries.
+func (a *App) UsageQuota() *socket.UsageQuotaResult {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.usageQuota == nil {
+		return nil
+	}
+
+	result := &socket.UsageQuotaResult{
+		CapturedAt: a.usageQuota.CapturedAt,
+	}
+
+	if t := a.usageQuota.Session; t != nil {
+		result.Session = &socket.UsageQuotaTierResult{
+			Label: t.Label, UsedPct: t.UsedPct,
+			ResetsAt: t.ResetsAt, ResetEpoch: t.ResetEpoch, Timezone: t.Timezone,
+		}
+	}
+	if t := a.usageQuota.WeeklyAll; t != nil {
+		result.WeeklyAll = &socket.UsageQuotaTierResult{
+			Label: t.Label, UsedPct: t.UsedPct,
+			ResetsAt: t.ResetsAt, ResetEpoch: t.ResetEpoch, Timezone: t.Timezone,
+		}
+	}
+	if t := a.usageQuota.WeeklySonnet; t != nil {
+		result.WeeklySonnet = &socket.UsageQuotaTierResult{
+			Label: t.Label, UsedPct: t.UsedPct,
+			ResetsAt: t.ResetsAt, ResetEpoch: t.ResetEpoch, Timezone: t.Timezone,
+		}
+	}
+
+	return result
 }
 
 // LearnerSnapshot returns a deep copy of the current learner state.

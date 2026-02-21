@@ -115,6 +115,10 @@ func (m *mockQueries) ProjectConfig() socket.ProjectConfigResult {
 	}
 }
 
+func (m *mockQueries) UsageQuota() *socket.UsageQuotaResult {
+	return nil
+}
+
 func newTestState() *ports.LearnerState {
 	return &ports.LearnerState{
 		PromptCount: 42,

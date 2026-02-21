@@ -1,0 +1,27 @@
+# aOa Usage Quota
+#
+# This file lets aOa track your Claude Code usage limits.
+# The dashboard uses this to show session/weekly countdowns and budget pacing.
+#
+# HOW TO UPDATE:
+#   1. In Claude Code, type:  /usage
+#   2. Copy the entire output (Cmd+A, Cmd+C or select all)
+#   3. Paste it below the marker line
+#   4. Save the file — aOa processes it automatically
+#
+# You only need to do this once a day (or when you want fresh numbers).
+#
+
+--- PASTE /usage OUTPUT BELOW THIS LINE ---
+
+Current session
+  ██████▌                                            13% used
+  Resets 3pm (America/New_York)
+
+  Current week (all models)
+  ██████████████████████████████████████████████     92% used
+  Resets Feb 22, 8pm (America/New_York)
+
+  Current week (Sonnet only)
+  █                                                  2% used
+  Resets Feb 25, 10pm (America/New_York)

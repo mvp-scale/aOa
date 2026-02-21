@@ -53,22 +53,22 @@
         </div>
       </div>
       <div class="hero-metrics">
-        <div class="hm-cell"><div class="hm-value green" id="hm-live-0">-</div><div class="hm-label">time saved</div></div>
+        <div class="hm-cell"><div class="hm-value green" id="hm-live-0">-</div><div class="hm-label">tokens saved</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value green" id="hm-live-1">-</div><div class="hm-label">tokens saved</div></div>
-        <div class="hm-cell"><div class="hm-value cyan" id="hm-live-2">-</div><div class="hm-label">guided</div></div>
+        <div class="hm-cell right"><div class="hm-value green" id="hm-live-1">-</div><div class="hm-label">cost saved</div></div>
+        <div class="hm-cell"><div class="hm-value cyan" id="hm-live-2">-</div><div class="hm-label">time saved</div></div>
         <div class="hm-arrow">&rarr;</div>
         <div class="hm-cell right"><div class="hm-value blue" id="hm-live-3">-</div><div class="hm-label">extended</div></div>
       </div>
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card cyan"><div class="stat-value" id="ls-guided">-</div><div class="stat-label">Guided Ratio</div><div class="stat-sub">of reads guided</div></div>
-      <div class="stat-card green"><div class="stat-value" id="ls-savings">-</div><div class="stat-label">Avg Savings</div><div class="stat-sub">per guided read</div></div>
-      <div class="stat-card blue"><div class="stat-value" id="ls-searches">-</div><div class="stat-label">Searches</div><div class="stat-sub">indexed queries</div></div>
-      <div class="stat-card purple"><div class="stat-value" id="ls-files">-</div><div class="stat-label">Files Indexed</div><div class="stat-sub">symbols tracked</div></div>
+      <div class="stat-card cyan"><div class="stat-value" id="ls-ctxutil">-</div><div class="stat-label">Context Util%</div><div class="stat-sub">window usage</div></div>
+      <div class="stat-card red"><div class="stat-value" id="ls-burn">-</div><div class="stat-label">Burn Rate</div><div class="stat-sub">tokens/min</div></div>
+      <div class="stat-card green"><div class="stat-value" id="ls-guided">-</div><div class="stat-label">Guided Ratio</div><div class="stat-sub">of reads guided</div></div>
+      <div class="stat-card blue"><div class="stat-value" id="ls-speed">-</div><div class="stat-label">Output Speed</div><div class="stat-sub">tokens/sec</div></div>
+      <div class="stat-card purple"><div class="stat-value" id="ls-cachehit">-</div><div class="stat-label">Cache Hit%</div><div class="stat-sub">reuse rate</div></div>
       <div class="stat-card yellow"><div class="stat-value" id="ls-autotune">-</div><div class="stat-label">Autotune</div><div class="stat-sub">next cycle</div></div>
-      <div class="stat-card red"><div class="stat-value" id="ls-burn">-</div><div class="stat-label">Context Burn</div><div class="stat-sub">token burn rate</div></div>
     </div>
 
     <div class="card activity-card">
@@ -111,15 +111,15 @@
         <div class="hm-cell right"><div class="hm-value red" id="hm-recon-1">-</div><div class="hm-label">findings</div></div>
         <div class="hm-cell"><div class="hm-value red" id="hm-recon-2">-</div><div class="hm-label">critical</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value green" id="hm-recon-3">-</div><div class="hm-label">clean files</div></div>
+        <div class="hm-cell right"><div class="hm-value green" id="hm-recon-3">-</div><div class="hm-label">clean file %</div></div>
       </div>
     </div>
 
     <div class="stats-grid" style="grid-template-columns:repeat(5,1fr)">
-      <div class="stat-card green"><div class="stat-value" id="rs-files">-</div><div class="stat-label">Files Scanned</div><div class="stat-sub">across project</div></div>
-      <div class="stat-card red"><div class="stat-value" id="rs-findings">-</div><div class="stat-label">Findings</div><div class="stat-sub">total detections</div></div>
+      <div class="stat-card yellow"><div class="stat-value" id="rs-density">-</div><div class="stat-label">Findings/File</div><div class="stat-sub">finding density</div></div>
       <div class="stat-card red"><div class="stat-value" id="rs-critical">-</div><div class="stat-label">Critical</div><div class="stat-sub">immediate attention</div></div>
       <div class="stat-card yellow"><div class="stat-value" id="rs-warnings">-</div><div class="stat-label">Warnings</div><div class="stat-sub">should review</div></div>
+      <div class="stat-card green"><div class="stat-value" id="rs-cleanpct">-</div><div class="stat-label">Clean File%</div><div class="stat-sub">no findings</div></div>
       <div class="stat-card purple"><div class="stat-value" id="rs-dims">-</div><div class="stat-label">Dimensions</div><div class="stat-sub"><span id="rs-active-count">-</span> active</div></div>
     </div>
 
@@ -153,12 +153,12 @@
         </div>
       </div>
       <div class="hero-metrics">
-        <div class="hm-cell"><div class="hm-value purple" id="hm-intel-0">-</div><div class="hm-label">domains</div></div>
+        <div class="hm-cell"><div class="hm-value purple" id="hm-intel-0">-</div><div class="hm-label">core domains</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value green" id="hm-intel-1">-</div><div class="hm-label">core</div></div>
-        <div class="hm-cell"><div class="hm-value cyan" id="hm-intel-2">-</div><div class="hm-label">terms matched</div></div>
+        <div class="hm-cell right"><div class="hm-value green" id="hm-intel-1">-</div><div class="hm-label">domain velocity</div></div>
+        <div class="hm-cell"><div class="hm-value cyan" id="hm-intel-2">-</div><div class="hm-label">term coherence</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value yellow" id="hm-intel-3">-</div><div class="hm-label">bigrams</div></div>
+        <div class="hm-cell right"><div class="hm-value yellow" id="hm-intel-3">-</div><div class="hm-label">KW&rarr;domain %</div></div>
       </div>
     </div>
 
@@ -166,7 +166,7 @@
       <div class="stat-card purple"><div class="stat-value" id="is-domains">-</div><div class="stat-label">Domains</div><div class="stat-sub">semantic domains</div></div>
       <div class="stat-card green"><div class="stat-value" id="is-core">-</div><div class="stat-label">Core</div><div class="stat-sub">top ranked</div></div>
       <div class="stat-card cyan"><div class="stat-value" id="is-terms">-</div><div class="stat-label">Terms</div><div class="stat-sub">atlas terms matched</div></div>
-      <div class="stat-card blue"><div class="stat-value" id="is-keywords">-</div><div class="stat-label">Keywords</div><div class="stat-sub">unique keywords</div></div>
+      <div class="stat-card blue"><div class="stat-value" id="is-learnrate">-</div><div class="stat-label">Learning Rate</div><div class="stat-sub">keywords/prompt</div></div>
       <div class="stat-card yellow"><div class="stat-value" id="is-bigrams">-</div><div class="stat-label">Bigrams</div><div class="stat-sub">conversation patterns</div></div>
       <div class="stat-card red"><div class="stat-value" id="is-totalhits">-</div><div class="stat-label">Total Hits</div><div class="stat-sub">learning signals</div></div>
     </div>
@@ -225,18 +225,19 @@
         <div class="hm-cell"><div class="hm-value cyan" id="hm-debrief-0">-</div><div class="hm-label">input tokens</div></div>
         <div class="hm-arrow">&rarr;</div>
         <div class="hm-cell right"><div class="hm-value green" id="hm-debrief-1">-</div><div class="hm-label">output tokens</div></div>
-        <div class="hm-cell"><div class="hm-value blue" id="hm-debrief-2">-</div><div class="hm-label">cache reused</div></div>
+        <div class="hm-cell"><div class="hm-value blue" id="hm-debrief-2">-</div><div class="hm-label">cache savings</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value purple" id="hm-debrief-3">-</div><div class="hm-label">tokens saved</div></div>
+        <div class="hm-cell right"><div class="hm-value purple" id="hm-debrief-3">-</div><div class="hm-label">cost/turn</div></div>
       </div>
     </div>
 
-    <div class="stats-grid" style="grid-template-columns:repeat(5,1fr)">
-      <div class="stat-card cyan"><div class="stat-value" id="ds-input">-</div><div class="stat-label">Input Tokens</div><div class="stat-sub">prompt tokens</div></div>
-      <div class="stat-card green"><div class="stat-value" id="ds-output">-</div><div class="stat-label">Output Tokens</div><div class="stat-sub">response tokens</div></div>
-      <div class="stat-card blue"><div class="stat-value" id="ds-cread">-</div><div class="stat-label">Cache Read</div><div class="stat-sub">tokens reused</div></div>
-      <div class="stat-card purple"><div class="stat-value" id="ds-cwrite">-</div><div class="stat-label">Cache Write</div><div class="stat-sub">tokens cached</div></div>
-      <div class="stat-card yellow"><div class="stat-value" id="ds-hitrate">-</div><div class="stat-label">Cache Hit %</div><div class="stat-sub">reuse rate</div></div>
+    <div class="stats-grid">
+      <div class="stat-card blue"><div class="stat-value" id="ds-hitrate">-</div><div class="stat-label">Cache Hit%</div><div class="stat-sub">reuse rate</div></div>
+      <div class="stat-card green"><div class="stat-value" id="ds-speed">-</div><div class="stat-label">Output Speed</div><div class="stat-sub">tokens/sec</div></div>
+      <div class="stat-card cyan"><div class="stat-value" id="ds-turndur">-</div><div class="stat-label">Avg Turn Dur</div><div class="stat-sub">per exchange</div></div>
+      <div class="stat-card yellow"><div class="stat-value" id="ds-tooldensity">-</div><div class="stat-label">Tool Density</div><div class="stat-sub">tools/turn</div></div>
+      <div class="stat-card purple"><div class="stat-value" id="ds-amplify">-</div><div class="stat-label">Amplification</div><div class="stat-sub">output/input ratio</div></div>
+      <div class="stat-card red"><div class="stat-value" id="ds-modelmix">-</div><div class="stat-label">Model Mix</div><div class="stat-sub">primary model</div></div>
     </div>
 
     <div class="conv-grid">
@@ -271,21 +272,21 @@
         </div>
       </div>
       <div class="hero-metrics">
-        <div class="hm-cell"><div class="hm-value green" id="hm-arsenal-0">-</div><div class="hm-label">tokens saved</div></div>
+        <div class="hm-cell"><div class="hm-value green" id="hm-arsenal-0">-</div><div class="hm-label">cost avoidance</div></div>
         <div class="hm-arrow">&rarr;</div>
         <div class="hm-cell right"><div class="hm-value blue" id="hm-arsenal-1">-</div><div class="hm-label">sessions extended</div></div>
-        <div class="hm-cell"><div class="hm-value red" id="hm-arsenal-2">-</div><div class="hm-label">unguided cost</div></div>
+        <div class="hm-cell"><div class="hm-value cyan" id="hm-arsenal-2">-</div><div class="hm-label">cache savings</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value cyan" id="hm-arsenal-3">-</div><div class="hm-label">guided ratio</div></div>
+        <div class="hm-cell right"><div class="hm-value purple" id="hm-arsenal-3">-</div><div class="hm-label">efficiency</div></div>
       </div>
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card green"><div class="stat-value" id="as-saved">-</div><div class="stat-label">Tokens Saved</div><div class="stat-sub">cumulative</div></div>
+      <div class="stat-card cyan"><div class="stat-value" id="as-ratio">-</div><div class="stat-label">Guided Ratio</div><div class="stat-sub">overall</div></div>
       <div class="stat-card red"><div class="stat-value" id="as-cost">-</div><div class="stat-label">Unguided Cost</div><div class="stat-sub">waste tokens</div></div>
       <div class="stat-card blue"><div class="stat-value" id="as-sessions">-</div><div class="stat-label">Sessions</div><div class="stat-sub">tracked</div></div>
-      <div class="stat-card purple"><div class="stat-value" id="as-extended">-</div><div class="stat-label">Sessions Extended</div><div class="stat-sub">delta minutes</div></div>
-      <div class="stat-card cyan"><div class="stat-value" id="as-ratio">-</div><div class="stat-label">Guided Ratio</div><div class="stat-sub">overall</div></div>
+      <div class="stat-card purple"><div class="stat-value" id="as-avgprompts">-</div><div class="stat-label">Avg Prompts</div><div class="stat-sub">per session</div></div>
+      <div class="stat-card green"><div class="stat-value" id="as-saved">-</div><div class="stat-label">Tokens Saved</div><div class="stat-sub">cumulative</div></div>
       <div class="stat-card yellow"><div class="stat-value" id="as-velocity">-</div><div class="stat-label">Read Velocity</div><div class="stat-sub">reads per prompt</div></div>
     </div>
 

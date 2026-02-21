@@ -246,6 +246,38 @@ type RunwayResult struct {
 	DeltaMinutes       float64 `json:"delta_minutes"`
 	TokensSaved        int64   `json:"tokens_saved"`
 	TimeSavedMs        int64   `json:"time_saved_ms"`
+	MsPerToken         float64 `json:"ms_per_token"`
+	ReadCount          int     `json:"read_count"`
+	GuidedReadCount    int     `json:"guided_read_count"`
+	CacheHitRate       float64 `json:"cache_hit_rate"`
+	// Context snapshot from status line hook (real Claude Code data)
+	CtxUsed            int64   `json:"ctx_used"`
+	CtxMax             int64   `json:"ctx_max"`
+	CtxUsedPct         float64 `json:"ctx_used_pct"`
+	CtxRemainingPct    float64 `json:"ctx_remaining_pct"`
+	TotalCostUSD       float64 `json:"total_cost_usd"`
+	TotalDurationMs    int64   `json:"total_duration_ms"`
+	TotalApiDurationMs int64   `json:"total_api_duration_ms"`
+	TotalLinesAdded    int     `json:"total_lines_added"`
+	TotalLinesRemoved  int     `json:"total_lines_removed"`
+	CtxSnapshotAge     int64   `json:"ctx_snapshot_age"`
+}
+
+// UsageQuotaTierResult holds one tier from parsed /usage output.
+type UsageQuotaTierResult struct {
+	Label      string `json:"label"`
+	UsedPct    int    `json:"used_pct"`
+	ResetsAt   string `json:"resets_at"`
+	ResetEpoch int64  `json:"reset_epoch"`
+	Timezone   string `json:"timezone"`
+}
+
+// UsageQuotaResult holds the parsed /usage output for the API.
+type UsageQuotaResult struct {
+	Session      *UsageQuotaTierResult `json:"session,omitempty"`
+	WeeklyAll    *UsageQuotaTierResult `json:"weekly_all,omitempty"`
+	WeeklySonnet *UsageQuotaTierResult `json:"weekly_sonnet,omitempty"`
+	CapturedAt   int64                 `json:"captured_at"`
 }
 
 // SessionSummaryResult describes a single persisted session in the API response.

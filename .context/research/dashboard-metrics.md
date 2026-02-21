@@ -6,6 +6,37 @@ True origin → calculation → storage for every hero and stats metric across 5
 **Tailer parser**: `internal/adapters/tailer/parser.go`
 **Event handler**: `internal/app/app.go` `onSessionEvent()`
 
+### Data Sources
+
+| Source | Location | How Ingested | What It Provides |
+|--------|----------|-------------|------------------|
+| **Session JSONL** | `~/.claude/projects/{encoded-path}/*.jsonl` | Tailer (polling, byte-offset) → claude.Reader → `onSessionEvent()` | Per-turn tokens, tool invocations, conversation text, model, session boundaries |
+| **Status Line Hook** | `.aoa/context.jsonl` | Hook appends on each status update → fsnotify → `onContextFileChanged()` | Real context window position, total cost USD, session/API duration, lines added/removed, model, version |
+| **Project Files** | Project root (recursive walk) | fsnotify → `onFileChanged()` | Index files/tokens, recon findings |
+| **Learner State** | `.aoa/aoa.db` (bbolt) | In-memory learner, persisted at autotune/session end | Domains, terms, keywords, bigrams, hit counts |
+
+### Status Line Hook Data (`.aoa/context.jsonl`)
+
+The status line hook receives Claude Code's stdin JSON on every status update (~300ms debounce). It captures fields **not available** in session JSONL and appends them to `.aoa/context.jsonl`. The daemon reads this file (read-only) via fsnotify and stores the last 5 snapshots in a ring buffer.
+
+| Field | Type | Description | Available Elsewhere? |
+|-------|------|-------------|---------------------|
+| `ctx_used` | `int64` | Current context window token count (input + cache_creation + cache_read) | No — session JSONL has per-turn usage, not cumulative position |
+| `ctx_max` | `int64` | Context window size (e.g., 200000) | No — daemon guesses from model name |
+| `used_pct` | `float64` | Context utilization percentage (from Claude Code) | No |
+| `remaining_pct` | `float64` | Remaining context percentage | No |
+| `total_cost_usd` | `float64` | Real session cost calculated by Claude Code | No — daemon estimates from pricing table |
+| `total_duration_ms` | `int64` | Total session wall-clock duration | No |
+| `total_api_duration_ms` | `int64` | Total time spent in API calls | No |
+| `total_lines_added` | `int` | Lines of code added this session | No |
+| `total_lines_removed` | `int` | Lines of code removed this session | No |
+| `model` | `string` | Model ID (e.g., `claude-opus-4-6`) | Yes (session JSONL) |
+| `session_id` | `string` | Session UUID | Yes (session JSONL) |
+| `version` | `string` | Claude Code CLI version | Yes (session JSONL) |
+| `ts` | `int64` | Unix timestamp when captured | — |
+
+**File management**: Hook appends freely, self-truncates to 5 lines when file exceeds 20 lines (tail + atomic mv). Daemon is read-only — never writes to this file. Max file size: ~1.2KB.
+
 ---
 
 ## Key Metrics by Tab — Full Catalog
@@ -28,12 +59,12 @@ The Live tab answers: *How healthy is my session? Is aOa helping? How much runwa
 | Position | Current Metric | Status | Rec# | Recommended Metric | Story |
 |----------|---------------|--------|------|--------------------|-------|
 | **Hero Card** | Angle of Attack (rotating headline) | **[LIVE]** | 1 | **Runway** (minutes remaining) | The single most urgent number. "You have 47 min left." User sees time as currency — this is the clock. Rotating headline stays as flavor text above. |
-| **Hero Support** | runway, domains, prompts, counterfactual | **[LIVE]** | 2 | **Burn Rate** · **Context %** · **Model** · **Turn #** | Four-stat support line. Burn rate = velocity of spend, Context % = how full the tank is, Model = what engine, Turn # = where we are. Tells the operational story in one glance. |
+| **Hero Support** | runway, domains, prompts, counterfactual | **[LIVE]** | 2 | **Burn Rate** · **Context %** · **Model** · **Turn #** | Four-stat support line. Burn rate = velocity of spend, Context % = real utilization from status line hook (`ctx_used/ctx_max`), Model = what engine, Turn # = where we are. Tells the operational story in one glance. |
 | **Hero TL** | Time Saved | **[LIVE]** | 3 | **Tokens Saved** | Lead with the concrete number. Tokens saved is the raw proof of value — "aOa saved you 42k tokens." It's the first thing an observer would want to verify. |
 | **Hero TR** | Tokens Saved | **[LIVE]** | 4 | **Cost Saved $** | Convert tokens to dollars. "$0.63 saved" is more visceral than "42k tokens." Requires pricing calc. This is the money story. |
 | **Hero BL** | Guided % | **[LIVE]** | 5 | **Time Saved** | Move time saved here — it's the human-felt benefit. "2.3 min saved" means the user physically waited less. Pairs with cost above: money + time. |
 | **Hero BR** | Extended Runway | **[LIVE]** | 6 | **Extended Runway** | Keep this — "you gained +8 min" closes the hero story. The hero block now reads: saved tokens → saved money → saved time → gained runway. A complete value arc. |
-| **Stats 1** | Guided Ratio | **[LIVE]** | 7 | **Context Utilization %** | How full is the context window? This is the fuel gauge. Answers "should I be worried?" Green at 30%, yellow at 60%, red at 85%. Most actionable stat. |
+| **Stats 1** | Guided Ratio | **[LIVE]** | 7 | **Context Utilization %** | How full is the context window? This is the fuel gauge. Answers "should I be worried?" Green at 30%, yellow at 60%, red at 85%. Most actionable stat. **Source**: `.aoa/context.jsonl` → `used_pct` (real data from Claude Code status line hook, not estimated). |
 | **Stats 2** | Avg Savings/Read | **[LIVE]** | 8 | **Burn Rate** | Tokens/min. If context utilization is the fuel gauge, burn rate is the speedometer. Together they answer "when will I run out?" |
 | **Stats 3** | Searches | **[LIVE]** | 9 | **Guided Ratio** | % of reads that were guided. This is the quality indicator — is aOa actually steering Claude? Higher = better training. |
 | **Stats 4** | Files Indexed | **[LIVE]** | 10 | **Output Speed** | Tokens/sec generation rate. Users feel this — are responses coming fast or slow? Derived from `output_tokens / durationMs`. A performance pulse. |
@@ -112,7 +143,7 @@ The Debrief tab answers: *How much did this session cost? Was it efficient? How 
 
 | Position | Current Metric | Status | Rec# | Recommended Metric | Story |
 |----------|---------------|--------|------|--------------------|-------|
-| **Hero Card** | Debrief (rotating headline) | **[LIVE]** | 1 | **Session Cost $** | Money. The single most important number for accountability. "$4.82 this session." Users immediately know what they spent. Everything else is detail. |
+| **Hero Card** | Debrief (rotating headline) | **[LIVE]** | 1 | **Session Cost $** | Money. The single most important number for accountability. "$4.82 this session." Users immediately know what they spent. Everything else is detail. **Source**: prefers real `total_cost_usd` from status line hook; falls back to pricing table estimate. |
 | **Hero Support** | turn count, total tokens, cache hit rate, tokens saved | **[LIVE]** | 2 | **Turns** · **Total Tokens** · **Cache Savings $** · **Output Speed** | Four-stat support. Turns = session length, Total tokens = volume, Cache savings = money NOT spent, Output speed = performance feel. |
 | **Hero TL** | Input Tokens | **[LIVE]** | 3 | **Input Tokens** | Keep — the context cost. This is what the user is "feeding" Claude. Cyan. |
 | **Hero TR** | Output Tokens | **[LIVE]** | 4 | **Output Tokens** | Keep — what Claude produced. Green. The two together show the I/O ratio. |
@@ -196,25 +227,33 @@ These metrics span multiple tabs or represent the overall aOa value proposition.
 
 ### Data Availability Summary
 
-| Data Point | Already Captured | In JSONL | Needs New Code |
-|-----------|:---:|:---:|:---:|
-| Token counts per turn | Y | Y | — |
-| Turn duration (ms) | Y | Y | — |
-| Tool invocations + params | Y | Y | — |
-| User/AI message text | Y | Y | — |
-| Model per turn | Y | Y | — |
-| Cache read/write counts | Y | Y | — |
-| Context compaction events | — | Y | Extract from system events |
-| Sub-agent token usage | — | Y | Extract from toolUseResult |
-| Output speed (tok/sec) | — | Y | Combine output_tokens + durationMs |
-| User think time | — | Y | Timestamp gap analysis |
-| Edit acceptance rate | — | Y | Read toolUseResult.userModified |
-| Bash success rate | — | Y | Read toolUseResult.interrupted/stderr |
-| Web search frequency | — | Y | Read usage.server_tool_use |
-| Cost/pricing calculations | — | — | Apply pricing table to existing token data |
-| Domain freshness timestamps | — | — | Add timestamp to observe() calls |
-| Historical domain snapshots | — | — | Snapshot DomainMeta at each autotune |
-| Signal source tagging | — | — | Tag observe() with source enum |
+| Data Point | Already Captured | In JSONL | In Status Hook | Needs New Code |
+|-----------|:---:|:---:|:---:|:---:|
+| Token counts per turn | Y | Y | — | — |
+| Turn duration (ms) | Y | Y | — | — |
+| Tool invocations + params | Y | Y | — | — |
+| User/AI message text | Y | Y | — | — |
+| Model per turn | Y | Y | Y | — |
+| Cache read/write counts | Y | Y | — | — |
+| **Context window position** | **Y** | — | **Y** | — |
+| **Context window max** | **Y** | — | **Y** | — |
+| **Context utilization %** | **Y** | — | **Y** | — |
+| **Real session cost USD** | **Y** | — | **Y** | — |
+| **Session wall-clock duration** | **Y** | — | **Y** | — |
+| **API call duration** | **Y** | — | **Y** | — |
+| **Lines added/removed** | **Y** | — | **Y** | — |
+| **Claude Code version** | **Y** | Y | **Y** | — |
+| Context compaction events | — | Y | — | Extract from system events |
+| Sub-agent token usage | — | Y | — | Extract from toolUseResult |
+| Output speed (tok/sec) | — | Y | — | Combine output_tokens + durationMs |
+| User think time | — | Y | — | Timestamp gap analysis |
+| Edit acceptance rate | — | Y | — | Read toolUseResult.userModified |
+| Bash success rate | — | Y | — | Read toolUseResult.interrupted/stderr |
+| Web search frequency | — | Y | — | Read usage.server_tool_use |
+| Cost/pricing calculations | Y | — | Y | Real cost from hook; estimate as fallback |
+| Domain freshness timestamps | — | — | — | Add timestamp to observe() calls |
+| Historical domain snapshots | — | — | — | Snapshot DomainMeta at each autotune |
+| Signal source tagging | — | — | — | Tag observe() with source enum |
 
 ---
 
@@ -230,19 +269,19 @@ These metrics span multiple tabs or represent the overall aOa value proposition.
 | **Time Saved** | Same token fields + turn `durationMs` (system event) | `tokensSaved × P50(ms/token)` where P50 is median ms/token from last 30 min of valid turns (min 5 samples). Fallback: 7.5 ms/token. | `SessionSummary.TimeSavedMs` → bbolt; current: `app.sessionTimeSavedMs` |
 | **Guided Ratio** | `ToolInvocation` Read events with `limit` field | `guidedReads / totalReads`. A read is "guided" if offset+limit partial read saves ≥ 50% vs full file. | `SessionSummary.GuidedRatio` → bbolt |
 | **Extended Runway** | Same token fields (burn rate inputs) | `(remaining / actualBurnRate) − (remaining / counterfactBurnRate)` in minutes. Counterfact rate = actual minus guided-read token savings. | Ephemeral — recalculated per request |
-| **Runway** | Same token fields | `(contextWindowMax − lifetimeTotalTokens) / TokensPerMin`. `contextWindowMax` from hardcoded model map (`internal/app/models.go`), default 200k. | Ephemeral |
+| **Runway** | Same token fields | `(contextWindowMax − lifetimeTotalTokens) / TokensPerMin`. `contextWindowMax` from status line hook `ctx_max` (real), fallback to hardcoded model map (`internal/app/models.go`), default 200k. | Ephemeral |
 | **Counterfact Runway** | Same token fields | Same formula but using counterfactual burn rate (what would burn without guided reads) | Ephemeral |
 
 ### Stats Grid
 
-| Metric | JSONL Origin | Calculation | Stored |
-|--------|-------------|-------------|--------|
-| **Searches** | `user` message events | `PromptCount` — incremented on each `EventUserInput` | Learner state → bbolt |
-| **Files** | Project file system (walk at init) | `len(idx.Files)` | Index → bbolt |
-| **Autotune Progress** | Same user messages | `promptN % 50` — resets at each autotune cycle | Ephemeral |
+| Metric | Origin | Calculation | Stored |
+|--------|--------|-------------|--------|
+| **Context Util%** | Status line hook `used_pct` | Real `ctx_used / ctx_max × 100` from Claude Code. Fallback: `-` if no snapshot. | Ring buffer (last 5 snapshots) |
 | **Burn Rate** | `message.usage.*_tokens` | `sum(tokens in 5-min window) / windowDuration.Minutes()` via `BurnRateTracker` | Ephemeral rolling window |
-| **Guided %** | Read `ToolInvocation` events | Same as hero Guided Ratio | bbolt sessions |
-| **Savings/Read** | Same token fields + file sizes | `sum(tokens_saved) / sum(guided_read_count)` across all sessions | bbolt sessions |
+| **Guided Ratio** | Read `ToolInvocation` events | `guidedReads / totalReads` across all sessions + current | bbolt sessions + ephemeral |
+| **Output Speed** | `ms_per_token` from `RateTracker` | `1000 / ms_per_token` tokens/sec | Ephemeral |
+| **Cache Hit%** | `message.usage.cache_read_input_tokens` | `CacheReadTokens / (InputTokens + CacheReadTokens)` | `SessionMetrics.CacheHitRate()` |
+| **Autotune Progress** | `user` message events | `promptN % 50` — resets at each autotune cycle | Ephemeral |
 
 ---
 
@@ -286,9 +325,9 @@ All Intel metrics originate from text in the JSONL session file, processed throu
 
 ---
 
-## Debrief Tab — `/api/conversation/metrics`
+## Debrief Tab — `/api/conversation/metrics` + `/api/runway` + `/api/conversation/tools`
 
-All token metrics originate directly from the `usage` object on Claude API responses.
+Token metrics from the `usage` object on Claude API responses. Cost metrics prefer real `total_cost_usd` from status line hook, with pricing table estimate as fallback.
 
 ### Hero Card + Stats Grid
 
@@ -331,6 +370,8 @@ All token metrics originate directly from the `usage` object on Claude API respo
 
 ## Master Origin Table
 
+### Session JSONL (`~/.claude/projects/.../*.jsonl`)
+
 | JSONL Field | What It Is | Feeds |
 |-------------|-----------|-------|
 | `message.usage.input_tokens` | Tokens in Claude's context window for that turn | Burn rate, runway, session totals, cache hit rate |
@@ -345,6 +386,21 @@ All token metrics originate directly from the `usage` object on Claude API respo
 | `message.model` | Model name (e.g. `claude-opus-4-6`) | Context window size lookup |
 | Session JSONL filename / `sessionId` | UUID in path | Session boundary detection |
 | Project file system (not JSONL) | Source code files | Recon findings, index files/tokens |
+
+### Status Line Hook (`.aoa/context.jsonl`)
+
+| Field | What It Is | Feeds |
+|-------|-----------|-------|
+| `ctx_used` | Real context window token position | Live: Context Util%, support line (122k/200k) |
+| `ctx_max` | Real context window max | Live: Context Util% denominator, overrides model lookup |
+| `used_pct` | Real utilization % from Claude Code | Live: Stats 1, support line |
+| `remaining_pct` | Remaining context % | Live: color coding (green/yellow/red thresholds) |
+| `total_cost_usd` | Real session cost from Claude | Debrief: Session Cost hero, cost/turn; Arsenal: ROI calc |
+| `total_duration_ms` | Session wall-clock time | Available for session pacing metrics |
+| `total_api_duration_ms` | Time spent in API calls | Available for API efficiency (api_time / wall_time) |
+| `total_lines_added` | Code lines added this session | Available for productivity metrics |
+| `total_lines_removed` | Code lines removed this session | Available for churn metrics |
+| `ts` | Capture timestamp | Rate calculations (context velocity, cost velocity) |
 
 ---
 

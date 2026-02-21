@@ -125,6 +125,35 @@ elif [ "$PERCENT" -lt 85 ]; then CTX_COLOR=$YELLOW
 else CTX_COLOR=$RED
 fi
 
+# === WRITE CONTEXT SNAPSHOT TO .aoa/context.jsonl ===
+# Append real Claude Code data for the dashboard. Daemon is read-only consumer.
+CONTEXT_JSONL="$PROJECT_DIR/.aoa/context.jsonl"
+if [ -d "$PROJECT_DIR/.aoa" ]; then
+    # Extract cost fields (not available in session JSONL)
+    COST_USD=$(echo "$input" | jq -r '.cost.total_cost_usd // 0' 2>/dev/null)
+    COST_DUR=$(echo "$input" | jq -r '.cost.total_duration_ms // 0' 2>/dev/null)
+    COST_API_DUR=$(echo "$input" | jq -r '.cost.total_api_duration_ms // 0' 2>/dev/null)
+    LINES_ADD=$(echo "$input" | jq -r '.cost.total_lines_added // 0' 2>/dev/null)
+    LINES_REM=$(echo "$input" | jq -r '.cost.total_lines_removed // 0' 2>/dev/null)
+    USED_PCT=$(echo "$input" | jq -r '.context_window.used_percentage // 0' 2>/dev/null)
+    REMAIN_PCT=$(echo "$input" | jq -r '.context_window.remaining_percentage // 0' 2>/dev/null)
+    CC_SESSION=$(echo "$input" | jq -r '.session_id // ""' 2>/dev/null)
+    CC_VER=$(echo "$input" | jq -r '.version // ""' 2>/dev/null)
+    CC_MODEL_ID=$(echo "$input" | jq -r '.model.id // ""' 2>/dev/null)
+    TS=$(date +%s)
+
+    # Append single JSONL line (atomic for writes < PIPE_BUF)
+    printf '{"ts":%s,"ctx_used":%s,"ctx_max":%s,"used_pct":%s,"remaining_pct":%s,"total_cost_usd":%s,"total_duration_ms":%s,"total_api_duration_ms":%s,"total_lines_added":%s,"total_lines_removed":%s,"model":"%s","session_id":"%s","version":"%s"}\n' \
+        "$TS" "$TOTAL_TOKENS" "$CONTEXT_SIZE" "$USED_PCT" "$REMAIN_PCT" \
+        "$COST_USD" "$COST_DUR" "$COST_API_DUR" "$LINES_ADD" "$LINES_REM" \
+        "$CC_MODEL_ID" "$CC_SESSION" "$CC_VER" >> "$CONTEXT_JSONL"
+
+    # Self-truncate: keep last 20 lines max
+    if [ "$(wc -l < "$CONTEXT_JSONL" 2>/dev/null)" -gt 20 ] 2>/dev/null; then
+        tail -5 "$CONTEXT_JSONL" > "${CONTEXT_JSONL}.tmp" && mv "${CONTEXT_JSONL}.tmp" "$CONTEXT_JSONL"
+    fi
+fi
+
 # === READ DAEMON STATUS ===
 SEP="${DIM}│${RESET}"
 INTENTS=0

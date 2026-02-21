@@ -91,6 +91,7 @@ func (s *Server) Start(preferredPort int) error {
 	mux.HandleFunc("GET /api/sessions", s.handleSessions)
 	mux.HandleFunc("GET /api/config", s.handleConfig)
 	mux.HandleFunc("GET /api/recon", s.handleRecon)
+	mux.HandleFunc("GET /api/usage", s.handleUsage)
 
 	s.httpSrv = &http.Server{Handler: mux}
 
@@ -342,5 +343,19 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	result := s.queries.ProjectConfig()
 	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	result := s.queries.UsageQuota()
+	w.Header().Set("Content-Type", "application/json")
+	if result == nil {
+		w.Write([]byte("null"))
+		return
+	}
 	json.NewEncoder(w).Encode(result)
 }
