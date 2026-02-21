@@ -111,7 +111,7 @@ func BuiltinManifest() *Manifest {
 			"json":       {Name: "json", Version: "0.24.8", Priority: "P1", Extensions: []string{".json", ".jsonc"}, RepoURL: "https://github.com/tree-sitter/tree-sitter-json"},
 
 			// P2 Common
-			"csharp":     {Name: "csharp", Version: "0.23.1", Priority: "P2", Extensions: []string{".cs"}, RepoURL: "https://github.com/tree-sitter/tree-sitter-c-sharp"},
+			"c_sharp":    {Name: "c_sharp", Version: "0.23.1", Priority: "P2", Extensions: []string{".cs"}, RepoURL: "https://github.com/tree-sitter/tree-sitter-c-sharp"},
 			"ruby":       {Name: "ruby", Version: "0.23.1", Priority: "P2", Extensions: []string{".rb"}, RepoURL: "https://github.com/tree-sitter/tree-sitter-ruby"},
 			"php":        {Name: "php", Version: "0.24.2", Priority: "P2", Extensions: []string{".php"}, RepoURL: "https://github.com/tree-sitter/tree-sitter-php"},
 			"kotlin":     {Name: "kotlin", Version: "1.1.0", Priority: "P2", Extensions: []string{".kt", ".kts"}, RepoURL: "https://github.com/tree-sitter-grammars/tree-sitter-kotlin"},

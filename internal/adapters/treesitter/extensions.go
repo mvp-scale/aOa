@@ -5,7 +5,6 @@ package treesitter
 // both compiled-in and dynamically-loaded grammars.
 
 // registerExtensions maps file extensions to language names.
-// All 97 extensions from Python aOa parity.
 func (p *Parser) registerExtensions() {
 	// Core
 	p.addExt("python", ".py", ".pyw")
@@ -17,7 +16,7 @@ func (p *Parser) registerExtensions() {
 	p.addExt("java", ".java")
 	p.addExt("c", ".c", ".h")
 	p.addExt("cpp", ".cpp", ".hpp", ".cc", ".cxx", ".hxx")
-	p.addExt("csharp", ".cs")
+	p.addExt("c_sharp", ".cs")
 	p.addExt("ruby", ".rb")
 	p.addExt("php", ".php")
 	p.addExt("swift", ".swift")
@@ -25,13 +24,18 @@ func (p *Parser) registerExtensions() {
 	p.addExt("scala", ".scala", ".sc")
 
 	// Scripting
-	p.addExt("bash", ".sh", ".bash", ".zsh")
+	p.addExt("bash", ".sh", ".bash")
 	p.addExt("lua", ".lua")
 	p.addExt("perl", ".pl", ".pm")
 	p.addExt("r", ".r", ".R")
 	p.addExt("julia", ".jl")
 	p.addExt("elixir", ".ex", ".exs")
 	p.addExt("erlang", ".erl", ".hrl")
+	p.addExt("awk", ".awk")
+	p.addExt("fish", ".fish")
+	p.addExt("nu", ".nu")
+	p.addExt("powershell", ".ps1", ".psm1", ".psd1")
+	p.addExt("tcl", ".tcl")
 
 	// Functional
 	p.addExt("haskell", ".hs", ".lhs")
@@ -41,6 +45,12 @@ func (p *Parser) registerExtensions() {
 	p.addExt("clojure", ".clj", ".cljs", ".cljc")
 	p.addExt("purescript", ".purs")
 	p.addExt("fennel", ".fnl")
+	p.addExt("fsharp", ".fs", ".fsx", ".fsi")
+	p.addExt("scheme", ".scm", ".ss")
+	p.addExt("racket", ".rkt")
+	p.addExt("commonlisp", ".lisp", ".cl", ".lsp")
+	p.addExt("sml", ".sml", ".sig")
+	p.addExt("rescript", ".res", ".resi")
 
 	// Systems & Emerging
 	p.addExt("zig", ".zig")
@@ -53,17 +63,31 @@ func (p *Parser) registerExtensions() {
 	p.addExt("ada", ".ada", ".adb", ".ads")
 	p.addExt("fortran", ".f90", ".f95", ".f03", ".f")
 	p.addExt("verilog", ".sv")
+	p.addExt("systemverilog", ".svh")
 	p.addExt("vhdl", ".vhd", ".vhdl")
+	p.addExt("pascal", ".pas", ".pp")
+	p.addExt("crystal", ".cr")
+	p.addExt("hare", ".ha")
+	p.addExt("cairo", ".cairo")
 
 	// Web & Frontend
 	p.addExt("html", ".html", ".htm")
-	p.addExt("css", ".css", ".scss", ".less")
+	p.addExt("css", ".css", ".less")
+	p.addExt("scss", ".scss")
 	p.addExt("vue", ".vue")
 	p.addExt("svelte", ".svelte")
 	p.addExt("dart", ".dart")
+	p.addExt("astro", ".astro")
+	p.addExt("pug", ".pug")
+	p.addExt("slim", ".slim")
+	p.addExt("haml", ".haml")
+	p.addExt("embedded_template", ".erb")
+	p.addExt("heex", ".heex")
 
 	// Data & Config
-	p.addExt("json", ".json", ".jsonc")
+	p.addExt("json", ".json")
+	p.addExt("jsonc", ".jsonc")
+	p.addExt("json5", ".json5")
 	p.addExt("yaml", ".yaml", ".yml")
 	p.addExt("toml", ".toml")
 	p.addExt("sql", ".sql")
@@ -72,13 +96,40 @@ func (p *Parser) registerExtensions() {
 	p.addExt("hcl", ".tf", ".hcl")
 	p.addExt("dockerfile", "Dockerfile", ".dockerfile")
 	p.addExt("nix", ".nix")
+	p.addExt("xml", ".xml", ".xsl", ".xslt")
+	p.addExt("csv", ".csv")
+	p.addExt("ini", ".ini")
+	p.addExt("proto", ".proto")
+	p.addExt("latex", ".tex", ".latex")
+	p.addExt("kdl", ".kdl")
 
-	// Build
+	// Build & Infra
 	p.addExt("cmake", ".cmake")
 	p.addExt("make", ".mk")
 	p.addExt("groovy", ".groovy", ".gradle")
 	p.addExt("glsl", ".glsl", ".vert", ".frag")
 	p.addExt("hlsl", ".hlsl")
+	p.addExt("wgsl", ".wgsl")
+	p.addExt("just", "Justfile", ".just")
+	p.addExt("ninja", ".ninja")
+	p.addExt("meson", ".meson")
+
+	// Blockchain & Smart Contracts
+	p.addExt("solidity", ".sol")
+	p.addExt("prisma", ".prisma")
+
+	// Game Dev
+	p.addExt("gdscript", ".gd")
+	p.addExt("godot_resource", ".tscn", ".tres")
+
+	// Misc
+	p.addExt("vim", ".vim")
+	p.addExt("typst", ".typ")
+	p.addExt("pkl", ".pkl")
+	p.addExt("asm", ".asm", ".s", ".S")
+	p.addExt("nasm", ".nasm")
+	p.addExt("starlark", ".bzl", ".star")
+	p.addExt("cobol", ".cob", ".cbl")
 }
 
 // symbolRules maps language names to their symbol extraction node types.
@@ -198,7 +249,7 @@ var symbolRules = map[string]map[string]string{
 		"method_signature":   "method",
 		"class_definition":   "class",
 	},
-	"csharp": {
+	"c_sharp": {
 		"method_declaration":    "method",
 		"class_declaration":     "class",
 		"interface_declaration": "interface",

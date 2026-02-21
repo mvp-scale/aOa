@@ -1101,3 +1101,9 @@ Flags:
       --root string   project root directory (required)
 
 
+[2026-02-20T21:58:05-05:00] remote stop, shutting down
+[2026-02-20T21:58:05-05:00] daemon stopped
+[2026-02-20T21:58:06-05:00] daemon starting
+[2026-02-20T21:58:09-05:00] aoa-recon found at /home/corey/aOa-go/aoa-recon
+[2026-02-20T21:58:09-05:00] daemon ready at /tmp/aoa-a90cd43ef9f4.sock
+[2026-02-20T21:58:09-05:00] dashboard at http://localhost:19270

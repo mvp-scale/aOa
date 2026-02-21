@@ -56,8 +56,7 @@ func LibExtension() string {
 // symbolOverrides maps internal language names to C symbol names where the
 // default derivation (tree_sitter_{name}) doesn't apply.
 var symbolOverrides = map[string]string{
-	"csharp": "tree_sitter_c_sharp",
-	"objc":   "tree_sitter_objc",
+	"objc": "tree_sitter_objc",
 }
 
 // CSymbolName returns the C function name for a language's tree-sitter grammar.

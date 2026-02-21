@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-20 (Session 63) | **Phase**: L6 — Two-binary distribution (aoa + aoa-recon). Parser interface decoupled, pure Go binary (CGO_ENABLED=0), tokenization-only fallback, recon bridge (git-lfs model), npm packaging, CI/release pipeline.
+> **Updated**: 2026-02-20 (Session 64) | **Phase**: L6 — Two-binary distribution (aoa + aoa-recon). Parser interface decoupled, pure Go binary (CGO_ENABLED=0), tokenization-only fallback, recon bridge (git-lfs model), npm packaging, CI/release pipeline.
 > **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 + L3.2–L3.14 + L4.1–L4.3 + L6.1–L6.10 (470+ active tests, 32 skipped)
 
 ---
@@ -72,7 +72,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Session 63 delivered L6 (Two-binary distribution). aOa now ships as two binaries: `aoa` (pure Go, 7.5 MB, CGO_ENABLED=0) for search + learning + dashboard, and `aoa-recon` (CGo, 73 MB) for tree-sitter parsing + security scanning. `ports.Parser` interface decouples domain from adapter. Tokenization-only fallback enables file-level search without any CGo. `ReconBridge` discovers `aoa-recon` on PATH and invokes as subprocess (git-lfs model). Dashboard shows install prompt when recon not available. npm package structure follows esbuild/turbo pattern (wrapper + platform packages). CI workflow builds 8 binaries and publishes to npm on tag push. Scanner logic extracted to shared `internal/adapters/recon/` package.
+**Current**: Session 64 replaced 28 individual upstream grammar imports with 509 grammars from [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest). `aoa-recon` now compiles all 509 languages (361 MB binary). Extension mappings expanded from 97 to 163. `aoa` pure Go binary unchanged (11 MB, CGO_ENABLED=0). Code generator (`gen_forest.go`) scans forest sub-packages and produces `languages_forest.go`. All 470+ tests pass. Session 63 delivered L6 (Two-binary distribution). `ports.Parser` interface decouples domain from adapter. Tokenization-only fallback enables file-level search without any CGo. `ReconBridge` discovers `aoa-recon` on PATH and invokes as subprocess (git-lfs model). Dashboard shows install prompt when recon not available. npm package structure follows esbuild/turbo pattern (wrapper + platform packages). CI workflow builds 8 binaries and publishes to npm on tag push.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -136,6 +136,13 @@
 - **Graceful degradation on dynamic load failure** — `ParseFile()` returns `nil, nil` if grammar `.so` not found. Same behavior as extension-mapped-but-no-grammar today. No errors surfaced to user — just falls back to tokenization-only indexing.
 - **57-language manifest with priority tiers** — `BuiltinManifest()` embedded in binary. P1 Core (11 langs every dev uses), P2 Common (11 langs most devs use), P3 Extended (17 niche but real), P4 Specialist (18 domain-specific). `aoa grammar list` shows tier/status at a glance.
 - **Individual .so files, not regional bundles** — Simpler to build, simpler to download individually. Pack tarballs (core/common/extended/specialist) for bulk download.
+
+**Design Decisions Locked** (Session 64):
+- **go-sitter-forest sub-package imports** — Import each forest sub-package directly (e.g., `go-sitter-forest/python`), NOT the root `forest.go`. Root depends on `go-tree-sitter-bare` (different bindings), causing duplicate C runtime symbols at link time. Sub-packages export `GetLanguage() unsafe.Pointer` with zero Go dependencies — just CGo to compile `parser.c`. Wrapped with `tree_sitter.NewLanguage()` from official bindings.
+- **Code generator for grammar registration** — `gen_forest.go` (`//go:build ignore`) scans `_tmp_sitter_forest/go-sitter-forest-main/*/binding.go`, extracts package names, generates `languages_forest.go` with 509 imports and `registerBuiltinLanguages()`. Uniform `forest_` alias prefix avoids keyword conflicts (`go`, `func`), stdlib conflicts (`context`), and package name mismatches (`Go`, `ConTeXt`, `FunC`).
+- **Local replace directives** — go.mod uses `replace` directives pointing to `_tmp_sitter_forest/go-sitter-forest-main/{lang}` for all 509 sub-packages. Each sub-package has its own `go.mod` with no external deps. Switch to published versions when ready to release.
+- **Language name = directory name** — `c_sharp` not `csharp`, matching forest directory. Default C symbol derivation (`tree_sitter_c_sharp`) works without overrides. Extension mappings, symbol rules, and manifest updated accordingly.
+- **fastbuild skipped** — Generate never completes (15min+). 6 other broken parsers (cfhtml, cfml, cpp2, enforce, rst, zsh) have no `binding.go` and are automatically excluded.
 
 **Design Decisions Locked** (Session 63):
 - **Two-binary distribution** — `aoa` (pure Go, CGO_ENABLED=0, ~8 MB) for search + learning + dashboard. `aoa-recon` (CGo, ~80 MB) for tree-sitter parsing + security scanning. Users who want fast search get a tiny binary; users who want scanning install the companion. npm packages for zero-friction install.
@@ -733,9 +740,9 @@ NER-style dimensional view: tier toggle sidebar (5 tiers, color-coded), file→f
 
 **Layer 6: Distribution v2 (Two-binary split, npm packaging)**
 
-> aOa ships as two binaries: `aoa` (pure Go, ~8 MB) for search + learning + dashboard, and `aoa-recon` (CGo, ~80 MB) for tree-sitter parsing + security scanning. Distributed via npm. `aoa` auto-discovers `aoa-recon` when both are installed (git-lfs model).
+> aOa ships as two binaries: `aoa` (pure Go, ~11 MB) for search + learning + dashboard, and `aoa-recon` (CGo, ~361 MB, 509 languages via go-sitter-forest) for tree-sitter parsing + security scanning. Distributed via npm. `aoa` auto-discovers `aoa-recon` when both are installed (git-lfs model).
 >
-> **Quality Gate**: `CGO_ENABLED=0 go build ./cmd/aoa/` produces a working binary. `go build ./cmd/aoa-recon/` produces a CGo binary with all grammars. `aoa` discovers and invokes `aoa-recon` as subprocess. Dashboard shows install prompt when recon not available.
+> **Quality Gate**: `CGO_ENABLED=0 go build ./cmd/aoa/` produces a working binary. `go build ./cmd/aoa-recon/` produces a CGo binary with 509 grammars. `aoa` discovers and invokes `aoa-recon` as subprocess. Dashboard shows install prompt when recon not available.
 
 #### L6.1
 
@@ -769,7 +776,7 @@ Changed `App.Parser` from `*treesitter.Parser` to `ports.Parser` interface. `Con
 
 **Create cmd/aoa-recon/ entry point** — 🟢 Complete
 
-Separate binary with Cobra CLI: `enhance --db <path> --root <project>` (full project scan), `enhance-file --db <path> --file <path>` (incremental), `version`. Opens bbolt, loads existing index, creates treesitter.Parser, walks files, writes enhanced symbol metadata back. 73 MB binary with all grammars.
+Separate binary with Cobra CLI: `enhance --db <path> --root <project>` (full project scan), `enhance-file --db <path> --file <path>` (incremental), `version`. Opens bbolt, loads existing index, creates treesitter.Parser, walks files, writes enhanced symbol metadata back. 361 MB binary with 509 grammars (via go-sitter-forest).
 
 **Files**: `cmd/aoa-recon/main.go` (new)
 
@@ -822,8 +829,8 @@ Added `ReconAvailable() bool` to `AppQueries` interface. Recon API response incl
 | Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, content scanning, `Rebuild()` for live mutation. Hot file cache (22 tests incl. trigram). Trigram index for sub-ms content search (~60µs on 500 files). Case-sensitive by default (G1). `fileSpans` precomputed. |
 | Learner (21-step autotune) | 5/5 fixture parity, float64 precision on DomainMeta.Hits. Do not change decay/prune constants. |
 | Session Prism (Claude JSONL reader) | Defensive parsing, UUID dedup, compound message decomposition. Battle-tested. |
-| Tree-sitter parser (28 languages) | Symbol extraction working for Go, Python, JS/TS + 24 generic. Reuse ASTs for L5. Now behind `ports.Parser` interface; lives in `aoa-recon` binary. |
-| Two-binary distribution (L6, 10 tasks) | `aoa` (pure Go, 7.5 MB) + `aoa-recon` (CGo, 73 MB). ReconBridge auto-discovery. npm packaging. CI/release pipeline. |
+| Tree-sitter parser (509 languages) | go-sitter-forest provides 509 compiled-in grammars. Symbol extraction for Go, Python, JS/TS + generic. 163 file extension mappings. `gen_forest.go` generator. Behind `ports.Parser` interface; lives in `aoa-recon` binary (361 MB). |
+| Two-binary distribution (L6, 10 tasks) | `aoa` (pure Go, 11 MB) + `aoa-recon` (CGo, 361 MB). ReconBridge auto-discovery. npm packaging. CI/release pipeline. |
 | Socket protocol | JSON-over-socket IPC. Concurrent clients. `Reindex` command with extended timeout. Extend, don't replace. |
 | Value engine (L0, 24 new tests) | Burn rate, runway projection, session persistence, activity enrichments. All wired. |
 | Activity rubric (41 tests) | Three-lane color system: green (guided savings), red (unguided cost — pill, impact, target), purple (creative words for Write/Edit). Learned column with cycling AI vocabulary. Autotune enrichments. Target: `aOa` blue, `grep`/`egrep` green. Impact: numbers cyan. |

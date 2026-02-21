@@ -23,7 +23,7 @@ func TestCSymbolName(t *testing.T) {
 		{"rust", "tree_sitter_rust"},
 		{"c", "tree_sitter_c"},
 		{"cpp", "tree_sitter_cpp"},
-		{"csharp", "tree_sitter_c_sharp"}, // override
+		{"c_sharp", "tree_sitter_c_sharp"}, // default derivation now works
 		{"objc", "tree_sitter_objc"},      // override
 		{"bash", "tree_sitter_bash"},
 		{"hcl", "tree_sitter_hcl"},
@@ -45,7 +45,7 @@ func TestSOBaseName(t *testing.T) {
 		{"tsx", "typescript"}, // tsx shares typescript's .so
 		{"typescript", "typescript"},
 		{"go", "go"},
-		{"csharp", "csharp"},
+		{"c_sharp", "c_sharp"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.lang, func(t *testing.T) {
@@ -208,23 +208,23 @@ func TestParser_HasLanguage(t *testing.T) {
 
 	// Not available
 	assert.False(t, p.HasLanguage("nonexistent"))
-	assert.False(t, p.HasLanguage("swift")) // extension-mapped but not compiled in
+	assert.False(t, p.HasLanguage("klingon")) // not a real parser
 }
 
 func TestParser_HasLanguage_WithLoader(t *testing.T) {
 	dir := t.TempDir()
 	ext := LibExtension()
 
-	// Create fake swift.so
-	f, err := os.Create(filepath.Join(dir, "swift"+ext))
+	// Create fake brainfuck.so (not a compiled-in grammar)
+	f, err := os.Create(filepath.Join(dir, "brainfuck"+ext))
 	require.NoError(t, err)
 	f.Close()
 
 	p := NewParser()
 	p.SetGrammarPaths([]string{dir})
 
-	// swift now discoverable via loader
-	assert.True(t, p.HasLanguage("swift"))
+	// brainfuck now discoverable via loader
+	assert.True(t, p.HasLanguage("brainfuck"))
 	// still can't find nonexistent
 	assert.False(t, p.HasLanguage("nonexistent"))
 }
