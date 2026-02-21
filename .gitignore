@@ -1,5 +1,6 @@
-# Binary
+# Binaries
 /aoa
+/aoa-recon
 
 # Runtime state (project-local, not committed)
 .aoa/aoa.db
