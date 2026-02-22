@@ -37,3 +37,18 @@ const dest = path.join(binDir, "aoa");
 try { fs.unlinkSync(dest); } catch {}
 fs.symlinkSync(binPath, dest);
 fs.chmodSync(dest, 0o755);
+
+// Guide users to make `aoa` available on PATH
+const isGlobal = process.env.npm_config_global === "true";
+if (!isGlobal) {
+  console.log("");
+  console.log("  \x1b[36maOa installed.\x1b[0m Run \x1b[1maoa init\x1b[0m to get started.");
+  console.log("");
+  console.log("  To add aoa to your PATH, add this to your shell profile (~/.bashrc or ~/.zshrc):");
+  console.log("");
+  console.log('    export PATH="./node_modules/.bin:$PATH"');
+  console.log("");
+  console.log("  Or run directly: ./node_modules/.bin/aoa");
+  console.log("  Or use: npx @mvpscale/aoa");
+  console.log("");
+}
