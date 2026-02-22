@@ -51,10 +51,8 @@ var enhanceFileCmd = &cobra.Command{
 var enhanceFilePath string
 
 func init() {
-	enhanceCmd.Flags().StringVar(&enhanceDB, "db", "", "path to bbolt database (required)")
-	enhanceCmd.Flags().StringVar(&enhanceRoot, "root", "", "project root directory (required)")
-	enhanceCmd.MarkFlagRequired("db")
-	enhanceCmd.MarkFlagRequired("root")
+	enhanceCmd.Flags().StringVar(&enhanceDB, "db", "", "path to bbolt database (auto-detected from .aoa/)")
+	enhanceCmd.Flags().StringVar(&enhanceRoot, "root", "", "project root directory (auto-detected from .aoa/)")
 
 	enhanceFileCmd.Flags().StringVar(&enhanceDB, "db", "", "path to bbolt database (required)")
 	enhanceFileCmd.Flags().StringVar(&enhanceFilePath, "file", "", "file to parse (required)")
@@ -74,11 +72,58 @@ var skipDirs = map[string]bool{
 	".aoa": true, ".next": true, "target": true, ".claude": true,
 }
 
+// findAoaRoot walks up from the given directory looking for a .aoa/ subdirectory.
+// Returns the directory containing .aoa/, or "" if not found.
+func findAoaRoot(start string) string {
+	dir := start
+	for {
+		candidate := filepath.Join(dir, ".aoa")
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
 func runEnhance(cmd *cobra.Command, args []string) error {
+	// Auto-detect root from .aoa/ directory if not specified
+	if enhanceRoot == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("get working directory: %w", err)
+		}
+		detected := findAoaRoot(cwd)
+		if detected == "" {
+			fmt.Fprintln(os.Stderr, "Error: no .aoa/ directory found.")
+			fmt.Fprintln(os.Stderr, "")
+			fmt.Fprintln(os.Stderr, "  Run 'aoa init' in your project root first, then run 'aoa-recon enhance'.")
+			os.Exit(1)
+		}
+		enhanceRoot = detected
+	}
+
 	absRoot, err := filepath.Abs(enhanceRoot)
 	if err != nil {
 		return fmt.Errorf("resolve root: %w", err)
 	}
+
+	// Auto-detect db path if not specified
+	if enhanceDB == "" {
+		enhanceDB = filepath.Join(absRoot, ".aoa", "aoa.db")
+	}
+
+	// Check that the database file exists
+	if _, err := os.Stat(enhanceDB); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Error: no database found at %s\n", enhanceDB)
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  Run 'aoa init' in your project root first to create the index.")
+		os.Exit(1)
+	}
+
 	projectID := filepath.Base(absRoot)
 
 	store, err := bbolt.NewStore(enhanceDB)

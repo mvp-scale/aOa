@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/corey/aoa/internal/adapters/bbolt"
@@ -34,6 +35,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens (%dms)\n",
 			result.FileCount, result.SymbolCount, result.TokenCount, result.ElapsedMs)
+		runReconIfAvailable(root, dbPath)
 		createShims()
 		return nil
 	}
@@ -52,7 +54,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 		return fmt.Errorf("open database: %w", err)
 	}
-	defer store.Close()
 
 	parser := newParser()
 
@@ -60,17 +61,41 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	idx, stats, err := app.BuildIndex(root, parser)
 	if err != nil {
+		store.Close()
 		return fmt.Errorf("build index: %w", err)
 	}
 
 	if err := store.SaveIndex(projectID, idx); err != nil {
+		store.Close()
 		return fmt.Errorf("save index: %w", err)
 	}
 
+	// Close store before recon to release bbolt single-writer lock.
+	store.Close()
+
 	fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens\n",
 		stats.FileCount, stats.SymbolCount, stats.TokenCount)
+	runReconIfAvailable(root, dbPath)
 	createShims()
 	return nil
+}
+
+// runReconIfAvailable invokes aoa-recon enhance if the binary is on PATH.
+// On failure it warns but does not fail init.
+func runReconIfAvailable(root, dbPath string) {
+	reconPath, err := exec.LookPath("aoa-recon")
+	if err != nil {
+		fmt.Println("  Tip: npm install -g @mvpscale/aoa-recon for structural analysis")
+		return
+	}
+
+	fmt.Println("⚡ Enhancing with aoa-recon...")
+	cmd := exec.Command(reconPath, "enhance", "--db", dbPath, "--root", root)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: aoa-recon enhance failed: %v\n", err)
+	}
 }
 
 // createShims writes grep and egrep shim scripts to ~/.aoa/shims/.
