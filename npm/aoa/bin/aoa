@@ -2,7 +2,9 @@
 "use strict";
 
 const { execFileSync } = require("child_process");
+const fs = require("fs");
 const os = require("os");
+const path = require("path");
 
 const PLATFORM_MAP = {
   "linux-x64": "@mvpscale/aoa-linux-x64",
@@ -28,6 +30,24 @@ function getBinaryPath() {
   console.error(`aoa: platform package ${pkg} not installed.`);
   console.error("Try reinstalling: npm install @mvpscale/aoa");
   process.exit(1);
+}
+
+// Show setup message once on first run
+const marker = path.join(os.homedir(), ".aoa", ".setup-shown");
+if (!fs.existsSync(marker)) {
+  const shimDir = path.join(os.homedir(), ".aoa", "shims");
+  console.error("");
+  console.error("  \x1b[36maOa installed.\x1b[0m Get started with: aoa init");
+  console.error("");
+  console.error("  To intercept AI tool searches, add to ~/.bashrc or ~/.zshrc:");
+  console.error("");
+  console.error(`    alias claude='PATH="${shimDir}:$PATH" claude'`);
+  console.error(`    alias gemini='PATH="${shimDir}:$PATH" gemini'`);
+  console.error("");
+  try {
+    fs.mkdirSync(path.join(os.homedir(), ".aoa"), { recursive: true });
+    fs.writeFileSync(marker, new Date().toISOString() + "\n");
+  } catch (_) {}
 }
 
 try {

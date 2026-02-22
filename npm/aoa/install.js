@@ -2,6 +2,7 @@
 "use strict";
 
 const os = require("os");
+const path = require("path");
 
 const PLATFORM_MAP = {
   "linux-x64": "@mvpscale/aoa-linux-x64",
@@ -14,8 +15,8 @@ const key = `${os.platform()}-${os.arch()}`;
 const pkg = PLATFORM_MAP[key];
 
 if (!pkg) {
-  process.stderr.write(`aoa: unsupported platform ${key}\n`);
-  process.stderr.write(`Supported: ${Object.keys(PLATFORM_MAP).join(", ")}\n`);
+  console.error(`aoa: unsupported platform ${key}`);
+  console.error(`Supported: ${Object.keys(PLATFORM_MAP).join(", ")}`);
   process.exit(1);
 }
 
@@ -23,9 +24,32 @@ if (!pkg) {
 try {
   require.resolve(`${pkg}/bin/aoa`);
 } catch {
-  process.stderr.write(`aoa: platform package ${pkg} not installed.\n`);
-  process.stderr.write("Try reinstalling: npm install @mvpscale/aoa\n");
+  console.error(`aoa: platform package ${pkg} not installed.`);
+  console.error("Try reinstalling: npm install @mvpscale/aoa");
   process.exit(1);
 }
 
-process.stderr.write("\n  \x1b[36maOa installed.\x1b[0m Run \x1b[1maoa init\x1b[0m to get started.\n\n");
+// Detect if this was a global install (bin goes on PATH automatically)
+const isGlobal = process.env.npm_config_global === "true";
+
+const home = os.homedir();
+const shimDir = path.join(home, ".aoa", "shims");
+
+console.log("");
+console.log("  \x1b[36maOa installed.\x1b[0m");
+console.log("");
+
+if (isGlobal) {
+  console.log("  Get started:");
+  console.log("    aoa init");
+} else {
+  console.log("  Get started:");
+  console.log("    npx aoa init");
+}
+
+console.log("");
+console.log("  To intercept AI tool searches, add to ~/.bashrc or ~/.zshrc:");
+console.log("");
+console.log(`    alias claude='PATH="${shimDir}:$PATH" claude'`);
+console.log(`    alias gemini='PATH="${shimDir}:$PATH" gemini'`);
+console.log("");
