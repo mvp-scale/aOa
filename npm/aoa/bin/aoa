@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+"use strict";
+
+const { execFileSync } = require("child_process");
+const os = require("os");
+
+const PLATFORM_MAP = {
+  "linux-x64": "@mvpscale/aoa-linux-x64",
+  "linux-arm64": "@mvpscale/aoa-linux-arm64",
+  "darwin-x64": "@mvpscale/aoa-darwin-x64",
+  "darwin-arm64": "@mvpscale/aoa-darwin-arm64",
+};
+
+function getBinaryPath() {
+  const key = `${os.platform()}-${os.arch()}`;
+  const pkg = PLATFORM_MAP[key];
+
+  if (!pkg) {
+    console.error(`aoa: unsupported platform ${key}`);
+    console.error(`Supported: ${Object.keys(PLATFORM_MAP).join(", ")}`);
+    process.exit(1);
+  }
+
+  try {
+    return require.resolve(`${pkg}/bin/aoa`);
+  } catch (e) {}
+
+  console.error(`aoa: platform package ${pkg} not installed.`);
+  console.error("Try reinstalling: npm install @mvpscale/aoa");
+  process.exit(1);
+}
+
+try {
+  execFileSync(getBinaryPath(), process.argv.slice(2), {
+    stdio: "inherit",
+    env: process.env,
+  });
+} catch (e) {
+  if (e && e.status) process.exit(e.status);
+  throw e;
+}
