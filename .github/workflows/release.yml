@@ -152,7 +152,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/aoa-*
+            release/aoa-linux-*
+            release/aoa-darwin-*
             release/aoa-recon-*
             release/checksums.txt
           generate_release_notes: true
