@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build:
@@ -164,13 +165,19 @@ jobs:
     name: Publish to npm
     needs: release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
+
+      - name: Ensure npm >= 11.5.1 for trusted publishing
+        run: npm install -g npm@latest && npm --version
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -219,17 +226,13 @@ jobs:
           done
 
       - name: Publish platform packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           for dir in npm/aoa-linux-* npm/aoa-darwin-* npm/aoa-recon-linux-* npm/aoa-recon-darwin-*; do
             echo "Publishing $(basename $dir)..."
-            cd "$dir" && npm publish --access public && cd ../..
+            npm publish "./$dir" --access public --provenance
           done
 
       - name: Publish wrapper packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd npm/aoa && npm publish --access public --tag latest && cd ../..
-          cd npm/aoa-recon && npm publish --access public --tag latest && cd ../..
+          npm publish ./npm/aoa --access public --provenance
+          npm publish ./npm/aoa-recon --access public --provenance
