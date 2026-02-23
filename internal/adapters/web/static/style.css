@@ -776,7 +776,14 @@ body {
   border-bottom: 1px solid var(--border-subtle); gap: 8px; font-size: 12px;
   background: var(--bg);
 }
+.finding-peek { cursor: pointer; }
+.finding-peek:hover { background: var(--card-hover, rgba(255,255,255,0.03)); }
+.finding-peek-active { background: var(--card-hover, rgba(255,255,255,0.03)); }
 .finding-row:last-child { border-bottom: none; }
+.finding-line {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--mute);
+  white-space: nowrap; flex-shrink: 0; min-width: 36px;
+}
 .finding-sev {
   flex-shrink: 0; font-size: 9px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.3px; padding: 1px 5px; border-radius: 3px; white-space: nowrap;
@@ -792,9 +799,10 @@ body {
   flex: 1; color: var(--dim); font-size: 11px; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.finding-line {
-  font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--mute);
-  white-space: nowrap; flex-shrink: 0;
+.finding-code {
+  flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--text-secondary); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* ══════════════════════════════════════════════════════════

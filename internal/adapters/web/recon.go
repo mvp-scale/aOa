@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"strconv"
+	"time"
 
 	"github.com/corey/aoa/internal/adapters/recon"
 	"github.com/corey/aoa/internal/adapters/socket"
@@ -53,10 +55,12 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 	}
 	response := struct {
 		*recon.Result
-		ReconAvailable bool `json:"recon_available"`
+		ReconAvailable bool  `json:"recon_available"`
+		ScannedAt      int64 `json:"scanned_at"`
 	}{
 		Result:         result,
 		ReconAvailable: reconAvailable,
+		ScannedAt:      time.Now().Unix(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -138,16 +142,107 @@ func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[s
 	}
 	response := struct {
 		*recon.Result
-		ReconAvailable  bool `json:"recon_available"`
-		DimensionalMode bool `json:"dimensional_mode"`
+		ReconAvailable  bool  `json:"recon_available"`
+		DimensionalMode bool  `json:"dimensional_mode"`
+		ScannedAt       int64 `json:"scanned_at"`
 	}{
 		Result:          result,
 		ReconAvailable:  reconAvailable,
 		DimensionalMode: true,
+		ScannedAt:       time.Now().Unix(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// handleSourceLine returns source lines from the in-memory file cache.
+// GET /api/source-line?file=relative/path.go&line=12&context=2
+func (s *Server) handleSourceLine(w http.ResponseWriter, r *http.Request) {
+	if s.idx == nil || s.engine == nil {
+		http.Error(w, `{"error":"index not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	filePath := r.URL.Query().Get("file")
+	lineStr := r.URL.Query().Get("line")
+	ctxStr := r.URL.Query().Get("context")
+
+	if filePath == "" || lineStr == "" {
+		http.Error(w, `{"error":"file and line required"}`, http.StatusBadRequest)
+		return
+	}
+
+	lineNum, err := strconv.Atoi(lineStr)
+	if err != nil || lineNum < 1 {
+		http.Error(w, `{"error":"invalid line number"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctxLines := 0
+	if ctxStr != "" {
+		ctxLines, _ = strconv.Atoi(ctxStr)
+	}
+	if ctxLines < 0 {
+		ctxLines = 0
+	}
+	if ctxLines > 5 {
+		ctxLines = 5
+	}
+
+	// Find file ID by path
+	fc := s.engine.Cache()
+	if fc == nil {
+		http.Error(w, `{"error":"file cache not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	var fileID uint32
+	found := false
+	for id, fm := range s.idx.Files {
+		if fm.Path == filePath {
+			fileID = id
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.Error(w, `{"error":"file not in index"}`, http.StatusNotFound)
+		return
+	}
+
+	lines := fc.GetLines(fileID)
+	if lines == nil {
+		http.Error(w, `{"error":"file not in cache"}`, http.StatusNotFound)
+		return
+	}
+
+	// Extract the requested line plus context
+	startLine := lineNum - ctxLines
+	if startLine < 1 {
+		startLine = 1
+	}
+	endLine := lineNum + ctxLines
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+
+	type sourceLine struct {
+		Line    int    `json:"line"`
+		Content string `json:"content"`
+		IsMatch bool   `json:"is_match"`
+	}
+	result := make([]sourceLine, 0, endLine-startLine+1)
+	for i := startLine; i <= endLine; i++ {
+		result = append(result, sourceLine{
+			Line:    i,
+			Content: lines[i-1], // 0-indexed array, 1-indexed lines
+			IsMatch: i == lineNum,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 // inferTierDim maps a rule ID to its tier and dimension.

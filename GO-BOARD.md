@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-20 (Session 64) | **Phase**: L6 — Two-binary distribution (aoa + aoa-recon). Parser interface decoupled, pure Go binary (CGO_ENABLED=0), tokenization-only fallback, recon bridge (git-lfs model), npm packaging, CI/release pipeline.
+> **Updated**: 2026-02-22 (Session 65) | **Phase**: L6 — Two-binary distribution (aoa + aoa-recon). Parser interface decoupled, pure Go binary (CGO_ENABLED=0), tokenization-only fallback, recon bridge (git-lfs model), npm packaging, CI/release pipeline. **84% complete.**
 > **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 + L3.2–L3.14 + L4.1–L4.3 + L6.1–L6.10 (470+ active tests, 32 skipped)
 
 ---
@@ -38,6 +38,7 @@
 | **L4** | Distribution | Goreleaser, grammar loader, install docs | `go install` or binary download works on linux/darwin × amd64/arm64 |
 | **L5** | Dimensional Analysis | Bitmask engine, 6-tier scanning, Recon tab | Security tier catches known vulns in test projects; query time < 10ms |
 | **L6** | Distribution v2 | Two-binary split, npm packaging, zero-friction install | `npm install -g aoa` works; `npm install -g aoa-recon` lights up Recon tab |
+| **L7** | Onboarding UX | First-run experience, progress feedback, expectation setting | User sees meaningful progress during startup; understands system is working |
 
 ### Columns
 
@@ -72,7 +73,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Session 64 replaced 28 individual upstream grammar imports with 509 grammars from [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest). `aoa-recon` now compiles all 509 languages (361 MB binary). Extension mappings expanded from 97 to 163. `aoa` pure Go binary unchanged (11 MB, CGO_ENABLED=0). Code generator (`gen_forest.go`) scans forest sub-packages and produces `languages_forest.go`. All 470+ tests pass. Session 63 delivered L6 (Two-binary distribution). `ports.Parser` interface decouples domain from adapter. Tokenization-only fallback enables file-level search without any CGo. `ReconBridge` discovers `aoa-recon` on PATH and invokes as subprocess (git-lfs model). Dashboard shows install prompt when recon not available. npm package structure follows esbuild/turbo pattern (wrapper + platform packages). CI workflow builds 8 binaries and publishes to npm on tag push.
+**Current**: Session 65 delivered two major features: (1) **GNU grep parity** — `aoa grep`/`aoa egrep` now handle three execution modes natively (file args, stdin piping, index search), 22 of 28 GNU grep flags implemented, 100% coverage of observed AI agent usage. Piped output auto-strips ANSI. Falls back to `/usr/bin/grep` for rare flags. (2) **Recon findings peek** — dashboard finding rows are clickable, toggling between description and live source line from the in-memory FileCache (zero disk I/O). Scan freshness indicator ("scanned Xs ago"). Noise filtering: drill-down only shows findings from tiers that registered at the file level, suppressing low-severity evidence that didn't accumulate enough signal. New `/api/source-line` endpoint serves lines from cache. Session 64 replaced 28 individual upstream grammar imports with 509 grammars from [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest). Session 63 delivered L6 (Two-binary distribution).
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -137,6 +138,13 @@
 - **57-language manifest with priority tiers** — `BuiltinManifest()` embedded in binary. P1 Core (11 langs every dev uses), P2 Common (11 langs most devs use), P3 Extended (17 niche but real), P4 Specialist (18 domain-specific). `aoa grammar list` shows tier/status at a glance.
 - **Individual .so files, not regional bundles** — Simpler to build, simpler to download individually. Pack tarballs (core/common/extended/specialist) for bulk download.
 
+**Design Decisions Locked** (Session 65):
+- **GNU grep three-route architecture** — `runGrep()` routes: (1) file args present → `grepFiles()` native Go line filter, (2) stdin is pipe → `grepStdin()` native Go filter, (3) neither → daemon index search, fallback to `/usr/bin/grep` if daemon down. File args take priority over stdin detection. 22 flags implemented natively. `grepExit{code}` type propagates GNU exit codes (0/1/2) through cobra. Output auto-switches to `file:line:content` format when stdout is not a TTY.
+- **Grep parity coverage model** — 22 of 28 GNU grep flags native (100% of observed AI agent usage). Remaining 6 flags (`-P`, `-x`, `-f`, `-b`, `-Z`, `-R`) never seen in agent session logs (<4% of flag surface). System grep fallback covers edge cases. README documents alignment honestly: "100% of AI agent use cases tested, <4% flag surface forwarded to system grep."
+- **Recon findings peek = view toggle, not expand** — Click a finding row: description text swaps to live source line from FileCache. Click again: swaps back. No persistence, no disk I/O. `/api/source-line?file=X&line=12&context=0` resolves file path to ID, reads from in-memory cache. Finding row layout reordered: line number left, severity, rule ID, then toggleable desc/code.
+- **Recon tier noise gating** — File-level drill-down only shows findings from tiers that registered > 0 at the file level. If PERF=0 at the file row, performance findings are suppressed in the method view. Individual low-severity warnings are evidence; only surface them when enough accumulate to register as a real concern. `reconAggregateFile()` computes active tiers, `elevatedFindings` filter applied before grouping by symbol.
+- **Scan freshness indicator** — `/api/recon` response includes `scanned_at` (unix timestamp). Hero support line shows "scanned just now" / "12s ago" / "3m ago". Sets user expectation that data reflects the current cache state.
+
 **Design Decisions Locked** (Session 64):
 - **go-sitter-forest sub-package imports** — Import each forest sub-package directly (e.g., `go-sitter-forest/python`), NOT the root `forest.go`. Root depends on `go-tree-sitter-bare` (different bindings), causing duplicate C runtime symbols at link time. Sub-packages export `GetLanguage() unsafe.Pointer` with zero Go dependencies — just CGo to compile `parser.c`. Wrapped with `tree_sitter.NewLanguage()` from official bindings.
 - **Code generator for grammar registration** — `gen_forest.go` (`//go:build ignore`) scans `_tmp_sitter_forest/go-sitter-forest-main/*/binding.go`, extracts package names, generates `languages_forest.go` with 509 imports and `registerBuiltinLanguages()`. Uniform `forest_` alias prefix avoids keyword conflicts (`go`, `func`), stdlib conflicts (`context`), and package name mismatches (`Go`, `ConTeXt`, `FunC`).
@@ -169,8 +177,12 @@
 - **Actions tab: web search/fetch token costs** — Web search and web fetch activities show data size (~200 KB download) but don't display associated token costs. These API calls consume tokens and should be accounted for in the savings metrics. Need to capture token usage from web search/fetch events in the JSONL session log and surface it in the actions table.
 - **Actions tab: agent/subagent activity** — When Claude Code spawns subagents (Task tool), the actions table doesn't reflect their activity. Should at minimum show a summary row for agent invocations (agent type, task description, duration, token cost) rather than listing every individual tool call the agent makes — otherwise the table gets too noisy.
 
-**Needs Discussion** (before L3):
-- **Alias strategy** — Goal is replacing `grep` itself. `grep auth` → `aoa grep auth` transparently. Graceful degradation on unsupported flags?
+**Known Issues / UX Gaps** (Session 65):
+- **Startup progress feedback** — Daemon startup takes 20-30s on large projects (tree-sitter indexing + recon enhance). During this time the user sees nothing — just a spinner with no indication of progress. `aoa daemon restart` can timeout waiting for readiness. Need: file count progress, "indexing N files...", "enhancing...", percent complete. This is L7.1.
+- **Finding ignore/dismiss** — Recon findings can't be suppressed. Users see false positives (e.g., scanner flagging its own rule definitions for `password=` patterns) with no way to mark them as reviewed. Future: `.aoa/ignore` file with rules like `hardcoded_secret:rules_security.go`, dashboard dismiss button writes to it.
+
+**Resolved Discussion Items**:
+- **Alias strategy** — Resolved (Session 65). `aoa grep`/`aoa egrep` now handle file args, stdin piping, and index search natively. 22 GNU grep flags implemented. Falls back to `/usr/bin/grep` for unrecognized flags. Shims in `~/.aoa/shims/` replace grep transparently for AI agents.
 - **Real-time conversation** — Resolved (Session 58). Debrief tab now polls at 1s (vs 3s for other tabs). Auto-scroll sticks to bottom when user is near the live edge. Floating "Now ↓" button for jump-back after scrolling up. Thinking text appears within ~1s of generation.
 
 ---
@@ -245,6 +257,9 @@
 | [L6](#layer-6) | [L6.8](#l68) | | | x | | | | | L6.2 | 🟢 | 🟢 | 🟡 | npm package structure — wrapper packages + platform packages + JS shims | Zero-friction install via npm | `npm/aoa/` + `npm/aoa-{platform}/` with postinstall shim; esbuild/turbo pattern |
 | [L6](#layer-6) | [L6.9](#l69) | | | x | | | | | L6.4, L6.8 | 🟢 | 🟢 | 🟡 | npm recon package structure — wrapper + platform packages for aoa-recon | Zero-friction recon install | `npm/aoa-recon/` + `npm/aoa-recon-{platform}/` — same pattern as L6.8 |
 | [L6](#layer-6) | [L6.10](#l610) | | | x | | | | | L6.8, L6.9 | 🟡 | 🟢 | 🟡 | CI/Release — workflow builds both binaries, publishes to npm | Tag → build → publish, fully automated | `.github/workflows/release.yml` (8 matrix jobs + npm publish) |
+| [L3](#layer-3) | [L3.15](#l315) | | x | | x | | | | - | 🟢 | 🟢 | 🟡 | GNU grep native parity — 3 modes, 22 flags, stdin/files/index routing | Drop-in grep replacement for AI agents | Smoke tests: stdin pipe, file grep, recursive, exit codes, no ANSI. **Gap**: no automated parity test suite yet |
+| [L5](#layer-5) | [L5.13](#l513) | | | | | | | x | L5.12 | 🟢 | 🟢 | 🟡 | Recon findings peek — source line toggle, tier noise filter, scan age | Findings are actionable, not just labels | `/api/source-line` endpoint; click toggles desc↔code; tier gating filters noise. **Gap**: browser-only validation |
+| [L7](#layer-7) | [L7.1](#l71) | | | | x | | | x | - | 🟡 | ⚪ | ⚪ | Startup progress feedback — file count, scan progress, time remaining | Users don't know daemon is working during 20-30s startup | Show indexing progress: files scanned, symbols found, percent complete |
 
 ---
 
@@ -522,6 +537,24 @@ Step-by-step: stop Python daemon, install Go binary, migrate bbolt data (or re-i
 
 **Files**: `docs/migration.md`
 
+#### L3.15
+
+**GNU grep native parity** — 🟢 Complete (Session 65)
+
+Three-route architecture makes `aoa grep`/`aoa egrep` drop-in replacements for GNU grep. 22 flags implemented natively covering 100% of observed AI agent usage. Piped output auto-strips ANSI codes. System grep fallback for rare flags.
+
+**Execution modes:**
+- File args present → `grepFiles()` — native Go line-by-line search
+- Stdin is pipe (no file args) → `grepStdin()` — native Go stdin filter
+- Neither → daemon index search → fallback to `/usr/bin/grep` if daemon down
+
+**22 native flags:** `-i`, `-w`, `-c`, `-q`, `-v`, `-m`, `-E`, `-e`, `-F`, `-n`, `-H`, `-h`, `-l`, `-L`, `-o`, `-r`, `-A`, `-B`, `-C`, `-a`, `--include/--exclude/--exclude-dir`, `--color`
+
+**GNU compat details:** exit codes 0/1/2, `file:line:content` format, `--` group separators, binary detection (NUL in first 512 bytes), multi-file filename prefix, ANSI auto-strip when not TTY.
+
+**New files:** `cmd/aoa/cmd/tty.go`, `grep_native.go`, `grep_fallback.go`, `grep_exit.go`
+**Modified:** `cmd/aoa/cmd/grep.go`, `egrep.go`, `output.go`, `cmd/aoa/main.go`
+
 ---
 
 ### Layer 4
@@ -734,6 +767,20 @@ NER-style dimensional view: tier toggle sidebar (5 tiers, color-coded), file→f
 
 **Files**: `internal/adapters/recon/scanner.go` (extracted from web/recon.go), `internal/adapters/web/recon.go` (thin handler calling shared scanner), `internal/domain/index/search.go` (Cache accessor), `internal/adapters/web/server.go` (route), `internal/adapters/web/static/index.html`, `style.css`, `app.js`
 
+#### L5.13
+
+**Recon findings peek + tier noise gating** — 🟢 Complete (Session 65)
+
+Three enhancements to the Recon findings UX:
+
+1. **Source line peek**: Finding rows are clickable. Click toggles between description text ("Potential hardcoded secret") and the actual source line from the in-memory FileCache. Zero disk I/O — reads from the same cache used for search. New `GET /api/source-line?file=X&line=12&context=0` endpoint resolves path→fileID→cache line.
+
+2. **Tier noise gating**: File-level drill-down filters findings to only show tiers that registered > 0 at the file level. If `content_test.go` shows PERF=0, performance-tier findings are hidden when drilling into that file. Prevents walls of low-severity warnings from tiers that didn't accumulate enough signal. `reconAggregateFile()` computes active tiers; `elevatedFindings` filter applied before grouping by symbol.
+
+3. **Scan freshness**: `/api/recon` response includes `scanned_at` timestamp. Hero support line shows "scanned just now" / "scanned 12s ago" / "scanned 3m ago".
+
+**Files**: `internal/adapters/web/recon.go` (handleSourceLine, scanned_at), `internal/adapters/web/server.go` (route), `internal/adapters/web/static/app.js` (peek handler, tier filter, scan age), `internal/adapters/web/static/style.css` (finding-peek, finding-code)
+
 ---
 
 ### Layer 6
@@ -838,6 +885,37 @@ Release workflow builds 8 binaries (2 binaries × 4 platforms), creates GitHub r
 | File watcher (L2, 5 new tests) | `fsnotify` → `onFileChanged` → re-parse → `Rebuild()` → `SaveIndex()`. Add/modify/delete. |
 | Invert-match (L2, 8 new tests) | `-v` flag for grep/egrep. Symbol complement + content matcher flip. All 4 modes. |
 | Reindex protocol (L2, 4 new tests) | `BuildIndex()` shared function. `aoa init` delegates to daemon or runs direct. No more lock errors. |
+
+---
+
+### Layer 7
+
+**Layer 7: Onboarding UX (First-run experience, progress feedback)**
+
+> Users don't know the system is working. A 20-30s silent startup with no feedback creates uncertainty and distrust.
+> **Quality Gate**: User sees meaningful progress during daemon startup and `aoa init`.
+
+#### L7.1
+
+**Startup progress feedback** — ⚪ Not started
+
+Problem: `aoa daemon start` and `aoa init` take 20-30s on large projects. During this time the user sees a spinner with no indication of what's happening. `aoa daemon restart` can timeout before indexing completes.
+
+Needed:
+- File count progress during indexing: "Indexing... 234/500 files (47%)"
+- Symbol count as they're discovered
+- Phase indication: "Indexing files..." → "Building search index..." → "Running recon enhance..."
+- Time since start (not time remaining — too unreliable)
+- `aoa daemon restart` timeout should be more forgiving, or show intermediate status
+
+Approach TBD — options include:
+- Progress callback in `BuildIndex()` that writes to stderr
+- Socket-based progress query (`/api/indexing-status`) for dashboard
+- Log-based progress (daemon.log entries per 100 files)
+
+**Files**: `internal/app/indexer.go`, `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/daemon.go`
+
+---
 
 ### What We're NOT Doing
 

@@ -1577,11 +1577,13 @@ function reconMethodRowHtml(name, findings) {
   });
 
   filtered.forEach(function(f) {
-    h += '<div class="finding-row">' +
+    var filePath = (reconFolder === '.' ? '' : reconFolder + '/') + reconFile;
+    h += '<div class="finding-row finding-peek" data-file="' + escapeHtml(filePath) + '" data-line="' + f.line + '">' +
+      '<span class="finding-line">L:' + f.line + '</span>' +
       '<span class="finding-sev ' + f.severity + '">' + f.severity + '</span>' +
       '<span class="finding-id">' + escapeHtml(f.id) + '</span>' +
       '<span class="finding-desc">' + escapeHtml(f.label) + '</span>' +
-      '<span class="finding-line">L:' + f.line + '</span></div>';
+      '<span class="finding-code" style="display:none"></span></div>';
   });
 
   return h;
@@ -1632,6 +1634,11 @@ function renderRecon() {
   sup.push('<span class="p">' + activeDimCount + '</span> dims active');
   if (!data.recon_available) {
     sup.push('<span class="p" title="Install aoa-recon for symbol-level scanning">lite mode</span>');
+  }
+  if (data.scanned_at) {
+    var ago = Math.max(0, Math.floor(Date.now() / 1000 - data.scanned_at));
+    var agoStr = ago < 5 ? 'just now' : ago < 60 ? ago + 's ago' : Math.floor(ago / 60) + 'm ago';
+    sup.push('<span class="g" title="Cache snapshot age">scanned ' + agoStr + '</span>');
   }
   setHtml('heroSupport-recon', sup.join(' &middot; '));
 
@@ -1765,9 +1772,24 @@ function renderReconTree(data) {
       document.getElementById('reconTreeBadge').textContent = symbols.length + ' symbols';
       h += reconColHeaderHtml();
 
+      // Compute which tiers have nonzero counts at the file level.
+      // Only show findings from tiers that actually registered — tiers with
+      // zero file-level score are noise (individual low-severity warnings
+      // that didn't accumulate enough to be a real concern).
+      var fileAgg = reconAggregateFile(data, reconFolder, reconFile);
+      var activeTiers = {};
+      Object.keys(fileAgg.byCat).forEach(function(tid) {
+        if (fileAgg.byCat[tid] > 0) activeTiers[tid] = true;
+      });
+
+      // Filter findings to only tiers that surfaced at file level
+      var elevatedFindings = reconFilterFindings(fileData.findings).filter(function(f) {
+        return activeTiers[f.tier_id];
+      });
+
       // Group findings by symbol
       var findingsBySymbol = {};
-      (fileData.findings || []).forEach(function(f) {
+      elevatedFindings.forEach(function(f) {
         var sym = f.symbol || '(package-level)';
         if (!findingsBySymbol[sym]) findingsBySymbol[sym] = [];
         findingsBySymbol[sym].push(f);
@@ -1821,6 +1843,56 @@ function renderReconTree(data) {
       });
     });
   }
+
+  // Finding peek: click toggles between description and source line
+  wrap.querySelectorAll('.finding-peek').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var row = this;
+      var descEl = row.querySelector('.finding-desc');
+      var codeEl = row.querySelector('.finding-code');
+      if (!descEl || !codeEl) return;
+
+      // Toggle: if code is visible, swap back to description
+      if (codeEl.style.display !== 'none') {
+        codeEl.style.display = 'none';
+        descEl.style.display = '';
+        row.classList.remove('finding-peek-active');
+        return;
+      }
+
+      // If code already fetched, just show it
+      if (codeEl.getAttribute('data-loaded')) {
+        descEl.style.display = 'none';
+        codeEl.style.display = '';
+        row.classList.add('finding-peek-active');
+        return;
+      }
+
+      // Fetch source line from cache
+      var file = row.getAttribute('data-file');
+      var line = row.getAttribute('data-line');
+      codeEl.textContent = 'loading...';
+      descEl.style.display = 'none';
+      codeEl.style.display = '';
+
+      fetch('/api/source-line?file=' + encodeURIComponent(file) + '&line=' + line + '&context=0')
+        .then(function(r) { return r.json(); })
+        .then(function(lines) {
+          if (lines && lines.length > 0) {
+            codeEl.textContent = lines[0].content;
+          } else {
+            codeEl.textContent = '(line not in cache)';
+          }
+          codeEl.setAttribute('data-loaded', '1');
+          row.classList.add('finding-peek-active');
+        })
+        .catch(function() {
+          codeEl.textContent = '(unavailable)';
+          codeEl.setAttribute('data-loaded', '1');
+          row.classList.add('finding-peek-active');
+        });
+    });
+  });
 }
 
 function reconAggregateFolder(data, folder) {
