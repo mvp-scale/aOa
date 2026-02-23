@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](.context/COMPLETED.md) | [Backlog](.context/BACKLOG.md)
 
-> **Updated**: 2026-02-22 (Session 65) | **Phase**: L6 — Two-binary distribution (aoa + aoa-recon). Parser interface decoupled, pure Go binary (CGO_ENABLED=0), tokenization-only fallback, recon bridge (git-lfs model), npm packaging, CI/release pipeline. **84% complete.**
-> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 + L3.2–L3.14 + L4.1–L4.3 + L6.1–L6.10 (470+ active tests, 32 skipped)
+> **Updated**: 2026-02-23 (Session 66) | **Phase**: L7 — Onboarding UX + Recon hardening. Deferred startup, recon cache with incremental updates, investigation tracking, dashboard recon overhaul. **86% complete.**
+> **Completed work**: See [COMPLETED.md](.context/COMPLETED.md) — Phases 1–8c + L0 + L1 + L2 + L3.2–L3.14 + L4.1–L4.3 + L5.13–L5.15 + L6.1–L6.10 + L7.1 (470+ active tests, 32 skipped)
 
 ---
 
@@ -73,7 +73,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search — and proves it with measurable savings.
 
-**Current**: Session 65 delivered two major features: (1) **GNU grep parity** — `aoa grep`/`aoa egrep` now handle three execution modes natively (file args, stdin piping, index search), 22 of 28 GNU grep flags implemented, 100% coverage of observed AI agent usage. Piped output auto-strips ANSI. Falls back to `/usr/bin/grep` for rare flags. (2) **Recon findings peek** — dashboard finding rows are clickable, toggling between description and live source line from the in-memory FileCache (zero disk I/O). Scan freshness indicator ("scanned Xs ago"). Noise filtering: drill-down only shows findings from tiers that registered at the file level, suppressing low-severity evidence that didn't accumulate enough signal. New `/api/source-line` endpoint serves lines from cache. Session 64 replaced 28 individual upstream grammar imports with 509 grammars from [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest). Session 63 delivered L6 (Two-binary distribution).
+**Current**: Session 66 delivered three major recon enhancements: (1) **Recon cache + incremental updates** — scanner pre-computes results at startup (`warmReconCache`), serves cached JSON instantly; file watcher triggers `SubtractFile`/`ScanFile`/`AddFile` for incremental updates on every file change. Zero per-poll scan cost. (2) **Investigation tracking** — per-file investigated status with `SetFileInvestigated`/`ClearInvestigated`, persisted to `.aoa/recon-investigated.json`, auto-pruned after 1 week, auto-cleared on file change. New `POST /api/recon-investigate` endpoint. Dashboard shows investigated tier with toggle. (3) **Dashboard Recon overhaul** — 5 focus modes (Recon/Critical/Warning/Info/All), tier colors decoupled from severity (no traffic-light confusion), tier badge on every finding, code toggle with source cache, Copy Prompt generates grep-style output with taxonomy for pasting into Claude Code, investigation UI per file. Session 65 delivered GNU grep parity and findings peek. Session 64 replaced 28 grammar imports with 509 via go-sitter-forest. Session 63 delivered L6 (Two-binary distribution).
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -138,6 +138,14 @@
 - **57-language manifest with priority tiers** — `BuiltinManifest()` embedded in binary. P1 Core (11 langs every dev uses), P2 Common (11 langs most devs use), P3 Extended (17 niche but real), P4 Specialist (18 domain-specific). `aoa grammar list` shows tier/status at a glance.
 - **Individual .so files, not regional bundles** — Simpler to build, simpler to download individually. Pack tarballs (core/common/extended/specialist) for bulk download.
 
+**Design Decisions Locked** (Session 66):
+- **Recon cache architecture** — Pre-compute full scan at startup via `warmReconCache()`. Serve from memory via `CachedReconResult()` (RWMutex-protected). File watcher triggers incremental updates: `SubtractFile()` removes old contribution, `ScanFile()` re-scans with fresh symbols/lines, `AddFile()` merges new contribution. Full re-scan after reindex. Zero per-poll scan cost — API returns cached JSON instantly.
+- **Investigation tracking with auto-expiry** — `investigatedFiles map[string]int64` (relPath → unix timestamp). Persisted to `.aoa/recon-investigated.json`. Auto-pruned on load (entries >1 week removed). Auto-cleared on file change via `clearFileInvestigated()` in watcher — forces re-triage after modification. `POST /api/recon-investigate` with actions: add, remove, clear. Recon API response includes `investigated_files` array.
+- **Recon dashboard five focus modes** — Toolbar buttons: Recon (hides info-level, default), Critical, Warning, Info, All. Filters findings at display time. Severity-based focus, not tier-based — orthogonal to dimension toggles.
+- **Tier colors decoupled from severity** — Pink (security), cyan (performance), purple (quality), orange (architecture), green (observability). Avoids traffic-light confusion where red/yellow/green mapped to both tiers and severity levels simultaneously. Tier badge (SEC/PERF/QUAL/ARCH/OBS) on every finding row.
+- **Copy Prompt for Claude Code** — Generates grep-style output with file path header, taxonomy (domains/rules affected), affected symbols, and call-graph guidance. `navigator.clipboard.writeText()`. Button shows "Paste in Claude Code ↗" feedback. Designed to provide actionable context when pasted into an agent session.
+- **Investigated tier in dashboard** — Treated as a virtual tier alongside SEC/PERF/QUAL/ARCH/OBS. Toggle on/off in dimension sidebar. Solo mode: when only `investigated` is toggled on, shows only investigated files. Context-dependent button labels: "Investigated" (to mark) / "Uninvestigate" (to unmark).
+
 **Design Decisions Locked** (Session 65):
 - **GNU grep three-route architecture** — `runGrep()` routes: (1) file args present → `grepFiles()` native Go line filter, (2) stdin is pipe → `grepStdin()` native Go filter, (3) neither → daemon index search, fallback to `/usr/bin/grep` if daemon down. File args take priority over stdin detection. 22 flags implemented natively. `grepExit{code}` type propagates GNU exit codes (0/1/2) through cobra. Output auto-switches to `file:line:content` format when stdout is not a TTY.
 - **Grep parity coverage model** — 22 of 28 GNU grep flags native (100% of observed AI agent usage). Remaining 6 flags (`-P`, `-x`, `-f`, `-b`, `-Z`, `-R`) never seen in agent session logs (<4% of flag surface). System grep fallback covers edge cases. README documents alignment honestly: "100% of AI agent use cases tested, <4% flag surface forwarded to system grep."
@@ -177,11 +185,12 @@
 - **Actions tab: web search/fetch token costs** — Web search and web fetch activities show data size (~200 KB download) but don't display associated token costs. These API calls consume tokens and should be accounted for in the savings metrics. Need to capture token usage from web search/fetch events in the JSONL session log and surface it in the actions table.
 - **Actions tab: agent/subagent activity** — When Claude Code spawns subagents (Task tool), the actions table doesn't reflect their activity. Should at minimum show a summary row for agent invocations (agent type, task description, duration, token cost) rather than listing every individual tool call the agent makes — otherwise the table gets too noisy.
 
-**Known Issues / UX Gaps** (Session 65):
-- **Startup progress feedback** — Daemon startup takes 20-30s on large projects (tree-sitter indexing + recon enhance). During this time the user sees nothing — just a spinner with no indication of progress. `aoa daemon restart` can timeout waiting for readiness. Need: file count progress, "indexing N files...", "enhancing...", percent complete. This is L7.1.
-- **Finding ignore/dismiss** — Recon findings can't be suppressed. Users see false positives (e.g., scanner flagging its own rule definitions for `password=` patterns) with no way to mark them as reviewed. Future: `.aoa/ignore` file with rules like `hardcoded_secret:rules_security.go`, dashboard dismiss button writes to it.
+**Known Issues / UX Gaps** (Session 66):
+- **Finding ignore/dismiss (partial)** — Investigation tracking (L5.15) lets users mark files as reviewed, but there is no per-finding or per-rule suppression yet. Users can investigate a file to acknowledge its findings; status auto-clears on file change. Future: `.aoa/ignore` file with rules like `hardcoded_secret:rules_security.go` for permanent per-rule suppression.
 
 **Resolved Discussion Items**:
+- **Startup progress feedback** — Resolved (Session 66). Deferred all heavy IO to background after socket/HTTP are up. Daemon responds in 0.1s. `WarmCaches()` runs index load → learner → file cache → recon scan with step-by-step logging. Dashboard works immediately; data populates as caches warm.
+- **Finding ignore/dismiss (partial)** — Partially resolved (Session 66). Investigation tracking (L5.15) allows per-file acknowledgment with auto-expiry. Not yet per-finding or per-rule.
 - **Alias strategy** — Resolved (Session 65). `aoa grep`/`aoa egrep` now handle file args, stdin piping, and index search natively. 22 GNU grep flags implemented. Falls back to `/usr/bin/grep` for unrecognized flags. Shims in `~/.aoa/shims/` replace grep transparently for AI agents.
 - **Real-time conversation** — Resolved (Session 58). Debrief tab now polls at 1s (vs 3s for other tabs). Auto-scroll sticks to bottom when user is near the live edge. Floating "Now ↓" button for jump-back after scrolling up. Thinking text appears within ~1s of generation.
 
@@ -258,10 +267,13 @@
 | [L6](#layer-6) | [L6.9](#l69) | | | x | | | | | L6.4, L6.8 | 🟢 | 🟢 | 🟡 | npm recon package structure — wrapper + platform packages for aoa-recon | Zero-friction recon install | `npm/aoa-recon/` + `npm/aoa-recon-{platform}/` — same pattern as L6.8 |
 | [L6](#layer-6) | [L6.10](#l610) | | | x | | | | | L6.8, L6.9 | 🟡 | 🟢 | 🟡 | CI/Release — workflow builds both binaries, publishes to npm | Tag → build → publish, fully automated | `.github/workflows/release.yml` (8 matrix jobs + npm publish) |
 | [L3](#layer-3) | [L3.15](#l315) | | x | | x | | | | - | 🟢 | 🟢 | 🟡 | GNU grep native parity — 3 modes, 22 flags, stdin/files/index routing | Drop-in grep replacement for AI agents | Smoke tests: stdin pipe, file grep, recursive, exit codes, no ANSI. **Gap**: no automated parity test suite yet |
-| [L5](#layer-5) | [L5.13](#l513) | | | | | | | x | L5.12 | 🟢 | 🟢 | 🟡 | Recon findings peek — source line toggle, tier noise filter, scan age | Findings are actionable, not just labels | `/api/source-line` endpoint; click toggles desc↔code; tier gating filters noise. **Gap**: browser-only validation |
-| [L7](#layer-7) | [L7.1](#l71) | x | | | x | | | x | - | 🟢 | 🟢 | 🟡 | Startup progress feedback — deferred loading, async cache warming | Daemon starts in <1s, caches warm in background with progress logging | `daemon start` returns in 0.1s; log shows step-by-step progress. **Gap**: no automated startup time test |
+| [L5](#layer-5) | [L5.13](#l513) | | | | | | | x | L5.12 | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul — 5 focus modes, tier redesign, code toggle, copy prompt | Recon tab is actionable, not just a finding list | Focus modes, tier badges, source cache, copy prompt, column alignment. **Gap**: browser-only validation |
+| [L5](#layer-5) | [L5.14](#l514) | x | | | | x | | | L5.12 | 🟢 | 🟢 | 🟡 | Recon cache + incremental updates — pre-compute at startup, SubtractFile/AddFile on file change | Zero per-poll scan cost, instant API response | `warmReconCache()`, `updateReconForFile()`, `CachedReconResult()`. **Gap**: no unit tests for incremental path |
+| [L5](#layer-5) | [L5.15](#l515) | | | | | | | x | L5.14 | 🟢 | 🟢 | 🟡 | Investigation tracking — per-file investigated status, persistence, auto-expiry | Users can mark files as reviewed, auto-clears on change | `POST /api/recon-investigate`, `.aoa/recon-investigated.json`, 1-week auto-prune. **Gap**: no unit tests |
+| [L7](#layer-7) | [L7.1](#l71) | x | | | x | | | x | - | 🟢 | 🟢 | 🟡 | Startup progress feedback — deferred loading, async cache warming incl. recon | Daemon starts in <1s, caches warm in background with progress logging | `daemon start` returns in 0.1s; log shows step-by-step progress incl. recon scan. **Gap**: no automated startup time test |
 | [L7](#layer-7) | [L7.2](#l72) | x | | | | x | | | - | 🟡 | ⚪ | ⚪ | Database storage optimization — replace JSON blobs with binary encoding | 964MB bbolt with JSON serialization. Investigate gob/protobuf/msgpack for faster load | Profile load time; compare encoding formats; target <3s index load |
 | [L7](#layer-7) | [L7.3](#l73) | | | | | | | x | - | 🟡 | ⚪ | ⚪ | Recon source line editor view — replace per-line peek with file-level source display | Show all flagged lines in an editor-like view grouped by severity, not one-at-a-time peeks | Design conversation needed on layout; toggle between dimensional view and source view |
+| [L7](#layer-7) | [L7.4](#l74) | | | | x | x | | | - | 🟢 | ⚪ | ⚪ | .aoa/ directory restructure — subdirs for log/run/recon/hook, log rotation, delete dead dirs | Clean project state dir; logs don't grow forever; clear separation of ephemeral vs persistent | All paths resolve; daemon.log rotates; `domains/` removed; migration handles existing installs |
 
 ---
 
@@ -771,17 +783,72 @@ NER-style dimensional view: tier toggle sidebar (5 tiers, color-coded), file→f
 
 #### L5.13
 
-**Recon findings peek + tier noise gating** — 🟢 Complete (Session 65)
+**Recon dashboard overhaul** — 🟢 Complete (Sessions 65–66)
 
-Three enhancements to the Recon findings UX:
+Major Recon tab redesign across two sessions. Session 65 delivered findings peek and tier noise gating. Session 66 expanded to a full UX overhaul:
 
-1. **Source line peek**: Finding rows are clickable. Click toggles between description text ("Potential hardcoded secret") and the actual source line from the in-memory FileCache. Zero disk I/O — reads from the same cache used for search. New `GET /api/source-line?file=X&line=12&context=0` endpoint resolves path→fileID→cache line.
+**Session 65 (foundations):**
+1. **Source line peek**: Finding rows are clickable. Click toggles between description text and actual source line from FileCache. Zero disk I/O. `GET /api/source-line?file=X&line=12&context=0` resolves path→fileID→cache line. Context parameter supports 0–5 lines before/after.
+2. **Tier noise gating**: File-level drill-down filters findings to only show tiers that registered > 0. `reconAggregateFile()` computes active tiers; `elevatedFindings` filter applied before grouping by symbol.
+3. **Scan freshness**: `/api/recon` response includes `scanned_at` timestamp. Hero support line shows "scanned just now" / "12s ago" / "3m ago".
 
-2. **Tier noise gating**: File-level drill-down filters findings to only show tiers that registered > 0 at the file level. If `content_test.go` shows PERF=0, performance-tier findings are hidden when drilling into that file. Prevents walls of low-severity warnings from tiers that didn't accumulate enough signal. `reconAggregateFile()` computes active tiers; `elevatedFindings` filter applied before grouping by symbol.
+**Session 66 (overhaul):**
+4. **Five focus modes**: Toolbar buttons — Recon (hides info-level, default), Critical, Warning, Info, All. Severity-based filtering orthogonal to dimension toggles.
+5. **Tier colors decoupled from severity**: Pink (security), cyan (performance), purple (quality), orange (architecture), green (observability). Tier badge (SEC/PERF/QUAL/ARCH/OBS) on every finding row.
+6. **Code toggle with source cache**: `reconSourceToggle` swaps finding detail ↔ inline source. `reconSourceCache` prevents refetch on poll cycles. Same row, no layout jitter.
+7. **Copy Prompt**: Generates grep-style output with file path header, taxonomy, affected symbols, and call-graph guidance. Copies to clipboard. Button shows "Paste in Claude Code ↗" feedback.
+8. **Column alignment**: `.tree-dims` shared between folder and file views for consistent layout.
 
-3. **Scan freshness**: `/api/recon` response includes `scanned_at` timestamp. Hero support line shows "scanned just now" / "scanned 12s ago" / "scanned 3m ago".
+**Files**: `internal/adapters/web/recon.go` (handleSourceLine, scanned_at), `internal/adapters/web/server.go` (routes), `internal/adapters/web/static/app.js` (focus modes, code toggle, copy prompt, source cache, tier redesign), `internal/adapters/web/static/style.css` (tier colors, finding-peek, finding-code, column alignment)
 
-**Files**: `internal/adapters/web/recon.go` (handleSourceLine, scanned_at), `internal/adapters/web/server.go` (route), `internal/adapters/web/static/app.js` (peek handler, tier filter, scan age), `internal/adapters/web/static/style.css` (finding-peek, finding-code)
+#### L5.14
+
+**Recon cache + incremental updates** — 🟢 Complete (Session 66)
+
+Pre-compute recon scans at startup and serve cached results instantly instead of re-scanning on every 3s poll. Incremental updates on file changes keep the cache fresh without full re-scans.
+
+**Architecture:**
+- `warmReconCache()` — full scan at startup after file cache warm; stores `recon.Result` + timestamp under `reconMu`
+- `CachedReconResult()` — returns cached result + `scannedAt`; RWMutex read-protected
+- `updateReconForFile(fileID, relPath)` — called from file watcher on create/modify/delete:
+  - `SubtractFile(dir, base)` — removes old file's contribution from aggregate counts
+  - `ScanFile(fileMeta, symbols, fileLines, pats)` — scans single file against patterns
+  - `AddFile(dir, base, info)` — merges new contribution into aggregates
+- `appFileCacheAdapter` — wraps search engine's `FileCache` to provide `recon.LineGetter` interface
+- Full reindex triggers `warmReconCache()` in background goroutine
+
+**Scanner incremental methods** (in `scanner.go`):
+- `SubtractFile()` — decrements `FilesScanned`, `TotalFindings`, severity buckets, tier/dim counts; deletes from `Tree`
+- `AddFile()` — increments all counts; maintains `CleanFiles`; inserts into `Tree`
+- `ScanFile()` — scans single file; detects long functions (>100 lines); returns `FileInfo` without modifying `Tree`
+- `BuildFileSymbols(idx)` — builds per-file sorted symbol mapping from index metadata
+- `Patterns()` — returns built-in scan patterns (11 pattern types)
+
+**Files**: `internal/app/app.go` (warmReconCache, CachedReconResult, updateReconForFile, appFileCacheAdapter), `internal/adapters/recon/scanner.go` (SubtractFile, AddFile, ScanFile, BuildFileSymbols, Patterns), `internal/app/watcher.go` (updateReconForFile calls), `internal/adapters/web/recon.go` (serves cached result)
+
+#### L5.15
+
+**Investigation tracking** — 🟢 Complete (Session 66)
+
+Per-file investigation status with persistence, auto-expiry, and dashboard integration. Partially resolves the "finding ignore/dismiss" known issue — file-level acknowledgment, not yet per-finding/per-rule.
+
+**Data model:** `investigatedFiles map[string]int64` — relPath → unix timestamp.
+
+**Core methods:**
+- `InvestigatedFiles()` — returns slice of investigated paths; prunes entries >1 week old
+- `SetFileInvestigated(relPath, investigated)` — marks/unmarks file; stores timestamp on add, deletes on remove; persists to disk
+- `ClearInvestigated()` — clears all markers
+- `saveInvestigated()` — writes to `.aoa/recon-investigated.json` as JSON map
+- `loadInvestigated()` — reads from disk; prunes expired entries; called during `WarmCaches()`
+- `clearFileInvestigated(relPath)` — called from file watcher on modify/delete; removes investigation so user re-triages
+
+**API:** `POST /api/recon-investigate` — actions: `"add"`, `"remove"`, `"clear"`. Recon API response includes `investigated_files` array.
+
+**Dashboard:** `investigated` treated as virtual tier alongside SEC/PERF/QUAL/ARCH/OBS. Toggle in dimension sidebar. Solo mode shows only investigated files. Context-dependent button labels. CSS class for investigated state.
+
+**Socket interface:** `InvestigatedFiles()`, `SetFileInvestigated()`, `ClearInvestigated()` added to `AppQueries`.
+
+**Files**: `internal/app/app.go` (investigation methods, persistence, watcher integration), `internal/adapters/socket/server.go` (interface additions), `internal/adapters/web/recon.go` (handleReconInvestigate endpoint, investigated_files in response), `internal/adapters/web/server.go` (route), `internal/adapters/web/static/app.js` (investigation UI, solo mode, annotateInvestigated), `internal/adapters/web/static/style.css` (investigated tier styles)
 
 ---
 
@@ -884,7 +951,9 @@ Release workflow builds 8 binaries (2 binaries × 4 platforms), creates GitHub r
 | Value engine (L0, 24 new tests) | Burn rate, runway projection, session persistence, activity enrichments. All wired. |
 | Activity rubric (41 tests) | Three-lane color system: green (guided savings), red (unguided cost — pill, impact, target), purple (creative words for Write/Edit). Learned column with cycling AI vocabulary. Autotune enrichments. Target: `aOa` blue, `grep`/`egrep` green. Impact: numbers cyan. |
 | Dashboard (L1, 5-tab SPA) | 3-file split: `index.html` + `style.css` + `app.js`. Tab-aware polling. Soft glow animations. All tabs render live data. |
-| File watcher (L2, 5 new tests) | `fsnotify` → `onFileChanged` → re-parse → `Rebuild()` → `SaveIndex()`. Add/modify/delete. |
+| Recon cache (L5.14) | Pre-computed at startup, incremental `SubtractFile`/`AddFile` on file change. Zero per-poll cost. `CachedReconResult()` under RWMutex. |
+| Investigation tracking (L5.15) | Per-file investigated status. Persisted to `.aoa/recon-investigated.json`. 1-week auto-expiry. Auto-cleared on file change. `POST /api/recon-investigate`. |
+| File watcher (L2, 5 new tests) | `fsnotify` → `onFileChanged` → re-parse → `Rebuild()` → `SaveIndex()` → `updateReconForFile()` → `clearFileInvestigated()`. Add/modify/delete. |
 | Invert-match (L2, 8 new tests) | `-v` flag for grep/egrep. Symbol complement + content matcher flip. All 4 modes. |
 | Reindex protocol (L2, 4 new tests) | `BuildIndex()` shared function. `aoa init` delegates to daemon or runs direct. No more lock errors. |
 
@@ -892,10 +961,10 @@ Release workflow builds 8 binaries (2 binaries × 4 platforms), creates GitHub r
 
 ### Layer 7
 
-**Layer 7: Onboarding UX (First-run experience, progress feedback)**
+**Layer 7: Onboarding UX & Operational Polish (First-run experience, progress feedback, project state hygiene)**
 
-> Users don't know the system is working. A 20-30s silent startup with no feedback creates uncertainty and distrust.
-> **Quality Gate**: User sees meaningful progress during daemon startup and `aoa init`.
+> Users don't know the system is working. A 20-30s silent startup with no feedback creates uncertainty and distrust. The `.aoa/` directory accumulates cruft with no organization.
+> **Quality Gate**: User sees meaningful progress during daemon startup and `aoa init`. Project state directory is clean and self-documenting.
 
 #### L7.1
 
@@ -919,7 +988,9 @@ all caches warm — 3932 files ready (57.9s total)
 
 User sees `daemon started (pid N)` in 0.1 seconds. Dashboard works immediately. Searches and recon data populate as caches warm.
 
-**Files**: `internal/app/app.go` (WarmCaches), `internal/domain/index/search.go` (SetCache/WarmCache split), `cmd/aoa/cmd/daemon.go` (deferred warm)
+Recon cache warming (`warmReconCache()`) added as final step of `WarmCaches()` in Session 66. Investigation state loaded from disk via `loadInvestigated()`.
+
+**Files**: `internal/app/app.go` (WarmCaches, warmReconCache, loadInvestigated), `internal/domain/index/search.go` (SetCache/WarmCache split), `cmd/aoa/cmd/daemon.go` (deferred warm)
 
 #### L7.2
 
@@ -949,6 +1020,57 @@ Design conversation needed:
 - Consider: is this a separate "Source" tab within the file drill-down, or a mode toggle on the existing view?
 
 **Files**: `internal/adapters/web/static/app.js`, `internal/adapters/web/static/style.css`, `internal/adapters/web/recon.go` (may need new API endpoint for multi-line fetch)
+
+#### L7.4
+
+**.aoa/ directory restructure** — ⚪ Not started
+
+Problem: `.aoa/` is a flat dumping ground with no logical organization. Dead directories (`domains/`), unbounded log growth (`daemon.log` never rotates), ephemeral runtime files mixed with persistent data, and hook-written files mixed with daemon state.
+
+**Current layout** (11 items, flat):
+```
+.aoa/
+  aoa.db                   964MB  persistent database
+  daemon.log               grows forever
+  daemon.pid               ephemeral PID
+  http.port                ephemeral port number
+  status.json              hook-read status line
+  context.jsonl            hook-written context snapshots
+  usage.txt                user-pasted /usage output
+  recon-investigated.json  investigation markers
+  domains/intent.json      DEAD — zero Go code references
+  grammars/                EMPTY — purego loader search path (vestigial with go-sitter-forest)
+```
+
+**Target layout** (subdirectories by concern):
+```
+.aoa/
+  aoa.db              persistent database (stays top-level — the one big file)
+  status.json         stays top-level (hook reads this path directly)
+  log/
+    daemon.log        rotated: rename to daemon.log.1 on startup when > 1MB
+  run/
+    daemon.pid        ephemeral runtime state, deleted on clean shutdown
+    http.port         ephemeral runtime state, deleted on clean shutdown
+  recon/
+    investigated.json investigation markers (moved from recon-investigated.json)
+  hook/
+    context.jsonl     hook-written context snapshots
+    usage.txt         user-pasted /usage output
+  grammars/           keep (purego dynamic loader search path, empty by default)
+  domains/            DELETE (dead — no Go code references, legacy from Python)
+```
+
+**Implementation steps:**
+1. Update path construction in ~6 Go files (daemon.go, app.go, watcher.go, web/server.go, recon)
+2. Add `ensureSubdirs()` to daemon startup — creates `log/`, `run/`, `recon/`, `hook/` if missing
+3. Add log rotation: on daemon start, if `log/daemon.log` > 1MB, rename to `daemon.log.1` (keep 1 old copy)
+4. Migration: on first startup, move files from old flat paths to new subdirs if they exist
+5. Delete `domains/` directory and `intent.json`
+6. Update `.gitignore` if needed
+7. Update CLAUDE.md Key Paths table
+
+**Files to change**: `cmd/aoa/cmd/daemon.go` (log path, pid path, port path, rotation), `internal/app/app.go` (DB path default, http.port path, investigated path, context/usage paths), `internal/app/watcher.go` (context.jsonl, usage.txt paths), `internal/adapters/web/server.go` (port file path), `hooks/` (status.json path — verify no change needed)
 
 ---
 
