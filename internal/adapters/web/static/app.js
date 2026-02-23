@@ -1464,10 +1464,36 @@ function toggleReconDim(dimId) {
   renderRecon();
 }
 
+function soloReconTier(tierId) {
+  // Deactivate all dimensions, then activate only this tier's dimensions
+  RECON_TIERS.forEach(function(t) {
+    t.dimensions.forEach(function(d) {
+      reconActiveDims[d.id] = (t.id === tierId);
+    });
+  });
+  saveReconDimState();
+}
+
 // Navigation state
 var reconLevel = 'root', reconFolder = null, reconFile = null;
 
+// File-level controls
+var reconFocus = 'recon';  // 'recon' | 'critical' | 'warning' | 'info' | 'all'
+var reconSourceOn = false;  // false = findings detail | true = inline source code
+
+// Source line cache: "file:line" → source text. Avoids re-fetching on every poll cycle.
+var reconSourceCache = {};
+
 function reconNavigateTo(level, folder, file) {
+  // Reset controls when leaving file level
+  if (level !== 'file') {
+    reconFocus = 'recon';
+    reconSourceOn = false;
+  }
+  // Clear source cache when navigating to a different file
+  if (file !== reconFile || folder !== reconFolder) {
+    reconSourceCache = {};
+  }
   reconLevel = level;
   reconFolder = folder || null;
   reconFile = file || null;
@@ -1477,7 +1503,14 @@ function reconNavigateTo(level, folder, file) {
 // Filter findings based on active dimensions
 function reconFilterFindings(findings) {
   if (!findings) return [];
-  return findings.filter(function(f) { return reconActiveDims[f.dim_id]; });
+  return findings.filter(function(f) {
+    if (!reconActiveDims[f.dim_id]) return false;
+    if (reconFocus === 'recon' && f.severity === 'info') return false;
+    if (reconFocus === 'critical' && f.severity !== 'critical') return false;
+    if (reconFocus === 'warning' && f.severity !== 'warning') return false;
+    if (reconFocus === 'info' && f.severity !== 'info') return false;
+    return true;
+  });
 }
 
 // Aggregate findings for a tree node (folder or file)
@@ -1525,13 +1558,59 @@ function reconDimsHtml(byCat) {
   return h;
 }
 
-function reconColHeaderHtml() {
-  var h = '<div class="tree-col-header"><span class="col-name"></span>';
+function reconDimsHeaderHtml() {
+  var h = '<span class="dims-label">Dimensions</span>' +
+    '<div class="tree-dims">';
   RECON_DIM_ORDER.forEach(function(tid) {
     var active = isReconTierActive(tid);
     h += '<span class="col-dim ' + tid + (active ? '' : ' off') + '" data-tier-toggle="' + tid + '">' + RECON_TIER_ABBREV[tid] + '</span>';
   });
-  h += '<span style="width:7px"></span><span style="width:40px"></span><span style="width:14px"></span></div>';
+  h += '</div>';
+  return h;
+}
+
+function reconColHeaderHtml(fileLevel) {
+  var h = '<div class="tree-col-header">';
+  if (fileLevel) {
+    // File-level toolbar: Focus | Code | Copy Prompt | ... | Dimensions
+    h += '<div class="toolbar-box">' +
+      '<span class="toolbar-label">Focus</span>' +
+      '<span class="toolbar-btn' + (reconFocus === 'recon' ? ' active' : '') + '" data-focus="recon">Recon</span>' +
+      '<span class="toolbar-btn' + (reconFocus === 'critical' ? ' active' : '') + '" data-focus="critical">Critical</span>' +
+      '<span class="toolbar-btn' + (reconFocus === 'warning' ? ' active' : '') + '" data-focus="warning">Warning</span>' +
+      '<span class="toolbar-btn' + (reconFocus === 'info' ? ' active' : '') + '" data-focus="info">Info</span>' +
+      '<span class="toolbar-btn' + (reconFocus === 'all' ? ' active' : '') + '" data-focus="all">All</span>' +
+      '</div>';
+    h += '<span class="toolbar-btn toolbar-toggle' + (reconSourceOn ? ' active' : '') + '" id="reconSourceToggle">Code</span>';
+    h += '<span class="toolbar-btn toolbar-action" id="reconCopyPrompt">Copy Prompt</span>';
+    h += reconDimsHeaderHtml();
+    // Trailing spacers to match method-row trailing elements (severity dot + score bar + chevron)
+    h += '<span style="width:7px;flex-shrink:0"></span>' +
+      '<span style="width:44px;flex-shrink:0"></span>' +
+      '<span style="width:14px;flex-shrink:0"></span>';
+  } else {
+    // Root/folder level: spacer + Dimensions (right-aligned)
+    h += '<span class="col-name"></span>';
+    h += reconDimsHeaderHtml();
+    // Trailing spacers to align with severity dot + score bar + chevron
+    h += '<span style="width:7px;flex-shrink:0"></span>' +
+      '<span style="width:44px;flex-shrink:0"></span>' +
+      '<span style="width:14px;flex-shrink:0"></span>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function reconDimsClickableHtml(byCat, navAction) {
+  var h = '';
+  RECON_DIM_ORDER.forEach(function(tid) {
+    var n = byCat[tid] || 0;
+    if (n > 0) {
+      h += '<span class="dim-num ' + tid + ' dim-clickable" data-dim-nav="' + escapeHtml(navAction) + '" data-dim-tier="' + tid + '">' + n + '</span>';
+    } else {
+      h += '<span class="dim-num zero">' + n + '</span>';
+    }
+  });
   return h;
 }
 
@@ -1542,7 +1621,7 @@ function reconTreeRowHtml(type, name, agg, navAction) {
   return '<div class="tree-row" data-nav="' + escapeHtml(navAction) + '">' +
     '<span class="tree-icon ' + type + '">' + icon + '</span>' +
     '<span class="tree-name">' + escapeHtml(name) + '</span>' +
-    '<div class="tree-dims">' + reconDimsHtml(agg.byCat) + '</div>' +
+    '<div class="tree-dims">' + reconDimsClickableHtml(agg.byCat, navAction) + '</div>' +
     (sev ? '<span class="tree-severity ' + sev + '"></span>' : '<span style="width:7px"></span>') +
     '<div class="tree-score"><div class="tree-score-fill ' + reconScoreClass(pct) + '" style="width:' + pct + '%"></div></div>' +
     '<span class="tree-chevron">\u203A</span></div>';
@@ -1553,10 +1632,7 @@ function reconMethodRowHtml(name, findings) {
   var h = '';
 
   if (filtered.length === 0) {
-    return '<div class="tree-row" style="cursor:default"><span class="tree-icon method">\u0192</span>' +
-      '<span class="tree-name">' + escapeHtml(name) + '</span><div class="tree-dims">' + reconDimsHtml({}) + '</div>' +
-      '<span style="width:7px"></span><div class="tree-score"><div class="tree-score-fill low" style="width:0"></div></div>' +
-      '<span style="width:14px"></span></div>';
+    return '';
   }
 
   var byCat = {}; var sevs = { critical: 0, warning: 0, info: 0 };
@@ -1564,6 +1640,7 @@ function reconMethodRowHtml(name, findings) {
   var sev = reconMaxSeverity(sevs);
   var pct = reconScorePct(sevs);
 
+  // Symbol header — always the same structure regardless of code toggle
   h += '<div class="tree-row" style="cursor:default"><span class="tree-icon method">\u0192</span>' +
     '<span class="tree-name">' + escapeHtml(name) + '</span>' +
     '<div class="tree-dims">' + reconDimsHtml(byCat) + '</div>' +
@@ -1573,20 +1650,111 @@ function reconMethodRowHtml(name, findings) {
 
   filtered.sort(function(a, b) {
     var o = { critical: 0, warning: 1, info: 2 };
-    return o[a.severity] - o[b.severity];
+    if (o[a.severity] !== o[b.severity]) return o[a.severity] - o[b.severity];
+    return a.line - b.line;
   });
 
+  var filePath = (reconFolder === '.' ? '' : reconFolder + '/') + reconFile;
+
   filtered.forEach(function(f) {
-    var filePath = (reconFolder === '.' ? '' : reconFolder + '/') + reconFile;
-    h += '<div class="finding-row finding-peek" data-file="' + escapeHtml(filePath) + '" data-line="' + f.line + '">' +
-      '<span class="finding-line">L:' + f.line + '</span>' +
-      '<span class="finding-sev ' + f.severity + '">' + f.severity + '</span>' +
-      '<span class="finding-id">' + escapeHtml(f.id) + '</span>' +
-      '<span class="finding-desc">' + escapeHtml(f.label) + '</span>' +
-      '<span class="finding-code" style="display:none"></span></div>';
+    var tierAbbrev = RECON_TIER_ABBREV[f.tier_id] || f.tier_id;
+
+    if (reconSourceOn) {
+      // Code mode: tier + line + severity + source code (replaces rule_id + description)
+      var cacheKey = filePath + ':' + f.line;
+      var cachedSrc = reconSourceCache[cacheKey];
+      var srcText = cachedSrc || '';
+      var needsFetch = !cachedSrc;
+      h += '<div class="finding-row finding-code-mode"' +
+        (needsFetch ? ' data-code-file="' + escapeHtml(filePath) + '" data-code-line="' + f.line + '"' : '') + '>' +
+        '<span class="finding-tier ' + f.tier_id + '">' + tierAbbrev + '</span>' +
+        '<span class="finding-line">L' + f.line + '</span>' +
+        '<span class="finding-sev ' + f.severity + '">' + f.severity + '</span>' +
+        '<span class="finding-src">' + escapeHtml(srcText) + '</span></div>';
+    } else {
+      // Detail mode: tier + line + severity + rule_id + description
+      h += '<div class="finding-row finding-peek" data-file="' + escapeHtml(filePath) + '" data-line="' + f.line + '">' +
+        '<span class="finding-tier ' + f.tier_id + '">' + tierAbbrev + '</span>' +
+        '<span class="finding-line">L' + f.line + '</span>' +
+        '<span class="finding-sev ' + f.severity + '">' + f.severity + '</span>' +
+        '<span class="finding-id">' + escapeHtml(f.id) + '</span>' +
+        '<span class="finding-desc">' + escapeHtml(f.label) + '</span>' +
+        '<span class="finding-code" style="display:none"></span></div>';
+    }
   });
 
   return h;
+}
+
+function reconCopyInvestigatePrompt() {
+  var data = cache.recon;
+  if (!data || !data.tree || !reconFolder || !reconFile) return;
+
+  var fileData = data.tree[reconFolder] && data.tree[reconFolder][reconFile];
+  if (!fileData) return;
+
+  var filePath = (reconFolder === '.' ? '' : reconFolder + '/') + reconFile;
+  var findings = reconFilterFindings(fileData.findings);
+
+  if (findings.length === 0) return;
+
+  // Collect unique tiers and their severities for the taxonomy header
+  var tierSevs = {};
+  findings.forEach(function(f) {
+    if (!tierSevs[f.tier_id]) tierSevs[f.tier_id] = {};
+    tierSevs[f.tier_id][f.severity] = true;
+  });
+
+  // Collect affected symbols for caller investigation
+  var symbolSet = {};
+  findings.forEach(function(f) {
+    if (f.symbol && f.symbol !== '(package-level)') symbolSet[f.symbol] = true;
+  });
+
+  var lines = [];
+  lines.push('Investigate `' + filePath + '`.');
+  lines.push('');
+
+  // Taxonomy: define each tier+severity combo once
+  var taxParts = [];
+  Object.keys(tierSevs).forEach(function(tid) {
+    var abbrev = (RECON_TIER_ABBREV[tid] || tid).toUpperCase();
+    var sevList = Object.keys(tierSevs[tid]).sort();
+    taxParts.push(abbrev + ' = ' + tid + ' (' + sevList.join(', ') + ')');
+  });
+  lines.push('Dimensions: ' + taxParts.join('; '));
+  lines.push('');
+
+  // Findings: file:line [TIER severity] actual_code_or_label
+  findings.sort(function(a, b) { return a.line - b.line; });
+  findings.forEach(function(f) {
+    var abbrev = (RECON_TIER_ABBREV[f.tier_id] || f.tier_id).toUpperCase();
+    var cacheKey = filePath + ':' + f.line;
+    var code = reconSourceCache[cacheKey];
+    var content = code ? code.trim() : f.label;
+    lines.push(filePath + ':' + f.line + ' [' + abbrev + ' ' + f.severity + '] ' + content);
+  });
+  lines.push('');
+  lines.push('For each line: real issue \u2192 provide the fix, or acceptable in context \u2192 explain why.');
+
+  var namedSymbols = Object.keys(symbolSet);
+  if (namedSymbols.length > 0) {
+    lines.push('Also check callers of ' + namedSymbols.map(function(s) { return '`' + s + '`'; }).join(', ') + ' for propagation.');
+  }
+
+  var prompt = lines.join('\n');
+
+  navigator.clipboard.writeText(prompt).then(function() {
+    var btn = document.getElementById('reconCopyPrompt');
+    if (btn) {
+      btn.textContent = 'Paste in Claude Code \u2197';
+      btn.classList.add('copied');
+      setTimeout(function() {
+        btn.textContent = 'Copy Prompt';
+        btn.classList.remove('copied');
+      }, 3000);
+    }
+  });
 }
 
 function renderReconInstallPrompt() {
@@ -1770,22 +1938,10 @@ function renderReconTree(data) {
     if (fileData) {
       var symbols = fileData.symbols || [];
       document.getElementById('reconTreeBadge').textContent = symbols.length + ' symbols';
-      h += reconColHeaderHtml();
+      h += reconColHeaderHtml(true);
 
-      // Compute which tiers have nonzero counts at the file level.
-      // Only show findings from tiers that actually registered — tiers with
-      // zero file-level score are noise (individual low-severity warnings
-      // that didn't accumulate enough to be a real concern).
-      var fileAgg = reconAggregateFile(data, reconFolder, reconFile);
-      var activeTiers = {};
-      Object.keys(fileAgg.byCat).forEach(function(tid) {
-        if (fileAgg.byCat[tid] > 0) activeTiers[tid] = true;
-      });
-
-      // Filter findings to only tiers that surfaced at file level
-      var elevatedFindings = reconFilterFindings(fileData.findings).filter(function(f) {
-        return activeTiers[f.tier_id];
-      });
+      // Filter findings by active dimensions
+      var elevatedFindings = reconFilterFindings(fileData.findings);
 
       // Group findings by symbol
       var findingsBySymbol = {};
@@ -1831,6 +1987,21 @@ function renderReconTree(data) {
     });
   });
 
+  // Attach click handlers for dimension count numbers (solo tier + navigate)
+  wrap.querySelectorAll('[data-dim-nav]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var tierId = this.getAttribute('data-dim-tier');
+      var nav = this.getAttribute('data-dim-nav');
+      var parts = nav.split(':');
+      soloReconTier(tierId);
+      if (parts[0] === 'root') reconNavigateTo('root');
+      else if (parts[0] === 'folder') reconNavigateTo('folder', parts[1]);
+      else if (parts[0] === 'file') reconNavigateTo('file', parts[1], parts[2]);
+      renderReconSidebar(cache.recon);
+    });
+  });
+
   // Breadcrumb navigation
   if (bcEl) {
     bcEl.querySelectorAll('[data-nav]').forEach(function(el) {
@@ -1841,6 +2012,57 @@ function renderReconTree(data) {
         else if (parts[0] === 'folder') reconNavigateTo('folder', parts[1]);
         else if (parts[0] === 'file') reconNavigateTo('file', parts[1], parts[2]);
       });
+    });
+  }
+
+  // Focus buttons (file level)
+  wrap.querySelectorAll('[data-focus]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      reconFocus = this.getAttribute('data-focus');
+      renderReconTree(cache.recon);
+    });
+  });
+
+  // Source toggle (file level)
+  var srcToggle = document.getElementById('reconSourceToggle');
+  if (srcToggle) {
+    srcToggle.addEventListener('click', function(e) {
+      e.stopPropagation();
+      reconSourceOn = !reconSourceOn;
+      renderReconTree(cache.recon);
+    });
+  }
+
+  // Copy Prompt button (file level)
+  var cpBtn = document.getElementById('reconCopyPrompt');
+  if (cpBtn) {
+    cpBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      reconCopyInvestigatePrompt();
+    });
+  }
+
+  // Code mode: fetch source lines for finding rows not yet cached
+  if (reconSourceOn) {
+    wrap.querySelectorAll('.finding-code-mode[data-code-file]').forEach(function(el) {
+      var file = el.getAttribute('data-code-file');
+      var line = el.getAttribute('data-code-line');
+      var srcEl = el.querySelector('.finding-src');
+      if (!srcEl) return;
+      var cacheKey = file + ':' + line;
+
+      fetch('/api/source-line?file=' + encodeURIComponent(file) + '&line=' + line + '&context=0')
+        .then(function(r) { return r.json(); })
+        .then(function(lines) {
+          var text = (lines && lines.length > 0) ? lines[0].content : '(line not in cache)';
+          reconSourceCache[cacheKey] = text;
+          srcEl.textContent = text;
+        })
+        .catch(function() {
+          reconSourceCache[cacheKey] = '(unavailable)';
+          srcEl.textContent = '(unavailable)';
+        });
     });
   }
 

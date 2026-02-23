@@ -108,6 +108,7 @@ func (a *App) ReconAvailable() bool {
 
 // TriggerReconEnhance runs aoa-recon enhance in the background after init/reindex.
 // Non-blocking: spawns a goroutine. Errors are logged but not fatal.
+// After success, invalidates the dimensional cache so the next poll picks up fresh data.
 func (a *App) TriggerReconEnhance() {
 	if a.reconBridge == nil || !a.reconBridge.Available() {
 		return
@@ -121,13 +122,37 @@ func (a *App) TriggerReconEnhance() {
 		if output != "" {
 			fmt.Printf("[%s] %s\n", time.Now().Format(time.RFC3339), output)
 		}
+		// Invalidate dimensional cache so next poll reloads from bbolt
+		a.invalidateDimCache()
 	}()
 }
 
 // DimensionalResults returns persisted dimensional analysis results from bbolt.
 // Returns nil if no dimensional data exists (aoa-recon hasn't run yet).
+// Results are cached in memory; cache is invalidated when aoa-recon completes.
 // Implements socket.AppQueries.
 func (a *App) DimensionalResults() map[string]*socket.DimensionalFileResult {
+	a.reconMu.RLock()
+	if a.dimCacheSet {
+		cached := a.dimCache
+		a.reconMu.RUnlock()
+		return cached
+	}
+	a.reconMu.RUnlock()
+
+	// Cache miss — load from bbolt and cache the result
+	results := a.loadDimensionalFromStore()
+
+	a.reconMu.Lock()
+	a.dimCache = results
+	a.dimCacheSet = true
+	a.reconMu.Unlock()
+
+	return results
+}
+
+// loadDimensionalFromStore reads dimensional analysis from bbolt and converts to DTOs.
+func (a *App) loadDimensionalFromStore() map[string]*socket.DimensionalFileResult {
 	if a.Store == nil {
 		return nil
 	}
@@ -179,7 +204,16 @@ func (a *App) DimensionalResults() map[string]*socket.DimensionalFileResult {
 	return results
 }
 
+// invalidateDimCache clears the dimensional results cache so the next call reloads from bbolt.
+func (a *App) invalidateDimCache() {
+	a.reconMu.Lock()
+	a.dimCache = nil
+	a.dimCacheSet = false
+	a.reconMu.Unlock()
+}
+
 // TriggerReconEnhanceFile runs aoa-recon enhance-file in the background after a file change.
+// After success, invalidates the dimensional cache.
 func (a *App) TriggerReconEnhanceFile(absPath string) {
 	if a.reconBridge == nil || !a.reconBridge.Available() {
 		return
@@ -190,5 +224,7 @@ func (a *App) TriggerReconEnhanceFile(absPath string) {
 			// Silently ignore — incremental enhancement is best-effort.
 			return
 		}
+		// Invalidate dimensional cache so next poll reloads from bbolt
+		a.invalidateDimCache()
 	}()
 }

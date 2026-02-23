@@ -79,6 +79,8 @@ func (a *App) onFileChanged(absPath string) {
 			if a.Store != nil {
 				_ = a.Store.SaveIndex(a.ProjectID, a.Index)
 			}
+			// Update recon cache: remove deleted file's contribution
+			a.updateReconForFile(existingID, relPath)
 		}
 		return
 	}
@@ -145,6 +147,8 @@ func (a *App) onFileChanged(absPath string) {
 		if a.Store != nil {
 			_ = a.Store.SaveIndex(a.ProjectID, a.Index)
 		}
+		// Incrementally update recon cache for this file
+		a.updateReconForFile(fileID, relPath)
 		return
 	}
 
@@ -167,6 +171,9 @@ func (a *App) onFileChanged(absPath string) {
 	if a.Store != nil {
 		_ = a.Store.SaveIndex(a.ProjectID, a.Index)
 	}
+
+	// Incrementally update recon cache for this file
+	a.updateReconForFile(fileID, relPath)
 
 	// If aoa-recon is available and parser is nil, trigger incremental enhancement.
 	// When parser is non-nil, symbols are already extracted above.

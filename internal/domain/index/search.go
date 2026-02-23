@@ -119,12 +119,17 @@ func NewSearchEngine(idx *ports.Index, domains map[string]Domain, projectRoot st
 // Cache returns the attached FileCache (may be nil).
 func (e *SearchEngine) Cache() *FileCache { return e.cache }
 
-// SetCache attaches a FileCache for content scanning and performs
-// the initial cache warm from the current index.
+// SetCache attaches a FileCache for content scanning.
+// Call WarmCache() separately to populate it from disk.
 func (e *SearchEngine) SetCache(c *FileCache) {
 	e.cache = c
-	if c != nil && e.projectRoot != "" {
-		c.WarmFromIndex(e.idx.Files, e.projectRoot)
+}
+
+// WarmCache populates the file cache from the current index.
+// This is IO-heavy and may take seconds on large repos.
+func (e *SearchEngine) WarmCache() {
+	if e.cache != nil && e.projectRoot != "" {
+		e.cache.WarmFromIndex(e.idx.Files, e.projectRoot)
 	}
 }
 

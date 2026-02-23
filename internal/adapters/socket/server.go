@@ -36,6 +36,7 @@ type AppQueries interface {
 	ProjectConfig() ProjectConfigResult
 	ReconAvailable() bool
 	DimensionalResults() map[string]*DimensionalFileResult
+	CachedReconResult() (interface{}, int64) // cached interim scanner result + scanned_at timestamp
 	UsageQuota() *UsageQuotaResult
 }
 

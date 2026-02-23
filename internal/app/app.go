@@ -15,6 +15,7 @@ import (
 	"github.com/corey/aoa/internal/adapters/bbolt"
 	claude "github.com/corey/aoa/internal/adapters/claude"
 	fsw "github.com/corey/aoa/internal/adapters/fsnotify"
+	"github.com/corey/aoa/internal/adapters/recon"
 	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/adapters/web"
 	"github.com/corey/aoa/internal/domain/enricher"
@@ -162,6 +163,15 @@ type App struct {
 
 	reconBridge    *ReconBridge            // discovers and invokes aoa-recon companion binary
 	mu             sync.Mutex             // serializes learner access (searches are concurrent)
+
+	// Recon cache (pre-computed at startup, served instantly, updated incrementally)
+	reconMu        sync.RWMutex
+	reconCache     *recon.Result
+	reconScannedAt int64 // unix timestamp of last scan
+
+	// Dimensional results cache (from aoa-recon via bbolt, cached in memory)
+	dimCache     map[string]*socket.DimensionalFileResult
+	dimCacheSet  bool // true once loaded (distinguishes nil "no data" from "not loaded")
 	promptN        uint32                 // prompt counter (incremented on each user input)
 	lastAutotune   *learner.AutotuneResult // most recent autotune result (for status line)
 	statusLinePath string                 // project-local path for status line file
@@ -225,6 +235,8 @@ type Config struct {
 }
 
 // New creates an App with all dependencies wired. Does not start services.
+// Initialization is fast — heavy IO (index load, cache warming) is deferred
+// to WarmCaches() which should be called after Start().
 func New(cfg Config) (*App, error) {
 	if cfg.ProjectRoot == "" {
 		return nil, fmt.Errorf("project root required")
@@ -247,19 +259,11 @@ func New(cfg Config) (*App, error) {
 		return nil, fmt.Errorf("create watcher: %w", err)
 	}
 
-	// Load existing index or create empty
-	idx, err := store.LoadIndex(cfg.ProjectID)
-	if err != nil {
-		store.Close()
-		watcher.Stop()
-		return nil, fmt.Errorf("load index: %w", err)
-	}
-	if idx == nil {
-		idx = &ports.Index{
-			Tokens:   make(map[string][]ports.TokenRef),
-			Metadata: make(map[ports.TokenRef]*ports.SymbolMeta),
-			Files:    make(map[uint32]*ports.FileMeta),
-		}
+	// Start with empty index — loaded in WarmCaches() after server is up
+	idx := &ports.Index{
+		Tokens:   make(map[string][]ports.TokenRef),
+		Metadata: make(map[ports.TokenRef]*ports.SymbolMeta),
+		Files:    make(map[uint32]*ports.FileMeta),
 	}
 
 	// Load universal domains from embedded atlas
@@ -278,23 +282,12 @@ func New(cfg Config) (*App, error) {
 
 	engine := index.NewSearchEngine(idx, domains, cfg.ProjectRoot)
 
-	// Create file cache and attach to search engine
+	// Create file cache and attach to search engine (not yet warmed)
 	cache := index.NewFileCache(cfg.CacheMaxBytes)
 	engine.SetCache(cache)
 
-	// Load existing learner state or create fresh
-	ls, err := store.LoadLearnerState(cfg.ProjectID)
-	if err != nil {
-		store.Close()
-		watcher.Stop()
-		return nil, fmt.Errorf("load learner state: %w", err)
-	}
-	var lrn *learner.Learner
-	if ls != nil {
-		lrn = learner.NewFromState(ls)
-	} else {
-		lrn = learner.New()
-	}
+	// Start with fresh learner — state loaded in WarmCaches()
+	lrn := learner.New()
 
 	reader := claude.New(claude.Config{
 		ProjectRoot: cfg.ProjectRoot,
@@ -314,7 +307,6 @@ func New(cfg Config) (*App, error) {
 		Parser:         cfg.Parser, // nil = tokenization-only mode
 		Reader:         reader,
 		Index:          idx,
-		promptN:        lrn.PromptCount(),
 		statusLinePath: statusPath,
 		httpPort:       cfg.HTTPPort,
 		dbPath:         cfg.DBPath,
@@ -530,6 +522,75 @@ func (a *App) Start() error {
 	a.writeStatus(nil)
 	a.mu.Unlock()
 	return nil
+}
+
+// WarmCaches loads the persisted index and learner state from bbolt, warms the
+// file cache from disk, and pre-computes the recon scan. This is IO-heavy and
+// should be called after Start() so the daemon is already reachable.
+// The logFn callback receives progress messages.
+func (a *App) WarmCaches(logFn func(string)) {
+	totalStart := time.Now()
+
+	// 1. Load persisted index from bbolt
+	logFn("loading index from database...")
+	start := time.Now()
+	idx, err := a.Store.LoadIndex(a.ProjectID)
+	if err != nil {
+		logFn(fmt.Sprintf("warning: failed to load index: %v", err))
+	}
+	if idx != nil {
+		a.mu.Lock()
+		// Swap in the loaded index — the engine and server hold pointers to
+		// the same Index struct, so we copy fields rather than replacing the pointer.
+		a.Index.Tokens = idx.Tokens
+		a.Index.Metadata = idx.Metadata
+		a.Index.Files = idx.Files
+		a.mu.Unlock()
+		a.Engine.Rebuild()
+		logFn(fmt.Sprintf("index loaded: %d files, %d tokens (%.1fs)",
+			len(idx.Files), len(idx.Tokens), time.Since(start).Seconds()))
+	} else {
+		logFn(fmt.Sprintf("no persisted index found (%.1fs)", time.Since(start).Seconds()))
+	}
+
+	// 2. Load persisted learner state
+	logFn("loading learner state...")
+	start = time.Now()
+	ls, err := a.Store.LoadLearnerState(a.ProjectID)
+	if err != nil {
+		logFn(fmt.Sprintf("warning: failed to load learner state: %v", err))
+	}
+	if ls != nil {
+		a.mu.Lock()
+		a.Learner = learner.NewFromState(ls)
+		a.promptN = a.Learner.PromptCount()
+		a.mu.Unlock()
+		logFn(fmt.Sprintf("learner state loaded: %d prompts (%.1fs)",
+			ls.PromptCount, time.Since(start).Seconds()))
+	} else {
+		logFn(fmt.Sprintf("no learner state found (%.1fs)", time.Since(start).Seconds()))
+	}
+
+	fileCount := len(a.Index.Files)
+	if fileCount == 0 {
+		logFn("no files in index, skipping cache warm")
+		return
+	}
+
+	// 3. Warm file cache from disk
+	logFn(fmt.Sprintf("warming file cache (%d files)...", fileCount))
+	start = time.Now()
+	a.Engine.WarmCache()
+	logFn(fmt.Sprintf("file cache ready (%.1fs)", time.Since(start).Seconds()))
+
+	// 4. Pre-compute recon scan
+	logFn("scanning recon patterns...")
+	start = time.Now()
+	a.warmReconCache()
+	logFn(fmt.Sprintf("recon cache ready (%.1fs)", time.Since(start).Seconds()))
+
+	logFn(fmt.Sprintf("all caches warm — %d files ready (%.1fs total)",
+		fileCount, time.Since(totalStart).Seconds()))
 }
 
 // Stop gracefully shuts down all services and persists learner state.
@@ -1866,6 +1927,9 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 		a.TriggerReconEnhance()
 	}
 
+	// Re-scan recon in the background after full reindex
+	go a.warmReconCache()
+
 	elapsed := time.Since(start)
 	return socket.ReindexResult{
 		FileCount:   stats.FileCount,
@@ -1873,6 +1937,83 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 		TokenCount:  stats.TokenCount,
 		ElapsedMs:   elapsed.Milliseconds(),
 	}, nil
+}
+
+// warmReconCache runs a full recon scan and stores the result under reconMu.
+// Safe to call from any goroutine.
+func (a *App) warmReconCache() {
+	var lines recon.LineGetter
+	if fc := a.Engine.Cache(); fc != nil {
+		lines = &appFileCacheAdapter{cache: fc}
+	}
+	result := recon.Scan(a.Index, lines)
+	a.reconMu.Lock()
+	a.reconCache = result
+	a.reconScannedAt = time.Now().Unix()
+	a.reconMu.Unlock()
+}
+
+// CachedReconResult returns the cached interim scanner result and its timestamp.
+// Returns (nil, 0) if no scan has been performed yet.
+// Implements socket.AppQueries.
+func (a *App) CachedReconResult() (interface{}, int64) {
+	a.reconMu.RLock()
+	defer a.reconMu.RUnlock()
+	return a.reconCache, a.reconScannedAt
+}
+
+// updateReconForFile incrementally patches the recon cache for a single file.
+// fileID is the index file ID; relPath is the relative path within the project.
+// If the file was deleted (not in index), removes it from the cache.
+func (a *App) updateReconForFile(fileID uint32, relPath string) {
+	a.reconMu.Lock()
+	defer a.reconMu.Unlock()
+
+	if a.reconCache == nil {
+		return
+	}
+
+	dir := filepath.Dir(relPath)
+	base := filepath.Base(relPath)
+
+	// Remove old contribution
+	a.reconCache.SubtractFile(dir, base)
+
+	// If file still exists in index, re-scan it
+	fileMeta := a.Index.Files[fileID]
+	if fileMeta == nil {
+		// File was deleted — subtraction was enough
+		a.reconScannedAt = time.Now().Unix()
+		return
+	}
+
+	// Get fresh lines from file cache
+	var fileLines []string
+	if fc := a.Engine.Cache(); fc != nil {
+		fileLines = fc.GetLines(fileID)
+	}
+
+	// Get symbols for this file
+	symbols := recon.BuildFileSymbols(a.Index)[fileID]
+	pats := recon.Patterns()
+
+	info := recon.ScanFile(fileMeta, symbols, fileLines, pats)
+	a.reconCache.AddFile(dir, base, info)
+	a.reconScannedAt = time.Now().Unix()
+}
+
+// appFileCacheAdapter adapts the search engine's FileCache to the recon.LineGetter interface.
+type appFileCacheAdapter struct {
+	cache interface {
+		GetLines(fileID uint32) []string
+	}
+}
+
+func (a *appFileCacheAdapter) GetLines(fileID uint32) []string {
+	if a.cache == nil {
+		return nil
+	}
+	return a.cache.GetLines(fileID)
 }
 
 // WipeProject deletes all persisted data and resets in-memory state.
@@ -1933,6 +2074,14 @@ func (a *App) WipeProject() error {
 	a.currentSessionID = ""
 	a.currentSessionStart = 0
 	a.sessionPrompts = 0
+
+	// Reset recon cache and dimensional cache
+	a.reconMu.Lock()
+	a.reconCache = nil
+	a.reconScannedAt = 0
+	a.dimCache = nil
+	a.dimCacheSet = false
+	a.reconMu.Unlock()
 
 	return nil
 }

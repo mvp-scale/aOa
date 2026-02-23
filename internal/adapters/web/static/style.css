@@ -24,6 +24,12 @@
   --shadow: none; --nav-bg: rgba(12,12,14,0.82); --table-hover: rgba(255,255,255,0.03);
   --green-rgb: 52,211,153; --blue-rgb: 96,165,250; --purple-rgb: 192,132,252;
   --cyan-rgb: 34,211,238; --yellow-rgb: 251,191,36; --red-rgb: 248,113,113;
+  /* Recon tier colors — decoupled from severity traffic light */
+  --tier-sec: #f472b6; --tier-sec-dim: rgba(244,114,182,0.12);
+  --tier-perf: #22d3ee; --tier-perf-dim: rgba(34,211,238,0.12);
+  --tier-qual: #c084fc; --tier-qual-dim: rgba(192,132,252,0.12);
+  --tier-arch: #fb923c; --tier-arch-dim: rgba(251,146,60,0.12);
+  --tier-obs: #34d399; --tier-obs-dim: rgba(52,211,153,0.12);
 }
 
 /* ── CSS Variables: Light Theme ── */
@@ -40,6 +46,12 @@
   --shadow: 0 1px 3px rgba(0,0,0,0.06); --nav-bg: rgba(245,245,247,0.82); --table-hover: rgba(0,0,0,0.02);
   --green-rgb: 22,163,74; --blue-rgb: 37,99,235; --purple-rgb: 147,51,234;
   --cyan-rgb: 8,145,178; --yellow-rgb: 217,119,6; --red-rgb: 220,38,38;
+  /* Recon tier colors — decoupled from severity traffic light */
+  --tier-sec: #db2777; --tier-sec-dim: rgba(219,39,119,0.1);
+  --tier-perf: #0891b2; --tier-perf-dim: rgba(8,145,178,0.1);
+  --tier-qual: #9333ea; --tier-qual-dim: rgba(147,51,234,0.1);
+  --tier-arch: #ea580c; --tier-arch-dim: rgba(234,88,12,0.1);
+  --tier-obs: #16a34a; --tier-obs-dim: rgba(22,163,74,0.1);
 }
 
 /* ── Reset & Body ── */
@@ -625,18 +637,18 @@ body {
 }
 .recon-tier-toggle.on::after { transform: translateX(14px); }
 .recon-tier-toggle.off { background: var(--border); }
-.recon-tier.security .recon-tier-toggle.on { background: var(--red); }
-.recon-tier.performance .recon-tier-toggle.on { background: var(--yellow); }
-.recon-tier.quality .recon-tier-toggle.on { background: var(--blue); }
-.recon-tier.architecture .recon-tier-toggle.on { background: var(--cyan); }
-.recon-tier.observability .recon-tier-toggle.on { background: var(--green); }
+.recon-tier.security .recon-tier-toggle.on { background: var(--tier-sec); }
+.recon-tier.performance .recon-tier-toggle.on { background: var(--tier-perf); }
+.recon-tier.quality .recon-tier-toggle.on { background: var(--tier-qual); }
+.recon-tier.architecture .recon-tier-toggle.on { background: var(--tier-arch); }
+.recon-tier.observability .recon-tier-toggle.on { background: var(--tier-obs); }
 .recon-tier-label-group { flex: 1; min-width: 0; }
 .recon-tier-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-.recon-tier.security .recon-tier-label { color: var(--red); }
-.recon-tier.performance .recon-tier-label { color: var(--yellow); }
-.recon-tier.quality .recon-tier-label { color: var(--blue); }
-.recon-tier.architecture .recon-tier-label { color: var(--cyan); }
-.recon-tier.observability .recon-tier-label { color: var(--green); }
+.recon-tier.security .recon-tier-label { color: var(--tier-sec); }
+.recon-tier.performance .recon-tier-label { color: var(--tier-perf); }
+.recon-tier.quality .recon-tier-label { color: var(--tier-qual); }
+.recon-tier.architecture .recon-tier-label { color: var(--tier-arch); }
+.recon-tier.observability .recon-tier-label { color: var(--tier-obs); }
 .recon-tier-desc {
   font-size: 10px; color: var(--mute); font-weight: 400;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -646,11 +658,11 @@ body {
   padding: 1px 6px; border-radius: 8px; min-width: 20px; text-align: center;
   flex-shrink: 0;
 }
-.recon-tier.security .recon-tier-count { background: var(--red-dim); color: var(--red); }
-.recon-tier.performance .recon-tier-count { background: var(--yellow-dim); color: var(--yellow); }
-.recon-tier.quality .recon-tier-count { background: var(--blue-dim); color: var(--blue); }
-.recon-tier.architecture .recon-tier-count { background: var(--cyan-dim); color: var(--cyan); }
-.recon-tier.observability .recon-tier-count { background: var(--green-dim); color: var(--green); }
+.recon-tier.security .recon-tier-count { background: var(--tier-sec-dim); color: var(--tier-sec); }
+.recon-tier.performance .recon-tier-count { background: var(--tier-perf-dim); color: var(--tier-perf); }
+.recon-tier.quality .recon-tier-count { background: var(--tier-qual-dim); color: var(--tier-qual); }
+.recon-tier.architecture .recon-tier-count { background: var(--tier-arch-dim); color: var(--tier-arch); }
+.recon-tier.observability .recon-tier-count { background: var(--tier-obs-dim); color: var(--tier-obs); }
 .recon-tier-header.tier-off .recon-tier-label { opacity: 0.4; text-decoration: line-through; }
 .recon-tier-header.tier-off .recon-tier-desc { opacity: 0.3; }
 .recon-tier-header.tier-off + .recon-tier-pills { opacity: 0.25; pointer-events: none; }
@@ -665,11 +677,11 @@ body {
   font-family: 'JetBrains Mono', monospace; cursor: pointer;
   transition: all 0.15s; white-space: nowrap; user-select: none;
 }
-.recon-tier.security .recon-dim-pill.active { background: var(--red-dim); color: var(--red); }
-.recon-tier.performance .recon-dim-pill.active { background: var(--yellow-dim); color: var(--yellow); }
-.recon-tier.quality .recon-dim-pill.active { background: var(--blue-dim); color: var(--blue); }
-.recon-tier.architecture .recon-dim-pill.active { background: var(--cyan-dim); color: var(--cyan); }
-.recon-tier.observability .recon-dim-pill.active { background: var(--green-dim); color: var(--green); }
+.recon-tier.security .recon-dim-pill.active { background: var(--tier-sec-dim); color: var(--tier-sec); }
+.recon-tier.performance .recon-dim-pill.active { background: var(--tier-perf-dim); color: var(--tier-perf); }
+.recon-tier.quality .recon-dim-pill.active { background: var(--tier-qual-dim); color: var(--tier-qual); }
+.recon-tier.architecture .recon-dim-pill.active { background: var(--tier-arch-dim); color: var(--tier-arch); }
+.recon-tier.observability .recon-dim-pill.active { background: var(--tier-obs-dim); color: var(--tier-obs); }
 .recon-dim-pill.active:hover { filter: brightness(1.15); }
 .recon-dim-pill.inactive {
   background: var(--border-subtle); color: var(--mute);
@@ -716,7 +728,7 @@ body {
 .tree-col-header {
   display: flex; align-items: center; padding: 6px 14px; gap: 8px;
   border-bottom: 1px solid var(--border); background: var(--card-hover);
-  border-radius: 10px 10px 0 0;
+  border-radius: 10px 10px 0 0; flex-wrap: wrap;
 }
 .tree-col-header .col-name { flex: 1; min-width: 0; }
 .tree-col-header .col-dim {
@@ -726,11 +738,11 @@ body {
 }
 .col-dim:hover { opacity: 0.7; }
 .col-dim.off { opacity: 0.25; text-decoration: line-through; }
-.col-dim.security { color: var(--red); }
-.col-dim.performance { color: var(--yellow); }
-.col-dim.quality { color: var(--blue); }
-.col-dim.architecture { color: var(--cyan); }
-.col-dim.observability { color: var(--green); }
+.col-dim.security { color: var(--tier-sec); }
+.col-dim.performance { color: var(--tier-perf); }
+.col-dim.quality { color: var(--tier-qual); }
+.col-dim.architecture { color: var(--tier-arch); }
+.col-dim.observability { color: var(--tier-obs); }
 
 .tree-row {
   display: flex; align-items: center; padding: 9px 14px;
@@ -754,11 +766,13 @@ body {
   font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .dim-num.zero { color: var(--border); }
-.dim-num.security { color: var(--red); }
-.dim-num.performance { color: var(--yellow); }
-.dim-num.quality { color: var(--blue); }
-.dim-num.architecture { color: var(--cyan); }
-.dim-num.observability { color: var(--green); }
+.dim-num.security { color: var(--tier-sec); }
+.dim-num.performance { color: var(--tier-perf); }
+.dim-num.quality { color: var(--tier-qual); }
+.dim-num.architecture { color: var(--tier-arch); }
+.dim-num.observability { color: var(--tier-obs); }
+.dim-num.dim-clickable { cursor: pointer; border-radius: 4px; transition: background 0.15s; }
+.dim-num.dim-clickable:hover { background: rgba(255,255,255,0.08); }
 .tree-severity { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; }
 .tree-severity.critical { background: var(--red); }
 .tree-severity.warning { background: var(--yellow); }
@@ -767,7 +781,7 @@ body {
 .tree-score-fill { height: 100%; border-radius: 2px; }
 .tree-score-fill.high { background: var(--red); }
 .tree-score-fill.medium { background: var(--yellow); }
-.tree-score-fill.low { background: var(--green); }
+.tree-score-fill.low { background: var(--blue); }
 .tree-chevron { flex-shrink: 0; font-size: 10px; color: var(--mute); width: 14px; text-align: center; }
 
 /* ── Finding detail rows ── */
@@ -788,9 +802,22 @@ body {
   flex-shrink: 0; font-size: 9px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.3px; padding: 1px 5px; border-radius: 3px; white-space: nowrap;
 }
+/* Severity uses traffic light — red/yellow/blue (tier colors are on a separate palette) */
 .finding-sev.critical { background: var(--red-dim); color: var(--red); }
 .finding-sev.warning { background: var(--yellow-dim); color: var(--yellow); }
 .finding-sev.info { background: var(--blue-dim); color: var(--blue); }
+
+/* Tier badge — colored by domain, sits left of line number */
+.finding-tier {
+  flex-shrink: 0; font-size: 8px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.3px; padding: 1px 4px; border-radius: 3px; white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace; min-width: 28px; text-align: center;
+}
+.finding-tier.security { background: var(--tier-sec-dim); color: var(--tier-sec); }
+.finding-tier.performance { background: var(--tier-perf-dim); color: var(--tier-perf); }
+.finding-tier.quality { background: var(--tier-qual-dim); color: var(--tier-qual); }
+.finding-tier.architecture { background: var(--tier-arch-dim); color: var(--tier-arch); }
+.finding-tier.observability { background: var(--tier-obs-dim); color: var(--tier-obs); }
 .finding-id {
   font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary);
   font-weight: 500; white-space: nowrap;
@@ -803,6 +830,43 @@ body {
   flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 11px;
   color: var(--text-secondary); min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* File-level toolbar: Focus | Source | Actions | Dimensions */
+.toolbar-box {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px;
+}
+.toolbar-label {
+  font-size: 8px; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--mute); margin-right: 2px; white-space: nowrap; font-weight: 600;
+}
+.toolbar-btn {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace; color: var(--dim);
+  border: 1px solid transparent; transition: all 0.15s; white-space: nowrap;
+}
+.toolbar-btn:hover { color: var(--text-secondary); background: rgba(255,255,255,0.04); }
+.toolbar-btn.active { color: var(--text); background: rgba(255,255,255,0.08); border-color: var(--text-secondary); }
+.toolbar-toggle { border: 1px solid var(--border); }
+.toolbar-toggle.active { background: rgba(255,255,255,0.08); border-color: var(--text-secondary); color: var(--text); }
+.toolbar-action { border: 1px solid var(--border); color: var(--dim); }
+.toolbar-action:hover { border-color: var(--text-secondary); color: var(--text); }
+.toolbar-action.copied { border-color: var(--green); color: var(--green); }
+.dims-label {
+  font-size: 8px; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--mute); white-space: nowrap; font-weight: 600;
+  margin-left: auto; margin-right: 4px;
+}
+
+/* Code mode: source text replaces rule_id + description in finding row */
+.finding-src {
+  flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--text-secondary); white-space: pre; overflow: hidden;
+  text-overflow: ellipsis; min-width: 0;
+}
+.finding-code-mode {
+  background: var(--bg);
 }
 
 /* ══════════════════════════════════════════════════════════

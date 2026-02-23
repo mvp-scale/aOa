@@ -230,17 +230,168 @@ type LineGetter interface {
 	GetLines(fileID uint32) []string
 }
 
-// Scan performs a full recon scan over all files in the index.
-func Scan(idx *ports.Index, lines LineGetter) *Result {
-	patterns := buildPatterns()
+// ScanFile scans a single file and returns its FileInfo.
+// symbols must be sorted by startLine. lines may be nil.
+func ScanFile(fileMeta *ports.FileMeta, symbols []symbolInfo, fileLines []string, pats []pattern) FileInfo {
+	base := filepath.Base(fileMeta.Path)
+	ext := filepath.Ext(base)
 
-	result := &Result{
-		TierCounts: make(map[string]int),
-		DimCounts:  make(map[string]int),
-		Tree:       make(map[string]map[string]FileInfo),
+	isCodeFile := CodeExts[ext]
+	isTest := strings.HasSuffix(base, "_test.go") ||
+		strings.HasSuffix(base, "_test.py") ||
+		strings.HasSuffix(base, ".test.js") ||
+		strings.HasSuffix(base, ".test.ts") ||
+		strings.HasSuffix(base, "_test.rs") ||
+		strings.Contains(base, "test_")
+	isMain := strings.Contains(fileMeta.Path, "cmd/") ||
+		base == "main.go" || base == "main.py"
+
+	symbolNames := make([]string, len(symbols))
+	for i, s := range symbols {
+		symbolNames[i] = s.name
 	}
 
-	// Build per-file symbol mapping from index metadata
+	var findings []Finding
+
+	if fileLines != nil {
+		forLoopDepth := 0
+		for lineIdx, line := range fileLines {
+			lineNum := lineIdx + 1
+
+			if reForLoop.MatchString(line) {
+				forLoopDepth++
+			}
+
+			for _, pat := range pats {
+				if pat.codeOnly && !isCodeFile {
+					continue
+				}
+				if pat.id == "defer_in_loop" {
+					if forLoopDepth > 0 && reDeferInFor.MatchString(line) {
+						sym := findEnclosingSymbol(symbols, lineNum)
+						findings = append(findings, Finding{
+							Symbol:   sym,
+							DimID:    pat.dimID,
+							TierID:   pat.tierID,
+							ID:       pat.id,
+							Label:    pat.label,
+							Severity: pat.severity,
+							Line:     lineNum,
+						})
+					}
+					continue
+				}
+				if pat.match(line, lineNum, isTest, isMain) {
+					sym := findEnclosingSymbol(symbols, lineNum)
+					findings = append(findings, Finding{
+						Symbol:   sym,
+						DimID:    pat.dimID,
+						TierID:   pat.tierID,
+						ID:       pat.id,
+						Label:    pat.label,
+						Severity: pat.severity,
+						Line:     lineNum,
+					})
+				}
+			}
+
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "}" && !strings.Contains(line, "\t\t") {
+				if forLoopDepth > 0 {
+					forLoopDepth--
+				}
+			}
+		}
+	}
+
+	// Check for long functions
+	if isCodeFile {
+		for _, sym := range symbols {
+			if sym.endLine > 0 && int(sym.endLine)-int(sym.startLine) > 100 {
+				findings = append(findings, Finding{
+					Symbol:   sym.name,
+					DimID:    "complexity",
+					TierID:   "quality",
+					ID:       "long_function",
+					Label:    "Function exceeds 100 lines",
+					Severity: "info",
+					Line:     int(sym.startLine),
+				})
+			}
+		}
+	}
+
+	return FileInfo{
+		Language: fileMeta.Language,
+		Symbols:  symbolNames,
+		Findings: findings,
+	}
+}
+
+// SubtractFile removes a file's contribution from aggregate counts.
+func (r *Result) SubtractFile(dir, base string) {
+	files, ok := r.Tree[dir]
+	if !ok {
+		return
+	}
+	info, ok := files[base]
+	if !ok {
+		return
+	}
+
+	r.FilesScanned--
+	if len(info.Findings) == 0 {
+		r.CleanFiles--
+	}
+	for _, f := range info.Findings {
+		r.TotalFindings--
+		r.TierCounts[f.TierID]--
+		r.DimCounts[f.DimID]--
+		switch f.Severity {
+		case "critical":
+			r.Critical--
+		case "warning":
+			r.Warnings--
+		case "info":
+			r.Info--
+		}
+	}
+
+	delete(files, base)
+	if len(files) == 0 {
+		delete(r.Tree, dir)
+	}
+}
+
+// AddFile adds a file's contribution to aggregate counts.
+func (r *Result) AddFile(dir, base string, info FileInfo) {
+	r.FilesScanned++
+
+	if _, ok := r.Tree[dir]; !ok {
+		r.Tree[dir] = make(map[string]FileInfo)
+	}
+	r.Tree[dir][base] = info
+
+	if len(info.Findings) == 0 {
+		r.CleanFiles++
+	}
+	for _, f := range info.Findings {
+		r.TotalFindings++
+		r.TierCounts[f.TierID]++
+		r.DimCounts[f.DimID]++
+		switch f.Severity {
+		case "critical":
+			r.Critical++
+		case "warning":
+			r.Warnings++
+		case "info":
+			r.Info++
+		}
+	}
+}
+
+// BuildFileSymbols builds a per-file sorted symbol mapping from index metadata.
+func BuildFileSymbols(idx *ports.Index) map[uint32][]symbolInfo {
 	fileSymbols := make(map[uint32][]symbolInfo)
 	for ref, meta := range idx.Metadata {
 		if meta == nil {
@@ -258,141 +409,37 @@ func Scan(idx *ports.Index, lines LineGetter) *Result {
 			return syms[i].startLine < syms[j].startLine
 		})
 	}
+	return fileSymbols
+}
 
-	// Pre-check long functions
-	type longFunc struct {
-		fileID uint32
-		sym    symbolInfo
+// Patterns returns the built-in scan patterns. Exported for incremental scanning.
+func Patterns() []pattern {
+	return buildPatterns()
+}
+
+// Scan performs a full recon scan over all files in the index.
+func Scan(idx *ports.Index, lines LineGetter) *Result {
+	pats := buildPatterns()
+
+	result := &Result{
+		TierCounts: make(map[string]int),
+		DimCounts:  make(map[string]int),
+		Tree:       make(map[string]map[string]FileInfo),
 	}
-	var longFuncs []longFunc
-	for fid, syms := range fileSymbols {
-		for _, sym := range syms {
-			if sym.endLine > 0 && int(sym.endLine)-int(sym.startLine) > 100 {
-				longFuncs = append(longFuncs, longFunc{fileID: fid, sym: sym})
-			}
-		}
-	}
+
+	fileSymbols := BuildFileSymbols(idx)
 
 	for fileID, fileMeta := range idx.Files {
-		result.FilesScanned++
-
 		dir := filepath.Dir(fileMeta.Path)
 		base := filepath.Base(fileMeta.Path)
-		ext := filepath.Ext(base)
 
-		isCodeFile := CodeExts[ext]
-		isTest := strings.HasSuffix(base, "_test.go") ||
-			strings.HasSuffix(base, "_test.py") ||
-			strings.HasSuffix(base, ".test.js") ||
-			strings.HasSuffix(base, ".test.ts") ||
-			strings.HasSuffix(base, "_test.rs") ||
-			strings.Contains(base, "test_")
-		isMain := strings.Contains(fileMeta.Path, "cmd/") ||
-			base == "main.go" || base == "main.py"
-
-		syms := fileSymbols[fileID]
-		symbolNames := make([]string, len(syms))
-		for i, s := range syms {
-			symbolNames[i] = s.name
-		}
-
-		var findings []Finding
-
+		var fileLines []string
 		if lines != nil {
-			fileLines := lines.GetLines(fileID)
-			if fileLines != nil {
-				forLoopDepth := 0
-				for lineIdx, line := range fileLines {
-					lineNum := lineIdx + 1
-
-					if reForLoop.MatchString(line) {
-						forLoopDepth++
-					}
-
-					for _, pat := range patterns {
-						if pat.codeOnly && !isCodeFile {
-							continue
-						}
-						if pat.id == "defer_in_loop" {
-							if forLoopDepth > 0 && reDeferInFor.MatchString(line) {
-								sym := findEnclosingSymbol(syms, lineNum)
-								findings = append(findings, Finding{
-									Symbol:   sym,
-									DimID:    pat.dimID,
-									TierID:   pat.tierID,
-									ID:       pat.id,
-									Label:    pat.label,
-									Severity: pat.severity,
-									Line:     lineNum,
-								})
-							}
-							continue
-						}
-						if pat.match(line, lineNum, isTest, isMain) {
-							sym := findEnclosingSymbol(syms, lineNum)
-							findings = append(findings, Finding{
-								Symbol:   sym,
-								DimID:    pat.dimID,
-								TierID:   pat.tierID,
-								ID:       pat.id,
-								Label:    pat.label,
-								Severity: pat.severity,
-								Line:     lineNum,
-							})
-						}
-					}
-
-					trimmed := strings.TrimSpace(line)
-					if trimmed == "}" && !strings.Contains(line, "\t\t") {
-						if forLoopDepth > 0 {
-							forLoopDepth--
-						}
-					}
-				}
-			}
+			fileLines = lines.GetLines(fileID)
 		}
 
-		if isCodeFile {
-			for _, lf := range longFuncs {
-				if lf.fileID == fileID {
-					findings = append(findings, Finding{
-						Symbol:   lf.sym.name,
-						DimID:    "complexity",
-						TierID:   "quality",
-						ID:       "long_function",
-						Label:    "Function exceeds 100 lines",
-						Severity: "info",
-						Line:     int(lf.sym.startLine),
-					})
-				}
-			}
-		}
-
-		if _, ok := result.Tree[dir]; !ok {
-			result.Tree[dir] = make(map[string]FileInfo)
-		}
-		result.Tree[dir][base] = FileInfo{
-			Language: fileMeta.Language,
-			Symbols:  symbolNames,
-			Findings: findings,
-		}
-
-		if len(findings) == 0 {
-			result.CleanFiles++
-		}
-		for _, f := range findings {
-			result.TotalFindings++
-			result.TierCounts[f.TierID]++
-			result.DimCounts[f.DimID]++
-			switch f.Severity {
-			case "critical":
-				result.Critical++
-			case "warning":
-				result.Warnings++
-			case "info":
-				result.Info++
-			}
-		}
+		info := ScanFile(fileMeta, fileSymbols[fileID], fileLines, pats)
+		result.AddFile(dir, base, info)
 	}
 
 	return result

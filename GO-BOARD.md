@@ -259,7 +259,9 @@
 | [L6](#layer-6) | [L6.10](#l610) | | | x | | | | | L6.8, L6.9 | 🟡 | 🟢 | 🟡 | CI/Release — workflow builds both binaries, publishes to npm | Tag → build → publish, fully automated | `.github/workflows/release.yml` (8 matrix jobs + npm publish) |
 | [L3](#layer-3) | [L3.15](#l315) | | x | | x | | | | - | 🟢 | 🟢 | 🟡 | GNU grep native parity — 3 modes, 22 flags, stdin/files/index routing | Drop-in grep replacement for AI agents | Smoke tests: stdin pipe, file grep, recursive, exit codes, no ANSI. **Gap**: no automated parity test suite yet |
 | [L5](#layer-5) | [L5.13](#l513) | | | | | | | x | L5.12 | 🟢 | 🟢 | 🟡 | Recon findings peek — source line toggle, tier noise filter, scan age | Findings are actionable, not just labels | `/api/source-line` endpoint; click toggles desc↔code; tier gating filters noise. **Gap**: browser-only validation |
-| [L7](#layer-7) | [L7.1](#l71) | | | | x | | | x | - | 🟡 | ⚪ | ⚪ | Startup progress feedback — file count, scan progress, time remaining | Users don't know daemon is working during 20-30s startup | Show indexing progress: files scanned, symbols found, percent complete |
+| [L7](#layer-7) | [L7.1](#l71) | x | | | x | | | x | - | 🟢 | 🟢 | 🟡 | Startup progress feedback — deferred loading, async cache warming | Daemon starts in <1s, caches warm in background with progress logging | `daemon start` returns in 0.1s; log shows step-by-step progress. **Gap**: no automated startup time test |
+| [L7](#layer-7) | [L7.2](#l72) | x | | | | x | | | - | 🟡 | ⚪ | ⚪ | Database storage optimization — replace JSON blobs with binary encoding | 964MB bbolt with JSON serialization. Investigate gob/protobuf/msgpack for faster load | Profile load time; compare encoding formats; target <3s index load |
+| [L7](#layer-7) | [L7.3](#l73) | | | | | | | x | - | 🟡 | ⚪ | ⚪ | Recon source line editor view — replace per-line peek with file-level source display | Show all flagged lines in an editor-like view grouped by severity, not one-at-a-time peeks | Design conversation needed on layout; toggle between dimensional view and source view |
 
 ---
 
@@ -897,23 +899,56 @@ Release workflow builds 8 binaries (2 binaries × 4 platforms), creates GitHub r
 
 #### L7.1
 
-**Startup progress feedback** — ⚪ Not started
+**Startup progress feedback** — 🟢 Complete (Session 66)
 
-Problem: `aoa daemon start` and `aoa init` take 20-30s on large projects. During this time the user sees a spinner with no indication of what's happening. `aoa daemon restart` can timeout before indexing completes.
+Solution: Deferred all heavy IO to background after the socket server is up.
 
-Needed:
-- File count progress during indexing: "Indexing... 234/500 files (47%)"
-- Symbol count as they're discovered
-- Phase indication: "Indexing files..." → "Building search index..." → "Running recon enhance..."
-- Time since start (not time remaining — too unreliable)
-- `aoa daemon restart` timeout should be more forgiving, or show intermediate status
+`New()` is now instant — creates an empty index, fresh learner, unwarmed file cache. `Start()` brings up the socket + HTTP server immediately. `WarmCaches()` runs in a goroutine with a progress callback:
 
-Approach TBD — options include:
-- Progress callback in `BuildIndex()` that writes to stderr
-- Socket-based progress query (`/api/indexing-status`) for dashboard
-- Log-based progress (daemon.log entries per 100 files)
+```
+loading index from database...          (28.7s — 964MB bbolt)
+index loaded: 3932 files, 48582 tokens
+loading learner state...                (0.0s)
+learner state loaded: 1611 prompts
+warming file cache (3932 files)...      (17.1s — reads all files from disk)
+file cache ready
+scanning recon patterns...              (12.1s — 3932 files × patterns)
+recon cache ready
+all caches warm — 3932 files ready (57.9s total)
+```
 
-**Files**: `internal/app/indexer.go`, `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/daemon.go`
+User sees `daemon started (pid N)` in 0.1 seconds. Dashboard works immediately. Searches and recon data populate as caches warm.
+
+**Files**: `internal/app/app.go` (WarmCaches), `internal/domain/index/search.go` (SetCache/WarmCache split), `cmd/aoa/cmd/daemon.go` (deferred warm)
+
+#### L7.2
+
+**Database storage optimization** — ⚪ Not started
+
+Problem: `aoa.db` is 964MB. `LoadIndex()` reads the entire file as JSON blobs and deserializes in ~28.7s. This is the single largest contributor to total startup time.
+
+Investigation needed:
+- Profile: how much time in bbolt read vs JSON unmarshal?
+- Alternative encodings: gob (Go-native), msgpack, protobuf, flatbuffers
+- Structural change: split monolithic token map into per-file buckets for incremental loading
+- Compression: gzip/zstd on stored blobs
+- Target: <3s index load for 4K-file projects
+
+**Files**: `internal/adapters/bbolt/store.go` (LoadIndex/SaveIndex)
+
+#### L7.3
+
+**Recon source line editor view** — ⚪ Not started
+
+Problem: The current per-line peek (click a finding → see one source line) is useful but limited. When a file has 10+ findings, the user wants to see all flagged lines in context, not click them one by one.
+
+Design conversation needed:
+- Toggle between dimensional view (current: symbols + findings grouped by severity) and source view (editor-like: all flagged lines shown with severity badges inline, like a code review)
+- Source view shows line numbers, syntax context, severity markers in the gutter
+- Severity grouping: critical lines first, then warning, info hidden by default
+- Consider: is this a separate "Source" tab within the file drill-down, or a mode toggle on the existing view?
+
+**Files**: `internal/adapters/web/static/app.js`, `internal/adapters/web/static/style.css`, `internal/adapters/web/recon.go` (may need new API endpoint for multi-line fetch)
 
 ---
 

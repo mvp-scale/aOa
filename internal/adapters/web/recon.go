@@ -35,7 +35,27 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Fall back to interim pattern scanner
+	// Check for cached interim scanner result (pre-computed at startup, updated incrementally)
+	if s.queries != nil {
+		cached, scannedAt := s.queries.CachedReconResult()
+		if result, ok := cached.(*recon.Result); ok && result != nil {
+			reconAvailable := s.queries.ReconAvailable()
+			response := struct {
+				*recon.Result
+				ReconAvailable bool  `json:"recon_available"`
+				ScannedAt      int64 `json:"scanned_at"`
+			}{
+				Result:         result,
+				ReconAvailable: reconAvailable,
+				ScannedAt:      scannedAt,
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	// Safety net: fall back to inline scan if both paths returned nil
 	if s.idx == nil || s.engine == nil {
 		http.Error(w, `{"error":"index not available"}`, http.StatusServiceUnavailable)
 		return

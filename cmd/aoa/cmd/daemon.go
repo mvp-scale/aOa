@@ -128,8 +128,10 @@ func spawnDaemon(root, sockPath string) error {
 	logFile.Close()
 
 	// Poll until the socket is reachable or the child dies.
+	// The daemon defers heavy work (cache warming) to after the socket is up,
+	// so this should complete in 1-2 seconds.
 	client := socket.NewClient(sockPath)
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		select {
 		case <-exited:
@@ -149,6 +151,8 @@ func spawnDaemon(root, sockPath string) error {
 			if portData, err := os.ReadFile(httpPortPath); err == nil {
 				fmt.Printf("  dashboard: http://localhost:%s\n", strings.TrimSpace(string(portData)))
 			}
+			// Brief tail of the log to show warmup progress
+			fmt.Printf("  caches warming in background (watch: tail -f %s)\n", logPath)
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -174,36 +178,47 @@ func readLogTail(path string, n int) string {
 // It opens the database, starts the socket server, and blocks until a signal
 // or remote shutdown arrives. All output goes to .aoa/daemon.log.
 func runDaemonLoop(root, sockPath string) error {
-	fmt.Printf("[%s] daemon starting\n", time.Now().Format(time.RFC3339))
+	logf := func(format string, args ...interface{}) {
+		fmt.Printf("[%s] "+format+"\n", append([]interface{}{time.Now().Format(time.RFC3339)}, args...)...)
+	}
+
+	logf("daemon starting")
 
 	a, err := app.New(app.Config{ProjectRoot: root, Parser: newParser()})
 	if err != nil {
 		if isDBLockError(err) {
-			fmt.Printf("[%s] error: %s\n", time.Now().Format(time.RFC3339), diagnoseDBLock(root))
+			logf("error: %s", diagnoseDBLock(root))
 			return fmt.Errorf("cannot start daemon: %s", diagnoseDBLock(root))
 		}
-		fmt.Printf("[%s] error: %v\n", time.Now().Format(time.RFC3339), err)
+		logf("error: %v", err)
 		return fmt.Errorf("init: %w", err)
 	}
 
 	if err := a.Start(); err != nil {
-		fmt.Printf("[%s] error: %v\n", time.Now().Format(time.RFC3339), err)
+		logf("error: %v", err)
 		return err
 	}
 
-	fmt.Printf("[%s] daemon ready at %s\n", time.Now().Format(time.RFC3339), sockPath)
+	logf("daemon ready at %s", sockPath)
 	if a.WebServer.Port() > 0 {
-		fmt.Printf("[%s] dashboard at %s\n", time.Now().Format(time.RFC3339), a.WebServer.URL())
+		logf("dashboard at %s", a.WebServer.URL())
 	}
+
+	// Warm caches in the background — daemon is already serving.
+	// Searches and dashboard work immediately; content scanning and
+	// recon results appear once warming completes.
+	go a.WarmCaches(func(msg string) {
+		logf("%s", msg)
+	})
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
 	case sig := <-sigCh:
-		fmt.Printf("[%s] received %s, shutting down\n", time.Now().Format(time.RFC3339), sig)
+		logf("received %s, shutting down", sig)
 	case <-a.Server.ShutdownCh():
-		fmt.Printf("[%s] remote stop, shutting down\n", time.Now().Format(time.RFC3339))
+		logf("remote stop, shutting down")
 	}
 
 	err = a.Stop()
@@ -212,7 +227,7 @@ func runDaemonLoop(root, sockPath string) error {
 	pidPath := filepath.Join(root, ".aoa", "daemon.pid")
 	os.Remove(pidPath)
 
-	fmt.Printf("[%s] daemon stopped\n", time.Now().Format(time.RFC3339))
+	logf("daemon stopped")
 	return err
 }
 
