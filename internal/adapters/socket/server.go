@@ -37,6 +37,9 @@ type AppQueries interface {
 	ReconAvailable() bool
 	DimensionalResults() map[string]*DimensionalFileResult
 	CachedReconResult() (interface{}, int64) // cached interim scanner result + scanned_at timestamp
+	InvestigatedFiles() []string
+	SetFileInvestigated(relPath string, investigated bool)
+	ClearInvestigated()
 	UsageQuota() *UsageQuotaResult
 }
 

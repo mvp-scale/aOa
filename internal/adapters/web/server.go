@@ -91,6 +91,7 @@ func (s *Server) Start(preferredPort int) error {
 	mux.HandleFunc("GET /api/sessions", s.handleSessions)
 	mux.HandleFunc("GET /api/config", s.handleConfig)
 	mux.HandleFunc("GET /api/recon", s.handleRecon)
+	mux.HandleFunc("POST /api/recon-investigate", s.handleReconInvestigate)
 	mux.HandleFunc("GET /api/source-line", s.handleSourceLine)
 	mux.HandleFunc("GET /api/usage", s.handleUsage)
 

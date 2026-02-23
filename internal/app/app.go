@@ -5,6 +5,7 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -172,6 +173,9 @@ type App struct {
 	// Dimensional results cache (from aoa-recon via bbolt, cached in memory)
 	dimCache     map[string]*socket.DimensionalFileResult
 	dimCacheSet  bool // true once loaded (distinguishes nil "no data" from "not loaded")
+
+	// Investigated files (user-triaged, excluded from active recon view)
+	investigatedFiles map[string]int64 // relPath -> unix timestamp
 	promptN        uint32                 // prompt counter (incremented on each user input)
 	lastAutotune   *learner.AutotuneResult // most recent autotune result (for status line)
 	statusLinePath string                 // project-local path for status line file
@@ -587,6 +591,7 @@ func (a *App) WarmCaches(logFn func(string)) {
 	logFn("scanning recon patterns...")
 	start = time.Now()
 	a.warmReconCache()
+	a.loadInvestigated()
 	logFn(fmt.Sprintf("recon cache ready (%.1fs)", time.Since(start).Seconds()))
 
 	logFn(fmt.Sprintf("all caches warm — %d files ready (%.1fs total)",
@@ -2000,6 +2005,87 @@ func (a *App) updateReconForFile(fileID uint32, relPath string) {
 	info := recon.ScanFile(fileMeta, symbols, fileLines, pats)
 	a.reconCache.AddFile(dir, base, info)
 	a.reconScannedAt = time.Now().Unix()
+}
+
+// InvestigatedFiles returns the current set of investigated file paths.
+// Implements socket.AppQueries.
+func (a *App) InvestigatedFiles() []string {
+	a.reconMu.RLock()
+	defer a.reconMu.RUnlock()
+	now := time.Now().Unix()
+	weekSec := int64(7 * 24 * 60 * 60)
+	var files []string
+	for path, ts := range a.investigatedFiles {
+		if now-ts < weekSec {
+			files = append(files, path)
+		}
+	}
+	return files
+}
+
+// SetFileInvestigated marks or unmarks a file as investigated.
+func (a *App) SetFileInvestigated(relPath string, investigated bool) {
+	a.reconMu.Lock()
+	defer a.reconMu.Unlock()
+	if a.investigatedFiles == nil {
+		a.investigatedFiles = make(map[string]int64)
+	}
+	if investigated {
+		a.investigatedFiles[relPath] = time.Now().Unix()
+	} else {
+		delete(a.investigatedFiles, relPath)
+	}
+	a.saveInvestigated()
+}
+
+// ClearInvestigated removes all investigation markers.
+func (a *App) ClearInvestigated() {
+	a.reconMu.Lock()
+	defer a.reconMu.Unlock()
+	a.investigatedFiles = make(map[string]int64)
+	a.saveInvestigated()
+}
+
+// saveInvestigated persists the investigated files to .aoa/recon-investigated.json.
+// Must be called under reconMu.Lock().
+func (a *App) saveInvestigated() {
+	path := filepath.Join(a.ProjectRoot, ".aoa", "recon-investigated.json")
+	data, _ := json.Marshal(a.investigatedFiles)
+	os.WriteFile(path, data, 0644)
+}
+
+// loadInvestigated loads investigated files from disk, pruning expired entries.
+func (a *App) loadInvestigated() {
+	path := filepath.Join(a.ProjectRoot, ".aoa", "recon-investigated.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		a.investigatedFiles = make(map[string]int64)
+		return
+	}
+	var files map[string]int64
+	if err := json.Unmarshal(data, &files); err != nil {
+		a.investigatedFiles = make(map[string]int64)
+		return
+	}
+	// Prune expired (>1 week)
+	now := time.Now().Unix()
+	weekSec := int64(7 * 24 * 60 * 60)
+	for path, ts := range files {
+		if now-ts >= weekSec {
+			delete(files, path)
+		}
+	}
+	a.investigatedFiles = files
+}
+
+// clearFileInvestigated removes investigation status for a file (called on file change).
+func (a *App) clearFileInvestigated(relPath string) {
+	a.reconMu.Lock()
+	defer a.reconMu.Unlock()
+	if _, ok := a.investigatedFiles[relPath]; ok {
+		delete(a.investigatedFiles, relPath)
+		a.saveInvestigated()
+	}
 }
 
 // appFileCacheAdapter adapts the search engine's FileCache to the recon.LineGetter interface.

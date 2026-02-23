@@ -81,6 +81,7 @@ func (a *App) onFileChanged(absPath string) {
 			}
 			// Update recon cache: remove deleted file's contribution
 			a.updateReconForFile(existingID, relPath)
+			a.clearFileInvestigated(relPath)
 		}
 		return
 	}
@@ -149,6 +150,7 @@ func (a *App) onFileChanged(absPath string) {
 		}
 		// Incrementally update recon cache for this file
 		a.updateReconForFile(fileID, relPath)
+		a.clearFileInvestigated(relPath)
 		return
 	}
 
@@ -174,6 +176,7 @@ func (a *App) onFileChanged(absPath string) {
 
 	// Incrementally update recon cache for this file
 	a.updateReconForFile(fileID, relPath)
+	a.clearFileInvestigated(relPath)
 
 	// If aoa-recon is available and parser is nil, trigger incremental enhancement.
 	// When parser is non-nil, symbols are already extracted above.

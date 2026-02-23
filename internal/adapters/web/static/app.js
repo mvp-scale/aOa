@@ -360,6 +360,7 @@ function poll() {
     case 'recon':
       safeFetch('/api/recon').then(function(d) {
         cache.recon = d;
+        reconAnnotateInvestigated(d);
         renderRecon();
       }).catch(function() {});
       break;
@@ -1422,21 +1423,29 @@ var RECON_TIERS = [
     dimensions: [
       { id: 'debug', label: 'Debug Artifacts' }
     ]
+  },
+  {
+    id: 'investigated', label: 'Investigated', color: 'slate', desc: 'Reviewed & accepted files',
+    dimensions: [
+      { id: 'investigated', label: 'Reviewed' }
+    ],
+    defaultOff: true
   }
 ];
 
 var RECON_TIER_ABBREV = {
   security: 'Sec', performance: 'Perf', quality: 'Qual',
-  architecture: 'Arch', observability: 'Obs'
+  architecture: 'Arch', observability: 'Obs', investigated: 'Inv'
 };
-var RECON_DIM_ORDER = ['security', 'performance', 'quality', 'architecture', 'observability'];
+var RECON_DIM_ORDER = ['security', 'performance', 'quality', 'architecture', 'observability', 'investigated'];
 
 // Active dimension state — persisted in localStorage
 var reconActiveDims = {};
 var savedReconDims = JSON.parse(localStorage.getItem('aoa-recon-dims') || '{}');
 RECON_TIERS.forEach(function(t) {
   t.dimensions.forEach(function(d) {
-    reconActiveDims[d.id] = savedReconDims.hasOwnProperty(d.id) ? savedReconDims[d.id] : true;
+    var defaultVal = t.defaultOff ? false : true;
+    reconActiveDims[d.id] = savedReconDims.hasOwnProperty(d.id) ? savedReconDims[d.id] : defaultVal;
   });
 });
 
@@ -1484,6 +1493,58 @@ var reconSourceOn = false;  // false = findings detail | true = inline source co
 // Source line cache: "file:line" → source text. Avoids re-fetching on every poll cycle.
 var reconSourceCache = {};
 
+// Annotate findings with investigated flag based on investigated_files from API.
+// Also adds 'investigated' dim_id so the dim filter system handles show/hide.
+function reconAnnotateInvestigated(data) {
+  if (!data || !data.tree) return;
+  var invSet = {};
+  (data.investigated_files || []).forEach(function(f) { invSet[f] = true; });
+
+  Object.keys(data.tree).forEach(function(folder) {
+    var files = data.tree[folder];
+    Object.keys(files).forEach(function(file) {
+      var relPath = (folder === '.' ? '' : folder + '/') + file;
+      var isInv = !!invSet[relPath];
+      var info = files[file];
+      if (info.findings) {
+        info.findings.forEach(function(f) {
+          f.investigated = isInv;
+        });
+      }
+    });
+  });
+}
+
+// Mark/unmark a file as investigated via API.
+function reconSetInvestigated(relPath, investigated) {
+  fetch('/api/recon-investigate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file: relPath, action: investigated ? 'add' : 'remove' })
+  }).then(function() {
+    // Re-fetch recon data to update annotations
+    safeFetch('/api/recon').then(function(d) {
+      cache.recon = d;
+      reconAnnotateInvestigated(d);
+      renderRecon();
+    });
+  });
+}
+
+function reconClearAllInvestigated() {
+  fetch('/api/recon-investigate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'clear' })
+  }).then(function() {
+    safeFetch('/api/recon').then(function(d) {
+      cache.recon = d;
+      reconAnnotateInvestigated(d);
+      renderRecon();
+    });
+  });
+}
+
 function reconNavigateTo(level, folder, file) {
   // Reset controls when leaving file level
   if (level !== 'file') {
@@ -1503,8 +1564,15 @@ function reconNavigateTo(level, folder, file) {
 // Filter findings based on active dimensions
 function reconFilterFindings(findings) {
   if (!findings) return [];
+  var invActive = reconActiveDims['investigated'];
   return findings.filter(function(f) {
-    if (!reconActiveDims[f.dim_id]) return false;
+    // Investigated findings: only show when investigated toggle is ON
+    if (f.investigated && !invActive) return false;
+    // Non-investigated findings: hide when ONLY investigated toggle is on (solo mode)
+    if (!f.investigated && invActive && !reconActiveDims[f.dim_id]) return false;
+    // Normal dim filter for non-investigated findings
+    if (!f.investigated && !reconActiveDims[f.dim_id]) return false;
+    // Focus filter
     if (reconFocus === 'recon' && f.severity === 'info') return false;
     if (reconFocus === 'critical' && f.severity !== 'critical') return false;
     if (reconFocus === 'warning' && f.severity !== 'warning') return false;
@@ -1583,6 +1651,10 @@ function reconColHeaderHtml(fileLevel) {
       '</div>';
     h += '<span class="toolbar-btn toolbar-toggle' + (reconSourceOn ? ' active' : '') + '" id="reconSourceToggle">Code</span>';
     h += '<span class="toolbar-btn toolbar-action" id="reconCopyPrompt">Copy Prompt</span>';
+    // Investigate action — context-dependent label
+    var filePath = (reconFolder === '.' ? '' : reconFolder + '/') + reconFile;
+    var isInv = cache.recon && cache.recon.investigated_files && cache.recon.investigated_files.indexOf(filePath) >= 0;
+    h += '<span class="toolbar-btn toolbar-action' + (isInv ? ' investigated' : '') + '" id="reconInvBtn">' + (isInv ? 'Uninvestigate' : 'Investigated') + '</span>';
     h += reconDimsHeaderHtml();
     // Trailing spacers to match method-row trailing elements (severity dot + score bar + chevron)
     h += '<span style="width:7px;flex-shrink:0"></span>' +
@@ -2043,6 +2115,18 @@ function renderReconTree(data) {
     });
   }
 
+  // Investigate button (file level)
+  var invBtn = document.getElementById('reconInvBtn');
+  if (invBtn) {
+    invBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (!reconFolder || !reconFile) return;
+      var filePath = (reconFolder === '.' ? '' : reconFolder + '/') + reconFile;
+      var isInv = cache.recon && cache.recon.investigated_files && cache.recon.investigated_files.indexOf(filePath) >= 0;
+      reconSetInvestigated(filePath, !isInv);
+    });
+  }
+
   // Code mode: fetch source lines for finding rows not yet cached
   if (reconSourceOn) {
     wrap.querySelectorAll('.finding-code-mode[data-code-file]').forEach(function(el) {
@@ -2126,10 +2210,20 @@ function reconAggregateFolder(data, folder) {
     var filtered = reconFilterFindings(files[file].findings);
     filtered.forEach(function(f) {
       byCat[f.tier_id] = (byCat[f.tier_id] || 0) + 1;
+      if (f.investigated) byCat['investigated'] = (byCat['investigated'] || 0) + 1;
       sevs[f.severity]++;
       total++;
     });
   });
+  // Also count investigated findings that are currently hidden (for INV column display)
+  if (!reconActiveDims['investigated']) {
+    Object.keys(files).forEach(function(file) {
+      var allFindings = files[file].findings || [];
+      allFindings.forEach(function(f) {
+        if (f.investigated) byCat['investigated'] = (byCat['investigated'] || 0) + 1;
+      });
+    });
+  }
   return { byCat: byCat, sevs: sevs, total: total };
 }
 
@@ -2142,9 +2236,16 @@ function reconAggregateFile(data, folder, file) {
     var filtered = reconFilterFindings(fileData.findings);
     filtered.forEach(function(f) {
       byCat[f.tier_id] = (byCat[f.tier_id] || 0) + 1;
+      if (f.investigated) byCat['investigated'] = (byCat['investigated'] || 0) + 1;
       sevs[f.severity]++;
       total++;
     });
+    // Also count investigated findings that are currently hidden
+    if (!reconActiveDims['investigated']) {
+      (fileData.findings || []).forEach(function(f) {
+        if (f.investigated) byCat['investigated'] = (byCat['investigated'] || 0) + 1;
+      });
+    }
   }
   return { byCat: byCat, sevs: sevs, total: total };
 }

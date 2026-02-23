@@ -40,14 +40,20 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 		cached, scannedAt := s.queries.CachedReconResult()
 		if result, ok := cached.(*recon.Result); ok && result != nil {
 			reconAvailable := s.queries.ReconAvailable()
+			invFiles := s.queries.InvestigatedFiles()
+			if invFiles == nil {
+				invFiles = []string{}
+			}
 			response := struct {
 				*recon.Result
-				ReconAvailable bool  `json:"recon_available"`
-				ScannedAt      int64 `json:"scanned_at"`
+				ReconAvailable    bool     `json:"recon_available"`
+				ScannedAt         int64    `json:"scanned_at"`
+				InvestigatedFiles []string `json:"investigated_files"`
 			}{
-				Result:         result,
-				ReconAvailable: reconAvailable,
-				ScannedAt:      scannedAt,
+				Result:            result,
+				ReconAvailable:    reconAvailable,
+				ScannedAt:         scannedAt,
+				InvestigatedFiles: invFiles,
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
@@ -263,6 +269,46 @@ func (s *Server) handleSourceLine(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+// handleReconInvestigate handles POST /api/recon-investigate to mark/unmark files.
+func (s *Server) handleReconInvestigate(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		File   string `json:"file"`
+		Action string `json:"action"` // "add", "remove", "clear"
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request"}`, http.StatusBadRequest)
+		return
+	}
+
+	switch req.Action {
+	case "add":
+		if req.File == "" {
+			http.Error(w, `{"error":"file required"}`, http.StatusBadRequest)
+			return
+		}
+		s.queries.SetFileInvestigated(req.File, true)
+	case "remove":
+		if req.File == "" {
+			http.Error(w, `{"error":"file required"}`, http.StatusBadRequest)
+			return
+		}
+		s.queries.SetFileInvestigated(req.File, false)
+	case "clear":
+		s.queries.ClearInvestigated()
+	default:
+		http.Error(w, `{"error":"action must be add, remove, or clear"}`, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`))
 }
 
 // inferTierDim maps a rule ID to its tier and dimension.

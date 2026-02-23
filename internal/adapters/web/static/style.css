@@ -30,6 +30,7 @@
   --tier-qual: #c084fc; --tier-qual-dim: rgba(192,132,252,0.12);
   --tier-arch: #fb923c; --tier-arch-dim: rgba(251,146,60,0.12);
   --tier-obs: #34d399; --tier-obs-dim: rgba(52,211,153,0.12);
+  --tier-inv: #94a3b8; --tier-inv-dim: rgba(148,163,184,0.12);
 }
 
 /* ── CSS Variables: Light Theme ── */
@@ -52,6 +53,7 @@
   --tier-qual: #9333ea; --tier-qual-dim: rgba(147,51,234,0.1);
   --tier-arch: #ea580c; --tier-arch-dim: rgba(234,88,12,0.1);
   --tier-obs: #16a34a; --tier-obs-dim: rgba(22,163,74,0.1);
+  --tier-inv: #64748b; --tier-inv-dim: rgba(100,116,139,0.1);
 }
 
 /* ── Reset & Body ── */
@@ -642,6 +644,7 @@ body {
 .recon-tier.quality .recon-tier-toggle.on { background: var(--tier-qual); }
 .recon-tier.architecture .recon-tier-toggle.on { background: var(--tier-arch); }
 .recon-tier.observability .recon-tier-toggle.on { background: var(--tier-obs); }
+.recon-tier.investigated .recon-tier-toggle.on { background: var(--tier-inv); }
 .recon-tier-label-group { flex: 1; min-width: 0; }
 .recon-tier-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 .recon-tier.security .recon-tier-label { color: var(--tier-sec); }
@@ -649,6 +652,7 @@ body {
 .recon-tier.quality .recon-tier-label { color: var(--tier-qual); }
 .recon-tier.architecture .recon-tier-label { color: var(--tier-arch); }
 .recon-tier.observability .recon-tier-label { color: var(--tier-obs); }
+.recon-tier.investigated .recon-tier-label { color: var(--tier-inv); }
 .recon-tier-desc {
   font-size: 10px; color: var(--mute); font-weight: 400;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -663,6 +667,7 @@ body {
 .recon-tier.quality .recon-tier-count { background: var(--tier-qual-dim); color: var(--tier-qual); }
 .recon-tier.architecture .recon-tier-count { background: var(--tier-arch-dim); color: var(--tier-arch); }
 .recon-tier.observability .recon-tier-count { background: var(--tier-obs-dim); color: var(--tier-obs); }
+.recon-tier.investigated .recon-tier-count { background: var(--tier-inv-dim); color: var(--tier-inv); }
 .recon-tier-header.tier-off .recon-tier-label { opacity: 0.4; text-decoration: line-through; }
 .recon-tier-header.tier-off .recon-tier-desc { opacity: 0.3; }
 .recon-tier-header.tier-off + .recon-tier-pills { opacity: 0.25; pointer-events: none; }
@@ -682,6 +687,7 @@ body {
 .recon-tier.quality .recon-dim-pill.active { background: var(--tier-qual-dim); color: var(--tier-qual); }
 .recon-tier.architecture .recon-dim-pill.active { background: var(--tier-arch-dim); color: var(--tier-arch); }
 .recon-tier.observability .recon-dim-pill.active { background: var(--tier-obs-dim); color: var(--tier-obs); }
+.recon-tier.investigated .recon-dim-pill.active { background: var(--tier-inv-dim); color: var(--tier-inv); }
 .recon-dim-pill.active:hover { filter: brightness(1.15); }
 .recon-dim-pill.inactive {
   background: var(--border-subtle); color: var(--mute);
@@ -743,6 +749,7 @@ body {
 .col-dim.quality { color: var(--tier-qual); }
 .col-dim.architecture { color: var(--tier-arch); }
 .col-dim.observability { color: var(--tier-obs); }
+.col-dim.investigated { color: var(--tier-inv); }
 
 .tree-row {
   display: flex; align-items: center; padding: 9px 14px;
@@ -771,6 +778,7 @@ body {
 .dim-num.quality { color: var(--tier-qual); }
 .dim-num.architecture { color: var(--tier-arch); }
 .dim-num.observability { color: var(--tier-obs); }
+.dim-num.investigated { color: var(--tier-inv); }
 .dim-num.dim-clickable { cursor: pointer; border-radius: 4px; transition: background 0.15s; }
 .dim-num.dim-clickable:hover { background: rgba(255,255,255,0.08); }
 .tree-severity { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; }
@@ -818,6 +826,7 @@ body {
 .finding-tier.quality { background: var(--tier-qual-dim); color: var(--tier-qual); }
 .finding-tier.architecture { background: var(--tier-arch-dim); color: var(--tier-arch); }
 .finding-tier.observability { background: var(--tier-obs-dim); color: var(--tier-obs); }
+.finding-tier.investigated { background: var(--tier-inv-dim); color: var(--tier-inv); }
 .finding-id {
   font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary);
   font-weight: 500; white-space: nowrap;
@@ -853,6 +862,7 @@ body {
 .toolbar-action { border: 1px solid var(--border); color: var(--dim); }
 .toolbar-action:hover { border-color: var(--text-secondary); color: var(--text); }
 .toolbar-action.copied { border-color: var(--green); color: var(--green); }
+.toolbar-action.investigated { border-color: var(--tier-inv); color: var(--tier-inv); }
 .dims-label {
   font-size: 8px; text-transform: uppercase; letter-spacing: 0.6px;
   color: var(--mute); white-space: nowrap; font-weight: 600;
