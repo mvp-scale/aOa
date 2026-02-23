@@ -11,33 +11,41 @@ import (
 )
 
 var (
-	grepAndMode      bool
-	grepCountOnly    bool
-	grepCaseInsens   bool
-	grepWordBound    bool
-	grepQuiet        bool
-	grepInvertMatch  bool
-	grepMaxCount     int
-	grepUseRegex     bool
-	grepPatterns     []string
-	grepIncludeGlob  string
-	grepExcludeGlob  string
-	grepExcludeDir   string
-	grepOnlyMatch    bool
-	grepFilesNoMatch bool
-	grepNoFilename   bool
-	grepNoColor      bool
-	grepAfterCtx     int
-	grepBeforeCtx    int
-	grepContext      int
+	grepAndMode        bool
+	grepCountOnly      bool
+	grepCaseInsens     bool
+	grepWordBound      bool
+	grepQuiet          bool
+	grepInvertMatch    bool
+	grepMaxCount       int
+	grepUseRegex       bool
+	grepPatterns       []string
+	grepIncludeGlob    string
+	grepExcludeGlob    string
+	grepExcludeDir     string
+	grepOnlyMatch      bool
+	grepFilesNoMatch   bool
+	grepNoFilename     bool
+	grepNoColor        bool
+	grepAfterCtx       int
+	grepBeforeCtx      int
+	grepContext        int
+	grepRecursive      bool
+	grepLineNumber     bool
+	grepWithFilename   bool
+	grepFixedStrings   bool
+	grepFilesMatch     bool
+	grepColor          string
 )
 
 var grepCmd = &cobra.Command{
-	Use:   "grep [flags] <query>",
-	Short: "Search indexed symbols",
-	Long:  "Fast O(1) symbol lookup. Space-separated terms are OR search, ranked by density.",
-	Args:  cobra.ArbitraryArgs,
-	RunE:  runGrep,
+	Use:           "grep [flags] <pattern> [file ...]",
+	Short:         "Search indexed symbols or grep files",
+	Long:          "Drop-in grep replacement. Searches files/stdin when given, falls back to aOa index search.",
+	Args:          cobra.ArbitraryArgs,
+	RunE:          runGrep,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func init() {
@@ -48,45 +56,88 @@ func init() {
 	f.BoolVarP(&grepWordBound, "word-regexp", "w", false, "Word boundary")
 	f.BoolVarP(&grepQuiet, "quiet", "q", false, "Quiet mode (exit code only)")
 	f.BoolVarP(&grepInvertMatch, "invert-match", "v", false, "Select non-matching")
-	f.IntVarP(&grepMaxCount, "max-count", "m", 20, "Max results")
-	f.BoolVarP(&grepUseRegex, "extended-regexp", "E", false, "Use regex (routes to egrep)")
+	f.IntVarP(&grepMaxCount, "max-count", "m", 0, "Stop after N matches")
+	f.BoolVarP(&grepUseRegex, "extended-regexp", "E", false, "Use extended regex")
 	f.StringArrayVarP(&grepPatterns, "regexp", "e", nil, "Multiple patterns (OR)")
 	f.StringVar(&grepIncludeGlob, "include", "", "File glob filter (include)")
 	f.StringVar(&grepExcludeGlob, "exclude", "", "File glob filter (exclude)")
 	f.StringVar(&grepExcludeDir, "exclude-dir", "", "Directory glob filter (exclude)")
 	f.BoolVarP(&grepOnlyMatch, "only-matching", "o", false, "Print only the matching part")
 	f.BoolVarP(&grepFilesNoMatch, "files-without-match", "L", false, "Print files without matches")
-	f.BoolVar(&grepNoFilename, "no-filename", false, "Suppress filename prefix")
 	f.BoolVar(&grepNoColor, "no-color", false, "Suppress color output")
 	f.IntVarP(&grepAfterCtx, "after-context", "A", 0, "Lines of context after match")
 	f.IntVarP(&grepBeforeCtx, "before-context", "B", 0, "Lines of context before match")
 	f.IntVarP(&grepContext, "context", "C", 0, "Lines of context (overrides -A/-B)")
 
-	// No-op flags for grep compatibility
-	f.BoolP("recursive", "r", false, "Always recursive (no-op)")
-	f.BoolP("line-number", "n", false, "Always shows line numbers (no-op)")
-	f.BoolP("with-filename", "H", false, "Always shows filenames (no-op)")
-	f.BoolP("fixed-strings", "F", false, "Already literal (no-op)")
-	f.BoolP("files-with-matches", "l", false, "Default behavior (no-op)")
-	f.MarkHidden("recursive")
-	f.MarkHidden("line-number")
-	f.MarkHidden("with-filename")
-	f.MarkHidden("fixed-strings")
-	f.MarkHidden("files-with-matches")
+	// Real flags (previously no-op)
+	f.BoolVarP(&grepRecursive, "recursive", "r", false, "Recurse into directories")
+	f.BoolVarP(&grepLineNumber, "line-number", "n", false, "Show line numbers")
+	f.BoolVarP(&grepWithFilename, "with-filename", "H", false, "Force filename prefix")
+	f.BoolVarP(&grepFixedStrings, "fixed-strings", "F", false, "Treat pattern as fixed string")
+	f.BoolVarP(&grepFilesMatch, "files-with-matches", "l", false, "Print only filenames of matching files")
+	f.BoolVar(&grepNoFilename, "no-filename", false, "Suppress filename prefix")
+	f.StringVar(&grepColor, "color", "auto", "Color output: auto, always, never")
 }
 
 func runGrep(cmd *cobra.Command, args []string) error {
-	// Build query from args and -e patterns
-	query := buildQuery(args, grepPatterns)
-	if query == "" {
-		return fmt.Errorf("no search query provided")
+	// 1. Parse pattern vs file args
+	pattern, fileArgs, multiPattern, err := parseGrepArgs(args, grepPatterns)
+	if err != nil {
+		return err
 	}
 
-	// If -E flag, route to egrep behavior
-	if grepUseRegex {
-		return runEgrepSearch(query)
+	// 2. Resolve color
+	useColor := resolveColor(grepColor, grepNoColor)
+
+	// 3. Build matcher options
+	// Multiple -e patterns joined with | require regex mode
+	useRegex := grepUseRegex || multiPattern
+	matchOpts := matcherOpts{
+		useRegex:     useRegex,
+		caseInsens:   grepCaseInsens,
+		wordBound:    grepWordBound,
+		fixedStrings: grepFixedStrings,
+		onlyMatch:    grepOnlyMatch,
 	}
 
+	outOpts := grepOutputOpts{
+		lineNumber:   grepLineNumber,
+		withFilename: grepWithFilename,
+		noFilename:   grepNoFilename,
+		countOnly:    grepCountOnly,
+		quiet:        grepQuiet,
+		invertMatch:  grepInvertMatch,
+		maxCount:     grepMaxCount,
+		onlyMatch:    grepOnlyMatch,
+		filesMatch:   grepFilesMatch,
+		filesNoMatch: grepFilesNoMatch,
+		afterCtx:     grepAfterCtx,
+		beforeCtx:    grepBeforeCtx,
+		context:      grepContext,
+		useColor:     useColor,
+		recursive:    grepRecursive,
+		includeGlob:  grepIncludeGlob,
+		excludeGlob:  grepExcludeGlob,
+		excludeDir:   grepExcludeDir,
+	}
+
+	// 4. Route: file args → grepFiles (takes priority over stdin)
+	if len(fileArgs) > 0 {
+		return grepFiles(pattern, fileArgs, matchOpts, outOpts)
+	}
+
+	// 5. Route: stdin pipe → grepStdin (only when no file args)
+	if isStdinPipe() {
+		return grepStdin(pattern, matchOpts, outOpts)
+	}
+
+	// 6. Default: index search via daemon
+	return runGrepIndex(pattern, useColor)
+}
+
+// runGrepIndex searches the aOa index via the daemon socket.
+// Falls back to system grep if the daemon is not running.
+func runGrepIndex(query string, useColor bool) error {
 	opts := ports.SearchOptions{
 		AndMode:           grepAndMode,
 		CountOnly:         grepCountOnly,
@@ -106,23 +157,34 @@ func runGrep(cmd *cobra.Command, args []string) error {
 	if grepCaseInsens {
 		opts.Mode = "case_insensitive"
 	}
-
-	return executeSearch(query, opts)
-}
-
-// buildQuery combines positional args and -e patterns into a single query string.
-func buildQuery(args, patterns []string) string {
-	parts := make([]string, 0, len(args)+len(patterns))
-	for _, a := range args {
-		// Convert pipe-separated patterns to space-separated (grep parity)
-		a = strings.ReplaceAll(a, `\|`, " ")
-		parts = append(parts, a)
+	if grepUseRegex {
+		opts.Mode = "regex"
 	}
-	parts = append(parts, patterns...)
-	return strings.Join(parts, " ")
+
+	return executeSearch(query, opts, useColor)
 }
 
-func executeSearch(query string, opts ports.SearchOptions) error {
+// parseGrepArgs separates the pattern from file arguments.
+// With -e: all positional args are file paths, patterns come from -e flags.
+// Without -e: first positional arg is the pattern, rest are file paths.
+// multiPattern is true when multiple -e patterns were joined (requires regex mode).
+func parseGrepArgs(args, ePatterns []string) (pattern string, fileArgs []string, multiPattern bool, err error) {
+	if len(ePatterns) > 0 {
+		// -e patterns provided: join with | for OR, all positional args are files
+		pattern = strings.Join(ePatterns, "|")
+		fileArgs = args
+		multiPattern = len(ePatterns) > 1
+	} else if len(args) > 0 {
+		pattern = args[0]
+		fileArgs = args[1:]
+	}
+	if pattern == "" {
+		return "", nil, false, fmt.Errorf("no search pattern provided")
+	}
+	return pattern, fileArgs, multiPattern, nil
+}
+
+func executeSearch(query string, opts ports.SearchOptions, useColor bool) error {
 	root := projectRoot()
 	sockPath := socket.SocketPath(root)
 	client := socket.NewClient(sockPath)
@@ -130,12 +192,20 @@ func executeSearch(query string, opts ports.SearchOptions) error {
 	result, err := client.Search(query, opts)
 	if err != nil {
 		if isConnectError(err) {
-			return fmt.Errorf("daemon not running. Start with: aoa daemon start")
+			// Daemon not running — fall back to system grep
+			return fallbackSystemGrep(os.Args[1:])
 		}
 		return err
 	}
-	fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, grepNoFilename, grepNoColor))
-	if opts.Quiet {
+
+	// Choose output format based on TTY
+	if isStdoutTTY() && useColor {
+		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, grepNoFilename, false))
+	} else {
+		fmt.Print(formatGrepCompat(result, grepLineNumber, grepNoFilename, grepFilesMatch, grepCountOnly, grepQuiet))
+	}
+
+	if opts.Quiet || result.ExitCode != 0 {
 		os.Exit(result.ExitCode)
 	}
 	return nil

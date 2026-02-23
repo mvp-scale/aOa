@@ -10,6 +10,9 @@ import (
 
 func main() {
 	if err := cmd.Execute(); err != nil {
+		if code := cmd.GrepExitCode(err); code >= 0 {
+			os.Exit(code)
+		}
 		os.Exit(1)
 	}
 }

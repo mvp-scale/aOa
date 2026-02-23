@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/ports"
@@ -11,32 +10,39 @@ import (
 )
 
 var (
-	egrepCountOnly    bool
-	egrepQuiet        bool
-	egrepInvertMatch  bool
-	egrepMaxCount     int
-	egrepPatterns     []string
-	egrepIncludeGlob  string
-	egrepExcludeGlob  string
-	egrepCaseInsens   bool
-	egrepWordBound    bool
-	egrepAndMode      bool
-	egrepExcludeDir   string
-	egrepOnlyMatch    bool
-	egrepFilesNoMatch bool
-	egrepNoFilename   bool
-	egrepNoColor      bool
-	egrepAfterCtx     int
-	egrepBeforeCtx    int
-	egrepContext       int
+	egrepCountOnly     bool
+	egrepQuiet         bool
+	egrepInvertMatch   bool
+	egrepMaxCount      int
+	egrepPatterns      []string
+	egrepIncludeGlob   string
+	egrepExcludeGlob   string
+	egrepCaseInsens    bool
+	egrepWordBound     bool
+	egrepAndMode       bool
+	egrepExcludeDir    string
+	egrepOnlyMatch     bool
+	egrepFilesNoMatch  bool
+	egrepNoFilename    bool
+	egrepNoColor       bool
+	egrepAfterCtx      int
+	egrepBeforeCtx     int
+	egrepContext        int
+	egrepRecursive     bool
+	egrepLineNumber    bool
+	egrepWithFilename  bool
+	egrepFilesMatch    bool
+	egrepColor         string
 )
 
 var egrepCmd = &cobra.Command{
-	Use:   "egrep [flags] <pattern>",
-	Short: "Regex search across indexed symbols",
-	Long:  "Extended regular expression search. Scans all symbols with full regex support.",
-	Args:  cobra.ArbitraryArgs,
-	RunE:  runEgrep,
+	Use:           "egrep [flags] <pattern> [file ...]",
+	Short:         "Extended regex search or grep files",
+	Long:          "Drop-in egrep replacement. Uses extended regex. Searches files/stdin when given, falls back to aOa index.",
+	Args:          cobra.ArbitraryArgs,
+	RunE:          runEgrep,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func init() {
@@ -47,37 +53,82 @@ func init() {
 	f.BoolVarP(&egrepCountOnly, "count", "c", false, "Count only")
 	f.BoolVarP(&egrepQuiet, "quiet", "q", false, "Quiet mode (exit code only)")
 	f.BoolVarP(&egrepInvertMatch, "invert-match", "v", false, "Select non-matching")
-	f.IntVarP(&egrepMaxCount, "max-count", "m", 20, "Max results")
+	f.IntVarP(&egrepMaxCount, "max-count", "m", 0, "Stop after N matches")
 	f.StringArrayVarP(&egrepPatterns, "regexp", "e", nil, "Multiple patterns (combined with |)")
 	f.StringVar(&egrepIncludeGlob, "include", "", "File glob filter (include)")
 	f.StringVar(&egrepExcludeGlob, "exclude", "", "File glob filter (exclude)")
 	f.StringVar(&egrepExcludeDir, "exclude-dir", "", "Directory glob filter (exclude)")
 	f.BoolVarP(&egrepOnlyMatch, "only-matching", "o", false, "Print only the matching part")
 	f.BoolVarP(&egrepFilesNoMatch, "files-without-match", "L", false, "Print files without matches")
-	f.BoolVar(&egrepNoFilename, "no-filename", false, "Suppress filename prefix")
 	f.BoolVar(&egrepNoColor, "no-color", false, "Suppress color output")
 	f.IntVarP(&egrepAfterCtx, "after-context", "A", 0, "Lines of context after match")
 	f.IntVarP(&egrepBeforeCtx, "before-context", "B", 0, "Lines of context before match")
 	f.IntVarP(&egrepContext, "context", "C", 0, "Lines of context (overrides -A/-B)")
 
-	// No-op flags for egrep compatibility
-	f.BoolP("recursive", "r", false, "Always recursive (no-op)")
-	f.BoolP("line-number", "n", false, "Always shows line numbers (no-op)")
-	f.BoolP("with-filename", "H", false, "Always shows filenames (no-op)")
-	f.MarkHidden("recursive")
-	f.MarkHidden("line-number")
-	f.MarkHidden("with-filename")
+	// Real flags (previously no-op)
+	f.BoolVarP(&egrepRecursive, "recursive", "r", false, "Recurse into directories")
+	f.BoolVarP(&egrepLineNumber, "line-number", "n", false, "Show line numbers")
+	f.BoolVarP(&egrepWithFilename, "with-filename", "H", false, "Force filename prefix")
+	f.BoolVarP(&egrepFilesMatch, "files-with-matches", "l", false, "Print only filenames of matching files")
+	f.BoolVar(&egrepNoFilename, "no-filename", false, "Suppress filename prefix")
+	f.StringVar(&egrepColor, "color", "auto", "Color output: auto, always, never")
 }
 
 func runEgrep(cmd *cobra.Command, args []string) error {
-	pattern := buildEgrepPattern(args, egrepPatterns)
-	if pattern == "" {
-		return fmt.Errorf("no search pattern provided")
+	// 1. Parse pattern vs file args
+	pattern, fileArgs, _, err := parseGrepArgs(args, egrepPatterns)
+	if err != nil {
+		return err
 	}
-	return runEgrepSearch(pattern)
+
+	// 2. Resolve color
+	useColor := resolveColor(egrepColor, egrepNoColor)
+
+	// 3. Build matcher options — egrep always uses regex
+	matchOpts := matcherOpts{
+		useRegex:   true,
+		caseInsens: egrepCaseInsens,
+		wordBound:  egrepWordBound,
+		onlyMatch:  egrepOnlyMatch,
+	}
+
+	outOpts := grepOutputOpts{
+		lineNumber:   egrepLineNumber,
+		withFilename: egrepWithFilename,
+		noFilename:   egrepNoFilename,
+		countOnly:    egrepCountOnly,
+		quiet:        egrepQuiet,
+		invertMatch:  egrepInvertMatch,
+		maxCount:     egrepMaxCount,
+		onlyMatch:    egrepOnlyMatch,
+		filesMatch:   egrepFilesMatch,
+		filesNoMatch: egrepFilesNoMatch,
+		afterCtx:     egrepAfterCtx,
+		beforeCtx:    egrepBeforeCtx,
+		context:      egrepContext,
+		useColor:     useColor,
+		recursive:    egrepRecursive,
+		includeGlob:  egrepIncludeGlob,
+		excludeGlob:  egrepExcludeGlob,
+		excludeDir:   egrepExcludeDir,
+	}
+
+	// 4. Route: file args → grepFiles (takes priority over stdin)
+	if len(fileArgs) > 0 {
+		return grepFiles(pattern, fileArgs, matchOpts, outOpts)
+	}
+
+	// 5. Route: stdin pipe → grepStdin (only when no file args)
+	if isStdinPipe() {
+		return grepStdin(pattern, matchOpts, outOpts)
+	}
+
+	// 6. Default: index search via daemon
+	return runEgrepIndex(pattern, useColor)
 }
 
-func runEgrepSearch(pattern string) error {
+// runEgrepIndex searches the aOa index via the daemon with regex mode.
+func runEgrepIndex(pattern string, useColor bool) error {
 	opts := ports.SearchOptions{
 		Mode:              "regex",
 		CountOnly:         egrepCountOnly,
@@ -106,28 +157,19 @@ func runEgrepSearch(pattern string) error {
 	result, err := client.Search(pattern, opts)
 	if err != nil {
 		if isConnectError(err) {
-			return fmt.Errorf("daemon not running. Start with: aoa daemon start")
+			return fallbackSystemGrep(os.Args[1:])
 		}
 		return err
 	}
-	fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, egrepNoFilename, egrepNoColor))
-	if opts.Quiet {
+
+	if isStdoutTTY() && useColor {
+		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, egrepNoFilename, false))
+	} else {
+		fmt.Print(formatGrepCompat(result, egrepLineNumber, egrepNoFilename, egrepFilesMatch, egrepCountOnly, egrepQuiet))
+	}
+
+	if opts.Quiet || result.ExitCode != 0 {
 		os.Exit(result.ExitCode)
 	}
 	return nil
-}
-
-// buildEgrepPattern combines args and -e patterns into a single regex.
-// Multiple -e patterns are joined with | (regex OR).
-func buildEgrepPattern(args, patterns []string) string {
-	all := make([]string, 0, len(args)+len(patterns))
-	all = append(all, args...)
-	all = append(all, patterns...)
-	if len(all) == 0 {
-		return ""
-	}
-	if len(all) == 1 {
-		return all[0]
-	}
-	return strings.Join(all, "|")
 }

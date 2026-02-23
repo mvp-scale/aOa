@@ -180,6 +180,102 @@ func sortedContextLines(ctx map[int]string) []int {
 	return nums
 }
 
+// formatGrepCompat formats a SearchResult as GNU grep-compatible output.
+// No header line, no symbols/domains/tags — just file:line:content.
+func formatGrepCompat(result *socket.SearchResult, lineNumbers, noFilename, filesMatch, countOnly, quiet bool) string {
+	if quiet {
+		return ""
+	}
+
+	if countOnly {
+		return fmt.Sprintf("%d\n", result.Count)
+	}
+
+	if filesMatch {
+		// -l mode: just unique filenames
+		seen := make(map[string]bool)
+		var sb strings.Builder
+		for _, hit := range result.Hits {
+			if !seen[hit.File] {
+				seen[hit.File] = true
+				sb.WriteString(hit.File)
+				sb.WriteByte('\n')
+			}
+		}
+		return sb.String()
+	}
+
+	// Dedup by file:line to avoid symbol hit + content hit on same line
+	type fileLineKey struct {
+		file string
+		line int
+	}
+	seen := make(map[fileLineKey]bool)
+
+	var sb strings.Builder
+	for _, hit := range result.Hits {
+		if hit.Kind == "file" {
+			// -L file-only hits
+			if !noFilename {
+				sb.WriteString(hit.File)
+				sb.WriteByte('\n')
+			}
+			continue
+		}
+
+		key := fileLineKey{hit.File, hit.Line}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		// Context lines before
+		if len(hit.ContextLines) > 0 {
+			lineNums := sortedContextLines(hit.ContextLines)
+			for _, ln := range lineNums {
+				if ln >= hit.Line {
+					continue
+				}
+				writeGrepCompatLine(&sb, hit.File, ln, hit.ContextLines[ln], noFilename, lineNumbers, "-")
+			}
+		}
+
+		// Determine content: use Content for content hits, symbol name for symbol hits
+		content := hit.Content
+		if content == "" && hit.Symbol != "" {
+			content = hit.Symbol
+		}
+
+		writeGrepCompatLine(&sb, hit.File, hit.Line, content, noFilename, lineNumbers, ":")
+
+		// Context lines after
+		if len(hit.ContextLines) > 0 {
+			lineNums := sortedContextLines(hit.ContextLines)
+			for _, ln := range lineNums {
+				if ln <= hit.Line {
+					continue
+				}
+				writeGrepCompatLine(&sb, hit.File, ln, hit.ContextLines[ln], noFilename, lineNumbers, "-")
+			}
+		}
+	}
+	return sb.String()
+}
+
+// writeGrepCompatLine writes a single line in file:line:content format.
+func writeGrepCompatLine(sb *strings.Builder, file string, line int, content string, noFilename, lineNumbers bool, sep string) {
+	if !noFilename {
+		sb.WriteString(file)
+		sb.WriteString(sep)
+	}
+	if lineNumbers {
+		fmt.Fprintf(sb, "%d", line)
+		sb.WriteString(sep)
+	}
+	sb.WriteString(content)
+	sb.WriteByte('\n')
+}
+
 // formatHealth formats a HealthResult for terminal display.
 func formatHealth(h *socket.HealthResult) string {
 	var sb strings.Builder
