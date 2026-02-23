@@ -1,6 +1,6 @@
 # aOa Completed Work
 
-> Moved from GO-BOARD.md to keep the active board focused. Each phase includes what was built, why, and how it was validated.
+> Moved from BOARD.md to keep the active board focused. Each phase includes what was built, why, and how it was validated.
 
 ---
 

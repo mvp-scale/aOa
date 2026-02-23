@@ -6,9 +6,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **aOa is a standalone project.** Do NOT import, reference, copy, or depend on anything from outside the `aOa/` directory. No imports from the parent `aOa/` codebase. All dependencies come from Go modules (`go.mod`) or are written fresh here. This is a clean-room rewrite guided by behavioral specs and test fixtures in `test/fixtures/`, not by copying Python code.
 
-## GO-BOARD
+## Project Context
 
-When referencing "the go board" or "GO-BOARD", this means `GO-BOARD.md` in this repo -- the project board for the Go port. Not the parent aOa board. Check it for current phase, task status, and session logs.
+### .context/ Layout
+
+```
+.context/
+  INDEX.md        # Derived index — line pointers, unblocked/blocked, layer status
+  CURRENT.md      # Session checklist — done/in-progress/next
+  BOARD.md        # Source of truth — task table + supporting detail
+  COMPLETED.md    # Archived completed work
+  BACKLOG.md      # Deferred items
+  decisions/      # ADRs (date-prefixed)
+  details/        # Research & discovery (date-prefixed)
+  archived/       # Session bridges, old boards
+```
+
+**Board**: `.context/BOARD.md` is the project board. Check it for task status and open work.
+
+**Context loading**: Read `.context/INDEX.md` first for fast orientation. It has line pointers into BOARD.md so you can read targeted sections instead of the full file.
+
+### Beacon Agent
+
+Beacon manages project continuity across `.context/`. Trigger with "Hey Beacon".
+
+| Trigger | What Beacon Does |
+|---------|-----------------|
+| "where are we", "status" | Reads INDEX + CURRENT, presents state |
+| "update the board" | Batch-updates BOARD -> INDEX -> CURRENT |
+| "capture", "write this up" | Writes to decisions/ or details/ |
+| "new session" | Archives CURRENT, bumps session counter |
+| "move to completed" | Moves triple-green tasks to COMPLETED.md |
+
+**Speed rule**: Most work happens WITHOUT Beacon. Update CURRENT.md directly as you work. Beacon spawns for board-level operations only.
 
 ## Build and Test Commands
 

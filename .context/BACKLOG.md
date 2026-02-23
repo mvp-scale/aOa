@@ -1,6 +1,6 @@
 # Backlog
 
-[Board](../GO-BOARD.md) | [Completed](COMPLETED.md) | [Backlog](#backlog)
+[Board](BOARD.md) | [Completed](COMPLETED.md) | [Backlog](#backlog)
 
 > Deferred items, future ideas, and research topics not yet on the active board.
 

@@ -305,7 +305,7 @@ aOa is in active development. **211 tests passing, 0 failing.**
 - Phase 6: In progress (CLI complete, daemon wired, release pipeline pending)
 - Phase 7: Planned (migration validation, parallel run with Python version)
 
-See [GO-BOARD.md](GO-BOARD.md) for the full project board.
+See [BOARD.md](.context/BOARD.md) for the full project board.
 
 ---
 
