@@ -50,7 +50,7 @@ Rules are written against these concepts. The translation layer handles the rest
 
 ## Writing Rules
 
-Rules live in 6 YAML files, one per tier. YAML is the source of truth — adding a rule is a new entry, no Go changes needed. Rules are embedded at compile time.
+Rules live in 5 YAML files, one per active tier. YAML is the source of truth — adding a rule is a new entry, no Go changes needed. Rules are embedded at compile time.
 
 ### Minimal Example
 
@@ -88,7 +88,7 @@ The rule's **kind** is inferred from which layers are present:
 | `id` | string | yes | Unique identifier, e.g. `command_injection` |
 | `label` | string | yes | Human-readable description |
 | `dimension` | string | yes | Category within the tier, e.g. `injection`, `secrets` |
-| `tier` | string | yes | `security`, `performance`, `quality`, `observability`, `architecture`, `compliance` |
+| `tier` | string | yes | `security`, `performance`, `quality`, `observability`, `architecture` |
 | `bit` | int | yes | Bit position 0-63 within the tier (must be unique per tier) |
 | `severity` | string | yes | `info`, `warning`, `high`, `critical` |
 | `text_patterns` | []string | | Literal strings for Layer 1 |
@@ -250,7 +250,7 @@ Text catches broad patterns. Structural confirms it's an assignment with a sensi
 
 ## Tier and Dimension Reference
 
-### Security (tier 0)
+### Security (tier 0) — 9 dimensions
 | Dimension | Bits | Description |
 |-----------|------|-------------|
 | injection | 0-7, 20-25 | Command injection, SQL injection, XSS, path traversal, deserialization |
@@ -259,45 +259,43 @@ Text catches broad patterns. Structural confirms it's an assignment with a sensi
 | denial | 25 | Regex DoS |
 | transport | 26-28 | Insecure TLS, disabled cert verify, HTTP URLs |
 | exposure | 29-30 | Debug endpoints, CORS wildcards |
-| config | 31-32 | Hardcoded IPs, world-readable permissions |
+| config | 31-32, 37 | Hardcoded IPs, world-readable permissions, unsafe defaults |
 | data | 33 | Sensitive data in logs |
 | auth | 34-36 | Missing CSRF, insecure password comparison, missing headers |
 
-### Performance (tier 1)
+### Performance (tier 1) — 5 dimensions
 | Dimension | Bits | Description |
 |-----------|------|-------------|
-| resources | 0-3 | Defer in loop, unclosed handles, leaked contexts |
-| concurrency | 5-7 | Goroutine leaks, mutex issues, waitgroup misuse |
-| query | 10-11 | N+1 queries, unbounded selects |
-| memory | 15-16 | String concat in loops, hot-path allocations |
+| resources | 0-4 | Defer in loop, unclosed handles, leaked contexts, resource alloc in loop |
+| concurrency | 5-9 | Lock/goroutine/channel in loop, goroutine leaks, sync primitives |
+| query | 10-14 | N+1 queries, exec in loop, unbounded selects, raw SQL |
+| memory | 15-19 | Allocation in loop, append, string concat, regex compile in loop |
+| hot_path | 20-25 | Reflection, JSON marshal in loop, fmt.Sprint in loop, sort in loop |
 
-### Quality (tier 2)
+### Quality (tier 2) — 4 dimensions
 | Dimension | Bits | Description |
 |-----------|------|-------------|
-| errors | 0-5 | Ignored errors, panic in lib, unchecked assertions, empty catch |
-| complexity | 6-9 | Long functions, deep nesting, too many params, large switch |
-| dead_code | 10-12 | Unreachable code, commented-out code, unused imports |
-| conventions | 15-17 | Magic numbers, init side effects, missing doc comments |
+| errors | 0-5, 20 | Ignored errors, panic in lib, unchecked assertions, deprecated stdlib |
+| complexity | 6-9, 21-22 | Long functions, deep nesting, params, switch, god function, wide function |
+| dead_code | 10-14 | Unreachable code, commented-out code, unused imports, empty body, disabled tests |
+| conventions | 15-19, 23 | Doc comments, init side effects, magic numbers, boolean params, nested callbacks |
 
-### Observability (tier 3)
+### Observability (tier 3) — 5 dimensions
 | Dimension | Bits | Description |
 |-----------|------|-------------|
-| debug | 0-3 | Print statements, TODO markers, debug endpoints, verbose logging |
-| silent_failures | 5-7 | Recovered panics without logging, fire-and-forget goroutines |
+| debug | 0-4 | Print statements, TODO markers, debug endpoints, verbose logging, sleep |
+| silent_failures | 5-9 | Recovered panics, fire-and-forget goroutines, discarded errors |
+| logging | 10-14 | Unstructured logs, sensitive log data, PII in logs |
+| resilience | 15-19 | Panic in handler, os.Exit/log.Fatal in lib, signal/health hints |
+| error_visibility | 20-24 | Bare error return, errors.New, error wrapping, sensitive in error |
 
-### Architecture (tier 4)
+### Architecture (tier 4) — 4 dimensions
 | Dimension | Bits | Description |
 |-----------|------|-------------|
-| antipattern | 0-3 | Global state, god objects, singletons, hardcoded config |
-| imports | 5-7 | Excessive imports, banned imports, hexagonal violations |
-| api_surface | 10-11 | Fat interfaces, leaking internal types |
-
-### Compliance (tier 5)
-| Dimension | Bits | Description |
-|-----------|------|-------------|
-| cve_patterns | 0-2 | Deprecated stdlib, unsafe defaults, known vulnerable patterns |
-| licensing | 5-6 | Missing license headers, GPL contamination |
-| data_handling | 10-11 | PII in logs, sensitive data in errors |
+| antipattern | 0-4 | Global state, god objects, singletons, hardcoded config, massive structs |
+| imports | 5-9 | Excessive imports, banned imports, hexagonal violations, extreme imports |
+| api_surface | 10-14 | Fat interfaces, exported surface area, method count, deep inheritance |
+| coupling | 15-23 | Parameter explosion, deep nesting, method chains, handler length, init weight |
 
 ## Pipeline
 

@@ -1405,12 +1405,13 @@ var RECON_TIERS = [
     ]
   },
   {
-    id: 'performance', label: 'Performance', color: 'yellow', desc: 'Resources, concurrency, query, memory',
+    id: 'performance', label: 'Performance', color: 'yellow', desc: 'Resources, concurrency, query, memory, hot path',
     dimensions: [
       { id: 'resources', label: 'Resource Leaks' },
       { id: 'concurrency', label: 'Concurrency' },
       { id: 'query', label: 'Query Patterns' },
-      { id: 'memory', label: 'Memory' }
+      { id: 'memory', label: 'Memory' },
+      { id: 'hot_path', label: 'Hot Path' }
     ]
   },
   {
@@ -1423,26 +1424,22 @@ var RECON_TIERS = [
     ]
   },
   {
-    id: 'architecture', label: 'Architecture', color: 'cyan', desc: 'Anti-patterns, imports, API surface',
+    id: 'architecture', label: 'Architecture', color: 'cyan', desc: 'Anti-patterns, imports, API surface, coupling',
     dimensions: [
       { id: 'antipattern', label: 'Anti-patterns' },
       { id: 'imports', label: 'Import Health' },
-      { id: 'api_surface', label: 'API Surface' }
+      { id: 'api_surface', label: 'API Surface' },
+      { id: 'coupling', label: 'Coupling' }
     ]
   },
   {
-    id: 'observability', label: 'Observability', color: 'green', desc: 'Debug artifacts, silent failures',
+    id: 'observability', label: 'Observability', color: 'green', desc: 'Debug, silent failures, logging, resilience, error visibility',
     dimensions: [
       { id: 'debug', label: 'Debug Artifacts' },
-      { id: 'silent_failures', label: 'Silent Failures' }
-    ]
-  },
-  {
-    id: 'compliance', label: 'Compliance', color: 'purple', desc: 'CVE patterns, licensing, data handling',
-    dimensions: [
-      { id: 'cve_patterns', label: 'CVE Patterns' },
-      { id: 'licensing', label: 'Licensing' },
-      { id: 'data_handling', label: 'Data Handling' }
+      { id: 'silent_failures', label: 'Silent Failures' },
+      { id: 'logging', label: 'Logging' },
+      { id: 'resilience', label: 'Resilience' },
+      { id: 'error_visibility', label: 'Error Visibility' }
     ]
   },
   {
@@ -1456,9 +1453,9 @@ var RECON_TIERS = [
 
 var RECON_TIER_ABBREV = {
   security: 'Sec', performance: 'Perf', quality: 'Qual',
-  architecture: 'Arch', observability: 'Obs', compliance: 'Comp', investigated: 'Inv'
+  architecture: 'Arch', observability: 'Obs', investigated: 'Inv'
 };
-var RECON_DIM_ORDER = ['security', 'performance', 'quality', 'architecture', 'observability', 'compliance', 'investigated'];
+var RECON_DIM_ORDER = ['security', 'performance', 'quality', 'architecture', 'observability', 'investigated'];
 
 // Active dimension state — persisted in localStorage
 var reconActiveDims = {};
@@ -1635,7 +1632,7 @@ function reconAggregate(data, prefix) {
 function reconMaxSeverity(s) {
   return s.critical > 0 ? 'critical' : s.warning > 0 ? 'warning' : s.info > 0 ? 'info' : null;
 }
-function reconScorePct(s) { return Math.min(100, s.critical * 30 + s.warning * 12 + s.info * 4); }
+function reconScorePct(s) { return Math.min(100, s.critical * 25 + s.warning * 10 + s.info * 0); }
 function reconScoreClass(p) { return p >= 40 ? 'high' : p >= 15 ? 'medium' : 'low'; }
 
 function reconDimsHtml(byCat) {

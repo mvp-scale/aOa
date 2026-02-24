@@ -1,13 +1,15 @@
 # Architecture tier — universal across all 509 tree-sitter languages.
 # No per-language mapping needed. See README.md for schema and examples.
+#
+# Severity model: text-only rules capped at info. Only structural/composite earn warning+.
 
-# === Anti-pattern dimension ===
+# === Anti-pattern dimension (bits 0-4) ===
 - id: global_state
   label: Mutable global variable at package level
   dimension: antipattern
   tier: architecture
   bit: 0
-  severity: warning
+  severity: info
   skip_test: true
   code_only: true
   text_patterns:
@@ -53,13 +55,24 @@
     - ":6379"
     - "localhost:"
 
-# === Imports dimension ===
+- id: massive_struct
+  label: Struct/class with excessive fields (>25)
+  dimension: antipattern
+  tier: architecture
+  bit: 4
+  severity: critical
+  code_only: true
+  structural:
+    match: class
+    child_count_threshold: 25
+
+# === Imports dimension (bits 5-9) ===
 - id: excessive_imports
   label: File imports too many packages (>15)
   dimension: imports
   tier: architecture
   bit: 5
-  severity: info
+  severity: warning
   code_only: true
   structural:
     match: import
@@ -77,6 +90,9 @@
     - '"math/rand"'
     - "import ioutil"
     - "from cgi import"
+  structural:
+    match: import
+    text_contains: ["io/ioutil", "math/rand"]
 
 - id: domain_imports_adapter
   label: Domain package imports adapter (hexagonal violation)
@@ -89,26 +105,194 @@
     - '"adapters/'
     - "from adapters."
     - "import adapters."
+  structural:
+    match: import
+    text_contains: ["adapters/", "adapters."]
 
-# === API surface dimension ===
+- id: extreme_imports
+  label: File imports excessive packages (>30)
+  dimension: imports
+  tier: architecture
+  bit: 8
+  severity: critical
+  code_only: true
+  structural:
+    match: import
+    child_count_threshold: 30
+
+- id: wildcard_import
+  label: Wildcard import (observational)
+  dimension: imports
+  tier: architecture
+  bit: 9
+  severity: info
+  code_only: true
+  text_patterns:
+    - "import *"
+    - "from * import"
+
+# === API surface dimension (bits 10-14) ===
 - id: unstable_interface
   label: Interface with excessive methods (>10)
   dimension: api_surface
   tier: architecture
   bit: 10
-  severity: info
+  severity: warning
   code_only: true
   structural:
     match: interface
     child_count_threshold: 10
   skip_langs: ["python", "javascript", "typescript", "tsx", "ruby", "c", "cpp"]
 
-- id: leaking_internal_type
-  label: Exported function using unexported types
+- id: fat_interface
+  label: Interface with too many methods (>20)
   dimension: api_surface
   tier: architecture
   bit: 11
+  severity: critical
+  code_only: true
+  structural:
+    match: interface
+    child_count_threshold: 20
+  skip_langs: ["python", "javascript", "typescript", "tsx", "ruby", "c", "cpp"]
+
+- id: exported_surface_area
+  label: Large undocumented exported function
+  dimension: api_surface
+  tier: architecture
+  bit: 12
+  severity: warning
+  code_only: true
+  structural:
+    match: function
+    without_sibling: doc_comment
+    line_threshold: 50
+
+- id: method_count_per_type
+  label: Type with too many methods (>20)
+  dimension: api_surface
+  tier: architecture
+  bit: 13
+  severity: warning
+  code_only: true
+  structural:
+    match: class
+    child_count_threshold: 20
+
+- id: deep_inheritance
+  label: Deep inheritance chain (observational)
+  dimension: api_surface
+  tier: architecture
+  bit: 14
+  severity: info
+  code_only: true
+  text_patterns:
+    - "extends"
+    - "implements"
+
+# === Coupling dimension (bits 15-23) ===
+- id: parameter_explosion
+  label: Function with too many parameters (>7)
+  dimension: coupling
+  tier: architecture
+  bit: 15
+  severity: warning
+  code_only: true
+  structural:
+    match: function
+    child_count_threshold: 7
+
+- id: function_too_deep
+  label: Function nesting exceeds 5 levels
+  dimension: coupling
+  tier: architecture
+  bit: 16
+  severity: warning
+  code_only: true
+  structural:
+    match: function
+    nesting_threshold: 5
+
+- id: long_method_chain
+  label: Long method chain (observational)
+  dimension: coupling
+  tier: architecture
+  bit: 17
+  severity: info
+  code_only: true
+  text_patterns:
+    - ".()."
+    - ").("
+  structural:
+    match: call
+    text_contains: [")."]
+
+- id: handler_too_long
+  label: HTTP handler exceeds 80 lines
+  dimension: coupling
+  tier: architecture
+  bit: 18
+  severity: warning
+  code_only: true
+  structural:
+    match: function
+    name_contains: ["Handler", "handler", "Serve"]
+    line_threshold: 80
+
+- id: package_init_heavy
+  label: Heavy init function (>10 lines)
+  dimension: coupling
+  tier: architecture
+  bit: 19
   severity: warning
   code_only: true
   text_patterns:
-    - "func ("
+    - "func init()"
+  structural:
+    match: function
+    line_threshold: 10
+
+- id: struct_embedding_depth
+  label: Struct embedding depth (observational)
+  dimension: coupling
+  tier: architecture
+  bit: 20
+  severity: info
+  code_only: true
+  text_patterns:
+    - "embed"
+
+- id: circular_dependency_hint
+  label: Circular dependency hint (observational)
+  dimension: coupling
+  tier: architecture
+  bit: 21
+  severity: info
+  code_only: true
+  text_patterns:
+    - "import cycle"
+
+- id: test_import_in_prod
+  label: Test utility imported in production code
+  dimension: coupling
+  tier: architecture
+  bit: 22
+  severity: info
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "testutil"
+    - "mock."
+    - "gomock"
+
+- id: controller_too_many_routes
+  label: Route registration function with too many routes
+  dimension: coupling
+  tier: architecture
+  bit: 23
+  severity: warning
+  code_only: true
+  structural:
+    match: function
+    name_contains: ["Register", "Routes", "Setup"]
+    child_count_threshold: 10

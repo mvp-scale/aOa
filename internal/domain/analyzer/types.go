@@ -4,7 +4,8 @@ package analyzer
 
 import "math/bits"
 
-// Tier represents a dimension tier (security, performance, quality, observability, architecture, compliance).
+// Tier represents a dimension tier (security, performance, quality, observability, architecture).
+// Slot 5 is reserved (formerly compliance) to preserve bitmask storage compatibility.
 type Tier int
 
 const (
@@ -13,10 +14,10 @@ const (
 	TierQuality       Tier = 2
 	TierObservability Tier = 3
 	TierArchitecture  Tier = 4
-	TierCompliance    Tier = 5
+	TierReserved      Tier = 5 // formerly compliance — slot preserved for bitmask compat
 )
 
-// TierCount is the number of tiers in the bitmask.
+// TierCount is the number of slots in the bitmask (includes reserved slot 5).
 const TierCount = 6
 
 // TierName returns the string label for a tier constant.
@@ -32,8 +33,8 @@ func TierName(t Tier) string {
 		return "observability"
 	case TierArchitecture:
 		return "architecture"
-	case TierCompliance:
-		return "compliance"
+	case TierReserved:
+		return "reserved"
 	default:
 		return "unknown"
 	}
@@ -53,8 +54,6 @@ func TierFromName(name string) Tier {
 		return TierObservability
 	case "architecture":
 		return TierArchitecture
-	case "compliance":
-		return TierCompliance
 	default:
 		return -1
 	}

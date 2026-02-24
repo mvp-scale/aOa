@@ -25,7 +25,6 @@ func TestLoadRulesFromFS(t *testing.T) {
 	assert.Greater(t, tierCounts[TierQuality], 0, "should have quality rules")
 	assert.Greater(t, tierCounts[TierArchitecture], 0, "should have architecture rules")
 	assert.Greater(t, tierCounts[TierObservability], 0, "should have observability rules")
-	assert.Greater(t, tierCounts[TierCompliance], 0, "should have compliance rules")
 
 	for tier, count := range tierCounts {
 		t.Logf("  tier %d (%s): %d rules", tier, TierName(tier), count)
@@ -106,7 +105,7 @@ func TestTierFromName(t *testing.T) {
 	assert.Equal(t, TierQuality, TierFromName("quality"))
 	assert.Equal(t, TierObservability, TierFromName("observability"))
 	assert.Equal(t, TierArchitecture, TierFromName("architecture"))
-	assert.Equal(t, TierCompliance, TierFromName("compliance"))
+	assert.Equal(t, Tier(-1), TierFromName("compliance"), "compliance tier removed")
 	assert.Equal(t, Tier(-1), TierFromName("unknown"))
 }
 

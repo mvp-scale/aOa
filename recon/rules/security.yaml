@@ -532,6 +532,26 @@
     - "print(password"
     - "print(secret"
 
+# === Config dimension (bit 37) — absorbed from former compliance tier ===
+- id: unsafe_defaults
+  label: Security-sensitive constructor without safe config
+  dimension: config
+  tier: security
+  bit: 37
+  severity: warning
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "xml.NewDecoder("
+    - "yaml.load("
+    - "http.ListenAndServe("
+    - "http.DefaultClient"
+    - "http.DefaultTransport"
+    - "tls.Config{}"
+  structural:
+    match: call
+    receiver_contains: ["xml.NewDecoder", "yaml.load", "http.ListenAndServe"]
+
 # === Denial dimension ===
 - id: regex_dos
   label: Potentially catastrophic regex backtracking

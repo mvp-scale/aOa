@@ -1,7 +1,9 @@
 # Quality tier — universal across all 509 tree-sitter languages.
 # No per-language mapping needed. See README.md for schema and examples.
+#
+# Severity model: text-only rules capped at info. Only structural/composite earn warning+.
 
-# === Errors dimension ===
+# === Errors dimension (bits 0-5, 20) ===
 - id: ignored_error
   label: Error return value assigned to blank identifier
   dimension: errors
@@ -57,7 +59,7 @@
   dimension: errors
   tier: quality
   bit: 4
-  severity: warning
+  severity: info
   code_only: true
   text_patterns:
     - "recover()"
@@ -76,13 +78,32 @@
   text_patterns:
     - "return err"
 
-# === Complexity dimension ===
+- id: deprecated_stdlib
+  label: Deprecated standard library API usage
+  dimension: errors
+  tier: quality
+  bit: 20
+  severity: warning
+  code_only: true
+  text_patterns:
+    - "ioutil.ReadAll("
+    - "ioutil.ReadFile("
+    - "ioutil.WriteFile("
+    - "ioutil.TempDir("
+    - "ioutil.TempFile("
+    - "ioutil.ReadDir("
+    - "math/rand"
+  structural:
+    match: call
+    receiver_contains: ["ioutil.ReadAll", "ioutil.ReadFile", "ioutil.WriteFile", "ioutil.TempDir", "ioutil.TempFile", "ioutil.ReadDir"]
+
+# === Complexity dimension (bits 6-9, 21-22) ===
 - id: long_function
   label: Function exceeds 100 lines
   dimension: complexity
   tier: quality
   bit: 6
-  severity: info
+  severity: warning
   code_only: true
   structural:
     match: function
@@ -121,7 +142,29 @@
     match: switch
     child_count_threshold: 15
 
-# === Dead code dimension ===
+- id: god_function
+  label: Function exceeds 200 lines (god function)
+  dimension: complexity
+  tier: quality
+  bit: 21
+  severity: critical
+  code_only: true
+  structural:
+    match: function
+    line_threshold: 200
+
+- id: wide_function
+  label: Function has excessive parameters (>8)
+  dimension: complexity
+  tier: quality
+  bit: 22
+  severity: warning
+  code_only: true
+  structural:
+    match: function
+    child_count_threshold: 8
+
+# === Dead code dimension (bits 10-14) ===
 - id: unreachable_code
   label: Statements after unconditional return/panic
   dimension: dead_code
@@ -146,6 +189,9 @@
     - "// type "
     - "# def "
     - "# class "
+  structural:
+    match: function
+    text_contains: ["// func ", "// var ", "// type "]
 
 - id: unused_import
   label: Unused import detected
@@ -157,20 +203,41 @@
   text_patterns:
     - "_ \""
 
-# === Conventions dimension ===
-- id: magic_number
-  label: Magic number without constant
+- id: empty_function_body
+  label: Empty function body (no statements)
+  dimension: dead_code
+  tier: quality
+  bit: 13
+  severity: warning
+  code_only: true
+  structural:
+    match: function
+    child_count_threshold: 0
+
+- id: disabled_test
+  label: Disabled or skipped test
+  dimension: dead_code
+  tier: quality
+  bit: 14
+  severity: info
+  code_only: true
+  text_patterns:
+    - "t.Skip("
+    - "@unittest.skip"
+    - "xit("
+
+# === Conventions dimension (bits 15-19, 23) ===
+- id: exported_no_doc
+  label: Exported function without doc comment
   dimension: conventions
   tier: quality
   bit: 15
   severity: info
   code_only: true
-  text_patterns:
-    - "== 200"
-    - "== 404"
-    - "== 500"
-    - "== 401"
-    - "== 403"
+  structural:
+    match: function
+    without_sibling: doc_comment
+  skip_langs: ["python", "javascript", "typescript", "tsx", "ruby", "java", "c", "cpp", "rust"]
 
 - id: init_side_effects
   label: init function with side effects
@@ -181,15 +248,54 @@
   code_only: true
   text_patterns:
     - "func init()"
+  structural:
+    match: function
+    line_threshold: 10
 
-- id: exported_no_doc
-  label: Exported function without doc comment
+- id: magic_number
+  label: Magic number without constant
   dimension: conventions
   tier: quality
   bit: 17
   severity: info
   code_only: true
+  text_patterns:
+    - "== 200"
+    - "== 404"
+    - "== 500"
+    - "== 401"
+    - "== 403"
+
+- id: boolean_param
+  label: Function with many boolean parameters (unclear API)
+  dimension: conventions
+  tier: quality
+  bit: 18
+  severity: info
+  code_only: true
   structural:
     match: function
-    without_sibling: doc_comment
-  skip_langs: ["python", "javascript", "typescript", "tsx", "ruby", "java", "c", "cpp", "rust"]
+    child_count_threshold: 3
+
+- id: deeply_nested_callback
+  label: Deeply nested callback (callback hell)
+  dimension: conventions
+  tier: quality
+  bit: 19
+  severity: warning
+  code_only: true
+  structural:
+    match: function
+    nesting_threshold: 3
+    inside: call
+
+- id: inconsistent_receiver
+  label: Inconsistent receiver naming (observational)
+  dimension: conventions
+  tier: quality
+  bit: 23
+  severity: info
+  code_only: true
+  text_patterns:
+    - "func (s *"
+    - "func (r *"

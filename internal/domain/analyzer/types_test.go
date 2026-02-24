@@ -35,7 +35,7 @@ func TestBitmask_OverflowGuard(t *testing.T) {
 	// Out of range bits are silently ignored
 	b.Set(TierSecurity, 64)
 	b.Set(TierSecurity, -1)
-	b.Set(Tier(5), 0)  // invalid tier
+	b.Set(Tier(6), 0)  // invalid tier (out of range)
 	b.Set(Tier(-1), 0) // invalid tier
 	assert.True(t, b.IsZero())
 }
@@ -44,7 +44,7 @@ func TestBitmask_HasOverflowGuard(t *testing.T) {
 	var b Bitmask
 	assert.False(t, b.Has(TierSecurity, 64))
 	assert.False(t, b.Has(TierSecurity, -1))
-	assert.False(t, b.Has(Tier(5), 0))
+	assert.False(t, b.Has(Tier(6), 0))
 }
 
 func TestBitmask_Or(t *testing.T) {

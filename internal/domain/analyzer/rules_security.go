@@ -403,6 +403,22 @@ var securityRules = []Rule{
 		},
 	},
 
+	// === Config dimension (bit 37) — absorbed from former compliance tier ===
+	{
+		ID: "unsafe_defaults", Label: "Security-sensitive constructor without safe config",
+		Dimension: "config", Tier: TierSecurity, Bit: 37, Severity: SevWarning,
+		Kind: RuleComposite, SkipTest: true, CodeOnly: true,
+		TextPatterns: []string{
+			"xml.NewDecoder(", "yaml.load(",
+			"http.ListenAndServe(", "http.DefaultClient",
+			"http.DefaultTransport", "tls.Config{}",
+		},
+		Structural: &StructuralBlock{
+			Match:            "call",
+			ReceiverContains: []string{"xml.NewDecoder", "yaml.load", "http.ListenAndServe"},
+		},
+	},
+
 	// === Auth dimension (bits 34-36) ===
 	{
 		ID: "missing_csrf", Label: "POST/PUT handler without CSRF protection",

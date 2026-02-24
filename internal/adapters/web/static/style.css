@@ -30,7 +30,7 @@
   --tier-qual: #c084fc; --tier-qual-dim: rgba(192,132,252,0.12);
   --tier-arch: #fb923c; --tier-arch-dim: rgba(251,146,60,0.12);
   --tier-obs: #34d399; --tier-obs-dim: rgba(52,211,153,0.12);
-  --tier-comp: #a78bfa; --tier-comp-dim: rgba(167,139,250,0.12);
+
   --tier-inv: #94a3b8; --tier-inv-dim: rgba(148,163,184,0.12);
 }
 
@@ -54,7 +54,7 @@
   --tier-qual: #9333ea; --tier-qual-dim: rgba(147,51,234,0.1);
   --tier-arch: #ea580c; --tier-arch-dim: rgba(234,88,12,0.1);
   --tier-obs: #16a34a; --tier-obs-dim: rgba(22,163,74,0.1);
-  --tier-comp: #7c3aed; --tier-comp-dim: rgba(124,58,237,0.1);
+
   --tier-inv: #64748b; --tier-inv-dim: rgba(100,116,139,0.1);
 }
 
@@ -646,7 +646,6 @@ body {
 .recon-tier.quality .recon-tier-toggle.on { background: var(--tier-qual); }
 .recon-tier.architecture .recon-tier-toggle.on { background: var(--tier-arch); }
 .recon-tier.observability .recon-tier-toggle.on { background: var(--tier-obs); }
-.recon-tier.compliance .recon-tier-toggle.on { background: var(--tier-comp); }
 .recon-tier.investigated .recon-tier-toggle.on { background: var(--tier-inv); }
 .recon-tier-label-group { flex: 1; min-width: 0; }
 .recon-tier-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -655,7 +654,6 @@ body {
 .recon-tier.quality .recon-tier-label { color: var(--tier-qual); }
 .recon-tier.architecture .recon-tier-label { color: var(--tier-arch); }
 .recon-tier.observability .recon-tier-label { color: var(--tier-obs); }
-.recon-tier.compliance .recon-tier-label { color: var(--tier-comp); }
 .recon-tier.investigated .recon-tier-label { color: var(--tier-inv); }
 .recon-tier-desc {
   font-size: 10px; color: var(--mute); font-weight: 400;

@@ -1,7 +1,9 @@
 # Observability tier — universal across all 509 tree-sitter languages.
 # No per-language mapping needed. See README.md for schema and examples.
+#
+# Severity model: text-only rules capped at info. Only structural/composite earn warning+.
 
-# === Debug dimension ===
+# === Debug dimension (bits 0-4) ===
 - id: print_statement
   label: Debug print statement left in code
   dimension: debug
@@ -17,6 +19,9 @@
     - "System.out.println("
     - "var_dump("
     - "print("
+  structural:
+    match: call
+    receiver_contains: ["fmt.Println", "fmt.Printf", "console.log", "System.out.println"]
 
 - id: todo_fixme
   label: TODO/FIXME/HACK/XXX marker in source
@@ -24,6 +29,7 @@
   tier: observability
   bit: 1
   severity: info
+  code_only: true
   text_patterns:
     - "TODO"
     - "FIXME"
@@ -35,7 +41,7 @@
   dimension: debug
   tier: observability
   bit: 2
-  severity: warning
+  severity: info
   skip_test: true
   code_only: true
   text_patterns:
@@ -57,7 +63,20 @@
     - "logger.debug("
     - "logging.debug("
 
-# === Silent failures dimension ===
+- id: sleep_in_code
+  label: time.Sleep call in code
+  dimension: debug
+  tier: observability
+  bit: 4
+  severity: info
+  code_only: true
+  text_patterns:
+    - "time.Sleep("
+  structural:
+    match: call
+    receiver_contains: ["time.Sleep"]
+
+# === Silent failures dimension (bits 5-9) ===
 - id: recovered_panic_no_log
   label: Recovered panic without logging
   dimension: silent_failures
@@ -67,13 +86,16 @@
   code_only: true
   text_patterns:
     - "recover()"
+  structural:
+    match: call
+    receiver_contains: ["recover"]
 
 - id: goroutine_fire_forget
   label: Goroutine without error propagation
   dimension: silent_failures
   tier: observability
   bit: 6
-  severity: warning
+  severity: info
   code_only: true
   text_patterns:
     - "go func()"
@@ -89,3 +111,230 @@
   text_patterns:
     - "ctx.Done()"
     - "<-ctx.Done()"
+
+- id: error_to_dev_null
+  label: Error explicitly discarded
+  dimension: silent_failures
+  tier: observability
+  bit: 8
+  severity: info
+  code_only: true
+  text_patterns:
+    - "_ = os."
+    - "_ = io."
+
+- id: log_and_return
+  label: Log error then return (double handling)
+  dimension: silent_failures
+  tier: observability
+  bit: 9
+  severity: info
+  code_only: true
+  text_patterns:
+    - "log.Error"
+  structural:
+    match: call
+    receiver_contains: ["log.Error"]
+
+# === Logging dimension (bits 10-14) ===
+- id: unstructured_log
+  label: Unstructured log output (use structured logging)
+  dimension: logging
+  tier: observability
+  bit: 10
+  severity: info
+  code_only: true
+  text_patterns:
+    - "log.Println("
+    - "log.Printf("
+  structural:
+    match: call
+    receiver_contains: ["log.Println", "log.Printf"]
+
+- id: sensitive_log_pattern
+  label: Sensitive data in log output
+  dimension: logging
+  tier: observability
+  bit: 11
+  severity: warning
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "password"
+    - "secret"
+    - "token"
+  structural:
+    match: call
+    receiver_contains: ["log.", "fmt.", "console."]
+    text_contains: ["password", "secret", "token"]
+
+- id: error_log_level
+  label: Error/fatal log level usage (observational)
+  dimension: logging
+  tier: observability
+  bit: 12
+  severity: info
+  code_only: true
+  text_patterns:
+    - "log.Error("
+    - "log.Fatal("
+
+- id: pii_in_log
+  label: PII patterns in log output
+  dimension: logging
+  tier: observability
+  bit: 13
+  severity: warning
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "email"
+    - "ssn"
+    - "phone"
+    - "credit"
+  structural:
+    match: call
+    receiver_contains: ["log.", "fmt.Print"]
+    text_contains: ["email", "ssn", "phone", "credit"]
+
+- id: log_without_context
+  label: Log message without context (observational)
+  dimension: logging
+  tier: observability
+  bit: 14
+  severity: info
+  code_only: true
+  text_patterns:
+    - 'log.Print("'
+    - 'fmt.Println("error'
+
+# === Resilience dimension (bits 15-19) ===
+- id: panic_in_handler
+  label: panic() in handler/server code
+  dimension: resilience
+  tier: observability
+  bit: 15
+  severity: warning
+  code_only: true
+  text_patterns:
+    - "panic("
+  structural:
+    match: call
+    text_contains: ["panic("]
+
+- id: os_exit_in_lib
+  label: os.Exit() in library code
+  dimension: resilience
+  tier: observability
+  bit: 16
+  severity: warning
+  skip_main: true
+  code_only: true
+  text_patterns:
+    - "os.Exit("
+  structural:
+    match: call
+    receiver_contains: ["os.Exit"]
+
+- id: fatal_log_in_lib
+  label: log.Fatal() in library code
+  dimension: resilience
+  tier: observability
+  bit: 17
+  severity: warning
+  skip_main: true
+  code_only: true
+  text_patterns:
+    - "log.Fatal("
+  structural:
+    match: call
+    receiver_contains: ["log.Fatal"]
+
+- id: signal_handler_hint
+  label: Signal handler registration (observational)
+  dimension: resilience
+  tier: observability
+  bit: 18
+  severity: info
+  code_only: true
+  text_patterns:
+    - "signal.Notify("
+
+- id: health_check_hint
+  label: Health check endpoint (observational)
+  dimension: resilience
+  tier: observability
+  bit: 19
+  severity: info
+  code_only: true
+  text_patterns:
+    - "/health"
+    - "/healthz"
+
+# === Error visibility dimension (bits 20-24) ===
+- id: bare_error_return
+  label: Error returned without wrapping
+  dimension: error_visibility
+  tier: observability
+  bit: 20
+  severity: info
+  code_only: true
+  text_patterns:
+    - "return err"
+  structural:
+    match: return
+    text_contains: ["err"]
+
+- id: error_string_only
+  label: Error created with string only (no type)
+  dimension: error_visibility
+  tier: observability
+  bit: 21
+  severity: info
+  code_only: true
+  text_patterns:
+    - 'errors.New("'
+  structural:
+    match: call
+    receiver_contains: ["errors.New"]
+
+- id: error_wrap_pattern
+  label: Error wrapping with %w (positive signal)
+  dimension: error_visibility
+  tier: observability
+  bit: 22
+  severity: info
+  code_only: true
+  text_patterns:
+    - 'fmt.Errorf("%w'
+  structural:
+    match: call
+    receiver_contains: ["fmt.Errorf"]
+
+- id: sensitive_in_error
+  label: Sensitive data in error message
+  dimension: error_visibility
+  tier: observability
+  bit: 23
+  severity: warning
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "password"
+    - "secret"
+    - "token"
+  structural:
+    match: call
+    receiver_contains: ["errors.New", "fmt.Errorf"]
+    text_contains: ["password", "secret", "token"]
+
+- id: panic_without_recover
+  label: panic() without recover (observational)
+  dimension: error_visibility
+  tier: observability
+  bit: 24
+  severity: info
+  skip_main: true
+  code_only: true
+  text_patterns:
+    - "panic("

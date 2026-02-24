@@ -1,7 +1,9 @@
 # Performance tier — universal across all 509 tree-sitter languages.
 # No per-language mapping needed. See README.md for schema and examples.
+#
+# Severity model: text-only rules capped at info. Only structural/composite earn warning+.
 
-# === Resources dimension ===
+# === Resources dimension (bits 0-4) ===
 - id: defer_in_loop
   label: defer inside loop body
   dimension: resources
@@ -27,6 +29,9 @@
     - "net.Dial("
     - "net.Listen("
     - "sql.Open("
+  structural:
+    match: call
+    receiver_contains: ["os.Open", "os.Create", "os.OpenFile", "net.Dial", "net.Listen", "sql.Open"]
 
 - id: context_without_cancel
   label: Context created without calling cancel
@@ -39,6 +44,9 @@
     - "context.WithCancel("
     - "context.WithTimeout("
     - "context.WithDeadline("
+  structural:
+    match: call
+    receiver_contains: ["context.WithCancel", "context.WithTimeout", "context.WithDeadline"]
 
 - id: unclosed_response_body
   label: HTTP response body not closed
@@ -53,92 +61,301 @@
     - "http.Do("
     - "client.Do("
     - "client.Get("
+  structural:
+    match: call
+    receiver_contains: ["http.Get", "http.Post", "http.Do", "client.Do", "client.Get"]
 
-# === Concurrency dimension ===
-- id: goroutine_leak
-  label: Goroutine without exit path
+- id: resource_in_loop
+  label: Resource allocation inside loop body
+  dimension: resources
+  tier: performance
+  bit: 4
+  severity: critical
+  code_only: true
+  structural:
+    match: call
+    receiver_contains: ["os.Open", "os.Create", "sql.Open", "net.Dial"]
+    inside: for_loop
+
+# === Concurrency dimension (bits 5-9) ===
+- id: lock_in_loop
+  label: Lock acquisition inside loop body
   dimension: concurrency
   tier: performance
   bit: 5
   severity: warning
   code_only: true
-  text_patterns:
-    - "go func()"
-    - "go func ("
+  structural:
+    match: call
+    text_contains: [".Lock("]
+    inside: for_loop
 
-- id: mutex_without_unlock
-  label: Mutex lock without matching unlock
+- id: goroutine_in_loop
+  label: Goroutine launched inside loop body
   dimension: concurrency
   tier: performance
   bit: 6
   severity: warning
   code_only: true
-  text_patterns:
-    - ".Lock()"
-    - ".RLock()"
+  structural:
+    match: call
+    text_contains: ["go func"]
+    inside: for_loop
 
-- id: waitgroup_misuse
-  label: WaitGroup potential misuse
+- id: channel_in_loop
+  label: Channel created inside loop body
   dimension: concurrency
   tier: performance
   bit: 7
   severity: warning
   code_only: true
-  text_patterns:
-    - ".Add("
-    - ".Wait()"
-    - ".Done()"
+  structural:
+    match: call
+    text_contains: ["make(chan"]
+    inside: for_loop
 
-# === Query dimension ===
-- id: n_plus_one_query
-  label: Database call inside loop (N+1 query pattern)
+- id: goroutine_leak
+  label: Goroutine without exit path
+  dimension: concurrency
+  tier: performance
+  bit: 8
+  severity: info
+  code_only: true
+  text_patterns:
+    - "go func()"
+    - "go func ("
+  structural:
+    match: call
+    text_contains: ["go func"]
+
+- id: sync_primitive_usage
+  label: Sync primitive usage (observational)
+  dimension: concurrency
+  tier: performance
+  bit: 9
+  severity: info
+  code_only: true
+  text_patterns:
+    - ".Lock()"
+    - ".RLock()"
+    - ".Wait()"
+
+# === Query dimension (bits 10-14) ===
+- id: query_in_loop
+  label: Database query inside loop (N+1 pattern)
   dimension: query
   tier: performance
   bit: 10
-  severity: warning
+  severity: critical
   skip_test: true
   code_only: true
   text_patterns:
     - ".Query("
     - ".QueryRow("
+  structural:
+    match: call
+    receiver_contains: ["Query", "QueryRow"]
+    inside: for_loop
+
+- id: exec_in_loop
+  label: Database exec inside loop
+  dimension: query
+  tier: performance
+  bit: 11
+  severity: critical
+  skip_test: true
+  code_only: true
+  text_patterns:
     - ".Exec("
-    - ".Find("
-    - ".First("
+  structural:
+    match: call
+    receiver_contains: ["Exec"]
+    inside: for_loop
 
 - id: unbounded_query
   label: Query without LIMIT or pagination
   dimension: query
   tier: performance
-  bit: 11
-  severity: info
+  bit: 12
+  severity: warning
   skip_test: true
   code_only: true
   text_patterns:
     - "SELECT *"
     - "select *"
-    - ".Find(&"
-    - ".All("
+  structural:
+    match: call
+    receiver_contains: ["Query", "Exec"]
 
-# === Memory dimension ===
-- id: string_concat_in_loop
-  label: String concatenation in loop (use strings.Builder)
+- id: db_without_transaction
+  label: Multiple DB ops without transaction
+  dimension: query
+  tier: performance
+  bit: 13
+  severity: warning
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - ".Query("
+    - ".Exec("
+  structural:
+    match: call
+    receiver_contains: ["Query", "Exec"]
+
+- id: raw_sql_string
+  label: Raw SQL string literal (observational)
+  dimension: query
+  tier: performance
+  bit: 14
+  severity: info
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - '"SELECT'
+    - '"INSERT'
+    - '"DELETE'
+
+# === Memory dimension (bits 15-19) ===
+- id: allocation_in_loop
+  label: Heap allocation inside loop body
   dimension: memory
   tier: performance
   bit: 15
-  severity: info
+  severity: warning
   code_only: true
-  text_patterns:
-    - "strings.Builder"
-    - "bytes.Buffer"
+  structural:
+    match: call
+    text_contains: ["make("]
+    inside: for_loop
 
-- id: large_allocation_hint
-  label: Allocation in hot path
+- id: append_in_loop
+  label: Append inside loop body (observational)
   dimension: memory
   tier: performance
   bit: 16
   severity: info
   code_only: true
+  structural:
+    match: call
+    text_contains: ["append("]
+    inside: for_loop
+
+- id: string_concat_in_loop
+  label: String concatenation in loop (use strings.Builder)
+  dimension: memory
+  tier: performance
+  bit: 17
+  severity: warning
+  code_only: true
+  text_patterns:
+    - "+="
+  structural:
+    match: assignment
+    inside: for_loop
+
+- id: large_buffer_alloc
+  label: Large buffer allocation (observational)
+  dimension: memory
+  tier: performance
+  bit: 18
+  severity: info
+  code_only: true
   text_patterns:
     - "make([]byte,"
-    - "make(map["
     - "new(bytes.Buffer)"
+
+- id: regex_compile_in_loop
+  label: Regex compilation inside loop body
+  dimension: memory
+  tier: performance
+  bit: 19
+  severity: warning
+  code_only: true
+  text_patterns:
+    - "regexp.Compile("
+    - "regexp.MustCompile("
+  structural:
+    match: call
+    receiver_contains: ["regexp.Compile", "regexp.MustCompile"]
+    inside: for_loop
+
+# === Hot path dimension (bits 20-25) ===
+- id: reflection_call
+  label: Reflection usage in code path
+  dimension: hot_path
+  tier: performance
+  bit: 20
+  severity: info
+  code_only: true
+  text_patterns:
+    - "reflect."
+  structural:
+    match: call
+    receiver_contains: ["reflect."]
+
+- id: json_marshal_in_loop
+  label: JSON marshal/unmarshal inside loop body
+  dimension: hot_path
+  tier: performance
+  bit: 21
+  severity: warning
+  code_only: true
+  text_patterns:
+    - "json.Marshal"
+    - "json.Unmarshal"
+  structural:
+    match: call
+    receiver_contains: ["json.Marshal", "json.Unmarshal"]
+    inside: for_loop
+
+- id: fmt_sprint_in_loop
+  label: fmt.Sprint inside loop body
+  dimension: hot_path
+  tier: performance
+  bit: 22
+  severity: warning
+  code_only: true
+  text_patterns:
+    - "fmt.Sprint"
+    - "fmt.Sprintf"
+  structural:
+    match: call
+    receiver_contains: ["fmt.Sprint", "fmt.Sprintf"]
+    inside: for_loop
+
+- id: sleep_in_handler
+  label: time.Sleep in handler/server code
+  dimension: hot_path
+  tier: performance
+  bit: 23
+  severity: warning
+  code_only: true
+  text_patterns:
+    - "time.Sleep("
+  structural:
+    match: call
+    receiver_contains: ["time.Sleep"]
+
+- id: sort_in_loop
+  label: Sort operation inside loop body
+  dimension: hot_path
+  tier: performance
+  bit: 24
+  severity: warning
+  code_only: true
+  text_patterns:
+    - "sort."
+  structural:
+    match: call
+    receiver_contains: ["sort."]
+    inside: for_loop
+
+- id: map_lookup_in_loop
+  label: Map lookup in loop (observational)
+  dimension: hot_path
+  tier: performance
+  bit: 25
+  severity: info
+  code_only: true
+  text_patterns:
+    - "map["
