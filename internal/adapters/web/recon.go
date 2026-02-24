@@ -9,7 +9,30 @@ import (
 
 	"github.com/corey/aoa/internal/adapters/recon"
 	"github.com/corey/aoa/internal/adapters/socket"
+	"github.com/corey/aoa/internal/domain/analyzer"
 )
+
+// ruleIndex maps rule ID → (tier, dimension) for data-driven tier/dim resolution.
+var ruleIndex map[string]ruleMeta
+
+type ruleMeta struct {
+	tier      string
+	dimension string
+	label     string
+}
+
+// SetRuleIndex populates the rule metadata index from loaded rules.
+// Called once at startup after YAML rules are loaded.
+func SetRuleIndex(rules []analyzer.Rule) {
+	ruleIndex = make(map[string]ruleMeta, len(rules))
+	for _, r := range rules {
+		ruleIndex[r.ID] = ruleMeta{
+			tier:      analyzer.TierName(r.Tier),
+			dimension: r.Dimension,
+			label:     r.Label,
+		}
+	}
+}
 
 // fileCacheAdapter adapts the search engine's FileCache to the recon.LineGetter interface.
 type fileCacheAdapter struct {
@@ -123,7 +146,7 @@ func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[s
 				DimID:    dimID,
 				TierID:   tierID,
 				ID:       f.RuleID,
-				Label:    f.RuleID,
+				Label:    inferLabel(f.RuleID),
 				Severity: sevStr,
 				Line:     f.Line,
 			})
@@ -312,7 +335,14 @@ func (s *Server) handleReconInvestigate(w http.ResponseWriter, r *http.Request) 
 }
 
 // inferTierDim maps a rule ID to its tier and dimension.
+// Uses data-driven rule index when available (from YAML), falls back to hardcoded map.
 func inferTierDim(ruleID string) (tierID, dimID string) {
+	if ruleIndex != nil {
+		if rm, ok := ruleIndex[ruleID]; ok {
+			return rm.tier, rm.dimension
+		}
+	}
+	// Fallback for backward compatibility
 	switch ruleID {
 	case "hardcoded_secret", "aws_credentials", "jwt_secret_inline", "private_key_inline":
 		return "security", "secrets"
@@ -342,4 +372,14 @@ func inferTierDim(ruleID string) (tierID, dimID string) {
 	default:
 		return "security", "general"
 	}
+}
+
+// inferLabel returns the label for a finding, using rule index when available.
+func inferLabel(ruleID string) string {
+	if ruleIndex != nil {
+		if rm, ok := ruleIndex[ruleID]; ok && rm.label != "" {
+			return rm.label
+		}
+	}
+	return ruleID
 }

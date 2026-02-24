@@ -4,7 +4,7 @@ package analyzer
 
 import "math/bits"
 
-// Tier represents a dimension tier (security, performance, quality, observability).
+// Tier represents a dimension tier (security, performance, quality, observability, architecture, compliance).
 type Tier int
 
 const (
@@ -12,10 +12,85 @@ const (
 	TierPerformance   Tier = 1
 	TierQuality       Tier = 2
 	TierObservability Tier = 3
+	TierArchitecture  Tier = 4
+	TierCompliance    Tier = 5
 )
 
 // TierCount is the number of tiers in the bitmask.
-const TierCount = 4
+const TierCount = 6
+
+// TierName returns the string label for a tier constant.
+func TierName(t Tier) string {
+	switch t {
+	case TierSecurity:
+		return "security"
+	case TierPerformance:
+		return "performance"
+	case TierQuality:
+		return "quality"
+	case TierObservability:
+		return "observability"
+	case TierArchitecture:
+		return "architecture"
+	case TierCompliance:
+		return "compliance"
+	default:
+		return "unknown"
+	}
+}
+
+// TierFromName maps a string tier name to its Tier constant.
+// Returns -1 for unknown names.
+func TierFromName(name string) Tier {
+	switch name {
+	case "security":
+		return TierSecurity
+	case "performance":
+		return TierPerformance
+	case "quality":
+		return TierQuality
+	case "observability":
+		return TierObservability
+	case "architecture":
+		return TierArchitecture
+	case "compliance":
+		return TierCompliance
+	default:
+		return -1
+	}
+}
+
+// SeverityFromName maps a string severity name to its Severity constant.
+// Returns -1 for unknown names.
+func SeverityFromName(name string) Severity {
+	switch name {
+	case "info":
+		return SevInfo
+	case "warning":
+		return SevWarning
+	case "high":
+		return SevHigh
+	case "critical":
+		return SevCritical
+	default:
+		return -1
+	}
+}
+
+// RuleKindFromName maps a string kind name to its RuleKind constant.
+// Returns -1 for unknown names.
+func RuleKindFromName(name string) RuleKind {
+	switch name {
+	case "text":
+		return RuleText
+	case "structural":
+		return RuleStructural
+	case "composite":
+		return RuleComposite
+	default:
+		return -1
+	}
+}
 
 // Bitmask holds one uint64 per tier, with 64 bit positions each.
 // Bit positions map 1:1 with rule definitions.

@@ -1,0 +1,184 @@
+# Quality tier rules — errors, complexity, dead_code, conventions
+
+# === Errors dimension ===
+- id: ignored_error
+  label: Error return value assigned to blank identifier
+  dimension: errors
+  tier: quality
+  bit: 0
+  severity: warning
+  kind: structural
+  code_only: true
+  structural_check: checkIgnoredError
+
+- id: panic_in_lib
+  label: panic() called in library/non-main package
+  dimension: errors
+  tier: quality
+  bit: 1
+  severity: warning
+  kind: structural
+  skip_main: true
+  code_only: true
+  structural_check: checkPanicInLib
+
+- id: unchecked_type_assertion
+  label: Type assertion without comma-ok pattern
+  dimension: errors
+  tier: quality
+  bit: 2
+  severity: warning
+  kind: structural
+  code_only: true
+  structural_check: checkUncheckedTypeAssert
+
+- id: error_not_checked
+  label: Error return value not checked
+  dimension: errors
+  tier: quality
+  bit: 3
+  severity: warning
+  kind: structural
+  code_only: true
+  structural_check: checkErrorNotChecked
+
+- id: empty_catch_block
+  label: Empty catch/recover block swallows error
+  dimension: errors
+  tier: quality
+  bit: 4
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - "recover()"
+    - "catch {}"
+    - "catch (Exception"
+    - "except:"
+    - "except Exception:"
+
+- id: error_without_context
+  label: Error returned without context wrapping
+  dimension: errors
+  tier: quality
+  bit: 5
+  severity: info
+  kind: text
+  code_only: true
+  text_patterns:
+    - "return err"
+
+# === Complexity dimension ===
+- id: long_function
+  label: Function exceeds 100 lines
+  dimension: complexity
+  tier: quality
+  bit: 6
+  severity: info
+  kind: structural
+  code_only: true
+  structural_check: checkLongFunction
+
+- id: nesting_depth
+  label: Nesting depth exceeds 4 levels
+  dimension: complexity
+  tier: quality
+  bit: 7
+  severity: warning
+  kind: structural
+  code_only: true
+  structural_check: checkNestingDepth
+
+- id: too_many_params
+  label: Function has too many parameters (>5)
+  dimension: complexity
+  tier: quality
+  bit: 8
+  severity: info
+  kind: structural
+  code_only: true
+  structural_check: checkTooManyParams
+
+- id: large_switch
+  label: Switch statement with more than 15 cases
+  dimension: complexity
+  tier: quality
+  bit: 9
+  severity: info
+  kind: structural
+  code_only: true
+  structural_check: checkLargeSwitch
+
+# === Dead code dimension ===
+- id: unreachable_code
+  label: Statements after unconditional return/panic
+  dimension: dead_code
+  tier: quality
+  bit: 10
+  severity: warning
+  kind: structural
+  code_only: true
+  structural_check: checkUnreachableCode
+
+- id: commented_out_code
+  label: Commented-out code block
+  dimension: dead_code
+  tier: quality
+  bit: 11
+  severity: info
+  kind: text
+  code_only: true
+  text_patterns:
+    - "// func "
+    - "// var "
+    - "// type "
+    - "# def "
+    - "# class "
+
+- id: unused_import
+  label: Unused import detected
+  dimension: dead_code
+  tier: quality
+  bit: 12
+  severity: info
+  kind: text
+  code_only: true
+  text_patterns:
+    - "_ \""
+
+# === Conventions dimension ===
+- id: magic_number
+  label: Magic number without constant
+  dimension: conventions
+  tier: quality
+  bit: 15
+  severity: info
+  kind: text
+  code_only: true
+  text_patterns:
+    - "== 200"
+    - "== 404"
+    - "== 500"
+    - "== 401"
+    - "== 403"
+
+- id: init_side_effects
+  label: init function with side effects
+  dimension: conventions
+  tier: quality
+  bit: 16
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - "func init()"
+
+- id: exported_no_doc
+  label: Exported function without doc comment
+  dimension: conventions
+  tier: quality
+  bit: 17
+  severity: info
+  kind: structural
+  code_only: true
+  structural_check: checkExportedNoDoc

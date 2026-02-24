@@ -1,8 +1,8 @@
-# Board
+# Project Board
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-02-23 (Session 66) | **86% complete.**
+> **Updated**: 2026-02-23 (Session 67) | **86% complete.**
 > **Completed work**: See [COMPLETED.md](COMPLETED.md) — Phases 1–8c + L0 + L1 + L2.2–L2.7 + L3 + L4.1/L4.3 + L5.1–L5.6/L5.9 + L6.1–L6.6 (470+ active tests, 32 skipped)
 > **Archived boards**: `.context/archived/`
 
@@ -91,14 +91,18 @@
 | [L3](#layer-3) | [L3.15](#l315) | | x | | x | | | | - | 🟢 | 🟢 | 🟡 | GNU grep native parity — 3 modes, 22 flags, stdin/files/index routing | Drop-in grep replacement for AI agents | Smoke tests pass. **Gap**: no automated parity test suite |
 | [L4](#layer-4) | [L4.2](#l42) | | | x | | | | | L4.1 | 🟡 | 🟢 | 🟡 | Grammar CLI + build CI — `aoa grammar list/install/info` | Easy grammar distribution | CLI works. **Gap**: actual download not implemented |
 | [L4](#layer-4) | [L4.4](#l44) | | | x | x | | | | L4.3 | 🟢 | ⚪ | ⚪ | Installation docs — `go install` or download binary | Friction-free onboarding | New user installs and runs in <2 minutes |
-| [L5](#layer-5) | [L5.7](#l57) | | | | | | | | L5.1 | 🟡 | ⚪ | ⚪ | Performance tier — 4 dims (queries, memory, concurrency, resource leaks) | Second tier | Flags N+1, unbounded allocs |
-| [L5](#layer-5) | [L5.8](#l58) | | | | | | | | L5.1 | 🟡 | ⚪ | ⚪ | Quality tier — 4 dims (complexity, error handling, dead code, conventions) | Third tier | God functions, ignored errors |
+| [L5](#layer-5) | [L5.7](#l57) | | | | | | | | L5.1 | 🟡 | 🔵 | 🟡 | Performance tier — `defer_in_loop` active; add concurrency, query patterns, memory dims | Second tier coverage | 1/4 dims have detectors. **Gap**: 3 dimensions empty |
+| [L5](#layer-5) | [L5.8](#l58) | | | | | | | | L5.1 | 🟡 | 🔵 | 🟡 | Quality tier — complexity + errors active; add dead code, conventions dims | Third tier coverage | 3 detectors across 2/4 dims. **Gap**: 2 dimensions empty |
 | [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
 | [L5](#layer-5) | [L5.11](#l511) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Dimension query support — `--dimension=security --risk=high` | Filter by dimension | CLI filters by tier and severity |
 | [L5](#layer-5) | [L5.12](#l512) | | | | | | | x | L5.9 | 🟢 | 🟢 | 🟡 | Recon tab — dimensional engine with interim scanner fallback | Dashboard dimensional view | API works. **Gap**: dashboard UI upgrade for bitmask scores |
 | [L5](#layer-5) | [L5.13](#l513) | | | | | | | x | L5.12 | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul — 5 focus modes, tier redesign, code toggle, copy prompt | Recon tab is actionable, not just a finding list | **Gap**: browser-only validation |
 | [L5](#layer-5) | [L5.14](#l514) | x | | | | x | | | L5.12 | 🟢 | 🟢 | 🟡 | Recon cache + incremental updates — pre-compute at startup, SubtractFile/AddFile on file change | Zero per-poll scan cost, instant API response | **Gap**: no unit tests for incremental path |
 | [L5](#layer-5) | [L5.15](#l515) | | | | | | | x | L5.14 | 🟢 | 🟢 | 🟡 | Investigation tracking — per-file investigated status, persistence, auto-expiry | Users can mark files as reviewed, auto-clears on change | **Gap**: no unit tests |
+| [L5](#layer-5) | [L5.16](#l516) | | | | | | | x | L5.1 | 🟡 | ⚪ | ⚪ | Security dimension expansion — auth gaps (14q), path traversal (12q), deepen injection/secrets/crypto | Complete 5-dimension security tier | Detectors across all 5 security dimensions |
+| [L5](#layer-5) | [L5.17](#l517) | | | | | | | x | L5.1 | 🟡 | ⚪ | ⚪ | Architecture dimension expansion — import health + API surface detectors | Complete 3-dimension architecture tier | Detectors for all 3 architecture dimensions |
+| [L5](#layer-5) | [L5.18](#l518) | | | | | | | x | L5.1 | 🟡 | ⚪ | ⚪ | Observability dimension expansion — silent failures (swallowed errors, empty catches) | Complete 2-dimension observability tier | Detectors for both observability dimensions |
+| [L5](#layer-5) | [L5.19](#l519) | | | | | | | x | L5.1 | 🟡 | ⚪ | ⚪ | Compliance tier — CVE patterns, licensing, data handling (new tier + dashboard entry) | Compliance coverage | New RECON_TIERS entry + detectors for all 3 dimensions |
 | [L6](#layer-6) | [L6.7](#l67) | | | | | | | x | L6.6 | 🟢 | 🟢 | 🟡 | Dashboard Recon tab install prompt — "npm install aoa-recon" when not detected | Users know how to unlock Recon | **Gap**: browser-only validation |
 | [L6](#layer-6) | [L6.8](#l68) | | | x | | | | | L6.2 | 🟢 | 🟢 | 🟡 | npm package structure — wrapper + platform packages + JS shims | Zero-friction install via npm | **Gap**: not yet published to npm |
 | [L6](#layer-6) | [L6.9](#l69) | | | x | | | | | L6.4, L6.8 | 🟢 | 🟢 | 🟡 | npm recon package structure — wrapper + platform packages | Zero-friction recon install | **Gap**: not yet published to npm |
@@ -172,25 +176,39 @@ Two install paths: `go install` (from source) vs binary download (lean + grammar
 
 **Layer 5: Dimensional Analysis (Bitmask engine, Recon tab)**
 
-> Early warning system. 6 tiers, 22 dimensions. Security tier complete, performance and quality tiers not started.
+> Early warning system. 6 tiers, 21 dimensions. 11 pattern detectors active across 8 dimensions. Dashboard wires 9 of 21 dimensions. Security has 4/67 planned detectors; Performance, Quality, Architecture, Observability partially covered; Compliance tier not yet started.
 >
 > **Research**: [Bitmask analysis](../docs/research/bitmask-dimensional-analysis.md) | [AST vs LSP](../docs/research/asv-vs-lsp.md)
 
 #### L5.7
 
-**Performance tier** — ⚪ Not started
+**Performance tier** — 🔵 In progress, 🟡 Partial
 
-~50-60 questions: query patterns, memory, concurrency, resource leaks.
+1 of 4 dimensions has an active detector. Dashboard wires 2 of 4 dimensions (resources, concurrency).
 
-**Files**: `dimensions/performance/*.yaml`
+**Active**: `defer_in_loop` (resources — defer inside loop body, severity: warning)
+
+**Missing dimensions**:
+- **Concurrency** — dashboard dimension exists but no detectors (race conditions, mutex misuse, goroutine leaks)
+- **Query Patterns** — not in dashboard (N+1 queries, unbounded result sets, missing pagination)
+- **Memory** — not in dashboard (unbounded allocations, large copies, string concatenation in loops)
+
+**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/static/app.js` (RECON_TIERS)
 
 #### L5.8
 
-**Quality tier** — ⚪ Not started
+**Quality tier** — 🔵 In progress, 🟡 Partial
 
-~45-55 questions: complexity, error handling, dead code, conventions.
+3 detectors across 2 of 4 dimensions. Dashboard wires 2 of 4 dimensions (complexity, errors).
 
-**Files**: `dimensions/quality/*.yaml`
+**Active**:
+- `ignored_error` (errors — `_ = func()` pattern, severity: warning)
+- `panic_in_lib` (errors — panic in non-main package, severity: warning)
+- `long_function` (complexity — functions >100 lines, severity: info)
+
+**Missing dimensions**:
+- **Dead Code** — not in dashboard (unreachable code, unused exports, dead branches)
+- **Conventions** — not in dashboard (naming violations, inconsistent patterns, mutable state)
 
 #### L5.10
 
@@ -247,6 +265,63 @@ Per-file investigated status with persistence (`.aoa/recon-investigated.json`), 
 **Gap**: No unit tests for investigation methods.
 
 **Files**: `internal/app/app.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+
+#### L5.16
+
+**Security dimension expansion** — ⚪ Not started
+
+Current security coverage: 4 detectors across 3 of 5 planned dimensions. Research doc defines 67 security questions total.
+
+**Active dimensions** (3):
+- **Injection** (1/16): `command_injection`
+- **Secrets** (1/13): `hardcoded_secret`
+- **Cryptography** (2/12): `weak_hash`, `insecure_random`
+
+**Missing dimensions** (2):
+- **Auth Gaps** (0/14): route without auth, auth bypass, missing CSRF, session without expiry, missing rate limit, broken access control, privilege escalation, insecure password compare, permissive CORS, missing security headers, unvalidated redirect
+- **Path Traversal** (0/12): path from user input, directory traversal, symlink following, archive extraction, unrestricted file upload, SSRF, file deletion, temp file location, world-readable perms, path join without clean
+
+Each task: add detectors to `scanner.go`, add dimension entries to `RECON_TIERS` in `app.js`, add rule→tier mappings in `inferTierDim()` in `recon.go`.
+
+**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+
+#### L5.17
+
+**Architecture dimension expansion** — ⚪ Not started
+
+Current: 1 detector (`global_state`) in 1 of 3 planned dimensions. Dashboard wires 1 dimension (antipatterns).
+
+**Missing dimensions**:
+- **Import Health** — circular imports, banned imports, deep nesting, dependency fan-out
+- **API Surface** — exported functions without docs, unstable public interfaces, leaking internal types
+
+**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+
+#### L5.18
+
+**Observability dimension expansion** — ⚪ Not started
+
+Current: 2 detectors (`print_statement`, `todo_fixme`) in 1 of 2 planned dimensions. Dashboard wires 1 dimension (debug).
+
+**Missing dimension**:
+- **Silent Failures** — swallowed errors (empty catch blocks), recovered panics without logging, context cancellation ignored, channels never read
+
+**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+
+#### L5.19
+
+**Compliance tier** — ⚪ Not started
+
+Entirely new tier. Not in dashboard RECON_TIERS. No detectors. Research doc lists 3 dimensions.
+
+**Planned dimensions**:
+- **CVE Patterns** — known vulnerable function calls, deprecated APIs, unsafe defaults
+- **Licensing** — license header presence, SPDX compliance, GPL contamination in permissive projects
+- **Data Handling** — PII in logs, unencrypted storage, missing data sanitization
+
+Requires: new `RECON_TIERS` entry (color: purple), new `inferTierDim` mappings, new scanner detectors.
+
+**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
 
 ---
 

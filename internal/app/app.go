@@ -19,6 +19,7 @@ import (
 	"github.com/corey/aoa/internal/adapters/recon"
 	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/adapters/web"
+	"github.com/corey/aoa/internal/domain/analyzer"
 	"github.com/corey/aoa/internal/domain/enricher"
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/domain/learner"
@@ -163,6 +164,8 @@ type App struct {
 	Index     *ports.Index
 
 	reconBridge    *ReconBridge            // discovers and invokes aoa-recon companion binary
+	dimEngine      *recon.Engine           // YAML-driven dimensional analysis engine
+	dimRules       []analyzer.Rule         // loaded from YAML at startup
 	mu             sync.Mutex             // serializes learner access (searches are concurrent)
 
 	// Recon cache (pre-computed at startup, served instantly, updated incrementally)
@@ -338,6 +341,9 @@ func New(cfg Config) (*App, error) {
 
 	// Discover aoa-recon companion binary (non-fatal if not found)
 	a.initReconBridge()
+
+	// Load YAML-defined dimensional analysis rules and create engine
+	a.initDimEngine()
 
 	return a, nil
 }
@@ -590,9 +596,14 @@ func (a *App) WarmCaches(logFn func(string)) {
 	// 4. Pre-compute recon scan
 	logFn("scanning recon patterns...")
 	start = time.Now()
-	a.warmReconCache()
+	if a.dimEngine != nil {
+		a.warmDimCache()
+		logFn(fmt.Sprintf("dimensional cache ready — %d rules (%.1fs)", len(a.dimRules), time.Since(start).Seconds()))
+	} else {
+		a.warmReconCache()
+		logFn(fmt.Sprintf("recon cache ready (%.1fs)", time.Since(start).Seconds()))
+	}
 	a.loadInvestigated()
-	logFn(fmt.Sprintf("recon cache ready (%.1fs)", time.Since(start).Seconds()))
 
 	logFn(fmt.Sprintf("all caches warm — %d files ready (%.1fs total)",
 		fileCount, time.Since(totalStart).Seconds()))
@@ -1933,7 +1944,11 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 	}
 
 	// Re-scan recon in the background after full reindex
-	go a.warmReconCache()
+	if a.dimEngine != nil {
+		go a.warmDimCache()
+	} else {
+		go a.warmReconCache()
+	}
 
 	elapsed := time.Since(start)
 	return socket.ReindexResult{
@@ -2005,6 +2020,15 @@ func (a *App) updateReconForFile(fileID uint32, relPath string) {
 	info := recon.ScanFile(fileMeta, symbols, fileLines, pats)
 	a.reconCache.AddFile(dir, base, info)
 	a.reconScannedAt = time.Now().Unix()
+}
+
+// updateReconOrDimForFile dispatches to the dimensional engine or old scanner.
+func (a *App) updateReconOrDimForFile(fileID uint32, relPath string) {
+	if a.dimEngine != nil {
+		a.updateDimForFile(fileID, relPath)
+	} else {
+		a.updateReconForFile(fileID, relPath)
+	}
 }
 
 // InvestigatedFiles returns the current set of investigated file paths.

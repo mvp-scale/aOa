@@ -1391,37 +1391,58 @@ window.scrollToNow = function(id) {
    ══════════════════════════════════════════════════════════ */
 var RECON_TIERS = [
   {
-    id: 'security', label: 'Security', color: 'red', desc: 'Injection, secrets, crypto',
+    id: 'security', label: 'Security', color: 'red', desc: 'Injection, secrets, crypto, transport, auth',
     dimensions: [
       { id: 'injection', label: 'Injection' },
       { id: 'secrets', label: 'Secrets' },
-      { id: 'crypto', label: 'Cryptography' }
+      { id: 'crypto', label: 'Cryptography' },
+      { id: 'transport', label: 'Transport' },
+      { id: 'exposure', label: 'Exposure' },
+      { id: 'config', label: 'Config' },
+      { id: 'data', label: 'Data' },
+      { id: 'denial', label: 'Denial' },
+      { id: 'auth', label: 'Auth' }
     ]
   },
   {
-    id: 'performance', label: 'Performance', color: 'yellow', desc: 'Resources, concurrency',
+    id: 'performance', label: 'Performance', color: 'yellow', desc: 'Resources, concurrency, query, memory',
     dimensions: [
       { id: 'resources', label: 'Resource Leaks' },
-      { id: 'concurrency', label: 'Concurrency' }
+      { id: 'concurrency', label: 'Concurrency' },
+      { id: 'query', label: 'Query Patterns' },
+      { id: 'memory', label: 'Memory' }
     ]
   },
   {
-    id: 'quality', label: 'Quality', color: 'blue', desc: 'Complexity, errors, conventions',
+    id: 'quality', label: 'Quality', color: 'blue', desc: 'Errors, complexity, dead code, conventions',
     dimensions: [
+      { id: 'errors', label: 'Error Handling' },
       { id: 'complexity', label: 'Complexity' },
-      { id: 'errors', label: 'Error Handling' }
+      { id: 'dead_code', label: 'Dead Code' },
+      { id: 'conventions', label: 'Conventions' }
     ]
   },
   {
-    id: 'architecture', label: 'Architecture', color: 'cyan', desc: 'Anti-patterns, imports',
+    id: 'architecture', label: 'Architecture', color: 'cyan', desc: 'Anti-patterns, imports, API surface',
     dimensions: [
-      { id: 'antipattern', label: 'Anti-patterns' }
+      { id: 'antipattern', label: 'Anti-patterns' },
+      { id: 'imports', label: 'Import Health' },
+      { id: 'api_surface', label: 'API Surface' }
     ]
   },
   {
-    id: 'observability', label: 'Observability', color: 'green', desc: 'Debug artifacts, markers',
+    id: 'observability', label: 'Observability', color: 'green', desc: 'Debug artifacts, silent failures',
     dimensions: [
-      { id: 'debug', label: 'Debug Artifacts' }
+      { id: 'debug', label: 'Debug Artifacts' },
+      { id: 'silent_failures', label: 'Silent Failures' }
+    ]
+  },
+  {
+    id: 'compliance', label: 'Compliance', color: 'purple', desc: 'CVE patterns, licensing, data handling',
+    dimensions: [
+      { id: 'cve_patterns', label: 'CVE Patterns' },
+      { id: 'licensing', label: 'Licensing' },
+      { id: 'data_handling', label: 'Data Handling' }
     ]
   },
   {
@@ -1435,9 +1456,9 @@ var RECON_TIERS = [
 
 var RECON_TIER_ABBREV = {
   security: 'Sec', performance: 'Perf', quality: 'Qual',
-  architecture: 'Arch', observability: 'Obs', investigated: 'Inv'
+  architecture: 'Arch', observability: 'Obs', compliance: 'Comp', investigated: 'Inv'
 };
-var RECON_DIM_ORDER = ['security', 'performance', 'quality', 'architecture', 'observability', 'investigated'];
+var RECON_DIM_ORDER = ['security', 'performance', 'quality', 'architecture', 'observability', 'compliance', 'investigated'];
 
 // Active dimension state — persisted in localStorage
 var reconActiveDims = {};

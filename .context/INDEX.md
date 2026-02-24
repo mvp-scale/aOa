@@ -1,6 +1,6 @@
 # Index
 
-> **Updated**: 2026-02-23 (Session 66)
+> **Updated**: 2026-02-23 (Session 67)
 
 ## Active Layer
 
@@ -16,14 +16,18 @@ Tasks with no blocking dependencies (or all deps satisfied):
 | L3.15 | 🟢 | 🟢 | 🟡 | GNU grep native parity (gap: parity test suite) |
 | L4.2 | 🟡 | 🟢 | 🟡 | Grammar CLI (gap: download not implemented) |
 | L4.4 | 🟢 | ⚪ | ⚪ | Installation docs |
-| L5.7 | 🟡 | ⚪ | ⚪ | Performance tier rules |
-| L5.8 | 🟡 | ⚪ | ⚪ | Quality tier rules |
+| L5.7 | 🟡 | 🔵 | 🟡 | Performance tier (1/4 dims active, gap: concurrency/query/memory) |
+| L5.8 | 🟡 | 🔵 | 🟡 | Quality tier (2/4 dims active, gap: dead code/conventions) |
 | L5.10 | 🟢 | ⚪ | ⚪ | Dimension scores in search results |
 | L5.11 | 🟢 | ⚪ | ⚪ | Dimension query support |
 | L5.12 | 🟢 | 🟢 | 🟡 | Recon tab (gap: bitmask upgrade) |
 | L5.13 | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul (gap: browser-only) |
 | L5.14 | 🟢 | 🟢 | 🟡 | Recon cache + incremental (gap: unit tests) |
 | L5.15 | 🟢 | 🟢 | 🟡 | Investigation tracking (gap: unit tests) |
+| L5.16 | 🟡 | ⚪ | ⚪ | Security expansion (auth gaps + path traversal + deepen 3 active dims) |
+| L5.17 | 🟡 | ⚪ | ⚪ | Architecture expansion (import health + API surface) |
+| L5.18 | 🟡 | ⚪ | ⚪ | Observability expansion (silent failures) |
+| L5.19 | 🟡 | ⚪ | ⚪ | Compliance tier (CVE patterns + licensing + data handling) |
 | L6.7 | 🟢 | 🟢 | 🟡 | Recon install prompt (gap: browser-only) |
 | L7.1 | 🟢 | 🟢 | 🟡 | Startup progress (gap: timing test) |
 | L7.2 | 🟡 | ⚪ | ⚪ | Database storage optimization |
@@ -50,18 +54,18 @@ Line ranges into BOARD.md for targeted reads:
 | Goals | 11-23 | `offset=11, limit=13` |
 | Board Structure | 27-69 | `offset=27, limit=43` |
 | Mission | 73-79 | `offset=73, limit=7` |
-| Board Table | 83-110 | `offset=83, limit=28` |
-| Supporting Detail | 113-345 | `offset=113, limit=233` |
-| - Layer 2 | 115-130 | `offset=115, limit=16` |
-| - Layer 3 | 133-144 | `offset=133, limit=12` |
-| - Layer 4 | 147-168 | `offset=147, limit=22` |
-| - Layer 5 | 171-250 | `offset=171, limit=80` |
-| - Layer 6 | 253-282 | `offset=253, limit=30` |
-| - Layer 7 | 285-345 | `offset=285, limit=61` |
-| What Works | 348-363 | `offset=348, limit=16` |
-| What We're NOT Doing | 367-374 | `offset=367, limit=8` |
-| Key Documents | 376-384 | `offset=376, limit=9` |
-| Quick Reference | 386-398 | `offset=386, limit=13` |
+| Board Table | 83-114 | `offset=83, limit=32` |
+| Supporting Detail | 117-420 | `offset=117, limit=304` |
+| - Layer 2 | 119-134 | `offset=119, limit=16` |
+| - Layer 3 | 137-148 | `offset=137, limit=12` |
+| - Layer 4 | 151-172 | `offset=151, limit=22` |
+| - Layer 5 | 175-325 | `offset=175, limit=151` |
+| - Layer 6 | 328-357 | `offset=328, limit=30` |
+| - Layer 7 | 360-420 | `offset=360, limit=61` |
+| What Works | 423-440 | `offset=423, limit=18` |
+| What We're NOT Doing | 442-449 | `offset=442, limit=8` |
+| Key Documents | 451-459 | `offset=451, limit=9` |
+| Quick Reference | 461-473 | `offset=461, limit=13` |
 
 ## Layer Status
 
@@ -72,7 +76,7 @@ Line ranges into BOARD.md for targeted reads:
 | L2 | 7 | 6 | 1 | L2.1 validation gap |
 | L3 | 14 | 13 | 1 | L3.15 validation gap |
 | L4 | 4 | 2 | 2 | L4.2 partial, L4.4 not started |
-| L5 | 15 | 7 | 8 | Active -- recon done, tiers/query open |
+| L5 | 19 | 7 | 12 | Active -- recon infra done, 11 detectors across 8/21 dims, 4 new tier tasks |
 | L6 | 10 | 6 | 4 | L6.7 done, npm/CI validation gaps |
 | L7 | 4 | 1 | 3 | Active -- startup done, 3 open |
 
@@ -80,7 +84,7 @@ Line ranges into BOARD.md for targeted reads:
 
 | Task | Type | Document | Status |
 |------|------|----------|--------|
-| -- | -- | (none yet) | -- |
+| L5.7-L5.19 | Reference | `details/2026-02-23-dimensional-taxonomy.md` | Complete — 142 questions across 21 dimensions |
 
 ## Key Files
 

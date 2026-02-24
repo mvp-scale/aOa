@@ -1,0 +1,107 @@
+# Compliance tier rules — cve_patterns, licensing, data_handling
+
+# === CVE patterns dimension ===
+- id: deprecated_stdlib
+  label: Deprecated standard library API usage
+  dimension: cve_patterns
+  tier: compliance
+  bit: 0
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - "ioutil.ReadAll("
+    - "ioutil.ReadFile("
+    - "ioutil.WriteFile("
+    - "ioutil.TempDir("
+    - "ioutil.TempFile("
+    - "ioutil.ReadDir("
+
+- id: unsafe_defaults
+  label: Security-sensitive constructor without safe config
+  dimension: cve_patterns
+  tier: compliance
+  bit: 1
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "http.ListenAndServe("
+    - "http.DefaultClient"
+    - "http.DefaultTransport"
+    - "tls.Config{}"
+
+- id: known_vuln_pattern
+  label: Known vulnerable function call pattern
+  dimension: cve_patterns
+  tier: compliance
+  bit: 2
+  severity: high
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "xml.NewDecoder("
+    - "DOMParser("
+    - "yaml.load("
+
+# === Licensing dimension ===
+- id: missing_license_header
+  label: Source file without license header
+  dimension: licensing
+  tier: compliance
+  bit: 5
+  severity: info
+  kind: text
+  code_only: true
+  text_patterns:
+    - "SPDX-License-Identifier"
+    - "Copyright"
+    - "Licensed under"
+
+- id: gpl_contamination
+  label: GPL dependency in permissive project
+  dimension: licensing
+  tier: compliance
+  bit: 6
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - "GPL-3.0"
+    - "GPL-2.0"
+    - "AGPL"
+    - "LGPL"
+
+# === Data handling dimension ===
+- id: pii_in_log
+  label: PII patterns in log output
+  dimension: data_handling
+  tier: compliance
+  bit: 10
+  severity: high
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "email"
+    - "ssn"
+    - "social_security"
+    - "credit_card"
+    - "phone_number"
+
+- id: sensitive_in_error
+  label: Sensitive data in error message
+  dimension: data_handling
+  tier: compliance
+  bit: 11
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "stack trace"
+    - "stacktrace"
+    - "Traceback"
+    - "at line"

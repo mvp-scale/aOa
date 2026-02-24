@@ -80,7 +80,7 @@ func (a *App) onFileChanged(absPath string) {
 				_ = a.Store.SaveIndex(a.ProjectID, a.Index)
 			}
 			// Update recon cache: remove deleted file's contribution
-			a.updateReconForFile(existingID, relPath)
+			a.updateReconOrDimForFile(existingID, relPath)
 			a.clearFileInvestigated(relPath)
 		}
 		return
@@ -149,7 +149,7 @@ func (a *App) onFileChanged(absPath string) {
 			_ = a.Store.SaveIndex(a.ProjectID, a.Index)
 		}
 		// Incrementally update recon cache for this file
-		a.updateReconForFile(fileID, relPath)
+		a.updateReconOrDimForFile(fileID, relPath)
 		a.clearFileInvestigated(relPath)
 		return
 	}
@@ -175,7 +175,7 @@ func (a *App) onFileChanged(absPath string) {
 	}
 
 	// Incrementally update recon cache for this file
-	a.updateReconForFile(fileID, relPath)
+	a.updateReconOrDimForFile(fileID, relPath)
 	a.clearFileInvestigated(relPath)
 
 	// If aoa-recon is available and parser is nil, trigger incremental enhancement.

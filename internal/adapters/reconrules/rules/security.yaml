@@ -1,0 +1,581 @@
+# Security tier rules — injection, secrets, crypto, transport, exposure, config, data, denial
+# Text patterns are language-agnostic (AC automaton matches any language)
+# Structural checks use lang_map for cross-language AST walking
+
+# === Injection dimension ===
+- id: command_injection
+  label: Potential command injection via exec/system call
+  dimension: injection
+  tier: security
+  bit: 0
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "exec.Command("
+    - "os.system("
+    - "subprocess.call("
+    - "subprocess.Popen("
+    - "subprocess.run("
+    - "child_process.exec("
+    - "child_process.spawn("
+
+- id: sql_injection_keyword
+  label: Potential SQL injection via string concatenation
+  dimension: injection
+  tier: security
+  bit: 1
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - '"SELECT " +'
+    - '"INSERT " +'
+    - '"UPDATE " +'
+    - '"DELETE " +'
+    - '"SELECT " %'
+    - '"INSERT " %'
+    - '"UPDATE " %'
+    - '"DELETE " %'
+    - 'f"SELECT '
+    - 'f"INSERT '
+    - 'f"UPDATE '
+    - 'f"DELETE '
+
+- id: eval_usage
+  label: Dynamic code execution via eval
+  dimension: injection
+  tier: security
+  bit: 2
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "eval("
+    - "Function("
+
+- id: unsafe_deserialization
+  label: Unsafe deserialization
+  dimension: injection
+  tier: security
+  bit: 3
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "pickle.loads("
+    - "pickle.load("
+    - "yaml.load("
+    - "yaml.unsafe_load("
+    - "Marshal.load("
+    - "unserialize("
+
+- id: path_traversal_keyword
+  label: Potential path traversal via unvalidated input
+  dimension: injection
+  tier: security
+  bit: 4
+  severity: high
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "../"
+    - '..\\'
+
+- id: open_redirect_keyword
+  label: Potential open redirect
+  dimension: injection
+  tier: security
+  bit: 5
+  severity: high
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "redirect_url"
+    - "redirect_uri"
+    - "return_url"
+    - "next_url"
+    - "Redirect(r.URL.Query()"
+    - "redirect(request.args"
+
+- id: ldap_injection
+  label: LDAP filter built with string concatenation
+  dimension: injection
+  tier: security
+  bit: 6
+  severity: high
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "ldap.Search("
+    - "ldap.NewSearchRequest("
+    - "ldap_search("
+    - "(cn="
+
+- id: xxe_injection
+  label: XML parser without disabling external entities
+  dimension: injection
+  tier: security
+  bit: 7
+  severity: high
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "xml.NewDecoder("
+    - "xml.Unmarshal("
+    - "etree.NewDocument("
+    - "lxml.etree"
+    - "XMLReader("
+
+- id: sql_string_concat
+  label: SQL query built via string concatenation
+  dimension: injection
+  tier: security
+  bit: 20
+  severity: critical
+  kind: structural
+  skip_test: true
+  code_only: true
+  structural_check: checkSQLStringConcat
+
+- id: exec_with_variable
+  label: exec.Command with non-literal argument
+  dimension: injection
+  tier: security
+  bit: 21
+  severity: critical
+  kind: composite
+  skip_test: true
+  code_only: true
+  structural_check: checkExecWithVariable
+  text_patterns:
+    - "exec.Command("
+    - "os.system("
+    - "subprocess.call("
+
+- id: tainted_path_join
+  label: path.Join with potentially tainted argument
+  dimension: injection
+  tier: security
+  bit: 22
+  severity: high
+  kind: composite
+  skip_test: true
+  code_only: true
+  structural_check: checkTaintedPathJoin
+  text_patterns:
+    - "filepath.Join("
+    - "path.Join("
+    - "os.path.join("
+
+- id: format_string_injection
+  label: Format string with user-controlled input
+  dimension: injection
+  tier: security
+  bit: 23
+  severity: high
+  kind: composite
+  skip_test: true
+  code_only: true
+  structural_check: checkFormatStringInjection
+  text_patterns:
+    - "fmt.Sprintf("
+    - "fmt.Fprintf("
+    - "String.format("
+
+- id: template_unescaped
+  label: Unescaped template output
+  dimension: injection
+  tier: security
+  bit: 24
+  severity: high
+  kind: composite
+  skip_test: true
+  code_only: true
+  structural_check: checkTemplateUnescaped
+  text_patterns:
+    - "template.HTML("
+    - "| safe"
+    - "| raw"
+    - "dangerouslySetInnerHTML"
+
+# === Secrets dimension ===
+- id: hardcoded_secret
+  label: Potential hardcoded secret or credential
+  dimension: secrets
+  tier: security
+  bit: 8
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "password="
+    - "password ="
+    - "password:"
+    - "passwd="
+    - "passwd ="
+    - "secret="
+    - "secret ="
+    - "secret:"
+    - "api_key="
+    - "api_key ="
+    - "apikey="
+    - "apikey ="
+    - "private_key="
+    - "private_key ="
+    - "access_token="
+    - "access_token ="
+
+- id: aws_credentials
+  label: AWS credentials in source code
+  dimension: secrets
+  tier: security
+  bit: 9
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "AKIA"
+    - "aws_secret_access_key"
+    - "aws_access_key_id"
+
+- id: jwt_secret_inline
+  label: JWT secret hardcoded in source
+  dimension: secrets
+  tier: security
+  bit: 10
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "jwt.sign("
+    - "jwt.encode("
+    - "JWT_SECRET="
+    - "JWT_SECRET ="
+    - "signingKey ="
+    - "signingKey="
+
+- id: private_key_inline
+  label: Private key material in source
+  dimension: secrets
+  tier: security
+  bit: 11
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "BEGIN RSA PRIVATE KEY"
+    - "BEGIN EC PRIVATE KEY"
+    - "BEGIN PRIVATE KEY"
+    - "BEGIN DSA PRIVATE KEY"
+
+- id: connection_string_creds
+  label: Connection string with embedded credentials
+  dimension: secrets
+  tier: security
+  bit: 12
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "://root:"
+    - "://admin:"
+    - "://postgres:"
+    - "://sa:"
+    - "mongodb+srv://"
+
+- id: oauth_client_secret
+  label: OAuth client secret inline
+  dimension: secrets
+  tier: security
+  bit: 13
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "client_secret="
+    - "client_secret ="
+    - "CLIENT_SECRET="
+    - "CLIENT_SECRET ="
+
+- id: webhook_secret_inline
+  label: Webhook secret inline
+  dimension: secrets
+  tier: security
+  bit: 14
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "webhook_secret="
+    - "webhook_secret ="
+    - "signing_secret="
+    - "signing_secret ="
+
+# === Crypto dimension ===
+- id: weak_hash
+  label: MD5 or SHA1 used (weak for security purposes)
+  dimension: crypto
+  tier: security
+  bit: 15
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "md5.New("
+    - "md5.Sum("
+    - "hashlib.md5("
+    - "sha1.New("
+    - "sha1.Sum("
+    - "hashlib.sha1("
+    - "crypto.createHash('md5')"
+    - "crypto.createHash('sha1')"
+    - "MD5.Create("
+    - "SHA1.Create("
+
+- id: insecure_random
+  label: math/rand used where crypto/rand may be needed
+  dimension: crypto
+  tier: security
+  bit: 16
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - '"math/rand"'
+    - "import random"
+    - "Math.random()"
+
+- id: ecb_mode
+  label: ECB block cipher mode (insecure)
+  dimension: crypto
+  tier: security
+  bit: 17
+  severity: high
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "cipher.NewECB"
+    - "AES/ECB"
+    - "MODE_ECB"
+    - "createCipheriv('aes-128-ecb'"
+
+- id: deprecated_tls
+  label: Deprecated TLS version configured
+  dimension: crypto
+  tier: security
+  bit: 18
+  severity: high
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "tls.VersionTLS10"
+    - "tls.VersionSSL"
+    - "ssl.PROTOCOL_TLSv1"
+    - "SSLv3"
+    - "TLSv1_METHOD"
+
+# === Transport dimension ===
+- id: insecure_tls
+  label: Insecure TLS configuration
+  dimension: transport
+  tier: security
+  bit: 26
+  severity: high
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "InsecureSkipVerify: true"
+    - "InsecureSkipVerify:true"
+    - "MinVersion: tls.VersionTLS10"
+    - "MinVersion: tls.VersionSSL"
+
+- id: disabled_tls_verify
+  label: TLS certificate verification disabled
+  dimension: transport
+  tier: security
+  bit: 27
+  severity: critical
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "verify=False"
+    - "NODE_TLS_REJECT_UNAUTHORIZED"
+    - "CURLOPT_SSL_VERIFYPEER, 0"
+    - "CURLOPT_SSL_VERIFYPEER, false"
+
+- id: insecure_http
+  label: Insecure HTTP URL (non-HTTPS)
+  dimension: transport
+  tier: security
+  bit: 28
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "http://"
+
+# === Exposure dimension ===
+- id: debug_endpoint
+  label: Debug/admin endpoint exposed
+  dimension: exposure
+  tier: security
+  bit: 29
+  severity: high
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "/debug/pprof"
+    - "/admin"
+    - "/_debug"
+    - "/swagger"
+
+- id: cors_wildcard
+  label: CORS wildcard allows any origin
+  dimension: exposure
+  tier: security
+  bit: 30
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - 'Access-Control-Allow-Origin", "*"'
+    - '"Access-Control-Allow-Origin": "*"'
+    - "cors.AllowAll("
+
+# === Config dimension ===
+- id: hardcoded_ip
+  label: Hardcoded IP address
+  dimension: config
+  tier: security
+  bit: 31
+  severity: info
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "192.168."
+    - "10.0."
+    - "172.16."
+    - "0.0.0.0"
+
+- id: world_readable_perms
+  label: World-readable file permissions
+  dimension: config
+  tier: security
+  bit: 32
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "0777"
+    - "0666"
+    - "0755"
+
+# === Data dimension ===
+- id: sensitive_data_log
+  label: Sensitive data potentially logged
+  dimension: data
+  tier: security
+  bit: 33
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "log.Print(password"
+    - 'log.Printf("password'
+    - "log.Print(secret"
+    - 'log.Printf("secret'
+    - "console.log(password"
+    - "console.log(secret"
+    - "print(password"
+    - "print(secret"
+
+# === Denial dimension ===
+- id: regex_dos
+  label: Potentially catastrophic regex backtracking
+  dimension: denial
+  tier: security
+  bit: 25
+  severity: warning
+  kind: composite
+  skip_test: true
+  code_only: true
+  structural_check: checkRegexDos
+  text_patterns:
+    - "regexp.Compile("
+    - "regexp.MustCompile("
+    - "new RegExp("
+    - "re.compile("
+
+# === Auth dimension ===
+- id: missing_csrf
+  label: POST/PUT handler without CSRF protection
+  dimension: auth
+  tier: security
+  bit: 34
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - ".POST("
+    - ".Put("
+    - "HandleFunc(\"/api"
+    - 'methods=["POST"]'
+
+- id: insecure_password_compare
+  label: Insecure password comparison (not constant-time)
+  dimension: auth
+  tier: security
+  bit: 35
+  severity: high
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "== password"
+    - "== hash"
+    - "password =="
+    - "hmac.Equal"
+
+- id: missing_security_headers
+  label: Missing security headers
+  dimension: auth
+  tier: security
+  bit: 36
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "X-Frame-Options"
+    - "Content-Security-Policy"
+    - "Strict-Transport-Security"
+    - "X-Content-Type-Options"

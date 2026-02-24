@@ -181,46 +181,46 @@ var securityRules = []Rule{
 		},
 	},
 
-	// === Structural rules (AST walker) ===
+	// === Structural rules (AST walker) — correct tier assignments ===
 	{
 		ID: "defer_in_loop", Label: "defer inside loop body",
-		Dimension: "resources", Tier: TierSecurity, Bit: 20, Severity: SevWarning,
+		Dimension: "resources", Tier: TierPerformance, Bit: 0, Severity: SevWarning,
 		Kind: RuleStructural, CodeOnly: true,
 		StructuralCheck: "checkDeferInLoop",
 	},
 	{
 		ID: "ignored_error", Label: "Error return value assigned to blank identifier",
-		Dimension: "errors", Tier: TierSecurity, Bit: 21, Severity: SevWarning,
+		Dimension: "errors", Tier: TierQuality, Bit: 0, Severity: SevWarning,
 		Kind: RuleStructural, CodeOnly: true,
 		StructuralCheck: "checkIgnoredError",
 	},
 	{
 		ID: "panic_in_lib", Label: "panic() called in library/non-main package",
-		Dimension: "errors", Tier: TierSecurity, Bit: 22, Severity: SevWarning,
+		Dimension: "errors", Tier: TierQuality, Bit: 1, Severity: SevWarning,
 		Kind: RuleStructural, SkipMain: true, CodeOnly: true,
 		StructuralCheck: "checkPanicInLib",
 	},
 	{
 		ID: "unchecked_type_assertion", Label: "Type assertion without comma-ok pattern",
-		Dimension: "errors", Tier: TierSecurity, Bit: 23, Severity: SevWarning,
+		Dimension: "errors", Tier: TierQuality, Bit: 2, Severity: SevWarning,
 		Kind: RuleStructural, CodeOnly: true,
 		StructuralCheck: "checkUncheckedTypeAssert",
 	},
 	{
 		ID: "sql_string_concat", Label: "SQL query built via string concatenation",
-		Dimension: "injection", Tier: TierSecurity, Bit: 24, Severity: SevCritical,
+		Dimension: "injection", Tier: TierSecurity, Bit: 20, Severity: SevCritical,
 		Kind: RuleStructural, SkipTest: true, CodeOnly: true,
 		StructuralCheck: "checkSQLStringConcat",
 	},
 	{
 		ID: "error_not_checked", Label: "Error return value not checked",
-		Dimension: "errors", Tier: TierSecurity, Bit: 25, Severity: SevWarning,
+		Dimension: "errors", Tier: TierQuality, Bit: 3, Severity: SevWarning,
 		Kind: RuleStructural, CodeOnly: true,
 		StructuralCheck: "checkErrorNotChecked",
 	},
 	{
 		ID: "long_function", Label: "Function exceeds 100 lines",
-		Dimension: "complexity", Tier: TierSecurity, Bit: 26, Severity: SevInfo,
+		Dimension: "complexity", Tier: TierQuality, Bit: 4, Severity: SevInfo,
 		Kind: RuleStructural, CodeOnly: true,
 		StructuralCheck: "checkLongFunction",
 	},
@@ -228,44 +228,44 @@ var securityRules = []Rule{
 	// === Composite rules (AC + AST confirmation) ===
 	{
 		ID: "exec_with_variable", Label: "exec.Command with non-literal argument",
-		Dimension: "injection", Tier: TierSecurity, Bit: 30, Severity: SevCritical,
+		Dimension: "injection", Tier: TierSecurity, Bit: 21, Severity: SevCritical,
 		Kind: RuleComposite, SkipTest: true, CodeOnly: true,
 		StructuralCheck: "checkExecWithVariable",
 		TextPatterns:    []string{"exec.Command(", "os.system(", "subprocess.call("},
 	},
 	{
 		ID: "tainted_path_join", Label: "path.Join with potentially tainted argument",
-		Dimension: "injection", Tier: TierSecurity, Bit: 31, Severity: SevHigh,
+		Dimension: "injection", Tier: TierSecurity, Bit: 22, Severity: SevHigh,
 		Kind: RuleComposite, SkipTest: true, CodeOnly: true,
 		StructuralCheck: "checkTaintedPathJoin",
 		TextPatterns:    []string{"filepath.Join(", "path.Join(", "os.path.join("},
 	},
 	{
 		ID: "format_string_injection", Label: "Format string with user-controlled input",
-		Dimension: "injection", Tier: TierSecurity, Bit: 32, Severity: SevHigh,
+		Dimension: "injection", Tier: TierSecurity, Bit: 23, Severity: SevHigh,
 		Kind: RuleComposite, SkipTest: true, CodeOnly: true,
 		StructuralCheck: "checkFormatStringInjection",
 		TextPatterns:    []string{"fmt.Sprintf(", "fmt.Fprintf(", "String.format("},
 	},
 	{
 		ID: "template_unescaped", Label: "Unescaped template output",
-		Dimension: "injection", Tier: TierSecurity, Bit: 33, Severity: SevHigh,
+		Dimension: "injection", Tier: TierSecurity, Bit: 24, Severity: SevHigh,
 		Kind: RuleComposite, SkipTest: true, CodeOnly: true,
 		StructuralCheck: "checkTemplateUnescaped",
 		TextPatterns:    []string{"template.HTML(", "| safe", "| raw", "dangerouslySetInnerHTML"},
 	},
 	{
 		ID: "regex_dos", Label: "Potentially catastrophic regex backtracking",
-		Dimension: "denial", Tier: TierSecurity, Bit: 34, Severity: SevWarning,
+		Dimension: "denial", Tier: TierSecurity, Bit: 25, Severity: SevWarning,
 		Kind: RuleComposite, SkipTest: true, CodeOnly: true,
 		StructuralCheck: "checkRegexDos",
 		TextPatterns:    []string{"regexp.Compile(", "regexp.MustCompile(", "new RegExp(", "re.compile("},
 	},
 }
 
-// AllRules returns all defined rules across all tiers.
+// AllRules returns all hardcoded rules as a fallback.
+// Prefer LoadRulesFromFS() for YAML-driven rules.
 func AllRules() []Rule {
-	// Currently only security tier; future tiers append here.
 	all := make([]Rule, len(securityRules))
 	copy(all, securityRules)
 	return all
@@ -273,8 +273,18 @@ func AllRules() []Rule {
 
 // TextRules returns only the rules that have text patterns (text + composite).
 func TextRules() []Rule {
+	return FilterTextRules(securityRules)
+}
+
+// StructuralRules returns only the rules that need AST walking (structural + composite).
+func StructuralRules() []Rule {
+	return FilterStructuralRules(securityRules)
+}
+
+// FilterTextRules returns rules with text patterns from a given slice.
+func FilterTextRules(rules []Rule) []Rule {
 	var out []Rule
-	for _, r := range securityRules {
+	for _, r := range rules {
 		if len(r.TextPatterns) > 0 {
 			out = append(out, r)
 		}
@@ -282,10 +292,10 @@ func TextRules() []Rule {
 	return out
 }
 
-// StructuralRules returns only the rules that need AST walking (structural + composite).
-func StructuralRules() []Rule {
+// FilterStructuralRules returns rules needing AST walking from a given slice.
+func FilterStructuralRules(rules []Rule) []Rule {
 	var out []Rule
-	for _, r := range securityRules {
+	for _, r := range rules {
 		if r.Kind == RuleStructural || r.Kind == RuleComposite {
 			out = append(out, r)
 		}

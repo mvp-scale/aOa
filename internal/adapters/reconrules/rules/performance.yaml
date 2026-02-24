@@ -1,0 +1,152 @@
+# Performance tier rules — resources, concurrency, query, memory
+
+# === Resources dimension ===
+- id: defer_in_loop
+  label: defer inside loop body
+  dimension: resources
+  tier: performance
+  bit: 0
+  severity: warning
+  kind: structural
+  code_only: true
+  structural_check: checkDeferInLoop
+
+- id: open_without_close
+  label: File/connection opened without close in scope
+  dimension: resources
+  tier: performance
+  bit: 1
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - "os.Open("
+    - "os.Create("
+    - "os.OpenFile("
+    - "net.Dial("
+    - "net.Listen("
+    - "sql.Open("
+
+- id: context_without_cancel
+  label: Context created without calling cancel
+  dimension: resources
+  tier: performance
+  bit: 2
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - "context.WithCancel("
+    - "context.WithTimeout("
+    - "context.WithDeadline("
+
+- id: unclosed_response_body
+  label: HTTP response body not closed
+  dimension: resources
+  tier: performance
+  bit: 3
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - "http.Get("
+    - "http.Post("
+    - "http.Do("
+    - "client.Do("
+    - "client.Get("
+
+# === Concurrency dimension ===
+- id: goroutine_leak
+  label: Goroutine without exit path
+  dimension: concurrency
+  tier: performance
+  bit: 5
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - "go func()"
+    - "go func ("
+
+- id: mutex_without_unlock
+  label: Mutex lock without matching unlock
+  dimension: concurrency
+  tier: performance
+  bit: 6
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - ".Lock()"
+    - ".RLock()"
+
+- id: waitgroup_misuse
+  label: WaitGroup potential misuse
+  dimension: concurrency
+  tier: performance
+  bit: 7
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - ".Add("
+    - ".Wait()"
+    - ".Done()"
+
+# === Query dimension ===
+- id: n_plus_one_query
+  label: Database call inside loop (N+1 query pattern)
+  dimension: query
+  tier: performance
+  bit: 10
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - ".Query("
+    - ".QueryRow("
+    - ".Exec("
+    - ".Find("
+    - ".First("
+
+- id: unbounded_query
+  label: Query without LIMIT or pagination
+  dimension: query
+  tier: performance
+  bit: 11
+  severity: info
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "SELECT *"
+    - "select *"
+    - ".Find(&"
+    - ".All("
+
+# === Memory dimension ===
+- id: string_concat_in_loop
+  label: String concatenation in loop (use strings.Builder)
+  dimension: memory
+  tier: performance
+  bit: 15
+  severity: info
+  kind: text
+  code_only: true
+  text_patterns:
+    - "strings.Builder"
+    - "bytes.Buffer"
+
+- id: large_allocation_hint
+  label: Allocation in hot path
+  dimension: memory
+  tier: performance
+  bit: 16
+  severity: info
+  kind: text
+  code_only: true
+  text_patterns:
+    - "make([]byte,"
+    - "make(map["
+    - "new(bytes.Buffer)"

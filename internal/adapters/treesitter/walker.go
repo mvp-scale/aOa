@@ -90,6 +90,22 @@ func (ctx *walkContext) walk(n *tree_sitter.Node, result *WalkResult) {
 			ctx.checkSQLStringConcat(n, r, result)
 		case "checkLongFunction":
 			ctx.checkLongFunction(n, r, result)
+		case "checkNestingDepth":
+			ctx.checkNestingDepth(n, r, result, 0)
+		case "checkTooManyParams":
+			ctx.checkTooManyParams(n, r, result)
+		case "checkLargeSwitch":
+			ctx.checkLargeSwitch(n, r, result)
+		case "checkUnreachableCode":
+			ctx.checkUnreachableCode(n, r, result)
+		case "checkGodObject":
+			ctx.checkGodObject(n, r, result)
+		case "checkExcessiveImports":
+			ctx.checkExcessiveImports(n, r, result)
+		case "checkExportedNoDoc":
+			ctx.checkExportedNoDoc(n, r, result)
+		case "checkUnstableInterface":
+			ctx.checkUnstableInterface(n, r, result)
 		}
 	}
 
@@ -264,6 +280,255 @@ func (ctx *walkContext) checkLongFunction(n *tree_sitter.Node, r analyzer.Rule, 
 			Symbol:   name,
 			Severity: r.Severity,
 		})
+	}
+}
+
+// checkNestingDepth: nesting exceeds 4 levels of if/for/switch
+func (ctx *walkContext) checkNestingDepth(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult, depth int) {
+	kind := n.Kind()
+	isNesting := analyzer.IsNodeKind(ctx.lang, analyzer.ConceptForLoop, kind) ||
+		kind == "if_statement" || kind == "if_expression" ||
+		kind == "switch_statement" || kind == "select_statement" ||
+		kind == "match_expression" || kind == "case_statement"
+
+	newDepth := depth
+	if isNesting {
+		newDepth++
+		if newDepth > 4 {
+			result.Findings = append(result.Findings, analyzer.RuleFinding{
+				RuleID:   r.ID,
+				Line:     int(n.StartPosition().Row + 1),
+				Severity: r.Severity,
+			})
+			return // don't report deeper nesting within same tree
+		}
+	}
+
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		ctx.checkNestingDepth(n.Child(i), r, result, newDepth)
+	}
+}
+
+// checkTooManyParams: function with more than 5 parameters
+func (ctx *walkContext) checkTooManyParams(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
+	if !isSymbolNode(ctx.lang, n.Kind()) {
+		return
+	}
+
+	// Look for parameter_list or formal_parameters child
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		kind := c.Kind()
+		if kind == "parameter_list" || kind == "formal_parameters" || kind == "parameters" {
+			// Count parameter children (exclude punctuation)
+			paramCount := 0
+			for j := uint(0); j < uint(c.ChildCount()); j++ {
+				pk := c.Child(j).Kind()
+				if pk != "," && pk != "(" && pk != ")" {
+					paramCount++
+				}
+			}
+			if paramCount > 5 {
+				name := extractSymbolName(n, ctx.source)
+				result.Findings = append(result.Findings, analyzer.RuleFinding{
+					RuleID:   r.ID,
+					Line:     int(n.StartPosition().Row + 1),
+					Symbol:   name,
+					Severity: r.Severity,
+				})
+			}
+			return
+		}
+	}
+}
+
+// checkLargeSwitch: switch/select with more than 15 cases
+func (ctx *walkContext) checkLargeSwitch(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
+	kind := n.Kind()
+	if kind != "switch_statement" && kind != "select_statement" &&
+		kind != "expression_switch_statement" && kind != "type_switch_statement" &&
+		kind != "match_expression" && kind != "switch_expression" {
+		return
+	}
+
+	caseCount := 0
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		ck := n.Child(i).Kind()
+		if ck == "case_clause" || ck == "expression_case" || ck == "default_case" ||
+			ck == "case" || ck == "communication_case" || ck == "match_arm" {
+			caseCount++
+		}
+	}
+	if caseCount > 15 {
+		result.Findings = append(result.Findings, analyzer.RuleFinding{
+			RuleID:   r.ID,
+			Line:     int(n.StartPosition().Row + 1),
+			Severity: r.Severity,
+		})
+	}
+}
+
+// checkUnreachableCode: statements after unconditional return/panic
+func (ctx *walkContext) checkUnreachableCode(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
+	// Look at block bodies for statements after return/panic
+	kind := n.Kind()
+	if kind != "block" && kind != "statement_block" && kind != "compound_statement" {
+		return
+	}
+
+	foundReturn := false
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		ck := c.Kind()
+		if ck == "{" || ck == "}" {
+			continue
+		}
+		if foundReturn {
+			result.Findings = append(result.Findings, analyzer.RuleFinding{
+				RuleID:   r.ID,
+				Line:     int(c.StartPosition().Row + 1),
+				Severity: r.Severity,
+			})
+			return // report only the first unreachable statement
+		}
+		if analyzer.IsNodeKind(ctx.lang, analyzer.ConceptReturn, ck) ||
+			(ck == "expression_statement" && c.ChildCount() > 0 && nodeTextWalker(c, ctx.source) == "panic(") {
+			foundReturn = true
+		}
+	}
+}
+
+// checkGodObject: struct/class with more than 15 fields
+func (ctx *walkContext) checkGodObject(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
+	if !analyzer.IsNodeKind(ctx.lang, analyzer.ConceptClass, n.Kind()) {
+		return
+	}
+
+	// Count field declarations
+	fieldCount := countFieldsRecursive(n)
+	if fieldCount > 15 {
+		name := extractSymbolName(n, ctx.source)
+		result.Findings = append(result.Findings, analyzer.RuleFinding{
+			RuleID:   r.ID,
+			Line:     int(n.StartPosition().Row + 1),
+			Symbol:   name,
+			Severity: r.Severity,
+		})
+	}
+}
+
+// countFieldsRecursive counts field declarations within a struct/class node.
+func countFieldsRecursive(n *tree_sitter.Node) int {
+	count := 0
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		kind := c.Kind()
+		if kind == "field_declaration" || kind == "field_definition" ||
+			kind == "property_declaration" || kind == "field_declaration_list" {
+			if kind == "field_declaration_list" {
+				count += countFieldsRecursive(c)
+			} else {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// checkExcessiveImports: file imports more than 15 packages
+func (ctx *walkContext) checkExcessiveImports(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
+	if !analyzer.IsNodeKind(ctx.lang, analyzer.ConceptImport, n.Kind()) {
+		return
+	}
+
+	// For Go: import_declaration can have an import_spec_list with multiple specs
+	importCount := 0
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		if c.Kind() == "import_spec_list" {
+			for j := uint(0); j < uint(c.ChildCount()); j++ {
+				if c.Child(j).Kind() == "import_spec" {
+					importCount++
+				}
+			}
+		} else if c.Kind() == "import_spec" {
+			importCount++
+		}
+	}
+
+	if importCount > 15 {
+		result.Findings = append(result.Findings, analyzer.RuleFinding{
+			RuleID:   r.ID,
+			Line:     int(n.StartPosition().Row + 1),
+			Severity: r.Severity,
+		})
+	}
+}
+
+// checkExportedNoDoc: exported function/type without preceding doc comment (Go-specific)
+func (ctx *walkContext) checkExportedNoDoc(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
+	if ctx.lang != "go" {
+		return
+	}
+	if !isSymbolNode(ctx.lang, n.Kind()) {
+		return
+	}
+
+	name := extractSymbolName(n, ctx.source)
+	if name == "" || name[0] < 'A' || name[0] > 'Z' {
+		return // not exported
+	}
+
+	// Check for preceding comment: look at the previous sibling
+	prevSib := n.PrevSibling()
+	if prevSib != nil && prevSib.Kind() == "comment" {
+		return // has doc comment
+	}
+
+	result.Findings = append(result.Findings, analyzer.RuleFinding{
+		RuleID:   r.ID,
+		Line:     int(n.StartPosition().Row + 1),
+		Symbol:   name,
+		Severity: r.Severity,
+	})
+}
+
+// checkUnstableInterface: interface with more than 10 methods (Go-specific)
+func (ctx *walkContext) checkUnstableInterface(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
+	if ctx.lang != "go" {
+		return
+	}
+	if n.Kind() != "type_declaration" {
+		return
+	}
+
+	// Look for interface_type child
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		if c.Kind() == "type_spec" {
+			for j := uint(0); j < uint(c.ChildCount()); j++ {
+				iface := c.Child(j)
+				if iface.Kind() == "interface_type" {
+					methodCount := 0
+					for k := uint(0); k < uint(iface.ChildCount()); k++ {
+						mk := iface.Child(k).Kind()
+						if mk == "method_spec" || mk == "method_elem" {
+							methodCount++
+						}
+					}
+					if methodCount > 10 {
+						name := extractSymbolName(n, ctx.source)
+						result.Findings = append(result.Findings, analyzer.RuleFinding{
+							RuleID:   r.ID,
+							Line:     int(n.StartPosition().Row + 1),
+							Symbol:   name,
+							Severity: r.Severity,
+						})
+					}
+					return
+				}
+			}
+		}
 	}
 }
 

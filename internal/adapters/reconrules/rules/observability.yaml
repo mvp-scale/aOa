@@ -1,0 +1,97 @@
+# Observability tier rules — debug, silent_failures
+
+# === Debug dimension ===
+- id: print_statement
+  label: Debug print statement left in code
+  dimension: debug
+  tier: observability
+  bit: 0
+  severity: info
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "fmt.Println("
+    - "fmt.Printf("
+    - "console.log("
+    - "System.out.println("
+    - "var_dump("
+    - "print("
+
+- id: todo_fixme
+  label: TODO/FIXME/HACK/XXX marker in source
+  dimension: debug
+  tier: observability
+  bit: 1
+  severity: info
+  kind: text
+  text_patterns:
+    - "TODO"
+    - "FIXME"
+    - "HACK"
+    - "XXX"
+
+- id: debug_endpoint_obs
+  label: Debug endpoint exposed in route
+  dimension: debug
+  tier: observability
+  bit: 2
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "/debug/"
+    - "/pprof/"
+    - "/__debug__"
+
+- id: verbose_logging
+  label: Verbose/trace logging in production code
+  dimension: debug
+  tier: observability
+  bit: 3
+  severity: info
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "log.Debug("
+    - "log.Trace("
+    - "logger.debug("
+    - "logging.debug("
+
+# === Silent failures dimension ===
+- id: recovered_panic_no_log
+  label: Recovered panic without logging
+  dimension: silent_failures
+  tier: observability
+  bit: 5
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - "recover()"
+
+- id: goroutine_fire_forget
+  label: Goroutine without error propagation
+  dimension: silent_failures
+  tier: observability
+  bit: 6
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - "go func()"
+    - "go func ("
+
+- id: context_cancel_ignored
+  label: Context cancellation not checked
+  dimension: silent_failures
+  tier: observability
+  bit: 7
+  severity: info
+  kind: text
+  code_only: true
+  text_patterns:
+    - "ctx.Done()"
+    - "<-ctx.Done()"

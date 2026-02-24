@@ -329,7 +329,7 @@ type ReindexResult struct {
 type DimensionalFileResult struct {
 	Path     string                       `json:"path"`
 	Language string                       `json:"language"`
-	Bitmask  [4]uint64                    `json:"bitmask"`
+	Bitmask  [6]uint64                    `json:"bitmask"`
 	Methods  []DimensionalMethodResult    `json:"methods"`
 	Findings []DimensionalFindingResult   `json:"findings"`
 	ScanTime int64                        `json:"scan_time_us"`
@@ -340,7 +340,7 @@ type DimensionalMethodResult struct {
 	Name     string                      `json:"name"`
 	Line     int                         `json:"line"`
 	EndLine  int                         `json:"end_line"`
-	Bitmask  [4]uint64                   `json:"bitmask"`
+	Bitmask  [6]uint64                   `json:"bitmask"`
 	Score    int                         `json:"score"`
 	Findings []DimensionalFindingResult  `json:"findings"`
 }

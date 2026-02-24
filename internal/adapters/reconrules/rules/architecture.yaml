@@ -1,0 +1,115 @@
+# Architecture tier rules — antipattern, imports, api_surface
+
+# === Anti-pattern dimension ===
+- id: global_state
+  label: Mutable global variable at package level
+  dimension: antipattern
+  tier: architecture
+  bit: 0
+  severity: warning
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - "var "
+
+- id: god_object
+  label: Struct/class with excessive fields (>15)
+  dimension: antipattern
+  tier: architecture
+  bit: 1
+  severity: warning
+  kind: structural
+  code_only: true
+  structural_check: checkGodObject
+
+- id: singleton_pattern
+  label: Singleton/service locator pattern
+  dimension: antipattern
+  tier: architecture
+  bit: 2
+  severity: info
+  kind: text
+  code_only: true
+  text_patterns:
+    - "sync.Once"
+    - "instance ="
+    - "GetInstance("
+    - "getInstance("
+
+- id: hardcoded_config
+  label: Hard-coded configuration value
+  dimension: antipattern
+  tier: architecture
+  bit: 3
+  severity: info
+  kind: text
+  skip_test: true
+  code_only: true
+  text_patterns:
+    - ":8080"
+    - ":3000"
+    - ":5432"
+    - ":27017"
+    - ":6379"
+    - "localhost:"
+
+# === Imports dimension ===
+- id: excessive_imports
+  label: File imports too many packages (>15)
+  dimension: imports
+  tier: architecture
+  bit: 5
+  severity: info
+  kind: structural
+  code_only: true
+  structural_check: checkExcessiveImports
+
+- id: banned_import
+  label: Deprecated or banned import
+  dimension: imports
+  tier: architecture
+  bit: 6
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - '"io/ioutil"'
+    - '"math/rand"'
+    - "import ioutil"
+    - "from cgi import"
+
+- id: domain_imports_adapter
+  label: Domain package imports adapter (hexagonal violation)
+  dimension: imports
+  tier: architecture
+  bit: 7
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - '"adapters/'
+    - "from adapters."
+    - "import adapters."
+
+# === API surface dimension ===
+- id: unstable_interface
+  label: Interface with excessive methods (>10)
+  dimension: api_surface
+  tier: architecture
+  bit: 10
+  severity: info
+  kind: structural
+  code_only: true
+  structural_check: checkUnstableInterface
+
+- id: leaking_internal_type
+  label: Exported function using unexported types
+  dimension: api_surface
+  tier: architecture
+  bit: 11
+  severity: warning
+  kind: text
+  code_only: true
+  text_patterns:
+    - "func ("
