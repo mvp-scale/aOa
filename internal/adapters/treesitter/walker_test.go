@@ -102,10 +102,9 @@ func main() {
 func TestWalker_CleanCode(t *testing.T) {
 	source := `package handler
 
-import "fmt"
-
-func Hello(name string) string {
-	return fmt.Sprintf("Hello, %s!", name)
+// Add returns the sum of two integers.
+func Add(a, b int) int {
+	return a + b
 }
 `
 	rules := analyzer.AllRules()
@@ -147,11 +146,14 @@ func helper() int {
 }
 
 func TestWalker_SQLStringConcat(t *testing.T) {
+	// ADR-correct: sql_string_concat matches call to query/execute/exec
+	// with a string_concat argument containing SQL keywords
 	source := `package db
 
-func query(name string) {
-	q := "SELECT * FROM users WHERE name = " + name
-	_ = q
+import "database/sql"
+
+func queryUser(db *sql.DB, name string) {
+	db.Query("SELECT * FROM users WHERE name = " + name)
 }
 `
 	rules := analyzer.AllRules()

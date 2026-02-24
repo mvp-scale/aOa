@@ -1,6 +1,5 @@
-# Security tier rules — injection, secrets, crypto, transport, exposure, config, data, denial
-# Text patterns are language-agnostic (AC automaton matches any language)
-# Structural checks use lang_map for cross-language AST walking
+# Security tier — universal across all 509 tree-sitter languages.
+# No per-language mapping needed. See README.md for schema and examples.
 
 # === Injection dimension ===
 - id: command_injection
@@ -9,7 +8,6 @@
   tier: security
   bit: 0
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -20,6 +18,9 @@
     - "subprocess.run("
     - "child_process.exec("
     - "child_process.spawn("
+  structural:
+    match: call
+    receiver_contains: ["exec.Command", "os.system", "subprocess.call", "subprocess.Popen", "child_process.exec"]
 
 - id: sql_injection_keyword
   label: Potential SQL injection via string concatenation
@@ -27,7 +28,6 @@
   tier: security
   bit: 1
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -50,12 +50,15 @@
   tier: security
   bit: 2
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
+  regex: '\beval\s*\('
   text_patterns:
     - "eval("
     - "Function("
+  structural:
+    match: call
+    receiver_contains: ["eval", "Function"]
 
 - id: unsafe_deserialization
   label: Unsafe deserialization
@@ -63,7 +66,6 @@
   tier: security
   bit: 3
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -73,6 +75,9 @@
     - "yaml.unsafe_load("
     - "Marshal.load("
     - "unserialize("
+  structural:
+    match: call
+    receiver_contains: ["pickle.loads", "pickle.load", "yaml.load", "yaml.unsafe_load", "Marshal.load", "unserialize"]
 
 - id: path_traversal_keyword
   label: Potential path traversal via unvalidated input
@@ -80,9 +85,9 @@
   tier: security
   bit: 4
   severity: high
-  kind: text
   skip_test: true
   code_only: true
+  regex: '\.\.[/\\]\w'
   text_patterns:
     - "../"
     - '..\\'
@@ -93,7 +98,6 @@
   tier: security
   bit: 5
   severity: high
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -110,7 +114,6 @@
   tier: security
   bit: 6
   severity: high
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -118,6 +121,9 @@
     - "ldap.NewSearchRequest("
     - "ldap_search("
     - "(cn="
+  structural:
+    match: call
+    receiver_contains: ["ldap.Search", "ldap.NewSearchRequest", "ldap_search"]
 
 - id: xxe_injection
   label: XML parser without disabling external entities
@@ -125,7 +131,6 @@
   tier: security
   bit: 7
   severity: high
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -134,6 +139,9 @@
     - "etree.NewDocument("
     - "lxml.etree"
     - "XMLReader("
+  structural:
+    match: call
+    receiver_contains: ["xml.NewDecoder", "xml.Unmarshal", "etree.NewDocument", "XMLReader"]
 
 - id: sql_string_concat
   label: SQL query built via string concatenation
@@ -141,10 +149,14 @@
   tier: security
   bit: 20
   severity: critical
-  kind: structural
   skip_test: true
   code_only: true
-  structural_check: checkSQLStringConcat
+  structural:
+    match: call
+    receiver_contains: [query, execute, exec, prepare, raw, cursor]
+    has_arg:
+      type: [string_concat, format_call, template_string]
+      text_contains: ["SELECT", "INSERT", "UPDATE", "DELETE", "DROP"]
 
 - id: exec_with_variable
   label: exec.Command with non-literal argument
@@ -152,10 +164,13 @@
   tier: security
   bit: 21
   severity: critical
-  kind: composite
   skip_test: true
   code_only: true
-  structural_check: checkExecWithVariable
+  structural:
+    match: call
+    receiver_contains: ["exec.Command", "os.system", "subprocess.call"]
+    has_arg:
+      type: ["identifier", "call"]
   text_patterns:
     - "exec.Command("
     - "os.system("
@@ -167,10 +182,13 @@
   tier: security
   bit: 22
   severity: high
-  kind: composite
   skip_test: true
   code_only: true
-  structural_check: checkTaintedPathJoin
+  structural:
+    match: call
+    receiver_contains: ["filepath.Join", "path.Join", "os.path.join"]
+    has_arg:
+      type: ["identifier", "call"]
   text_patterns:
     - "filepath.Join("
     - "path.Join("
@@ -182,10 +200,13 @@
   tier: security
   bit: 23
   severity: high
-  kind: composite
   skip_test: true
   code_only: true
-  structural_check: checkFormatStringInjection
+  structural:
+    match: call
+    receiver_contains: ["fmt.Sprintf", "fmt.Fprintf", "String.format"]
+    has_arg:
+      type: ["identifier", "call"]
   text_patterns:
     - "fmt.Sprintf("
     - "fmt.Fprintf("
@@ -197,10 +218,11 @@
   tier: security
   bit: 24
   severity: high
-  kind: composite
   skip_test: true
   code_only: true
-  structural_check: checkTemplateUnescaped
+  structural:
+    match: call
+    receiver_contains: ["template.HTML", "template.JS", "template.URL"]
   text_patterns:
     - "template.HTML("
     - "| safe"
@@ -214,9 +236,9 @@
   tier: security
   bit: 8
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
+  regex: '(?:password|passwd|secret|api_?key|private_key|access_token)\s*[:=]\s*[''"]?\S{4,}'
   text_patterns:
     - "password="
     - "password ="
@@ -234,6 +256,10 @@
     - "private_key ="
     - "access_token="
     - "access_token ="
+  structural:
+    match: assignment
+    name_contains: ["password", "secret", "api_key", "token", "passwd"]
+    value_type: string_literal
 
 - id: aws_credentials
   label: AWS credentials in source code
@@ -241,9 +267,9 @@
   tier: security
   bit: 9
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
+  regex: 'AKIA[0-9A-Z]{16}'
   text_patterns:
     - "AKIA"
     - "aws_secret_access_key"
@@ -255,7 +281,6 @@
   tier: security
   bit: 10
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -272,9 +297,9 @@
   tier: security
   bit: 11
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
+  regex: '-----BEGIN\s+(RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----'
   text_patterns:
     - "BEGIN RSA PRIVATE KEY"
     - "BEGIN EC PRIVATE KEY"
@@ -287,9 +312,9 @@
   tier: security
   bit: 12
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
+  regex: '://\w+:[^@/]{4,}@'
   text_patterns:
     - "://root:"
     - "://admin:"
@@ -303,7 +328,6 @@
   tier: security
   bit: 13
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -318,7 +342,6 @@
   tier: security
   bit: 14
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -334,7 +357,6 @@
   tier: security
   bit: 15
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -355,7 +377,6 @@
   tier: security
   bit: 16
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -369,7 +390,6 @@
   tier: security
   bit: 17
   severity: high
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -384,7 +404,6 @@
   tier: security
   bit: 18
   severity: high
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -401,9 +420,9 @@
   tier: security
   bit: 26
   severity: high
-  kind: text
   skip_test: true
   code_only: true
+  regex: 'InsecureSkipVerify\s*:\s*true'
   text_patterns:
     - "InsecureSkipVerify: true"
     - "InsecureSkipVerify:true"
@@ -416,7 +435,6 @@
   tier: security
   bit: 27
   severity: critical
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -431,9 +449,9 @@
   tier: security
   bit: 28
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
+  regex: 'http://[a-zA-Z0-9][\w.-]+'
   text_patterns:
     - "http://"
 
@@ -444,7 +462,6 @@
   tier: security
   bit: 29
   severity: high
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -459,7 +476,6 @@
   tier: security
   bit: 30
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -474,9 +490,9 @@
   tier: security
   bit: 31
   severity: info
-  kind: text
   skip_test: true
   code_only: true
+  regex: '\b(?:192\.168|10\.0|172\.(?:1[6-9]|2[0-9]|3[01])|0\.0\.0\.0)\.\d{1,3}'
   text_patterns:
     - "192.168."
     - "10.0."
@@ -489,9 +505,9 @@
   tier: security
   bit: 32
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
+  regex: '0[67][0-7]{2}'
   text_patterns:
     - "0777"
     - "0666"
@@ -504,7 +520,6 @@
   tier: security
   bit: 33
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -524,10 +539,11 @@
   tier: security
   bit: 25
   severity: warning
-  kind: composite
   skip_test: true
   code_only: true
-  structural_check: checkRegexDos
+  structural:
+    match: call
+    receiver_contains: ["regexp.Compile", "regexp.MustCompile", "RegExp", "re.compile"]
   text_patterns:
     - "regexp.Compile("
     - "regexp.MustCompile("
@@ -541,7 +557,6 @@
   tier: security
   bit: 34
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -549,6 +564,9 @@
     - ".Put("
     - "HandleFunc(\"/api"
     - 'methods=["POST"]'
+  structural:
+    match: call
+    receiver_contains: ["POST", "Put", "HandleFunc"]
 
 - id: insecure_password_compare
   label: Insecure password comparison (not constant-time)
@@ -556,7 +574,6 @@
   tier: security
   bit: 35
   severity: high
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -571,7 +588,6 @@
   tier: security
   bit: 36
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:

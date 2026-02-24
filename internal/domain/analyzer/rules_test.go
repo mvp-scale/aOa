@@ -3,13 +3,13 @@ package analyzer
 import (
 	"testing"
 
-	"github.com/corey/aoa/internal/adapters/reconrules"
+	"github.com/corey/aoa/recon"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLoadRulesFromFS(t *testing.T) {
-	rules, err := LoadRulesFromFS(reconrules.FS, "rules")
+	rules, err := LoadRulesFromFS(recon.FS, "rules")
 	require.NoError(t, err)
 	require.NotEmpty(t, rules)
 
@@ -33,7 +33,7 @@ func TestLoadRulesFromFS(t *testing.T) {
 }
 
 func TestLoadRulesFromFS_UniqueIDs(t *testing.T) {
-	rules, err := LoadRulesFromFS(reconrules.FS, "rules")
+	rules, err := LoadRulesFromFS(recon.FS, "rules")
 	require.NoError(t, err)
 
 	seen := make(map[string]bool)
@@ -44,7 +44,7 @@ func TestLoadRulesFromFS_UniqueIDs(t *testing.T) {
 }
 
 func TestLoadRulesFromFS_UniqueTierBit(t *testing.T) {
-	rules, err := LoadRulesFromFS(reconrules.FS, "rules")
+	rules, err := LoadRulesFromFS(recon.FS, "rules")
 	require.NoError(t, err)
 
 	type tierBitKey struct {
@@ -61,7 +61,7 @@ func TestLoadRulesFromFS_UniqueTierBit(t *testing.T) {
 }
 
 func TestLoadRulesFromFS_ValidBitRanges(t *testing.T) {
-	rules, err := LoadRulesFromFS(reconrules.FS, "rules")
+	rules, err := LoadRulesFromFS(recon.FS, "rules")
 	require.NoError(t, err)
 
 	for _, r := range rules {
@@ -71,7 +71,7 @@ func TestLoadRulesFromFS_ValidBitRanges(t *testing.T) {
 }
 
 func TestLoadRulesFromFS_TextRulesHavePatterns(t *testing.T) {
-	rules, err := LoadRulesFromFS(reconrules.FS, "rules")
+	rules, err := LoadRulesFromFS(recon.FS, "rules")
 	require.NoError(t, err)
 
 	for _, r := range rules {
@@ -79,13 +79,13 @@ func TestLoadRulesFromFS_TextRulesHavePatterns(t *testing.T) {
 			assert.NotEmpty(t, r.TextPatterns, "text rule %s must have patterns", r.ID)
 		}
 		if r.Kind == RuleStructural {
-			assert.NotEmpty(t, r.StructuralCheck, "structural rule %s must have check name", r.ID)
+			assert.NotNil(t, r.Structural, "structural rule %s must have structural block", r.ID)
 		}
 	}
 }
 
 func TestLoadRulesFromFS_AllDimensionsNonEmpty(t *testing.T) {
-	rules, err := LoadRulesFromFS(reconrules.FS, "rules")
+	rules, err := LoadRulesFromFS(recon.FS, "rules")
 	require.NoError(t, err)
 
 	dimCounts := make(map[string]int)

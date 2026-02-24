@@ -176,18 +176,43 @@ const (
 
 // Rule defines a single dimensional analysis rule.
 type Rule struct {
-	ID              string   // unique identifier, e.g. "hardcoded_secret"
-	Label           string   // human-readable description
-	Dimension       string   // dimension within the tier, e.g. "secrets", "injection"
-	StructuralCheck string   // check function name for structural/composite rules
-	Tier            Tier     // which tier this rule belongs to
-	Bit             int      // bit position 0-63 within the tier
-	Severity        Severity // finding severity
-	Kind            RuleKind // text, structural, or composite
-	TextPatterns    []string // patterns for AC automaton (text + composite rules)
-	SkipTest        bool     // skip test files
-	SkipMain        bool     // skip main/cmd packages
-	CodeOnly        bool     // only scan code files
+	ID           string           // unique identifier, e.g. "hardcoded_secret"
+	Label        string           // human-readable description
+	Dimension    string           // dimension within the tier, e.g. "secrets", "injection"
+	Structural   *StructuralBlock // declarative structural constraints
+	Regex        string           // optional regex confirmation pattern
+	Tier         Tier             // which tier this rule belongs to
+	Bit          int              // bit position 0-63 within the tier
+	Severity     Severity         // finding severity
+	Kind         RuleKind         // text, structural, or composite
+	TextPatterns []string         // patterns for AC automaton (text + composite rules)
+	SkipTest     bool             // skip test files
+	SkipMain     bool             // skip main/cmd packages
+	CodeOnly     bool             // only scan code files
+	SkipLangs    []string         // languages to skip this rule for
+}
+
+// StructuralBlock describes declarative AST matching constraints.
+// A node must satisfy ALL present fields to trigger the rule.
+type StructuralBlock struct {
+	Match               string   // concept to match, e.g. "call", "defer", "function"
+	ReceiverContains    []string // node text must contain one of these (case-sensitive)
+	Inside              string   // ancestor concept required, e.g. "for_loop"
+	HasArg              *ArgSpec // argument child constraint
+	NameContains        []string // identifier child must contain one of these substrings
+	ValueType           string   // not yet used — reserved
+	WithoutSibling      string   // semantic template name, e.g. "comma_ok", "doc_comment"
+	NestingThreshold    int      // nesting depth threshold (0 = disabled)
+	ChildCountThreshold int      // child count threshold (0 = disabled)
+	ParentKinds         []string // not yet used — reserved
+	TextContains        []string // node text (uppercased) must contain one of these
+	LineThreshold       int      // line span threshold (0 = disabled)
+}
+
+// ArgSpec constrains function/call arguments.
+type ArgSpec struct {
+	Type         []string // required argument node concept types, e.g. ["identifier", "call"]
+	TextContains []string // argument text must contain one of these
 }
 
 // RuleFinding records a single rule match at a specific location.

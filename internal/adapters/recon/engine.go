@@ -3,9 +3,8 @@
 package recon
 
 import (
+	"regexp"
 	"time"
-
-	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
 	"github.com/corey/aoa/internal/adapters/ahocorasick"
 	"github.com/corey/aoa/internal/adapters/treesitter"
@@ -23,7 +22,8 @@ type Engine struct {
 	rules       []analyzer.Rule
 	scanner     *ahocorasick.TextScanner
 	parser      *treesitter.Parser
-	textRuleMap []textRuleEntry // AC global pattern index → rule attribution
+	textRuleMap []textRuleEntry            // AC global pattern index → rule attribution
+	regexCache  map[string]*regexp.Regexp  // rule ID → compiled regex (Layer 3)
 }
 
 // NewEngine creates a dimensional analysis engine.
@@ -51,11 +51,22 @@ func NewEngine(rules []analyzer.Rule, parser *treesitter.Parser) *Engine {
 		scanner = ahocorasick.NewTextScanner(allPatterns)
 	}
 
+	// Build regex cache for rules with regex confirmation (Layer 3)
+	regexCache := make(map[string]*regexp.Regexp)
+	for _, r := range rules {
+		if r.Regex != "" {
+			if compiled, err := regexp.Compile(r.Regex); err == nil {
+				regexCache[r.ID] = compiled
+			}
+		}
+	}
+
 	return &Engine{
 		rules:       rules,
 		scanner:     scanner,
 		parser:      parser,
 		textRuleMap: ruleMap,
+		regexCache:  regexCache,
 	}
 }
 
@@ -126,6 +137,14 @@ func (e *Engine) AnalyzeFile(filePath string, source []byte, isTest, isMain bool
 				continue // composites handled separately after AST walk
 			}
 
+			// Regex confirmation (Layer 3): if rule has regex, extract line text and confirm
+			if re, ok := e.regexCache[rule.ID]; ok {
+				lineText := extractLineText(source, lineOffsets, line)
+				if !re.Match(lineText) {
+					continue
+				}
+			}
+
 			allFindings = append(allFindings, analyzer.RuleFinding{
 				RuleID:   rule.ID,
 				Line:     line,
@@ -135,12 +154,16 @@ func (e *Engine) AnalyzeFile(filePath string, source []byte, isTest, isMain bool
 	}
 
 	// Step 2: AST parse + structural walk
+	var structuralFindings map[string][]int // rule ID → list of lines with structural findings
 	if e.parser != nil {
 		tree, lang, err := e.parser.ParseToTree(filePath, source)
 		if err == nil && tree != nil {
 			defer tree.Close()
 
 			walkResult := treesitter.WalkForDimensions(tree.RootNode(), source, lang, e.rules, isMain)
+
+			// Build structural findings index for composite resolution
+			structuralFindings = make(map[string][]int)
 
 			// Add structural findings (with skip filters)
 			for _, f := range walkResult.Findings {
@@ -151,16 +174,23 @@ func (e *Engine) AnalyzeFile(filePath string, source []byte, isTest, isMain bool
 				if rule.SkipTest && isTest {
 					continue
 				}
-				allFindings = append(allFindings, f)
+
+				structuralFindings[f.RuleID] = append(structuralFindings[f.RuleID], f.Line)
+
+				// Only add pure structural findings directly
+				// Composite findings go through resolveComposites
+				if rule.Kind == analyzer.RuleStructural {
+					allFindings = append(allFindings, f)
+				}
 			}
 
 			// Use walker's symbol spans
 			symbols = walkResult.Symbols
 
 			// Step 3: Composite rule intersection
-			// For composite rules, check if AC text matches overlap with AST findings
+			// For composite rules: all present layers must agree (ADR constraint 6)
 			if e.scanner != nil {
-				compositeFindings := e.resolveComposites(source, lineOffsets, tree.RootNode(), lang, isTest, isMain, ruleMap)
+				compositeFindings := e.resolveComposites(source, lineOffsets, isTest, isMain, ruleMap, structuralFindings)
 				allFindings = append(allFindings, compositeFindings...)
 			}
 		}
@@ -196,8 +226,10 @@ func (e *Engine) AnalyzeFile(filePath string, source []byte, isTest, isMain bool
 	}
 }
 
-// resolveComposites checks composite rules: AC text hit + AST structural confirmation.
-func (e *Engine) resolveComposites(source []byte, lineOffsets []int, root *tree_sitter.Node, lang string, isTest, isMain bool, ruleMap map[string]analyzer.Rule) []analyzer.RuleFinding {
+// resolveComposites checks composite rules: AC text hit + structural confirmation.
+// For composite rules with a Structural block, verifies the structural finding
+// exists on the same or nearby line as the text hit. All present layers must agree.
+func (e *Engine) resolveComposites(source []byte, lineOffsets []int, isTest, isMain bool, ruleMap map[string]analyzer.Rule, structuralFindings map[string][]int) []analyzer.RuleFinding {
 	var findings []analyzer.RuleFinding
 
 	// Get text matches for composite rules
@@ -235,10 +267,22 @@ func (e *Engine) resolveComposites(source []byte, lineOffsets []int, root *tree_
 			continue
 		}
 
-		// For composite rules, the text match is the primary signal.
-		// AST confirmation is best-effort: if we found the text pattern,
-		// we report it as a finding. The structural check provides higher
-		// confidence but text-only is still meaningful.
+		// If rule has a Structural block, verify structural finding exists nearby
+		if rule.Structural != nil && structuralFindings != nil {
+			structLines := structuralFindings[rule.ID]
+			if !hasNearbyLine(structLines, line, 3) {
+				continue // structural layer didn't confirm — skip
+			}
+		}
+
+		// Regex confirmation (Layer 3)
+		if re, ok := e.regexCache[rule.ID]; ok {
+			lineText := extractLineText(source, lineOffsets, line)
+			if !re.Match(lineText) {
+				continue
+			}
+		}
+
 		seen[dk] = true
 		findings = append(findings, analyzer.RuleFinding{
 			RuleID:   rule.ID,
@@ -248,6 +292,33 @@ func (e *Engine) resolveComposites(source []byte, lineOffsets []int, root *tree_
 	}
 
 	return findings
+}
+
+// hasNearbyLine checks if any line in the slice is within distance of target.
+func hasNearbyLine(lines []int, target, distance int) bool {
+	for _, l := range lines {
+		diff := l - target
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff <= distance {
+			return true
+		}
+	}
+	return false
+}
+
+// extractLineText extracts the raw bytes for a given 1-indexed line.
+func extractLineText(source []byte, lineOffsets []int, line int) []byte {
+	if line < 1 || line > len(lineOffsets) {
+		return nil
+	}
+	start := lineOffsets[line-1]
+	end := len(source)
+	if line < len(lineOffsets) {
+		end = lineOffsets[line]
+	}
+	return source[start:end]
 }
 
 // buildLineOffsets returns a slice where lineOffsets[i] is the byte offset

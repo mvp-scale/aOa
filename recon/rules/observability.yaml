@@ -1,4 +1,5 @@
-# Observability tier rules — debug, silent_failures
+# Observability tier — universal across all 509 tree-sitter languages.
+# No per-language mapping needed. See README.md for schema and examples.
 
 # === Debug dimension ===
 - id: print_statement
@@ -7,7 +8,6 @@
   tier: observability
   bit: 0
   severity: info
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -24,7 +24,6 @@
   tier: observability
   bit: 1
   severity: info
-  kind: text
   text_patterns:
     - "TODO"
     - "FIXME"
@@ -37,7 +36,6 @@
   tier: observability
   bit: 2
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -51,7 +49,6 @@
   tier: observability
   bit: 3
   severity: info
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -67,7 +64,6 @@
   tier: observability
   bit: 5
   severity: warning
-  kind: text
   code_only: true
   text_patterns:
     - "recover()"
@@ -78,7 +74,6 @@
   tier: observability
   bit: 6
   severity: warning
-  kind: text
   code_only: true
   text_patterns:
     - "go func()"
@@ -90,7 +85,6 @@
   tier: observability
   bit: 7
   severity: info
-  kind: text
   code_only: true
   text_patterns:
     - "ctx.Done()"

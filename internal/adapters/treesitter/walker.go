@@ -77,35 +77,12 @@ func (ctx *walkContext) walk(n *tree_sitter.Node, result *WalkResult) {
 		if r.SkipMain && ctx.isMain {
 			continue
 		}
-		switch r.StructuralCheck {
-		case "checkDeferInLoop":
-			ctx.checkDeferInLoop(n, r, result)
-		case "checkIgnoredError":
-			ctx.checkIgnoredError(n, r, result)
-		case "checkPanicInLib":
-			ctx.checkPanicInLib(n, r, result)
-		case "checkUncheckedTypeAssert":
-			ctx.checkUncheckedTypeAssert(n, r, result)
-		case "checkSQLStringConcat":
-			ctx.checkSQLStringConcat(n, r, result)
-		case "checkLongFunction":
-			ctx.checkLongFunction(n, r, result)
-		case "checkNestingDepth":
-			ctx.checkNestingDepth(n, r, result, 0)
-		case "checkTooManyParams":
-			ctx.checkTooManyParams(n, r, result)
-		case "checkLargeSwitch":
-			ctx.checkLargeSwitch(n, r, result)
-		case "checkUnreachableCode":
-			ctx.checkUnreachableCode(n, r, result)
-		case "checkGodObject":
-			ctx.checkGodObject(n, r, result)
-		case "checkExcessiveImports":
-			ctx.checkExcessiveImports(n, r, result)
-		case "checkExportedNoDoc":
-			ctx.checkExportedNoDoc(n, r, result)
-		case "checkUnstableInterface":
-			ctx.checkUnstableInterface(n, r, result)
+		if ctx.shouldSkipLang(r) {
+			continue
+		}
+
+		if r.Structural != nil {
+			ctx.evaluateStructural(n, r, result)
 		}
 	}
 
@@ -120,101 +97,282 @@ func (ctx *walkContext) walk(n *tree_sitter.Node, result *WalkResult) {
 	}
 }
 
-// checkDeferInLoop: defer statement inside a loop body
-func (ctx *walkContext) checkDeferInLoop(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	if ctx.loopDepth == 0 {
-		return
+// shouldSkipLang returns true if this rule should be skipped for the current language.
+func (ctx *walkContext) shouldSkipLang(r analyzer.Rule) bool {
+	for _, lang := range r.SkipLangs {
+		if lang == ctx.lang {
+			return true
+		}
 	}
-	if !analyzer.IsNodeKind(ctx.lang, analyzer.ConceptDefer, n.Kind()) {
-		return
-	}
-	result.Findings = append(result.Findings, analyzer.RuleFinding{
-		RuleID:   r.ID,
-		Line:     int(n.StartPosition().Row + 1),
-		Severity: r.Severity,
-	})
+	return false
 }
 
-// checkIgnoredError: blank identifier assigned from a call returning error
-// Matches patterns like `_ = someFunc()` or `_, _ := someFunc()`
-func (ctx *walkContext) checkIgnoredError(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	if ctx.lang != "go" {
-		return
-	}
+// evaluateStructural evaluates a declarative StructuralBlock against a node.
+func (ctx *walkContext) evaluateStructural(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
+	sb := r.Structural
 	kind := n.Kind()
-	if kind != "short_var_declaration" && kind != "assignment_statement" {
+
+	// Special handling for nesting_threshold: needs recursive depth tracking
+	if sb.NestingThreshold > 0 {
+		ctx.evalNestingDepth(n, r, result, 0)
 		return
 	}
 
-	text := nodeTextWalker(n, ctx.source)
-	trimmed := strings.TrimSpace(text)
-
-	// Check for blank identifier pattern
-	hasBlank := strings.HasPrefix(trimmed, "_ =") ||
-		strings.HasPrefix(trimmed, "_ :=") ||
-		strings.Contains(trimmed, ", _ =") ||
-		strings.Contains(trimmed, ", _ :=")
-	if !hasBlank {
-		return
-	}
-	// Must involve a function call
-	if !strings.Contains(trimmed, "(") {
+	// Resolve match concept to AST node kinds
+	matchKinds := ctx.resolveMatchConcept(sb.Match)
+	if len(matchKinds) == 0 {
 		return
 	}
 
+	// Check if node kind matches
+	matched := false
+	for _, mk := range matchKinds {
+		if kind == mk {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return
+	}
+
+	// Check inside constraint
+	if sb.Inside != "" {
+		if !ctx.checkInside(n, sb.Inside) {
+			return
+		}
+	}
+
+	// Check text_contains constraint
+	if len(sb.TextContains) > 0 {
+		text := strings.ToUpper(nodeTextWalker(n, ctx.source))
+		found := false
+		for _, pat := range sb.TextContains {
+			if strings.Contains(text, strings.ToUpper(pat)) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return
+		}
+	}
+
+	// Check receiver_contains constraint (case-insensitive for cross-language matching)
+	if len(sb.ReceiverContains) > 0 {
+		text := strings.ToLower(nodeTextWalker(n, ctx.source))
+		found := false
+		for _, pat := range sb.ReceiverContains {
+			if strings.Contains(text, strings.ToLower(pat)) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return
+		}
+	}
+
+	// Check name_contains constraint
+	if len(sb.NameContains) > 0 {
+		if !ctx.checkNameContains(n, sb.NameContains) {
+			return
+		}
+	}
+
+	// Check has_arg constraint
+	if sb.HasArg != nil {
+		if !ctx.checkHasArg(n, sb.HasArg) {
+			return
+		}
+	}
+
+	// Check without_sibling constraint (semantic templates)
+	if sb.WithoutSibling != "" {
+		if !ctx.checkWithoutSibling(n, sb.WithoutSibling) {
+			return
+		}
+	}
+
+	// Check child_count_threshold constraint (context-sensitive)
+	if sb.ChildCountThreshold > 0 {
+		if !ctx.checkChildCountThreshold(n, sb.Match, sb.ChildCountThreshold) {
+			return
+		}
+	}
+
+	// Check line_threshold constraint
+	if sb.LineThreshold > 0 {
+		startLine := int(n.StartPosition().Row + 1)
+		endLine := int(n.EndPosition().Row + 1)
+		if endLine-startLine <= sb.LineThreshold {
+			return
+		}
+	}
+
+	// All constraints passed — emit finding
+	name := ""
+	if isSymbolNode(ctx.lang, kind) {
+		name = extractSymbolName(n, ctx.source)
+	}
 	result.Findings = append(result.Findings, analyzer.RuleFinding{
 		RuleID:   r.ID,
 		Line:     int(n.StartPosition().Row + 1),
+		Symbol:   name,
 		Severity: r.Severity,
 	})
 }
 
-// checkPanicInLib: panic() called outside main package
-func (ctx *walkContext) checkPanicInLib(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	if ctx.isMain {
-		return
-	}
-	if !analyzer.IsNodeKind(ctx.lang, analyzer.ConceptCall, n.Kind()) {
-		return
-	}
-	text := nodeTextWalker(n, ctx.source)
-	if !strings.HasPrefix(text, "panic(") {
-		return
-	}
-
-	result.Findings = append(result.Findings, analyzer.RuleFinding{
-		RuleID:   r.ID,
-		Line:     int(n.StartPosition().Row + 1),
-		Severity: r.Severity,
-	})
+// resolveMatchConcept resolves a match concept to AST node kinds
+// via the universal concept layer.
+func (ctx *walkContext) resolveMatchConcept(concept string) []string {
+	return analyzer.Resolve(ctx.lang, concept)
 }
 
-// checkUncheckedTypeAssert: type assertion without comma-ok pattern
-func (ctx *walkContext) checkUncheckedTypeAssert(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	if ctx.lang != "go" {
-		return
+// checkInside verifies that the node has an ancestor matching the given concept.
+func (ctx *walkContext) checkInside(n *tree_sitter.Node, concept string) bool {
+	// Special fast path for for_loop using loopDepth counter
+	if concept == analyzer.ConceptForLoop {
+		return ctx.loopDepth > 0
 	}
-	if n.Kind() != "type_assertion_expression" {
-		return
+
+	// General ancestor walk
+	ancestorKinds := analyzer.Resolve(ctx.lang, concept)
+	if len(ancestorKinds) == 0 {
+		return false
 	}
-	// If parent is an assignment with two LHS identifiers, it's comma-ok
-	// The type assertion itself is just `x.(Type)`. We check if it appears
-	// as the sole RHS of an assignment with only one LHS variable.
+	for p := n.Parent(); p != nil; p = p.Parent() {
+		pk := p.Kind()
+		for _, ak := range ancestorKinds {
+			if pk == ak {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// checkNameContains checks if any identifier child contains one of the substrings.
+func (ctx *walkContext) checkNameContains(n *tree_sitter.Node, patterns []string) bool {
+	nameKinds := []string{"identifier", "name", "field_identifier", "property_identifier", "blank_identifier"}
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		ck := c.Kind()
+		for _, nk := range nameKinds {
+			if ck == nk {
+				text := nodeTextWalker(c, ctx.source)
+				for _, pat := range patterns {
+					if strings.Contains(text, pat) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// checkHasArg checks if a call node has arguments matching the spec.
+func (ctx *walkContext) checkHasArg(n *tree_sitter.Node, spec *analyzer.ArgSpec) bool {
+	// Walk children looking for argument_list or similar
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		ck := c.Kind()
+		if ck == "argument_list" || ck == "arguments" || ck == "actual_parameters" {
+			return ctx.checkArgChildren(c, spec)
+		}
+	}
+	// For some grammars, arguments are direct children of call
+	return ctx.checkArgChildren(n, spec)
+}
+
+// checkArgChildren checks if any child of the argument list matches the spec.
+// When both Type and TextContains are present, an arg must satisfy type match
+// and then text_contains is checked on that same arg's subtree.
+func (ctx *walkContext) checkArgChildren(n *tree_sitter.Node, spec *analyzer.ArgSpec) bool {
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		ck := c.Kind()
+		// Skip punctuation
+		if ck == "," || ck == "(" || ck == ")" {
+			continue
+		}
+
+		// Check type constraint via universal concept resolution
+		typeMatched := false
+		if len(spec.Type) > 0 {
+			for _, t := range spec.Type {
+				conceptKinds := ctx.resolveMatchConcept(t)
+				if len(conceptKinds) > 0 {
+					for _, conceptKind := range conceptKinds {
+						if ck == conceptKind {
+							typeMatched = true
+							break
+						}
+					}
+				} else {
+					// Literal node kind match
+					if ck == t {
+						typeMatched = true
+					}
+				}
+				if typeMatched {
+					break
+				}
+			}
+		} else {
+			typeMatched = true // no type constraint means any arg passes
+		}
+
+		if !typeMatched {
+			continue
+		}
+
+		// If text_contains is also present, check it on the matched arg
+		if len(spec.TextContains) > 0 {
+			text := strings.ToUpper(nodeTextWalker(c, ctx.source))
+			for _, pat := range spec.TextContains {
+				if strings.Contains(text, strings.ToUpper(pat)) {
+					return true
+				}
+			}
+			// Type matched but text didn't — continue checking other args
+			continue
+		}
+
+		// Type matched, no text constraint — pass
+		return true
+	}
+	return false
+}
+
+// checkWithoutSibling implements semantic template checking.
+// Returns true if the "without" condition is met (i.e., the sibling is absent).
+func (ctx *walkContext) checkWithoutSibling(n *tree_sitter.Node, template string) bool {
+	switch template {
+	case "comma_ok":
+		return ctx.checkWithoutCommaOk(n)
+	case "doc_comment":
+		return ctx.checkWithoutDocComment(n)
+	case "after_return":
+		return ctx.checkAfterReturn(n)
+	case "error_check":
+		return ctx.checkWithoutErrorCheck(n)
+	default:
+		return false
+	}
+}
+
+// checkWithoutCommaOk: type assertion without comma-ok pattern.
+// Returns true if there's no comma-ok (i.e., the assertion IS unchecked).
+func (ctx *walkContext) checkWithoutCommaOk(n *tree_sitter.Node) bool {
 	parent := n.Parent()
 	if parent == nil {
-		// Used as expression statement without assignment — unchecked
-		result.Findings = append(result.Findings, analyzer.RuleFinding{
-			RuleID:   r.ID,
-			Line:     int(n.StartPosition().Row + 1),
-			Severity: r.Severity,
-		})
-		return
+		return true // used as expression statement without assignment
 	}
 
-	// Check if parent is assignment/short_var_declaration
 	pKind := parent.Kind()
 	if pKind == "short_var_declaration" || pKind == "assignment_statement" {
-		// Count the LHS identifiers by looking at expression_list before :=
 		text := nodeTextWalker(parent, ctx.source)
 		parts := strings.SplitN(text, ":=", 2)
 		if len(parts) < 2 {
@@ -222,69 +380,180 @@ func (ctx *walkContext) checkUncheckedTypeAssert(n *tree_sitter.Node, r analyzer
 		}
 		if len(parts) >= 1 {
 			lhs := parts[0]
-			commaCount := strings.Count(lhs, ",")
-			if commaCount >= 1 {
-				return // comma-ok pattern, e.g. `v, ok := x.(Type)`
+			if strings.Count(lhs, ",") >= 1 {
+				return false // comma-ok pattern
 			}
 		}
 	}
-
-	result.Findings = append(result.Findings, analyzer.RuleFinding{
-		RuleID:   r.ID,
-		Line:     int(n.StartPosition().Row + 1),
-		Severity: r.Severity,
-	})
+	return true
 }
 
-// checkSQLStringConcat: string concatenation containing SQL keywords
-func (ctx *walkContext) checkSQLStringConcat(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	if !analyzer.IsNodeKind(ctx.lang, analyzer.ConceptStringConcat, n.Kind()) {
-		return
+// checkWithoutDocComment: exported function/type without doc comment.
+// Returns true if there's no preceding doc comment.
+func (ctx *walkContext) checkWithoutDocComment(n *tree_sitter.Node) bool {
+	if ctx.lang != "go" {
+		return false
 	}
-	text := strings.ToUpper(nodeTextWalker(n, ctx.source))
-	sqlKeywords := []string{"SELECT ", "INSERT ", "UPDATE ", "DELETE ", "DROP ", "CREATE TABLE"}
-	hasSQLKeyword := false
-	for _, kw := range sqlKeywords {
-		if strings.Contains(text, kw) {
-			hasSQLKeyword = true
-			break
+
+	name := extractSymbolName(n, ctx.source)
+	if name == "" || name[0] < 'A' || name[0] > 'Z' {
+		return false // not exported — don't fire
+	}
+
+	prevSib := n.PrevSibling()
+	if prevSib != nil && prevSib.Kind() == "comment" {
+		return false // has doc comment
+	}
+	return true
+}
+
+// checkAfterReturn: block has statements after unconditional return.
+// Returns true if there are unreachable statements.
+func (ctx *walkContext) checkAfterReturn(n *tree_sitter.Node) bool {
+	foundReturn := false
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		ck := c.Kind()
+		if ck == "{" || ck == "}" {
+			continue
+		}
+		if foundReturn {
+			return true // found unreachable statement
+		}
+		if analyzer.IsNodeKind(ctx.lang, analyzer.ConceptReturn, ck) ||
+			(ck == "expression_statement" && c.ChildCount() > 0 && strings.HasPrefix(nodeTextWalker(c, ctx.source), "panic(")) {
+			foundReturn = true
 		}
 	}
-	if !hasSQLKeyword {
-		return
-	}
-	// Must have concatenation operator or variable interpolation
-	if !strings.Contains(text, "+") && !strings.Contains(text, "%") {
-		return
-	}
-
-	result.Findings = append(result.Findings, analyzer.RuleFinding{
-		RuleID:   r.ID,
-		Line:     int(n.StartPosition().Row + 1),
-		Severity: r.Severity,
-	})
+	return false
 }
 
-// checkLongFunction: function/method exceeds 100 lines
-func (ctx *walkContext) checkLongFunction(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	if !isSymbolNode(ctx.lang, n.Kind()) {
-		return
+// checkWithoutErrorCheck: call without error check.
+// This is a Go-specific check. Returns true if the call lacks error handling.
+func (ctx *walkContext) checkWithoutErrorCheck(n *tree_sitter.Node) bool {
+	if ctx.lang != "go" {
+		return false
 	}
-	startLine := int(n.StartPosition().Row + 1)
-	endLine := int(n.EndPosition().Row + 1)
-	if endLine-startLine > 100 {
-		name := extractSymbolName(n, ctx.source)
-		result.Findings = append(result.Findings, analyzer.RuleFinding{
-			RuleID:   r.ID,
-			Line:     startLine,
-			Symbol:   name,
-			Severity: r.Severity,
-		})
+
+	// Check if the call is on its own (expression_statement) without error handling
+	parent := n.Parent()
+	if parent == nil {
+		return false
+	}
+
+	// If parent is an expression_statement, the return is fully ignored
+	if parent.Kind() == "expression_statement" {
+		text := nodeTextWalker(n, ctx.source)
+		// Skip common non-error-returning patterns
+		if strings.HasPrefix(text, "fmt.") || strings.HasPrefix(text, "log.") ||
+			strings.HasPrefix(text, "defer ") || strings.HasPrefix(text, "go ") {
+			return false
+		}
+		return true
+	}
+
+	return false
+}
+
+// checkChildCountThreshold implements context-sensitive child counting.
+func (ctx *walkContext) checkChildCountThreshold(n *tree_sitter.Node, matchConcept string, threshold int) bool {
+	switch matchConcept {
+	case analyzer.ConceptFunction:
+		return ctx.countFunctionParams(n) > threshold
+	case analyzer.ConceptClass:
+		return countFieldsRecursive(n) > threshold
+	case analyzer.ConceptSwitch:
+		return ctx.countSwitchCases(n) > threshold
+	case analyzer.ConceptImport:
+		return ctx.countImportSpecs(n) > threshold
+	case analyzer.ConceptInterface:
+		return ctx.countInterfaceMethods(n) > threshold
+	default:
+		// Generic child count
+		return int(n.ChildCount()) > threshold
 	}
 }
 
-// checkNestingDepth: nesting exceeds 4 levels of if/for/switch
-func (ctx *walkContext) checkNestingDepth(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult, depth int) {
+// countFunctionParams counts parameter declarations in a function node.
+func (ctx *walkContext) countFunctionParams(n *tree_sitter.Node) int {
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		kind := c.Kind()
+		if kind == "parameter_list" || kind == "formal_parameters" || kind == "parameters" {
+			paramCount := 0
+			for j := uint(0); j < uint(c.ChildCount()); j++ {
+				pk := c.Child(j).Kind()
+				if pk != "," && pk != "(" && pk != ")" {
+					paramCount++
+				}
+			}
+			return paramCount
+		}
+	}
+	return 0
+}
+
+// countSwitchCases counts case clauses in a switch node.
+func (ctx *walkContext) countSwitchCases(n *tree_sitter.Node) int {
+	caseCount := 0
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		ck := n.Child(i).Kind()
+		if ck == "case_clause" || ck == "expression_case" || ck == "default_case" ||
+			ck == "case" || ck == "communication_case" || ck == "match_arm" {
+			caseCount++
+		}
+	}
+	return caseCount
+}
+
+// countImportSpecs counts import specifications in an import node.
+func (ctx *walkContext) countImportSpecs(n *tree_sitter.Node) int {
+	importCount := 0
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		if c.Kind() == "import_spec_list" {
+			for j := uint(0); j < uint(c.ChildCount()); j++ {
+				if c.Child(j).Kind() == "import_spec" {
+					importCount++
+				}
+			}
+		} else if c.Kind() == "import_spec" {
+			importCount++
+		}
+	}
+	return importCount
+}
+
+// countInterfaceMethods counts methods in an interface node.
+// For Go: walks through type_declaration > type_spec > interface_type.
+func (ctx *walkContext) countInterfaceMethods(n *tree_sitter.Node) int {
+	// For Go type_declaration containing interface
+	if ctx.lang == "go" && n.Kind() == "type_declaration" {
+		for i := uint(0); i < uint(n.ChildCount()); i++ {
+			c := n.Child(i)
+			if c.Kind() == "type_spec" {
+				for j := uint(0); j < uint(c.ChildCount()); j++ {
+					iface := c.Child(j)
+					if iface.Kind() == "interface_type" {
+						methodCount := 0
+						for k := uint(0); k < uint(iface.ChildCount()); k++ {
+							mk := iface.Child(k).Kind()
+							if mk == "method_spec" || mk == "method_elem" {
+								methodCount++
+							}
+						}
+						return methodCount
+					}
+				}
+			}
+		}
+	}
+	// Generic: count children
+	return int(n.ChildCount())
+}
+
+// evalNestingDepth recursively checks nesting depth.
+func (ctx *walkContext) evalNestingDepth(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult, depth int) {
 	kind := n.Kind()
 	isNesting := analyzer.IsNodeKind(ctx.lang, analyzer.ConceptForLoop, kind) ||
 		kind == "if_statement" || kind == "if_expression" ||
@@ -294,126 +563,18 @@ func (ctx *walkContext) checkNestingDepth(n *tree_sitter.Node, r analyzer.Rule, 
 	newDepth := depth
 	if isNesting {
 		newDepth++
-		if newDepth > 4 {
+		if newDepth > r.Structural.NestingThreshold {
 			result.Findings = append(result.Findings, analyzer.RuleFinding{
 				RuleID:   r.ID,
 				Line:     int(n.StartPosition().Row + 1),
 				Severity: r.Severity,
 			})
-			return // don't report deeper nesting within same tree
+			return // don't report deeper nesting
 		}
 	}
 
 	for i := uint(0); i < uint(n.ChildCount()); i++ {
-		ctx.checkNestingDepth(n.Child(i), r, result, newDepth)
-	}
-}
-
-// checkTooManyParams: function with more than 5 parameters
-func (ctx *walkContext) checkTooManyParams(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	if !isSymbolNode(ctx.lang, n.Kind()) {
-		return
-	}
-
-	// Look for parameter_list or formal_parameters child
-	for i := uint(0); i < uint(n.ChildCount()); i++ {
-		c := n.Child(i)
-		kind := c.Kind()
-		if kind == "parameter_list" || kind == "formal_parameters" || kind == "parameters" {
-			// Count parameter children (exclude punctuation)
-			paramCount := 0
-			for j := uint(0); j < uint(c.ChildCount()); j++ {
-				pk := c.Child(j).Kind()
-				if pk != "," && pk != "(" && pk != ")" {
-					paramCount++
-				}
-			}
-			if paramCount > 5 {
-				name := extractSymbolName(n, ctx.source)
-				result.Findings = append(result.Findings, analyzer.RuleFinding{
-					RuleID:   r.ID,
-					Line:     int(n.StartPosition().Row + 1),
-					Symbol:   name,
-					Severity: r.Severity,
-				})
-			}
-			return
-		}
-	}
-}
-
-// checkLargeSwitch: switch/select with more than 15 cases
-func (ctx *walkContext) checkLargeSwitch(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	kind := n.Kind()
-	if kind != "switch_statement" && kind != "select_statement" &&
-		kind != "expression_switch_statement" && kind != "type_switch_statement" &&
-		kind != "match_expression" && kind != "switch_expression" {
-		return
-	}
-
-	caseCount := 0
-	for i := uint(0); i < uint(n.ChildCount()); i++ {
-		ck := n.Child(i).Kind()
-		if ck == "case_clause" || ck == "expression_case" || ck == "default_case" ||
-			ck == "case" || ck == "communication_case" || ck == "match_arm" {
-			caseCount++
-		}
-	}
-	if caseCount > 15 {
-		result.Findings = append(result.Findings, analyzer.RuleFinding{
-			RuleID:   r.ID,
-			Line:     int(n.StartPosition().Row + 1),
-			Severity: r.Severity,
-		})
-	}
-}
-
-// checkUnreachableCode: statements after unconditional return/panic
-func (ctx *walkContext) checkUnreachableCode(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	// Look at block bodies for statements after return/panic
-	kind := n.Kind()
-	if kind != "block" && kind != "statement_block" && kind != "compound_statement" {
-		return
-	}
-
-	foundReturn := false
-	for i := uint(0); i < uint(n.ChildCount()); i++ {
-		c := n.Child(i)
-		ck := c.Kind()
-		if ck == "{" || ck == "}" {
-			continue
-		}
-		if foundReturn {
-			result.Findings = append(result.Findings, analyzer.RuleFinding{
-				RuleID:   r.ID,
-				Line:     int(c.StartPosition().Row + 1),
-				Severity: r.Severity,
-			})
-			return // report only the first unreachable statement
-		}
-		if analyzer.IsNodeKind(ctx.lang, analyzer.ConceptReturn, ck) ||
-			(ck == "expression_statement" && c.ChildCount() > 0 && nodeTextWalker(c, ctx.source) == "panic(") {
-			foundReturn = true
-		}
-	}
-}
-
-// checkGodObject: struct/class with more than 15 fields
-func (ctx *walkContext) checkGodObject(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	if !analyzer.IsNodeKind(ctx.lang, analyzer.ConceptClass, n.Kind()) {
-		return
-	}
-
-	// Count field declarations
-	fieldCount := countFieldsRecursive(n)
-	if fieldCount > 15 {
-		name := extractSymbolName(n, ctx.source)
-		result.Findings = append(result.Findings, analyzer.RuleFinding{
-			RuleID:   r.ID,
-			Line:     int(n.StartPosition().Row + 1),
-			Symbol:   name,
-			Severity: r.Severity,
-		})
+		ctx.evalNestingDepth(n.Child(i), r, result, newDepth)
 	}
 }
 
@@ -433,103 +594,6 @@ func countFieldsRecursive(n *tree_sitter.Node) int {
 		}
 	}
 	return count
-}
-
-// checkExcessiveImports: file imports more than 15 packages
-func (ctx *walkContext) checkExcessiveImports(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	if !analyzer.IsNodeKind(ctx.lang, analyzer.ConceptImport, n.Kind()) {
-		return
-	}
-
-	// For Go: import_declaration can have an import_spec_list with multiple specs
-	importCount := 0
-	for i := uint(0); i < uint(n.ChildCount()); i++ {
-		c := n.Child(i)
-		if c.Kind() == "import_spec_list" {
-			for j := uint(0); j < uint(c.ChildCount()); j++ {
-				if c.Child(j).Kind() == "import_spec" {
-					importCount++
-				}
-			}
-		} else if c.Kind() == "import_spec" {
-			importCount++
-		}
-	}
-
-	if importCount > 15 {
-		result.Findings = append(result.Findings, analyzer.RuleFinding{
-			RuleID:   r.ID,
-			Line:     int(n.StartPosition().Row + 1),
-			Severity: r.Severity,
-		})
-	}
-}
-
-// checkExportedNoDoc: exported function/type without preceding doc comment (Go-specific)
-func (ctx *walkContext) checkExportedNoDoc(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	if ctx.lang != "go" {
-		return
-	}
-	if !isSymbolNode(ctx.lang, n.Kind()) {
-		return
-	}
-
-	name := extractSymbolName(n, ctx.source)
-	if name == "" || name[0] < 'A' || name[0] > 'Z' {
-		return // not exported
-	}
-
-	// Check for preceding comment: look at the previous sibling
-	prevSib := n.PrevSibling()
-	if prevSib != nil && prevSib.Kind() == "comment" {
-		return // has doc comment
-	}
-
-	result.Findings = append(result.Findings, analyzer.RuleFinding{
-		RuleID:   r.ID,
-		Line:     int(n.StartPosition().Row + 1),
-		Symbol:   name,
-		Severity: r.Severity,
-	})
-}
-
-// checkUnstableInterface: interface with more than 10 methods (Go-specific)
-func (ctx *walkContext) checkUnstableInterface(n *tree_sitter.Node, r analyzer.Rule, result *WalkResult) {
-	if ctx.lang != "go" {
-		return
-	}
-	if n.Kind() != "type_declaration" {
-		return
-	}
-
-	// Look for interface_type child
-	for i := uint(0); i < uint(n.ChildCount()); i++ {
-		c := n.Child(i)
-		if c.Kind() == "type_spec" {
-			for j := uint(0); j < uint(c.ChildCount()); j++ {
-				iface := c.Child(j)
-				if iface.Kind() == "interface_type" {
-					methodCount := 0
-					for k := uint(0); k < uint(iface.ChildCount()); k++ {
-						mk := iface.Child(k).Kind()
-						if mk == "method_spec" || mk == "method_elem" {
-							methodCount++
-						}
-					}
-					if methodCount > 10 {
-						name := extractSymbolName(n, ctx.source)
-						result.Findings = append(result.Findings, analyzer.RuleFinding{
-							RuleID:   r.ID,
-							Line:     int(n.StartPosition().Row + 1),
-							Symbol:   name,
-							Severity: r.Severity,
-						})
-					}
-					return
-				}
-			}
-		}
-	}
 }
 
 // isSymbolNode returns true if this node kind represents a function/method/class.

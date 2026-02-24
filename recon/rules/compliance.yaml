@@ -1,4 +1,5 @@
-# Compliance tier rules — cve_patterns, licensing, data_handling
+# Compliance tier — universal across all 509 tree-sitter languages.
+# No per-language mapping needed. See README.md for schema and examples.
 
 # === CVE patterns dimension ===
 - id: deprecated_stdlib
@@ -7,7 +8,6 @@
   tier: compliance
   bit: 0
   severity: warning
-  kind: text
   code_only: true
   text_patterns:
     - "ioutil.ReadAll("
@@ -23,7 +23,6 @@
   tier: compliance
   bit: 1
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -38,7 +37,6 @@
   tier: compliance
   bit: 2
   severity: high
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -53,7 +51,6 @@
   tier: compliance
   bit: 5
   severity: info
-  kind: text
   code_only: true
   text_patterns:
     - "SPDX-License-Identifier"
@@ -66,7 +63,6 @@
   tier: compliance
   bit: 6
   severity: warning
-  kind: text
   code_only: true
   text_patterns:
     - "GPL-3.0"
@@ -81,7 +77,6 @@
   tier: compliance
   bit: 10
   severity: high
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -97,7 +92,6 @@
   tier: compliance
   bit: 11
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:

@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-02-23 (Session 67) | **86% complete.**
+> **Updated**: 2026-02-24 (Session 69) | **86% complete.**
 > **Completed work**: See [COMPLETED.md](COMPLETED.md) — Phases 1–8c + L0 + L1 + L2.2–L2.7 + L3 + L4.1/L4.3 + L5.1–L5.6/L5.9 + L6.1–L6.6 (470+ active tests, 32 skipped)
 > **Archived boards**: `.context/archived/`
 
@@ -74,7 +74,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search -- and proves it with measurable savings.
 
-**Current**: Core engine complete (search, learner, dashboard, grep parity). Recon scanning operational with caching and investigation tracking. Two-binary distribution built but not yet published. Focus shifting to dimensional rule expansion, operational polish, and onboarding.
+**Current**: Core engine complete (search, learner, dashboard, grep parity). Recon scanning operational with caching and investigation tracking. Two-binary distribution built but not yet published. Dimensional engine scaffolding committed (14 files, 6-tier bitmask, 21 dimensions in dashboard). YAML schema rework in progress per ADR -- declarative structural blocks replacing hardcoded function pointers.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -91,18 +91,18 @@
 | [L3](#layer-3) | [L3.15](#l315) | | x | | x | | | | - | 🟢 | 🟢 | 🟡 | GNU grep native parity — 3 modes, 22 flags, stdin/files/index routing | Drop-in grep replacement for AI agents | Smoke tests pass. **Gap**: no automated parity test suite |
 | [L4](#layer-4) | [L4.2](#l42) | | | x | | | | | L4.1 | 🟡 | 🟢 | 🟡 | Grammar CLI + build CI — `aoa grammar list/install/info` | Easy grammar distribution | CLI works. **Gap**: actual download not implemented |
 | [L4](#layer-4) | [L4.4](#l44) | | | x | x | | | | L4.3 | 🟢 | ⚪ | ⚪ | Installation docs — `go install` or download binary | Friction-free onboarding | New user installs and runs in <2 minutes |
-| [L5](#layer-5) | [L5.7](#l57) | | | | | | | | L5.1 | 🟡 | 🔵 | 🟡 | Performance tier — `defer_in_loop` active; add concurrency, query patterns, memory dims | Second tier coverage | 1/4 dims have detectors. **Gap**: 3 dimensions empty |
-| [L5](#layer-5) | [L5.8](#l58) | | | | | | | | L5.1 | 🟡 | 🔵 | 🟡 | Quality tier — complexity + errors active; add dead code, conventions dims | Third tier coverage | 3 detectors across 2/4 dims. **Gap**: 2 dimensions empty |
+| [L5](#layer-5) | [L5.7](#l57) | | | | | | | | L5.1 | 🟡 | 🔵 | 🟡 | Performance tier — YAML rework done, universal concepts; add concurrency, query patterns, memory dims | Second tier coverage | 1/4 dims have detectors. **Gap**: 3 dimensions need rules |
+| [L5](#layer-5) | [L5.8](#l58) | | | | | | | | L5.1 | 🟡 | 🔵 | 🟡 | Quality tier — YAML rework done, universal concepts; add dead code, conventions dims | Third tier coverage | 3 detectors across 2/4 dims. **Gap**: 2 dimensions need rules |
 | [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
 | [L5](#layer-5) | [L5.11](#l511) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Dimension query support — `--dimension=security --risk=high` | Filter by dimension | CLI filters by tier and severity |
 | [L5](#layer-5) | [L5.12](#l512) | | | | | | | x | L5.9 | 🟢 | 🟢 | 🟡 | Recon tab — dimensional engine with interim scanner fallback | Dashboard dimensional view | API works. **Gap**: dashboard UI upgrade for bitmask scores |
 | [L5](#layer-5) | [L5.13](#l513) | | | | | | | x | L5.12 | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul — 5 focus modes, tier redesign, code toggle, copy prompt | Recon tab is actionable, not just a finding list | **Gap**: browser-only validation |
 | [L5](#layer-5) | [L5.14](#l514) | x | | | | x | | | L5.12 | 🟢 | 🟢 | 🟡 | Recon cache + incremental updates — pre-compute at startup, SubtractFile/AddFile on file change | Zero per-poll scan cost, instant API response | **Gap**: no unit tests for incremental path |
 | [L5](#layer-5) | [L5.15](#l515) | | | | | | | x | L5.14 | 🟢 | 🟢 | 🟡 | Investigation tracking — per-file investigated status, persistence, auto-expiry | Users can mark files as reviewed, auto-clears on change | **Gap**: no unit tests |
-| [L5](#layer-5) | [L5.16](#l516) | | | | | | | x | L5.1 | 🟡 | ⚪ | ⚪ | Security dimension expansion — auth gaps (14q), path traversal (12q), deepen injection/secrets/crypto | Complete 5-dimension security tier | Detectors across all 5 security dimensions |
-| [L5](#layer-5) | [L5.17](#l517) | | | | | | | x | L5.1 | 🟡 | ⚪ | ⚪ | Architecture dimension expansion — import health + API surface detectors | Complete 3-dimension architecture tier | Detectors for all 3 architecture dimensions |
-| [L5](#layer-5) | [L5.18](#l518) | | | | | | | x | L5.1 | 🟡 | ⚪ | ⚪ | Observability dimension expansion — silent failures (swallowed errors, empty catches) | Complete 2-dimension observability tier | Detectors for both observability dimensions |
-| [L5](#layer-5) | [L5.19](#l519) | | | | | | | x | L5.1 | 🟡 | ⚪ | ⚪ | Compliance tier — CVE patterns, licensing, data handling (new tier + dashboard entry) | Compliance coverage | New RECON_TIERS entry + detectors for all 3 dimensions |
+| [L5](#layer-5) | [L5.16](#l516) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Security dimension expansion — YAML rework complete, universal concept layer, 86 rules loaded | Complete 5-dimension security tier | All rules load + pass. **Gap**: per-rule detection validation |
+| [L5](#layer-5) | [L5.17](#l517) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Architecture dimension expansion — YAML rework complete, universal concept layer | Complete 3-dimension architecture tier | All rules load + pass. **Gap**: per-rule detection validation |
+| [L5](#layer-5) | [L5.18](#l518) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Observability dimension expansion — YAML rework complete, universal concept layer | Complete 2-dimension observability tier | All rules load + pass. **Gap**: per-rule detection validation |
+| [L5](#layer-5) | [L5.19](#l519) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Compliance tier — YAML rework complete, universal concept layer | Compliance coverage | All rules load + pass. **Gap**: per-rule detection validation |
 | [L6](#layer-6) | [L6.7](#l67) | | | | | | | x | L6.6 | 🟢 | 🟢 | 🟡 | Dashboard Recon tab install prompt — "npm install aoa-recon" when not detected | Users know how to unlock Recon | **Gap**: browser-only validation |
 | [L6](#layer-6) | [L6.8](#l68) | | | x | | | | | L6.2 | 🟢 | 🟢 | 🟡 | npm package structure — wrapper + platform packages + JS shims | Zero-friction install via npm | **Gap**: not yet published to npm |
 | [L6](#layer-6) | [L6.9](#l69) | | | x | | | | | L6.4, L6.8 | 🟢 | 🟢 | 🟡 | npm recon package structure — wrapper + platform packages | Zero-friction recon install | **Gap**: not yet published to npm |
@@ -176,39 +176,40 @@ Two install paths: `go install` (from source) vs binary download (lean + grammar
 
 **Layer 5: Dimensional Analysis (Bitmask engine, Recon tab)**
 
-> Early warning system. 6 tiers, 21 dimensions. 11 pattern detectors active across 8 dimensions. Dashboard wires 9 of 21 dimensions. Security has 4/67 planned detectors; Performance, Quality, Architecture, Observability partially covered; Compliance tier not yet started.
+> Early warning system. 6 tiers, 21 dimensions. Dimensional engine scaffolding committed (14 files, `4d6dd8a`): types, bitmask DTOs, app lifecycle, dashboard UI for all 21 dimensions + compliance tier, 86 YAML rules with loader. **YAML rework complete**: Universal concept layer (15 concepts, 509 languages), declarative `structural:` blocks, `lang_map` eliminated from all rules. Performance/Quality tiers still need rules for empty dimensions.
 >
-> **Research**: [Bitmask analysis](../docs/research/bitmask-dimensional-analysis.md) | [AST vs LSP](../docs/research/asv-vs-lsp.md)
+> **ADR**: [Declarative YAML Rules](../decisions/2026-02-23-declarative-yaml-rules.md) -- spec (rework done)
+> **Research**: [Bitmask analysis](../docs/research/bitmask-dimensional-analysis.md) | [AST vs LSP](../docs/research/asv-vs-lsp.md) | [Dimensional taxonomy](details/2026-02-23-dimensional-taxonomy.md)
 
 #### L5.7
 
-**Performance tier** — 🔵 In progress, 🟡 Partial
+**Performance tier** — 🔵 In progress, 🟡 Partial (YAML structure fixed, dimensions incomplete)
 
-1 of 4 dimensions has an active detector. Dashboard wires 2 of 4 dimensions (resources, concurrency).
+1 of 4 dimensions has active rules. YAML rework done (declarative structural blocks, no lang_map, universal concepts). Dashboard wires 2 of 4 dimensions (resources, concurrency).
 
-**Active**: `defer_in_loop` (resources — defer inside loop body, severity: warning)
+**Active**: `defer_in_loop`, `open_without_close` (resources dimension)
 
-**Missing dimensions**:
-- **Concurrency** — dashboard dimension exists but no detectors (race conditions, mutex misuse, goroutine leaks)
+**Missing dimensions** (need new rules written):
+- **Concurrency** — dashboard dimension exists but no rules (race conditions, mutex misuse, goroutine leaks)
 - **Query Patterns** — not in dashboard (N+1 queries, unbounded result sets, missing pagination)
 - **Memory** — not in dashboard (unbounded allocations, large copies, string concatenation in loops)
 
-**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/static/app.js` (RECON_TIERS)
+**Files**: `recon/rules/performance.yaml`, `internal/adapters/web/static/app.js` (RECON_TIERS)
 
 #### L5.8
 
-**Quality tier** — 🔵 In progress, 🟡 Partial
+**Quality tier** — 🔵 In progress, 🟡 Partial (YAML structure fixed, dimensions incomplete)
 
-3 detectors across 2 of 4 dimensions. Dashboard wires 2 of 4 dimensions (complexity, errors).
+3 rules across 2 of 4 dimensions. YAML rework done (declarative structural blocks, no lang_map, universal concepts). Dashboard wires 2 of 4 dimensions (complexity, errors).
 
 **Active**:
-- `ignored_error` (errors — `_ = func()` pattern, severity: warning)
-- `panic_in_lib` (errors — panic in non-main package, severity: warning)
-- `long_function` (complexity — functions >100 lines, severity: info)
+- `ignored_error` (errors -- `_ = func()` pattern, severity: warning, `skip_langs` for non-Go)
+- `panic_in_lib` (errors -- panic in non-main package, severity: warning)
+- `long_function` (complexity -- functions >100 lines, severity: info)
 
-**Missing dimensions**:
-- **Dead Code** — not in dashboard (unreachable code, unused exports, dead branches)
-- **Conventions** — not in dashboard (naming violations, inconsistent patterns, mutable state)
+**Missing dimensions** (need new rules written):
+- **Dead Code** -- not in dashboard (unreachable code, unused exports, dead branches)
+- **Conventions** -- not in dashboard (naming violations, inconsistent patterns, mutable state)
 
 #### L5.10
 
@@ -268,60 +269,56 @@ Per-file investigated status with persistence (`.aoa/recon-investigated.json`), 
 
 #### L5.16
 
-**Security dimension expansion** — ⚪ Not started
+**Security dimension expansion** — 🟢 YAML rework complete, 🟡 Per-rule validation gap
 
-Current security coverage: 4 detectors across 3 of 5 planned dimensions. Research doc defines 67 security questions total.
+86 rules across all 5 security dimensions. Universal concept layer eliminates per-rule `lang_map`. All rules use declarative `structural:` blocks per ADR. LangMap removed from Rule struct, yamlRule, convertRule(), and all hardcoded fallback rules.
 
-**Active dimensions** (3):
-- **Injection** (1/16): `command_injection`
-- **Secrets** (1/13): `hardcoded_secret`
-- **Cryptography** (2/12): `weak_hash`, `insecure_random`
+**Complete**:
+- `security.yaml` -- 86 rules with proper `structural:` blocks, no `lang_map`, universal header
+- `rules_security.go` -- 6 hardcoded fallback rules, LangMap removed
+- `lang_map.go` -- rewritten with `conceptDefaults` (all 509 langs) + `langOverrides` (10 langs)
+- `walker.go` -- simplified `resolveMatchConcept()` to single `Resolve()` call
+- Dashboard wires all 5 security dimensions
 
-**Missing dimensions** (2):
-- **Auth Gaps** (0/14): route without auth, auth bypass, missing CSRF, session without expiry, missing rate limit, broken access control, privilege escalation, insecure password compare, permissive CORS, missing security headers, unvalidated redirect
-- **Path Traversal** (0/12): path from user input, directory traversal, symlink following, archive extraction, unrestricted file upload, SSRF, file deletion, temp file location, world-readable perms, path join without clean
+**Gap**: No per-rule detection validation tests (rules load and parse, but individual detection accuracy untested).
 
-Each task: add detectors to `scanner.go`, add dimension entries to `RECON_TIERS` in `app.js`, add rule→tier mappings in `inferTierDim()` in `recon.go`.
-
-**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+**Files**: `recon/rules/security.yaml`, `internal/domain/analyzer/rules_security.go`, `internal/domain/analyzer/lang_map.go`, `internal/adapters/treesitter/walker.go`
 
 #### L5.17
 
-**Architecture dimension expansion** — ⚪ Not started
+**Architecture dimension expansion** — 🟢 YAML rework complete, 🟡 Per-rule validation gap
 
-Current: 1 detector (`global_state`) in 1 of 3 planned dimensions. Dashboard wires 1 dimension (antipatterns).
+Rules across all 3 architecture dimensions with declarative `structural:` blocks. Universal concept layer, no `lang_map`. Universal header.
 
-**Missing dimensions**:
-- **Import Health** — circular imports, banned imports, deep nesting, dependency fan-out
-- **API Surface** — exported functions without docs, unstable public interfaces, leaking internal types
+**Complete**: `architecture.yaml` reworked, dashboard dimensions (antipatterns, imports, api_surface).
 
-**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+**Gap**: No per-rule detection validation tests.
+
+**Files**: `recon/rules/architecture.yaml`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
 
 #### L5.18
 
-**Observability dimension expansion** — ⚪ Not started
+**Observability dimension expansion** — 🟢 YAML rework complete, 🟡 Per-rule validation gap
 
-Current: 2 detectors (`print_statement`, `todo_fixme`) in 1 of 2 planned dimensions. Dashboard wires 1 dimension (debug).
+Rules across both observability dimensions with declarative `structural:` blocks. Universal concept layer, no `lang_map`. Universal header.
 
-**Missing dimension**:
-- **Silent Failures** — swallowed errors (empty catch blocks), recovered panics without logging, context cancellation ignored, channels never read
+**Complete**: `observability.yaml` reworked, dashboard dimensions (debug, silent_failures).
 
-**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+**Gap**: No per-rule detection validation tests.
+
+**Files**: `recon/rules/observability.yaml`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
 
 #### L5.19
 
-**Compliance tier** — ⚪ Not started
+**Compliance tier** — 🟢 YAML rework complete, 🟡 Per-rule validation gap
 
-Entirely new tier. Not in dashboard RECON_TIERS. No detectors. Research doc lists 3 dimensions.
+New tier. Dashboard RECON_TIERS entry exists (purple). CSS added (`--tier-comp`). Rules across all 3 compliance dimensions with declarative `structural:` blocks. Universal concept layer, no `lang_map`. Universal header.
 
-**Planned dimensions**:
-- **CVE Patterns** — known vulnerable function calls, deprecated APIs, unsafe defaults
-- **Licensing** — license header presence, SPDX compliance, GPL contamination in permissive projects
-- **Data Handling** — PII in logs, unencrypted storage, missing data sanitization
+**Complete**: `compliance.yaml` reworked, RECON_TIERS entry, compliance tier CSS, 3 dimensions (cve_patterns, licensing, data_handling).
 
-Requires: new `RECON_TIERS` entry (color: purple), new `inferTierDim` mappings, new scanner detectors.
+**Gap**: No per-rule detection validation tests.
 
-**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+**Files**: `recon/rules/compliance.yaml`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`, `internal/adapters/web/static/style.css`
 
 ---
 
@@ -453,6 +450,8 @@ Delete dead `domains/` directory. Add `ensureSubdirs()` at startup. Migration mo
 | Document | Purpose |
 |----------|---------|
 | [COMPLETED.md](COMPLETED.md) | Archived phases 1-8c + all 🟢🟢🟢 tasks with validation notes |
+| [Declarative YAML Rules ADR](decisions/2026-02-23-declarative-yaml-rules.md) | Spec for dimensional rules rework -- schema, constraints, Go types |
+| [Dimensional Taxonomy](details/2026-02-23-dimensional-taxonomy.md) | 142 questions across 21 dimensions, 6 tiers |
 | [Bitmask Analysis](../docs/research/bitmask-dimensional-analysis.md) | Security worked example, execution pipeline, cross-language uniformity |
 | [AST vs LSP](../docs/research/asv-vs-lsp.md) | Viability assessment, per-dimension confidence ratings |
 | [Sub-ms grep research](../docs/research/sub-ms-grep.md) | Trigram index approach, 5 alternatives evaluated |

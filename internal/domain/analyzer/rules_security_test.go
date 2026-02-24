@@ -9,7 +9,7 @@ import (
 
 func TestAllRules_Count(t *testing.T) {
 	rules := AllRules()
-	assert.GreaterOrEqual(t, len(rules), 30, "expected at least 30 rules")
+	assert.GreaterOrEqual(t, len(rules), 42, "expected at least 42 rules")
 }
 
 func TestAllRules_UniqueIDs(t *testing.T) {
@@ -57,10 +57,10 @@ func TestAllRules_FieldsPopulated(t *testing.T) {
 		case RuleText:
 			assert.NotEmpty(t, r.TextPatterns, "text rule %s has no patterns", r.ID)
 		case RuleStructural:
-			assert.NotEmpty(t, r.StructuralCheck, "structural rule %s has no check", r.ID)
+			assert.NotNil(t, r.Structural, "structural rule %s has no structural block", r.ID)
 		case RuleComposite:
 			assert.NotEmpty(t, r.TextPatterns, "composite rule %s has no patterns", r.ID)
-			assert.NotEmpty(t, r.StructuralCheck, "composite rule %s has no check", r.ID)
+			assert.NotNil(t, r.Structural, "composite rule %s has no structural block", r.ID)
 		}
 	}
 }
@@ -73,10 +73,10 @@ func TestTextRules_AllHavePatterns(t *testing.T) {
 	assert.Greater(t, len(rules), 15, "expected at least 15 text rules")
 }
 
-func TestStructuralRules_AllHaveChecks(t *testing.T) {
+func TestStructuralRules_AllHaveStructural(t *testing.T) {
 	rules := StructuralRules()
 	for _, r := range rules {
-		assert.NotEmpty(t, r.StructuralCheck, "structural rule %s has no check", r.ID)
+		assert.NotNil(t, r.Structural, "structural rule %s has no structural block", r.ID)
 	}
-	assert.Greater(t, len(rules), 8, "expected at least 8 structural rules")
+	assert.Greater(t, len(rules), 15, "expected at least 15 structural rules")
 }

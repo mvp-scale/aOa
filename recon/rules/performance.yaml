@@ -1,4 +1,5 @@
-# Performance tier rules — resources, concurrency, query, memory
+# Performance tier — universal across all 509 tree-sitter languages.
+# No per-language mapping needed. See README.md for schema and examples.
 
 # === Resources dimension ===
 - id: defer_in_loop
@@ -7,9 +8,10 @@
   tier: performance
   bit: 0
   severity: warning
-  kind: structural
   code_only: true
-  structural_check: checkDeferInLoop
+  structural:
+    match: defer
+    inside: for_loop
 
 - id: open_without_close
   label: File/connection opened without close in scope
@@ -17,7 +19,6 @@
   tier: performance
   bit: 1
   severity: warning
-  kind: text
   code_only: true
   text_patterns:
     - "os.Open("
@@ -33,7 +34,6 @@
   tier: performance
   bit: 2
   severity: warning
-  kind: text
   code_only: true
   text_patterns:
     - "context.WithCancel("
@@ -46,7 +46,6 @@
   tier: performance
   bit: 3
   severity: warning
-  kind: text
   code_only: true
   text_patterns:
     - "http.Get("
@@ -62,7 +61,6 @@
   tier: performance
   bit: 5
   severity: warning
-  kind: text
   code_only: true
   text_patterns:
     - "go func()"
@@ -74,7 +72,6 @@
   tier: performance
   bit: 6
   severity: warning
-  kind: text
   code_only: true
   text_patterns:
     - ".Lock()"
@@ -86,7 +83,6 @@
   tier: performance
   bit: 7
   severity: warning
-  kind: text
   code_only: true
   text_patterns:
     - ".Add("
@@ -100,7 +96,6 @@
   tier: performance
   bit: 10
   severity: warning
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -116,7 +111,6 @@
   tier: performance
   bit: 11
   severity: info
-  kind: text
   skip_test: true
   code_only: true
   text_patterns:
@@ -132,7 +126,6 @@
   tier: performance
   bit: 15
   severity: info
-  kind: text
   code_only: true
   text_patterns:
     - "strings.Builder"
@@ -144,7 +137,6 @@
   tier: performance
   bit: 16
   severity: info
-  kind: text
   code_only: true
   text_patterns:
     - "make([]byte,"

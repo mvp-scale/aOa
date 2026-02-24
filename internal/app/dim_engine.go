@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/corey/aoa/internal/adapters/recon"
-	"github.com/corey/aoa/internal/adapters/reconrules"
 	"github.com/corey/aoa/internal/adapters/socket"
+	reconfs "github.com/corey/aoa/recon"
 	"github.com/corey/aoa/internal/adapters/treesitter"
 	"github.com/corey/aoa/internal/adapters/web"
 	"github.com/corey/aoa/internal/domain/analyzer"
@@ -18,7 +18,7 @@ import (
 // initDimEngine loads YAML rules and creates the dimensional analysis engine.
 // Falls back to hardcoded rules if YAML loading fails.
 func (a *App) initDimEngine() {
-	rules, err := analyzer.LoadRulesFromFS(reconrules.FS, "rules")
+	rules, err := analyzer.LoadRulesFromFS(reconfs.FS, "rules")
 	if err != nil {
 		fmt.Printf("[%s] YAML rules failed, using hardcoded fallback: %v\n",
 			time.Now().Format(time.RFC3339), err)
