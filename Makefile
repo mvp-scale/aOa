@@ -6,7 +6,7 @@ BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X github.com/corey/aoa/internal/version.Version=$(VERSION) \
            -X github.com/corey/aoa/internal/version.BuildDate=$(BUILD_DATE)
 
-.PHONY: build build-lean build-pure build-recon test lint bench coverage check vet
+.PHONY: build build-lean build-pure build-recon test lint bench bench-gauntlet bench-baseline bench-compare coverage check vet
 
 # Build the binary with version info (all grammars compiled in, ~80 MB)
 build:
@@ -70,6 +70,20 @@ check: vet lint test build-pure
 	 fi
 	@echo ""
 	@echo "✓ All checks passed (including pure-build gate + size gate)"
+
+# Search performance gauntlet (22-shape query matrix, benchstat-compatible)
+bench-gauntlet:
+	go test ./test/ -bench=BenchmarkSearchGauntlet -benchmem -run=^$ -count=6
+
+# Generate benchstat baseline for the search gauntlet
+bench-baseline:
+	@mkdir -p test/testdata/benchmarks
+	go test ./test/ -bench=BenchmarkSearchGauntlet -benchmem -run=^$ -count=6 > test/testdata/benchmarks/baseline.txt
+
+# Compare current performance against baseline (requires benchstat)
+bench-compare:
+	go test ./test/ -bench=BenchmarkSearchGauntlet -benchmem -run=^$ -count=6 > /tmp/aoa-bench-current.txt
+	benchstat test/testdata/benchmarks/baseline.txt /tmp/aoa-bench-current.txt
 
 # Count test status
 status:

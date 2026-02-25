@@ -436,7 +436,7 @@ Delete dead `domains/` directory. Add `ensureSubdirs()` at startup. Migration mo
 
 | Component | Notes |
 |-----------|-------|
-| Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, trigram content search (~60us on 500 files), case-sensitive default (G1). **G0 perf**: regex trigram extraction (5s->8ms), symbol search gated on metadata (186ms->4us). All ops sub-25ms. |
+| Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, trigram content search (~60us on 500 files), case-sensitive default (G1). **G0 perf**: regex trigram extraction (5s->8ms), symbol search gated on metadata (186ms->4us). All ops sub-25ms. **G0 gauntlet**: 22-shape perf regression suite (`test/gauntlet_test.go`) — ceiling test in `go test ./...`, benchstat baselines via `make bench-gauntlet/bench-baseline/bench-compare`. Covers every Search() code path including regex trigram, lean-mode guard, brute-force, glob, context, count, quiet, only-matching. |
 | Learner (21-step autotune) | 5/5 fixture parity, float64 precision. Do not change decay/prune constants. |
 | Session Prism (Claude JSONL reader) | Defensive parsing, UUID dedup, compound message decomposition. |
 | Tree-sitter parser (509 languages) | go-sitter-forest, behind `ports.Parser` interface, lives in `aoa-recon` binary. |

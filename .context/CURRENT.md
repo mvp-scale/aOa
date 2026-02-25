@@ -16,6 +16,8 @@
 - [x] Fixed TestWalker_IgnoredError -- expression_list wrapper handling in Go AST
 - [x] E2E: 18 test packages green, go vet clean, both build targets compile
 - [x] Detail doc: `details/2026-02-25-session-71-g0-perf-and-recon-separation.md`
+- [x] G0 Search Performance Gauntlet -- 22-shape automated regression suite (`test/gauntlet_test.go`). Ceiling test runs in `go test ./...`. Benchstat baselines via `make bench-gauntlet/bench-baseline/bench-compare`. Covers every Search() code path: literal, OR, AND, regex concat/alt, case-insensitive, word-boundary, invert, glob include/exclude, context lines, count, quiet, only-matching -- each in Full and Lean (empty Metadata) modes. Ceilings calibrated against live measurements (1-25ms). Would have caught both Session 71 bugs.
+- [x] Updated BOARD.md "What Works" with gauntlet details
 
 ## Next
 
