@@ -636,8 +636,8 @@ func TestGrep_Basic(t *testing.T) {
 	if exit != 0 {
 		t.Fatalf("grep exit %d", exit)
 	}
-	if !strings.Contains(stdout, "hits") {
-		t.Errorf("should show hits:\n%s", stdout)
+	if !strings.Contains(stdout, "hello") {
+		t.Errorf("should contain 'hello' in results:\n%s", stdout)
 	}
 }
 
@@ -674,8 +674,8 @@ func TestEgrep_Basic(t *testing.T) {
 	if exit != 0 {
 		t.Fatalf("egrep exit %d", exit)
 	}
-	if !strings.Contains(stdout, "hits") {
-		t.Errorf("should show hits:\n%s", stdout)
+	if !strings.Contains(stdout, "hello") {
+		t.Errorf("should contain 'hello' in results:\n%s", stdout)
 	}
 }
 
@@ -1052,8 +1052,13 @@ func TestGrep_InvertMatch(t *testing.T) {
 	if exit != 0 {
 		t.Fatalf("grep -v exit %d", exit)
 	}
-	if !strings.Contains(stdout, "hits") {
-		t.Errorf("grep -v should show hits:\n%s", stdout)
+	// In grep-compat mode (non-TTY), output is file:content lines.
+	// Inverted results should contain non-hello symbols like "main" or "add".
+	if stdout == "" {
+		t.Errorf("grep -v should produce output")
+	}
+	if strings.Contains(stdout, "hello()") {
+		t.Errorf("grep -v should NOT contain 'hello()':\n%s", stdout)
 	}
 }
 
@@ -1065,12 +1070,14 @@ func TestGrep_InvertMatch_CountOnly(t *testing.T) {
 	defer cleanup()
 
 	// -v -c should count non-matching symbols.
+	// In grep-compat mode (non-TTY), output is just a number.
 	stdout, _, exit := runAOA(t, dir, "grep", "-v", "-c", "hello")
 	if exit != 0 {
 		t.Fatalf("grep -v -c exit %d", exit)
 	}
-	if !strings.Contains(stdout, "hits") {
-		t.Errorf("grep -v -c should show hit count:\n%s", stdout)
+	count := strings.TrimSpace(stdout)
+	if count == "" || count == "0" {
+		t.Errorf("grep -v -c should show non-zero count, got: %q", count)
 	}
 }
 
@@ -1082,12 +1089,13 @@ func TestEgrep_InvertMatch(t *testing.T) {
 	defer cleanup()
 
 	// egrep -v with regex.
+	// In grep-compat mode (non-TTY), output is file:content lines.
 	stdout, _, exit := runAOA(t, dir, "egrep", "-v", "hel.*")
 	if exit != 0 {
 		t.Fatalf("egrep -v exit %d", exit)
 	}
-	if !strings.Contains(stdout, "hits") {
-		t.Errorf("egrep -v should show hits:\n%s", stdout)
+	if stdout == "" {
+		t.Errorf("egrep -v should produce output")
 	}
 }
 
@@ -1119,5 +1127,123 @@ func UniqueNewSymbol() {
 	}
 	if !strings.Contains(strings.ToLower(stdout), "uniquenewsymbol") {
 		t.Errorf("grep should find UniqueNewSymbol after reindex:\n%s", stdout)
+	}
+}
+
+// =============================================================================
+// L2.1: File watcher auto-reindex — no init needed
+// =============================================================================
+
+func TestFileWatcher_NewFile_AutoReindex(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// Baseline: "watcherprobe" should not exist yet.
+	stdout, _, _ := runAOA(t, dir, "grep", "watcherprobe")
+	if strings.Contains(strings.ToLower(stdout), "watcherprobe") {
+		t.Fatal("watcherprobe should not exist before file creation")
+	}
+
+	// Create a new file — the daemon's file watcher should auto-detect it.
+	writeFile(t, filepath.Join(dir, "probe.go"), `package main
+
+func WatcherProbe() {
+	return
+}
+`)
+
+	// Wait for fsnotify detection (50ms debounce) + parse + rebuild.
+	// Poll up to 3s to avoid flaky timing.
+	var found bool
+	for i := 0; i < 30; i++ {
+		time.Sleep(100 * time.Millisecond)
+		stdout, _, _ = runAOA(t, dir, "grep", "watcherprobe")
+		if strings.Contains(strings.ToLower(stdout), "watcherprobe") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("file watcher should auto-index new file — WatcherProbe not found after 3s")
+	}
+}
+
+func TestFileWatcher_ModifyFile_AutoReindex(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// Baseline: search for "multiply" (exists in util.go).
+	stdout, _, exit := runAOA(t, dir, "grep", "multiply")
+	if exit != 0 {
+		t.Fatalf("baseline grep exit %d", exit)
+	}
+	if !strings.Contains(strings.ToLower(stdout), "multiply") {
+		t.Fatal("multiply should exist in baseline index")
+	}
+
+	// Modify util.go: replace multiply with a new unique symbol.
+	writeFile(t, filepath.Join(dir, "util.go"), `package main
+
+func add(a, b int) int {
+	return a + b
+}
+
+func WatcherModified(x, y int) int {
+	return x * y
+}
+`)
+
+	// Poll for the new symbol to appear.
+	var found bool
+	for i := 0; i < 30; i++ {
+		time.Sleep(100 * time.Millisecond)
+		stdout, _, _ = runAOA(t, dir, "grep", "watchermodified")
+		if strings.Contains(strings.ToLower(stdout), "watchermodified") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("file watcher should auto-reindex modified file — WatcherModified not found after 3s")
+	}
+}
+
+func TestFileWatcher_DeleteFile_AutoReindex(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// Baseline: "multiply" exists (in util.go).
+	stdout, _, exit := runAOA(t, dir, "grep", "multiply")
+	if exit != 0 {
+		t.Fatalf("baseline grep exit %d", exit)
+	}
+	if !strings.Contains(strings.ToLower(stdout), "multiply") {
+		t.Fatal("multiply should exist in baseline index")
+	}
+
+	// Delete util.go — watcher should remove its symbols.
+	os.Remove(filepath.Join(dir, "util.go"))
+
+	// Poll for the symbol to disappear.
+	var gone bool
+	for i := 0; i < 30; i++ {
+		time.Sleep(100 * time.Millisecond)
+		stdout, _, _ = runAOA(t, dir, "grep", "multiply")
+		if !strings.Contains(strings.ToLower(stdout), "multiply") {
+			gone = true
+			break
+		}
+	}
+	if !gone {
+		t.Error("file watcher should remove deleted file's symbols — multiply still found after 3s")
 	}
 }

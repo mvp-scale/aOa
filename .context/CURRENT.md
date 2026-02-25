@@ -1,27 +1,28 @@
-# Session 71 | 2026-02-25 | G0 Performance + P0 Complete + Recon Separation
+# Session 72 | 2026-02-25 | L5 Dimension Rules + Optimization
 
-> **Session**: 71 -- Two critical G0 speed violations fixed (regex trigram 625x, symbol guard 41x). All P0 bugs triple-green. Clean aoa-pure/recon separation complete. Walker fix shipped. Full gauntlet sub-25ms.
+> **Session**: 72
+
+## Now
+
+1. Resume L5: dimension rules for L5.7/L5.8 per-rule detection validation
+2. L7.2: database storage optimization (964MB bbolt, 28.7s load)
+3. L4.4: installation docs
 
 ## Done
 
-- [x] G0 Fix: Regex search trigram extraction -- `scanContentRegexTrigram()` extracts literals from regex AST, intersect/union posting lists (5s->8ms, 625x)
-- [x] G0 Fix: Symbol search metadata guard -- skip symbol iteration when no tree-sitter metadata loaded (186ms->4us, 46500x)
-- [x] Full gauntlet verified: grep 6ms, egrep concat 10ms, egrep alternation 8ms, locate 10ms, find 24ms, tree 4ms
-- [x] Deleted old recon scanner from app.go (warmReconCache, updateReconForFile, CachedReconResult, reconCache fields)
-- [x] Local types in web/recon.go -- removed recon import from lean path
-- [x] Removed CachedReconResult from AppQueries interface and mock
-- [x] Gated initReconBridge on .aoa/recon.enabled marker file
-- [x] Created `aoa recon init` command for explicit activation
-- [x] B7/B9/B10/B11/B14/B15/B17: All 7 P0 bugs triple-green
-- [x] Fixed TestWalker_IgnoredError -- expression_list wrapper handling in Go AST
-- [x] E2E: 18 test packages green, go vet clean, both build targets compile
-- [x] Detail doc: `details/2026-02-25-session-71-g0-perf-and-recon-separation.md`
-- [x] G0 Search Performance Gauntlet -- 22-shape automated regression suite (`test/gauntlet_test.go`). Ceiling test runs in `go test ./...`. Benchstat baselines via `make bench-gauntlet/bench-baseline/bench-compare`. Covers every Search() code path: literal, OR, AND, regex concat/alt, case-insensitive, word-boundary, invert, glob include/exclude, context lines, count, quiet, only-matching -- each in Full and Lean (empty Metadata) modes. Ceilings calibrated against live measurements (1-25ms). Would have caught both Session 71 bugs.
-- [x] Updated BOARD.md "What Works" with gauntlet details
+- [x] Moved 11 triple-green tasks to COMPLETED.md: P0 (B7, B9, B10, B11, B14, B15, B17), L3.15, L6.8, L6.9, L6.10
+- [x] Marked L4.2 (Grammar CLI download) as superseded -> BACKLOG.md (G2 split made dynamic download irrelevant)
+- [x] L6 layer now fully complete (all 10 tasks done)
+- [x] L3 layer now fully archived (all 15 tasks in COMPLETED.md)
+- [x] Rebuilt INDEX.md with updated board pointers and layer status
+- [x] **L7.2: Binary encoding** -- replaced JSON with binary posting lists + gob. 20x smaller (75MB->3.7MB for 50K tokens). Lazy v0->v1 migration. 5 tests + 4 benchmarks. All 25 bbolt tests pass.
+- [x] **AOA_SHIM=1** -- env var for explicit Unix shim mode. Fixed 3 bugs: fallback arg forwarding (os.Args[1:]->os.Args[2:]), silent errors (now print to stderr), test assertions (grep-compat format). 9 integration tests fixed. 18/18 packages pass.
+- [x] L2.1 now triple-green on board (was already validated, INDEX was stale)
+- [x] Moved L2.1 and L7.2 to COMPLETED.md (both triple-green)
+- [x] Fixed shim scripts in init.go to include `export AOA_SHIM=1`
+- [x] Cleaned up stale L2 quality gate note in BOARD.md
 
 ## Next
 
-1. Resume L5: dimension rules for L5.7/L5.8 empty dimensions
-2. L7.2: database storage optimization (964MB bbolt, 28.7s load)
-3. L4.4: installation docs
-4. Consider moving P0 triple-green tasks to COMPLETED.md
+- L5.10/L5.11: dimension scores in search results + query support
+- L7.3/L7.4: recon source view, .aoa/ restructure

@@ -15,6 +15,15 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+// Index format versions.
+const (
+	formatV0 byte = 0 // JSON (original format, no version key)
+	formatV1 byte = 1 // Binary posting lists + gob
+)
+
+// keyVersion is the bbolt key for the index format version byte.
+var keyVersion = []byte("_version")
+
 // Bucket keys
 var (
 	bucketIndex      = []byte("index")
@@ -64,37 +73,47 @@ type indexJSON struct {
 	Files    map[string]*ports.FileMeta     `json:"files"`
 }
 
+// indexFormat returns the format version of the index bucket.
+// Returns formatV0 if no version key is present (legacy JSON data).
+func indexFormat(ib *bolt.Bucket) byte {
+	v := ib.Get(keyVersion)
+	if v == nil || len(v) == 0 {
+		return formatV0
+	}
+	return v[0]
+}
+
 // SaveIndex persists the full search index for a project.
+// Always writes format v1 (binary posting lists + gob).
 func (s *Store) SaveIndex(projectID string, idx *ports.Index) error {
 	if idx == nil {
 		return fmt.Errorf("nil index")
 	}
 
-	// Convert to JSON-serializable form
-	ij := indexJSON{
-		Tokens:   idx.Tokens,
-		Metadata: make(map[tokenRefKey]*ports.SymbolMeta, len(idx.Metadata)),
-		Files:    make(map[string]*ports.FileMeta, len(idx.Files)),
+	// Encode tokens as binary posting lists.
+	tokensBin, err := encodePostingLists(idx.Tokens)
+	if err != nil {
+		return fmt.Errorf("encode tokens: %w", err)
 	}
 
+	// Convert metadata keys to string form for gob (TokenRef is not a valid map key in gob).
+	metaMap := make(map[tokenRefKey]*ports.SymbolMeta, len(idx.Metadata))
 	for ref, sym := range idx.Metadata {
-		ij.Metadata[metadataKey(ref)] = sym
+		metaMap[metadataKey(ref)] = sym
 	}
-	for fid, fm := range idx.Files {
-		ij.Files[fmt.Sprintf("%d", fid)] = fm
+	metaBin, err := encodeGob(metaMap)
+	if err != nil {
+		return fmt.Errorf("encode metadata: %w", err)
 	}
 
-	tokensJSON, err := json.Marshal(ij.Tokens)
-	if err != nil {
-		return fmt.Errorf("marshal tokens: %w", err)
+	// Convert file keys to string form for gob.
+	filesMap := make(map[string]*ports.FileMeta, len(idx.Files))
+	for fid, fm := range idx.Files {
+		filesMap[fmt.Sprintf("%d", fid)] = fm
 	}
-	metaJSON, err := json.Marshal(ij.Metadata)
+	filesBin, err := encodeGob(filesMap)
 	if err != nil {
-		return fmt.Errorf("marshal metadata: %w", err)
-	}
-	filesJSON, err := json.Marshal(ij.Files)
-	if err != nil {
-		return fmt.Errorf("marshal files: %w", err)
+		return fmt.Errorf("encode files: %w", err)
 	}
 
 	return s.db.Update(func(tx *bolt.Tx) error {
@@ -106,20 +125,25 @@ func (s *Store) SaveIndex(projectID string, idx *ports.Index) error {
 		if err != nil {
 			return err
 		}
-		if err := ib.Put(keyTokens, tokensJSON); err != nil {
+		if err := ib.Put(keyVersion, []byte{formatV1}); err != nil {
 			return err
 		}
-		if err := ib.Put(keyMetadata, metaJSON); err != nil {
+		if err := ib.Put(keyTokens, tokensBin); err != nil {
 			return err
 		}
-		return ib.Put(keyFiles, filesJSON)
+		if err := ib.Put(keyMetadata, metaBin); err != nil {
+			return err
+		}
+		return ib.Put(keyFiles, filesBin)
 	})
 }
 
 // LoadIndex retrieves the search index for a project.
 // Returns nil, nil if no index exists (fresh project).
+// Supports both v0 (JSON) and v1 (binary/gob) formats transparently.
 func (s *Store) LoadIndex(projectID string) (*ports.Index, error) {
-	var tokensJSON, metaJSON, filesJSON []byte
+	var tokensRaw, metaRaw, filesRaw []byte
+	var version byte
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		proj := tx.Bucket([]byte(projectID))
@@ -130,18 +154,19 @@ func (s *Store) LoadIndex(projectID string) (*ports.Index, error) {
 		if ib == nil {
 			return nil
 		}
+		version = indexFormat(ib)
 		// Copy bytes out of the transaction (bbolt slices are only valid within tx)
 		if v := ib.Get(keyTokens); v != nil {
-			tokensJSON = make([]byte, len(v))
-			copy(tokensJSON, v)
+			tokensRaw = make([]byte, len(v))
+			copy(tokensRaw, v)
 		}
 		if v := ib.Get(keyMetadata); v != nil {
-			metaJSON = make([]byte, len(v))
-			copy(metaJSON, v)
+			metaRaw = make([]byte, len(v))
+			copy(metaRaw, v)
 		}
 		if v := ib.Get(keyFiles); v != nil {
-			filesJSON = make([]byte, len(v))
-			copy(filesJSON, v)
+			filesRaw = make([]byte, len(v))
+			copy(filesRaw, v)
 		}
 		return nil
 	})
@@ -149,7 +174,7 @@ func (s *Store) LoadIndex(projectID string) (*ports.Index, error) {
 		return nil, err
 	}
 
-	if tokensJSON == nil && metaJSON == nil && filesJSON == nil {
+	if tokensRaw == nil && metaRaw == nil && filesRaw == nil {
 		return nil, nil
 	}
 
@@ -159,50 +184,66 @@ func (s *Store) LoadIndex(projectID string) (*ports.Index, error) {
 		Files:    make(map[uint32]*ports.FileMeta),
 	}
 
-	// Unmarshal the three blobs concurrently — each writes to its own data,
-	// no shared state between goroutines.
+	// Decode the three blobs concurrently — each writes to its own data.
 	var wg sync.WaitGroup
 	var tokErr, metaErr, filesErr error
 	var rawMeta map[string]*ports.SymbolMeta
 	var rawFiles map[string]*ports.FileMeta
 
-	if tokensJSON != nil {
+	if tokensRaw != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			tokErr = json.Unmarshal(tokensJSON, &idx.Tokens)
+			switch version {
+			case formatV1:
+				idx.Tokens, tokErr = decodePostingLists(tokensRaw)
+			default: // formatV0 — legacy JSON
+				tokErr = json.Unmarshal(tokensRaw, &idx.Tokens)
+			}
 		}()
 	}
 
-	if metaJSON != nil {
+	if metaRaw != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			metaErr = json.Unmarshal(metaJSON, &rawMeta)
+			switch version {
+			case formatV1:
+				rawMeta = make(map[string]*ports.SymbolMeta)
+				metaErr = decodeGob(metaRaw, &rawMeta)
+			default: // formatV0
+				metaErr = json.Unmarshal(metaRaw, &rawMeta)
+			}
 		}()
 	}
 
-	if filesJSON != nil {
+	if filesRaw != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			filesErr = json.Unmarshal(filesJSON, &rawFiles)
+			switch version {
+			case formatV1:
+				rawFiles = make(map[string]*ports.FileMeta)
+				filesErr = decodeGob(filesRaw, &rawFiles)
+			default: // formatV0
+				filesErr = json.Unmarshal(filesRaw, &rawFiles)
+			}
 		}()
 	}
 
 	wg.Wait()
 
 	if tokErr != nil {
-		return nil, fmt.Errorf("unmarshal tokens: %w", tokErr)
+		return nil, fmt.Errorf("decode tokens: %w", tokErr)
 	}
 	if metaErr != nil {
-		return nil, fmt.Errorf("unmarshal metadata: %w", metaErr)
+		return nil, fmt.Errorf("decode metadata: %w", metaErr)
 	}
 	if filesErr != nil {
-		return nil, fmt.Errorf("unmarshal files: %w", filesErr)
+		return nil, fmt.Errorf("decode files: %w", filesErr)
 	}
 
-	// Convert string-keyed maps to typed keys
+	// Convert string-keyed maps to typed keys.
 	for k, sym := range rawMeta {
 		var fileID uint32
 		var line uint16

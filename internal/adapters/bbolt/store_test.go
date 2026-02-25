@@ -1,6 +1,7 @@
 package bbolt
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	bolt "go.etcd.io/bbolt"
 )
 
 // =============================================================================
@@ -774,4 +776,403 @@ func TestStore_Dimensions_EmptyAnalyses(t *testing.T) {
 	// Empty bucket still returns a valid map
 	assert.NotNil(t, loaded)
 	assert.Len(t, loaded, 0)
+}
+
+// =============================================================================
+// L7.2: Binary encoding tests — posting lists, gob, migration, benchmarks
+// =============================================================================
+
+func TestEncodeDecodePostingLists_Roundtrip(t *testing.T) {
+	tests := []struct {
+		name   string
+		tokens map[string][]ports.TokenRef
+	}{
+		{
+			name: "normal",
+			tokens: map[string][]ports.TokenRef{
+				"login":   {{FileID: 1, Line: 10}, {FileID: 2, Line: 25}},
+				"handler": {{FileID: 1, Line: 10}},
+				"session": {{FileID: 3, Line: 5}},
+			},
+		},
+		{
+			name:   "empty map",
+			tokens: map[string][]ports.TokenRef{},
+		},
+		{
+			name: "zero-ref token",
+			tokens: map[string][]ports.TokenRef{
+				"empty_token": {},
+				"has_ref":     {{FileID: 99, Line: 1}},
+			},
+		},
+		{
+			name: "max values",
+			tokens: map[string][]ports.TokenRef{
+				"max": {{FileID: 4294967295, Line: 65535}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			encoded, err := encodePostingLists(tt.tokens)
+			require.NoError(t, err)
+
+			decoded, err := decodePostingLists(encoded)
+			require.NoError(t, err)
+
+			assert.Equal(t, len(tt.tokens), len(decoded))
+			for key, refs := range tt.tokens {
+				assert.Equal(t, refs, decoded[key], "mismatch for token %q", key)
+			}
+		})
+	}
+}
+
+func TestDecodePostingLists_CorruptData(t *testing.T) {
+	// Truncated data should return errors, not panics.
+	_, err := decodePostingLists([]byte{})
+	assert.Error(t, err)
+
+	_, err = decodePostingLists([]byte{0x01, 0x00})
+	assert.Error(t, err)
+
+	// Header says 1 token, but no key data follows.
+	_, err = decodePostingLists([]byte{0x01, 0x00, 0x00, 0x00})
+	assert.Error(t, err)
+}
+
+func TestGobMetadata_Roundtrip(t *testing.T) {
+	original := map[string]*ports.SymbolMeta{
+		"1:10": {
+			Name:      "login",
+			Signature: "login(self, user, password)",
+			Kind:      "function",
+			StartLine: 10,
+			EndLine:   25,
+			Parent:    "AuthHandler",
+			Tags:      []string{"auth", "login"},
+		},
+		"2:25": {
+			Name:      "deploy",
+			Signature: "deploy()",
+			Kind:      "function",
+			StartLine: 25,
+			EndLine:   40,
+		},
+	}
+
+	encoded, err := encodeGob(original)
+	require.NoError(t, err)
+
+	var decoded map[string]*ports.SymbolMeta
+	err = decodeGob(encoded, &decoded)
+	require.NoError(t, err)
+
+	assert.Equal(t, len(original), len(decoded))
+	for k, orig := range original {
+		got := decoded[k]
+		require.NotNil(t, got, "missing key %s", k)
+		assert.Equal(t, orig.Name, got.Name)
+		assert.Equal(t, orig.Signature, got.Signature)
+		assert.Equal(t, orig.Kind, got.Kind)
+		assert.Equal(t, orig.StartLine, got.StartLine)
+		assert.Equal(t, orig.EndLine, got.EndLine)
+		assert.Equal(t, orig.Parent, got.Parent)
+		assert.Equal(t, orig.Tags, got.Tags)
+	}
+}
+
+func TestGobFiles_Roundtrip(t *testing.T) {
+	original := map[string]*ports.FileMeta{
+		"1": {Path: "handler.py", LastModified: 1700000000, Language: "python", Domain: "@auth", Size: 4096},
+		"2": {Path: "views.py", LastModified: 1700000100, Language: "python", Domain: "@api", Size: 2048},
+	}
+
+	encoded, err := encodeGob(original)
+	require.NoError(t, err)
+
+	var decoded map[string]*ports.FileMeta
+	err = decodeGob(encoded, &decoded)
+	require.NoError(t, err)
+
+	assert.Equal(t, len(original), len(decoded))
+	for k, orig := range original {
+		got := decoded[k]
+		require.NotNil(t, got, "missing key %s", k)
+		assert.Equal(t, orig.Path, got.Path)
+		assert.Equal(t, orig.LastModified, got.LastModified)
+		assert.Equal(t, orig.Language, got.Language)
+		assert.Equal(t, orig.Domain, got.Domain)
+		assert.Equal(t, orig.Size, got.Size)
+	}
+}
+
+func TestStore_FormatMigration_V0ToV1(t *testing.T) {
+	// Write v0 JSON blobs directly via bbolt, then LoadIndex (detects v0),
+	// SaveIndex (writes v1), LoadIndex again (detects v1). Verify data matches.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "migrate.db")
+
+	// Write v0 data directly.
+	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	require.NoError(t, err)
+
+	original := makeTestIndex()
+
+	// Build v0 JSON blobs manually (same as the old SaveIndex).
+	type v0JSON struct {
+		Tokens   map[string][]ports.TokenRef       `json:"tokens"`
+		Metadata map[string]*ports.SymbolMeta       `json:"metadata"`
+		Files    map[string]*ports.FileMeta         `json:"files"`
+	}
+	v0 := v0JSON{
+		Tokens:   original.Tokens,
+		Metadata: make(map[string]*ports.SymbolMeta, len(original.Metadata)),
+		Files:    make(map[string]*ports.FileMeta, len(original.Files)),
+	}
+	for ref, sym := range original.Metadata {
+		v0.Metadata[fmt.Sprintf("%d:%d", ref.FileID, ref.Line)] = sym
+	}
+	for fid, fm := range original.Files {
+		v0.Files[fmt.Sprintf("%d", fid)] = fm
+	}
+
+	tokJSON, err := json.Marshal(v0.Tokens)
+	require.NoError(t, err)
+	metaJSON, err := json.Marshal(v0.Metadata)
+	require.NoError(t, err)
+	filesJSON, err := json.Marshal(v0.Files)
+	require.NoError(t, err)
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		proj, err := tx.CreateBucketIfNotExists([]byte("proj-1"))
+		if err != nil {
+			return err
+		}
+		ib, err := proj.CreateBucketIfNotExists(bucketIndex)
+		if err != nil {
+			return err
+		}
+		// No _version key — this is v0.
+		if err := ib.Put(keyTokens, tokJSON); err != nil {
+			return err
+		}
+		if err := ib.Put(keyMetadata, metaJSON); err != nil {
+			return err
+		}
+		return ib.Put(keyFiles, filesJSON)
+	})
+	require.NoError(t, err)
+	db.Close()
+
+	// Open via Store and load v0.
+	store, err := NewStore(path)
+	require.NoError(t, err)
+	defer store.Close()
+
+	loaded, err := store.LoadIndex("proj-1")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.Equal(t, len(original.Tokens), len(loaded.Tokens))
+	assert.Equal(t, len(original.Metadata), len(loaded.Metadata))
+	assert.Equal(t, len(original.Files), len(loaded.Files))
+
+	// Save — this writes v1.
+	err = store.SaveIndex("proj-1", loaded)
+	require.NoError(t, err)
+
+	// Load again — should read v1 binary/gob.
+	loaded2, err := store.LoadIndex("proj-1")
+	require.NoError(t, err)
+	require.NotNil(t, loaded2)
+
+	// Verify data matches original.
+	assert.Equal(t, len(original.Tokens), len(loaded2.Tokens))
+	for tok, refs := range original.Tokens {
+		assert.Equal(t, refs, loaded2.Tokens[tok], "token %q mismatch after migration", tok)
+	}
+	assert.Equal(t, len(original.Metadata), len(loaded2.Metadata))
+	for ref, sym := range original.Metadata {
+		got, ok := loaded2.Metadata[ref]
+		require.True(t, ok, "missing metadata for %v after migration", ref)
+		assert.Equal(t, sym.Name, got.Name)
+		assert.Equal(t, sym.Kind, got.Kind)
+	}
+	assert.Equal(t, len(original.Files), len(loaded2.Files))
+	for fid, fm := range original.Files {
+		got, ok := loaded2.Files[fid]
+		require.True(t, ok, "missing file %d after migration", fid)
+		assert.Equal(t, fm.Path, got.Path)
+	}
+
+	// Verify version key is now v1.
+	err = store.db.View(func(tx *bolt.Tx) error {
+		proj := tx.Bucket([]byte("proj-1"))
+		require.NotNil(t, proj)
+		ib := proj.Bucket(bucketIndex)
+		require.NotNil(t, ib)
+		v := ib.Get(keyVersion)
+		require.NotNil(t, v)
+		assert.Equal(t, []byte{formatV1}, v)
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+func TestStore_LargeIndex_BinaryRoundtrip(t *testing.T) {
+	// 50K tokens, ~500K refs. Verify roundtrip correctness and measure size.
+	store, _ := newTestStore(t)
+
+	idx := &ports.Index{
+		Tokens:   make(map[string][]ports.TokenRef),
+		Metadata: make(map[ports.TokenRef]*ports.SymbolMeta),
+		Files:    make(map[uint32]*ports.FileMeta),
+	}
+
+	// Build 50K tokens with ~10 refs each = ~500K refs total.
+	for i := 0; i < 50000; i++ {
+		tok := fmt.Sprintf("token_%d", i)
+		refs := make([]ports.TokenRef, 10)
+		for j := 0; j < 10; j++ {
+			fid := uint32(i*10 + j)
+			line := uint16((j + 1) * 5)
+			refs[j] = ports.TokenRef{FileID: fid, Line: line}
+			if j == 0 {
+				idx.Metadata[refs[j]] = &ports.SymbolMeta{
+					Name: tok, Kind: "function", Signature: tok + "()",
+					StartLine: line, EndLine: line + 20,
+				}
+				idx.Files[fid] = &ports.FileMeta{
+					Path: fmt.Sprintf("pkg/mod_%d/file_%d.go", i/100, i),
+					Language: "go", LastModified: 1700000000 + int64(i),
+				}
+			}
+		}
+		idx.Tokens[tok] = refs
+	}
+
+	err := store.SaveIndex("proj-large", idx)
+	require.NoError(t, err)
+
+	loaded, err := store.LoadIndex("proj-large")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+
+	assert.Equal(t, len(idx.Tokens), len(loaded.Tokens))
+	assert.Equal(t, len(idx.Metadata), len(loaded.Metadata))
+	assert.Equal(t, len(idx.Files), len(loaded.Files))
+
+	// Spot check a few tokens.
+	for _, tok := range []string{"token_0", "token_25000", "token_49999"} {
+		assert.Equal(t, idx.Tokens[tok], loaded.Tokens[tok], "mismatch for %s", tok)
+	}
+
+	// Measure binary posting list size.
+	encoded, err := encodePostingLists(idx.Tokens)
+	require.NoError(t, err)
+	t.Logf("Large index: %d tokens, %d total refs, binary size=%d bytes (%.1f MB)",
+		len(idx.Tokens), 50000*10, len(encoded), float64(len(encoded))/1024/1024)
+}
+
+// =============================================================================
+// Benchmarks — binary encoding
+// =============================================================================
+
+func benchmarkIndex() *ports.Index {
+	idx := &ports.Index{
+		Tokens:   make(map[string][]ports.TokenRef),
+		Metadata: make(map[ports.TokenRef]*ports.SymbolMeta),
+		Files:    make(map[uint32]*ports.FileMeta),
+	}
+	for i := 0; i < 10000; i++ {
+		tok := fmt.Sprintf("token_%d", i)
+		refs := make([]ports.TokenRef, 10)
+		for j := 0; j < 10; j++ {
+			fid := uint32(i*10 + j)
+			line := uint16((j + 1) * 5)
+			refs[j] = ports.TokenRef{FileID: fid, Line: line}
+		}
+		idx.Tokens[tok] = refs
+		idx.Files[uint32(i)] = &ports.FileMeta{
+			Path: fmt.Sprintf("file_%d.go", i), Language: "go",
+			LastModified: 1700000000 + int64(i),
+		}
+		idx.Metadata[refs[0]] = &ports.SymbolMeta{
+			Name: tok, Kind: "function", Signature: tok + "()",
+			StartLine: refs[0].Line, EndLine: refs[0].Line + 20,
+		}
+	}
+	return idx
+}
+
+func BenchmarkEncodePostingLists(b *testing.B) {
+	idx := benchmarkIndex()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, err := encodePostingLists(idx.Tokens)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkDecodePostingLists(b *testing.B) {
+	idx := benchmarkIndex()
+	data, err := encodePostingLists(idx.Tokens)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, err := decodePostingLists(data)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkStore_SaveIndex_V1(b *testing.B) {
+	dir := b.TempDir()
+	path := filepath.Join(dir, "bench.db")
+	store, err := NewStore(path)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer store.Close()
+
+	idx := benchmarkIndex()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if err := store.SaveIndex("bench", idx); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkStore_LoadIndex_V1(b *testing.B) {
+	dir := b.TempDir()
+	path := filepath.Join(dir, "bench.db")
+	store, err := NewStore(path)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer store.Close()
+
+	idx := benchmarkIndex()
+	if err := store.SaveIndex("bench", idx); err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, err := store.LoadIndex("bench")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
 }

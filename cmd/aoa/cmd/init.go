@@ -121,8 +121,8 @@ func createShims() {
 	}
 
 	shims := map[string]string{
-		"grep":  "#!/usr/bin/env bash\nexec aoa grep \"$@\"\n",
-		"egrep": "#!/usr/bin/env bash\nexec aoa egrep \"$@\"\n",
+		"grep":  "#!/usr/bin/env bash\nexport AOA_SHIM=1\nexec aoa grep \"$@\"\n",
+		"egrep": "#!/usr/bin/env bash\nexport AOA_SHIM=1\nexec aoa egrep \"$@\"\n",
 	}
 
 	wrote := false

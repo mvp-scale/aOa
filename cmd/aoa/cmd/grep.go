@@ -83,7 +83,8 @@ func runGrep(cmd *cobra.Command, args []string) error {
 	// 1. Parse pattern vs file args
 	pattern, fileArgs, multiPattern, err := parseGrepArgs(args, grepPatterns)
 	if err != nil {
-		return err
+		fmt.Fprintf(os.Stderr, "grep: %v\n", err)
+		return grepExit{2}
 	}
 
 	// 2. Resolve color
@@ -179,7 +180,7 @@ func parseGrepArgs(args, ePatterns []string) (pattern string, fileArgs []string,
 		fileArgs = args[1:]
 	}
 	if pattern == "" {
-		return "", nil, false, fmt.Errorf("no search pattern provided")
+		return "", nil, false, fmt.Errorf("no search query provided")
 	}
 	return pattern, fileArgs, multiPattern, nil
 }
@@ -192,8 +193,14 @@ func executeSearch(query string, opts ports.SearchOptions, useColor bool) error 
 	result, err := client.Search(query, opts)
 	if err != nil {
 		if isConnectError(err) {
-			// Daemon not running — fall back to system grep
-			return fallbackSystemGrep(os.Args[1:])
+			if isShimMode() {
+				// Shim mode: fall back to system grep with correct args.
+				// os.Args[2:] skips ["aoa", "grep"] to get the original grep args.
+				return fallbackSystemGrep(os.Args[2:])
+			}
+			// Interactive mode: clear error message to stderr.
+			fmt.Fprintln(os.Stderr, "Error: daemon not running. Start with: aoa daemon start")
+			return grepExit{2}
 		}
 		return err
 	}

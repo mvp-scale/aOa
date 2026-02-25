@@ -199,7 +199,7 @@
 | 2 | Search | aOa | `multi-or` | N hits, M files \| Xms | aOa grep \<q1\> \<q2\> |
 | 3 | Search | aOa | `multi-and` | N hits, M files \| Xms | aOa grep -a \<q1\>,\<q2\> |
 | 4 | Search | aOa | `regex` | N hits, M files \| Xms | aOa egrep \<pattern\> |
-| 5 | Read (ranged, ≥50% savings) | Claude | `aOa guided` | ↓90% (44k → 4k) | file:offset-end |
+| 5 | Read (ranged, >=50% savings) | Claude | `aOa guided` | ↓90% (44k → 4k) | file:offset-end |
 | 6 | Read (ranged, <50% savings) | Claude | `-` | ↓44% (2.5k → 1.4k) | file:offset-end |
 | 7 | Read (whole file) | Claude | `-` | `-` | file |
 | 12 | Bash (aOa command) | *filtered* | — | — | — |
@@ -241,6 +241,70 @@ All flags below are implemented and tested:
 | Tests passing | 300+ | 315+ |
 | Hook elimination | 0-1 | Optional status line only |
 | Haiku elimination | 0 | Universal atlas |
+
+---
+
+## P0: Critical Bugs (Session 72 -- archived 2026-02-25)
+
+All 7 bugs fixed. Old recon scanner deleted entirely, recon gated behind `aoa recon init`, debug mode implemented, truncation fixed. Clean separation of aoa-pure from recon complete.
+
+| ID | Task | Resolution | Va Detail |
+|:---|:-----|:-----------|:----------|
+| B7 | Remove "recon cached" from pure aOa logs | Old scanner deleted entirely -- zero recon code in lean path | Triple-green |
+| B9 | Recon tab shows install prompt in pure mode | Install prompt only path when recon not enabled | Triple-green |
+| B10 | Gate `warmReconCache()` in `Reindex()` behind recon availability | Superseded -- warmReconCache() deleted entirely | Triple-green |
+| B11 | Gate `updateReconForFile` in file watcher behind recon availability | Superseded -- updateReconForFile() deleted entirely | Triple-green |
+| B14 | Remove truncation on debrief text -- assistant and thinking | 500-char truncation removed from user input text | Triple-green |
+| B15 | Fix `BuildFileSymbols` called for entire index on every file change | Superseded -- BuildFileSymbols calls deleted with old scanner | Triple-green |
+| B17 | Add debug mode (`AOA_DEBUG=1`) -- log all runtime events | AOA_DEBUG=1 enables timestamped debug logging at all key event points | Triple-green |
+
+---
+
+## L3.15: GNU grep native parity (Session 72 -- archived 2026-02-25)
+
+Three-route architecture: file args -> `grepFiles()`, stdin pipe -> `grepStdin()`, neither -> daemon index search -> fallback `/usr/bin/grep`. 22 native flags covering 100% of observed AI agent usage.
+
+**Validation**: 135 automated parity tests across two suites:
+- `test/migration/grep_parity_test.go` (77 tests): internal search engine vs fixture index -- flags, combinations, edge cases, coverage matrix
+- `test/migration/unix_grep_parity_test.go` (58 tests): CLI output format vs `/usr/bin/grep` -- exit codes, stdin/file/index routing, real-world agent invocations (Claude, Gemini), snapshots
+
+**Files**: `cmd/aoa/cmd/grep.go`, `egrep.go`, `tty.go`, `grep_native.go`, `grep_fallback.go`, `grep_exit.go`, `output.go`
+
+---
+
+## L6.8 + L6.9: npm packages (Session 72 -- archived 2026-02-25)
+
+10 npm packages: 2 wrappers + 8 platform-specific. esbuild/turbo pattern with JS postinstall shim. Published as `@mvpscale/aoa` and `@mvpscale/aoa-recon` v0.1.7 (2026-02-22).
+
+**Files**: `npm/aoa/`, `npm/aoa-recon/`, 8x `npm/aoa-{platform}/`
+
+---
+
+## L6.10: CI/Release (Session 72 -- archived 2026-02-25)
+
+Release workflow: 8 matrix jobs (2 binaries x 4 platforms), GitHub release, npm publish. 5 successful releases (v0.1.3-v0.1.7).
+
+**Files**: `.github/workflows/release.yml`
+
+---
+
+## L2.1: Wire file watcher (Session 72 -- archived 2026-02-25)
+
+`Watch()` in app.go, `onFileChanged()` handles add/modify/delete, `Rebuild()` on SearchEngine. 13 tests: 4 app (new/modify/delete/unsupported) + 6 adapter (detect change/new/delete, ignore non-code, reindex latency, stop cleanup) + 3 integration (new file auto-reindex, modify auto-reindex, delete auto-reindex). Full daemon -> fsnotify -> parse -> index -> search pipeline. Poll-based assertions (up to 3s) avoid flaky timing.
+
+**Files**: `internal/domain/index/search.go`, `internal/app/app.go`, `internal/app/watcher.go`, `internal/domain/index/rebuild_test.go`, `internal/app/watcher_test.go`, `test/integration/cli_test.go`
+
+---
+
+## L7.2: Database storage optimization (Session 72 -- archived 2026-02-25)
+
+Replaced JSON serialization with binary posting lists + gob for the bbolt search index. Format versioning (`_version` key): v0=JSON (legacy), v1=binary/gob. `SaveIndex` always writes v1. `LoadIndex` detects version and branches. Lazy v0->v1 migration -- first load reads v0, next save writes v1, all subsequent loads use fast binary path.
+
+**Results**: 50K tokens / 500K refs encodes to 3.7 MB binary (vs ~75 MB JSON = ~20x smaller). Parallel decode preserved. All 25 bbolt tests pass.
+
+**Key change**: TokenRefs encoded as little-endian uint32(FileID) + uint16(Line) = 6 bytes vs `{"FileID":1234,"Line":56}` = 25 bytes JSON.
+
+**Files**: `internal/adapters/bbolt/encoding.go`, `internal/adapters/bbolt/store.go`, `internal/adapters/bbolt/store_test.go`
 
 ---
 

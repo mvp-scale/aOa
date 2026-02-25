@@ -6,6 +6,12 @@
 
 ---
 
+## Superseded Tasks
+
+| ID | Task | Original Layer | Why Superseded | Date |
+|:---|:-----|:---------------|:---------------|:-----|
+| L4.2 | Grammar CLI download (`aoa grammar install`) | L4 Distribution | G2 split made dynamic download irrelevant -- `aoa-recon` compiles in all 509 grammars via go-sitter-forest. CLI `list/info/path` commands still work but `install` download is dead code. | 2026-02-25 |
+
 ## Deferred Research
 
 | Item | Context | When to revisit |

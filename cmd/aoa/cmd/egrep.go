@@ -78,7 +78,8 @@ func runEgrep(cmd *cobra.Command, args []string) error {
 	// 1. Parse pattern vs file args
 	pattern, fileArgs, _, err := parseGrepArgs(args, egrepPatterns)
 	if err != nil {
-		return err
+		fmt.Fprintf(os.Stderr, "egrep: %v\n", err)
+		return grepExit{2}
 	}
 
 	// 2. Resolve color
@@ -157,7 +158,11 @@ func runEgrepIndex(pattern string, useColor bool) error {
 	result, err := client.Search(pattern, opts)
 	if err != nil {
 		if isConnectError(err) {
-			return fallbackSystemGrep(os.Args[1:])
+			if isShimMode() {
+				return fallbackSystemGrep(os.Args[2:])
+			}
+			fmt.Fprintln(os.Stderr, "Error: daemon not running. Start with: aoa daemon start")
+			return grepExit{2}
 		}
 		return err
 	}

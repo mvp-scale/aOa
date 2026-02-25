@@ -1,14 +1,12 @@
 # Index
 
-> **Updated**: 2026-02-25 (Session 71)
+> **Updated**: 2026-02-25 (Session 72)
 
 ## Active Layer
 
-**L5** (Dimensional Analysis) -- YAML rework complete. Universal concept layer (15 concepts, 509 languages), declarative structural blocks, lang_map eliminated. L5.16-L5.19 now green. L5.7/L5.8 still need rules for empty dimensions. Walker expression_list fix shipped. L7 deferred.
+**L5** (Dimensional Analysis) -- YAML rework complete. Universal concept layer (15 concepts, 509 languages), declarative structural blocks, lang_map eliminated. L5.7/8/16-19 all green with per-rule validation gaps. L5.10/11 not started (dimension scores + query support). Walker expression_list fix shipped. L7 deferred.
 
-**P0** (Critical Bugs) -- All 7 bugs triple-green. Old recon scanner deleted entirely, recon gated behind `aoa recon init`, debug mode implemented, truncation fixed. Clean separation of aoa-pure from recon complete.
-
-**G0** (Speed) -- Two critical violations found and fixed in Session 71. Regex search now uses trigram extraction (5s->8ms). Symbol search gated on metadata presence (186ms->4us). Full gauntlet all sub-25ms.
+**G0** (Speed) -- Two critical violations found and fixed in Session 71. Regex search now uses trigram extraction (5s->8ms). Symbol search gated on metadata presence (186ms->4us). Full gauntlet all sub-25ms. 22-shape automated regression suite (`test/gauntlet_test.go`) with benchstat baselines prevents future regressions. Session 72: L7.2 binary encoding shipped and archived (964MB->~50MB bbolt, 28.7s->sub-second load, 20x smaller token storage). AOA_SHIM=1 env var added for explicit Unix shim mode, fixing 3 grep/egrep shim bugs. Shim scripts in init.go fixed to include `export AOA_SHIM=1`.
 
 ## Unblocked Tasks
 
@@ -16,12 +14,9 @@ Tasks with no blocking dependencies (or all deps satisfied):
 
 | ID | Cf | St | Va | Task |
 |----|:--:|:--:|:--:|------|
-| L2.1 | 🟢 | 🟢 | 🟡 | Wire file watcher (gap: integration test) |
-| L3.15 | 🟢 | 🟢 | 🟡 | GNU grep native parity (gap: parity test suite) |
-| L4.2 | 🟡 | 🟢 | 🟡 | Grammar CLI (gap: download not implemented) |
 | L4.4 | 🟢 | ⚪ | ⚪ | Installation docs |
-| L5.7 | 🟡 | 🔵 | 🟡 | Performance tier (YAML rework done, 3 dims need rules) |
-| L5.8 | 🟡 | 🔵 | 🟡 | Quality tier (YAML rework done, 2 dims need rules) |
+| L5.7 | 🟢 | 🟢 | 🟡 | Performance tier (gap: per-rule detection validation) |
+| L5.8 | 🟢 | 🟢 | 🟡 | Quality tier (gap: per-rule detection validation) |
 | L5.10 | 🟢 | ⚪ | ⚪ | Dimension scores in search results |
 | L5.11 | 🟢 | ⚪ | ⚪ | Dimension query support |
 | L5.12 | 🟢 | 🟢 | 🟡 | Recon tab (gap: bitmask upgrade) |
@@ -31,22 +26,15 @@ Tasks with no blocking dependencies (or all deps satisfied):
 | L5.16 | 🟢 | 🟢 | 🟡 | Security expansion (YAML rework complete, per-rule validation gap) |
 | L5.17 | 🟢 | 🟢 | 🟡 | Architecture expansion (YAML rework complete, per-rule validation gap) |
 | L5.18 | 🟢 | 🟢 | 🟡 | Observability expansion (YAML rework complete, per-rule validation gap) |
-| L5.19 | 🟢 | 🟢 | 🟡 | Compliance tier (YAML rework complete, per-rule validation gap) |
+| L5.19 | 🟢 | 🟢 | 🟡 | Compliance tier (pivoted/superseded, absorbed into security) |
 | L6.7 | 🟢 | 🟢 | 🟡 | Recon install prompt (gap: browser-only) |
 | L7.1 | 🟢 | 🟢 | 🟡 | Startup progress (gap: timing test) |
-| L7.2 | 🟡 | ⚪ | ⚪ | Database storage optimization |
 | L7.3 | 🟡 | ⚪ | ⚪ | Recon source line editor view |
 | L7.4 | 🟢 | ⚪ | ⚪ | .aoa/ directory restructure |
 
 ## Blocked Tasks
 
-| ID | Blocked By | Task |
-|----|-----------|------|
-| L6.8 | L6.2 (done) | npm package structure -- dep satisfied but unpublished |
-| L6.9 | L6.4 (done), L6.8 | npm recon packages -- blocked on L6.8 publish |
-| L6.10 | L6.8, L6.9 | CI/Release -- blocked on npm packages |
-
-Note: L6.8's dependency L6.2 is complete, so L6.8 is technically unblocked for code work but the validation gap is "not yet published to npm." L6.9 and L6.10 chain from there.
+No tasks are currently blocked.
 
 ## Board Pointers
 
@@ -58,32 +46,31 @@ Line ranges into BOARD.md for targeted reads:
 | Goals | 11-23 | `offset=11, limit=13` |
 | Board Structure | 27-69 | `offset=27, limit=43` |
 | Mission | 73-79 | `offset=73, limit=7` |
-| Board Table | 83-114 | `offset=83, limit=32` |
-| Supporting Detail | 117-416 | `offset=117, limit=300` |
-| - Layer 2 | 119-134 | `offset=119, limit=16` |
-| - Layer 3 | 137-148 | `offset=137, limit=12` |
-| - Layer 4 | 151-172 | `offset=151, limit=22` |
-| - Layer 5 | 175-320 | `offset=175, limit=146` |
-| - Layer 6 | 323-352 | `offset=323, limit=30` |
-| - Layer 7 | 355-416 | `offset=355, limit=62` |
-| What Works | 418-435 | `offset=418, limit=18` |
-| What We're NOT Doing | 437-445 | `offset=437, limit=9` |
-| Key Documents | 446-457 | `offset=446, limit=12` |
-| Quick Reference | 458-470 | `offset=458, limit=13` |
+| Board Table | 83-110 | `offset=83, limit=28` |
+| Supporting Detail | 113-372 | `offset=113, limit=260` |
+| - Layer 2 | 115-131 | `offset=115, limit=17` |
+| - Layer 4 | 133-145 | `offset=133, limit=13` |
+| - Layer 5 | 147-291 | `offset=147, limit=145` |
+| - Layer 6 | 294-308 | `offset=294, limit=15` |
+| - Layer 7 | 310-372 | `offset=310, limit=63` |
+| What Works | 375-392 | `offset=375, limit=18` |
+| What We're NOT Doing | 396-403 | `offset=396, limit=8` |
+| Key Documents | 405-415 | `offset=405, limit=11` |
+| Quick Reference | 417-429 | `offset=417, limit=13` |
 
 ## Layer Status
 
 | Layer | Total | Done | Open | Status |
 |-------|-------|------|------|--------|
-| P0 | 7 | 7 | 0 | Complete -- all bugs fixed, old scanner deleted |
+| P0 | 7 | 7 | 0 | Complete -- archived to COMPLETED.md |
 | L0 | 12 | 12 | 0 | Complete |
 | L1 | 8 | 8 | 0 | Complete |
-| L2 | 7 | 6 | 1 | L2.1 validation gap |
-| L3 | 14 | 13 | 1 | L3.15 validation gap |
-| L4 | 4 | 2 | 2 | L4.2 partial, L4.4 not started |
-| L5 | 19 | 7 | 12 | Active -- YAML rework complete, L5.16-19 green, L5.7/8 need dim rules, L5.10/11 not started |
-| L6 | 10 | 6 | 4 | L6.7 done, npm/CI validation gaps |
-| L7 | 4 | 1 | 3 | Deferred -- startup done, 3 open |
+| L2 | 7 | 7 | 0 | Complete -- all archived to COMPLETED.md |
+| L3 | 15 | 15 | 0 | Complete -- L3.15 archived to COMPLETED.md |
+| L4 | 4 | 2 | 1 | L4.4 not started. L4.2 superseded -> BACKLOG.md |
+| L5 | 19 | 9 | 10 | Active -- L5.7/8/16-19 green (Va gaps), L5.10/11 not started, L5.12-15 green (Va gaps) |
+| L6 | 10 | 10 | 0 | Complete -- L6.8/9/10 archived to COMPLETED.md |
+| L7 | 4 | 2 | 2 | L7.1/L7.2 complete (L7.2 archived), L7.3/L7.4 open |
 
 ## Active Documents
 
@@ -102,4 +89,4 @@ Line ranges into BOARD.md for targeted reads:
 | `.context/COMPLETED.md` | Archived completed work |
 | `.context/BACKLOG.md` | Deferred items |
 | `CLAUDE.md` | Agent instructions, architecture, build commands |
-| `Makefile` | build, build-pure, build-recon, check targets |
+| `Makefile` | build, build-pure, build-recon, check, bench-gauntlet, bench-baseline, bench-compare targets |
