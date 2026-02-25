@@ -24,6 +24,7 @@ const usageTxtFile = "usage.txt"
 // onFileChanged handles a file create/modify/delete event from the watcher.
 // It updates the index in-place and rebuilds the search engine.
 func (a *App) onFileChanged(absPath string) {
+	a.debugf("file-changed %s", absPath)
 	aoadir := filepath.Join(a.ProjectRoot, ".aoa")
 	base := filepath.Base(absPath)
 	dir := filepath.Dir(absPath)
@@ -76,8 +77,9 @@ func (a *App) onFileChanged(absPath string) {
 		if existingID > 0 {
 			a.removeFileFromIndex(existingID)
 			a.Engine.Rebuild()
+			a.Engine.RemoveCacheFile(existingID)
 			if a.Store != nil {
-				_ = a.Store.SaveIndex(a.ProjectID, a.Index)
+				a.markIndexDirty()
 			}
 			// Update recon cache: remove deleted file's contribution
 			a.updateReconOrDimForFile(existingID, relPath)
@@ -145,8 +147,9 @@ func (a *App) onFileChanged(absPath string) {
 			}
 		}
 		a.Engine.Rebuild()
+		a.Engine.UpdateCacheFile(fileID, absPath, info.Size())
 		if a.Store != nil {
-			_ = a.Store.SaveIndex(a.ProjectID, a.Index)
+			a.markIndexDirty()
 		}
 		// Incrementally update recon cache for this file
 		a.updateReconOrDimForFile(fileID, relPath)
@@ -170,8 +173,9 @@ func (a *App) onFileChanged(absPath string) {
 	}
 
 	a.Engine.Rebuild()
+	a.Engine.UpdateCacheFile(fileID, absPath, info.Size())
 	if a.Store != nil {
-		_ = a.Store.SaveIndex(a.ProjectID, a.Index)
+		a.markIndexDirty()
 	}
 
 	// Incrementally update recon cache for this file

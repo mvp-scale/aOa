@@ -209,18 +209,6 @@ func TestGrepSignal_LearnerReceivesSignals(t *testing.T) {
 	assert.Greater(t, state.KeywordHits["auth"], uint32(0),
 		"grep pattern 'auth' should generate keyword signal")
 
-	// Check for Learn activity with "(grep)" suffix
-	found := false
-	for i := 0; i < a.activityCount; i++ {
-		idx := (a.activityHead - 1 - i + 50) % 50
-		e := a.activityRing[idx]
-		if e.Action == "Learn" && e.Source == "aOa" {
-			assert.Contains(t, e.Impact, "(grep)")
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "expected Learn activity with (grep) suffix")
 }
 
 func TestGrepSignal_BigramPromotion(t *testing.T) {
@@ -253,17 +241,4 @@ func TestGrepSessionEvent_LearnerReceivesSignals(t *testing.T) {
 	state := a.Learner.State()
 	assert.Greater(t, state.KeywordHits["auth"], uint32(0),
 		"session Grep event should produce keyword learning signals")
-
-	// Check for Learn activity with "(grep)" suffix
-	found := false
-	for i := 0; i < a.activityCount; i++ {
-		idx := (a.activityHead - 1 - i + 50) % 50
-		e := a.activityRing[idx]
-		if e.Action == "Learn" && e.Source == "aOa" {
-			assert.Contains(t, e.Impact, "(grep)")
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "session Grep event should produce Learn activity with (grep)")
 }

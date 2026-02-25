@@ -1,3 +1,5 @@
+//go:build !lean
+
 package app
 
 import (
@@ -20,7 +22,7 @@ import (
 func (a *App) initDimEngine() {
 	rules, err := analyzer.LoadRulesFromFS(reconfs.FS, "rules")
 	if err != nil {
-		fmt.Printf("[%s] YAML rules failed, using hardcoded fallback: %v\n",
+		fmt.Fprintf(os.Stderr, "[%s] YAML rules failed, using hardcoded fallback: %v\n",
 			time.Now().Format(time.RFC3339), err)
 		rules = analyzer.AllRules()
 	}
@@ -31,11 +33,6 @@ func (a *App) initDimEngine() {
 
 	if tsParser, ok := a.Parser.(*treesitter.Parser); ok && tsParser != nil {
 		a.dimEngine = recon.NewEngine(rules, tsParser)
-		fmt.Printf("[%s] dimensional engine: %d rules loaded (%d text, %d structural, %d composite)\n",
-			time.Now().Format(time.RFC3339), len(rules),
-			countRuleKind(rules, analyzer.RuleText),
-			countRuleKind(rules, analyzer.RuleStructural),
-			countRuleKind(rules, analyzer.RuleComposite))
 	}
 }
 
@@ -49,49 +46,108 @@ func countRuleKind(rules []analyzer.Rule, kind analyzer.RuleKind) int {
 	return n
 }
 
-// warmDimCache runs the dimensional engine over all indexed files and populates
-// the dimensional results cache. Falls back to old scanner if no engine.
-func (a *App) warmDimCache() {
-	if a.dimEngine == nil {
-		return
+// warmDimCache loads persisted dimensional analysis results from bbolt, then
+// incrementally rescans only files that are new or modified since last scan.
+// Persists the final results to bbolt for fast subsequent restarts.
+// Returns (cached, scanned, firstRun) counts for the caller to log.
+// logFn receives progress messages during scanning.
+func (a *App) warmDimCache(logFn func(string)) (int, int, bool) {
+	engine, _ := a.dimEngine.(*recon.Engine)
+	if engine == nil {
+		return 0, 0, false
 	}
 
-	results := make(map[string]*socket.DimensionalFileResult)
+	total := len(a.Index.Files)
+	results := make(map[string]*socket.DimensionalFileResult, total)
+	analyses := make(map[string]*analyzer.FileAnalysis, total)
 
+	// Try to load persisted results from bbolt
+	persisted, err := a.Store.LoadAllDimensions(a.ProjectID)
+	if err != nil {
+		persisted = nil
+	}
+	firstRun := persisted == nil
+
+	if firstRun {
+		logFn(fmt.Sprintf("building dimensional cache (first run) — %d files to scan...", total))
+	}
+
+	scanned := 0
+	cached := 0
+	processed := 0
+	scanStart := time.Now()
 	for fileID, fm := range a.Index.Files {
-		absPath := filepath.Join(a.ProjectRoot, fm.Path)
-		source, err := os.ReadFile(absPath)
-		if err != nil {
+		// Check if persisted result exists and is still fresh
+		if persisted != nil {
+			if fa, ok := persisted[fm.Path]; ok {
+				// ScanTime is in microseconds; LastModified is in seconds
+				if fm.LastModified <= fa.ScanTime/1e6 {
+					results[fm.Path] = convertFileAnalysis(fa, fileID)
+					analyses[fm.Path] = fa
+					cached++
+					processed++
+					continue
+				}
+			}
+		}
+
+		// File is new or stale — try file cache first, fall back to disk
+		source, ok := a.getFileSource(fileID, fm.Path)
+		if !ok {
+			processed++
 			continue
 		}
 
-		isTest := strings.HasSuffix(fm.Path, "_test.go") ||
-			strings.HasSuffix(fm.Path, "_test.py") ||
-			strings.HasSuffix(fm.Path, ".test.js") ||
-			strings.HasSuffix(fm.Path, ".test.ts") ||
-			strings.HasSuffix(fm.Path, ".spec.js") ||
-			strings.HasSuffix(fm.Path, ".spec.ts")
-		isMain := strings.Contains(fm.Path, "cmd/") ||
-			fm.Path == "main.go" ||
-			strings.HasSuffix(fm.Path, "/main.go")
-
-		fa := a.dimEngine.AnalyzeFile(fm.Path, source, isTest, isMain)
+		fa := engine.AnalyzeFile(fm.Path, source, isTestFile(fm.Path), isMainFile(fm.Path))
 		if fa == nil {
+			processed++
 			continue
 		}
 
 		results[fm.Path] = convertFileAnalysis(fa, fileID)
+		analyses[fm.Path] = fa
+		scanned++
+		processed++
+
+		// Report progress every 500 files when actively scanning
+		if scanned > 0 && processed%500 == 0 {
+			logFn(fmt.Sprintf("dim scan: %d/%d files (%.1fs elapsed, %d cached, %d scanned)...",
+				processed, total, time.Since(scanStart).Seconds(), cached, scanned))
+		}
 	}
 
 	a.reconMu.Lock()
 	a.dimCache = results
 	a.dimCacheSet = true
 	a.reconMu.Unlock()
+
+	// Persist to bbolt so subsequent restarts can skip re-scanning
+	if scanned > 0 {
+		_ = a.Store.SaveAllDimensions(a.ProjectID, analyses)
+	}
+
+	return cached, scanned, firstRun
+}
+
+func isTestFile(path string) bool {
+	return strings.HasSuffix(path, "_test.go") ||
+		strings.HasSuffix(path, "_test.py") ||
+		strings.HasSuffix(path, ".test.js") ||
+		strings.HasSuffix(path, ".test.ts") ||
+		strings.HasSuffix(path, ".spec.js") ||
+		strings.HasSuffix(path, ".spec.ts")
+}
+
+func isMainFile(path string) bool {
+	return strings.Contains(path, "cmd/") ||
+		path == "main.go" ||
+		strings.HasSuffix(path, "/main.go")
 }
 
 // updateDimForFile incrementally updates dimensional results for a single file.
 func (a *App) updateDimForFile(fileID uint32, relPath string) {
-	if a.dimEngine == nil {
+	engine, _ := a.dimEngine.(*recon.Engine)
+	if engine == nil {
 		return
 	}
 
@@ -110,31 +166,36 @@ func (a *App) updateDimForFile(fileID uint32, relPath string) {
 		return
 	}
 
-	// Read and analyze the file
-	absPath := filepath.Join(a.ProjectRoot, relPath)
-	source, err := os.ReadFile(absPath)
-	if err != nil {
+	// Read file — try cache first, fall back to disk
+	source, ok := a.getFileSource(fileID, relPath)
+	if !ok {
 		delete(a.dimCache, relPath)
 		return
 	}
 
-	isTest := strings.HasSuffix(relPath, "_test.go") ||
-		strings.HasSuffix(relPath, "_test.py") ||
-		strings.HasSuffix(relPath, ".test.js") ||
-		strings.HasSuffix(relPath, ".test.ts") ||
-		strings.HasSuffix(relPath, ".spec.js") ||
-		strings.HasSuffix(relPath, ".spec.ts")
-	isMain := strings.Contains(relPath, "cmd/") ||
-		relPath == "main.go" ||
-		strings.HasSuffix(relPath, "/main.go")
-
-	fa := a.dimEngine.AnalyzeFile(relPath, source, isTest, isMain)
+	fa := engine.AnalyzeFile(relPath, source, isTestFile(relPath), isMainFile(relPath))
 	if fa == nil {
 		delete(a.dimCache, relPath)
 		return
 	}
 
 	a.dimCache[relPath] = convertFileAnalysis(fa, fileID)
+}
+
+// getFileSource returns file content, checking the file cache first and falling
+// back to os.ReadFile. Returns nil, false if the file cannot be read.
+func (a *App) getFileSource(fileID uint32, relPath string) ([]byte, bool) {
+	if cache := a.Engine.Cache(); cache != nil {
+		if content, ok := cache.GetContent(fileID); ok {
+			return content, true
+		}
+	}
+	absPath := filepath.Join(a.ProjectRoot, relPath)
+	source, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, false
+	}
+	return source, true
 }
 
 // convertFileAnalysis converts analyzer.FileAnalysis to socket.DimensionalFileResult.

@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-02-24 (Session 69) | **86% complete.**
-> **Completed work**: See [COMPLETED.md](COMPLETED.md) — Phases 1–8c + L0 + L1 + L2.2–L2.7 + L3 + L4.1/L4.3 + L5.1–L5.6/L5.9 + L6.1–L6.6 (470+ active tests, 32 skipped)
+> **Updated**: 2026-02-25 (Session 71, revalidated) | **89% complete.**
+> **Completed work**: See [COMPLETED.md](COMPLETED.md) — Phases 1–8c + L0 + L1 + L2.2–L2.7 + L3 (incl. L3.15) + L4.1/L4.3 + L5.1–L5.6/L5.9 + L6.1–L6.6/L6.8–L6.10 (470+ active tests, 32 skipped)
 > **Archived boards**: `.context/archived/`
 
 ---
@@ -14,11 +14,11 @@
 
 | Goal | Statement |
 |------|-----------|
-| **G0** | **Speed** — 50-120x faster than Python. Sub-millisecond search, <200ms startup, <50MB memory. |
-| **G1** | **Parity** — Zero behavioral divergence from Python. Test fixtures are the source of truth. |
-| **G2** | **Single Binary** — One `aoa` binary. Zero Docker, zero runtime deps, zero install friction. |
-| **G3** | **Agent-First** — Replace `grep`/`find` transparently for AI agents. Minimize prompt education tax. |
-| **G4** | **Clean Architecture** — Hexagonal. Domain logic is dependency-free. External concerns behind interfaces. |
+| **G0** | **Speed** — 50-120x faster than Python. Sub-ms search, <200ms startup, <50MB memory. No O(n) on hot paths. |
+| **G1** | **Parity** — Zero behavioral divergence from Python. Test fixtures are source of truth. |
+| **G2** | **Two Binaries, Clean Split** — `aoa` works standalone with zero deps. `aoa-recon` is optional; when installed it enhances `aoa` through a defined bridge. `aoa` must never depend on `aoa-recon` being present. |
+| **G3** | **Agent-First** — Drop-in shim for grep/egrep/find. Three Unix modes: direct (`grep pat file`), pipe (`cmd | grep pat`), index (`grep pat` → O(1) daemon). Same flags, same output format, same exit codes. Agents never know it's not GNU grep. |
+| **G4** | **Clean Architecture** — Hexagonal. Domain logic dependency-free. External concerns behind interfaces. No feature entanglement. |
 | **G5** | **Self-Learning** — Adaptive pattern recognition. observe(), autotune, competitive displacement. |
 | **G6** | **Value Proof** — Surface measurable savings. Context runway, tokens saved, sessions extended. |
 
@@ -74,7 +74,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search -- and proves it with measurable savings.
 
-**Current**: Core engine complete (search, learner, dashboard, grep parity). Recon scanning operational with caching and investigation tracking. Two-binary distribution built but not yet published. Dimensional engine scaffolding committed (14 files, 6-tier bitmask, 21 dimensions in dashboard). YAML schema rework in progress per ADR -- declarative structural blocks replacing hardcoded function pointers.
+**Current**: Core engine complete (search, learner, dashboard, grep parity). Recon scanning operational with caching and investigation tracking. Two-binary distribution published to npm (`@mvpscale/aoa` + `@mvpscale/aoa-recon` v0.1.7). Dimensional engine with 5 active tiers (security, performance, quality, architecture, observability), 136 YAML rules across 21 dimensions. CI/release pipeline proven across 5 releases.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -82,31 +82,47 @@
 
 ## Board
 
+### P0: Critical Bugs (fix before any new work)
+
+> See [BUGFIX.md](BUGFIX.md) for full details and pattern analysis.
+
+| Layer | ID | G0 | G1 | G2 | G3 | G4 | G5 | G6 | Dep | Cf | St | Va | Task | Value | Va Detail |
+|:------|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:----|:--:|:--:|:--:|:-----|:------|:----------|
+| **P0** | [B7](#b7) | | | | x | | | | - | 🟢 | 🟢 | 🟢 | Remove "recon cached" from pure aOa logs | Pure mode must not mention recon | Old scanner deleted entirely -- zero recon code in lean path |
+| **P0** | [B9](#b9) | | | | x | | | x | - | 🟢 | 🟢 | 🟢 | Recon tab shows install prompt in pure mode | Users know how to install recon | Install prompt only path when recon not enabled |
+| **P0** | [B10](#b10) | x | | | | x | | | - | 🟢 | 🟢 | 🟢 | Gate `warmReconCache()` in `Reindex()` behind recon availability | Recon scanner runs after reindex even when recon not installed | Superseded -- warmReconCache() deleted entirely |
+| **P0** | [B11](#b11) | x | | | | x | | | - | 🟢 | 🟢 | 🟢 | Gate `updateReconForFile` in file watcher behind recon availability | Old scanner runs on every file change even without recon | Superseded -- updateReconForFile() deleted entirely |
+| **P0** | [B14](#b14) | | | | x | | | x | - | 🟢 | 🟢 | 🟢 | Remove truncation on debrief text — assistant and thinking | Users see full text in debrief tab | 500-char truncation removed from user input text |
+| **P0** | [B15](#b15) | x | | | | x | | | - | 🟢 | 🟢 | 🟢 | Fix `BuildFileSymbols` called for entire index on every file change | Single file edit rebuilds all 4000 file symbols under lock, blocks dashboard | Superseded -- BuildFileSymbols calls deleted with old scanner |
+| **P0** | [B17](#b17) | | | | x | x | | | - | 🟢 | 🟢 | 🟢 | Add debug mode (`AOA_DEBUG=1`) — log all runtime events | No way to diagnose runtime issues; file changes, searches, hangs invisible | AOA_DEBUG=1 enables timestamped debug logging at all key event points |
+
+### Active Board
+
 | Layer | ID | G0 | G1 | G2 | G3 | G4 | G5 | G6 | Dep | Cf | St | Va | Task | Value | Va Detail |
 |:------|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:----|:--:|:--:|:--:|:-----|:------|:----------|
 | **L0** | | | | | | | | | | | | | *All 12 tasks complete — see COMPLETED.md* | | |
 | **L1** | | | | | | | | | | | | | *All 8 tasks complete — see COMPLETED.md* | | |
-| [L2](#layer-2) | [L2.1](#l21) | x | | | | x | x | | - | 🟢 | 🟢 | 🟡 | Wire file watcher — `Watch()` in app.go, change→reparse→reindex | Dynamic re-indexing without restart | Unit: 5 tests. **Gap**: no integration test through fsnotify event pipeline |
+| [L2](#layer-2) | [L2.1](#l21) | x | | | | x | x | | - | 🟢 | 🟢 | 🟡 | Wire file watcher — `Watch()` in app.go, change→reparse→reindex | Dynamic re-indexing without restart | Unit: 10 tests (4 app + 6 adapter). **Gap**: no integration test through fsnotify event pipeline |
 | **L3** | | | | | | | | | | | | | *All tasks complete — see COMPLETED.md* | | |
-| [L3](#layer-3) | [L3.15](#l315) | | x | | x | | | | - | 🟢 | 🟢 | 🟡 | GNU grep native parity — 3 modes, 22 flags, stdin/files/index routing | Drop-in grep replacement for AI agents | Smoke tests pass. **Gap**: no automated parity test suite |
-| [L4](#layer-4) | [L4.2](#l42) | | | x | | | | | L4.1 | 🟡 | 🟢 | 🟡 | Grammar CLI + build CI — `aoa grammar list/install/info` | Easy grammar distribution | CLI works. **Gap**: actual download not implemented |
+| [L3](#layer-3) | [L3.15](#l315) | | x | | x | | | | - | 🟢 | 🟢 | 🟢 | GNU grep native parity — 3 modes, 22 flags, stdin/files/index routing | Drop-in grep replacement for AI agents | 135 parity tests (77 internal + 58 Unix). Revalidated 2026-02-25 |
+| [L4](#layer-4) | [L4.2](#l42) | | | x | | | | | L4.1 | 🟡 | 🟢 | 🟡 | Grammar CLI + build CI — `aoa grammar list/install/info` | Easy grammar distribution | CLI works. **Pivoted**: download irrelevant after G2 split — aoa-recon compiles in all 509 grammars. Revalidated 2026-02-25 |
 | [L4](#layer-4) | [L4.4](#l44) | | | x | x | | | | L4.3 | 🟢 | ⚪ | ⚪ | Installation docs — `go install` or download binary | Friction-free onboarding | New user installs and runs in <2 minutes |
-| [L5](#layer-5) | [L5.7](#l57) | | | | | | | | L5.1 | 🟡 | 🔵 | 🟡 | Performance tier — YAML rework done, universal concepts; add concurrency, query patterns, memory dims | Second tier coverage | 1/4 dims have detectors. **Gap**: 3 dimensions need rules |
-| [L5](#layer-5) | [L5.8](#l58) | | | | | | | | L5.1 | 🟡 | 🔵 | 🟡 | Quality tier — YAML rework done, universal concepts; add dead code, conventions dims | Third tier coverage | 3 detectors across 2/4 dims. **Gap**: 2 dimensions need rules |
+| [L5](#layer-5) | [L5.7](#l57) | | | | | | | | L5.1 | 🟢 | 🟢 | 🟡 | Performance tier — 26 rules across 5 dimensions (resources, concurrency, query, memory, hot_path) | Second tier coverage | All 5 dims wired in dashboard. **Gap**: per-rule detection validation. Revalidated 2026-02-25 |
+| [L5](#layer-5) | [L5.8](#l58) | | | | | | | | L5.1 | 🟢 | 🟢 | 🟡 | Quality tier — 24 rules across 4 dimensions (errors, complexity, dead_code, conventions) | Third tier coverage | All 4 dims wired in dashboard. **Gap**: per-rule detection validation. Revalidated 2026-02-25 |
 | [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
 | [L5](#layer-5) | [L5.11](#l511) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Dimension query support — `--dimension=security --risk=high` | Filter by dimension | CLI filters by tier and severity |
 | [L5](#layer-5) | [L5.12](#l512) | | | | | | | x | L5.9 | 🟢 | 🟢 | 🟡 | Recon tab — dimensional engine with interim scanner fallback | Dashboard dimensional view | API works. **Gap**: dashboard UI upgrade for bitmask scores |
 | [L5](#layer-5) | [L5.13](#l513) | | | | | | | x | L5.12 | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul — 5 focus modes, tier redesign, code toggle, copy prompt | Recon tab is actionable, not just a finding list | **Gap**: browser-only validation |
 | [L5](#layer-5) | [L5.14](#l514) | x | | | | x | | | L5.12 | 🟢 | 🟢 | 🟡 | Recon cache + incremental updates — pre-compute at startup, SubtractFile/AddFile on file change | Zero per-poll scan cost, instant API response | **Gap**: no unit tests for incremental path |
 | [L5](#layer-5) | [L5.15](#l515) | | | | | | | x | L5.14 | 🟢 | 🟢 | 🟡 | Investigation tracking — per-file investigated status, persistence, auto-expiry | Users can mark files as reviewed, auto-clears on change | **Gap**: no unit tests |
-| [L5](#layer-5) | [L5.16](#l516) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Security dimension expansion — YAML rework complete, universal concept layer, 86 rules loaded | Complete 5-dimension security tier | All rules load + pass. **Gap**: per-rule detection validation |
+| [L5](#layer-5) | [L5.16](#l516) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Security dimension expansion — YAML rework complete, universal concept layer, 37 rules loaded | Complete 5-dimension security tier | All rules load + pass. **Gap**: per-rule detection validation. Revalidated 2026-02-25 |
 | [L5](#layer-5) | [L5.17](#l517) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Architecture dimension expansion — YAML rework complete, universal concept layer | Complete 3-dimension architecture tier | All rules load + pass. **Gap**: per-rule detection validation |
 | [L5](#layer-5) | [L5.18](#l518) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Observability dimension expansion — YAML rework complete, universal concept layer | Complete 2-dimension observability tier | All rules load + pass. **Gap**: per-rule detection validation |
-| [L5](#layer-5) | [L5.19](#l519) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Compliance tier — YAML rework complete, universal concept layer | Compliance coverage | All rules load + pass. **Gap**: per-rule detection validation |
+| [L5](#layer-5) | [L5.19](#l519) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | ~~Compliance tier~~ — **Pivoted**: tier removed, concepts absorbed into security tier (config dimension). `TierReserved` preserves bitmask slot. No YAML file. | ~~Compliance coverage~~ | Superseded. Revalidated 2026-02-25 |
 | [L6](#layer-6) | [L6.7](#l67) | | | | | | | x | L6.6 | 🟢 | 🟢 | 🟡 | Dashboard Recon tab install prompt — "npm install aoa-recon" when not detected | Users know how to unlock Recon | **Gap**: browser-only validation |
-| [L6](#layer-6) | [L6.8](#l68) | | | x | | | | | L6.2 | 🟢 | 🟢 | 🟡 | npm package structure — wrapper + platform packages + JS shims | Zero-friction install via npm | **Gap**: not yet published to npm |
-| [L6](#layer-6) | [L6.9](#l69) | | | x | | | | | L6.4, L6.8 | 🟢 | 🟢 | 🟡 | npm recon package structure — wrapper + platform packages | Zero-friction recon install | **Gap**: not yet published to npm |
-| [L6](#layer-6) | [L6.10](#l610) | | | x | | | | | L6.8, L6.9 | 🟡 | 🟢 | 🟡 | CI/Release — workflow builds both binaries, publishes to npm | Tag → build → publish, fully automated | **Gap**: workflow untested end-to-end |
+| [L6](#layer-6) | [L6.8](#l68) | | | x | | | | | L6.2 | 🟢 | 🟢 | 🟢 | npm package structure — wrapper + platform packages + JS shims | Zero-friction install via npm | Published: `@mvpscale/aoa` v0.1.7 (2026-02-22). Revalidated 2026-02-25 |
+| [L6](#layer-6) | [L6.9](#l69) | | | x | | | | | L6.4, L6.8 | 🟢 | 🟢 | 🟢 | npm recon package structure — wrapper + platform packages | Zero-friction recon install | Published: `@mvpscale/aoa-recon` v0.1.7 (2026-02-22). Revalidated 2026-02-25 |
+| [L6](#layer-6) | [L6.10](#l610) | | | x | | | | | L6.8, L6.9 | 🟢 | 🟢 | 🟢 | CI/Release — workflow builds both binaries, publishes to npm | Tag → build → publish, fully automated | 5 successful releases (v0.1.3–v0.1.7). Revalidated 2026-02-25 |
 | [L7](#layer-7) | [L7.1](#l71) | x | | | x | | | x | - | 🟢 | 🟢 | 🟡 | Startup progress feedback — deferred loading, async cache warming incl. recon | Daemon starts in <1s, caches warm in background | **Gap**: no automated startup time test |
 | [L7](#layer-7) | [L7.2](#l72) | x | | | | x | | | - | 🟡 | ⚪ | ⚪ | Database storage optimization — replace JSON blobs with binary encoding | 964MB bbolt, 28.7s load. Target <3s | Profile load time; compare encoding formats |
 | [L7](#layer-7) | [L7.3](#l73) | | | | | | | x | - | 🟡 | ⚪ | ⚪ | Recon source line editor view — file-level source display | All flagged lines in context, not one-at-a-time | Design conversation needed on layout |
@@ -126,7 +142,7 @@
 
 **Wire file watcher** — 🟢 Complete, 🟡 Validation gap
 
-`Rebuild()` on `SearchEngine`. `onFileChanged()` handles add/modify/delete. 5 unit tests (rebuild, new file, modify, delete, unsupported extension).
+`Rebuild()` on `SearchEngine`. `onFileChanged()` handles add/modify/delete. 10 unit tests: 4 in app (new/modify/delete/unsupported) + 6 in adapter (detect change/new/delete, ignore non-code, reindex latency, stop cleanup). Revalidated 2026-02-25.
 
 **Gap**: No integration test through fsnotify event pipeline — needs `TestDaemon_FileWatcher_ReindexOnEdit`.
 
@@ -138,11 +154,13 @@
 
 #### L3.15
 
-**GNU grep native parity** — 🟢 Complete, 🟡 Needs automated parity suite
+**GNU grep native parity** — 🟢🟢🟢 Complete + validated. Revalidated 2026-02-25.
 
 Three-route architecture: file args → `grepFiles()`, stdin pipe → `grepStdin()`, neither → daemon index search → fallback `/usr/bin/grep`. 22 native flags covering 100% of observed AI agent usage.
 
-**Gap**: Smoke tests pass but no automated parity test suite comparing output against `/usr/bin/grep`.
+**Validation**: 135 automated parity tests across two suites:
+- `test/migration/grep_parity_test.go` (77 tests): internal search engine vs fixture index — flags, combinations, edge cases, coverage matrix
+- `test/migration/unix_grep_parity_test.go` (58 tests): CLI output format vs `/usr/bin/grep` — exit codes, stdin/file/index routing, real-world agent invocations (Claude, Gemini), snapshots
 
 **Files**: `cmd/aoa/cmd/grep.go`, `egrep.go`, `tty.go`, `grep_native.go`, `grep_fallback.go`, `grep_exit.go`, `output.go`
 
@@ -154,11 +172,11 @@ Three-route architecture: file args → `grepFiles()`, stdin pipe → `grepStdin
 
 #### L4.2
 
-**Grammar CLI + Build CI** — 🟢 Code complete, 🟡 Download not implemented
+**Grammar CLI + Build CI** — 🟢 Code complete, 🟡 Pivoted. Revalidated 2026-02-25.
 
 `aoa grammar list/info/install/path` commands work. 57-grammar manifest embedded. CI workflow defined.
 
-**Gap**: `aoa grammar install` doesn't download from GitHub Releases — shows what would be installed.
+**Pivoted**: After G2 split, `aoa-recon` compiles in all 509 grammars via go-sitter-forest. Dynamic grammar download is no longer needed — users install `aoa-recon` and get everything. The `aoa grammar install` download TODO is effectively dead code. Consider moving to backlog.
 
 **Files**: `cmd/aoa/cmd/grammar.go`, `internal/adapters/treesitter/manifest.go`, `grammars/manifest.json`, `.github/workflows/build-grammars.yml`
 
@@ -176,40 +194,41 @@ Two install paths: `go install` (from source) vs binary download (lean + grammar
 
 **Layer 5: Dimensional Analysis (Bitmask engine, Recon tab)**
 
-> Early warning system. 6 tiers, 21 dimensions. Dimensional engine scaffolding committed (14 files, `4d6dd8a`): types, bitmask DTOs, app lifecycle, dashboard UI for all 21 dimensions + compliance tier, 86 YAML rules with loader. **YAML rework complete**: Universal concept layer (15 concepts, 509 languages), declarative `structural:` blocks, `lang_map` eliminated from all rules. Performance/Quality tiers still need rules for empty dimensions.
+> Early warning system. 5 active tiers, 21 dimensions. Dimensional engine with 136 YAML rules across all tiers. **YAML rework complete**: Universal concept layer (15 concepts, 509 languages), declarative `structural:` blocks, `lang_map` eliminated from all rules. Performance tier (26 rules, 5 dims) and Quality tier (24 rules, 4 dims) fully populated. Compliance tier pivoted — concepts absorbed into security. Revalidated 2026-02-25.
 >
 > **ADR**: [Declarative YAML Rules](../decisions/2026-02-23-declarative-yaml-rules.md) -- spec (rework done)
 > **Research**: [Bitmask analysis](../docs/research/bitmask-dimensional-analysis.md) | [AST vs LSP](../docs/research/asv-vs-lsp.md) | [Dimensional taxonomy](details/2026-02-23-dimensional-taxonomy.md)
 
 #### L5.7
 
-**Performance tier** — 🔵 In progress, 🟡 Partial (YAML structure fixed, dimensions incomplete)
+**Performance tier** — 🟢 Complete, 🟡 Per-rule detection validation gap. Revalidated 2026-02-25.
 
-1 of 4 dimensions has active rules. YAML rework done (declarative structural blocks, no lang_map, universal concepts). Dashboard wires 2 of 4 dimensions (resources, concurrency).
+26 rules across 5 dimensions, all wired in dashboard. YAML rework done (declarative structural blocks, no lang_map, universal concepts).
 
-**Active**: `defer_in_loop`, `open_without_close` (resources dimension)
+**Dimensions** (all complete):
+- **Resources** (5 rules): `defer_in_loop`, `open_without_close`, etc.
+- **Concurrency** (5 rules): `lock_in_loop`, `goroutine_in_loop`, `channel_in_loop`, `goroutine_leak`, `sync_primitive_usage`
+- **Query** (5 rules): `query_in_loop`, `exec_in_loop`, `unbounded_query`, `db_without_transaction`, `raw_sql_string`
+- **Memory** (5 rules): `allocation_in_loop`, `append_in_loop`, `string_concat_in_loop`, `large_buffer_alloc`, `regex_compile_in_loop`
+- **Hot Path** (6 rules): `reflection_call`, `json_marshal_in_loop`, `fmt_sprint_in_loop`, `sleep_in_handler`, `sort_in_loop`, `map_lookup_in_loop`
 
-**Missing dimensions** (need new rules written):
-- **Concurrency** — dashboard dimension exists but no rules (race conditions, mutex misuse, goroutine leaks)
-- **Query Patterns** — not in dashboard (N+1 queries, unbounded result sets, missing pagination)
-- **Memory** — not in dashboard (unbounded allocations, large copies, string concatenation in loops)
+**Gap**: No per-rule detection validation tests (rules load and parse, but individual detection accuracy untested).
 
 **Files**: `recon/rules/performance.yaml`, `internal/adapters/web/static/app.js` (RECON_TIERS)
 
 #### L5.8
 
-**Quality tier** — 🔵 In progress, 🟡 Partial (YAML structure fixed, dimensions incomplete)
+**Quality tier** — 🟢 Complete, 🟡 Per-rule detection validation gap. Revalidated 2026-02-25.
 
-3 rules across 2 of 4 dimensions. YAML rework done (declarative structural blocks, no lang_map, universal concepts). Dashboard wires 2 of 4 dimensions (complexity, errors).
+24 rules across 4 dimensions, all wired in dashboard. YAML rework done (declarative structural blocks, no lang_map, universal concepts).
 
-**Active**:
-- `ignored_error` (errors -- `_ = func()` pattern, severity: warning, `skip_langs` for non-Go)
-- `panic_in_lib` (errors -- panic in non-main package, severity: warning)
-- `long_function` (complexity -- functions >100 lines, severity: info)
+**Dimensions** (all complete):
+- **Errors** (7 rules): `ignored_error`, `panic_in_lib`, `unchecked_type_assertion`, `error_not_checked`, `empty_catch_block`, `error_without_context`, `deprecated_stdlib`
+- **Complexity** (6 rules): `long_function`, `nesting_depth`, `too_many_params`, `large_switch`, `god_function`, `wide_function`
+- **Dead Code** (5 rules): `unreachable_code`, `commented_out_code`, `unused_import`, `empty_function_body`, `disabled_test`
+- **Conventions** (6 rules): `exported_no_doc`, `init_side_effects`, `magic_number`, `boolean_param`, `deeply_nested_callback`, `inconsistent_receiver`
 
-**Missing dimensions** (need new rules written):
-- **Dead Code** -- not in dashboard (unreachable code, unused exports, dead branches)
-- **Conventions** -- not in dashboard (naming violations, inconsistent patterns, mutable state)
+**Gap**: No per-rule detection validation tests (rules load and parse, but individual detection accuracy untested).
 
 #### L5.10
 
@@ -251,11 +270,11 @@ Interim pattern scanner with 10 detectors + `long_function`. `GET /api/recon` re
 
 **Recon cache + incremental updates** — 🟢 Complete, 🟡 No unit tests
 
-Pre-compute scan at startup via `warmReconCache()`. Incremental updates via `SubtractFile`/`ScanFile`/`AddFile` on file watcher events. `CachedReconResult()` serves from memory (RWMutex-protected).
+Old warmReconCache/updateReconForFile deleted in Session 71 (clean separation). Recon now gated behind `aoa recon init` + `.aoa/recon.enabled` marker. When enabled, ReconBridge handles scanning via separate aoa-recon binary.
 
-**Gap**: No unit tests for incremental path (SubtractFile/AddFile correctness).
+**Gap**: No unit tests for incremental path.
 
-**Files**: `internal/app/app.go`, `internal/adapters/recon/scanner.go`, `internal/app/watcher.go`
+**Files**: `internal/app/recon_bridge.go`, `internal/adapters/web/recon.go`, `internal/app/watcher.go`
 
 #### L5.15
 
@@ -269,12 +288,12 @@ Per-file investigated status with persistence (`.aoa/recon-investigated.json`), 
 
 #### L5.16
 
-**Security dimension expansion** — 🟢 YAML rework complete, 🟡 Per-rule validation gap
+**Security dimension expansion** — 🟢 YAML rework complete, 🟡 Per-rule validation gap. Revalidated 2026-02-25.
 
-86 rules across all 5 security dimensions. Universal concept layer eliminates per-rule `lang_map`. All rules use declarative `structural:` blocks per ADR. LangMap removed from Rule struct, yamlRule, convertRule(), and all hardcoded fallback rules.
+37 rules across all 5 security dimensions. Universal concept layer eliminates per-rule `lang_map`. All rules use declarative `structural:` blocks per ADR. LangMap removed from Rule struct, yamlRule, convertRule(), and all hardcoded fallback rules.
 
 **Complete**:
-- `security.yaml` -- 86 rules with proper `structural:` blocks, no `lang_map`, universal header
+- `security.yaml` -- 37 rules with proper `structural:` blocks, no `lang_map`, universal header
 - `rules_security.go` -- 6 hardcoded fallback rules, LangMap removed
 - `lang_map.go` -- rewritten with `conceptDefaults` (all 509 langs) + `langOverrides` (10 langs)
 - `walker.go` -- simplified `resolveMatchConcept()` to single `Resolve()` call
@@ -310,15 +329,11 @@ Rules across both observability dimensions with declarative `structural:` blocks
 
 #### L5.19
 
-**Compliance tier** — 🟢 YAML rework complete, 🟡 Per-rule validation gap
+**Compliance tier** — **Pivoted / Superseded**. Revalidated 2026-02-25.
 
-New tier. Dashboard RECON_TIERS entry exists (purple). CSS added (`--tier-comp`). Rules across all 3 compliance dimensions with declarative `structural:` blocks. Universal concept layer, no `lang_map`. Universal header.
+Compliance tier was removed from the codebase. `TierReserved` in `types.go` preserves the bitmask slot ("formerly compliance — slot preserved for bitmask compat"). No `compliance.yaml` file exists. Compliance concepts (CVE patterns, licensing, data handling) were absorbed into the security tier's config dimension.
 
-**Complete**: `compliance.yaml` reworked, RECON_TIERS entry, compliance tier CSS, 3 dimensions (cve_patterns, licensing, data_handling).
-
-**Gap**: No per-rule detection validation tests.
-
-**Files**: `recon/rules/compliance.yaml`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`, `internal/adapters/web/static/style.css`
+Dashboard `RECON_TIERS` has 5 active tiers (security, performance, quality, architecture, observability) — compliance is not among them.
 
 ---
 
@@ -338,17 +353,17 @@ New tier. Dashboard RECON_TIERS entry exists (purple). CSS added (`--tier-comp`)
 
 #### L6.8 + L6.9
 
-**npm packages** — 🟢 Structure complete, 🟡 Not yet published
+**npm packages** — 🟢🟢🟢 Published. Revalidated 2026-02-25.
 
-10 npm packages: 2 wrappers + 8 platform-specific. esbuild/turbo pattern with JS postinstall shim.
+10 npm packages: 2 wrappers + 8 platform-specific. esbuild/turbo pattern with JS postinstall shim. Published as `@mvpscale/aoa` and `@mvpscale/aoa-recon` v0.1.7 (2026-02-22).
 
 **Files**: `npm/aoa/`, `npm/aoa-recon/`, 8× `npm/aoa-{platform}/`
 
 #### L6.10
 
-**CI/Release** — 🟢 Workflow defined, 🟡 Untested end-to-end
+**CI/Release** — 🟢🟢🟢 Tested end-to-end. Revalidated 2026-02-25.
 
-Release workflow: 8 matrix jobs (2 binaries × 4 platforms), GitHub release, npm publish.
+Release workflow: 8 matrix jobs (2 binaries × 4 platforms), GitHub release, npm publish. 5 successful releases (v0.1.3–v0.1.7).
 
 **Files**: `.github/workflows/release.yml`
 
@@ -421,7 +436,7 @@ Delete dead `domains/` directory. Add `ensureSubdirs()` at startup. Migration mo
 
 | Component | Notes |
 |-----------|-------|
-| Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, trigram content search (~60µs on 500 files), case-sensitive default (G1). |
+| Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, trigram content search (~60us on 500 files), case-sensitive default (G1). **G0 perf**: regex trigram extraction (5s->8ms), symbol search gated on metadata (186ms->4us). All ops sub-25ms. |
 | Learner (21-step autotune) | 5/5 fixture parity, float64 precision. Do not change decay/prune constants. |
 | Session Prism (Claude JSONL reader) | Defensive parsing, UUID dedup, compound message decomposition. |
 | Tree-sitter parser (509 languages) | go-sitter-forest, behind `ports.Parser` interface, lives in `aoa-recon` binary. |
@@ -432,7 +447,7 @@ Delete dead `domains/` directory. Add `ensureSubdirs()` at startup. Migration mo
 | Dashboard (L1, 5-tab SPA) | 3-file split. Tab-aware polling. Soft glow animations. |
 | Recon cache (L5.14) | Pre-computed at startup, incremental on file change. Zero per-poll cost. |
 | Investigation tracking (L5.15) | Per-file status. Persisted. 1-week auto-expiry. Auto-cleared on change. |
-| File watcher (L2) | `onFileChanged` → re-parse → `Rebuild` → `SaveIndex` → `updateReconForFile` → `clearFileInvestigated`. |
+| File watcher (L2) | `onFileChanged` -> re-parse -> `Rebuild` -> `SaveIndex` -> `clearFileInvestigated`. Recon gated behind `.aoa/recon.enabled`. |
 
 ---
 

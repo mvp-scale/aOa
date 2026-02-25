@@ -1,9 +1,7 @@
 package app
 
 import (
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/domain/learner"
@@ -96,13 +94,4 @@ func (a *App) processGrepSignal(pattern string) {
 	}
 
 	a.Learner.ProcessBigrams(pattern)
-
-	if len(sc.Keywords) > 0 || len(sc.Terms) > 0 || len(sc.Domains) > 0 {
-		a.pushActivity(ActivityEntry{
-			Action:    "Learn",
-			Source:    "aOa",
-			Impact:    fmt.Sprintf("+%d keywords, +%d terms, +%d domains (grep)", len(sc.Keywords), len(sc.Terms), len(sc.Domains)),
-			Timestamp: time.Now().Unix(),
-		})
-	}
 }

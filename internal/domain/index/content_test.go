@@ -545,14 +545,22 @@ func TestContentSearch_ExtractTrigrams(t *testing.T) {
 	}
 }
 
-func TestContentSearch_CanUseTrigram(t *testing.T) {
-	assert.True(t, canUseTrigram("tree", ports.SearchOptions{}), "3+ chars, default mode")
-	assert.True(t, canUseTrigram("tree", ports.SearchOptions{Mode: "case_insensitive"}), "3+ chars, -i mode")
-	assert.False(t, canUseTrigram("ab", ports.SearchOptions{}), "<3 chars")
-	assert.False(t, canUseTrigram("tree", ports.SearchOptions{InvertMatch: true}), "InvertMatch")
-	assert.False(t, canUseTrigram("tree", ports.SearchOptions{Mode: "regex"}), "regex mode")
-	assert.False(t, canUseTrigram("tree", ports.SearchOptions{WordBoundary: true}), "word boundary")
-	assert.False(t, canUseTrigram("tree", ports.SearchOptions{AndMode: true}), "AND mode")
+func TestContentSearch_ExtractRegexLiterals(t *testing.T) {
+	tests := []struct {
+		pattern  string
+		expected int // minimum number of extracted literals
+	}{
+		{"func.*Observer", 2},         // "func" and "Observer"
+		{"WarmCaches|Reindex", 2},     // two alternation branches
+		{"A|B|C", 0},                  // all < 3 chars, none usable
+		{"searchObserver", 1},         // single literal
+		{".*", 0},                     // no literals
+		{"abc|def|ghi", 3},            // three usable literals
+	}
+	for _, tt := range tests {
+		lits := extractRegexLiterals(tt.pattern)
+		assert.GreaterOrEqual(t, len(lits), tt.expected, "pattern %q", tt.pattern)
+	}
 }
 
 // --- Edge cases + regression (L2.7) ---

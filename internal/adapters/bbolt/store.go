@@ -7,6 +7,7 @@ package bbolt
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/corey/aoa/internal/domain/analyzer"
@@ -158,39 +159,65 @@ func (s *Store) LoadIndex(projectID string) (*ports.Index, error) {
 		Files:    make(map[uint32]*ports.FileMeta),
 	}
 
+	// Unmarshal the three blobs concurrently — each writes to its own data,
+	// no shared state between goroutines.
+	var wg sync.WaitGroup
+	var tokErr, metaErr, filesErr error
+	var rawMeta map[string]*ports.SymbolMeta
+	var rawFiles map[string]*ports.FileMeta
+
 	if tokensJSON != nil {
-		if err := json.Unmarshal(tokensJSON, &idx.Tokens); err != nil {
-			return nil, fmt.Errorf("unmarshal tokens: %w", err)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tokErr = json.Unmarshal(tokensJSON, &idx.Tokens)
+		}()
 	}
 
 	if metaJSON != nil {
-		var rawMeta map[string]*ports.SymbolMeta
-		if err := json.Unmarshal(metaJSON, &rawMeta); err != nil {
-			return nil, fmt.Errorf("unmarshal metadata: %w", err)
-		}
-		for k, sym := range rawMeta {
-			var fileID uint32
-			var line uint16
-			if _, err := fmt.Sscanf(k, "%d:%d", &fileID, &line); err != nil {
-				return nil, fmt.Errorf("parse metadata key %q: %w", k, err)
-			}
-			idx.Metadata[ports.TokenRef{FileID: fileID, Line: line}] = sym
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			metaErr = json.Unmarshal(metaJSON, &rawMeta)
+		}()
 	}
 
 	if filesJSON != nil {
-		var rawFiles map[string]*ports.FileMeta
-		if err := json.Unmarshal(filesJSON, &rawFiles); err != nil {
-			return nil, fmt.Errorf("unmarshal files: %w", err)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			filesErr = json.Unmarshal(filesJSON, &rawFiles)
+		}()
+	}
+
+	wg.Wait()
+
+	if tokErr != nil {
+		return nil, fmt.Errorf("unmarshal tokens: %w", tokErr)
+	}
+	if metaErr != nil {
+		return nil, fmt.Errorf("unmarshal metadata: %w", metaErr)
+	}
+	if filesErr != nil {
+		return nil, fmt.Errorf("unmarshal files: %w", filesErr)
+	}
+
+	// Convert string-keyed maps to typed keys
+	for k, sym := range rawMeta {
+		var fileID uint32
+		var line uint16
+		if _, err := fmt.Sscanf(k, "%d:%d", &fileID, &line); err != nil {
+			return nil, fmt.Errorf("parse metadata key %q: %w", k, err)
 		}
-		for k, fm := range rawFiles {
-			var fid uint32
-			if _, err := fmt.Sscanf(k, "%d", &fid); err != nil {
-				return nil, fmt.Errorf("parse file key %q: %w", k, err)
-			}
-			idx.Files[fid] = fm
+		idx.Metadata[ports.TokenRef{FileID: fileID, Line: line}] = sym
+	}
+
+	for k, fm := range rawFiles {
+		var fid uint32
+		if _, err := fmt.Sscanf(k, "%d", &fid); err != nil {
+			return nil, fmt.Errorf("parse file key %q: %w", k, err)
 		}
+		idx.Files[fid] = fm
 	}
 
 	return idx, nil
@@ -255,7 +282,11 @@ func (s *Store) LoadLearnerState(projectID string) (*ports.LearnerState, error) 
 	return &state, nil
 }
 
+// maxSessionRetention is the maximum number of session summaries to keep per project.
+const maxSessionRetention = 200
+
 // SaveSessionSummary persists a session summary for a project.
+// If more than maxSessionRetention sessions exist, the oldest are pruned.
 func (s *Store) SaveSessionSummary(projectID string, summary *ports.SessionSummary) error {
 	if summary == nil {
 		return fmt.Errorf("nil session summary")
@@ -275,7 +306,26 @@ func (s *Store) SaveSessionSummary(projectID string, summary *ports.SessionSumma
 		if err != nil {
 			return err
 		}
-		return sb.Put([]byte(summary.SessionID), data)
+		if err := sb.Put([]byte(summary.SessionID), data); err != nil {
+			return err
+		}
+
+		// Prune oldest sessions beyond retention limit.
+		// bbolt cursors iterate keys in sorted order; Claude session IDs are
+		// chronologically sortable, so earliest keys are the oldest sessions.
+		count := sb.Stats().KeyN
+		if count > maxSessionRetention {
+			excess := count - maxSessionRetention
+			c := sb.Cursor()
+			for k, _ := c.First(); k != nil && excess > 0; k, _ = c.Next() {
+				if err := sb.Delete(k); err != nil {
+					return err
+				}
+				excess--
+			}
+		}
+
+		return nil
 	})
 }
 

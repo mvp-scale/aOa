@@ -58,10 +58,18 @@ coverage:
 	go tool cover -func=coverage.out
 	@rm -f coverage.out
 
-# The local CI: vet + lint + test + verify pure build compiles
+# The local CI: vet + lint + test + verify pure build compiles + size gate
 check: vet lint test build-pure
+	@SIZE=$$(stat --format=%s aoa 2>/dev/null || stat -f%z aoa); \
+	 SIZE_MB=$$((SIZE / 1048576)); \
+	 if [ "$$SIZE" -gt 15728640 ]; then \
+	   echo ""; \
+	   echo "✗ FAIL: lean binary is $${SIZE_MB} MB — max 15 MB"; \
+	   echo "  → A file is missing //go:build !lean (imports CGo/treesitter?)"; \
+	   exit 1; \
+	 fi
 	@echo ""
-	@echo "✓ All checks passed (including pure-build gate)"
+	@echo "✓ All checks passed (including pure-build gate + size gate)"
 
 # Count test status
 status:

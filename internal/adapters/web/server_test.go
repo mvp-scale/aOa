@@ -103,10 +103,6 @@ func (m *mockQueries) DimensionalResults() map[string]*socket.DimensionalFileRes
 	return nil
 }
 
-func (m *mockQueries) CachedReconResult() (interface{}, int64) {
-	return nil, 0
-}
-
 func (m *mockQueries) InvestigatedFiles() []string {
 	return nil
 }

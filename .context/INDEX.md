@@ -1,10 +1,14 @@
 # Index
 
-> **Updated**: 2026-02-24 (Session 69)
+> **Updated**: 2026-02-25 (Session 71)
 
 ## Active Layer
 
-**L5** (Dimensional Analysis) -- YAML rework complete. Universal concept layer (15 concepts, 509 languages), declarative structural blocks, lang_map eliminated. L5.16-L5.19 now green. L5.7/L5.8 still need rules for empty dimensions. L7 deferred.
+**L5** (Dimensional Analysis) -- YAML rework complete. Universal concept layer (15 concepts, 509 languages), declarative structural blocks, lang_map eliminated. L5.16-L5.19 now green. L5.7/L5.8 still need rules for empty dimensions. Walker expression_list fix shipped. L7 deferred.
+
+**P0** (Critical Bugs) -- All 7 bugs triple-green. Old recon scanner deleted entirely, recon gated behind `aoa recon init`, debug mode implemented, truncation fixed. Clean separation of aoa-pure from recon complete.
+
+**G0** (Speed) -- Two critical violations found and fixed in Session 71. Regex search now uses trigram extraction (5s->8ms). Symbol search gated on metadata presence (186ms->4us). Full gauntlet all sub-25ms.
 
 ## Unblocked Tasks
 
@@ -71,6 +75,7 @@ Line ranges into BOARD.md for targeted reads:
 
 | Layer | Total | Done | Open | Status |
 |-------|-------|------|------|--------|
+| P0 | 7 | 7 | 0 | Complete -- all bugs fixed, old scanner deleted |
 | L0 | 12 | 12 | 0 | Complete |
 | L1 | 8 | 8 | 0 | Complete |
 | L2 | 7 | 6 | 1 | L2.1 validation gap |
@@ -86,6 +91,7 @@ Line ranges into BOARD.md for targeted reads:
 |------|------|----------|--------|
 | L5.7-L5.19 | Reference | `details/2026-02-23-dimensional-taxonomy.md` | Complete -- 142 questions across 21 dimensions |
 | L5.7-L5.19 | ADR | `decisions/2026-02-23-declarative-yaml-rules.md` | Accepted -- declarative YAML schema, 6 constraints |
+| -- | detail | `details/2026-02-25-session-71-g0-perf-and-recon-separation.md` | Complete -- G0 perf fixes, recon separation, P0 closure |
 
 ## Key Files
 

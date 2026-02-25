@@ -3,6 +3,7 @@ package index
 import (
 	"path/filepath"
 	"regexp"
+	"regexp/syntax"
 	"sort"
 	"strings"
 
@@ -32,22 +33,275 @@ type contentFileLine struct {
 }
 
 // scanFileContents scans all cached/on-disk files for grep-style substring matches.
-// Uses trigram index when available for queries >= 3 chars (O(1) candidate lookup),
-// falls back to brute-force for short queries, regex, InvertMatch, etc.
+// Uses trigram index when available for O(1) candidate lookup (G0: no O(n) on hot paths).
+// Regex queries extract literal substrings for trigram narrowing, then verify with regex.
+// Falls back to brute-force only for short queries, InvertMatch, or queries without literals.
 // Tags are deferred (nil) and filled after MaxCount truncation by fillContentTags.
 func (e *SearchEngine) scanFileContents(query string, opts ports.SearchOptions, symbolHits []Hit) []Hit {
-	if e.cache != nil && e.cache.HasTrigramIndex() && canUseTrigram(query, opts) {
+	if e.cache == nil || !e.cache.HasTrigramIndex() {
+		return e.scanContentBruteForce(query, opts, symbolHits)
+	}
+
+	// InvertMatch needs full scan (finding what DOESN'T match)
+	if opts.InvertMatch {
+		return e.scanContentBruteForce(query, opts, symbolHits)
+	}
+
+	// Regex: extract literals for trigram narrowing, verify with compiled regex
+	if opts.Mode == "regex" {
+		return e.scanContentRegexTrigram(query, opts, symbolHits)
+	}
+
+	// Literal/AND/word-boundary modes
+	if opts.WordBoundary || opts.AndMode {
+		return e.scanContentBruteForce(query, opts, symbolHits)
+	}
+	if len(query) >= 3 {
 		return e.scanContentTrigram(query, opts, symbolHits)
 	}
 	return e.scanContentBruteForce(query, opts, symbolHits)
 }
 
-// canUseTrigram returns true if the query/options combination can use the trigram index.
-func canUseTrigram(query string, opts ports.SearchOptions) bool {
-	if opts.InvertMatch || opts.WordBoundary || opts.AndMode || opts.Mode == "regex" {
-		return false
+// scanContentRegexTrigram uses literal extraction from regex patterns to narrow
+// candidates via trigram index, then verifies each candidate with the compiled regex.
+// For concatenation (func.*Observer): intersects trigram results (both must appear).
+// For alternation (A|B|C): unions trigram candidates across branches.
+// Falls back to brute-force only when no usable literals can be extracted.
+func (e *SearchEngine) scanContentRegexTrigram(pattern string, opts ports.SearchOptions, symbolHits []Hit) []Hit {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil
 	}
-	return len(query) >= 3
+
+	// Extract structured literal group preserving concat vs alternation
+	group := extractRegexLiteralGroup(pattern)
+	if group == nil {
+		return e.scanContentBruteForce(pattern, opts, symbolHits)
+	}
+
+	allCandidates := e.resolveLiteralGroup(group)
+	if len(allCandidates) == 0 {
+		return nil
+	}
+
+	// Verify each candidate with the compiled regex
+	dedup := make(map[contentFileLine]bool, len(symbolHits))
+	for _, h := range symbolHits {
+		dedup[contentFileLine{h.fileID, h.Line}] = true
+	}
+
+	var hits []Hit
+	for _, cand := range allCandidates {
+		lineNum := int(cand.LineNum)
+		lineIdx := lineNum - 1
+
+		fl := contentFileLine{cand.FileID, lineNum}
+		if dedup[fl] {
+			continue
+		}
+
+		file := e.idx.Files[cand.FileID]
+		if file == nil || file.Size > maxContentFileSize {
+			continue
+		}
+		if !matchesAllGlobs(file.Path, opts) {
+			continue
+		}
+
+		lines := e.cache.GetLines(cand.FileID)
+		if lines == nil || lineIdx >= len(lines) {
+			continue
+		}
+
+		if !re.MatchString(lines[lineIdx]) {
+			continue
+		}
+
+		dedup[fl] = true
+		spans := e.fileSpans[cand.FileID]
+		hit := e.buildContentHit(cand.FileID, file.Path, lineNum, lines[lineIdx], spans)
+		hits = append(hits, hit)
+	}
+
+	sortByFileIDLine(hits)
+	return hits
+}
+
+// resolveLiteralGroup resolves a regexLiteralGroup into candidate contentRefs
+// using the trigram index. Intersects within concatenations, unions across alternations.
+func (e *SearchEngine) resolveLiteralGroup(g *regexLiteralGroup) []contentRef {
+	// Handle alternation branches: union results from each branch
+	if len(g.branches) > 0 {
+		var result []contentRef
+		for _, branch := range g.branches {
+			branchCands := e.resolveLiteralGroup(&branch)
+			if branchCands != nil {
+				result = unionContentRefs(result, branchCands)
+			}
+		}
+		return result
+	}
+
+	// Handle intersection: all literals must appear → intersect trigram results
+	if len(g.intersect) == 0 {
+		return nil
+	}
+
+	// Use the most selective literal (longest → fewest trigram candidates)
+	// by intersecting trigram posting lists for ALL literals
+	var result []contentRef
+	first := true
+	for _, lit := range g.intersect {
+		trigrams := extractTrigrams(strings.ToLower(lit))
+		if len(trigrams) == 0 {
+			continue
+		}
+		candidates := e.cache.TrigramLookup(trigrams)
+		if candidates == nil {
+			return nil // one literal has zero matches → no results
+		}
+		if first {
+			result = candidates
+			first = false
+		} else {
+			result = intersectContentRefs(result, candidates)
+			if len(result) == 0 {
+				return nil
+			}
+		}
+	}
+	return result
+}
+
+// regexLiteralGroup represents extracted literals from a regex.
+// For concatenation (func.*Observer): all literals must appear → intersect trigram results.
+// For alternation (A|B|C): any branch can match → union trigram results across branches.
+type regexLiteralGroup struct {
+	// Intersect: all of these literals must appear on the same line (from concatenation).
+	intersect []string
+	// Branches: each branch is an independent alternative (from alternation).
+	branches []regexLiteralGroup
+}
+
+// extractRegexLiterals parses a regex and extracts literal substrings (≥3 chars)
+// organized by their logical relationship (intersect vs union).
+func extractRegexLiterals(pattern string) []string {
+	parsed, err := syntax.Parse(pattern, syntax.Perl)
+	if err != nil {
+		return nil
+	}
+	parsed = parsed.Simplify()
+
+	var literals []string
+	collectLiterals(parsed, &literals)
+
+	var usable []string
+	for _, lit := range literals {
+		if len(lit) >= 3 {
+			usable = append(usable, lit)
+		}
+	}
+	return usable
+}
+
+// extractRegexLiteralGroup returns the structured literal group from a regex,
+// preserving concat (intersect) vs alternation (union) relationships.
+func extractRegexLiteralGroup(pattern string) *regexLiteralGroup {
+	parsed, err := syntax.Parse(pattern, syntax.Perl)
+	if err != nil {
+		return nil
+	}
+	parsed = parsed.Simplify()
+	return buildLiteralGroup(parsed)
+}
+
+// buildLiteralGroup recursively builds a regexLiteralGroup from a parsed regex.
+func buildLiteralGroup(re *syntax.Regexp) *regexLiteralGroup {
+	switch re.Op {
+	case syntax.OpLiteral:
+		lit := string(re.Rune)
+		if len(lit) >= 3 {
+			return &regexLiteralGroup{intersect: []string{lit}}
+		}
+		return nil
+
+	case syntax.OpConcat:
+		// All pieces must match on the same line → intersect
+		g := &regexLiteralGroup{}
+		for _, sub := range re.Sub {
+			sg := buildLiteralGroup(sub)
+			if sg != nil {
+				g.intersect = append(g.intersect, sg.intersect...)
+			}
+		}
+		if len(g.intersect) == 0 {
+			return nil
+		}
+		return g
+
+	case syntax.OpAlternate:
+		// Any branch can match → union across branches
+		g := &regexLiteralGroup{}
+		for _, sub := range re.Sub {
+			sg := buildLiteralGroup(sub)
+			if sg != nil {
+				g.branches = append(g.branches, *sg)
+			}
+		}
+		if len(g.branches) == 0 {
+			return nil
+		}
+		return g
+
+	case syntax.OpCapture:
+		if len(re.Sub) > 0 {
+			return buildLiteralGroup(re.Sub[0])
+		}
+		return nil
+
+	default:
+		return nil
+	}
+}
+
+// collectLiterals recursively extracts literal strings from a parsed regex AST (flat list).
+func collectLiterals(re *syntax.Regexp, out *[]string) {
+	switch re.Op {
+	case syntax.OpLiteral:
+		*out = append(*out, string(re.Rune))
+	case syntax.OpConcat, syntax.OpAlternate, syntax.OpCapture:
+		for _, sub := range re.Sub {
+			collectLiterals(sub, out)
+		}
+	}
+}
+
+// unionContentRefs merges two sorted contentRef slices, deduplicating.
+func unionContentRefs(a, b []contentRef) []contentRef {
+	if len(a) == 0 {
+		return b
+	}
+	if len(b) == 0 {
+		return a
+	}
+	result := make([]contentRef, 0, len(a)+len(b))
+	i, j := 0, 0
+	for i < len(a) && j < len(b) {
+		if a[i].FileID < b[j].FileID || (a[i].FileID == b[j].FileID && a[i].LineNum < b[j].LineNum) {
+			result = append(result, a[i])
+			i++
+		} else if a[i].FileID > b[j].FileID || (a[i].FileID == b[j].FileID && a[i].LineNum > b[j].LineNum) {
+			result = append(result, b[j])
+			j++
+		} else {
+			result = append(result, a[i])
+			i++
+			j++
+		}
+	}
+	result = append(result, a[i:]...)
+	result = append(result, b[j:]...)
+	return result
 }
 
 // extractTrigrams extracts unique 3-byte substrings from a lowered query string.

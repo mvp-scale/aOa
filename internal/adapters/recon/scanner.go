@@ -412,6 +412,26 @@ func BuildFileSymbols(idx *ports.Index) map[uint32][]symbolInfo {
 	return fileSymbols
 }
 
+// BuildFileSymbolsSingle extracts symbols for a single file from the index.
+// O(metadata-for-file) instead of O(all-metadata).
+func BuildFileSymbolsSingle(idx *ports.Index, fileID uint32) []symbolInfo {
+	var syms []symbolInfo
+	for ref, meta := range idx.Metadata {
+		if ref.FileID != fileID || meta == nil {
+			continue
+		}
+		syms = append(syms, symbolInfo{
+			name:      meta.Name,
+			startLine: meta.StartLine,
+			endLine:   meta.EndLine,
+		})
+	}
+	sort.Slice(syms, func(i, j int) bool {
+		return syms[i].startLine < syms[j].startLine
+	})
+	return syms
+}
+
 // Patterns returns the built-in scan patterns. Exported for incremental scanning.
 func Patterns() []pattern {
 	return buildPatterns()

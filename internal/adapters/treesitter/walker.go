@@ -253,11 +253,19 @@ func (ctx *walkContext) checkInside(n *tree_sitter.Node, concept string) bool {
 }
 
 // checkNameContains checks if any identifier child contains one of the substrings.
+// Looks through expression_list wrappers (Go assignments use expression_list for LHS/RHS).
 func (ctx *walkContext) checkNameContains(n *tree_sitter.Node, patterns []string) bool {
 	nameKinds := []string{"identifier", "name", "field_identifier", "property_identifier", "blank_identifier"}
 	for i := uint(0); i < uint(n.ChildCount()); i++ {
 		c := n.Child(i)
 		ck := c.Kind()
+		// Look through expression_list wrappers (Go assignment LHS)
+		if ck == "expression_list" || ck == "left_hand_side" {
+			if ctx.checkNameContains(c, patterns) {
+				return true
+			}
+			continue
+		}
 		for _, nk := range nameKinds {
 			if ck == nk {
 				text := nodeTextWalker(c, ctx.source)
@@ -273,6 +281,7 @@ func (ctx *walkContext) checkNameContains(n *tree_sitter.Node, patterns []string
 }
 
 // checkHasArg checks if a call node has arguments matching the spec.
+// For assignment nodes, looks through expression_list wrappers to find the call.
 func (ctx *walkContext) checkHasArg(n *tree_sitter.Node, spec *analyzer.ArgSpec) bool {
 	// Walk children looking for argument_list or similar
 	for i := uint(0); i < uint(n.ChildCount()); i++ {
@@ -280,6 +289,12 @@ func (ctx *walkContext) checkHasArg(n *tree_sitter.Node, spec *analyzer.ArgSpec)
 		ck := c.Kind()
 		if ck == "argument_list" || ck == "arguments" || ck == "actual_parameters" {
 			return ctx.checkArgChildren(c, spec)
+		}
+		// Look through expression_list wrappers (Go assignment RHS)
+		if ck == "expression_list" || ck == "right_hand_side" {
+			if ctx.checkHasArg(c, spec) {
+				return true
+			}
 		}
 	}
 	// For some grammars, arguments are direct children of call

@@ -92,12 +92,15 @@ func (rb *ReconBridge) EnhanceFile(dbPath, filePath string) (string, error) {
 // reconBridge is the App-level field for the recon bridge. Set during New().
 // Not exported because it's an implementation detail.
 
-// initReconBridge sets up the recon bridge and stores it on the App.
+// initReconBridge sets up the recon bridge, but only if recon has been
+// explicitly enabled via `aoa recon init` (which writes .aoa/recon.enabled).
+// This ensures pure aOa never probes for or depends on aoa-recon.
 func (a *App) initReconBridge() {
-	a.reconBridge = NewReconBridge(a.ProjectRoot)
-	if a.reconBridge.Available() {
-		fmt.Printf("[%s] aoa-recon found at %s\n", time.Now().Format(time.RFC3339), a.reconBridge.Path())
+	enabledPath := filepath.Join(a.ProjectRoot, ".aoa", "recon.enabled")
+	if _, err := os.Stat(enabledPath); err != nil {
+		return // recon not enabled
 	}
+	a.reconBridge = NewReconBridge(a.ProjectRoot)
 }
 
 // ReconAvailable returns true if aoa-recon is installed and discoverable.

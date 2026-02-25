@@ -78,6 +78,18 @@ func (fc *FileCache) GetLines(fileID uint32) []string {
 	return nil
 }
 
+// GetContent returns the raw content for a cached file by joining its lines.
+// Returns nil, false on cache miss.
+func (fc *FileCache) GetContent(fileID uint32) ([]byte, bool) {
+	fc.mu.RLock()
+	defer fc.mu.RUnlock()
+	e, ok := fc.entries[fileID]
+	if !ok || len(e.lines) == 0 {
+		return nil, false
+	}
+	return []byte(strings.Join(e.lines, "\n")), true
+}
+
 // Invalidate removes a file from the cache.
 func (fc *FileCache) Invalidate(fileID uint32) {
 	fc.mu.Lock()
@@ -88,6 +100,68 @@ func (fc *FileCache) Invalidate(fileID uint32) {
 	}
 }
 
+// UpdateFile reads a single file from disk and updates its cache entry.
+// Then rebuilds the content and trigram indices from all cached entries.
+// This is O(1) I/O + O(cached-lines) index rebuild — no full disk re-read.
+func (fc *FileCache) UpdateFile(fileID uint32, absPath string, fileSize int64) {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+
+	// Remove old entry if present
+	if e, ok := fc.entries[fileID]; ok {
+		fc.totalMem -= e.size
+		delete(fc.entries, fileID)
+	}
+
+	// Skip files that are too large, binary, or empty
+	if fileSize > maxCacheFileSize || fileSize <= 0 {
+		fc.rebuildIndicesLocked()
+		return
+	}
+	ext := strings.ToLower(filepath.Ext(absPath))
+	if binaryExtensions[ext] {
+		fc.rebuildIndicesLocked()
+		return
+	}
+
+	// Read the single file
+	lines, size, ok := readAndValidateFile(absPath)
+	if !ok {
+		fc.rebuildIndicesLocked()
+		return
+	}
+
+	if fc.totalMem+size > fc.maxTotalBytes {
+		fc.atCapacity = true
+		fc.rebuildIndicesLocked()
+		return
+	}
+
+	fc.entries[fileID] = &cacheEntry{lines: lines, size: size}
+	fc.totalMem += size
+	fc.rebuildIndicesLocked()
+}
+
+// RemoveFile removes a file from cache and rebuilds indices.
+func (fc *FileCache) RemoveFile(fileID uint32) {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	if e, ok := fc.entries[fileID]; ok {
+		fc.totalMem -= e.size
+		delete(fc.entries, fileID)
+	}
+	fc.rebuildIndicesLocked()
+}
+
+// rebuildIndicesLocked rebuilds content and trigram indices from cached entries.
+// Must be called with fc.mu held (write lock). No disk I/O — purely in-memory.
+func (fc *FileCache) rebuildIndicesLocked() {
+	fc.contentIndex = make(map[string][]contentRef)
+	fc.trigramIndex = make(map[[3]byte][]contentRef)
+	fc.buildContentIndex()
+	fc.buildTrigramIndex()
+}
+
 // Stats returns cache statistics.
 func (fc *FileCache) Stats() (count int, memBytes int64, atCapacity bool) {
 	fc.mu.RLock()
@@ -95,9 +169,19 @@ func (fc *FileCache) Stats() (count int, memBytes int64, atCapacity bool) {
 	return len(fc.entries), fc.totalMem, fc.atCapacity
 }
 
+// cacheReadWorkers is the number of concurrent file-read goroutines during cache warm.
+const cacheReadWorkers = 16
+
+// fileReadResult holds the output of a single parallel file read.
+type fileReadResult struct {
+	id    uint32
+	lines []string
+	size  int64
+}
+
 // WarmFromIndex replaces all cache entries by reading eligible files from disk.
 // Files are loaded in LastModified descending order (most recent first) until
-// the memory budget is reached.
+// the memory budget is reached. File I/O is parallelized across multiple workers.
 func (fc *FileCache) WarmFromIndex(files map[uint32]*ports.FileMeta, projectRoot string) {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
@@ -122,40 +206,61 @@ func (fc *FileCache) WarmFromIndex(files map[uint32]*ports.FileMeta, projectRoot
 		return sorted[i].meta.LastModified > sorted[j].meta.LastModified
 	})
 
+	// Phase A: Pre-filter eligible files and estimate budget
+	var eligible []fileRef
+	var estimatedMem int64
 	for _, fr := range sorted {
 		fm := fr.meta
-
-		// Skip files over size limit
 		if fm.Size > maxCacheFileSize || fm.Size <= 0 {
 			continue
 		}
-
-		// Skip binary extensions
 		ext := strings.ToLower(filepath.Ext(fm.Path))
 		if binaryExtensions[ext] {
 			continue
 		}
-
-		// Check budget before reading
-		if fc.totalMem+fm.Size > fc.maxTotalBytes {
+		if estimatedMem+fm.Size > fc.maxTotalBytes {
 			fc.atCapacity = true
 			break
 		}
+		eligible = append(eligible, fr)
+		estimatedMem += fm.Size
+	}
 
-		absPath := filepath.Join(projectRoot, fm.Path)
-		lines, size, ok := readAndValidateFile(absPath)
-		if !ok {
-			continue
+	// Phase B: Parallel file reads with bounded worker pool
+	if len(eligible) > 0 {
+		sem := make(chan struct{}, cacheReadWorkers)
+		results := make(chan fileReadResult, len(eligible))
+		var wg sync.WaitGroup
+
+		for _, fr := range eligible {
+			wg.Add(1)
+			go func(fr fileRef) {
+				defer wg.Done()
+				sem <- struct{}{}        // acquire
+				defer func() { <-sem }() // release
+				absPath := filepath.Join(projectRoot, fr.meta.Path)
+				lines, size, ok := readAndValidateFile(absPath)
+				if ok {
+					results <- fileReadResult{id: fr.id, lines: lines, size: size}
+				}
+			}(fr)
 		}
 
-		// Re-check budget with actual size
-		if fc.totalMem+size > fc.maxTotalBytes {
-			fc.atCapacity = true
-			break
-		}
+		// Close results channel when all workers finish
+		go func() {
+			wg.Wait()
+			close(results)
+		}()
 
-		fc.entries[fr.id] = &cacheEntry{lines: lines, size: size}
-		fc.totalMem += size
+		// Collect results single-threaded, respecting budget
+		for r := range results {
+			if fc.totalMem+r.size > fc.maxTotalBytes {
+				fc.atCapacity = true
+				continue // drain channel but skip over-budget files
+			}
+			fc.entries[r.id] = &cacheEntry{lines: r.lines, size: r.size}
+			fc.totalMem += r.size
+		}
 	}
 
 	// Check if we're at >=90% capacity
@@ -163,7 +268,7 @@ func (fc *FileCache) WarmFromIndex(files map[uint32]*ports.FileMeta, projectRoot
 		fc.atCapacity = fc.totalMem >= (fc.maxTotalBytes*9/10)
 	}
 
-	// Build content token inverted index from cached entries
+	// Phase C: Build content token inverted index from cached entries
 	fc.buildContentIndex()
 
 	// Build trigram inverted index + pre-lowered lines from cached entries

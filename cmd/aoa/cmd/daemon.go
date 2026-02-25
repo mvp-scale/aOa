@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -91,6 +92,7 @@ func spawnDaemon(root, sockPath string) error {
 	}
 
 	logPath := filepath.Join(aoaDir, "daemon.log")
+	trimDaemonLog(logPath, 1000, 500)
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("open daemon log: %w", err)
@@ -174,6 +176,38 @@ func readLogTail(path string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
+// trimDaemonLog truncates the log file to the last `keep` lines when it
+// exceeds `threshold` lines. Only runs on daemon start, so cost is negligible.
+func trimDaemonLog(path string, threshold, keep int) {
+	f, err := os.Open(path)
+	if err != nil {
+		return // file doesn't exist yet — nothing to trim
+	}
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	f.Close()
+
+	if len(lines) <= threshold {
+		return
+	}
+
+	// Keep the last `keep` lines
+	lines = lines[len(lines)-keep:]
+	out, err := os.Create(path)
+	if err != nil {
+		return
+	}
+	defer out.Close()
+	for _, line := range lines {
+		fmt.Fprintln(out, line)
+	}
+}
+
 // runDaemonLoop is the blocking entry point for the background child process.
 // It opens the database, starts the socket server, and blocks until a signal
 // or remote shutdown arrives. All output goes to .aoa/daemon.log.
@@ -181,8 +215,6 @@ func runDaemonLoop(root, sockPath string) error {
 	logf := func(format string, args ...interface{}) {
 		fmt.Printf("[%s] "+format+"\n", append([]interface{}{time.Now().Format(time.RFC3339)}, args...)...)
 	}
-
-	logf("daemon starting")
 
 	a, err := app.New(app.Config{ProjectRoot: root, Parser: newParser()})
 	if err != nil {
@@ -199,26 +231,37 @@ func runDaemonLoop(root, sockPath string) error {
 		return err
 	}
 
-	logf("daemon ready at %s", sockPath)
+	// Single startup line with key stats
+	dashURL := ""
 	if a.WebServer.Port() > 0 {
-		logf("dashboard at %s", a.WebServer.URL())
+		dashURL = fmt.Sprintf(", dashboard %s", a.WebServer.URL())
 	}
+	logf("daemon starting — %d rules%s", a.RuleCount(), dashURL)
 
 	// Warm caches in the background — daemon is already serving.
-	// Searches and dashboard work immediately; content scanning and
-	// recon results appear once warming completes.
-	go a.WarmCaches(func(msg string) {
-		logf("%s", msg)
-	})
+	go func() {
+		r := a.WarmCaches(func(msg string) { logf("%s", msg) })
+		// Format summary from WarmResult
+		reconPart := ""
+		if r.FirstRun && r.ReconScanned > 0 {
+			reconPart = fmt.Sprintf(", recon %.1fs (first run)", r.ReconTime)
+		} else if r.ReconScanned > 0 {
+			reconPart = fmt.Sprintf(", recon %.1fs (%d rescanned)", r.ReconTime, r.ReconScanned)
+		} else if r.ReconCached > 0 {
+			reconPart = fmt.Sprintf(", recon cached (%d files)", r.ReconCached)
+		}
+		logf("ready (%.1fs) — %d files, %d tokens, index %.1fs, files %.1fs%s",
+			r.TotalTime, r.FileCount, r.TokenCount, r.IndexTime, r.CacheTime, reconPart)
+	}()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
-	case sig := <-sigCh:
-		logf("received %s, shutting down", sig)
+	case <-sigCh:
+		logf("stopped (signal)")
 	case <-a.Server.ShutdownCh():
-		logf("remote stop, shutting down")
+		logf("stopped (remote)")
 	}
 
 	err = a.Stop()
@@ -227,7 +270,6 @@ func runDaemonLoop(root, sockPath string) error {
 	pidPath := filepath.Join(root, ".aoa", "daemon.pid")
 	os.Remove(pidPath)
 
-	logf("daemon stopped")
 	return err
 }
 

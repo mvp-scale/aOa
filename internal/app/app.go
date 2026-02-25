@@ -16,7 +16,6 @@ import (
 	"github.com/corey/aoa/internal/adapters/bbolt"
 	claude "github.com/corey/aoa/internal/adapters/claude"
 	fsw "github.com/corey/aoa/internal/adapters/fsnotify"
-	"github.com/corey/aoa/internal/adapters/recon"
 	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/adapters/web"
 	"github.com/corey/aoa/internal/domain/analyzer"
@@ -75,8 +74,8 @@ type TurnAction struct {
 type ConversationTurn struct {
 	TurnID       string
 	Role         string // "user" or "assistant"
-	Text         string // truncated to 500 chars
-	ThinkingText string // truncated to 500 chars
+	Text         string
+	ThinkingText string
 	DurationMs   int
 	ToolNames    []string
 	Actions      []TurnAction
@@ -164,14 +163,12 @@ type App struct {
 	Index     *ports.Index
 
 	reconBridge    *ReconBridge            // discovers and invokes aoa-recon companion binary
-	dimEngine      *recon.Engine           // YAML-driven dimensional analysis engine
+	dimEngine      any                    // *recon.Engine in full builds, nil in lean
 	dimRules       []analyzer.Rule         // loaded from YAML at startup
+	debug          bool                   // AOA_DEBUG=1 enables verbose event logging
 	mu             sync.Mutex             // serializes learner access (searches are concurrent)
 
-	// Recon cache (pre-computed at startup, served instantly, updated incrementally)
 	reconMu        sync.RWMutex
-	reconCache     *recon.Result
-	reconScannedAt int64 // unix timestamp of last scan
 
 	// Dimensional results cache (from aoa-recon via bbolt, cached in memory)
 	dimCache     map[string]*socket.DimensionalFileResult
@@ -229,6 +226,11 @@ type App struct {
 
 	// Usage quota (from pasted /usage output via .aoa/usage.txt)
 	usageQuota *UsageQuota
+
+	// Debounced index persistence — in-memory index is always current,
+	// only the bbolt write is delayed to avoid 306MB rewrites on every file change.
+	indexDirty     bool
+	indexSaveTimer *time.Timer
 }
 
 // Config holds initialization parameters for the App.
@@ -239,6 +241,17 @@ type Config struct {
 	HTTPPort      int         // preferred HTTP port (default: computed from project root)
 	CacheMaxBytes int64       // file cache memory budget (default: 250MB if 0)
 	Parser        ports.Parser // optional: nil = tokenization-only mode (no tree-sitter)
+	Debug         bool        // enable debug logging (AOA_DEBUG=1)
+}
+
+// debugf logs a timestamped debug message when debug mode is enabled.
+// No-op when debug is off. Safe to call from any goroutine.
+func (a *App) debugf(format string, args ...interface{}) {
+	if !a.debug {
+		return
+	}
+	msg := fmt.Sprintf(format, args...)
+	fmt.Printf("[%s] [debug] %s\n", time.Now().Format("15:04:05.000"), msg)
 }
 
 // New creates an App with all dependencies wired. Does not start services.
@@ -309,6 +322,7 @@ func New(cfg Config) (*App, error) {
 		Store:          store,
 		Watcher:        watcher,
 		Enricher:       enr,
+		debug:          cfg.Debug || os.Getenv("AOA_DEBUG") == "1",
 		Engine:         engine,
 		Learner:        lrn,
 		Parser:         cfg.Parser, // nil = tokenization-only mode
@@ -425,6 +439,7 @@ func (sc *signalCollector) addTermDomain(term, domain string) {
 // searchObserver extracts learning signals from search queries and results.
 // Called after every search. Thread-safe via mutex.
 func (a *App) searchObserver(query string, opts ports.SearchOptions, result *index.SearchResult, elapsed time.Duration) {
+	a.debugf("search query=%q hits=%d elapsed=%v", query, len(result.Hits), elapsed)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -510,6 +525,10 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 // Start begins the daemon (socket server + HTTP server + session reader).
 func (a *App) Start() error {
 	a.started = time.Now()
+	if a.debug {
+		a.debugf("starting daemon — root=%s parser=%v reconBridge=%v dimEngine=%v",
+			a.ProjectRoot, a.Parser != nil, a.reconBridge != nil, a.dimEngine != nil)
+	}
 	if err := a.Server.Start(); err != nil {
 		return fmt.Errorf("start server: %w", err)
 	}
@@ -534,11 +553,28 @@ func (a *App) Start() error {
 	return nil
 }
 
+// WarmResult holds timing and stats from WarmCaches for structured logging.
+type WarmResult struct {
+	FileCount    int
+	TokenCount   int
+	PromptCount  int
+	IndexTime    float64
+	LearnerTime  float64
+	CacheTime    float64
+	ReconTime    float64
+	ReconCached  int  // files loaded from bbolt
+	ReconScanned int  // files re-analyzed
+	FirstRun     bool // true if recon had no persisted data
+	TotalTime    float64
+}
+
 // WarmCaches loads the persisted index and learner state from bbolt, warms the
 // file cache from disk, and pre-computes the recon scan. This is IO-heavy and
 // should be called after Start() so the daemon is already reachable.
-// The logFn callback receives progress messages.
-func (a *App) WarmCaches(logFn func(string)) {
+// logFn receives progress messages during long-running phases.
+// Returns a WarmResult with final stats for the caller to format a summary.
+func (a *App) WarmCaches(logFn func(string)) WarmResult {
+	var r WarmResult
 	totalStart := time.Now()
 
 	// 1. Load persisted index from bbolt
@@ -550,67 +586,109 @@ func (a *App) WarmCaches(logFn func(string)) {
 	}
 	if idx != nil {
 		a.mu.Lock()
-		// Swap in the loaded index — the engine and server hold pointers to
-		// the same Index struct, so we copy fields rather than replacing the pointer.
 		a.Index.Tokens = idx.Tokens
 		a.Index.Metadata = idx.Metadata
 		a.Index.Files = idx.Files
 		a.mu.Unlock()
 		a.Engine.Rebuild()
+		r.FileCount = len(idx.Files)
+		r.TokenCount = len(idx.Tokens)
 		logFn(fmt.Sprintf("index loaded: %d files, %d tokens (%.1fs)",
-			len(idx.Files), len(idx.Tokens), time.Since(start).Seconds()))
+			r.FileCount, r.TokenCount, time.Since(start).Seconds()))
 	} else {
-		logFn(fmt.Sprintf("no persisted index found (%.1fs)", time.Since(start).Seconds()))
+		logFn(fmt.Sprintf("no persisted index (%.1fs)", time.Since(start).Seconds()))
 	}
+	r.IndexTime = time.Since(start).Seconds()
 
 	// 2. Load persisted learner state
-	logFn("loading learner state...")
 	start = time.Now()
 	ls, err := a.Store.LoadLearnerState(a.ProjectID)
-	if err != nil {
-		logFn(fmt.Sprintf("warning: failed to load learner state: %v", err))
-	}
-	if ls != nil {
+	if err == nil && ls != nil {
 		a.mu.Lock()
 		a.Learner = learner.NewFromState(ls)
 		a.promptN = a.Learner.PromptCount()
 		a.mu.Unlock()
-		logFn(fmt.Sprintf("learner state loaded: %d prompts (%.1fs)",
-			ls.PromptCount, time.Since(start).Seconds()))
-	} else {
-		logFn(fmt.Sprintf("no learner state found (%.1fs)", time.Since(start).Seconds()))
+		r.PromptCount = int(ls.PromptCount)
 	}
+	r.LearnerTime = time.Since(start).Seconds()
 
-	fileCount := len(a.Index.Files)
-	if fileCount == 0 {
+	if r.FileCount == 0 {
 		logFn("no files in index, skipping cache warm")
-		return
+		r.TotalTime = time.Since(totalStart).Seconds()
+		return r
 	}
 
-	// 3. Warm file cache from disk
-	logFn(fmt.Sprintf("warming file cache (%d files)...", fileCount))
-	start = time.Now()
-	a.Engine.WarmCache()
-	logFn(fmt.Sprintf("file cache ready (%.1fs)", time.Since(start).Seconds()))
+	// 3. Warm file cache (always) and recon cache (only if recon is available).
+	logFn(fmt.Sprintf("warming file cache (%d files)...", r.FileCount))
+	var wg sync.WaitGroup
 
-	// 4. Pre-compute recon scan
-	logFn("scanning recon patterns...")
-	start = time.Now()
+	wg.Add(1)
+	fileCacheStart := time.Now()
+	go func() {
+		defer wg.Done()
+		a.Engine.WarmCache()
+	}()
+
+	reconStart := time.Now()
 	if a.dimEngine != nil {
-		a.warmDimCache()
-		logFn(fmt.Sprintf("dimensional cache ready — %d rules (%.1fs)", len(a.dimRules), time.Since(start).Seconds()))
-	} else {
-		a.warmReconCache()
-		logFn(fmt.Sprintf("recon cache ready (%.1fs)", time.Since(start).Seconds()))
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r.ReconCached, r.ReconScanned, r.FirstRun = a.warmDimCache(logFn)
+		}()
 	}
+
+	wg.Wait()
+	r.CacheTime = time.Since(fileCacheStart).Seconds()
+	r.ReconTime = time.Since(reconStart).Seconds()
 	a.loadInvestigated()
 
-	logFn(fmt.Sprintf("all caches warm — %d files ready (%.1fs total)",
-		fileCount, time.Since(totalStart).Seconds()))
+	r.TotalTime = time.Since(totalStart).Seconds()
+	return r
+}
+
+// RuleCount returns the number of dimensional analysis rules loaded.
+func (a *App) RuleCount() int {
+	return len(a.dimRules)
+}
+
+// indexSaveDebounce is the delay before flushing a dirty index to bbolt.
+const indexSaveDebounce = 2 * time.Second
+
+// markIndexDirty flags the index for deferred persistence.
+// Resets the debounce timer so rapid changes coalesce into a single write.
+// Must be called with a.mu held.
+func (a *App) markIndexDirty() {
+	a.indexDirty = true
+	if a.indexSaveTimer != nil {
+		a.indexSaveTimer.Stop()
+	}
+	a.indexSaveTimer = time.AfterFunc(indexSaveDebounce, func() {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		if a.indexDirty {
+			_ = a.Store.SaveIndex(a.ProjectID, a.Index)
+			a.indexDirty = false
+		}
+	})
+}
+
+// flushIndex saves the index to bbolt immediately if dirty.
+// Must be called with a.mu held.
+func (a *App) flushIndex() {
+	if a.indexSaveTimer != nil {
+		a.indexSaveTimer.Stop()
+		a.indexSaveTimer = nil
+	}
+	if a.indexDirty {
+		_ = a.Store.SaveIndex(a.ProjectID, a.Index)
+		a.indexDirty = false
+	}
 }
 
 // Stop gracefully shuts down all services and persists learner state.
 func (a *App) Stop() error {
+	a.debugf("stopping daemon")
 	a.Reader.Stop()
 	a.Watcher.Stop()
 	a.WebServer.Stop()
@@ -618,6 +696,7 @@ func (a *App) Stop() error {
 	// Persist final state before shutdown
 	a.mu.Lock()
 	a.flushSessionSummary()
+	a.flushIndex()
 	_ = a.Store.SaveLearnerState(a.ProjectID, a.Learner.State())
 	a.mu.Unlock()
 	a.Store.Close()
@@ -628,6 +707,7 @@ func (a *App) Stop() error {
 // Extracts bigrams from conversation text and file access signals from tools.
 // Thread-safe via mutex.
 func (a *App) onSessionEvent(ev ports.SessionEvent) {
+	a.debugf("session-event kind=%d", ev.Kind)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -657,7 +737,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 		a.pushTurn(ConversationTurn{
 			TurnID:    ev.TurnID,
 			Role:      "user",
-			Text:      a.truncate(ev.Text, 500),
+			Text:      ev.Text,
 			Timestamp: ts,
 			Model:     ev.Model,
 		})
@@ -1564,8 +1644,8 @@ func (a *App) turnFromBuilder(tb *turnBuilder) ConversationTurn {
 	return ConversationTurn{
 		TurnID:       tb.TurnID,
 		Role:         "assistant",
-		Text:         a.truncate(tb.Text.String(), 500),
-		ThinkingText: a.truncate(tb.ThinkingText.String(), 2000),
+		Text:         tb.Text.String(),
+		ThinkingText: tb.ThinkingText.String(),
 		DurationMs:   tb.DurationMs,
 		ToolNames:    tb.ToolNames,
 		Actions:      tb.Actions,
@@ -1914,6 +1994,7 @@ func (a *App) sortAndTruncate(m map[string]uint32, limit int) []socket.RankedIte
 // The IO-heavy walk/parse runs outside the mutex; only the swap is locked.
 // Implements socket.AppQueries.
 func (a *App) Reindex() (socket.ReindexResult, error) {
+	a.debugf("reindex starting")
 	start := time.Now()
 
 	// Build new index outside the mutex (IO-heavy)
@@ -1943,11 +2024,9 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 		a.TriggerReconEnhance()
 	}
 
-	// Re-scan recon in the background after full reindex
+	// Re-scan dimensional analysis in the background after full reindex
 	if a.dimEngine != nil {
-		go a.warmDimCache()
-	} else {
-		go a.warmReconCache()
+		go a.warmDimCache(func(string) {})
 	}
 
 	elapsed := time.Since(start)
@@ -1959,75 +2038,12 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 	}, nil
 }
 
-// warmReconCache runs a full recon scan and stores the result under reconMu.
-// Safe to call from any goroutine.
-func (a *App) warmReconCache() {
-	var lines recon.LineGetter
-	if fc := a.Engine.Cache(); fc != nil {
-		lines = &appFileCacheAdapter{cache: fc}
-	}
-	result := recon.Scan(a.Index, lines)
-	a.reconMu.Lock()
-	a.reconCache = result
-	a.reconScannedAt = time.Now().Unix()
-	a.reconMu.Unlock()
-}
-
-// CachedReconResult returns the cached interim scanner result and its timestamp.
-// Returns (nil, 0) if no scan has been performed yet.
-// Implements socket.AppQueries.
-func (a *App) CachedReconResult() (interface{}, int64) {
-	a.reconMu.RLock()
-	defer a.reconMu.RUnlock()
-	return a.reconCache, a.reconScannedAt
-}
-
-// updateReconForFile incrementally patches the recon cache for a single file.
-// fileID is the index file ID; relPath is the relative path within the project.
-// If the file was deleted (not in index), removes it from the cache.
-func (a *App) updateReconForFile(fileID uint32, relPath string) {
-	a.reconMu.Lock()
-	defer a.reconMu.Unlock()
-
-	if a.reconCache == nil {
-		return
-	}
-
-	dir := filepath.Dir(relPath)
-	base := filepath.Base(relPath)
-
-	// Remove old contribution
-	a.reconCache.SubtractFile(dir, base)
-
-	// If file still exists in index, re-scan it
-	fileMeta := a.Index.Files[fileID]
-	if fileMeta == nil {
-		// File was deleted — subtraction was enough
-		a.reconScannedAt = time.Now().Unix()
-		return
-	}
-
-	// Get fresh lines from file cache
-	var fileLines []string
-	if fc := a.Engine.Cache(); fc != nil {
-		fileLines = fc.GetLines(fileID)
-	}
-
-	// Get symbols for this file
-	symbols := recon.BuildFileSymbols(a.Index)[fileID]
-	pats := recon.Patterns()
-
-	info := recon.ScanFile(fileMeta, symbols, fileLines, pats)
-	a.reconCache.AddFile(dir, base, info)
-	a.reconScannedAt = time.Now().Unix()
-}
-
-// updateReconOrDimForFile dispatches to the dimensional engine or old scanner.
+// updateReconOrDimForFile dispatches to the dimensional engine for file analysis.
+// No-op when dimEngine is not available (pure aOa mode).
 func (a *App) updateReconOrDimForFile(fileID uint32, relPath string) {
 	if a.dimEngine != nil {
+		a.debugf("dim-update file=%s id=%d", relPath, fileID)
 		a.updateDimForFile(fileID, relPath)
-	} else {
-		a.updateReconForFile(fileID, relPath)
 	}
 }
 
@@ -2112,23 +2128,10 @@ func (a *App) clearFileInvestigated(relPath string) {
 	}
 }
 
-// appFileCacheAdapter adapts the search engine's FileCache to the recon.LineGetter interface.
-type appFileCacheAdapter struct {
-	cache interface {
-		GetLines(fileID uint32) []string
-	}
-}
-
-func (a *appFileCacheAdapter) GetLines(fileID uint32) []string {
-	if a.cache == nil {
-		return nil
-	}
-	return a.cache.GetLines(fileID)
-}
-
 // WipeProject deletes all persisted data and resets in-memory state.
 // Implements socket.AppQueries.
 func (a *App) WipeProject() error {
+	a.debugf("wipe-project starting")
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -2185,10 +2188,8 @@ func (a *App) WipeProject() error {
 	a.currentSessionStart = 0
 	a.sessionPrompts = 0
 
-	// Reset recon cache and dimensional cache
+	// Reset dimensional cache
 	a.reconMu.Lock()
-	a.reconCache = nil
-	a.reconScannedAt = 0
 	a.dimCache = nil
 	a.dimCacheSet = false
 	a.reconMu.Unlock()

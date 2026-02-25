@@ -35,7 +35,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens (%dms)\n",
 			result.FileCount, result.SymbolCount, result.TokenCount, result.ElapsedMs)
-		runReconIfAvailable(root, dbPath)
+		runReconIfEnabled(root, dbPath)
 		createShims()
 		return nil
 	}
@@ -75,17 +75,23 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens\n",
 		stats.FileCount, stats.SymbolCount, stats.TokenCount)
-	runReconIfAvailable(root, dbPath)
+	runReconIfEnabled(root, dbPath)
 	createShims()
 	return nil
 }
 
-// runReconIfAvailable invokes aoa-recon enhance if the binary is on PATH.
-// On failure it warns but does not fail init.
-func runReconIfAvailable(root, dbPath string) {
+// runReconIfEnabled invokes aoa-recon enhance only if recon has been explicitly
+// enabled via `aoa recon init` (which writes .aoa/recon.enabled).
+func runReconIfEnabled(root, dbPath string) {
+	enabledPath := filepath.Join(root, ".aoa", "recon.enabled")
+	if _, err := os.Stat(enabledPath); err != nil {
+		fmt.Println("  Tip: run 'aoa recon init' to enable structural analysis")
+		return
+	}
+
 	reconPath, err := exec.LookPath("aoa-recon")
 	if err != nil {
-		fmt.Println("  Tip: npm install -g @mvpscale/aoa-recon for structural analysis")
+		fmt.Println("  warning: recon enabled but aoa-recon not found on PATH")
 		return
 	}
 

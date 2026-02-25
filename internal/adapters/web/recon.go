@@ -7,10 +7,40 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/corey/aoa/internal/adapters/recon"
 	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/domain/analyzer"
 )
+
+// Local dashboard types — field-for-field identical JSON shape to recon.Result,
+// recon.Finding, recon.FileInfo. Avoids importing internal/adapters/recon (G4).
+
+type reconFinding struct {
+	Symbol   string `json:"symbol"`
+	DimID    string `json:"dim_id"`
+	TierID   string `json:"tier_id"`
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Severity string `json:"severity"`
+	Line     int    `json:"line"`
+}
+
+type reconFileInfo struct {
+	Language string         `json:"language"`
+	Symbols  []string       `json:"symbols"`
+	Findings []reconFinding `json:"findings"`
+}
+
+type reconResult struct {
+	FilesScanned  int                                `json:"files_scanned"`
+	TotalFindings int                                `json:"total_findings"`
+	Critical      int                                `json:"critical"`
+	Warnings      int                                `json:"warnings"`
+	Info          int                                `json:"info"`
+	CleanFiles    int                                `json:"clean_files"`
+	TierCounts    map[string]int                     `json:"tier_counts"`
+	DimCounts     map[string]int                     `json:"dim_counts"`
+	Tree          map[string]map[string]reconFileInfo `json:"tree"`
+}
 
 // ruleIndex maps rule ID → (tier, dimension) for data-driven tier/dim resolution.
 var ruleIndex map[string]ruleMeta
@@ -34,22 +64,8 @@ func SetRuleIndex(rules []analyzer.Rule) {
 	}
 }
 
-// fileCacheAdapter adapts the search engine's FileCache to the recon.LineGetter interface.
-type fileCacheAdapter struct {
-	cache interface {
-		GetLines(fileID uint32) []string
-	}
-}
-
-func (a *fileCacheAdapter) GetLines(fileID uint32) []string {
-	if a.cache == nil {
-		return nil
-	}
-	return a.cache.GetLines(fileID)
-}
-
 func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
-	// Check for persisted dimensional results first (from aoa-recon engine)
+	// Check for persisted dimensional results (from aoa-recon engine or dim engine)
 	if s.queries != nil {
 		dimResults := s.queries.DimensionalResults()
 		if dimResults != nil && len(dimResults) > 0 {
@@ -58,71 +74,25 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Check for cached interim scanner result (pre-computed at startup, updated incrementally)
-	if s.queries != nil {
-		cached, scannedAt := s.queries.CachedReconResult()
-		if result, ok := cached.(*recon.Result); ok && result != nil {
-			reconAvailable := s.queries.ReconAvailable()
-			invFiles := s.queries.InvestigatedFiles()
-			if invFiles == nil {
-				invFiles = []string{}
-			}
-			response := struct {
-				*recon.Result
-				ReconAvailable    bool     `json:"recon_available"`
-				ScannedAt         int64    `json:"scanned_at"`
-				InvestigatedFiles []string `json:"investigated_files"`
-			}{
-				Result:            result,
-				ReconAvailable:    reconAvailable,
-				ScannedAt:         scannedAt,
-				InvestigatedFiles: invFiles,
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	}
-
-	// Safety net: fall back to inline scan if both paths returned nil
-	if s.idx == nil || s.engine == nil {
-		http.Error(w, `{"error":"index not available"}`, http.StatusServiceUnavailable)
-		return
-	}
-
-	var lines recon.LineGetter
-	if fc := s.engine.Cache(); fc != nil {
-		lines = &fileCacheAdapter{cache: fc}
-	}
-
-	result := recon.Scan(s.idx, lines)
-
-	// Wrap result with recon_available field for dashboard install prompt
-	reconAvailable := false
-	if s.queries != nil {
-		reconAvailable = s.queries.ReconAvailable()
-	}
-	response := struct {
-		*recon.Result
-		ReconAvailable bool  `json:"recon_available"`
-		ScannedAt      int64 `json:"scanned_at"`
-	}{
-		Result:         result,
-		ReconAvailable: reconAvailable,
-		ScannedAt:      time.Now().Unix(),
-	}
-
+	// No recon data available — return install prompt
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	reconAvailable := s.queries != nil && s.queries.ReconAvailable()
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"files_scanned":   0,
+		"total_findings":  0,
+		"recon_available": reconAvailable,
+		"install_prompt":  "Run 'aoa recon init' to enable structural analysis",
+		"tree":            map[string]interface{}{},
+	})
 }
 
 // serveDimensionalResults converts dimensional analysis results to the
-// recon.Result JSON shape for backward compatibility with the dashboard.
+// reconResult JSON shape for backward compatibility with the dashboard.
 func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[string]*socket.DimensionalFileResult) {
-	result := &recon.Result{
+	result := &reconResult{
 		TierCounts: make(map[string]int),
 		DimCounts:  make(map[string]int),
-		Tree:       make(map[string]map[string]recon.FileInfo),
+		Tree:       make(map[string]map[string]reconFileInfo),
 	}
 
 	// Map severity int to string
@@ -134,14 +104,14 @@ func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[s
 		dir := filepath.Dir(relPath)
 		base := filepath.Base(relPath)
 
-		var findings []recon.Finding
+		var findings []reconFinding
 		for _, f := range fa.Findings {
 			sevStr := "info"
 			if f.Severity >= 0 && f.Severity < len(sevNames) {
 				sevStr = sevNames[f.Severity]
 			}
 			tierID, dimID := inferTierDim(f.RuleID)
-			findings = append(findings, recon.Finding{
+			findings = append(findings, reconFinding{
 				Symbol:   f.Symbol,
 				DimID:    dimID,
 				TierID:   tierID,
@@ -172,9 +142,9 @@ func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[s
 		}
 
 		if _, ok := result.Tree[dir]; !ok {
-			result.Tree[dir] = make(map[string]recon.FileInfo)
+			result.Tree[dir] = make(map[string]reconFileInfo)
 		}
-		result.Tree[dir][base] = recon.FileInfo{
+		result.Tree[dir][base] = reconFileInfo{
 			Language: fa.Language,
 			Symbols:  symbols,
 			Findings: findings,
@@ -190,12 +160,12 @@ func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[s
 		reconAvailable = s.queries.ReconAvailable()
 	}
 	response := struct {
-		*recon.Result
+		*reconResult
 		ReconAvailable  bool  `json:"recon_available"`
 		DimensionalMode bool  `json:"dimensional_mode"`
 		ScannedAt       int64 `json:"scanned_at"`
 	}{
-		Result:          result,
+		reconResult:     result,
 		ReconAvailable:  reconAvailable,
 		DimensionalMode: true,
 		ScannedAt:       time.Now().Unix(),
@@ -281,9 +251,9 @@ func (s *Server) handleSourceLine(w http.ResponseWriter, r *http.Request) {
 		Content string `json:"content"`
 		IsMatch bool   `json:"is_match"`
 	}
-	result := make([]sourceLine, 0, endLine-startLine+1)
+	resultLines := make([]sourceLine, 0, endLine-startLine+1)
 	for i := startLine; i <= endLine; i++ {
-		result = append(result, sourceLine{
+		resultLines = append(resultLines, sourceLine{
 			Line:    i,
 			Content: lines[i-1], // 0-indexed array, 1-indexed lines
 			IsMatch: i == lineNum,
@@ -291,7 +261,7 @@ func (s *Server) handleSourceLine(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	json.NewEncoder(w).Encode(resultLines)
 }
 
 // handleReconInvestigate handles POST /api/recon-investigate to mark/unmark files.

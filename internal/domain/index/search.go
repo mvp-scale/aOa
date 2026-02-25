@@ -1,6 +1,8 @@
 package index
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -47,6 +49,9 @@ type SearchEngine struct {
 	// observer is called after each search to emit learning signals.
 	observer   SearchObserver
 	observerWg sync.WaitGroup
+
+	// debug enables phase timing output (AOA_DEBUG=1).
+	debug bool
 }
 
 // SearchResult holds the output of a search operation.
@@ -82,6 +87,7 @@ func NewSearchEngine(idx *ports.Index, domains map[string]Domain, projectRoot st
 		refToTokens:    make(map[ports.TokenRef][]string),
 		tokenDocFreq:   make(map[string]int),
 		keywordToTerms: make(map[string][]string),
+		debug:          os.Getenv("AOA_DEBUG") == "1",
 	}
 
 	// Build reverse map: ref -> tokens, and doc frequency
@@ -133,6 +139,21 @@ func (e *SearchEngine) WarmCache() {
 	}
 }
 
+// UpdateCacheFile updates a single file in the cache and rebuilds content indices.
+// O(1) disk I/O + O(cached-lines) index rebuild. Use after file changes instead of WarmCache.
+func (e *SearchEngine) UpdateCacheFile(fileID uint32, absPath string, fileSize int64) {
+	if e.cache != nil {
+		e.cache.UpdateFile(fileID, absPath, fileSize)
+	}
+}
+
+// RemoveCacheFile removes a file from the cache and rebuilds content indices.
+func (e *SearchEngine) RemoveCacheFile(fileID uint32) {
+	if e.cache != nil {
+		e.cache.RemoveFile(fileID)
+	}
+}
+
 // Rebuild reconstructs derived maps (refToTokens, tokenDocFreq, keywordToTerms)
 // from current index state. Must be called after any index mutation (add/remove symbols).
 func (e *SearchEngine) Rebuild() {
@@ -165,11 +186,6 @@ func (e *SearchEngine) Rebuild() {
 
 	// Rebuild file spans for content scanning
 	e.fileSpans = e.buildFileSpans()
-
-	// Re-warm file cache if attached
-	if e.cache != nil {
-		e.cache.WarmFromIndex(e.idx.Files, e.projectRoot)
-	}
 }
 
 // SetObserver registers a callback invoked after every search.
@@ -194,28 +210,35 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 
 	var hits []Hit
 
-	switch {
-	case opts.Mode == "regex":
-		hits = e.searchRegex(query, opts)
-	case opts.AndMode:
-		hits = e.searchAND(query, opts)
-	default:
-		// Tokenize original query (preserves camelCase splits), then lowercase
-		// tokens for index lookup. The token index is already lowered.
-		tokens := Tokenize(query)
-		if opts.Mode == "case_insensitive" {
-			for i, t := range tokens {
-				tokens[i] = strings.ToLower(t)
+	// Symbol search: skip when no symbols are indexed (lean/tokenization-only mode).
+	// This avoids O(n) iteration over content-only token posting lists.
+	tSym := time.Now()
+	if len(e.idx.Metadata) > 0 {
+		switch {
+		case opts.Mode == "regex":
+			hits = e.searchRegex(query, opts)
+		case opts.AndMode:
+			hits = e.searchAND(query, opts)
+		default:
+			tokens := Tokenize(query)
+			if opts.Mode == "case_insensitive" {
+				for i, t := range tokens {
+					tokens[i] = strings.ToLower(t)
+				}
+			}
+			if len(tokens) == 0 {
+				return e.buildResult(nil, opts, maxCount)
+			}
+			if len(tokens) == 1 {
+				hits = e.searchLiteral(tokens[0], opts)
+			} else {
+				hits = e.searchOR(tokens, opts)
 			}
 		}
-		if len(tokens) == 0 {
-			return e.buildResult(nil, opts, maxCount)
-		}
-		if len(tokens) == 1 {
-			hits = e.searchLiteral(tokens[0], opts)
-		} else {
-			hits = e.searchOR(tokens, opts)
-		}
+	}
+	if e.debug {
+		fmt.Printf("[%s] [debug] search phase=symbols query=%q hits=%d elapsed=%v\n",
+			time.Now().Format("15:04:05.000"), query, len(hits), time.Since(tSym))
 	}
 
 	// Invert symbol hits: replace with all symbols NOT in the matched set
@@ -225,8 +248,13 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 
 	// Append content hits from file body scanning (grep-style)
 	if e.projectRoot != "" {
+		t0 := time.Now()
 		contentHits := e.scanFileContents(query, opts, hits)
 		hits = append(hits, contentHits...)
+		if e.debug {
+			fmt.Printf("[%s] [debug] search phase=content query=%q candidates=%d elapsed=%v\n",
+				time.Now().Format("15:04:05.000"), query, len(contentHits), time.Since(t0))
+		}
 	}
 
 	// -L: files-without-match — return files NOT in the matched set
@@ -242,10 +270,20 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 	result := e.buildResult(hits, opts, maxCount)
 
 	// Enrich symbol hits (domain + tags) only for survivors after truncation
+	t1 := time.Now()
 	e.enrichHits(result.Hits)
+	if e.debug {
+		fmt.Printf("[%s] [debug] search phase=enrich query=%q elapsed=%v\n",
+			time.Now().Format("15:04:05.000"), query, time.Since(t1))
+	}
 
 	// Generate tags for content hits that deferred tag generation (indexed paths)
+	t2 := time.Now()
 	e.fillContentTags(result.Hits)
+	if e.debug {
+		fmt.Printf("[%s] [debug] search phase=tags query=%q elapsed=%v\n",
+			time.Now().Format("15:04:05.000"), query, time.Since(t2))
+	}
 
 	// Attach context lines for -A/-B/-C (after enrichment, on final result set only)
 	e.attachContextLines(result.Hits, opts)

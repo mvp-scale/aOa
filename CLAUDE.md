@@ -6,12 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **aOa is a standalone project.** Do NOT import, reference, copy, or depend on anything from outside the `aOa/` directory. No imports from the parent `aOa/` codebase. All dependencies come from Go modules (`go.mod`) or are written fresh here. This is a clean-room rewrite guided by behavioral specs and test fixtures in `test/fixtures/`, not by copying Python code.
 
+## Goals
+
+**Read `.context/GOALS.md` before any planning or architectural decision.** Every plan, code change, and design choice must align with the goals defined there. If a proposed change violates any goal, redesign before proceeding.
+
 ## Project Context
 
 ### .context/ Layout
 
 ```
 .context/
+  GOALS.md        # Project goals — read before any planning or design decision
   INDEX.md        # Derived index — line pointers, unblocked/blocked, layer status
   CURRENT.md      # Session checklist — done/in-progress/next
   BOARD.md        # Source of truth — task table + supporting detail
