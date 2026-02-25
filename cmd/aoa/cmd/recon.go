@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 
+	"github.com/corey/aoa/internal/app"
 	"github.com/spf13/cobra"
 )
 
@@ -32,13 +32,13 @@ func init() {
 
 func runReconInit(cmd *cobra.Command, args []string) error {
 	root := projectRoot()
-	aoadir := filepath.Join(root, ".aoa")
-	enabledPath := filepath.Join(aoadir, "recon.enabled")
-	dbPath := filepath.Join(aoadir, "aoa.db")
+	paths := app.NewPaths(root)
+	enabledPath := paths.ReconEnabled
+	dbPath := paths.DB
 
-	// Ensure .aoa directory exists
-	if err := os.MkdirAll(aoadir, 0755); err != nil {
-		return fmt.Errorf("create .aoa dir: %w", err)
+	// Ensure .aoa directory structure exists
+	if err := paths.EnsureDirs(); err != nil {
+		return fmt.Errorf("create .aoa dirs: %w", err)
 	}
 
 	// Discover aoa-recon binary

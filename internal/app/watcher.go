@@ -15,28 +15,19 @@ import (
 	"github.com/corey/aoa/internal/ports"
 )
 
-// contextJSONLFile is the filename for status line context snapshots.
-const contextJSONLFile = "context.jsonl"
-
-// usageTxtFile is the filename for pasted /usage output.
-const usageTxtFile = "usage.txt"
-
 // onFileChanged handles a file create/modify/delete event from the watcher.
 // It updates the index in-place and rebuilds the search engine.
 func (a *App) onFileChanged(absPath string) {
 	a.debugf("file-changed %s", absPath)
-	aoadir := filepath.Join(a.ProjectRoot, ".aoa")
-	base := filepath.Base(absPath)
-	dir := filepath.Dir(absPath)
 
-	// Intercept .aoa/context.jsonl before the extension filter
-	if base == contextJSONLFile && dir == aoadir {
+	// Intercept .aoa/hook/context.jsonl before the extension filter
+	if absPath == a.Paths.ContextJSONL {
 		a.onContextFileChanged(absPath)
 		return
 	}
 
-	// Intercept .aoa/usage.txt — pasted /usage output
-	if base == usageTxtFile && dir == aoadir {
+	// Intercept .aoa/hook/usage.txt — pasted /usage output
+	if absPath == a.Paths.UsageTxt {
 		a.onUsageFileChanged(absPath)
 		return
 	}
@@ -375,10 +366,9 @@ func writeUsageConfirmation(absPath string, quota *UsageQuota) {
 	os.WriteFile(absPath, []byte(b.String()), 0644)
 }
 
-// SeedUsageFile creates .aoa/usage.txt with instructions if it doesn't exist.
-func SeedUsageFile(projectRoot string) {
-	path := filepath.Join(projectRoot, ".aoa", "usage.txt")
-	if _, err := os.Stat(path); err == nil {
+// SeedUsageFile creates .aoa/hook/usage.txt with instructions if it doesn't exist.
+func SeedUsageFile(paths *Paths) {
+	if _, err := os.Stat(paths.UsageTxt); err == nil {
 		return // already exists
 	}
 
@@ -387,7 +377,7 @@ func SeedUsageFile(projectRoot string) {
 	b.WriteString(usagePasteMarker)
 	b.WriteString("\n")
 
-	os.WriteFile(path, []byte(b.String()), 0644)
+	os.WriteFile(paths.UsageTxt, []byte(b.String()), 0644)
 }
 
 // usageQuota returns the current usage quota, or nil. Must be called with a.mu held.

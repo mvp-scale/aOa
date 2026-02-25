@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/corey/aoa/internal/adapters/socket"
+	"github.com/corey/aoa/internal/app"
 	"github.com/spf13/cobra"
 )
 
@@ -19,8 +20,9 @@ var configCmd = &cobra.Command{
 
 func runConfig(cmd *cobra.Command, args []string) error {
 	root := projectRoot()
+	paths := app.NewPaths(root)
 	sockPath := socket.SocketPath(root)
-	dbPath := filepath.Join(root, ".aoa", "aoa.db")
+	dbPath := paths.DB
 	projectID := filepath.Base(root)
 
 	client := socket.NewClient(sockPath)
@@ -38,8 +40,7 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Daemon:     %s\n", daemonStatus)
 
 	if daemonRunning {
-		httpPortPath := filepath.Join(root, ".aoa", "http.port")
-		if portData, err := os.ReadFile(httpPortPath); err == nil {
+		if portData, err := os.ReadFile(paths.PortFile); err == nil {
 			fmt.Printf("  Dashboard:  http://localhost:%s\n", strings.TrimSpace(string(portData)))
 		}
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/corey/aoa/internal/adapters/bbolt"
 	"github.com/corey/aoa/internal/adapters/socket"
+	"github.com/corey/aoa/internal/app"
 	"github.com/spf13/cobra"
 )
 
@@ -52,7 +53,7 @@ func runWipe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Daemon not running — wipe bbolt directly
-	dbPath := filepath.Join(root, ".aoa", "aoa.db")
+	dbPath := app.NewPaths(root).DB
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		fmt.Println("⚡ no data to wipe")
 		return nil

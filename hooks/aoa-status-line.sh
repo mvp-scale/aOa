@@ -127,8 +127,9 @@ fi
 
 # === WRITE CONTEXT SNAPSHOT TO .aoa/context.jsonl ===
 # Append real Claude Code data for the dashboard. Daemon is read-only consumer.
-CONTEXT_JSONL="$PROJECT_DIR/.aoa/context.jsonl"
+CONTEXT_JSONL="$PROJECT_DIR/.aoa/hook/context.jsonl"
 if [ -d "$PROJECT_DIR/.aoa" ]; then
+    mkdir -p "$PROJECT_DIR/.aoa/hook"
     # Extract cost fields (not available in session JSONL)
     COST_USD=$(echo "$input" | jq -r '.cost.total_cost_usd // 0' 2>/dev/null)
     COST_DUR=$(echo "$input" | jq -r '.cost.total_duration_ms // 0' 2>/dev/null)

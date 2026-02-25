@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/corey/aoa/internal/adapters/treesitter"
+	"github.com/corey/aoa/internal/app"
 	"github.com/spf13/cobra"
 )
 
@@ -142,7 +143,7 @@ func runGrammarInfo(cmd *cobra.Command, args []string) error {
 func runGrammarInstall(cmd *cobra.Command, args []string) error {
 	manifest := treesitter.BuiltinManifest()
 	root := projectRoot()
-	grammarDir := filepath.Join(root, ".aoa", "grammars")
+	grammarDir := app.NewPaths(root).GrammarsDir
 
 	// Resolve targets — could be pack names or individual grammars
 	var targets []string

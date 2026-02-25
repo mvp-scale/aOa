@@ -145,7 +145,7 @@ func startDaemon(t *testing.T, dir string) func() {
 		// Graceful stop.
 		runAOA(t, dir, "daemon", "stop")
 		// Safety net: force-kill via PID file if still alive.
-		pidFile := filepath.Join(dir, ".aoa", "daemon.pid")
+		pidFile := filepath.Join(dir, ".aoa", "run", "daemon.pid")
 		if data, err := os.ReadFile(pidFile); err == nil {
 			if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
 				syscall.Kill(pid, syscall.SIGKILL)
@@ -444,7 +444,7 @@ func TestDaemon_StartStop(t *testing.T) {
 	}
 
 	// PID file should exist.
-	if _, err := os.Stat(filepath.Join(dir, ".aoa", "daemon.pid")); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, ".aoa", "run", "daemon.pid")); os.IsNotExist(err) {
 		t.Error("PID file not created after start")
 	}
 
@@ -485,7 +485,7 @@ func TestDaemon_RemoteStop(t *testing.T) {
 	}
 
 	// Read PID to verify the process actually dies.
-	pidData, err := os.ReadFile(filepath.Join(dir, ".aoa", "daemon.pid"))
+	pidData, err := os.ReadFile(filepath.Join(dir, ".aoa", "run", "daemon.pid"))
 	if err != nil {
 		t.Fatalf("read PID file: %v", err)
 	}
@@ -512,7 +512,7 @@ func TestDaemon_RemoteStop(t *testing.T) {
 	if _, err := os.Stat(sockPath); err == nil {
 		t.Error("socket should be removed after remote stop")
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".aoa", "daemon.pid")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, ".aoa", "run", "daemon.pid")); err == nil {
 		t.Error("PID file should be removed after remote stop")
 	}
 
@@ -797,7 +797,7 @@ func TestDashboard_HealthEndpoint(t *testing.T) {
 	defer cleanup()
 
 	// Read the HTTP port file
-	portData, err := os.ReadFile(filepath.Join(dir, ".aoa", "http.port"))
+	portData, err := os.ReadFile(filepath.Join(dir, ".aoa", "run", "http.port"))
 	if err != nil {
 		t.Fatalf("read http.port: %v", err)
 	}
@@ -830,7 +830,7 @@ func TestDashboard_HTMLServed(t *testing.T) {
 	cleanup := startDaemon(t, dir)
 	defer cleanup()
 
-	portData, err := os.ReadFile(filepath.Join(dir, ".aoa", "http.port"))
+	portData, err := os.ReadFile(filepath.Join(dir, ".aoa", "run", "http.port"))
 	if err != nil {
 		t.Fatalf("read http.port: %v", err)
 	}
@@ -857,7 +857,7 @@ func TestDashboard_PortCleanedOnStop(t *testing.T) {
 	runAOA(t, dir, "init")
 
 	cleanup := startDaemon(t, dir)
-	portFile := filepath.Join(dir, ".aoa", "http.port")
+	portFile := filepath.Join(dir, ".aoa", "run", "http.port")
 
 	// Port file should exist while running.
 	if _, err := os.Stat(portFile); os.IsNotExist(err) {

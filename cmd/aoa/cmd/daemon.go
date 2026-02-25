@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -83,17 +81,19 @@ func runDaemonRestart(cmd *cobra.Command, args []string) error {
 }
 
 // spawnDaemon re-execs the current binary as a background process with
-// stdout/stderr directed to .aoa/daemon.log. It waits until the socket
+// stdout/stderr directed to .aoa/log/daemon.log. It waits until the socket
 // becomes reachable (or the child exits early) before returning.
 func spawnDaemon(root, sockPath string) error {
-	aoaDir := filepath.Join(root, ".aoa")
-	if err := os.MkdirAll(aoaDir, 0755); err != nil {
-		return fmt.Errorf("create .aoa dir: %w", err)
+	paths := app.NewPaths(root)
+	if err := paths.EnsureDirs(); err != nil {
+		return fmt.Errorf("create .aoa dirs: %w", err)
 	}
 
-	logPath := filepath.Join(aoaDir, "daemon.log")
-	trimDaemonLog(logPath, 1000, 500)
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// Size-based log rotation: >1MB -> daemon.log.1
+	if info, err := os.Stat(paths.DaemonLog); err == nil && info.Size() > 1<<20 {
+		os.Rename(paths.DaemonLog, paths.DaemonLog+".1")
+	}
+	logFile, err := os.OpenFile(paths.DaemonLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("open daemon log: %w", err)
 	}
@@ -119,8 +119,7 @@ func spawnDaemon(root, sockPath string) error {
 	pid := child.Process.Pid
 
 	// Write PID file so `daemon stop` can find orphaned processes.
-	pidPath := filepath.Join(aoaDir, "daemon.pid")
-	os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", pid)), 0644)
+	os.WriteFile(paths.PIDFile, []byte(fmt.Sprintf("%d", pid)), 0644)
 
 	// Watch for early child exit (e.g., lock contention, init failure).
 	exited := make(chan error, 1)
@@ -138,29 +137,28 @@ func spawnDaemon(root, sockPath string) error {
 		select {
 		case <-exited:
 			// Child exited early — read the log tail so the user sees why.
-			detail := readLogTail(logPath, 10)
+			detail := readLogTail(paths.DaemonLog, 10)
 			if detail != "" {
 				return fmt.Errorf("daemon failed to start:\n%s", detail)
 			}
-			return fmt.Errorf("daemon failed to start\n  → check log: %s", logPath)
+			return fmt.Errorf("daemon failed to start\n  → check log: %s", paths.DaemonLog)
 		default:
 		}
 		if client.Ping() {
 			fmt.Printf("⚡ daemon started (pid %d) — aOa %s\n", pid, version.String())
-			fmt.Printf("  log: %s\n", logPath)
+			fmt.Printf("  log: %s\n", paths.DaemonLog)
 			// Show dashboard URL if HTTP port file exists
-			httpPortPath := filepath.Join(aoaDir, "http.port")
-			if portData, err := os.ReadFile(httpPortPath); err == nil {
+			if portData, err := os.ReadFile(paths.PortFile); err == nil {
 				fmt.Printf("  dashboard: http://localhost:%s\n", strings.TrimSpace(string(portData)))
 			}
 			// Brief tail of the log to show warmup progress
-			fmt.Printf("  caches warming in background (watch: tail -f %s)\n", logPath)
+			fmt.Printf("  caches warming in background (watch: tail -f %s)\n", paths.DaemonLog)
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	return fmt.Errorf("daemon not responding after start\n  → check log: %s", logPath)
+	return fmt.Errorf("daemon not responding after start\n  → check log: %s", paths.DaemonLog)
 }
 
 // readLogTail returns the last n lines of a file, or empty string on error.
@@ -174,38 +172,6 @@ func readLogTail(path string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
-}
-
-// trimDaemonLog truncates the log file to the last `keep` lines when it
-// exceeds `threshold` lines. Only runs on daemon start, so cost is negligible.
-func trimDaemonLog(path string, threshold, keep int) {
-	f, err := os.Open(path)
-	if err != nil {
-		return // file doesn't exist yet — nothing to trim
-	}
-
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	f.Close()
-
-	if len(lines) <= threshold {
-		return
-	}
-
-	// Keep the last `keep` lines
-	lines = lines[len(lines)-keep:]
-	out, err := os.Create(path)
-	if err != nil {
-		return
-	}
-	defer out.Close()
-	for _, line := range lines {
-		fmt.Fprintln(out, line)
-	}
 }
 
 // runDaemonLoop is the blocking entry point for the background child process.
@@ -266,9 +232,8 @@ func runDaemonLoop(root, sockPath string) error {
 
 	err = a.Stop()
 
-	// Clean up PID file.
-	pidPath := filepath.Join(root, ".aoa", "daemon.pid")
-	os.Remove(pidPath)
+	// Clean up ephemeral runtime files.
+	a.Paths.CleanEphemeral()
 
 	return err
 }
@@ -276,7 +241,8 @@ func runDaemonLoop(root, sockPath string) error {
 func runDaemonStop(cmd *cobra.Command, args []string) error {
 	root := projectRoot()
 	sockPath := socket.SocketPath(root)
-	pidPath := filepath.Join(root, ".aoa", "daemon.pid")
+	paths := app.NewPaths(root)
+	pidPath := paths.PIDFile
 	client := socket.NewClient(sockPath)
 
 	// Socket is reachable — send a graceful shutdown request.

@@ -40,6 +40,7 @@ func newTestApp(t *testing.T) *App {
 	a := &App{
 		ProjectRoot: "/home/user/project",
 		ProjectID:   "project",
+		Paths:       NewPaths("/home/user/project"),
 		Enricher:    enr,
 		Learner:     learner.New(),
 		Index:       idx,

@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/corey/aoa/internal/adapters/socket"
+	"github.com/corey/aoa/internal/app"
 	"github.com/spf13/cobra"
 )
 
@@ -29,8 +29,7 @@ func runOpen(cmd *cobra.Command, args []string) error {
 	}
 
 	// Read the HTTP port file
-	httpPortPath := filepath.Join(root, ".aoa", "http.port")
-	portData, err := os.ReadFile(httpPortPath)
+	portData, err := os.ReadFile(app.NewPaths(root).PortFile)
 	if err != nil {
 		return fmt.Errorf("dashboard not available (no port file)\n  → restart daemon: aoa daemon stop && aoa daemon start")
 	}

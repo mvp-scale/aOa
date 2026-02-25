@@ -21,7 +21,8 @@ var initCmd = &cobra.Command{
 
 func runInit(cmd *cobra.Command, args []string) error {
 	root := projectRoot()
-	dbPath := filepath.Join(root, ".aoa", "aoa.db")
+	paths := app.NewPaths(root)
+	dbPath := paths.DB
 	projectID := filepath.Base(root)
 
 	// If daemon is running, delegate reindex via socket (avoids bbolt lock contention).
@@ -42,9 +43,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// No daemon — do it directly.
 
-	// Ensure .aoa directory exists
-	if err := os.MkdirAll(filepath.Join(root, ".aoa"), 0755); err != nil {
-		return fmt.Errorf("create .aoa dir: %w", err)
+	// Ensure .aoa directory structure exists
+	if err := paths.EnsureDirs(); err != nil {
+		return fmt.Errorf("create .aoa dirs: %w", err)
 	}
 
 	store, err := bbolt.NewStore(dbPath)
@@ -83,7 +84,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 // runReconIfEnabled invokes aoa-recon enhance only if recon has been explicitly
 // enabled via `aoa recon init` (which writes .aoa/recon.enabled).
 func runReconIfEnabled(root, dbPath string) {
-	enabledPath := filepath.Join(root, ".aoa", "recon.enabled")
+	enabledPath := app.NewPaths(root).ReconEnabled
 	if _, err := os.Stat(enabledPath); err != nil {
 		fmt.Println("  Tip: run 'aoa recon init' to enable structural analysis")
 		return

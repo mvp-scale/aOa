@@ -39,6 +39,7 @@ func newWatcherTestApp(t *testing.T, root string) *App {
 	return &App{
 		ProjectRoot: root,
 		ProjectID:   "test",
+		Paths:       NewPaths(root),
 		Enricher:    enr,
 		Engine:      engine,
 		Learner:     learner.New(),

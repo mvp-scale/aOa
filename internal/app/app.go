@@ -150,6 +150,7 @@ type ContextSnapshot struct {
 type App struct {
 	ProjectRoot string
 	ProjectID   string
+	Paths       *Paths // resolved .aoa/ directory paths
 
 	Store     *bbolt.Store
 	Watcher   *fsw.Watcher
@@ -264,8 +265,16 @@ func New(cfg Config) (*App, error) {
 	if cfg.ProjectID == "" {
 		cfg.ProjectID = filepath.Base(cfg.ProjectRoot)
 	}
+	paths := NewPaths(cfg.ProjectRoot)
+	if err := paths.EnsureDirs(); err != nil {
+		return nil, fmt.Errorf("ensure .aoa dirs: %w", err)
+	}
+	if _, err := paths.Migrate(); err != nil {
+		return nil, fmt.Errorf("migrate .aoa layout: %w", err)
+	}
+
 	if cfg.DBPath == "" {
-		cfg.DBPath = filepath.Join(cfg.ProjectRoot, ".aoa", "aoa.db")
+		cfg.DBPath = paths.DB
 	}
 
 	store, err := bbolt.NewStore(cfg.DBPath)
@@ -314,11 +323,12 @@ func New(cfg Config) (*App, error) {
 	})
 
 	// Status line goes alongside the DB in .aoa/
-	statusPath := filepath.Join(cfg.ProjectRoot, ".aoa", status.StatusFile)
+	statusPath := paths.Status
 
 	a := &App{
 		ProjectRoot:    cfg.ProjectRoot,
 		ProjectID:      cfg.ProjectID,
+		Paths:          paths,
 		Store:          store,
 		Watcher:        watcher,
 		Enricher:       enr,
@@ -347,8 +357,7 @@ func New(cfg Config) (*App, error) {
 	a.Server = socket.NewServer(engine, idx, sockPath, a)
 
 	// Create HTTP server for web dashboard
-	httpPortFile := filepath.Join(cfg.ProjectRoot, ".aoa", "http.port")
-	a.WebServer = web.NewServer(a, idx, engine, httpPortFile)
+	a.WebServer = web.NewServer(a, idx, engine, paths.PortFile)
 
 	// Wire search observer: search results → learning signals
 	engine.SetObserver(a.searchObserver)
@@ -2086,17 +2095,16 @@ func (a *App) ClearInvestigated() {
 	a.saveInvestigated()
 }
 
-// saveInvestigated persists the investigated files to .aoa/recon-investigated.json.
+// saveInvestigated persists the investigated files to .aoa/recon/investigated.json.
 // Must be called under reconMu.Lock().
 func (a *App) saveInvestigated() {
-	path := filepath.Join(a.ProjectRoot, ".aoa", "recon-investigated.json")
 	data, _ := json.Marshal(a.investigatedFiles)
-	os.WriteFile(path, data, 0644)
+	os.WriteFile(a.Paths.ReconInvestigated, data, 0644)
 }
 
 // loadInvestigated loads investigated files from disk, pruning expired entries.
 func (a *App) loadInvestigated() {
-	path := filepath.Join(a.ProjectRoot, ".aoa", "recon-investigated.json")
+	path := a.Paths.ReconInvestigated
 	data, err := os.ReadFile(path)
 	if err != nil {
 		a.investigatedFiles = make(map[string]int64)

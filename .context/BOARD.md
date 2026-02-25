@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-02-25 (Session 72) | **89% complete.**
-> **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9 + L6.1-L6.10 + L7.2 + P0 (all 7 bugs) (470+ active tests, 32 skipped)
+> **Updated**: 2026-02-25 (Session 73) | **89% complete.**
+> **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9 + L6 (all) + L7.2 + L8.1-L8.5 + P0 (all 7 bugs) (470+ active tests, 32 skipped)
 > **Archived boards**: `.context/archived/`
 
 ---
@@ -37,9 +37,10 @@
 | **L2** | Infra Gaps | File watcher, bbolt lock, CLI flags, sub-ms content search | `aoa init` works while daemon runs; file changes trigger re-index; `aoa grep` <=1ms |
 | **L3** | Migration | Parallel run Python vs Go, parity proof | 100 queries x 5 projects = zero divergence; benchmark confirms speedup |
 | **L4** | Distribution | Goreleaser, grammar loader, install docs | `go install` or binary download works on linux/darwin x amd64/arm64 |
-| **L5** | Dimensional Analysis | Bitmask engine, 6-tier scanning, Recon tab | Security tier catches known vulns in test projects; query time < 10ms |
+| **L5** | Dimensional Analysis | Bitmask engine, 6-tier scanning, rule expansion | Security tier catches known vulns in test projects; query time < 10ms |
 | **L6** | Distribution v2 | Two-binary split, npm packaging, zero-friction install | `npm install -g aoa` works; `npm install -g aoa-recon` lights up Recon tab |
 | **L7** | Onboarding UX | First-run experience, progress feedback, project state hygiene | User sees meaningful progress during startup; `.aoa/` is clean and self-documenting |
+| **L8** | Recon | Scanning dashboard, investigation tracking, source view | Recon tab shows findings; cache is instant; investigation tracks reviewed files |
 
 ### Columns
 
@@ -95,18 +96,19 @@
 | [L5](#layer-5) | [L5.8](#l58) | | | | | | | | L5.1 | 🟢 | 🟢 | 🟡 | Quality tier -- 24 rules across 4 dimensions (errors, complexity, dead_code, conventions) | Third tier coverage | All 4 dims wired in dashboard. **Gap**: per-rule detection validation. Revalidated 2026-02-25 |
 | [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
 | [L5](#layer-5) | [L5.11](#l511) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Dimension query support -- `--dimension=security --risk=high` | Filter by dimension | CLI filters by tier and severity |
-| [L5](#layer-5) | [L5.12](#l512) | | | | | | | x | L5.9 | 🟢 | 🟢 | 🟡 | Recon tab -- dimensional engine with interim scanner fallback | Dashboard dimensional view | API works. **Gap**: dashboard UI upgrade for bitmask scores |
-| [L5](#layer-5) | [L5.13](#l513) | | | | | | | x | L5.12 | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul -- 5 focus modes, tier redesign, code toggle, copy prompt | Recon tab is actionable, not just a finding list | **Gap**: browser-only validation |
-| [L5](#layer-5) | [L5.14](#l514) | x | | | | x | | | L5.12 | 🟢 | 🟢 | 🟡 | Recon cache + incremental updates -- pre-compute at startup, SubtractFile/AddFile on file change | Zero per-poll scan cost, instant API response | **Gap**: no unit tests for incremental path |
-| [L5](#layer-5) | [L5.15](#l515) | | | | | | | x | L5.14 | 🟢 | 🟢 | 🟡 | Investigation tracking -- per-file investigated status, persistence, auto-expiry | Users can mark files as reviewed, auto-clears on change | **Gap**: no unit tests |
 | [L5](#layer-5) | [L5.16](#l516) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Security dimension expansion -- YAML rework complete, universal concept layer, 37 rules loaded | Complete 5-dimension security tier | All rules load + pass. **Gap**: per-rule detection validation. Revalidated 2026-02-25 |
 | [L5](#layer-5) | [L5.17](#l517) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Architecture dimension expansion -- YAML rework complete, universal concept layer | Complete 3-dimension architecture tier | All rules load + pass. **Gap**: per-rule detection validation |
 | [L5](#layer-5) | [L5.18](#l518) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Observability dimension expansion -- YAML rework complete, universal concept layer | Complete 2-dimension observability tier | All rules load + pass. **Gap**: per-rule detection validation |
 | [L5](#layer-5) | [L5.19](#l519) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | ~~Compliance tier~~ -- **Pivoted**: tier removed, concepts absorbed into security tier (config dimension). `TierReserved` preserves bitmask slot. No YAML file. | ~~Compliance coverage~~ | Superseded. Revalidated 2026-02-25 |
-| [L6](#layer-6) | [L6.7](#l67) | | | | | | | x | L6.6 | 🟢 | 🟢 | 🟡 | Dashboard Recon tab install prompt -- "npm install aoa-recon" when not detected | Users know how to unlock Recon | **Gap**: browser-only validation |
+| **L6** | | | | | | | | | | | | | *All 9 tasks complete -- see COMPLETED.md* | | |
 | [L7](#layer-7) | [L7.1](#l71) | x | | | x | | | x | - | 🟢 | 🟢 | 🟡 | Startup progress feedback -- deferred loading, async cache warming incl. recon | Daemon starts in <1s, caches warm in background | **Gap**: no automated startup time test |
-| [L7](#layer-7) | [L7.3](#l73) | | | | | | | x | - | 🟡 | ⚪ | ⚪ | Recon source line editor view -- file-level source display | All flagged lines in context, not one-at-a-time | Design conversation needed on layout |
-| [L7](#layer-7) | [L7.4](#l74) | | | | x | x | | | - | 🟢 | ⚪ | ⚪ | .aoa/ directory restructure -- subdirs for log/run/recon/hook, log rotation, delete dead dirs | Clean project state dir; logs don't grow forever | All paths resolve; daemon.log rotates; migration handles existing installs |
+| [L7](#layer-7) | [L7.4](#l74) | | | | x | x | | | - | 🟢 | 🟢 | 🟢 | .aoa/ directory restructure -- `Paths` struct (18 fields), `EnsureDirs`, `Migrate` (7 files), 1MB log rotation, 13 files updated | Clean project state dir; logs don't grow forever | 7 unit tests, live migration verified on 1.3GB database, all builds clean |
+| [L8](#layer-8) | [L8.1](#l81) | | | | | | | x | L5.9 | 🟢 | 🟢 | 🟡 | Recon tab -- dimensional engine with interim scanner fallback | Dashboard dimensional view | API works. **Gap**: dashboard UI upgrade for bitmask scores |
+| [L8](#layer-8) | [L8.2](#l82) | | | | | | | x | L8.1 | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul -- 5 focus modes, tier redesign, code toggle, copy prompt | Recon tab is actionable, not just a finding list | **Gap**: browser-only validation |
+| [L8](#layer-8) | [L8.3](#l83) | x | | | | x | | | L8.1 | 🟢 | 🟢 | 🟡 | Recon cache + incremental updates -- pre-compute at startup, SubtractFile/AddFile on file change | Zero per-poll scan cost, instant API response | **Gap**: no unit tests for incremental path |
+| [L8](#layer-8) | [L8.4](#l84) | | | | | | | x | L8.3 | 🟢 | 🟢 | 🟡 | Investigation tracking -- per-file investigated status, persistence, auto-expiry | Users can mark files as reviewed, auto-clears on change | **Gap**: no unit tests |
+| [L8](#layer-8) | [L8.5](#l85) | | | | | | | x | L6.6 | 🟢 | 🟢 | 🟡 | Dashboard Recon tab install prompt -- "npm install aoa-recon" when not detected | Users know how to unlock Recon | **Gap**: browser-only validation |
+| [L8](#layer-8) | [L8.6](#l86) | | | | | | | x | - | 🟡 | ⚪ | ⚪ | Recon source line editor view -- file-level source display | All flagged lines in context, not one-at-a-time | Design conversation needed on layout |
 
 ---
 
@@ -146,7 +148,7 @@ Two install paths: `go install` (from source) vs binary download (lean + grammar
 
 ### Layer 5
 
-**Layer 5: Dimensional Analysis (Bitmask engine, Recon tab)**
+**Layer 5: Dimensional Analysis (Bitmask engine, rule expansion)**
 
 > Early warning system. 5 active tiers, 21 dimensions. Dimensional engine with 136 YAML rules across all tiers. **YAML rework complete**: Universal concept layer (15 concepts, 509 languages), declarative `structural:` blocks, `lang_map` eliminated from all rules. Performance tier (26 rules, 5 dims) and Quality tier (24 rules, 4 dims) fully populated. Compliance tier pivoted -- concepts absorbed into security. Revalidated 2026-02-25.
 >
@@ -200,46 +202,6 @@ Append `S:-23 P:0 Q:-4` to grep/egrep output.
 
 **Files**: `cmd/aoa/cmd/grep.go`
 
-#### L5.12
-
-**Recon tab** -- green Complete (interim scanner), yellow Bitmask upgrade pending
-
-Interim pattern scanner with 10 detectors + `long_function`. `GET /api/recon` returns folder->file->findings tree. Tier toggles, breadcrumb nav, code-only file filtering.
-
-**Gap**: Full bitmask engine (L5.1-L5.5) not yet wired to dashboard. AST-based patterns, AC scanner, cross-language uniformity still on interim scanner.
-
-**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
-
-#### L5.13
-
-**Recon dashboard overhaul** -- green Complete, yellow Browser-only validation
-
-8 features delivered across Sessions 65-66: source line peek, tier noise gating, scan freshness, 5 focus modes, tier color redesign, code toggle with source cache, Copy Prompt, column alignment.
-
-**Gap**: No automated tests -- browser-only validation.
-
-**Files**: `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`, `internal/adapters/web/static/style.css`
-
-#### L5.14
-
-**Recon cache + incremental updates** -- green Complete, yellow No unit tests
-
-Old warmReconCache/updateReconForFile deleted in Session 71 (clean separation). Recon now gated behind `aoa recon init` + `.aoa/recon.enabled` marker. When enabled, ReconBridge handles scanning via separate aoa-recon binary.
-
-**Gap**: No unit tests for incremental path.
-
-**Files**: `internal/app/recon_bridge.go`, `internal/adapters/web/recon.go`, `internal/app/watcher.go`
-
-#### L5.15
-
-**Investigation tracking** -- green Complete, yellow No unit tests
-
-Per-file investigated status with persistence (`.aoa/recon-investigated.json`), 1-week auto-expiry, auto-clear on file change. `POST /api/recon-investigate` endpoint. Dashboard investigated tier with solo mode.
-
-**Gap**: No unit tests for investigation methods.
-
-**Files**: `internal/app/app.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
-
 #### L5.16
 
 **Security dimension expansion** -- green YAML rework complete, yellow Per-rule validation gap. Revalidated 2026-02-25.
@@ -291,22 +253,6 @@ Dashboard `RECON_TIERS` has 5 active tiers (security, performance, quality, arch
 
 ---
 
-### Layer 6
-
-**Layer 6: Distribution v2**
-
-> aoa (pure Go, 11 MB) + aoa-recon (CGo, 361 MB). npm distribution.
-
-#### L6.7
-
-**Dashboard Recon tab install prompt** -- green Complete, yellow Browser-only
-
-`recon_available` field in API. Install prompt with `npm install -g aoa-recon`. "Lite mode" indicator.
-
-**Files**: `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
-
----
-
 ### Layer 7
 
 **Layer 7: Onboarding UX & Operational Polish**
@@ -335,40 +281,94 @@ Replaced JSON serialization with binary posting lists + gob for the bbolt search
 
 **Files**: `internal/adapters/bbolt/encoding.go` (new -- binary codec), `internal/adapters/bbolt/store.go` (format versioning + migration), `internal/adapters/bbolt/store_test.go` (5 new tests + 4 benchmarks)
 
-#### L7.3
+#### L7.4
+
+**.aoa/ directory restructure** -- COMPLETE (Session 73)
+
+`Paths` struct with 18 pre-computed path fields, `NewPaths()` constructor, `EnsureDirs()` (creates 7 subdirs), `Migrate()` (moves 7 files from flat layout, removes dead `domains/`), `CleanEphemeral()`. Replaced 25+ scattered `filepath.Join` calls across 13 files. Line-based `trimDaemonLog` replaced with 1MB size-based rotation (`os.Rename` to `.1`). Hook script updated for `hook/` subdirectory.
+
+```
+.aoa/
+  aoa.db              persistent database (top-level)
+  status.json         hook reads this (top-level)
+  log/daemon.log      rotated: >1MB -> daemon.log.1
+  run/daemon.pid      ephemeral
+  run/http.port       ephemeral
+  recon/enabled       marker file
+  recon/investigated.json
+  hook/context.jsonl  hook-written context snapshots
+  hook/usage.txt      pasted /usage output
+  bin/                recon binary fallback
+  grammars/           tree-sitter grammar .so files
+```
+
+**Validation**: 7 unit tests (NewPaths, EnsureDirs, Migrate_FreshInstall, Migrate_OldLayout, Migrate_Idempotent, Migrate_NoOverwrite, Migrate_DomainsCleanup). Live migration verified on 1.3GB database. All builds and vet clean.
+
+**Files**: `internal/app/paths.go` (new), `internal/app/paths_test.go` (new), `internal/app/app.go`, `internal/app/watcher.go`, `internal/app/recon_bridge.go`, `internal/app/watcher_test.go`, `internal/app/activity_test.go`, `cmd/aoa/cmd/daemon.go`, `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/config.go`, `cmd/aoa/cmd/wipe.go`, `cmd/aoa/cmd/recon.go`, `cmd/aoa/cmd/open.go`, `cmd/aoa/cmd/grammar_cgo.go`, `hooks/aoa-status-line.sh`, `test/integration/cli_test.go`
+
+---
+
+### Layer 8
+
+**Layer 8: Recon**
+
+> Scanning dashboard, investigation tracking, source view. Powered by the dimensional engine (L5).
+
+#### L8.1
+
+**Recon tab** -- green Complete (interim scanner), yellow Bitmask upgrade pending
+
+Interim pattern scanner with 10 detectors + `long_function`. `GET /api/recon` returns folder->file->findings tree. Tier toggles, breadcrumb nav, code-only file filtering.
+
+**Gap**: Full bitmask engine (L5.1-L5.5) not yet wired to dashboard. AST-based patterns, AC scanner, cross-language uniformity still on interim scanner.
+
+**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+
+#### L8.2
+
+**Recon dashboard overhaul** -- green Complete, yellow Browser-only validation
+
+8 features delivered across Sessions 65-66: source line peek, tier noise gating, scan freshness, 5 focus modes, tier color redesign, code toggle with source cache, Copy Prompt, column alignment.
+
+**Gap**: No automated tests -- browser-only validation.
+
+**Files**: `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`, `internal/adapters/web/static/style.css`
+
+#### L8.3
+
+**Recon cache + incremental updates** -- green Complete, yellow No unit tests
+
+Old warmReconCache/updateReconForFile deleted in Session 71 (clean separation). Recon now gated behind `aoa recon init` + `.aoa/recon.enabled` marker. When enabled, ReconBridge handles scanning via separate aoa-recon binary.
+
+**Gap**: No unit tests for incremental path.
+
+**Files**: `internal/app/recon_bridge.go`, `internal/adapters/web/recon.go`, `internal/app/watcher.go`
+
+#### L8.4
+
+**Investigation tracking** -- green Complete, yellow No unit tests
+
+Per-file investigated status with persistence (`.aoa/recon-investigated.json`), 1-week auto-expiry, auto-clear on file change. `POST /api/recon-investigate` endpoint. Dashboard investigated tier with solo mode.
+
+**Gap**: No unit tests for investigation methods.
+
+**Files**: `internal/app/app.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+
+#### L8.5
+
+**Dashboard Recon tab install prompt** -- green Complete, yellow Browser-only
+
+`recon_available` field in API. Install prompt with `npm install -g aoa-recon`. "Lite mode" indicator.
+
+**Files**: `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+
+#### L8.6
 
 **Recon source line editor view** -- Not started
 
 File-level source display with all flagged lines in context (editor-like, severity badges inline). Design conversation needed.
 
 **Files**: `internal/adapters/web/static/app.js`, `style.css`, `internal/adapters/web/recon.go`
-
-#### L7.4
-
-**.aoa/ directory restructure** -- Not started
-
-Reorganize `.aoa/` from flat dump to structured subdirectories:
-
-```
-.aoa/
-  aoa.db              top-level (persistent database)
-  status.json         top-level (hook reads this)
-  log/
-    daemon.log        rotated: >1MB -> daemon.log.1 on startup
-  run/
-    daemon.pid        ephemeral, deleted on clean shutdown
-    http.port         ephemeral, deleted on clean shutdown
-  recon/
-    investigated.json investigation markers
-  hook/
-    context.jsonl     hook-written context snapshots
-    usage.txt         user-pasted /usage output
-  grammars/           purego loader search path (empty by default)
-```
-
-Delete dead `domains/` directory. Add `ensureSubdirs()` at startup. Migration moves files from old flat paths on first run. ~6 Go files to update.
-
-**Files**: `cmd/aoa/cmd/daemon.go`, `internal/app/app.go`, `internal/app/watcher.go`, `internal/adapters/web/server.go`
 
 ---
 
@@ -387,8 +387,8 @@ Delete dead `domains/` directory. Add `ensureSubdirs()` at startup. Migration mo
 | Dashboard (L1, 5-tab SPA) | 3-file split. Tab-aware polling. Soft glow animations. |
 | GNU grep parity (L3.15) | 135 parity tests (77 internal + 58 Unix). 3-route architecture. 22 native flags. |
 | npm distribution (L6.8-L6.10) | 10 npm packages, CI/release pipeline, 5 successful releases (v0.1.3-v0.1.7). |
-| Recon cache (L5.14) | Pre-computed at startup, incremental on file change. Zero per-poll cost. |
-| Investigation tracking (L5.15) | Per-file status. Persisted. 1-week auto-expiry. Auto-cleared on change. |
+| Recon cache (L8.3) | Pre-computed at startup, incremental on file change. Zero per-poll cost. |
+| Investigation tracking (L8.4) | Per-file status. Persisted. 1-week auto-expiry. Auto-cleared on change. |
 | File watcher (L2) | `onFileChanged` -> re-parse -> `Rebuild` -> `SaveIndex` -> `clearFileInvestigated`. Recon gated behind `.aoa/recon.enabled`. |
 
 ---

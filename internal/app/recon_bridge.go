@@ -18,7 +18,7 @@ type ReconBridge struct {
 }
 
 // NewReconBridge probes for the aoa-recon binary.
-func NewReconBridge(projectRoot string) *ReconBridge {
+func NewReconBridge(paths *Paths) *ReconBridge {
 	rb := &ReconBridge{}
 
 	// 1. PATH lookup (npm install -g puts it here)
@@ -28,9 +28,8 @@ func NewReconBridge(projectRoot string) *ReconBridge {
 	}
 
 	// 2. Project-local .aoa/bin/
-	localBin := filepath.Join(projectRoot, ".aoa", "bin", "aoa-recon")
-	if _, err := os.Stat(localBin); err == nil {
-		rb.binaryPath = localBin
+	if _, err := os.Stat(paths.ReconBin); err == nil {
+		rb.binaryPath = paths.ReconBin
 		return rb
 	}
 
@@ -93,14 +92,13 @@ func (rb *ReconBridge) EnhanceFile(dbPath, filePath string) (string, error) {
 // Not exported because it's an implementation detail.
 
 // initReconBridge sets up the recon bridge, but only if recon has been
-// explicitly enabled via `aoa recon init` (which writes .aoa/recon.enabled).
+// explicitly enabled via `aoa recon init` (which writes .aoa/recon/enabled).
 // This ensures pure aOa never probes for or depends on aoa-recon.
 func (a *App) initReconBridge() {
-	enabledPath := filepath.Join(a.ProjectRoot, ".aoa", "recon.enabled")
-	if _, err := os.Stat(enabledPath); err != nil {
+	if _, err := os.Stat(a.Paths.ReconEnabled); err != nil {
 		return // recon not enabled
 	}
-	a.reconBridge = NewReconBridge(a.ProjectRoot)
+	a.reconBridge = NewReconBridge(a.Paths)
 }
 
 // ReconAvailable returns true if aoa-recon is installed and discoverable.
