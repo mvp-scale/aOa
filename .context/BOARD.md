@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-02-25 (Session 75) | **89% complete.**
-> **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9 + L6 (all) + L7.2 + L8.1-L8.5 + P0 (all 7 bugs) (470+ active tests, 32 skipped)
+> **Updated**: 2026-02-26 (Session 76) | **89% complete.**
+> **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9 + L6 (all) + L7.2 + L8.1-L8.5 + L9.0 + P0 (all 7 bugs) (470+ active tests, 32 skipped)
 > **Archived boards**: `.context/archived/`
 
 ---
@@ -41,6 +41,7 @@
 | **L6** | Distribution v2 | Two-binary split, npm packaging, zero-friction install | `npm install -g aoa` works; `npm install -g aoa-recon` lights up Recon tab |
 | **L7** | Onboarding UX | First-run experience, progress feedback, project state hygiene | User sees meaningful progress during startup; `.aoa/` is clean and self-documenting |
 | **L8** | Recon | Scanning dashboard, investigation tracking, source view | Recon tab shows findings; cache is instant; investigation tracks reviewed files |
+| **L9** | Telemetry | Unified content metering, tool shadow counterfactual, burst throughput | Every content stream measured; counterfactual proves aOa savings on every tool call |
 
 ### Columns
 
@@ -110,6 +111,15 @@
 | [L8](#layer-8) | [L8.4](#l84) | | | | | | | x | L8.3 | 🟢 | 🟢 | 🟡 | Investigation tracking -- per-file investigated status, persistence, auto-expiry | Users can mark files as reviewed, auto-clears on change | **Gap**: no unit tests |
 | [L8](#layer-8) | [L8.5](#l85) | | | | | | | x | L6.6 | 🟢 | 🟢 | 🟡 | Dashboard Recon tab install prompt -- "npm install aoa-recon" when not detected | Users know how to unlock Recon | **Gap**: browser-only validation |
 | [L8](#layer-8) | [L8.6](#l86) | | | | | | | x | - | 🟡 | ⚪ | ⚪ | Recon source line editor view -- file-level source display | All flagged lines in context, not one-at-a-time | Design conversation needed on layout |
+| [L9](#layer-9) | [L9.0](#l90) | | | | | x | | x | - | 🟢 | 🟢 | 🟡 | Inline tool result char capture -- `ResultChars` on TurnAction, throughput/conversation speed metrics | Throughput reflects actual content volume, not just model output | Live on dashboard. **Gap**: no unit test for char extraction accuracy |
+| [L9](#layer-9) | [L9.1](#l91) | | | | | x | | x | L9.0 | 🟢 | ⚪ | ⚪ | ContentMeter struct -- unified `(chars, timestamp)` accumulator for all content streams | Single source of truth for session content volume | Unit test: meter accumulates correctly from synthetic events |
+| [L9](#layer-9) | [L9.2](#l92) | | | | x | x | | x | L9.0 | 🟢 | ⚪ | ⚪ | Tool call detail capture -- pattern, path, command in `TurnActionResult` wire format | Dashboard shows what each tool call did, not just that it happened | Actions table displays tool details |
+| [L9](#layer-9) | [L9.3](#l93) | | | | | | | x | L9.1 | 🟢 | ⚪ | ⚪ | Persisted tool result sizes -- read `tool-results/toolu_*.txt` file sizes when inline content is 0 | Capture large tool outputs stored on disk | ToolPersistedChars populated in ContentMeter |
+| [L9](#layer-9) | [L9.4](#l94) | | | | | | | x | L9.1 | 🟢 | ⚪ | ⚪ | Subagent JSONL tailing -- discover and parse `subagents/agent-*.jsonl` | Capture full internal work of Task tool forks, not just summary | SubagentChars populated in ContentMeter |
+| [L9](#layer-9) | [L9.5](#l95) | x | | | x | | | x | L9.2 | 🟢 | ⚪ | ⚪ | Counterfactual shadow engine -- async aOa search for grep/glob tool calls, measure output delta | Proves aOa saves tokens on every search tool call | Shadow chars < actual chars on test queries |
+| [L9](#layer-9) | [L9.6](#l96) | | | | x | | | x | L9.5 | 🟡 | ⚪ | ⚪ | Bash command shadow -- parse `grep`/`find`/`rg` from bash commands, route to aOa equivalent | Extend counterfactual to bash-wrapped searches | Common bash search patterns parsed and shadowed |
+| [L9](#layer-9) | [L9.7](#l97) | | | | | | | x | L9.1 | 🟢 | ⚪ | ⚪ | Burst throughput & per-turn velocity -- `ActiveMs` denominator, `TurnSnapshot` ring buffer | Show how fast the system works when actively working, not diluted by idle | Per-turn sparkline on dashboard |
+| [L9](#layer-9) | [L9.8](#l98) | | | | | | | x | L9.5 | 🟢 | ⚪ | ⚪ | Dashboard shadow savings display -- per-action counterfactual column, session savings rollup | User sees "aOa saved X tokens on this grep" inline | Savings column in Actions table |
 
 ---
 
@@ -373,6 +383,105 @@ File-level source display with all flagged lines in context (editor-like, severi
 
 ---
 
+### Layer 9
+
+**Layer 9: Telemetry**
+
+> Unified content metering, tool call capture, counterfactual shadow engine. Every content stream measured in raw characters with timestamps. Counterfactual shadows prove aOa savings on queryable tool calls. Extends the existing `readSavings`/`burnRateCounterfact` system to cover all tool types.
+>
+> **Design**: [Throughput Telemetry Model](details/2026-02-26-throughput-telemetry-model.md) -- data hierarchy, calculations, ContentMeter spec, shadow pattern
+>
+> **Principle**: Raw character count is the universal measurement unit. Never convert to tokens at capture time. Every measurement is a `(chars, timestamp)` pair. Display converts to tokens (÷4) or any other unit.
+
+#### L9.0
+
+**Inline tool result char capture** -- green Complete, yellow No unit test for extraction accuracy
+
+Phase 0. Shipped 2026-02-26. 7 files changed:
+- `tailer/parser.go`: `ToolResultSizes map[string]int` on SessionEvent, extracts `len(content)` from `tool_result` blocks
+- `ports/session.go`: `ToolResultSizes` on canonical SessionEvent
+- `claude/reader.go`: `translateUser` emits `EventToolResult` with sizes map
+- `app/app.go`: `ToolID` + `ResultChars` on TurnAction, `EventToolResult` handler correlates via tool_use_id
+- `socket/protocol.go`: `ResultChars` on `TurnActionResult`
+- `web/static/app.js`: Throughput = `max(outputTokens, textTokens) + resultTokens`. Conversation Speed = textTokens only.
+- `web/static/index.html`: Accurate tooltips, "Conversation Speed" label
+
+**What's measured**: Just the text content string from tool results. No JSON envelope, no metadata keys. When a Read returns a file, `len("package auth\nfunc Login()...")` — the actual file text.
+
+**Gap**: No unit test asserting char extraction from a synthetic tool_result JSONL line.
+
+**Files**: `internal/adapters/tailer/parser.go`, `internal/ports/session.go`, `internal/adapters/claude/reader.go`, `internal/app/app.go`, `internal/adapters/socket/protocol.go`, `internal/adapters/web/static/app.js`, `internal/adapters/web/static/index.html`
+
+#### L9.1
+
+**ContentMeter struct** -- Not started
+
+Unified `(chars, timestamp)` accumulator. One per session. Records every content stream: UserChars, AssistantChars, ThinkingChars, ToolResultChars, ToolPersistedChars, SubagentChars, EditChars. Plus API-reported tokens (kept separate — real tokenizer). Plus ActiveMs (sum of turn durations). Plus TurnSnapshot ring buffer (last N turns with per-turn breakdowns).
+
+Wire existing captures (already in app.go scattered across fields) into the single struct. No new data sources — just restructuring.
+
+**Files**: `internal/app/app.go` (new struct + wiring)
+
+#### L9.2
+
+**Tool call detail capture** -- Not started
+
+Thread tool call details (Pattern, FilePath, Command) from TurnAction through to TurnActionResult wire format and dashboard. Already extracted by the tailer — just need to persist through the pipeline. Enables the Actions table to show "Grep `func.*Search` in `internal/`" instead of just "Grep".
+
+**Files**: `internal/app/app.go`, `internal/adapters/socket/protocol.go`, `internal/adapters/web/static/app.js`
+
+#### L9.3
+
+**Persisted tool result sizes** -- Not started
+
+When a `tool_result` has a `tool_use_id` but 0 inline content, check if `tool-results/toolu_{id}.txt` exists in the session directory and measure its file size. Fills the ToolPersistedChars gap in ContentMeter.
+
+**Files**: `internal/adapters/tailer/parser.go` or `internal/adapters/claude/reader.go`
+
+#### L9.4
+
+**Subagent JSONL tailing** -- Not started
+
+Extend the tailer to discover `subagents/agent-*.jsonl` files in the active session directory. Apply the same parser. Sum all content streams into SubagentChars. This captures the full internal work of Task tool calls (reads, greps, thinking) — currently we only see the final result summary.
+
+**Files**: `internal/adapters/tailer/tailer.go`, `internal/adapters/claude/reader.go`
+
+#### L9.5
+
+**Counterfactual shadow engine** -- Not started
+
+When a Grep or Glob tool invocation arrives, dispatch an async aOa search with the same query. Measure output size. Store in `ToolShadow` ring buffer. Non-blocking — main pipeline never waits. Delta = `ActualChars - ShadowChars`. Feeds into existing `counterfactTokensSaved` and `burnRateCounterfact`.
+
+Extends what `readSavings()` already does for reads to cover all queryable tools.
+
+**Files**: `internal/app/app.go` (shadow goroutine + ToolShadow ring), `internal/app/observer.go`
+
+#### L9.6
+
+**Bash command shadow** -- Not started
+
+Parse common bash search patterns: `grep -r "pattern" path`, `find . -name "*.go"`, `rg pattern path`. Route to aOa's search/files equivalents. Harder than L9.5 — requires command string parsing. Yellow confidence.
+
+**Files**: `internal/app/app.go`
+
+#### L9.7
+
+**Burst throughput & per-turn velocity** -- Not started
+
+Use `ActiveMs` (sum of turn durations, excluding idle gaps) as denominator for burst throughput rate. Populate TurnSnapshot ring with per-turn char breakdowns. Dashboard: sparkline or per-turn bars showing velocity over time.
+
+**Files**: `internal/app/app.go`, `internal/adapters/web/static/app.js`
+
+#### L9.8
+
+**Dashboard shadow savings display** -- Not started
+
+Per-action counterfactual column in the Actions table: "32K → 847 (↓97%)". Session-level rollup: "aOa could save ~40K tokens/session on grep alone." Feeds the existing runway delta display with richer data.
+
+**Files**: `internal/adapters/web/static/app.js`, `internal/adapters/web/static/index.html`
+
+---
+
 ### What Works (Preserve)
 
 | Component | Notes |
@@ -410,6 +519,7 @@ File-level source display with all flagged lines in context (editor-like, severi
 | [COMPLETED.md](COMPLETED.md) | Archived phases 1-8c + all triple-green tasks with validation notes |
 | [Declarative YAML Rules ADR](decisions/2026-02-23-declarative-yaml-rules.md) | Spec for dimensional rules rework -- schema, constraints, Go types |
 | [Dimensional Taxonomy](details/2026-02-23-dimensional-taxonomy.md) | 142 questions across 21 dimensions, 6 tiers |
+| [Throughput Telemetry Model](details/2026-02-26-throughput-telemetry-model.md) | Data hierarchy, calculations, ContentMeter spec, shadow pattern |
 | [Bitmask Analysis](../docs/research/bitmask-dimensional-analysis.md) | Security worked example, execution pipeline, cross-language uniformity |
 | [AST vs LSP](../docs/research/asv-vs-lsp.md) | Viability assessment, per-dimension confidence ratings |
 | [Sub-ms grep research](../docs/research/sub-ms-grep.md) | Trigram index approach, 5 alternatives evaluated |

@@ -184,23 +184,42 @@ func (r *Reader) translate(raw *tailer.SessionEvent) []ports.SessionEvent {
 	}
 }
 
-// translateUser converts a user message into a single EventUserInput.
+// translateUser converts a user message into EventUserInput and/or EventToolResult.
+// User messages carry tool_result blocks alongside user text.
 func (r *Reader) translateUser(raw *tailer.SessionEvent) []ports.SessionEvent {
-	if raw.UserText == "" {
+	var events []ports.SessionEvent
+
+	if raw.UserText != "" {
+		events = append(events, ports.SessionEvent{
+			ID:           raw.UUID,
+			TurnID:       raw.UUID,
+			SessionID:    raw.SessionID,
+			Timestamp:    raw.Timestamp,
+			Kind:         ports.EventUserInput,
+			Text:         raw.UserText,
+			AgentVersion: raw.Version,
+		})
+	}
+
+	if len(raw.ToolResultSizes) > 0 {
+		events = append(events, ports.SessionEvent{
+			ID:              raw.UUID + ":toolresult",
+			TurnID:          raw.UUID,
+			SessionID:       raw.SessionID,
+			Timestamp:       raw.Timestamp,
+			Kind:            ports.EventToolResult,
+			ToolResultSizes: raw.ToolResultSizes,
+			AgentVersion:    raw.Version,
+		})
+	}
+
+	if len(events) == 0 {
 		r.mu.Lock()
 		r.health.Gaps++
 		r.mu.Unlock()
-		return nil
 	}
-	return []ports.SessionEvent{{
-		ID:           raw.UUID,
-		TurnID:       raw.UUID,
-		SessionID:    raw.SessionID,
-		Timestamp:    raw.Timestamp,
-		Kind:         ports.EventUserInput,
-		Text:         raw.UserText,
-		AgentVersion: raw.Version,
-	}}
+
+	return events
 }
 
 // translateAssistant decomposes an assistant message into atomic events:

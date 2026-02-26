@@ -147,12 +147,13 @@ type StatsResult struct {
 
 // SessionMetricsResult is the result of a session metrics request.
 type SessionMetricsResult struct {
-	InputTokens   int     `json:"input_tokens"`
-	OutputTokens  int     `json:"output_tokens"`
-	CacheReadTokens int   `json:"cache_read_tokens"`
-	CacheWriteTokens int  `json:"cache_write_tokens"`
-	TurnCount     int     `json:"turn_count"`
-	CacheHitRate  float64 `json:"cache_hit_rate"`
+	InputTokens      int     `json:"input_tokens"`
+	OutputTokens     int     `json:"output_tokens"`
+	CacheReadTokens  int     `json:"cache_read_tokens"`
+	CacheWriteTokens int     `json:"cache_write_tokens"`
+	TurnCount        int     `json:"turn_count"`
+	CacheHitRate     float64 `json:"cache_hit_rate"`
+	SessionStartTs   int64   `json:"session_start_ts,omitempty"`
 }
 
 // ToolMetricsResult is the result of a tool metrics request.
@@ -201,6 +202,7 @@ type TurnActionResult struct {
 	Tokens      int    `json:"tokens,omitempty"`
 	Savings     int    `json:"savings,omitempty"`
 	TimeSavedMs int64  `json:"time_saved_ms,omitempty"`
+	ResultChars int    `json:"result_chars,omitempty"`
 }
 
 // ActivityEntryResult describes a single action in the activity feed.

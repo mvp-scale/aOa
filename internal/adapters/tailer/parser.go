@@ -44,6 +44,9 @@ type SessionEvent struct {
 	// Token economics (from assistant message.usage)
 	Usage *MessageUsage
 
+	// Tool result sizes (tool_use_id -> content char count)
+	ToolResultSizes map[string]int
+
 	// System event details
 	Subtype    string // e.g., "turn_duration"
 	ParentUUID string // links system events to parent AI turn
@@ -237,6 +240,33 @@ func (e *SessionEvent) extractContentBlock(block map[string]any, role string) {
 		text := getString(block, "text")
 		if len(text) > 0 && len(text) < 2000 {
 			e.AssistantText = appendText(e.AssistantText, text)
+		}
+
+		// Capture tool result size for throughput tracking.
+		// Correlate via tool_use_id back to the originating tool_use.
+		toolUseID := getStringAny(block, "tool_use_id", "id")
+		if toolUseID != "" {
+			chars := 0
+			// Content can be string, array of blocks, or just "text" field
+			switch c := block["content"].(type) {
+			case string:
+				chars = len(c)
+			case []any:
+				for _, item := range c {
+					if m, ok := item.(map[string]any); ok {
+						chars += len(getString(m, "text"))
+					}
+				}
+			default:
+				// Fallback: use "text" field length if present
+				chars = len(text)
+			}
+			if chars > 0 {
+				if e.ToolResultSizes == nil {
+					e.ToolResultSizes = make(map[string]int)
+				}
+				e.ToolResultSizes[toolUseID] = chars
+			}
 		}
 	}
 }

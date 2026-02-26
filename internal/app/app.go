@@ -68,6 +68,8 @@ type TurnAction struct {
 	Tokens      int    // estimated token cost of this action (0 = unknown)
 	Savings     int    // savings percentage when guided (0-99), 0 = none
 	TimeSavedMs int64  // estimated time saved in ms (only on guided)
+	ToolID      string // tool_use_id for result correlation
+	ResultChars int    // character count of tool result (0 = unknown)
 }
 
 // ConversationTurn describes a single turn in the conversation feed.
@@ -934,6 +936,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				Tokens:      tokens,
 				Savings:     savings,
 				TimeSavedMs: timeSavedMs,
+				ToolID:      ev.Tool.ToolID,
 			})
 
 			// Activity feed target includes range for reads
@@ -956,6 +959,36 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 					a.lastReadLearned = false
 				}
 				a.pushActivity(entry)
+			}
+		}
+
+	case ports.EventToolResult:
+		// Correlate tool result sizes back to TurnActions via ToolID.
+		// Tool results arrive in user messages; the matching tool_use was
+		// in a prior assistant message. Walk all turn builders to find matches.
+		if len(ev.ToolResultSizes) > 0 {
+			// Check current in-progress builder first (most likely match)
+			if a.currentBuilder != nil {
+				for i := range a.currentBuilder.Actions {
+					act := &a.currentBuilder.Actions[i]
+					if act.ToolID != "" {
+						if chars, ok := ev.ToolResultSizes[act.ToolID]; ok {
+							act.ResultChars = chars
+						}
+					}
+				}
+			}
+			// Also check pending turn builders (tool results may correlate
+			// to actions in a different turn builder than current)
+			for _, tb := range a.turnBuffer {
+				for i := range tb.Actions {
+					act := &tb.Actions[i]
+					if act.ToolID != "" {
+						if chars, ok := ev.ToolResultSizes[act.ToolID]; ok {
+							act.ResultChars = chars
+						}
+					}
+				}
 			}
 		}
 
@@ -1329,6 +1362,7 @@ func (a *App) SessionMetricsSnapshot() socket.SessionMetricsResult {
 		CacheWriteTokens: a.sessionMetrics.CacheWriteTokens,
 		TurnCount:        a.sessionMetrics.TurnCount,
 		CacheHitRate:     a.sessionMetrics.CacheHitRate(),
+		SessionStartTs:   a.currentSessionStart,
 	}
 }
 
@@ -1385,6 +1419,7 @@ func (a *App) ConversationTurns() socket.ConversationFeedResult {
 				Tokens:      act.Tokens,
 				Savings:     act.Savings,
 				TimeSavedMs: act.TimeSavedMs,
+				ResultChars: act.ResultChars,
 			})
 		}
 		turns = append(turns, socket.ConversationTurnResult{
@@ -1417,6 +1452,7 @@ func (a *App) ConversationTurns() socket.ConversationFeedResult {
 				Tokens:      act.Tokens,
 				Savings:     act.Savings,
 				TimeSavedMs: act.TimeSavedMs,
+				ResultChars: act.ResultChars,
 			})
 		}
 		turns = append(turns, socket.ConversationTurnResult{

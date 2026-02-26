@@ -1,6 +1,6 @@
 # Index
 
-> **Updated**: 2026-02-25 (Session 75)
+> **Updated**: 2026-02-26 (Session 75)
 
 ## Active Layer
 
@@ -86,6 +86,7 @@ Line ranges into BOARD.md for targeted reads:
 | L5.7-L5.19 | ADR | `decisions/2026-02-23-declarative-yaml-rules.md` | Accepted -- declarative YAML schema, 6 constraints |
 | -- | detail | `details/2026-02-25-session-71-g0-perf-and-recon-separation.md` | Complete -- G0 perf fixes, recon separation, P0 closure |
 | -- | detail | `details/QOL.md` | In progress -- dashboard QOL feedback (Live tab started) |
+| -- | detail | `details/2026-02-26-throughput-telemetry-model.md` | Complete -- telemetry data hierarchy, throughput/conv speed formulas, phased roadmap |
 
 ## Key Files
 

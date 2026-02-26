@@ -83,6 +83,10 @@ type SessionEvent struct {
 	// Typically present on AIResponse events (one per AI turn).
 	Usage *TokenUsage
 
+	// ToolResultSizes maps tool_use_id to content character count.
+	// Non-nil only on EventToolResult events.
+	ToolResultSizes map[string]int
+
 	// DurationMs is the turn duration in milliseconds.
 	// Non-zero only on SystemMeta events with timing data.
 	// Linked to the AI turn via TurnID.

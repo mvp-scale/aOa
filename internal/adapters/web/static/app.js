@@ -893,24 +893,66 @@ function renderDebrief() {
   var sessionCost = rw.total_cost_usd > 0 ? rw.total_cost_usd : calcSessionCost(inputTokens, outputTokens, cacheRead, model);
   var costPerTurn = turnCount > 0 ? sessionCost / turnCount : 0;
 
-  // Output speed — prefer server-side RateTracker, fallback to client-side median from feed
   var rawTurns = (cf.turns || []);
-  var outputSpeed = '-';
-  if (rw.ms_per_token > 0) {
-    outputSpeed = (1000 / rw.ms_per_token).toFixed(1) + '/s';
-  } else {
-    // Compute from conversation feed: median tok/sec from assistant turns
-    var speedSamples = [];
-    for (var sp = 0; sp < rawTurns.length; sp++) {
-      var st = rawTurns[sp];
-      if (st.role === 'assistant' && st.output_tokens > 10 && st.duration_ms > 500) {
-        speedSamples.push(st.output_tokens / (st.duration_ms / 1000));
+
+  // Shared char counts — used by both throughput and conv speed.
+  // Walk turns once: sum text chars, thinking chars, and tool result chars.
+  var totalTextChars = 0;   // user text + assistant text + thinking
+  var totalResultChars = 0; // tool result content
+  for (var ri = 0; ri < rawTurns.length; ri++) {
+    var rt = rawTurns[ri];
+    if (rt.text) totalTextChars += rt.text.length;
+    if (rt.thinking_text) totalTextChars += rt.thinking_text.length;
+    var rActions = rt.actions || [];
+    for (var ra = 0; ra < rActions.length; ra++) {
+      totalResultChars += (rActions[ra].result_chars || 0);
+    }
+  }
+  var textBasedTokens = Math.round(totalTextChars / 4);
+  var resultTokens = Math.round(totalResultChars / 4);
+
+  // Throughput — total content tokens / session wall time.
+  // Uses max(API outputTokens, text estimate) so throughput >= conv speed.
+  // API outputTokens is more accurate for model output; text estimate captures
+  // user input that outputTokens doesn't include.
+  var throughputTokens = Math.max(outputTokens, textBasedTokens) + resultTokens;
+  var throughput = '-';
+  var elapsedSec = 0;
+  if (rw.total_duration_ms > 0) {
+    elapsedSec = rw.total_duration_ms / 1000;
+  } else if (cm.session_start_ts > 0) {
+    elapsedSec = (Date.now() / 1000) - cm.session_start_ts;
+  } else if (rawTurns.length >= 2) {
+    var tsMin = Infinity, tsMax = 0;
+    for (var ti = 0; ti < rawTurns.length; ti++) {
+      if (rawTurns[ti].timestamp > 0) {
+        if (rawTurns[ti].timestamp < tsMin) tsMin = rawTurns[ti].timestamp;
+        if (rawTurns[ti].timestamp > tsMax) tsMax = rawTurns[ti].timestamp;
       }
     }
-    if (speedSamples.length >= 2) {
-      speedSamples.sort(function(a, b) { return a - b; });
-      var median = speedSamples[Math.floor(speedSamples.length / 2)];
-      outputSpeed = median.toFixed(1) + '/s';
+    if (tsMax > tsMin) elapsedSec = tsMax - tsMin;
+  }
+  if (elapsedSec > 5 && throughputTokens > 0) {
+    throughput = (throughputTokens / elapsedSec).toFixed(1) + '/s';
+  }
+
+  // Conv Speed — visible conversation text (chars/4) / wall time.
+  // Only user text + assistant text + thinking. Tool results are infrastructure
+  // data, not conversation — they go in throughput only.
+  var convSpeed = '-';
+  var convChars = totalTextChars;
+  var convTokens = convChars / 4;
+  if (rawTurns.length >= 2) {
+    var ctsMin = Infinity, ctsMax = 0;
+    for (var cj = 0; cj < rawTurns.length; cj++) {
+      if (rawTurns[cj].timestamp > 0) {
+        if (rawTurns[cj].timestamp < ctsMin) ctsMin = rawTurns[cj].timestamp;
+        if (rawTurns[cj].timestamp > ctsMax) ctsMax = rawTurns[cj].timestamp;
+      }
+    }
+    var convElapsed = ctsMax - ctsMin;
+    if (convElapsed > 5 && convTokens > 0) {
+      convSpeed = (convTokens / convElapsed).toFixed(1) + '/s';
     }
   }
 
@@ -967,12 +1009,12 @@ function renderDebrief() {
   if (turnCount > 0) sup.push('<span class="c">' + turnCount + '</span> turns');
   if (totalTokens > 0) sup.push('<span class="g">' + fmtK(totalTokens) + '</span> total tokens');
   if (cacheSavings > 0) sup.push('cache savings <span class="b">' + fmtDollar(cacheSavings) + '</span>');
-  if (outputSpeed !== '-') sup.push('speed <span class="g">' + outputSpeed + '</span>');
+  if (throughput !== '-') sup.push('throughput <span class="g">' + throughput + '</span>');
   setHtml('heroSupport-debrief', sup.length > 0 ? sup.join(' &middot; ') : '');
 
   // Stats
-  setGlow('ds-hitrate', fmtPct(cm.cache_hit_rate || 0));
-  setGlow('ds-speed', outputSpeed);
+  setGlow('ds-throughput', throughput);
+  setGlow('ds-convspeed', convSpeed);
   setGlow('ds-turndur', avgTurnDur);
   setGlow('ds-tooldensity', toolDensity);
   setGlow('ds-amplify', amplification);
