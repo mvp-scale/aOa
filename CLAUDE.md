@@ -6,6 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **aOa is a standalone project.** Do NOT import, reference, copy, or depend on anything from outside the `aOa/` directory. No imports from the parent `aOa/` codebase. All dependencies come from Go modules (`go.mod`) or are written fresh here. This is a clean-room rewrite guided by behavioral specs and test fixtures in `test/fixtures/`, not by copying Python code.
 
+## Build Rule
+
+**All builds MUST use `./build.sh` or `make build`.** Running `go build` directly is forbidden — a compile-time guard (`cmd/aoa/build_guard.go`) enforces this by panicking at startup. Do not bypass, remove, or modify the build guard. Do not run `go build ./cmd/aoa/` under any circumstances. Do not pass `-tags` to `go build` directly. The build script is the single source of truth for how binaries are produced.
+
+- `./build.sh` — standard build (no recon, no CGo, pure Go)
+- `./build.sh --recon` — opt-in recon build (explicit only, never default)
+- `./build.sh --recon-bin` — standalone aoa-recon binary
+
+Recon is **permanently opt-in**. The standard build must never include recon, dimensional analysis, or CGo. Any code that imports recon packages must have `//go:build recon`. Violating this rule is a build failure.
+
 ## Goals
 
 **Read `.context/GOALS.md` before any planning or architectural decision.** Every plan, code change, and design choice must align with the goals defined there. If a proposed change violates any goal, redesign before proceeding.
@@ -48,7 +58,8 @@ Beacon manages project continuity across `.context/`. Trigger with "Hey Beacon".
 ## Build and Test Commands
 
 ```bash
-go build ./cmd/aoa/          # Build the binary (outputs ./aoa)
+./build.sh                    # Build the binary (ONLY way to build — no recon, no CGo)
+./build.sh --recon            # Opt-in: build with recon enabled
 go vet ./...                  # Static analysis
 go test ./...                 # Run all tests
 go test ./... -v              # Verbose (shows skip reasons)
@@ -56,6 +67,8 @@ go test ./internal/domain/learner/ -run TestAutotune -v   # Single test/package
 go test ./... -bench=. -benchmem -run=^$                  # Benchmarks only
 make check                    # Local CI: vet + lint + test (run before committing)
 ```
+
+**CRITICAL: Never run `go build ./cmd/aoa/` directly.** A compile-time guard (`build_guard.go`) will panic. All builds go through `./build.sh` or `make build`. The standard build is pure Go, no CGo, no recon. Recon requires explicit `./build.sh --recon`. Never add recon imports to files without the `//go:build recon` tag.
 
 The module path is `github.com/corey/aoa`. The binary entry point is `cmd/aoa/main.go`.
 

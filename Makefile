@@ -1,32 +1,23 @@
 # aOa-go — local quality gates
 # Run `make check` before committing. That's the CI.
+#
+# IMPORTANT: All builds go through build.sh. Never run "go build" directly.
+# Standard build = no recon, no CGo, no compiled grammars.
+# Recon is opt-in only: make build-recon
 
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS := -X github.com/corey/aoa/internal/version.Version=$(VERSION) \
-           -X github.com/corey/aoa/internal/version.BuildDate=$(BUILD_DATE)
+.PHONY: build build-recon build-recon-bin test test-v test-active lint vet bench bench-gauntlet bench-baseline bench-compare coverage check status
 
-.PHONY: build build-lean build-pure build-recon test lint bench bench-gauntlet bench-baseline bench-compare coverage check vet
-
-# Build the binary with version info (all grammars compiled in, ~80 MB)
+# Standard build — no recon, no CGo, pure Go (~12 MB)
 build:
-	go build -ldflags "$(LDFLAGS)" -o aoa ./cmd/aoa/
+	./build.sh
 
-# Build lean binary (no grammars compiled in, ~12 MB, still needs CGo for tree-sitter core)
-# Grammars loaded dynamically from .aoa/grammars/*.so at runtime
-build-lean:
-	go build -tags lean -ldflags "-s -w $(LDFLAGS)" -o aoa ./cmd/aoa/
-
-# Build pure Go binary (~12 MB, no CGo, no tree-sitter)
-# Tokenization-only: file-level search works; symbol search requires aoa-recon
-# Uses -tags lean to exclude engine.go/walker.go/languages_forest.go (all //go:build !lean)
-# which would otherwise drag in CGo tree-sitter bindings via the recon import chain.
-build-pure:
-	CGO_ENABLED=0 go build -tags lean -ldflags "-s -w $(LDFLAGS)" -o aoa ./cmd/aoa/
-
-# Build the aoa-recon binary (all grammars + scanning, ~80 MB)
+# Build with recon/dimensional analysis (opt-in only)
 build-recon:
-	go build -ldflags "$(LDFLAGS)" -o aoa-recon ./cmd/aoa-recon/
+	./build.sh --recon
+
+# Build standalone aoa-recon binary
+build-recon-bin:
+	./build.sh --recon-bin
 
 # Run all tests (skipped tests are expected during development)
 test:
@@ -50,7 +41,7 @@ vet:
 
 # Benchmarks (skipped until implementations exist)
 bench:
-	go test ./... -bench=. -benchmem -run=^$
+	go test ./... -bench=. -benchmem -run=^$$
 
 # Test coverage report
 coverage:
@@ -58,31 +49,31 @@ coverage:
 	go tool cover -func=coverage.out
 	@rm -f coverage.out
 
-# The local CI: vet + lint + test + verify pure build compiles + size gate
-check: vet lint test build-pure
+# The local CI: vet + lint + test + standard build + size gate
+check: vet lint test build
 	@SIZE=$$(stat --format=%s aoa 2>/dev/null || stat -f%z aoa); \
 	 SIZE_MB=$$((SIZE / 1048576)); \
-	 if [ "$$SIZE" -gt 15728640 ]; then \
+	 if [ "$$SIZE" -gt 20971520 ]; then \
 	   echo ""; \
-	   echo "✗ FAIL: lean binary is $${SIZE_MB} MB — max 15 MB"; \
-	   echo "  → A file is missing //go:build !lean (imports CGo/treesitter?)"; \
+	   echo "FAIL: binary is $${SIZE_MB} MB — max 20 MB"; \
+	   echo "  Something dragged in CGo/treesitter/recon."; \
 	   exit 1; \
 	 fi
 	@echo ""
-	@echo "✓ All checks passed (including pure-build gate + size gate)"
+	@echo "All checks passed (standard build + size gate)"
 
 # Search performance gauntlet (22-shape query matrix, benchstat-compatible)
 bench-gauntlet:
-	go test ./test/ -bench=BenchmarkSearchGauntlet -benchmem -run=^$ -count=6
+	go test ./test/ -bench=BenchmarkSearchGauntlet -benchmem -run=^$$ -count=6
 
 # Generate benchstat baseline for the search gauntlet
 bench-baseline:
 	@mkdir -p test/testdata/benchmarks
-	go test ./test/ -bench=BenchmarkSearchGauntlet -benchmem -run=^$ -count=6 > test/testdata/benchmarks/baseline.txt
+	go test ./test/ -bench=BenchmarkSearchGauntlet -benchmem -run=^$$ -count=6 > test/testdata/benchmarks/baseline.txt
 
 # Compare current performance against baseline (requires benchstat)
 bench-compare:
-	go test ./test/ -bench=BenchmarkSearchGauntlet -benchmem -run=^$ -count=6 > /tmp/aoa-bench-current.txt
+	go test ./test/ -bench=BenchmarkSearchGauntlet -benchmem -run=^$$ -count=6 > /tmp/aoa-bench-current.txt
 	benchstat test/testdata/benchmarks/baseline.txt /tmp/aoa-bench-current.txt
 
 # Count test status

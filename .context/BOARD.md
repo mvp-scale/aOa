@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-02-25 (Session 73) | **89% complete.**
+> **Updated**: 2026-02-25 (Session 75) | **89% complete.**
 > **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9 + L6 (all) + L7.2 + L8.1-L8.5 + P0 (all 7 bugs) (470+ active tests, 32 skipped)
 > **Archived boards**: `.context/archived/`
 
@@ -103,6 +103,7 @@
 | **L6** | | | | | | | | | | | | | *All 9 tasks complete -- see COMPLETED.md* | | |
 | [L7](#layer-7) | [L7.1](#l71) | x | | | x | | | x | - | 🟢 | 🟢 | 🟡 | Startup progress feedback -- deferred loading, async cache warming incl. recon | Daemon starts in <1s, caches warm in background | **Gap**: no automated startup time test |
 | [L7](#layer-7) | [L7.4](#l74) | | | | x | x | | | - | 🟢 | 🟢 | 🟢 | .aoa/ directory restructure -- `Paths` struct (18 fields), `EnsureDirs`, `Migrate` (7 files), 1MB log rotation, 13 files updated | Clean project state dir; logs don't grow forever | 7 unit tests, live migration verified on 1.3GB database, all builds clean |
+| G0 | G0.HF1 | x | | | | | | | - | 🟢 | 🟢 | 🟢 | **Build process fix (hotfix)** -- `build.sh` as sole entry point, compile-time build guard, flipped build tags (`recon` opt-in), Makefile rewrite, CLAUDE.md Build Rule. Binary 366MB->8MB. | Standard binary is pure Go, no CGo bleed | `build.sh` enforced, `go build` panics with guard, 8MB binary verified |
 | [L8](#layer-8) | [L8.1](#l81) | | | | | | | x | L5.9 | 🟢 | 🟢 | 🟡 | Recon tab -- dimensional engine with interim scanner fallback | Dashboard dimensional view | API works. **Gap**: dashboard UI upgrade for bitmask scores |
 | [L8](#layer-8) | [L8.2](#l82) | | | | | | | x | L8.1 | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul -- 5 focus modes, tier redesign, code toggle, copy prompt | Recon tab is actionable, not just a finding list | **Gap**: browser-only validation |
 | [L8](#layer-8) | [L8.3](#l83) | x | | | | x | | | L8.1 | 🟢 | 🟢 | 🟡 | Recon cache + incremental updates -- pre-compute at startup, SubtractFile/AddFile on file change | Zero per-poll scan cost, instant API response | **Gap**: no unit tests for incremental path |

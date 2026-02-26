@@ -1,4 +1,4 @@
-//go:build !lean
+//go:build recon
 
 package app
 
@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/corey/aoa/internal/adapters/recon"
@@ -72,49 +75,101 @@ func (a *App) warmDimCache(logFn func(string)) (int, int, bool) {
 		logFn(fmt.Sprintf("building dimensional cache (first run) — %d files to scan...", total))
 	}
 
-	scanned := 0
 	cached := 0
-	processed := 0
 	scanStart := time.Now()
+
+	// Separate files into cached vs needing scan
+	type scanJob struct {
+		fileID uint32
+		path   string
+		source []byte
+	}
+	var jobs []scanJob
+
 	for fileID, fm := range a.Index.Files {
-		// Check if persisted result exists and is still fresh
 		if persisted != nil {
 			if fa, ok := persisted[fm.Path]; ok {
-				// ScanTime is in microseconds; LastModified is in seconds
 				if fm.LastModified <= fa.ScanTime/1e6 {
 					results[fm.Path] = convertFileAnalysis(fa, fileID)
 					analyses[fm.Path] = fa
 					cached++
-					processed++
 					continue
 				}
 			}
 		}
 
-		// File is new or stale — try file cache first, fall back to disk
 		source, ok := a.getFileSource(fileID, fm.Path)
 		if !ok {
-			processed++
 			continue
 		}
-
-		fa := engine.AnalyzeFile(fm.Path, source, isTestFile(fm.Path), isMainFile(fm.Path))
-		if fa == nil {
-			processed++
-			continue
-		}
-
-		results[fm.Path] = convertFileAnalysis(fa, fileID)
-		analyses[fm.Path] = fa
-		scanned++
-		processed++
-
-		// Report progress every 500 files when actively scanning
-		if scanned > 0 && processed%500 == 0 {
-			logFn(fmt.Sprintf("dim scan: %d/%d files (%.1fs elapsed, %d cached, %d scanned)...",
-				processed, total, time.Since(scanStart).Seconds(), cached, scanned))
-		}
+		jobs = append(jobs, scanJob{fileID: fileID, path: fm.Path, source: source})
 	}
+
+	// Parallel scan with worker pool
+	var scanned int64
+	var processed int64
+	numWorkers := runtime.NumCPU()
+	if numWorkers > 8 {
+		numWorkers = 8
+	}
+	if numWorkers < 2 {
+		numWorkers = 2
+	}
+
+	type scanResult struct {
+		path   string
+		fileID uint32
+		dr     *socket.DimensionalFileResult
+		fa     *analyzer.FileAnalysis
+	}
+
+	resultCh := make(chan scanResult, numWorkers*4)
+	var wg sync.WaitGroup
+
+	// Fan out jobs across workers
+	jobCh := make(chan scanJob, numWorkers*2)
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobCh {
+				fa := engine.AnalyzeFile(job.path, job.source, isTestFile(job.path), isMainFile(job.path))
+				p := atomic.AddInt64(&processed, 1)
+				if fa != nil {
+					atomic.AddInt64(&scanned, 1)
+					resultCh <- scanResult{
+						path:   job.path,
+						fileID: job.fileID,
+						dr:     convertFileAnalysis(fa, job.fileID),
+						fa:     fa,
+					}
+				}
+				if p%500 == 0 {
+					logFn(fmt.Sprintf("dim scan: %d/%d files (%.1fs elapsed, %d cached, %d scanned)...",
+						int64(cached)+p, total, time.Since(scanStart).Seconds(), cached, atomic.LoadInt64(&scanned)))
+				}
+			}
+		}()
+	}
+
+	// Collector goroutine — gathers results into maps
+	done := make(chan struct{})
+	go func() {
+		for sr := range resultCh {
+			results[sr.path] = sr.dr
+			analyses[sr.path] = sr.fa
+		}
+		close(done)
+	}()
+
+	// Feed jobs
+	for _, job := range jobs {
+		jobCh <- job
+	}
+	close(jobCh)
+	wg.Wait()
+	close(resultCh)
+	<-done
 
 	a.reconMu.Lock()
 	a.dimCache = results
@@ -126,7 +181,7 @@ func (a *App) warmDimCache(logFn func(string)) (int, int, bool) {
 		_ = a.Store.SaveAllDimensions(a.ProjectID, analyses)
 	}
 
-	return cached, scanned, firstRun
+	return cached, int(scanned), firstRun
 }
 
 func isTestFile(path string) bool {

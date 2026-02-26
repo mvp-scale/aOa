@@ -328,6 +328,7 @@ function poll() {
         safeFetch('/api/runway').then(function(d) { cache.runway = d; }).catch(function() {}),
         safeFetch('/api/stats').then(function(d) { cache.stats = d; }).catch(function() {}),
         safeFetch('/api/sessions').then(function(d) { cache.sessions = d; }).catch(function() {}),
+        safeFetch('/api/conversation/metrics').then(function(d) { cache.convMetrics = d; }).catch(function() {}),
         safeFetch('/api/activity/feed').then(function(d) { cache.activity = d; }).catch(function() {})
       ]).then(function() {
         renderLive();
@@ -402,38 +403,54 @@ function renderLive() {
   var costSaved = totalSaved * pricing.input / 1000000;
   var realCost = rw.total_cost_usd || 0;
 
-  // Context utilization: prefer real ctx_used_pct from status line hook
-  var ctxPct = rw.ctx_used_pct || 0;
+  // Context: prefer real remaining_pct from status line hook
+  var ctxRemainingPct = rw.ctx_remaining_pct || 0;
+  var ctxUsedPct = rw.ctx_used_pct || 0;
+  if (!ctxRemainingPct && ctxUsedPct > 0) ctxRemainingPct = 100 - ctxUsedPct;
   var ctxUsed = rw.ctx_used || 0;
   var ctxMax = rw.ctx_max || rw.context_window_max || 0;
 
   // Output speed
   var tokPerSec = (rw.ms_per_token > 0) ? (1000 / rw.ms_per_token) : 0;
 
-  // Hero metrics — tokens saved → cost saved → time saved → extended
+  // Hero metrics — always visible, show "-" when no data
   setGlow('hm-live-0', totalSaved > 0 ? fmtK(totalSaved) : '-');
   setGlow('hm-live-1', costSaved > 0 ? fmtDollar(costSaved) : '-');
   setGlow('hm-live-2', totalTimeSavedMs > 0 ? fmtTime(totalTimeSavedMs) : '-');
-  setGlow('hm-live-3', rw.delta_minutes ? fmtMin(rw.delta_minutes) : '-');
+  setGlow('hm-live-3', rw.delta_minutes > 0 ? fmtMin(rw.delta_minutes) : '-');
 
-  // Hero support line
+  // Hero support line — only show parts that have data
   var parts = [];
-  parts.push('burn <span class="r">' + (rw.burn_rate_per_min ? fmtK(Math.round(rw.burn_rate_per_min)) + '/m' : '-') + '</span>');
-  var ctxDisplay = ctxPct > 0 ? ctxPct.toFixed(0) + '%' : '-';
-  if (ctxUsed > 0 && ctxMax > 0) ctxDisplay = fmtK(ctxUsed) + '/' + fmtK(ctxMax) + ' (' + ctxPct.toFixed(0) + '%)';
-  parts.push('ctx <span class="c">' + ctxDisplay + '</span>');
+  if (rw.burn_rate_per_min) parts.push('burn <span class="r">' + fmtK(Math.round(rw.burn_rate_per_min)) + '/m</span>');
+  if (ctxRemainingPct > 0) {
+    var ctxDisplay = ctxRemainingPct.toFixed(0) + '% left';
+    if (ctxUsed > 0 && ctxMax > 0) ctxDisplay = fmtK(ctxUsed) + '/' + fmtK(ctxMax) + ' (' + ctxRemainingPct.toFixed(0) + '% left)';
+    parts.push('ctx <span class="c">' + ctxDisplay + '</span>');
+  }
   if (rw.model) parts.push('<span class="p">' + rw.model + '</span>');
-  parts.push('turn <span class="c">' + (st.prompt_count || 0) + '</span>');
-  setHtml('heroSupport-live', parts.join(' &middot; '));
+  if (st.prompt_count) parts.push('turn <span class="c">' + st.prompt_count + '</span>');
+  setHtml('heroSupport-live', parts.length > 0 ? parts.join(' &middot; ') : '');
 
   // Stats grid
   var promptN = st.prompt_count || 0;
   var autotuneProgress = promptN % 50;
-  setGlow('ls-ctxutil', ctxPct > 0 ? ctxPct.toFixed(0) + '%' : '-');
+  setGlow('ls-ctxutil', ctxRemainingPct > 0 ? ctxRemainingPct.toFixed(0) + '%' : '-');
   setGlow('ls-burn', rw.burn_rate_per_min ? fmtK(Math.round(rw.burn_rate_per_min)) + '/min' : '-');
   setGlow('ls-guided', fmtPct(ratio));
   setGlow('ls-speed', tokPerSec > 0 ? tokPerSec.toFixed(1) + '/s' : '-');
-  setGlow('ls-cachehit', rw.cache_hit_rate > 0 ? (rw.cache_hit_rate * 100).toFixed(0) + '%' : '-');
+
+  // Cache savings $ — dollars saved by prompt cache serving tokens at reduced rate
+  var cacheSavings = 0;
+  // Current session cache savings from conversation metrics
+  var cm = cache.convMetrics || {};
+  var cacheReadTokens = cm.cache_read_tokens || 0;
+  if (cacheReadTokens > 0) cacheSavings = calcCacheSavings(cacheReadTokens, rw.model);
+  // Historical session cache savings
+  for (var j = 0; j < sessions.length; j++) {
+    if (sessions[j].cache_read_tokens) cacheSavings += calcCacheSavings(sessions[j].cache_read_tokens, sessions[j].model || rw.model);
+  }
+  setGlow('ls-cachesave', cacheSavings > 0 ? fmtDollar(cacheSavings) : '-');
+
   setGlow('ls-autotune', autotuneProgress + '/50');
 }
 
@@ -876,12 +893,27 @@ function renderDebrief() {
   var sessionCost = rw.total_cost_usd > 0 ? rw.total_cost_usd : calcSessionCost(inputTokens, outputTokens, cacheRead, model);
   var costPerTurn = turnCount > 0 ? sessionCost / turnCount : 0;
 
-  // Output speed
-  var msPerToken = rw.ms_per_token || 0;
-  var outputSpeed = msPerToken > 0 ? (1000 / msPerToken).toFixed(1) + '/s' : '-';
-
-  // Avg turn duration from conversation feed
+  // Output speed — prefer server-side RateTracker, fallback to client-side median from feed
   var rawTurns = (cf.turns || []);
+  var outputSpeed = '-';
+  if (rw.ms_per_token > 0) {
+    outputSpeed = (1000 / rw.ms_per_token).toFixed(1) + '/s';
+  } else {
+    // Compute from conversation feed: median tok/sec from assistant turns
+    var speedSamples = [];
+    for (var sp = 0; sp < rawTurns.length; sp++) {
+      var st = rawTurns[sp];
+      if (st.role === 'assistant' && st.output_tokens > 10 && st.duration_ms > 500) {
+        speedSamples.push(st.output_tokens / (st.duration_ms / 1000));
+      }
+    }
+    if (speedSamples.length >= 2) {
+      speedSamples.sort(function(a, b) { return a - b; });
+      var median = speedSamples[Math.floor(speedSamples.length / 2)];
+      outputSpeed = median.toFixed(1) + '/s';
+    }
+  }
+
   var totalDurMs = 0, durCount = 0;
   for (var td = 0; td < rawTurns.length; td++) {
     if (rawTurns[td].duration_ms > 0) { totalDurMs += rawTurns[td].duration_ms; durCount++; }
@@ -929,14 +961,14 @@ function renderDebrief() {
   setGlow('hm-debrief-2', cacheSavings > 0 ? fmtDollar(cacheSavings) : '-');
   setGlow('hm-debrief-3', costPerTurn > 0 ? fmtDollar(costPerTurn) : '-');
 
-  // Hero support
+  // Hero support — only show parts that have data
   var totalTokens = inputTokens + outputTokens;
   var sup = [];
-  sup.push('<span class="c">' + turnCount + '</span> turns');
-  sup.push('<span class="g">' + fmtK(totalTokens) + '</span> total tokens');
-  sup.push('cache savings <span class="b">' + fmtDollar(cacheSavings) + '</span>');
-  sup.push('speed <span class="g">' + outputSpeed + '</span>');
-  setHtml('heroSupport-debrief', sup.join(' &middot; '));
+  if (turnCount > 0) sup.push('<span class="c">' + turnCount + '</span> turns');
+  if (totalTokens > 0) sup.push('<span class="g">' + fmtK(totalTokens) + '</span> total tokens');
+  if (cacheSavings > 0) sup.push('cache savings <span class="b">' + fmtDollar(cacheSavings) + '</span>');
+  if (outputSpeed !== '-') sup.push('speed <span class="g">' + outputSpeed + '</span>');
+  setHtml('heroSupport-debrief', sup.length > 0 ? sup.join(' &middot; ') : '');
 
   // Stats
   setGlow('ds-hitrate', fmtPct(cm.cache_hit_rate || 0));

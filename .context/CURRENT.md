@@ -1,19 +1,24 @@
-# Session 73 | 2026-02-25 | L5 Dimensions + Open Tasks
+# Session 75 | 2026-02-25 | QOL + Open Tasks
 
-> **Session**: 73
+> **Session**: 75
 
 ## Now
 
-- L5.10/L5.11: dimension scores in search results + query support
-- L8.6: recon source line editor view
+- Continue QOL dashboard walk-through (Intel, Debrief, Arsenal tabs)
+- Intel tab hero metrics philosophy (velocity/coherence/KW->domain%)
+- Arsenal: R/P column, daily savings chart, waste column, inline bars
+- Output Speed on Live tab (server-side RateTracker accumulation)
 
 ## Done
 
-- L7.4: .aoa/ directory restructure -- COMPLETE. Paths struct (18 fields), EnsureDirs, Migrate (7 files), 1MB log rotation, 13 files updated, 7 unit tests, live migration verified. L7 layer now fully complete.
+(empty)
 
 ## Next
 
+- Daemon restart reliability (stops aren't always clean)
 - L5.7/8/16-19: per-rule detection validation (Va gaps)
+- L5.10/L5.11: dimension scores in search results + query support
 - L8.1-4: remaining Va gaps (bitmask, browser-only, unit tests)
+- L8.6: recon source line editor view
 - L4.4: installation docs
 - L7.1: startup progress timing test

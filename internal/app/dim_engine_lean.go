@@ -1,4 +1,4 @@
-//go:build lean
+//go:build !recon
 
 package app
 

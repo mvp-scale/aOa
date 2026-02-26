@@ -1,6 +1,6 @@
 # Index
 
-> **Updated**: 2026-02-25 (Session 73)
+> **Updated**: 2026-02-25 (Session 75)
 
 ## Active Layer
 
@@ -8,7 +8,7 @@
 
 **L8** (Recon) -- New layer. Recon-specific tasks moved from L5/L6/L7. L8.1-L8.5 all green with Va gaps. L8.6 not started.
 
-**G0** (Speed) -- Two critical violations found and fixed in Session 71. Regex search now uses trigram extraction (5s->8ms). Symbol search gated on metadata presence (186ms->4us). Full gauntlet all sub-25ms. 22-shape automated regression suite (`test/gauntlet_test.go`) with benchstat baselines prevents future regressions. Session 72: L7.2 binary encoding shipped and archived (964MB->~50MB bbolt, 28.7s->sub-second load, 20x smaller token storage). AOA_SHIM=1 env var added for explicit Unix shim mode, fixing 3 grep/egrep shim bugs. Shim scripts in init.go fixed to include `export AOA_SHIM=1`.
+**G0** (Speed) -- Two critical violations found and fixed in Session 71. Regex search now uses trigram extraction (5s->8ms). Symbol search gated on metadata presence (186ms->4us). Full gauntlet all sub-25ms. 22-shape automated regression suite (`test/gauntlet_test.go`) with benchstat baselines prevents future regressions. Session 72: L7.2 binary encoding shipped and archived (964MB->~50MB bbolt, 28.7s->sub-second load, 20x smaller token storage). AOA_SHIM=1 env var added for explicit Unix shim mode, fixing 3 grep/egrep shim bugs. Shim scripts in init.go fixed to include `export AOA_SHIM=1`. Session 73: Build process hotfix -- `build.sh` as sole entry point, compile-time build guard, `recon` build tag opt-in, binary 366MB->8MB.
 
 ## Unblocked Tasks
 
@@ -27,6 +27,7 @@ Tasks with no blocking dependencies (or all deps satisfied):
 | L5.19 | 🟢 | 🟢 | 🟡 | Compliance tier (pivoted/superseded, absorbed into security) |
 | L7.1 | 🟢 | 🟢 | 🟡 | Startup progress (gap: timing test) |
 | L7.4 | 🟢 | 🟢 | 🟢 | .aoa/ directory restructure -- COMPLETE |
+| G0.HF1 | 🟢 | 🟢 | 🟢 | Build process fix (hotfix) -- build.sh entry point, build guard, 366MB->8MB -- COMPLETE |
 | L8.1 | 🟢 | 🟢 | 🟡 | Recon tab (gap: bitmask upgrade) |
 | L8.2 | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul (gap: browser-only) |
 | L8.3 | 🟢 | 🟢 | 🟡 | Recon cache + incremental (gap: unit tests) |
@@ -48,18 +49,18 @@ Line ranges into BOARD.md for targeted reads:
 | Goals | 11-23 | `offset=11, limit=13` |
 | Board Structure | 27-69 | `offset=27, limit=43` |
 | Mission | 73-79 | `offset=73, limit=7` |
-| Board Table | 83-110 | `offset=83, limit=28` |
-| Supporting Detail | 113-372 | `offset=113, limit=260` |
-| - Layer 2 | 115-131 | `offset=115, limit=17` |
-| - Layer 4 | 133-145 | `offset=133, limit=13` |
-| - Layer 5 | 147-291 | `offset=147, limit=145` |
-| - Layer 6 | 294-308 | `offset=294, limit=15` |
-| - Layer 7 | 310-340 | `offset=310, limit=31` |
-| - Layer 8 | 342-420 | `offset=342, limit=79` |
-| What Works | 422-440 | `offset=422, limit=19` |
-| What We're NOT Doing | 396-403 | `offset=396, limit=8` |
-| Key Documents | 405-415 | `offset=405, limit=11` |
-| Quick Reference | 417-429 | `offset=417, limit=13` |
+| Board Table | 83-112 | `offset=83, limit=30` |
+| Supporting Detail | 114-373 | `offset=114, limit=260` |
+| - Layer 2 | 116-132 | `offset=116, limit=17` |
+| - Layer 4 | 134-146 | `offset=134, limit=13` |
+| - Layer 5 | 148-292 | `offset=148, limit=145` |
+| - Layer 6 | 295-309 | `offset=295, limit=15` |
+| - Layer 7 | 311-341 | `offset=311, limit=31` |
+| - Layer 8 | 343-421 | `offset=343, limit=79` |
+| What Works | 423-441 | `offset=423, limit=19` |
+| What We're NOT Doing | 397-404 | `offset=397, limit=8` |
+| Key Documents | 406-416 | `offset=406, limit=11` |
+| Quick Reference | 418-430 | `offset=418, limit=13` |
 
 ## Layer Status
 
@@ -74,6 +75,7 @@ Line ranges into BOARD.md for targeted reads:
 | L5 | 15 | 9 | 6 | Active -- L5.7/8/16-19 green (Va gaps), L5.10/11 not started |
 | L6 | 9 | 9 | 0 | Complete -- all archived to COMPLETED.md |
 | L7 | 3 | 3 | 0 | Complete -- L7.1 (Va gap), L7.2 archived, L7.4 triple-green |
+| G0 | 1 | 1 | 0 | Complete -- G0.HF1 build process hotfix (triple-green) |
 | L8 | 6 | 5 | 1 | Recon -- L8.1-5 green (Va gaps), L8.6 not started |
 
 ## Active Documents
@@ -83,6 +85,7 @@ Line ranges into BOARD.md for targeted reads:
 | L5.7-L5.19 | Reference | `details/2026-02-23-dimensional-taxonomy.md` | Complete -- 142 questions across 21 dimensions |
 | L5.7-L5.19 | ADR | `decisions/2026-02-23-declarative-yaml-rules.md` | Accepted -- declarative YAML schema, 6 constraints |
 | -- | detail | `details/2026-02-25-session-71-g0-perf-and-recon-separation.md` | Complete -- G0 perf fixes, recon separation, P0 closure |
+| -- | detail | `details/QOL.md` | In progress -- dashboard QOL feedback (Live tab started) |
 
 ## Key Files
 
@@ -93,4 +96,5 @@ Line ranges into BOARD.md for targeted reads:
 | `.context/COMPLETED.md` | Archived completed work |
 | `.context/BACKLOG.md` | Deferred items |
 | `CLAUDE.md` | Agent instructions, architecture, build commands |
-| `Makefile` | build, build-pure, build-recon, check, bench-gauntlet, bench-baseline, bench-compare targets |
+| `build.sh` | ONLY build entry point -- standard (pure Go, 8MB) and recon (CGo, full) builds |
+| `Makefile` | All targets go through build.sh -- build, build-recon, check, bench-gauntlet, bench-baseline, bench-compare |

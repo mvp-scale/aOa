@@ -205,10 +205,11 @@ body {
 .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
 .stat-card {
   background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-  padding: 16px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+  padding: 16px; box-shadow: var(--shadow); position: relative; overflow: visible;
 }
 .stat-card::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  border-radius: 12px 12px 0 0;
 }
 .stat-card.cyan::before    { background: var(--cyan); }
 .stat-card.green::before   { background: var(--green); }
@@ -228,6 +229,29 @@ body {
 .stat-card.red .stat-value    { color: var(--red); }
 .stat-label { font-size: 12px; font-weight: 500; color: var(--dim); margin-bottom: 2px; }
 .stat-sub { font-size: 11px; color: var(--mute); }
+
+/* ── Stat card tooltips ──
+   Anchored to the card, appears on hover below the card.
+   Human-readable story text that matches the tab narrative.
+*/
+.stat-card[data-tooltip] { cursor: default; }
+.stat-card[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%; bottom: 0;
+  transform: translate(-50%, 100%);
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--dim); font-size: 11px; font-weight: 400;
+  line-height: 1.4; padding: 8px 12px; border-radius: 8px;
+  width: max-content; max-width: 260px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 100; pointer-events: none;
+  opacity: 0; transition: opacity 0.15s ease;
+  white-space: normal;
+}
+.stat-card[data-tooltip]:hover::after {
+  opacity: 1;
+}
 
 /* ── Numeric change glow system ──
    When a value changes, JS adds .num-glow (instant on),

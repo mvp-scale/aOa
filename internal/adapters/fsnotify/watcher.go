@@ -41,10 +41,11 @@ var ignoreFiles = map[string]bool{
 
 // Watcher implements ports.Watcher using fsnotify.
 type Watcher struct {
-	fw      *fsnotify.Watcher
-	done    chan struct{}
-	stopped bool
-	mu      sync.Mutex
+	fw         *fsnotify.Watcher
+	done       chan struct{}
+	stopped    bool
+	mu         sync.Mutex
+	allowPaths map[string]bool // paths exempt from ignore rules
 }
 
 // NewWatcher creates a new file system watcher.
@@ -54,8 +55,9 @@ func NewWatcher() (*Watcher, error) {
 		return nil, err
 	}
 	return &Watcher{
-		fw:   fw,
-		done: make(chan struct{}),
+		fw:         fw,
+		done:       make(chan struct{}),
+		allowPaths: make(map[string]bool),
 	}, nil
 }
 
@@ -107,8 +109,8 @@ func (w *Watcher) Watch(projectPath string, onChange func(filePath string)) erro
 					}
 				}
 
-				// Skip ignored files/dirs
-				if shouldIgnorePath(path) {
+				// Skip ignored files/dirs (unless in allow list)
+				if shouldIgnorePath(path) && !w.isAllowed(path) {
 					continue
 				}
 
@@ -144,6 +146,19 @@ func (w *Watcher) Watch(projectPath string, onChange func(filePath string)) erro
 	return nil
 }
 
+// WatchExtra adds an additional directory to the watch list, bypassing ignore rules.
+// Files within this directory will be allowed through the ignore filter.
+func (w *Watcher) WatchExtra(dir string) error {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	w.mu.Lock()
+	w.allowPaths[abs] = true
+	w.mu.Unlock()
+	return w.fw.Add(abs)
+}
+
 // Stop ends monitoring and releases all resources.
 // Safe to call multiple times.
 func (w *Watcher) Stop() error {
@@ -156,6 +171,18 @@ func (w *Watcher) Stop() error {
 	w.stopped = true
 	close(w.done)
 	return w.fw.Close()
+}
+
+// isAllowed returns true if the path is under an explicitly allowed directory.
+func (w *Watcher) isAllowed(path string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for dir := range w.allowPaths {
+		if strings.HasPrefix(path, dir+string(filepath.Separator)) || path == dir {
+			return true
+		}
+	}
+	return false
 }
 
 // shouldIgnoreDir returns true if the directory name should be skipped.

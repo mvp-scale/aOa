@@ -149,15 +149,17 @@ The Debrief tab answers: *How much did this session cost? Was it efficient? How 
 | **Hero TR** | Output Tokens | **[LIVE]** | 4 | **Output Tokens** | Keep — what Claude produced. Green. The two together show the I/O ratio. |
 | **Hero BL** | Cache Reused | **[LIVE]** | 5 | **Cache Savings $** | Convert cache reuse to dollars saved. "$1.24 saved by cache" is more compelling than "82k cache tokens." The efficiency story in money. |
 | **Hero BR** | Tokens Saved | **[LIVE]** | 6 | **Cost/Turn** | `sessionCost / turnCount` — "$0.19/turn." Gives a unit cost. Users can reason about it: "each question costs me $0.19." Powerful for budgeting. |
-| **Stats 1** | Input Tokens | **[LIVE]** | 7 | **Cache Hit %** | The efficiency headline. "73% cache hit rate" means 73% of context was served from cache (cheap). Green when high. This is THE efficiency metric. |
-| **Stats 2** | Output Tokens | **[LIVE]** | 8 | **Output Speed** | Tokens/sec. "42 tok/s" — users feel this as response latency. Derived from `output_tokens / durationMs`. Performance pulse. |
+| **Stats 1** | Input Tokens | **[LIVE]** | 7 | **Throughput** | Overall session token production rate. `total_output_tokens / elapsed_session_seconds`. Counts every token Claude produced — main conversation, subagent tasks, tool-heavy turns, everything. "128 tok/s" means the session is churning through work. This is the raw horsepower number. **[CALC]** |
+| **Stats 2** | Output Tokens | **[LIVE]** | 8 | **Conv Speed** | Conversational dialogue pace. Only measures the human↔AI exchange: user prompts + thinking + assistant responses. `Σ(conversation_chars) / 4 / conversation_wall_time`. Excludes tool execution and subagent overhead. "34 tok/s" reflects how fast the dialogue itself flows — the rhythm the user actually feels. **[CALC]** |
 | **Stats 3** | Cache Read | **[LIVE]** | 9 | **Avg Turn Duration** | Seconds per turn. "18s avg." Complements output speed — one is throughput, this is latency. Both matter. |
 | **Stats 4** | Cache Write | **[LIVE]** | 10 | **Tool Density** | Tools per turn. "3.2 tools/turn" shows how much work Claude does per prompt. High = complex tasks, low = conversational. |
 | **Stats 5** | Cache Hit % | **[LIVE]** | 11 | **Amplification Ratio** | `outputChars / inputChars` — "47x amplification." For every 1 char the user types, Claude produces 47. Shows leverage. |
 | *(new slot)* | — | — | 12 | **Model Mix** | "94% Opus / 4% Sonnet / 2% Haiku" — shows which engines ran. Color-coded. Affects cost interpretation. |
+| *(overflow)* | — | — | — | **Cache Hit %** | Moved out of stats grid — near 100% in practice (Anthropic's prompt cache is aggressive), making it noise rather than signal. Available in hero support line or tooltip. |
+| *(overflow)* | — | — | — | **Output Speed** (raw generation) | Raw Claude token generation rate (`output_tokens / durationMs` per turn, median). Replaced by the two-speed split: Throughput (everything) and Conv Speed (dialogue only). Available as tooltip on either speed metric. |
 | *(overflow)* | — | — | — | **Input Tokens** | Raw count moved out of stats grid — already in hero metric TL. Tooltip or detail view. |
 | *(overflow)* | — | — | — | **Output Tokens** | Raw count moved out — already in hero metric TR. Tooltip or detail view. |
-| *(overflow)* | — | — | — | **Cache Read / Cache Write** | Raw counts moved out — replaced by Cache Hit % and Cache Savings $. Available in expanded view. |
+| *(overflow)* | — | — | — | **Cache Read / Cache Write** | Raw counts moved out — replaced by Cache Savings $. Available in expanded view. |
 | *(overflow)* | — | — | — | **Thinking Ratio** | `thinkingTokens / outputTokens` — interesting but niche. Tooltip on output tokens. |
 | *(overflow)* | — | — | — | **Tool Success Rate** | `(bash − interrupted) / bash %` — interesting for debugging. Detail view. |
 | *(overflow)* | — | — | — | **Compaction Count/Savings** | Context compaction events. Warning-level indicator — surface as alert badge, not stat card. |
@@ -165,7 +167,7 @@ The Debrief tab answers: *How much did this session cost? Was it efficient? How 
 | *(overflow)* | — | — | — | **Sub-Agent Spawns / Delegation Ratio** | Agent token overhead — detail metric for power users. Tooltip or expanded view. |
 | *(overflow)* | — | — | — | **Web Search Count** | Niche. Tooltip on tool density or detail view. |
 
-**Recommended story flow**: Session cost (accountability) → I/O tokens (what went in/out) → Cache savings + cost/turn (efficiency) → Cache hit + speed + duration + tool density + amplification + model mix (performance profile). The tab evolves from "what did I spend" → "was it worth it" → "how did it perform."
+**Recommended story flow**: Session cost (accountability) → I/O tokens (what went in/out) → Cache savings + cost/turn (efficiency) → Throughput + conv speed + duration + tool density + amplification + model mix (performance profile). Two speed metrics tell different stories: throughput is raw horsepower (total work done), conv speed is dialogue rhythm (what the user feels). The tab evolves from "what did I spend" → "was it worth it" → "how did it perform."
 
 ---
 
@@ -245,7 +247,8 @@ These metrics span multiple tabs or represent the overall aOa value proposition.
 | **Claude Code version** | **Y** | Y | **Y** | — |
 | Context compaction events | — | Y | — | Extract from system events |
 | Sub-agent token usage | — | Y | — | Extract from toolUseResult |
-| Output speed (tok/sec) | — | Y | — | Combine output_tokens + durationMs |
+| Throughput (tok/sec) | — | Y | Y | `total_output_tokens / elapsed_seconds` — uses session metrics + timestamps or `total_duration_ms` from status hook |
+| Conv speed (tok/sec) | — | Y | — | `Σ(user+thinking+response chars) / 4 / conversation_wall_time` — filter feed to conversation events only |
 | User think time | — | Y | — | Timestamp gap analysis |
 | Edit acceptance rate | — | Y | — | Read toolUseResult.userModified |
 | Bash success rate | — | Y | — | Read toolUseResult.interrupted/stderr |

@@ -9,6 +9,7 @@ package treesitter
 import (
 	"path/filepath"
 	"strings"
+	"sync"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
@@ -27,6 +28,7 @@ type Symbol struct {
 
 // Parser extracts symbols from source files using tree-sitter grammars.
 type Parser struct {
+	mu        sync.RWMutex
 	languages map[string]*tree_sitter.Language // lang name -> language
 	extToLang map[string]string                // extension -> lang name
 	loader    *DynamicLoader                   // optional: loads grammars from .so/.dylib
@@ -65,16 +67,25 @@ func (p *Parser) ParseFile(filePath string, source []byte) ([]Symbol, error) {
 		return nil, nil
 	}
 
+	p.mu.RLock()
 	lang, ok := p.languages[langName]
+	p.mu.RUnlock()
+
 	if !ok && p.loader != nil {
-		loaded, err := p.loader.LoadGrammar(langName)
-		if err != nil {
-			return nil, nil // dynamic loading failed, degrade gracefully
+		p.mu.Lock()
+		lang, ok = p.languages[langName]
+		if !ok {
+			loaded, err := p.loader.LoadGrammar(langName)
+			if err != nil {
+				p.mu.Unlock()
+				return nil, nil
+			}
+			p.languages[langName] = loaded
+			lang = loaded
 		}
-		p.languages[langName] = loaded
-		lang = loaded
+		p.mu.Unlock()
 	} else if !ok {
-		return nil, nil // extension mapped but grammar not available
+		return nil, nil
 	}
 
 	if len(source) == 0 {
@@ -167,14 +178,25 @@ func (p *Parser) ParseToTree(filePath string, source []byte) (*tree_sitter.Tree,
 		return nil, "", nil
 	}
 
+	// Fast path: read lock for cached languages
+	p.mu.RLock()
 	lang, ok := p.languages[langName]
+	p.mu.RUnlock()
+
 	if !ok && p.loader != nil {
-		loaded, err := p.loader.LoadGrammar(langName)
-		if err != nil {
-			return nil, "", nil
+		p.mu.Lock()
+		// Double-check after acquiring write lock
+		lang, ok = p.languages[langName]
+		if !ok {
+			loaded, err := p.loader.LoadGrammar(langName)
+			if err != nil {
+				p.mu.Unlock()
+				return nil, "", nil
+			}
+			p.languages[langName] = loaded
+			lang = loaded
 		}
-		p.languages[langName] = loaded
-		lang = loaded
+		p.mu.Unlock()
 	} else if !ok {
 		return nil, "", nil
 	}
