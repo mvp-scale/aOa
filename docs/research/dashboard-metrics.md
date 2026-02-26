@@ -650,3 +650,141 @@ Attached to `user` events that carry tool results. Shape varies by tool:
 | `tool_use_id` | `string` | Tool use ID that spawned this task |
 | `description` | `string` | Human-readable task description |
 | `task_type` | `string` | `"local_agent"` (sub-agent) or `"local_bash"` (background shell) |
+
+---
+
+## L9 Telemetry Layer — New Data Sources & Derived Metrics
+
+L9 adds raw character counting and counterfactual comparison to every content stream flowing through the daemon. All measurements are `(chars, timestamp)` — token conversions happen at display time (chars/4).
+
+### New Data Sources
+
+| Source | Struct | Location | How Captured |
+|--------|--------|----------|-------------|
+| **ContentMeter** | `ContentMeter` | `internal/app/contentmeter.go` | Wired into `onSessionEvent()` — every event type feeds char counts |
+| **Shadow Ring** | `ShadowRing` | `internal/app/shadow.go` | Counterfactual comparisons from session log tool invocations and shim searches |
+| **Persisted Tool Results** | Tailer disk resolution | `internal/adapters/tailer/tailer.go` | `tool-results/toolu_{id}.txt` file sizes when inline content is 0 |
+| **Subagent JSONL** | Tailer subagent discovery | `internal/adapters/tailer/tailer.go` | `subagents/agent-*.jsonl` files parsed with same pipeline |
+
+### ContentMeter — Raw Char Accumulators
+
+Resets on session boundary. All fields are `int64` (chars) unless noted.
+
+| Field | Source Event | What It Measures |
+|-------|-------------|-----------------|
+| `UserChars` | `EventUserInput` → `len(ev.Text)` | Total characters the user typed |
+| `AssistantChars` | `EventAIResponse` → `len(ev.Text)` | Total characters Claude produced (visible response) |
+| `ThinkingChars` | `EventAIThinking` → `len(ev.Text)` | Total characters in extended thinking blocks |
+| `ToolResultChars` | `EventToolResult` → `sum(ev.ToolResultSizes)` | Total characters in tool results (Read, Grep, Bash output, etc.) |
+| `ToolPersistedChars` | `EventToolResult` → `ev.ToolPersistedSizes` | Chars resolved from `tool-results/` files on disk (large outputs Claude persists) |
+| `SubagentChars` | All event types where `ev.IsSubagent == true` | Total characters from subagent JSONL files |
+| `APIInputTokens` | `EventAIResponse` → `ev.Usage.InputTokens` | API-reported input tokens (real tokenizer, not char estimate) |
+| `APIOutputTokens` | `EventAIResponse` → `ev.Usage.OutputTokens` | API-reported output tokens |
+| `APICacheReadTokens` | `EventAIResponse` → `ev.Usage.CacheReadTokens` | API-reported cache read tokens |
+| `ActiveMs` | `EventSystemMeta` → `ev.DurationMs` | Sum of turn_duration events (excludes idle between turns) |
+| `TurnCount` | `PushTurn()` calls | Number of completed turns |
+| `ToolResultCount` | `RecordToolResult()` calls | Number of tool result events |
+| `SubagentCount` | `RecordSubagent()` calls | Number of subagent content events |
+
+### ContentMeter — Derived Metrics
+
+| Metric | Calculation | Status | Best Surface |
+|--------|-------------|--------|-------------|
+| **ConversationChars** | `UserChars + AssistantChars + ThinkingChars` | **[LIVE]** | Debrief support line |
+| **TotalChars** | `ConversationChars + ToolResultChars + ToolPersistedChars + SubagentChars` | **[LIVE]** | Debrief: total session volume |
+| **BurstTokensPerSec** | `TotalChars / 4 / (ActiveMs / 1000)` | **[LIVE]** | Debrief: Stats card — undiluted active-work generation rate |
+| **TurnVelocities** | Per-turn `(AssistantChars + ThinkingChars + ToolResultChars) / 4 / (DurationMs / 1000)` from ring buffer | **[LIVE]** | Debrief: sparkline or mini-bars per-turn velocity |
+| **ConversationTokens** | `ConversationChars / 4` | **[CALC]** | Debrief: Conv Speed numerator |
+| **TotalTokens** | `TotalChars / 4` | **[CALC]** | Debrief: Throughput numerator |
+| **Amplification** | `AssistantChars / UserChars` | **[CALC]** | Debrief: Stats card — output/input leverage ratio |
+| **ToolResultFraction** | `ToolResultChars / TotalChars` | **[CALC]** | Debrief: what % of context is infrastructure vs dialogue |
+| **SubagentFraction** | `SubagentChars / TotalChars` | **[CALC]** | Debrief: what % of work happened in subagent forks |
+| **PersistedFraction** | `ToolPersistedChars / ToolResultChars` | **[CALC]** | Live/Debrief tooltip: how much tool output was large enough to persist to disk |
+| **ThinkingRatio** | `ThinkingChars / (ThinkingChars + AssistantChars)` | **[CALC]** | Debrief: how much of Claude's output was reasoning vs visible response |
+| **IdleRatio** | `1 - (ActiveMs / wallClockMs)` | **[CALC]** | Debrief: what fraction of session time is idle (user thinking, permission prompts, etc.) |
+| **AvgTurnDuration** | `ActiveMs / TurnCount` | **[CALC]** | Debrief: Stats card — average seconds per turn |
+| **ToolDensity** | From TurnSnapshot ring: `sum(ActionCount) / TurnCount` | **[CALC]** | Debrief: Stats card — average tool calls per turn |
+| **UserThinkTime** | Timestamp gaps between consecutive `EventUserInput` events minus `ActiveMs` | **[NEW]** | Debrief: avg seconds the user spends between turns |
+| **PeakBurst** | `max(TurnVelocities)` | **[CALC]** | Debrief: highest single-turn tok/s observed |
+
+### Shadow Ring — Counterfactual Comparisons
+
+| Field | Source | What It Measures |
+|-------|--------|-----------------|
+| `ToolShadow.Source` | `"session_log"` or `"shim"` | Whether comparison came from session log Grep/Glob or from shim search truncation |
+| `ToolShadow.ActualChars` | Session log: `ev.ToolResultSizes[toolID]`; Shim: `result.TotalMatchChars` | Characters the native/untruncated result contained |
+| `ToolShadow.ShadowChars` | Session log: aOa async search result; Shim: truncated result chars | Characters aOa's optimized result contained |
+| `ToolShadow.CharsSaved` | `ActualChars - ShadowChars` | Character savings (positive = aOa saved context) |
+| `ToolShadow.ShadowMs` | `time.Since(start)` | How long the shadow search took |
+| `ShadowRing.TotalCharsSaved()` | Cumulative across all entries | Lifetime chars saved in this session |
+
+### Shadow Ring — Derived Metrics
+
+| Metric | Calculation | Status | Best Surface |
+|--------|-------------|--------|-------------|
+| **ShadowTokensSaved** | `TotalCharsSaved / 4` | **[LIVE]** | Live: Stats card (Shadow Saved), hero support line |
+| **ShadowSearchCount** | `ring.Count()` | **[LIVE]** | Live: tooltip on Shadow Saved card |
+| **AvgSavingsPerSearch** | `TotalCharsSaved / Count` | **[CALC]** | Arsenal/Debrief: average chars saved per shadow comparison |
+| **ShadowSavingsRate** | `CharsSaved / ActualChars × 100` per entry | **[CALC]** | Actions table: per-action "↓97%" display |
+| **ShimVsSessionLogSplit** | Count/savings by `Source == "shim"` vs `"session_log"` | **[CALC]** | Debrief: breakdown of savings by source — how much comes from the search engine vs session log comparison |
+| **CounterfactualCostSaved** | `ShadowTokensSaved × modelOutputPrice / 1M` | **[CALC]** | Arsenal: convert shadow token savings to dollars |
+| **ShadowHitRate** | `entries where CharsSaved > 0 / total entries` | **[CALC]** | Debrief: what % of shadow comparisons actually found savings |
+
+### Tool Detail Capture (L9.2)
+
+New fields on `TurnAction` and `TurnActionResult`:
+
+| Field | Source | What It Enables |
+|-------|--------|----------------|
+| `Pattern` | `ev.Tool.Pattern` on Grep/Glob invocations | Actions table: show what was searched for |
+| `FilePath` | `ev.File.Path` on Read/Write/Edit invocations | Actions table: show what file was accessed |
+| `Command` | `ev.Tool.Command` on Bash invocations | Actions table: show what command was run |
+
+### Subagent Tailing (L9.4)
+
+New fields on canonical `SessionEvent`:
+
+| Field | Source | What It Enables |
+|-------|--------|----------------|
+| `IsSubagent` | `tailer.SessionEvent.Source == "subagent"` | Route chars to SubagentChars instead of main counters |
+
+### Persisted Tool Results (L9.3)
+
+New fields on canonical `SessionEvent`:
+
+| Field | Source | What It Enables |
+|-------|--------|----------------|
+| `ToolPersistedSizes` | `os.Stat(tool-results/toolu_{id}.txt)` | Capture large tool outputs stored on disk instead of inline |
+
+### Search Engine (L9.6)
+
+New field on `SearchResult`:
+
+| Field | Source | What It Enables |
+|-------|--------|----------------|
+| `TotalMatchChars` | Sum of all hit chars before `maxCount` truncation in `buildResult()` | Shim counterfactual — proves search engine saves tokens by truncating |
+
+### Inferrable Metrics Not Yet Implemented
+
+These metrics can be derived from data we already capture but haven't built the calculation for yet.
+
+| Metric | Data Available | Calculation | Value |
+|--------|---------------|-------------|-------|
+| **Context Velocity** | `ctx_used` snapshots with timestamps from status hook | `Δctx_used / Δtime` — rate of context growth, tok/sec | More granular than burn rate — shows real-time context accumulation speed |
+| **Cost Velocity** | `total_cost_usd` snapshots with timestamps | `Δcost / Δtime` — dollars per minute | "You're spending $0.12/min" — budget pacing |
+| **Tool Result Compression Ratio** | `ToolResultChars` vs `TotalMatchChars` | `TotalMatchChars / ToolResultChars` across all searches | How aggressively search truncation compresses results, e.g. "8.4x compression" |
+| **Conversation/Infrastructure Ratio** | `ConversationChars` and `ToolResultChars` | `ConversationChars / ToolResultChars` | What fraction of the session is visible dialogue vs tool infrastructure. Low = tool-heavy session |
+| **Subagent Overhead** | `SubagentChars` vs `TotalChars` | `SubagentChars / TotalChars × 100` | What % of total session volume comes from subagent forks. Shows delegation cost |
+| **Persisted Result Rate** | `ToolPersistedChars` vs `ToolResultChars` | `ToolPersistedChars / (ToolResultChars + ToolPersistedChars) × 100` | What % of tool output is large enough that Claude writes it to disk |
+| **Turn Complexity Distribution** | TurnSnapshot ring: `ActionCount` per turn | Histogram or percentiles of tools-per-turn | Shows if work is concentrated in a few heavy turns or spread evenly |
+| **Thinking Efficiency** | `ThinkingChars` and corresponding `AssistantChars` per turn | `ThinkingChars / AssistantChars` per turn over time | Does more thinking lead to better (shorter, more precise) responses? Trend analysis |
+| **Cache Decay Curve** | `APICacheReadTokens` per turn over time | Plot cache read ratio by turn number within session | Shows when prompt cache starts degrading — useful for session length optimization |
+| **Shadow Savings Trend** | Shadow ring entries by timestamp | `CharsSaved` over time within session | Are searches becoming more or less efficient as the session progresses? |
+| **Compaction Impact** | `microcompactMetadata.tokensSaved` from system events | Track compaction events and their token savings | How much context was recovered by auto-compaction. Currently parsed but not surfaced |
+| **Write/Edit Acceptance** | `toolUseResult.userModified` on Edit events | `(edits - userModified) / edits × 100` | Trust metric — what % of code edits Claude made were accepted without modification |
+| **Bash Success Rate** | `toolUseResult.interrupted`, `toolUseResult.stderr` | `(bashCalls - interrupted - stderrOnly) / bashCalls × 100` | Command reliability — are bash commands succeeding? |
+| **File Read Hotspots** | `FileHits` in learner state + `TurnAction.FilePath` | Top N files by lifetime reads, ranked | Which files Claude reads most — helps identify knowledge concentration |
+| **Session Pacing** | `total_duration_ms`, `total_api_duration_ms` from status hook | `api_duration / total_duration × 100` | What % of session wall time is actual API work vs user think time + permission prompts |
+| **Lines Per Dollar** | `total_lines_added` from status hook, `total_cost_usd` | `lines_added / cost` | Productivity metric — lines of code produced per dollar spent |
+| **Net Lines** | `total_lines_added - total_lines_removed` from status hook | Simple subtraction | Net code growth — positive = building, negative = refactoring/cleanup |
+| **Web Search Frequency** | `message.usage.server_tool_use.web_search_requests` | Accumulate per turn | How often Claude reaches outside the codebase for answers |

@@ -315,6 +315,13 @@ function poll() {
     badge.className = 'status-badge live';
     setText('statusText', 'LIVE');
     setText('footerStatus', 'Online');
+    // Fetch version once (doesn't change during daemon lifetime)
+    if (!cache.config) {
+      safeFetch('/api/config').then(function(c) {
+        cache.config = c;
+        if (c.version) setText('footerVersion', c.version);
+      }).catch(function() {});
+    }
   }).catch(function() {
     var badge = document.getElementById('statusBadge');
     badge.className = 'status-badge offline';
@@ -410,14 +417,13 @@ function renderLive() {
   var ctxUsed = rw.ctx_used || 0;
   var ctxMax = rw.ctx_max || rw.context_window_max || 0;
 
-  // Output speed
-  var tokPerSec = (rw.ms_per_token > 0) ? (1000 / rw.ms_per_token) : 0;
-
   // Hero metrics — always visible, show "-" when no data
   setGlow('hm-live-0', totalSaved > 0 ? fmtK(totalSaved) : '-');
   setGlow('hm-live-1', costSaved > 0 ? fmtDollar(costSaved) : '-');
   setGlow('hm-live-2', totalTimeSavedMs > 0 ? fmtTime(totalTimeSavedMs) : '-');
-  setGlow('hm-live-3', rw.delta_minutes > 0 ? fmtMin(rw.delta_minutes) : '-');
+  var promptN = st.prompt_count || 0;
+  var autotuneProgress = promptN % 50;
+  setGlow('hm-live-3', autotuneProgress + '/50');
 
   // Hero support line — only show parts that have data
   var parts = [];
@@ -429,29 +435,25 @@ function renderLive() {
   }
   if (rw.model) parts.push('<span class="p">' + rw.model + '</span>');
   if (st.prompt_count) parts.push('turn <span class="c">' + st.prompt_count + '</span>');
+  if (rw.shadow_total_saved > 0) parts.push('shadow <span class="g">' + fmtK(rw.shadow_total_saved) + ' saved</span>');
   setHtml('heroSupport-live', parts.length > 0 ? parts.join(' &middot; ') : '');
 
-  // Stats grid
-  var promptN = st.prompt_count || 0;
-  var autotuneProgress = promptN % 50;
-  setGlow('ls-ctxutil', ctxRemainingPct > 0 ? ctxRemainingPct.toFixed(0) + '%' : '-');
+  // Stats grid — top row: situation, bottom row: aOa value
+  setGlow('ls-ctxused', ctxUsedPct > 0 ? ctxUsedPct.toFixed(0) + '%' : '-');
   setGlow('ls-burn', rw.burn_rate_per_min ? fmtK(Math.round(rw.burn_rate_per_min)) + '/min' : '-');
+  setGlow('ls-cost', realCost > 0 ? fmtDollar(realCost) : '-');
   setGlow('ls-guided', fmtPct(ratio));
-  setGlow('ls-speed', tokPerSec > 0 ? tokPerSec.toFixed(1) + '/s' : '-');
+  setGlow('ls-shadow', rw.shadow_total_saved > 0 ? fmtK(rw.shadow_total_saved) + ' tok' : '-');
 
   // Cache savings $ — dollars saved by prompt cache serving tokens at reduced rate
   var cacheSavings = 0;
-  // Current session cache savings from conversation metrics
   var cm = cache.convMetrics || {};
   var cacheReadTokens = cm.cache_read_tokens || 0;
   if (cacheReadTokens > 0) cacheSavings = calcCacheSavings(cacheReadTokens, rw.model);
-  // Historical session cache savings
   for (var j = 0; j < sessions.length; j++) {
     if (sessions[j].cache_read_tokens) cacheSavings += calcCacheSavings(sessions[j].cache_read_tokens, sessions[j].model || rw.model);
   }
   setGlow('ls-cachesave', cacheSavings > 0 ? fmtDollar(cacheSavings) : '-');
-
-  setGlow('ls-autotune', autotuneProgress + '/50');
 }
 
 /* ── Live: Activity Table ── */
@@ -592,19 +594,19 @@ function renderIntel() {
     for (var i = 0; i < dm.domains.length; i++) totalHits += (dm.domains[i].hits || 0);
   }
   var sup = [];
-  sup.push('<span class="g">' + coreCount + '</span> core');
-  sup.push('<span class="c">' + termCount + '</span> terms');
-  sup.push('<span class="b">' + kwCount + '</span> keywords');
-  sup.push('<span class="g">' + (totalHits ? totalHits.toFixed(1) : '0') + '</span> total hits');
+  sup.push('<span class="g">' + coreCount + '</span> mastered');
+  sup.push('<span class="c">' + termCount + '</span> concepts');
+  sup.push('<span class="b">' + kwCount + '</span> vocabulary');
+  sup.push('<span class="g">' + (totalHits ? totalHits.toFixed(1) : '0') + '</span> evidence');
   setHtml('heroSupport-intel', sup.join(' &middot; '));
 
-  // Stats
+  // Stats — pipeline: observe → extract → structure → master → pattern → prove
+  setGlow('is-observed', st.file_hit_count || 0);
+  setGlow('is-vocabulary', kwCount);
+  setGlow('is-concepts', termCount);
   setGlow('is-domains', domainCount);
-  setGlow('is-core', coreCount);
-  setGlow('is-terms', termCount);
-  setGlow('is-learnrate', learningRate);
-  setGlow('is-bigrams', st.bigram_count || 0);
-  setGlow('is-totalhits', totalHits ? totalHits.toFixed(1) : '0');
+  setGlow('is-patterns', st.bigram_count || 0);
+  setGlow('is-evidence', totalHits ? totalHits.toFixed(1) : '0');
 
   // Domain Rankings (with change-tracking visual effects)
   renderDomains(dm);
@@ -1006,19 +1008,19 @@ function renderDebrief() {
   // Hero support — only show parts that have data
   var totalTokens = inputTokens + outputTokens;
   var sup = [];
-  if (turnCount > 0) sup.push('<span class="c">' + turnCount + '</span> turns');
+  if (turnCount > 0) sup.push('<span class="c">' + turnCount + '</span> exchanges');
   if (totalTokens > 0) sup.push('<span class="g">' + fmtK(totalTokens) + '</span> total tokens');
-  if (cacheSavings > 0) sup.push('cache savings <span class="b">' + fmtDollar(cacheSavings) + '</span>');
-  if (throughput !== '-') sup.push('throughput <span class="g">' + throughput + '</span>');
+  if (cacheSavings > 0) sup.push('cache saved <span class="b">' + fmtDollar(cacheSavings) + '</span>');
+  if (throughput !== '-') sup.push('pace <span class="g">' + convSpeed + '</span>');
   setHtml('heroSupport-debrief', sup.length > 0 ? sup.join(' &middot; ') : '');
 
-  // Stats
-  setGlow('ds-throughput', throughput);
-  setGlow('ds-convspeed', convSpeed);
-  setGlow('ds-turndur', avgTurnDur);
-  setGlow('ds-tooldensity', toolDensity);
+  // Stats — dialogue → pace → depth → leverage → amplification → engine
+  setGlow('ds-flow', throughput);
+  setGlow('ds-pace', convSpeed);
+  setGlow('ds-turntime', avgTurnDur);
+  setGlow('ds-leverage', toolDensity);
   setGlow('ds-amplify', amplification);
-  setGlow('ds-modelmix', modelMix);
+  setGlow('ds-engine', modelMix);
   setText('convCount', (cf.count || 0) + ' turns');
 
   // Conversation Feed — reverse to chronological, pair user+assistant into exchanges
@@ -1132,22 +1134,37 @@ function renderDebrief() {
       var act = actions[a];
       var targetStr = act.target || '';
       if (act.range) targetStr += act.range;
+      // L9.2: Build detail subtitle from pattern/command/file_path
+      var detailStr = '';
+      if (act.pattern) detailStr = act.pattern;
+      else if (act.command) detailStr = act.command;
+      else if (act.file_path && !targetStr) detailStr = act.file_path;
       // Savings cell: compact 4-char max (e.g. ↓88%)
       var saveVal = '';
       if (act.savings > 0) {
         saveVal = '<span class="text-green">\u2193' + act.savings + '%</span>';
       }
+      // L9.8: Shadow savings cell
+      if (act.shadow_saved > 0) {
+        var pct = Math.round((1 - act.shadow_chars / (act.shadow_chars + act.shadow_saved)) * 100);
+        saveVal += (saveVal ? ' ' : '') + '<span class="text-cyan" title="Shadow: ' + fmtK(act.shadow_chars + act.shadow_saved) + ' \u2192 ' + fmtK(act.shadow_chars) + '">\u2193' + pct + '%</span>';
+      }
       // Tokens cell: compact 4-char max (e.g. 1.2k, 11k, 340)
+      // Fallback: estimate tokens from result_chars for tools that don't set tokens at invocation (e.g. Task)
       var tokVal = '';
-      if (act.tokens > 0) {
+      var displayTokens = act.tokens > 0 ? act.tokens : (act.result_chars > 0 ? Math.round(act.result_chars / 4) : 0);
+      if (displayTokens > 0) {
         var tokCls = act.attrib === 'aOa guided' ? 'text-green' : (act.attrib === 'unguided' ? 'text-red' : 'text-dim');
-        tokVal = '<span class="' + tokCls + '">' + fmtK(act.tokens) + '</span>';
+        tokVal = '<span class="' + tokCls + '">' + fmtK(displayTokens) + '</span>';
       }
       var pathStyle = act.attrib === 'unguided' ? ' style="color:var(--red)"' : '';
+      // L9.2: Tooltip includes detail (pattern/command) when available
+      var fullTooltip = targetStr;
+      if (detailStr && detailStr !== targetStr) fullTooltip += '\n' + detailStr;
       ahtml += '<div class="conv-action-item">' +
         '<span class="act-left">' +
           '<span class="conv-tool-chip ' + getToolChipClass(act.tool) + '">' + escapeHtml(act.tool) + '</span>' +
-          '<span class="conv-action-path"' + pathStyle + ' title="' + escapeHtml(targetStr) + '">' + escapeHtml(truncPath(targetStr, 80)) + '</span>' +
+          '<span class="conv-action-path"' + pathStyle + ' title="' + escapeHtml(fullTooltip) + '">' + escapeHtml(truncPath(targetStr, 80)) + '</span>' +
         '</span>' +
         '<span class="act-cell">' + saveVal + '</span>' +
         '<span class="act-cell">' + tokVal + '</span>' +

@@ -47,6 +47,13 @@ type SessionEvent struct {
 	// Tool result sizes (tool_use_id -> content char count)
 	ToolResultSizes map[string]int
 
+	// ToolPersistedIDs tracks which tool_use_ids were resolved from
+	// persisted tool-results/ files on disk (L9.3).
+	ToolPersistedIDs map[string]bool
+
+	// Source identifies where this event came from: "main" or "subagent".
+	Source string
+
 	// System event details
 	Subtype    string // e.g., "turn_duration"
 	ParentUUID string // links system events to parent AI turn
@@ -261,12 +268,12 @@ func (e *SessionEvent) extractContentBlock(block map[string]any, role string) {
 				// Fallback: use "text" field length if present
 				chars = len(text)
 			}
-			if chars > 0 {
-				if e.ToolResultSizes == nil {
-					e.ToolResultSizes = make(map[string]int)
-				}
-				e.ToolResultSizes[toolUseID] = chars
+			// L9.3: Always record the toolUseID, even when chars == 0.
+			// Zero-char entries get resolved from persisted tool-results/ files.
+			if e.ToolResultSizes == nil {
+				e.ToolResultSizes = make(map[string]int)
 			}
+			e.ToolResultSizes[toolUseID] = chars
 		}
 	}
 }

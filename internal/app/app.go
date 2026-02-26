@@ -14,6 +14,7 @@ import (
 
 	"github.com/corey/aoa/atlas"
 	"github.com/corey/aoa/internal/adapters/bbolt"
+	"github.com/corey/aoa/internal/version"
 	claude "github.com/corey/aoa/internal/adapters/claude"
 	fsw "github.com/corey/aoa/internal/adapters/fsnotify"
 	"github.com/corey/aoa/internal/adapters/socket"
@@ -70,6 +71,9 @@ type TurnAction struct {
 	TimeSavedMs int64  // estimated time saved in ms (only on guided)
 	ToolID      string // tool_use_id for result correlation
 	ResultChars int    // character count of tool result (0 = unknown)
+	Pattern     string // L9.2: search pattern (Grep/Glob)
+	FilePath    string // L9.2: file path (Read/Write/Edit)
+	Command     string // L9.2: shell command (Bash)
 }
 
 // ConversationTurn describes a single turn in the conversation feed.
@@ -186,6 +190,9 @@ type App struct {
 	dbPath         string                 // path to bbolt database file
 	started        time.Time              // daemon start time
 
+	// Content meter (L9.1) — raw char counts from all content streams
+	meter ContentMeter
+
 	// Session metrics accumulators (ephemeral, reset on daemon restart)
 	sessionMetrics SessionMetrics
 	toolMetrics    ToolMetrics
@@ -210,6 +217,10 @@ type App struct {
 	// Time savings tracking (L0.55)
 	rateTracker        *RateTracker // dynamic ms/token rate from completed turns
 	sessionTimeSavedMs int64        // cumulative time saved this session (ms)
+
+	// Shadow engine (L9.5/L9.6) — counterfactual comparison ring
+	shadowRing    ShadowRing             // ring buffer of shadow comparison results
+	shadowPending map[string]*ToolShadow // toolID → pending shadow (awaiting result)
 
 	// Value engine fields (L0.3)
 	currentModel          string // model from most recent event
@@ -349,6 +360,7 @@ func New(cfg Config) (*App, error) {
 			GrepPatterns: make(map[string]int),
 		},
 		turnBuffer:          make(map[string]*turnBuilder),
+		shadowPending:       make(map[string]*ToolShadow),
 		burnRate:            NewBurnRateTracker(5 * time.Minute),
 		burnRateCounterfact: NewBurnRateTracker(5 * time.Minute),
 		rateTracker:         NewRateTracker(30 * time.Minute),
@@ -517,6 +529,28 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 	fileSet := make(map[string]bool)
 	for _, hit := range result.Hits {
 		fileSet[hit.File] = true
+	}
+
+	// L9.6: Shim-level counterfactual — compute savings when results were truncated.
+	// TotalMatchChars > returned chars means the search engine truncated results.
+	if result.TotalMatchChars > 0 && len(result.Hits) > 0 {
+		var returnedChars int
+		for _, h := range result.Hits {
+			returnedChars += len(h.File) + len(h.Content) + 10
+		}
+		saved := result.TotalMatchChars - returnedChars
+		if saved > 0 {
+			a.counterfactTokensSaved += int64(saved / 4)
+			a.shadowRing.Push(ToolShadow{
+				Timestamp:   time.Now(),
+				Source:      "shim",
+				Pattern:     query,
+				ActualChars: result.TotalMatchChars,
+				ShadowChars: returnedChars,
+				CharsSaved:  saved,
+				ShadowRan:   true,
+			})
+		}
 	}
 
 	entry := ActivityEntry{
@@ -745,11 +779,18 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 
 	switch ev.Kind {
 	case ports.EventUserInput:
+		// L9.4: Subagent user input — just count chars, skip turn tracking
+		if ev.IsSubagent {
+			a.meter.RecordSubagent(len(ev.Text))
+			a.Learner.ProcessBigrams(ev.Text)
+			break
+		}
 		// Flush the current exchange builder before starting new user input
 		a.flushCurrentBuilder()
 		a.promptN++
 		a.sessionPrompts++
 		a.sessionMetrics.TurnCount++
+		a.meter.RecordUser(len(ev.Text))
 		a.Learner.ProcessBigrams(ev.Text)
 		a.writeStatus(nil)
 		// Push user turn to ring
@@ -763,6 +804,11 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 
 	case ports.EventAIThinking:
 		if ev.Text != "" {
+			if ev.IsSubagent {
+				a.meter.RecordSubagent(len(ev.Text))
+			} else {
+				a.meter.RecordThinking(len(ev.Text))
+			}
 			a.Learner.ProcessBigrams(ev.Text)
 			tb := a.ensureTurnBuilder(ev.TurnID, ts, ev.Model)
 			if tb.ThinkingText.Len() > 0 {
@@ -773,11 +819,20 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 
 	case ports.EventAIResponse:
 		if ev.Text != "" {
+			if ev.IsSubagent {
+				a.meter.RecordSubagent(len(ev.Text))
+			} else {
+				a.meter.RecordAssistant(len(ev.Text))
+			}
 			a.Learner.ProcessBigrams(ev.Text)
+		}
+		if ev.IsSubagent {
+			break // subagent responses don't accumulate into main session metrics
 		}
 		// Accumulate token usage (global + per-turn)
 		tb := a.ensureTurnBuilder(ev.TurnID, ts, ev.Model)
 		if ev.Usage != nil {
+			a.meter.RecordAPI(ev.Usage.InputTokens, ev.Usage.OutputTokens, ev.Usage.CacheReadTokens)
 			a.sessionMetrics.InputTokens += ev.Usage.InputTokens
 			a.sessionMetrics.OutputTokens += ev.Usage.OutputTokens
 			a.sessionMetrics.CacheReadTokens += ev.Usage.CacheReadTokens
@@ -921,9 +976,24 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 					tokens = a.estimateGlobTokens(globDir, globPattern)
 				}
 			case "Task":
-				if ev.Tool.Command != "" {
+				if ev.Tool.Input != nil {
+					if desc, ok := ev.Tool.Input["description"].(string); ok && desc != "" {
+						target = a.truncate(desc, 100)
+					}
+				}
+				if target == "" && ev.Tool.Command != "" {
 					target = a.truncate(ev.Tool.Command, 100)
 				}
+			}
+
+			// L9.2: Extract tool detail fields
+			var toolPattern, toolFilePath, toolCommand string
+			if ev.Tool != nil {
+				toolPattern = ev.Tool.Pattern
+				toolCommand = ev.Tool.Command
+			}
+			if ev.File != nil {
+				toolFilePath = ev.File.Path
 			}
 
 			// Append structured action to turn builder
@@ -937,7 +1007,22 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				Savings:     savings,
 				TimeSavedMs: timeSavedMs,
 				ToolID:      ev.Tool.ToolID,
+				Pattern:     toolPattern,
+				FilePath:    toolFilePath,
+				Command:     toolCommand,
 			})
+
+			// L9.5: Create pending shadow for Grep/Glob tools
+			if (action == "Grep" || action == "Glob") && ev.Tool.ToolID != "" && toolPattern != "" {
+				a.shadowPending[ev.Tool.ToolID] = &ToolShadow{
+					Timestamp: time.Now(),
+					Source:    "session_log",
+					ToolName:  action,
+					ToolID:    ev.Tool.ToolID,
+					Pattern:   toolPattern,
+					FilePath:  toolFilePath,
+				}
+			}
 
 			// Activity feed target includes range for reads
 			actTarget := target
@@ -963,6 +1048,24 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 		}
 
 	case ports.EventToolResult:
+		// L9.1: Accumulate tool result chars into content meter
+		if len(ev.ToolResultSizes) > 0 {
+			var totalResultChars int
+			for _, chars := range ev.ToolResultSizes {
+				totalResultChars += chars
+			}
+			if totalResultChars > 0 {
+				a.meter.RecordToolResult(totalResultChars)
+			}
+		}
+		// L9.3: Accumulate persisted tool result chars
+		if len(ev.ToolPersistedSizes) > 0 {
+			for _, chars := range ev.ToolPersistedSizes {
+				if chars > 0 {
+					a.meter.RecordToolPersisted(chars)
+				}
+			}
+		}
 		// Correlate tool result sizes back to TurnActions via ToolID.
 		// Tool results arrive in user messages; the matching tool_use was
 		// in a prior assistant message. Walk all turn builders to find matches.
@@ -990,9 +1093,22 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 					}
 				}
 			}
+
+			// L9.5: Dispatch shadow search for pending Grep/Glob comparisons
+			for toolID, chars := range ev.ToolResultSizes {
+				if shadow, ok := a.shadowPending[toolID]; ok {
+					shadow.ActualChars = chars
+					delete(a.shadowPending, toolID)
+					a.dispatchShadowSearch(shadow)
+				}
+			}
 		}
 
 	case ports.EventSystemMeta:
+		// L9.1: Track active milliseconds
+		if ev.DurationMs > 0 {
+			a.meter.RecordActiveMs(ev.DurationMs)
+		}
 		// Link DurationMs to turn builder
 		if ev.DurationMs > 0 && ev.TurnID != "" {
 			tb := a.ensureTurnBuilder(ev.TurnID, ts, ev.Model)
@@ -1187,6 +1303,13 @@ func (a *App) RunwayProjection() socket.RunwayResult {
 		ReadCount:          a.sessionReadCount,
 		GuidedReadCount:    a.sessionGuidedCount,
 		CacheHitRate:       a.sessionMetrics.CacheHitRate(),
+		// L9.7: Burst throughput from content meter
+		BurstThroughput:   a.meter.BurstTokensPerSec(),
+		ActiveMs:          a.meter.ActiveMs,
+		TurnVelocities:    a.meter.TurnVelocities(),
+		// L9.8: Shadow savings from shadow ring
+		ShadowTotalSaved:  a.shadowRing.TotalCharsSaved() / 4, // chars → tokens
+		ShadowSearchCount: a.shadowRing.Count(),
 	}
 
 	// Overlay real context data from status line hook if available
@@ -1282,6 +1405,8 @@ func (a *App) ProjectConfig() socket.ProjectConfigResult {
 		IndexFiles:    indexFiles,
 		IndexTokens:   indexTokens,
 		UptimeSeconds: uptimeSeconds,
+		Version:       version.Version,
+		BuildDate:     version.BuildDate,
 	}
 }
 
@@ -1410,17 +1535,7 @@ func (a *App) ConversationTurns() socket.ConversationFeedResult {
 		inProgress := a.turnFromBuilder(a.currentBuilder)
 		var actions []socket.TurnActionResult
 		for _, act := range inProgress.Actions {
-			actions = append(actions, socket.TurnActionResult{
-				Tool:        act.Tool,
-				Target:      act.Target,
-				Range:       act.Range,
-				Impact:      act.Impact,
-				Attrib:      act.Attrib,
-				Tokens:      act.Tokens,
-				Savings:     act.Savings,
-				TimeSavedMs: act.TimeSavedMs,
-				ResultChars: act.ResultChars,
-			})
+			actions = append(actions, a.actionToResult(act))
 		}
 		turns = append(turns, socket.ConversationTurnResult{
 			TurnID:       inProgress.TurnID,
@@ -1443,17 +1558,7 @@ func (a *App) ConversationTurns() socket.ConversationFeedResult {
 		turn := a.convRing[idx]
 		var actions []socket.TurnActionResult
 		for _, act := range turn.Actions {
-			actions = append(actions, socket.TurnActionResult{
-				Tool:        act.Tool,
-				Target:      act.Target,
-				Range:       act.Range,
-				Impact:      act.Impact,
-				Attrib:      act.Attrib,
-				Tokens:      act.Tokens,
-				Savings:     act.Savings,
-				TimeSavedMs: act.TimeSavedMs,
-				ResultChars: act.ResultChars,
-			})
+			actions = append(actions, a.actionToResult(act))
 		}
 		turns = append(turns, socket.ConversationTurnResult{
 			TurnID:       turn.TurnID,
@@ -1474,6 +1579,33 @@ func (a *App) ConversationTurns() socket.ConversationFeedResult {
 		Turns: turns,
 		Count: len(turns),
 	}
+}
+
+// actionToResult converts a TurnAction to a TurnActionResult for the wire format.
+// Also looks up shadow data if available. Must be called with a.mu held.
+func (a *App) actionToResult(act TurnAction) socket.TurnActionResult {
+	r := socket.TurnActionResult{
+		Tool:        act.Tool,
+		Target:      act.Target,
+		Range:       act.Range,
+		Impact:      act.Impact,
+		Attrib:      act.Attrib,
+		Tokens:      act.Tokens,
+		Savings:     act.Savings,
+		TimeSavedMs: act.TimeSavedMs,
+		ResultChars: act.ResultChars,
+		Pattern:     act.Pattern,
+		FilePath:    act.FilePath,
+		Command:     act.Command,
+	}
+	// L9.5: Look up shadow data by ToolID
+	if act.ToolID != "" {
+		if shadow := a.shadowRing.FindByToolID(act.ToolID); shadow != nil {
+			r.ShadowChars = shadow.ShadowChars
+			r.ShadowSaved = shadow.CharsSaved
+		}
+	}
+	return r
 }
 
 // TopKeywords returns the top N keywords sorted by hit count.
@@ -1608,9 +1740,62 @@ func (a *App) flushCurrentBuilder() {
 		if a.currentBuilder.DurationMs > 0 && a.currentBuilder.OutputTokens > 0 {
 			a.rateTracker.Record(a.currentBuilder.DurationMs, a.currentBuilder.OutputTokens)
 		}
+		// L9.1: Push turn snapshot to content meter ring
+		a.meter.PushTurn(TurnSnapshot{
+			Timestamp:       a.currentBuilder.Timestamp,
+			DurationMs:      a.currentBuilder.DurationMs,
+			UserChars:       0, // user chars recorded separately in EventUserInput
+			AssistantChars:  a.currentBuilder.Text.Len(),
+			ThinkingChars:   a.currentBuilder.ThinkingText.Len(),
+			ToolResultChars: a.builderToolResultChars(a.currentBuilder),
+			APIOutputTokens: a.currentBuilder.OutputTokens,
+			ActionCount:     len(a.currentBuilder.Actions),
+		})
 		a.pushTurn(a.turnFromBuilder(a.currentBuilder))
 		a.currentBuilder = nil
 	}
+}
+
+// dispatchShadowSearch runs an async shadow search to compare native tool output
+// with aOa's optimized search result. Must be called with a.mu held (shadow is
+// already detached from shadowPending). The goroutine acquires a.mu only to push
+// the result into the ring.
+func (a *App) dispatchShadowSearch(shadow *ToolShadow) {
+	if a.Engine == nil || shadow.Pattern == "" {
+		return
+	}
+	engine := a.Engine
+	go func(s *ToolShadow) {
+		start := time.Now()
+		result := engine.Search(s.Pattern, ports.SearchOptions{})
+		var shadowChars int
+		if result != nil {
+			for _, h := range result.Hits {
+				shadowChars += len(h.File) + len(h.Content) + 10
+			}
+		}
+		s.ShadowChars = shadowChars
+		s.ShadowRan = true
+		s.ShadowMs = time.Since(start).Milliseconds()
+		s.CharsSaved = s.ActualChars - s.ShadowChars
+
+		a.mu.Lock()
+		a.shadowRing.Push(*s)
+		if s.CharsSaved > 0 {
+			a.counterfactTokensSaved += int64(s.CharsSaved / 4)
+		}
+		a.mu.Unlock()
+	}(shadow)
+}
+
+// builderToolResultChars sums ResultChars from all actions in a turn builder.
+// Must be called with a.mu held.
+func (a *App) builderToolResultChars(tb *turnBuilder) int {
+	var total int
+	for _, act := range tb.Actions {
+		total += act.ResultChars
+	}
+	return total
 }
 
 // flushStaleTurns flushes the current builder and any legacy buffered turns.
@@ -1661,6 +1846,8 @@ func (a *App) handleSessionBoundary(ev ports.SessionEvent) {
 		a.currentSessionStart = ev.Timestamp.Unix()
 	}
 	a.currentSessionID = ev.SessionID
+	// L9.1: Reset content meter on session boundary
+	a.meter.Reset()
 }
 
 // flushSessionSummary builds a SessionSummary from current counters and persists it.

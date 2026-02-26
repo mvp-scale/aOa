@@ -203,6 +203,11 @@ type TurnActionResult struct {
 	Savings     int    `json:"savings,omitempty"`
 	TimeSavedMs int64  `json:"time_saved_ms,omitempty"`
 	ResultChars int    `json:"result_chars,omitempty"`
+	Pattern     string `json:"pattern,omitempty"`    // L9.2: search pattern (Grep/Glob)
+	FilePath    string `json:"file_path,omitempty"`  // L9.2: file path (Read/Write/Edit)
+	Command     string `json:"command,omitempty"`    // L9.2: shell command (Bash)
+	ShadowChars int    `json:"shadow_chars,omitempty"` // L9.5: aOa shadow search chars
+	ShadowSaved int    `json:"shadow_saved,omitempty"` // L9.5: chars saved vs native
 }
 
 // ActivityEntryResult describes a single action in the activity feed.
@@ -252,6 +257,15 @@ type RunwayResult struct {
 	ReadCount          int     `json:"read_count"`
 	GuidedReadCount    int     `json:"guided_read_count"`
 	CacheHitRate       float64 `json:"cache_hit_rate"`
+	// L9.7: Burst throughput metrics
+	BurstThroughput float64   `json:"burst_throughput,omitempty"`
+	ActiveMs        int64     `json:"active_ms,omitempty"`
+	TurnVelocities  []float64 `json:"turn_velocities,omitempty"`
+
+	// L9.8: Shadow savings metrics
+	ShadowTotalSaved  int64 `json:"shadow_total_saved,omitempty"`
+	ShadowSearchCount int   `json:"shadow_search_count,omitempty"`
+
 	// Context snapshot from status line hook (real Claude Code data)
 	CtxUsed            int64   `json:"ctx_used"`
 	CtxMax             int64   `json:"ctx_max"`
@@ -315,6 +329,8 @@ type ProjectConfigResult struct {
 	IndexFiles    int    `json:"index_files"`
 	IndexTokens   int    `json:"index_tokens"`
 	UptimeSeconds int64  `json:"uptime_seconds"`
+	Version       string `json:"version"`
+	BuildDate     string `json:"build_date"`
 }
 
 // ReindexResult is the result of a reindex request.

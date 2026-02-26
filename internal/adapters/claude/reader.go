@@ -168,13 +168,14 @@ func (r *Reader) onParseError(_ error) {
 
 // translate decomposes one raw tailer event into zero or more canonical events.
 func (r *Reader) translate(raw *tailer.SessionEvent) []ports.SessionEvent {
+	var events []ports.SessionEvent
 	switch raw.Type {
 	case "user":
-		return r.translateUser(raw)
+		events = r.translateUser(raw)
 	case "assistant":
-		return r.translateAssistant(raw)
+		events = r.translateAssistant(raw)
 	case "system":
-		return r.translateSystem(raw)
+		events = r.translateSystem(raw)
 	default:
 		// progress, file-history-snapshot, queue-operation, etc.
 		r.mu.Lock()
@@ -182,6 +183,13 @@ func (r *Reader) translate(raw *tailer.SessionEvent) []ports.SessionEvent {
 		r.mu.Unlock()
 		return nil
 	}
+	// L9.4: Tag subagent events
+	if raw.Source == "subagent" {
+		for i := range events {
+			events[i].IsSubagent = true
+		}
+	}
+	return events
 }
 
 // translateUser converts a user message into EventUserInput and/or EventToolResult.
@@ -202,14 +210,23 @@ func (r *Reader) translateUser(raw *tailer.SessionEvent) []ports.SessionEvent {
 	}
 
 	if len(raw.ToolResultSizes) > 0 {
+		// L9.3: Build persisted sizes map from resolved IDs
+		var persistedSizes map[string]int
+		if len(raw.ToolPersistedIDs) > 0 {
+			persistedSizes = make(map[string]int, len(raw.ToolPersistedIDs))
+			for id := range raw.ToolPersistedIDs {
+				persistedSizes[id] = raw.ToolResultSizes[id]
+			}
+		}
 		events = append(events, ports.SessionEvent{
-			ID:              raw.UUID + ":toolresult",
-			TurnID:          raw.UUID,
-			SessionID:       raw.SessionID,
-			Timestamp:       raw.Timestamp,
-			Kind:            ports.EventToolResult,
-			ToolResultSizes: raw.ToolResultSizes,
-			AgentVersion:    raw.Version,
+			ID:                 raw.UUID + ":toolresult",
+			TurnID:             raw.UUID,
+			SessionID:          raw.SessionID,
+			Timestamp:          raw.Timestamp,
+			Kind:               ports.EventToolResult,
+			ToolResultSizes:    raw.ToolResultSizes,
+			ToolPersistedSizes: persistedSizes,
+			AgentVersion:       raw.Version,
 		})
 	}
 

@@ -53,22 +53,22 @@
         </div>
       </div>
       <div class="hero-metrics">
-        <div class="hm-cell"><div class="hm-value green" id="hm-live-0">-</div><div class="hm-label">tokens saved</div></div>
+        <div class="hm-cell" data-tooltip="Raw proof of value. Every token saved is a token that didn't consume your context window — keeping your session alive longer."><div class="hm-value green" id="hm-live-0">-</div><div class="hm-label">tokens saved</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value green" id="hm-live-1">-</div><div class="hm-label">est. cost saved</div></div>
-        <div class="hm-cell"><div class="hm-value cyan" id="hm-live-2">-</div><div class="hm-label">time saved</div></div>
+        <div class="hm-cell right" data-tooltip="Tokens saved converted to dollars at current API rates. Money that stayed in your pocket because aOa steered Claude to read only what it needed."><div class="hm-value green" id="hm-live-1">-</div><div class="hm-label">est. cost saved</div></div>
+        <div class="hm-cell" data-tooltip="Wall-clock time you didn't spend waiting. Based on median token generation speed — this is how much faster your session ran."><div class="hm-value cyan" id="hm-live-2">-</div><div class="hm-label">time saved</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value blue" id="hm-live-3">-</div><div class="hm-label">+runway gained</div></div>
+        <div class="hm-cell right" data-tooltip="Autotune progress toward the next learning cycle. Every 50 prompts, aOa recalibrates its understanding of your project."><div class="hm-value yellow" id="hm-live-3">-</div><div class="hm-label">learning</div></div>
       </div>
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card cyan" data-tooltip="How much context window you have left. When this gets low, your session is running out of room."><div class="stat-value" id="ls-ctxutil">-</div><div class="stat-label">Context Remaining</div><div class="stat-sub">window left</div></div>
+      <div class="stat-card red" data-tooltip="How much of your context window is consumed. Higher means closer to the wall. When this gets high, consider starting a new session."><div class="stat-value" id="ls-ctxused">-</div><div class="stat-label">Context Used</div><div class="stat-sub">window consumed</div></div>
       <div class="stat-card red" data-tooltip="How fast you're consuming context. Higher means you're using runway faster. Based on the last 5 minutes of activity."><div class="stat-value" id="ls-burn">-</div><div class="stat-label">Burn Rate</div><div class="stat-sub">tok/min</div></div>
+      <div class="stat-card purple" data-tooltip="Real session cost from Claude Code. How much you've spent so far this session."><div class="stat-value" id="ls-cost">-</div><div class="stat-label">Session Cost</div><div class="stat-sub">spent this session</div></div>
       <div class="stat-card green" data-tooltip="Percentage of file reads that aOa optimized. Higher means more of Claude's reading is being steered to save tokens."><div class="stat-value" id="ls-guided">-</div><div class="stat-label">Guided Ratio</div><div class="stat-sub">of reads guided</div></div>
-      <div class="stat-card blue" data-tooltip="How fast Claude is generating responses. Smoothed over recent turns so it doesn't spike."><div class="stat-value" id="ls-speed">-</div><div class="stat-label">Output Speed</div><div class="stat-sub">tok/sec</div></div>
+      <div class="stat-card green" data-tooltip="Tokens saved by aOa's shadow search engine. Compares native tool output vs aOa's optimized results."><div class="stat-value" id="ls-shadow">-</div><div class="stat-label">Shadow Saved</div><div class="stat-sub">counterfactual</div></div>
       <div class="stat-card purple" data-tooltip="Dollars saved because Anthropic's prompt cache served tokens at a fraction of the normal price. Based on published API rates."><div class="stat-value" id="ls-cachesave">-</div><div class="stat-label">Cache Savings</div><div class="stat-sub">from prompt cache</div></div>
-      <div class="stat-card yellow" data-tooltip="Progress toward the next learning cycle. Every 50 prompts, aOa recalibrates what it knows about your project."><div class="stat-value" id="ls-autotune">-</div><div class="stat-label">Autotune</div><div class="stat-sub">next cycle</div></div>
     </div>
 
     <div class="card activity-card">
@@ -106,12 +106,12 @@
         </div>
       </div>
       <div class="hero-metrics">
-        <div class="hm-cell"><div class="hm-value green" id="hm-recon-0">-</div><div class="hm-label">files scanned</div></div>
+        <div class="hm-cell" data-tooltip="How many source files the dimensional analysis covered. More files scanned means broader coverage and a more trustworthy security posture."><div class="hm-value green" id="hm-recon-0">-</div><div class="hm-label">files scanned</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value red" id="hm-recon-1">-</div><div class="hm-label">findings</div></div>
-        <div class="hm-cell"><div class="hm-value red" id="hm-recon-2">-</div><div class="hm-label">critical</div></div>
+        <div class="hm-cell right" data-tooltip="Total issues discovered across all dimensions and severity levels. Each finding is a concrete improvement opportunity in your codebase."><div class="hm-value red" id="hm-recon-1">-</div><div class="hm-label">findings</div></div>
+        <div class="hm-cell" data-tooltip="High-severity findings that need attention now. These could affect security, reliability, or correctness — address these first."><div class="hm-value red" id="hm-recon-2">-</div><div class="hm-label">critical</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value green" id="hm-recon-3">-</div><div class="hm-label">clean file %</div></div>
+        <div class="hm-cell right" data-tooltip="Percentage of scanned files with zero findings. The positive side of the story — higher means a healthier codebase overall."><div class="hm-value green" id="hm-recon-3">-</div><div class="hm-label">clean file %</div></div>
       </div>
     </div>
 
@@ -153,22 +153,22 @@
         </div>
       </div>
       <div class="hero-metrics">
-        <div class="hm-cell"><div class="hm-value purple" id="hm-intel-0">-</div><div class="hm-label">core domains</div></div>
+        <div class="hm-cell" data-tooltip="Domains that earned core status through competitive displacement — areas where aOa's understanding is deepest. These survived decay, outlasted rivals, and proved their relevance through repeated observation."><div class="hm-value purple" id="hm-intel-0">-</div><div class="hm-label">mastered</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value green" id="hm-intel-1">-</div><div class="hm-label">domain velocity</div></div>
-        <div class="hm-cell"><div class="hm-value cyan" id="hm-intel-2">-</div><div class="hm-label">term coherence</div></div>
+        <div class="hm-cell right" data-tooltip="How fast aOa is building new understanding. Domains discovered per prompt — rising means active exploration, flattening means the system is converging on a stable model of your project."><div class="hm-value green" id="hm-intel-1">-</div><div class="hm-label">learning speed</div></div>
+        <div class="hm-cell" data-tooltip="What percentage of extracted terms resolve into real domains. Higher means the signal chain is clean — vocabulary is crystallizing into structured knowledge, not noise."><div class="hm-value cyan" id="hm-intel-2">-</div><div class="hm-label">signal clarity</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value yellow" id="hm-intel-3">-</div><div class="hm-label">KW&rarr;domain %</div></div>
+        <div class="hm-cell right" data-tooltip="The intelligence funnel: raw keywords in, structured domains out. Shows how efficiently observation becomes understanding. A rising rate means aOa is getting better at making sense of what it sees."><div class="hm-value yellow" id="hm-intel-3">-</div><div class="hm-label">conversion</div></div>
       </div>
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card purple" data-tooltip="Total semantic domains aOa has discovered in your project. Each domain represents a category of knowledge like authentication, testing, or API design."><div class="stat-value" id="is-domains">-</div><div class="stat-label">Domains</div><div class="stat-sub">semantic domains</div></div>
-      <div class="stat-card green" data-tooltip="Domains promoted to core status through repeated use. These are the areas aOa is most confident about in your project."><div class="stat-value" id="is-core">-</div><div class="stat-label">Core</div><div class="stat-sub">top ranked</div></div>
-      <div class="stat-card cyan" data-tooltip="Semantic terms mapped from your code and conversations. Terms bridge raw keywords to meaningful domains."><div class="stat-value" id="is-terms">-</div><div class="stat-label">Terms</div><div class="stat-sub">atlas terms matched</div></div>
-      <div class="stat-card blue" data-tooltip="How many new keywords aOa picks up per autotune cycle. Shows learning momentum — higher means the system is actively discovering."><div class="stat-value" id="is-learnrate">-</div><div class="stat-label">Learning Rate</div><div class="stat-sub">keywords/cycle</div></div>
-      <div class="stat-card yellow" data-tooltip="Word pairs extracted from your conversations with Claude. These capture how you naturally describe your project."><div class="stat-value" id="is-bigrams">-</div><div class="stat-label">Bigrams</div><div class="stat-sub">conversation patterns</div></div>
-      <div class="stat-card red" data-tooltip="Total learning signals received across all domains. Each time aOa observes relevant code activity, it records a hit."><div class="stat-value" id="is-totalhits">-</div><div class="stat-label">Total Hits</div><div class="stat-sub">learning signals</div></div>
+      <div class="stat-card blue" data-tooltip="Source files that generated learning signals. Every file interaction teaches aOa something — which files matter, how they relate, what patterns emerge. This is the raw fuel of intelligence."><div class="stat-value" id="is-observed">-</div><div class="stat-label">Observed</div><div class="stat-sub">files learned from</div></div>
+      <div class="stat-card cyan" data-tooltip="Raw words pulled from your code, searches, and conversations. The unstructured building blocks that aOa distills into meaning. More vocabulary means wider observational reach."><div class="stat-value" id="is-vocabulary">-</div><div class="stat-label">Vocabulary</div><div class="stat-sub">keywords extracted</div></div>
+      <div class="stat-card green" data-tooltip="Keywords that mapped to semantic terms via the Atlas — raw words becoming structured meaning. Each concept is a bridge from what you typed to what aOa understands."><div class="stat-value" id="is-concepts">-</div><div class="stat-label">Concepts</div><div class="stat-sub">terms resolved</div></div>
+      <div class="stat-card purple" data-tooltip="Semantic categories of understanding. Each domain represents a cluster of related concepts — authentication, testing, API design. This is intelligence, not just data."><div class="stat-value" id="is-domains">-</div><div class="stat-label">Domains</div><div class="stat-sub">knowledge mapped</div></div>
+      <div class="stat-card yellow" data-tooltip="Word pairs extracted from your conversations with Claude. These reveal how you naturally describe your project — the linguistic fingerprint aOa uses to understand your intent."><div class="stat-value" id="is-patterns">-</div><div class="stat-label">Patterns</div><div class="stat-sub">dialogue captured</div></div>
+      <div class="stat-card red" data-tooltip="Total reinforcement signals across all domains. Each hit strengthens a domain's relevance — strong signals survive decay, weak ones fade. This is the proof that learning is real, not just counting."><div class="stat-value" id="is-evidence">-</div><div class="stat-label">Evidence</div><div class="stat-sub">cumulative proof</div></div>
     </div>
 
     <div class="learning-grid">
@@ -222,22 +222,22 @@
         </div>
       </div>
       <div class="hero-metrics">
-        <div class="hm-cell"><div class="hm-value cyan" id="hm-debrief-0">-</div><div class="hm-label">input tokens</div></div>
+        <div class="hm-cell" data-tooltip="Everything you fed Claude this session — prompts, file contents, tool results. Each input token counts against your context window and your bill."><div class="hm-value cyan" id="hm-debrief-0">-</div><div class="hm-label">input</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value green" id="hm-debrief-1">-</div><div class="hm-label">output tokens</div></div>
-        <div class="hm-cell"><div class="hm-value blue" id="hm-debrief-2">-</div><div class="hm-label">cache savings</div></div>
+        <div class="hm-cell right" data-tooltip="Everything Claude produced — code, explanations, tool calls, thinking. The work product of your session."><div class="hm-value green" id="hm-debrief-1">-</div><div class="hm-label">output</div></div>
+        <div class="hm-cell" data-tooltip="Dollars you didn't spend because Anthropic's prompt cache served repeated context at a fraction of the price. This happens automatically — free efficiency."><div class="hm-value blue" id="hm-debrief-2">-</div><div class="hm-label">cache saved</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value purple" id="hm-debrief-3">-</div><div class="hm-label">cost/turn</div></div>
+        <div class="hm-cell right" data-tooltip="Average dollars per back-and-forth with Claude. Your unit price — useful for budgeting and comparing session efficiency across conversations."><div class="hm-value purple" id="hm-debrief-3">-</div><div class="hm-label">cost/exchange</div></div>
       </div>
     </div>
 
     <div class="stats-grid">
-      <div class="stat-card blue" data-tooltip="All content flowing through the session — model output tokens plus tool result text (chars÷4) — divided by session wall time. Includes file reads, grep results, bash output, and subagent responses."><div class="stat-value" id="ds-throughput">-</div><div class="stat-label">Throughput</div><div class="stat-sub">tok/s overall</div></div>
-      <div class="stat-card green" data-tooltip="Visible conversation text only — user prompts, assistant responses, and thinking (chars÷4) — divided by session wall time. Excludes tool result content. The dialogue rhythm you actually feel."><div class="stat-value" id="ds-convspeed">-</div><div class="stat-label">Conversation Speed</div><div class="stat-sub">tok/s dialogue</div></div>
-      <div class="stat-card cyan" data-tooltip="Average wall-clock time per turn, from your prompt to Claude's complete response. Includes thinking, tool use, and output."><div class="stat-value" id="ds-turndur">-</div><div class="stat-label">Avg Turn Dur</div><div class="stat-sub">per exchange</div></div>
-      <div class="stat-card yellow" data-tooltip="Average number of tool calls per turn. Higher means Claude is doing more work per prompt — reading files, running commands, making edits."><div class="stat-value" id="ds-tooldensity">-</div><div class="stat-label">Tool Density</div><div class="stat-sub">tools/turn</div></div>
-      <div class="stat-card purple" data-tooltip="For every character you type, how many characters Claude produces. Shows the leverage you get from each prompt."><div class="stat-value" id="ds-amplify">-</div><div class="stat-label">Amplification</div><div class="stat-sub">output/input ratio</div></div>
-      <div class="stat-card red" data-tooltip="Which Claude model handled most of this session. Different models have different costs and capabilities."><div class="stat-value" id="ds-modelmix">-</div><div class="stat-label">Model Mix</div><div class="stat-sub">primary model</div></div>
+      <div class="stat-card blue" data-tooltip="Total content moving through the session per second — model output, tool results, everything. The full bandwidth of your conversation with Claude, including work you don't see."><div class="stat-value" id="ds-flow">-</div><div class="stat-label">Flow</div><div class="stat-sub">tok/s overall</div></div>
+      <div class="stat-card green" data-tooltip="The conversation speed you actually feel — user prompts, assistant responses, and thinking, measured in tokens per second. Excludes tool machinery happening behind the scenes."><div class="stat-value" id="ds-pace">-</div><div class="stat-label">Pace</div><div class="stat-sub">tok/s visible</div></div>
+      <div class="stat-card cyan" data-tooltip="Average wall-clock time from your prompt to Claude's complete response. Includes thinking, tool use, and output. Longer turns usually mean Claude is doing more complex work."><div class="stat-value" id="ds-turntime">-</div><div class="stat-label">Turn Time</div><div class="stat-sub">per exchange</div></div>
+      <div class="stat-card yellow" data-tooltip="How many tools Claude reaches for per prompt. Higher means more autonomous work per exchange — reading files, running commands, making edits — all from a single ask."><div class="stat-value" id="ds-leverage">-</div><div class="stat-label">Leverage</div><div class="stat-sub">tools/turn</div></div>
+      <div class="stat-card purple" data-tooltip="For every character you type, how many characters Claude produces. Your multiplier — the leverage you get from each prompt. Higher means Claude is doing more of the heavy lifting."><div class="stat-value" id="ds-amplify">-</div><div class="stat-label">Amplification</div><div class="stat-sub">output/input</div></div>
+      <div class="stat-card red" data-tooltip="Which Claude model powered most of this session. Different engines have different strengths — Opus for depth, Sonnet for speed, Haiku for quick tasks."><div class="stat-value" id="ds-engine">-</div><div class="stat-label">Engine</div><div class="stat-sub">primary model</div></div>
     </div>
 
     <div class="conv-grid">
@@ -272,12 +272,12 @@
         </div>
       </div>
       <div class="hero-metrics">
-        <div class="hm-cell"><div class="hm-value green" id="hm-arsenal-0">-</div><div class="hm-label">cost avoidance</div></div>
+        <div class="hm-cell" data-tooltip="Lifetime dollars not spent because aOa guided Claude to read targeted file sections instead of entire files. The cumulative payoff of learning your codebase."><div class="hm-value green" id="hm-arsenal-0">-</div><div class="hm-label">cost avoidance</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value blue" id="hm-arsenal-1">-</div><div class="hm-label">sessions extended</div></div>
-        <div class="hm-cell"><div class="hm-value cyan" id="hm-arsenal-2">-</div><div class="hm-label">cache savings</div></div>
+        <div class="hm-cell right" data-tooltip="Total extra minutes of runway gained across all sessions. Time reclaimed by reducing context burn — sessions that lasted longer because aOa was working."><div class="hm-value blue" id="hm-arsenal-1">-</div><div class="hm-label">sessions extended</div></div>
+        <div class="hm-cell" data-tooltip="Lifetime dollars saved by Anthropic's prompt cache. A second value stream independent of guided reads — two mechanisms saving you money in parallel."><div class="hm-value cyan" id="hm-arsenal-2">-</div><div class="hm-label">cache savings</div></div>
         <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right"><div class="hm-value purple" id="hm-arsenal-3">-</div><div class="hm-label">efficiency</div></div>
+        <div class="hm-cell right" data-tooltip="Composite score across guided ratio, cache performance, and savings rate. A single grade for how well aOa is optimizing your workflow over time."><div class="hm-value purple" id="hm-arsenal-3">-</div><div class="hm-label">efficiency</div></div>
       </div>
     </div>
 
@@ -350,7 +350,7 @@
 <footer class="footer">
   <div class="footer-left">
     <span class="footer-online"><span class="dot"></span> <span id="footerStatus">Online</span></span>
-    <span>v1.0.0</span>
+    <span id="footerVersion">-</span>
   </div>
   <div class="footer-right">
     <span class="footer-motto"><span class="aoa-brand">aOa</span> learns &rarr; you build faster. <span class="way">This is the way.</span></span>

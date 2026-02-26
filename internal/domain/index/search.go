@@ -56,9 +56,10 @@ type SearchEngine struct {
 
 // SearchResult holds the output of a search operation.
 type SearchResult struct {
-	Hits     []Hit
-	Count    int // for -c mode
-	ExitCode int // for -q mode (0=found, 1=not)
+	Hits            []Hit
+	Count           int // for -c mode
+	ExitCode        int // for -q mode (0=found, 1=not)
+	TotalMatchChars int // L9.6: total chars of all matches before truncation
 }
 
 // Hit represents a single search result entry.
@@ -601,11 +602,18 @@ func (e *SearchEngine) buildResult(hits []Hit, opts ports.SearchOptions, maxCoun
 		return &SearchResult{Count: len(hits)}
 	}
 
+	// L9.6: Compute TotalMatchChars before truncation for counterfactual comparison.
+	// This is the total chars that all hits would produce if returned untruncated.
+	var totalMatchChars int
+	for _, h := range hits {
+		totalMatchChars += len(h.File) + len(h.Content) + 10 // file:line:content\n
+	}
+
 	if len(hits) > maxCount {
 		hits = hits[:maxCount]
 	}
 
-	return &SearchResult{Hits: hits}
+	return &SearchResult{Hits: hits, TotalMatchChars: totalMatchChars}
 }
 
 // refHasToken checks if a ref's token list contains the exact token.

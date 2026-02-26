@@ -30,6 +30,9 @@ type Tailer struct {
 	offset      int64
 	seen        map[string]bool // UUID dedup set
 
+	// L9.4: Subagent file tracking
+	subagentFiles map[string]int64 // path → last byte offset
+
 	mu      sync.Mutex
 	done    chan struct{}
 	started chan struct{} // closed after initial file discovery
@@ -70,13 +73,14 @@ func New(cfg Config) *Tailer {
 	}
 
 	return &Tailer{
-		sessionDir:   sessionDir,
-		pollInterval: interval,
-		callback:     cfg.Callback,
-		onError:      cfg.OnError,
-		seen:         make(map[string]bool),
-		done:         make(chan struct{}),
-		started:      make(chan struct{}),
+		sessionDir:    sessionDir,
+		pollInterval:  interval,
+		callback:      cfg.Callback,
+		onError:       cfg.OnError,
+		seen:          make(map[string]bool),
+		subagentFiles: make(map[string]int64),
+		done:          make(chan struct{}),
+		started:       make(chan struct{}),
 	}
 }
 
@@ -138,6 +142,7 @@ func (t *Tailer) loop() {
 		case <-ticker.C:
 			t.checkForNewerFile()
 			t.readNewLines()
+			t.readSubagentLines() // L9.4
 		}
 	}
 }
@@ -265,6 +270,11 @@ func (t *Tailer) readNewLines() {
 			continue
 		}
 
+		// L9.3: Resolve zero-char tool result sizes from persisted files
+		if len(ev.ToolResultSizes) > 0 {
+			t.resolvePersistedToolResults(ev)
+		}
+
 		// UUID dedup — skip already-seen events (known bug #5034)
 		if ev.UUID != "" {
 			if t.seen[ev.UUID] {
@@ -296,6 +306,165 @@ func (t *Tailer) readNewLines() {
 	// Bound dedup set to prevent unbounded growth
 	if len(t.seen) > 10000 {
 		t.seen = make(map[string]bool)
+	}
+}
+
+// readSubagentLines discovers and reads subagent JSONL files (L9.4).
+// Subagent files live in {sessionDir}/subagents/agent-*.jsonl.
+// Best-effort: short-lived subagents may be partially captured.
+func (t *Tailer) readSubagentLines() {
+	t.mu.Lock()
+	currentFile := t.currentFile
+	t.mu.Unlock()
+
+	if currentFile == "" {
+		return
+	}
+
+	sessionDir := filepath.Dir(currentFile)
+	subagentDir := filepath.Join(sessionDir, "subagents")
+
+	entries, err := os.ReadDir(subagentDir)
+	if err != nil {
+		return // no subagents directory — common case
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+			continue
+		}
+		path := filepath.Join(subagentDir, entry.Name())
+
+		// Check file size
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		offset := t.subagentFiles[path]
+		if info.Size() <= offset {
+			continue // no new data
+		}
+		if info.Size() < offset {
+			offset = 0 // file truncated
+		}
+
+		// Read new lines from this subagent file
+		f, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		if offset > 0 {
+			if _, err := f.Seek(offset, io.SeekStart); err != nil {
+				f.Close()
+				continue
+			}
+		}
+
+		reader := bufio.NewReaderSize(f, 256*1024) // 256KB buffer (subagent files are smaller)
+		newOffset := offset
+
+		for {
+			line, readErr := reader.ReadBytes('\n')
+			if len(line) == 0 && readErr != nil {
+				break
+			}
+
+			newOffset += int64(len(line))
+			line = trimNewline(line)
+			if len(line) == 0 {
+				if readErr != nil {
+					break
+				}
+				continue
+			}
+			if len(line) > 512*1024 {
+				if readErr != nil {
+					break
+				}
+				continue
+			}
+
+			ev, parseErr := ParseLine(line)
+			if parseErr != nil || ev == nil {
+				if readErr != nil {
+					break
+				}
+				continue
+			}
+
+			// Tag as subagent source
+			ev.Source = "subagent"
+
+			// UUID dedup
+			if ev.UUID != "" {
+				if t.seen[ev.UUID] {
+					if readErr != nil {
+						break
+					}
+					continue
+				}
+				t.seen[ev.UUID] = true
+			}
+
+			if ev.IsMeta {
+				if readErr != nil {
+					break
+				}
+				continue
+			}
+
+			if t.callback != nil {
+				t.callback(ev)
+			}
+
+			if readErr != nil {
+				break
+			}
+		}
+
+		f.Close()
+		t.subagentFiles[path] = newOffset
+	}
+}
+
+// resolvePersistedToolResults checks tool-results/ for persisted files when
+// tool result inline content is 0 chars. Claude Code writes large tool results
+// to tool-results/toolu_{id}.txt instead of inline in the JSONL.
+func (t *Tailer) resolvePersistedToolResults(ev *SessionEvent) {
+	t.mu.Lock()
+	currentFile := t.currentFile
+	t.mu.Unlock()
+
+	if currentFile == "" {
+		return
+	}
+
+	// Derive session dir from the JSONL file path.
+	// The JSONL sits directly in the session directory.
+	sessionDir := filepath.Dir(currentFile)
+	toolResultsDir := filepath.Join(sessionDir, "tool-results")
+
+	for id, chars := range ev.ToolResultSizes {
+		if chars > 0 {
+			continue // already has inline content
+		}
+		// Check for persisted file: tool-results/toolu_{id}.txt
+		// The ID from the JSONL is the full tool_use_id (e.g., "toolu_abc123")
+		persistedPath := filepath.Join(toolResultsDir, id+".txt")
+		info, err := os.Stat(persistedPath)
+		if err != nil {
+			continue // file doesn't exist or not readable
+		}
+		size := int(info.Size())
+		if size > 0 {
+			ev.ToolResultSizes[id] = size
+			// Track which IDs were resolved from disk
+			if ev.ToolPersistedIDs == nil {
+				ev.ToolPersistedIDs = make(map[string]bool)
+			}
+			ev.ToolPersistedIDs[id] = true
+		}
 	}
 }
 

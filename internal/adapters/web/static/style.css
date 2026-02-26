@@ -253,6 +253,30 @@ body {
   opacity: 1;
 }
 
+/* ── Hero metric tooltips ──
+   Same treatment as stat cards but anchored to the hm-cell.
+   Appears below the label on hover.
+*/
+.hm-cell[data-tooltip] { position: relative; cursor: default; }
+.hm-cell[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%; top: 100%;
+  transform: translateX(-50%);
+  margin-top: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--dim); font-size: 11px; font-weight: 400;
+  line-height: 1.4; padding: 8px 12px; border-radius: 8px;
+  width: max-content; max-width: 240px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 100; pointer-events: none;
+  opacity: 0; transition: opacity 0.15s ease;
+  white-space: normal;
+}
+.hm-cell[data-tooltip]:hover::after {
+  opacity: 1;
+}
+
 /* ── Numeric change glow system ──
    When a value changes, JS adds .num-glow (instant on),
    then removes it after 60ms — the base 2s transition fades the shadow out.

@@ -87,6 +87,13 @@ type SessionEvent struct {
 	// Non-nil only on EventToolResult events.
 	ToolResultSizes map[string]int
 
+	// ToolPersistedSizes maps tool_use_id to character count resolved from
+	// persisted tool-results/ files on disk (L9.3). Non-nil only on EventToolResult.
+	ToolPersistedSizes map[string]int
+
+	// IsSubagent is true when this event originated from a subagent JSONL file (L9.4).
+	IsSubagent bool
+
 	// DurationMs is the turn duration in milliseconds.
 	// Non-zero only on SystemMeta events with timing data.
 	// Linked to the AI turn via TurnID.
