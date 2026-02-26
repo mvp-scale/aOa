@@ -945,7 +945,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 					target = ev.Tool.Pattern
 				}
 				attrib = "unguided"
-				tokens = a.estimateGrepTokens()
+				// tokens deferred to result_chars (actual result size, not full-codebase estimate)
 				impact = a.estimateGrepCost(ev.Tool.Pattern)
 				// Session-log Grep → learning signals
 				if ev.Tool.Pattern != "" {

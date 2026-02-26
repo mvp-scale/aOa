@@ -283,6 +283,8 @@ func (e *SessionEvent) extractContentBlock(block map[string]any, role string) {
 // systemTagRE matches system-injected tags that should be stripped from user text.
 var systemTagRE = regexp.MustCompile(
 	`(?s)<system-reminder>.*?</system-reminder>` +
+		`|<task-notification>.*?</task-notification>` +
+		`|Full transcript available at:[^\n]*` +
 		`|<local-command-[^>]*>.*?</local-command-[^>]*>` +
 		`|<command-[^>]+>.*?</command-[^>]+>` +
 		`|<hook-[^>]+>.*?</hook-[^>]+>`,

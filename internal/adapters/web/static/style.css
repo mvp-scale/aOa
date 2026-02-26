@@ -491,7 +491,7 @@ body {
 }
 .conv-msg-role { font-weight: 700; font-size: 11px; }
 .conv-msg-meta { font-size: 10px; color: var(--mute); }
-.conv-msg-text { font-size: 12px; color: var(--text-secondary); line-height: 1.5; word-break: break-word; }
+.conv-msg-text { font-size: 11px; color: var(--text-secondary); line-height: 1.5; word-break: break-word; }
 /* Markdown rendered elements */
 .conv-msg-text .md-inline-code {
   font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 1px 5px;

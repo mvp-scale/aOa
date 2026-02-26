@@ -1072,7 +1072,7 @@ function renderDebrief() {
         '<div class="conv-msg-header"><span class="conv-msg-role text-yellow">User</span>' +
         userTokTag +
         '<span class="conv-msg-meta">' + relTime(ex.user.timestamp) + '</span></div>' +
-        '<div class="conv-msg-text">' + escapeHtml(truncText(ex.user.text, 500)) + '</div></div>';
+        '<div class="conv-msg-text">' + escapeHtml(truncText(ex.user.text, 2000)) + '</div></div>';
     }
 
     // Assistant: thinking (nested lines, always visible) + response
@@ -1095,7 +1095,7 @@ function renderDebrief() {
         '<div class="conv-msg-header"><span class="conv-msg-role text-green">Assistant</span>' +
         modelTag + tokenTag +
         '<span class="conv-msg-meta" style="margin-left:8px">' + relTime(ex.assistant.timestamp) + '</span></div>' +
-        '<div class="conv-msg-text">' + renderMd(truncText(ex.assistant.text, 500)) + '</div></div>';
+        '<div class="conv-msg-text">' + renderMd(truncText(ex.assistant.text, 2000)) + '</div></div>';
     }
   }
   mhtml += '<div class="conv-now"><span class="conv-now-line"></span><span class="conv-now-dot"></span><span class="conv-now-text">NOW</span><span class="conv-now-line"></span></div>';
@@ -1145,9 +1145,11 @@ function renderDebrief() {
         saveVal = '<span class="text-green">\u2193' + act.savings + '%</span>';
       }
       // L9.8: Shadow savings cell
-      if (act.shadow_saved > 0) {
+      if (act.shadow_saved > 0 && (act.shadow_chars + act.shadow_saved) > 0) {
         var pct = Math.round((1 - act.shadow_chars / (act.shadow_chars + act.shadow_saved)) * 100);
-        saveVal += (saveVal ? ' ' : '') + '<span class="text-cyan" title="Shadow: ' + fmtK(act.shadow_chars + act.shadow_saved) + ' \u2192 ' + fmtK(act.shadow_chars) + '">\u2193' + pct + '%</span>';
+        if (isFinite(pct)) {
+          saveVal += (saveVal ? ' ' : '') + '<span class="text-cyan" title="Shadow: ' + fmtK(act.shadow_chars + act.shadow_saved) + ' \u2192 ' + fmtK(act.shadow_chars) + '">\u2193' + pct + '%</span>';
+        }
       }
       // Tokens cell: compact 4-char max (e.g. 1.2k, 11k, 340)
       // Fallback: estimate tokens from result_chars for tools that don't set tokens at invocation (e.g. Task)
