@@ -581,33 +581,80 @@ body {
 /* ══════════════════════════════════════════════════════════
    ARSENAL TAB: Charts + Session Table
    ══════════════════════════════════════════════════════════ */
-/* Dual chart row — fixed height prevents canvas feedback loop */
-.arsenal-chart-row { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; flex-shrink: 0; height: 280px; }
+/* Dual chart row — taller to fit hero stats + data legend */
+.arsenal-chart-row { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; flex-shrink: 0; height: 340px; }
 
 /* Savings chart */
 .chart-area {
-  display: flex; align-items: stretch; gap: 3px; padding: 16px 20px;
-  flex: 1; min-height: 0; overflow: hidden;
+  display: flex; align-items: stretch; gap: 3px; flex: 1; min-height: 0;
+  border-bottom: 1px solid var(--border-subtle); padding: 0 20px 1px;
 }
-.chart-bar-group {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  width: calc(100% / 14); flex-shrink: 0;
+.chart-col {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  min-width: 0; height: 100%; justify-content: flex-end;
+  position: relative; z-index: 1;
 }
-.chart-bars { display: flex; align-items: flex-end; gap: 2px; width: 100%; flex: 1; }
-.chart-bar { flex: 1; border-radius: 3px 3px 0 0; min-height: 1px; transition: height 0.3s; }
-.chart-bar.counterfact { background: var(--red); opacity: 0.3; }
-.chart-bar.actual { background: var(--green); }
-.chart-bar:hover { filter: brightness(1.15); }
+.chart-bars { display: flex; gap: 2px; width: 100%; align-items: flex-end; flex: 1; }
+/* Split bar — single column, saved (red) on top, used (green) on bottom */
+.chart-split-bar {
+  width: 100%; border-radius: 3px 3px 0 0; display: flex; flex-direction: column;
+  overflow: hidden; cursor: default; transition: height 0.3s;
+}
+.chart-split-bar:hover { filter: brightness(1.15); }
+.chart-split-saved { background: var(--red); opacity: 0.25; min-height: 0; }
+.chart-split-used { background: var(--green); min-height: 1px; }
+/* Chart hero stats — big prominent numbers above the bars */
+.chart-hero-stats {
+  display: flex; gap: 28px; align-items: baseline; padding: 14px 20px 0; margin-bottom: 10px;
+}
+.chart-hero-stat { display: flex; flex-direction: column; gap: 2px; }
+.chart-hero-label {
+  font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600;
+  letter-spacing: 0.8px; text-transform: uppercase;
+}
+.chart-hero-label.red { color: var(--red); opacity: 0.7; }
+.chart-hero-label.green { color: var(--green); opacity: 0.7; }
+.chart-hero-val {
+  font-family: 'JetBrains Mono', monospace; font-weight: 700;
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.chart-hero-val.red { color: var(--red); font-size: 22px; }
+.chart-hero-val.green { color: var(--green); font-size: 22px; }
+.chart-hero-val.green-big { color: var(--green); font-size: 26px; }
+/* Data legend — two rows aligned directly under chart bars */
+.chart-data-legend {
+  display: flex; flex-direction: column; gap: 0;
+  border-top: 1px solid var(--border-subtle); margin-top: 2px; padding: 2px 20px;
+  min-height: 42px; flex-shrink: 0;
+}
+.data-legend-row {
+  display: flex; align-items: center; gap: 3px;
+}
+.data-legend-cell {
+  flex: 1; text-align: center; font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+  padding: 3px 0; min-width: 0; overflow: hidden;
+}
+.data-legend-cell.red { color: var(--red); }
+.data-legend-cell.green { color: var(--green); }
+.chart-summary-line {
+  display: flex; justify-content: space-between; align-items: center; padding: 8px 20px;
+  font-size: 11px; color: var(--dim); border-top: 1px solid var(--border-subtle);
+  min-height: 42px; flex-shrink: 0;
+}
+/* Now column — thin vertical line + pulsing dot, matches debrief conv-now */
+.chart-now-line { width: 1px; background: var(--green); opacity: 0.3; flex: 1; }
+.chart-now-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+  animation: pulse-dot 2s ease-in-out infinite; flex-shrink: 0;
+}
+@keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.8)} }
 .chart-label { font-size: 9px; color: var(--mute); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
 .chart-legend-inline { font-size: 10px; color: var(--dim); display: flex; align-items: center; gap: 4px; }
 .chart-legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 .chart-legend-dot.green { background: var(--green); }
 .chart-legend-dot.red { background: var(--red); opacity: 0.5; }
 .chart-legend-dot.blue { background: var(--blue); opacity: 0.5; }
-.chart-summary-line {
-  display: flex; justify-content: space-between; padding: 10px 20px;
-  font-size: 11px; color: var(--dim); border-top: 1px solid var(--border-subtle);
-}
 
 /* Session history table */
 .session-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -641,7 +688,7 @@ body {
 .ratio-text { font-weight: 600; font-size: 10px; font-variant-numeric: tabular-nums; }
 
 /* Learning curve canvas */
-.curve-canvas-wrap { padding: 12px; flex: 1; min-height: 0; overflow: hidden; }
+.curve-canvas-wrap { padding: 4px 8px; flex: 1; min-height: 0; overflow: hidden; }
 .curve-canvas-wrap canvas { width: 100%; display: block; }
 
 /* System status strip */
@@ -1073,8 +1120,11 @@ body {
   .conv-thought-line { font-size: 10px; }
 
   /* -- Arsenal: chart + session table -- */
-  .chart-area { min-height: 120px; padding: 10px 14px; gap: 4px; }
-  .chart-bar { width: 12px; }
+  .chart-area { min-height: 100px; gap: 2px; }
+  .chart-hero-stats { gap: 16px; margin-bottom: 10px; }
+  .chart-hero-val.red, .chart-hero-val.green { font-size: 18px; }
+  .chart-hero-val.green-big { font-size: 20px; }
+  .data-legend-cell { font-size: 9px; }
   .chart-label { font-size: 8px; }
   .chart-legend { font-size: 9px; padding: 6px 14px; gap: 8px; }
   .arsenal-chart-row { grid-template-columns: 1fr; gap: 10px; }

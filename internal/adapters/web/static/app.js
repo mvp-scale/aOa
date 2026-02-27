@@ -1285,7 +1285,7 @@ function renderArsenal() {
   setGlow('as-saved', fmtK(totalSaved));
   setGlow('as-velocity', readVelocity);
   setText('sessionCount', sessionCount + ' sessions');
-  setText('savingsLabel', fmtK(totalSaved) + ' saved');
+  // savingsLabel removed — savings now shown in chart hero stats
 
   // Savings Chart
   renderSavingsChart(sessions, cm, rw);
@@ -1353,13 +1353,16 @@ function renderArsenal() {
   renderLearningCurve(sessions);
 }
 
-/* ── Daily Token Usage Chart — trailing 14 days, fixed slots ── */
+/* ── Daily Token Usage Chart — trailing 14 days, split-bar columns ── */
 function renderSavingsChart(sessions, cm, rw) {
   var area = document.getElementById('savingsChartArea');
   if (!area) return;
 
+  var legendEl = document.getElementById('chartDataLegend');
+
   if (sessions.length === 0) {
     area.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:12px">No session data</div>';
+    if (legendEl) legendEl.innerHTML = '';
     return;
   }
 
@@ -1394,48 +1397,71 @@ function renderSavingsChart(sessions, cm, rw) {
     }
   }
 
-  // Inject current live session into today's slot
-  var todayKey = slots[slots.length - 1].key;
-  if (slotMap[todayKey] && cm) {
-    var liveInput = cm.input_tokens || 0;
-    var liveSaved = (rw && rw.tokens_saved) ? rw.tokens_saved : 0;
-    slotMap[todayKey].actual += liveInput;
-    slotMap[todayKey].counterfact += liveInput + liveSaved;
-    totalActual += liveInput;
-    totalCf += liveInput + liveSaved;
+  // Include live session in lifetime totals (for hero stats) but not in today's bar
+  if (cm) {
+    totalActual += (cm.input_tokens || 0);
+    totalCf += (cm.input_tokens || 0) + ((rw && rw.tokens_saved) ? rw.tokens_saved : 0);
   }
 
-  // Find max for scaling (across the 14-day window only)
-  var maxVal = 0;
+  // Find max counterfactual for linear scaling
+  var maxCf = 0;
   for (var k = 0; k < slots.length; k++) {
-    if (slots[k].counterfact > maxVal) maxVal = slots[k].counterfact;
-    if (slots[k].actual > maxVal) maxVal = slots[k].actual;
+    if (slots[k].counterfact > maxCf) maxCf = slots[k].counterfact;
   }
-  if (maxVal === 0) maxVal = 1;
+  if (maxCf === 0) maxCf = 1;
 
-  // Render 14 fixed-width columns
+  // Render 14 split-bar columns + now marker
   var html = '';
   for (var b = 0; b < slots.length; b++) {
     var entry = slots[b];
     var hasData = entry.actual > 0 || entry.counterfact > 0;
-    var actualPct = hasData ? Math.round((entry.actual / maxVal) * 100) : 0;
-    var cfPct = hasData ? Math.round((entry.counterfact / maxVal) * 100) : 0;
-    html += '<div class="chart-bar-group">' +
+    var barH = hasData ? Math.max(4, Math.round((entry.counterfact / maxCf) * 100)) : 0;
+    var savedPct = entry.counterfact > 0 ? Math.round((entry.counterfact - entry.actual) / entry.counterfact * 100) : 0;
+    var usedPct = 100 - savedPct;
+
+    html += '<div class="chart-col">' +
       '<div class="chart-bars">' +
       (hasData
-        ? '<div class="chart-bar counterfact" style="height:' + cfPct + '%" title="Without aOa: ' + fmtK(entry.counterfact) + '"></div>' +
-          '<div class="chart-bar actual" style="height:' + actualPct + '%" title="With aOa: ' + fmtK(entry.actual) + '"></div>'
+        ? '<div class="chart-split-bar" style="height:' + barH + '%" title="Without aOa: ' + fmtK(entry.counterfact) + ' · With: ' + fmtK(entry.actual) + ' · Saved: ' + savedPct + '%">' +
+          '<div class="chart-split-saved" style="flex:' + savedPct + '"></div>' +
+          '<div class="chart-split-used" style="flex:' + usedPct + '"></div>' +
+          '</div>'
         : '') +
       '</div>' +
       '<div class="chart-label">' + entry.label + '</div>' +
       '</div>';
   }
+  // Now column — thin pulsing line + dot
+  html += '<div class="chart-col" style="max-width:12px">' +
+    '<div class="chart-bars" style="flex-direction:column;align-items:center;justify-content:flex-end">' +
+    '<div class="chart-now-dot"></div>' +
+    '<div class="chart-now-line"></div>' +
+    '</div>' +
+    '<div class="chart-label" style="color:var(--green);font-weight:600;font-size:8px">now</div>' +
+    '</div>';
   area.innerHTML = html;
 
-  // Summary line (lifetime, not just the 14-day window)
-  setText('chartActual', fmtK(totalActual));
+  // Data legend — red row: daily token totals, green row: ↓% savings
+  if (legendEl) {
+    var rowTokens = '<div class="data-legend-row">';
+    var rowSavings = '<div class="data-legend-row">';
+    for (var lg = 0; lg < slots.length; lg++) {
+      var ld = slots[lg];
+      var lpct = ld.counterfact > 0 ? Math.round((ld.counterfact - ld.actual) / ld.counterfact * 100) : 0;
+      rowTokens += '<span class="data-legend-cell red">' + (ld.counterfact > 0 ? fmtK(ld.counterfact) : '') + '</span>';
+      rowSavings += '<span class="data-legend-cell green">' + (ld.counterfact > 0 ? '&darr;' + lpct + '%' : '') + '</span>';
+    }
+    // Empty spacer for the "now" column
+    rowTokens += '<span class="data-legend-cell" style="max-width:12px"></span></div>';
+    rowSavings += '<span class="data-legend-cell" style="max-width:12px"></span></div>';
+    legendEl.innerHTML = rowTokens + rowSavings;
+  }
+
+  // Hero stats (lifetime, not just the 14-day window)
   setText('chartCf', fmtK(totalCf));
-  setText('chartDiff', fmtK(Math.max(0, totalCf - totalActual)));
+  setText('chartActual', fmtK(totalActual));
+  var pctSaved = totalCf > 0 ? Math.round((totalCf - totalActual) / totalCf * 100) : 0;
+  setText('chartSavedPct', pctSaved + '%');
 }
 
 /* ── Learning Curve (dual-axis canvas) ── */
@@ -1449,8 +1475,8 @@ function renderLearningCurve(sessions) {
   var parent = canvas.parentElement;
   var rect = parent.getBoundingClientRect();
   var dpr = window.devicePixelRatio || 1;
-  var w = rect.width - 24;
-  var h = Math.min(rect.height - 4, 200);
+  var w = rect.width - 16;
+  var h = rect.height - 4;
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   canvas.style.width = w + 'px';
@@ -1603,16 +1629,34 @@ function renderLearningCurve(sessions) {
   ctx.font = '8px Inter, sans-serif';
   ctx.fillText('Session', w / 2, h - 1);
 
-  // Footer values
-  var first = points[0];
-  var startPct = Math.round(first.ratio * 100);
-  var endPct = Math.round(last.ratio * 100);
+  // Footer values — use smoothed averages (up to 3 sessions) to avoid single-point noise
+  var nSmooth = Math.min(3, Math.floor(points.length / 2));
+  if (nSmooth < 1) nSmooth = 1;
+  var earlyRatio = 0, earlyC = 0, lateRatio = 0, lateC = 0;
+  for (var ei = 0; ei < nSmooth; ei++) {
+    earlyRatio += points[ei].ratio;
+    earlyC += points[ei].cpp;
+    lateRatio += points[points.length - 1 - ei].ratio;
+    lateC += points[points.length - 1 - ei].cpp;
+  }
+  earlyRatio /= nSmooth; earlyC /= nSmooth;
+  lateRatio /= nSmooth; lateC /= nSmooth;
+  var startPct = Math.round(earlyRatio * 100);
+  var endPct = Math.round(lateRatio * 100);
   setText('curveStart', startPct + '%');
   setText('curveEnd', endPct + '%');
-  setText('costStart', fmtK(Math.round(first.cpp)));
-  setText('costEnd', fmtK(Math.round(last.cpp)));
-  var pctDrop = first.cpp > 0 ? Math.round((1 - last.cpp / first.cpp) * 100) : 0;
-  setText('curveImprovement', '+' + (endPct - startPct) + ' pts guided, ' + pctDrop + '% cheaper/prompt');
+  setText('costStart', fmtK(Math.round(earlyC)));
+  setText('costEnd', fmtK(Math.round(lateC)));
+  var guidedDelta = endPct - startPct;
+  var guidedStr = (guidedDelta >= 0 ? '+' : '') + guidedDelta + ' pts guided';
+  var costStr = '';
+  if (earlyC > 0) {
+    var costChange = Math.round((1 - lateC / earlyC) * 100);
+    if (costChange > 0) costStr = costChange + '% cheaper/prompt';
+    else if (costChange < 0) costStr = Math.abs(costChange) + '% costlier/prompt';
+    else costStr = 'flat cost/prompt';
+  }
+  setText('curveImprovement', guidedStr + (costStr ? ', ' + costStr : ''));
 }
 
 /* ── Now button: scroll listeners + global handler ── */

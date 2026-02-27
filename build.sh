@@ -23,7 +23,7 @@ case "$MODE" in
     ;;
   --recon-bin)
     echo "Building standalone aoa-recon..."
-    go build -ldflags "$LDFLAGS" -o aoa-recon ./cmd/aoa-recon/
+    go build -tags "recon" -ldflags "$LDFLAGS" -o aoa-recon ./cmd/aoa-recon/
     SIZE=$(stat --format=%s aoa-recon 2>/dev/null || stat -f%z aoa-recon)
     echo "Built: aoa-recon ($(( SIZE / 1048576 )) MB)"
     ;;

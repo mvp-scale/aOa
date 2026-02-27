@@ -295,17 +295,26 @@
         <div class="card-header">
           <span class="card-title">Daily Token Usage</span>
           <div style="display:flex;gap:16px;align-items:center">
-            <span class="chart-legend-inline"><span class="chart-legend-dot green"></span>With aOa</span>
             <span class="chart-legend-inline"><span class="chart-legend-dot red"></span>Without aOa</span>
-            <span class="card-badge" id="savingsLabel">-</span>
+            <span class="chart-legend-inline"><span class="chart-legend-dot green"></span>With aOa</span>
+          </div>
+        </div>
+        <div class="chart-hero-stats">
+          <div class="chart-hero-stat">
+            <span class="chart-hero-label red">Without aOa</span>
+            <span class="chart-hero-val red" id="chartCf">-</span>
+          </div>
+          <div class="chart-hero-stat">
+            <span class="chart-hero-label green">With aOa</span>
+            <span class="chart-hero-val green" id="chartActual">-</span>
+          </div>
+          <div class="chart-hero-stat">
+            <span class="chart-hero-label green">aOa Saved</span>
+            <span class="chart-hero-val green-big" id="chartSavedPct">-</span>
           </div>
         </div>
         <div class="chart-area" id="savingsChartArea"></div>
-        <div class="chart-summary-line">
-          <span>You used <span class="text-green" id="chartActual">-</span> tokens</span>
-          <span>Without aOa: <span class="text-red" id="chartCf">-</span></span>
-          <span>Saved: <span class="text-green" id="chartDiff">-</span></span>
-        </div>
+        <div class="chart-data-legend" id="chartDataLegend"></div>
       </div>
       <div class="card">
         <div class="card-header">

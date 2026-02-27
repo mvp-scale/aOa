@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-02-26 (Session 77) | **89% complete.**
+> **Updated**: 2026-02-27 (Session 78) | **89% complete.**
 > **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9/L5.19 + L6 (all) + L7.2 + L8.1 + L9 (all) + P0 (all 7 bugs) (489+ active tests, 32 skipped)
 > **Archived boards**: `.context/archived/`
 
@@ -253,7 +253,7 @@ Replaced JSON serialization with binary posting lists + gob for the bbolt search
 
 **Recon dashboard overhaul** -- green Complete, yellow Browser-only validation
 
-8 features delivered across Sessions 65-66: source line peek, tier noise gating, scan freshness, 5 focus modes, tier color redesign, code toggle with source cache, Copy Prompt, column alignment.
+8 features delivered across Sessions 65-66: source line peek, tier noise gating, scan freshness, 5 focus modes, tier color redesign, code toggle with source cache, Copy Prompt, column alignment. Session 78: fixed `investigated_files` missing from `/api/recon` response (both dimensional results path and empty-data path).
 
 **Gap**: No automated tests -- browser-only validation.
 
@@ -265,7 +265,7 @@ Replaced JSON serialization with binary posting lists + gob for the bbolt search
 
 Old warmReconCache/updateReconForFile deleted in Session 71 (clean separation). Recon now gated behind `aoa recon init` + `.aoa/recon.enabled` marker. When enabled, ReconBridge handles scanning via separate aoa-recon binary.
 
-**Gap**: No unit tests for incremental path.
+**Gap**: No unit tests for incremental path. Session 78: `build.sh --recon-bin` fixed (was missing `-tags "recon"`, failing to compile `recon.NewEngine`). `aoa-recon` binary now builds and connects successfully.
 
 **Files**: `internal/app/recon_bridge.go`, `internal/adapters/web/recon.go`, `internal/app/watcher.go`
 

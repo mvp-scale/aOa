@@ -204,29 +204,71 @@ body {
 .legend-swatch.without { background: var(--red); opacity: 0.4; }
 
 .chart-area {
-  display: flex; align-items: flex-end; gap: 3px; flex: 1; min-height: 120px;
+  display: flex; align-items: stretch; gap: 3px; flex: 1; min-height: 120px;
   border-bottom: 1px solid var(--border-subtle); padding-bottom: 1px;
 }
 .chart-col {
   flex: 1; display: flex; flex-direction: column; align-items: center;
   min-width: 0; height: 100%; justify-content: flex-end;
+  position: relative; z-index: 1;
 }
 .chart-bars { display: flex; gap: 2px; width: 100%; align-items: flex-end; flex: 1; }
 .chart-bar { flex: 1; border-radius: 3px 3px 0 0; min-height: 2px; transition: height 0.3s; cursor: default; }
 .chart-bar.with { background: var(--green); }
 .chart-bar.without { background: var(--red); opacity: 0.3; }
 .chart-bar:hover { filter: brightness(1.15); }
+/* Split bar — single column, saved (red) on top, used (green) on bottom */
+.chart-split-bar {
+  width: 100%; border-radius: 3px 3px 0 0; display: flex; flex-direction: column;
+  overflow: hidden; cursor: default; transition: height 0.3s;
+}
+.chart-split-bar:hover { filter: brightness(1.15); }
+.chart-split-saved { background: var(--red); opacity: 0.25; min-height: 0; }
+.chart-split-used { background: var(--green); min-height: 1px; }
+/* Chart hero stats — big prominent numbers above the bars */
+.chart-hero-stats {
+  display: flex; gap: 28px; align-items: baseline; margin-bottom: 14px;
+}
+.chart-hero-stat { display: flex; flex-direction: column; gap: 2px; }
+.chart-hero-label {
+  font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600;
+  letter-spacing: 0.8px; text-transform: uppercase;
+}
+.chart-hero-label.red { color: var(--red); opacity: 0.7; }
+.chart-hero-label.green { color: var(--green); opacity: 0.7; }
+.chart-hero-val {
+  font-family: 'JetBrains Mono', monospace; font-weight: 700;
+  font-variant-numeric: tabular-nums; line-height: 1;
+}
+.chart-hero-val.red { color: var(--red); font-size: 22px; }
+.chart-hero-val.green { color: var(--green); font-size: 22px; }
+.chart-hero-val.green-big { color: var(--green); font-size: 26px; }
+/* Data legend — two rows aligned directly under chart bars */
+.chart-data-legend {
+  display: flex; flex-direction: column; gap: 0;
+  border-top: 1px solid var(--border-subtle); margin-top: 2px;
+}
+.data-legend-row {
+  display: flex; align-items: center; gap: 3px;
+}
+.data-legend-cell {
+  flex: 1; text-align: center; font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+  padding: 3px 0; min-width: 0; overflow: hidden;
+}
+.data-legend-cell.red { color: var(--red); }
+.data-legend-cell.green { color: var(--green); }
+/* Now column — thin vertical line + pulsing dot, mirrors debrief conv-now */
+.chart-now-line { width: 1px; background: var(--green); opacity: 0.3; flex: 1; }
+.chart-now-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+  animation: pulse-dot 2s ease-in-out infinite; flex-shrink: 0;
+}
+@keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.8)} }
 .chart-date {
   font-size: 9px; color: var(--mute); font-family: 'JetBrains Mono', monospace;
   text-align: center; padding-top: 5px; font-variant-numeric: tabular-nums;
 }
-.chart-summary {
-  display: flex; justify-content: space-between; align-items: center;
-  padding-top: 10px; font-size: 12px; color: var(--dim);
-}
-.chart-summary .cs-val { font-weight: 700; }
-.chart-summary .cs-val.green { color: var(--green); }
-.chart-summary .cs-val.red { color: var(--red); }
 
 /* ====== LEARNING CURVE — promoted to chart row ====== */
 .curve-card {
@@ -445,17 +487,26 @@ body {
           <span class="chart-title">Daily Token Usage</span>
         </div>
         <div class="chart-legend">
-          <span class="legend-item"><span class="legend-swatch with"></span> With aOa</span>
           <span class="legend-item"><span class="legend-swatch without"></span> Without aOa</span>
-          <span class="chart-badge" id="chartBadge">0 saved</span>
+          <span class="legend-item"><span class="legend-swatch with"></span> With aOa</span>
+        </div>
+      </div>
+      <div class="chart-hero-stats">
+        <div class="chart-hero-stat">
+          <span class="chart-hero-label red">Without aOa</span>
+          <span class="chart-hero-val red" id="chartCf">0</span>
+        </div>
+        <div class="chart-hero-stat">
+          <span class="chart-hero-label green">With aOa</span>
+          <span class="chart-hero-val green" id="chartActual">0</span>
+        </div>
+        <div class="chart-hero-stat">
+          <span class="chart-hero-label green">aOa Saved</span>
+          <span class="chart-hero-val green-big" id="chartSavedPct">0%</span>
         </div>
       </div>
       <div class="chart-area" id="chartArea"></div>
-      <div class="chart-summary">
-        <span>You used <span class="cs-val green" id="chartActual">0</span> tokens</span>
-        <span>Without aOa you'd have used <span class="cs-val red" id="chartCf">0</span></span>
-        <span>Difference: <span class="cs-val green" id="chartDiff">0</span></span>
-      </div>
+      <div class="chart-data-legend" id="chartDataLegend"></div>
     </div>
 
     <!-- Learning Curve — dual axis: guided ratio UP, cost/prompt DOWN -->
@@ -642,10 +693,12 @@ body {
         var prompts = randInt(15, 80);
         var reads = randInt(Math.floor(prompts * 0.4), Math.floor(prompts * 1.2));
         var guided = Math.round(reads * ratio);
-        var savedPerRead = randInt(800, 4000);
-        var saved = guided * savedPerRead;
-        var actual = prompts * randInt(3000, 8000);
-        var cf = actual + saved;
+        // Production-scale: without aOa = 5-25M tokens, with aOa = 5-15% of that
+        var cfBase = randInt(5000000, 25000000);
+        var savingsRatio = 0.85 + ratio * 0.10; // 85-95% savings as learning improves
+        var saved = Math.round(cfBase * savingsRatio);
+        var actual = cfBase - saved;
+        var cf = cfBase;
         var dur = randInt(20, 180);
         // Time saved: ~200ms per guided read (skip vs full file)
         var timeSavedMs = guided * randInt(150, 400);
@@ -694,31 +747,59 @@ body {
     return days;
   }
 
-  // ====== RENDER CHART ======
+  // ====== RENDER CHART (split bars — saved on top, used on bottom) ======
   function renderChart(sessions) {
     var days = aggregateByDay(sessions);
     var show = days.slice(-14);
-    var max = 0;
-    show.forEach(function(d) { max = Math.max(max, d.cf, d.actual); });
+    var maxCf = 0;
+    show.forEach(function(d) { maxCf = Math.max(maxCf, d.cf); });
+    if (maxCf === 0) maxCf = 1;
 
     var html = '';
     show.forEach(function(d) {
-      var ah = Math.max(2, d.actual / max * 100);
-      var ch = Math.max(2, d.cf / max * 100);
-      var label = d.sessions > 1 ? d.dateShort + ' (' + d.sessions + ')' : d.dateShort;
-      html += '<div class="chart-col"><div class="chart-bars">' +
-        '<div class="chart-bar without" style="height:' + ch + '%" title="Without aOa: ' + fmtK(Math.round(d.cf)) + '"></div>' +
-        '<div class="chart-bar with" style="height:' + ah + '%" title="With aOa: ' + fmtK(Math.round(d.actual)) + '"></div>' +
-        '</div><div class="chart-date">' + label + '</div></div>';
+      var barH = Math.max(4, Math.round((d.cf / maxCf) * 100));
+      var savedPct = d.cf > 0 ? Math.round((d.cf - d.actual) / d.cf * 100) : 0;
+      var usedPct = 100 - savedPct;
+      var label = d.dateShort;
+      html += '<div class="chart-col">' +
+        '<div class="chart-bars">' +
+        '<div class="chart-split-bar" style="height:' + barH + '%" title="Without aOa: ' + fmtK(Math.round(d.cf)) + ' · With: ' + fmtK(Math.round(d.actual)) + ' · Saved: ' + savedPct + '%">' +
+        '<div class="chart-split-saved" style="flex:' + savedPct + '"></div>' +
+        '<div class="chart-split-used" style="flex:' + usedPct + '"></div>' +
+        '</div>' +
+        '</div>' +
+        '<div class="chart-date">' + label + '</div>' +
+        '</div>';
     });
+    // Now column
+    html += '<div class="chart-col" style="max-width:12px">' +
+      '<div class="chart-bars" style="flex-direction:column;align-items:center;justify-content:flex-end">' +
+      '<div class="chart-now-dot"></div>' +
+      '<div class="chart-now-line"></div>' +
+      '</div>' +
+      '<div class="chart-date" style="color:var(--green);font-weight:600;font-size:8px">now</div>' +
+      '</div>';
     document.getElementById('chartArea').innerHTML = html;
+
+    // Data legend — red row: total tokens, green row: ↓% savings
+    var rowTokens = '<div class="data-legend-row">';
+    var rowSavings = '<div class="data-legend-row">';
+    show.forEach(function(d) {
+      var pct = d.cf > 0 ? Math.round((d.cf - d.actual) / d.cf * 100) : 0;
+      rowTokens += '<span class="data-legend-cell red">' + fmtK(Math.round(d.cf)) + '</span>';
+      rowSavings += '<span class="data-legend-cell green">&darr;' + pct + '%</span>';
+    });
+    // Empty spacer for the "now" column
+    rowTokens += '<span class="data-legend-cell" style="max-width:12px"></span></div>';
+    rowSavings += '<span class="data-legend-cell" style="max-width:12px"></span></div>';
+    document.getElementById('chartDataLegend').innerHTML = rowTokens + rowSavings;
 
     var totalActual = 0, totalCf = 0, totalSaved = 0;
     sessions.forEach(function(s) { totalActual += s.actual; totalCf += s.cf; totalSaved += s.saved; });
-    document.getElementById('chartActual').textContent = fmtK(Math.round(totalActual));
     document.getElementById('chartCf').textContent = fmtK(Math.round(totalCf));
-    document.getElementById('chartDiff').textContent = fmtK(Math.round(totalSaved));
-    document.getElementById('chartBadge').textContent = fmtK(Math.round(totalSaved)) + ' saved';
+    document.getElementById('chartActual').textContent = fmtK(Math.round(totalActual));
+    var pctSaved = totalCf > 0 ? Math.round((totalCf - totalActual) / totalCf * 100) : 0;
+    document.getElementById('chartSavedPct').textContent = pctSaved + '%';
   }
 
   // ====== RENDER LEARNING CURVE — dual axis ======

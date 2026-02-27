@@ -1,6 +1,6 @@
 # Index
 
-> **Updated**: 2026-02-26 (Session 77)
+> **Updated**: 2026-02-27 (Session 78)
 
 ## Active Layer
 
@@ -81,8 +81,8 @@ Line ranges into BOARD.md for targeted reads:
 | L5.7-L5.19 | Reference | `details/2026-02-23-dimensional-taxonomy.md` | Complete -- 142 questions across 21 dimensions |
 | L5.7-L5.19 | ADR | `decisions/2026-02-23-declarative-yaml-rules.md` | Accepted -- declarative YAML schema, 6 constraints |
 | -- | detail | `details/2026-02-25-session-71-g0-perf-and-recon-separation.md` | Complete -- G0 perf fixes, recon separation, P0 closure |
-| -- | detail | `details/QOL.md` | In progress -- dashboard QOL (Live, Intel, Arsenal done; Recon remains) |
-| -- | mockup | `docs/mockups/arsenal-v2.html` | Complete -- Arsenal tab redesign mockup with mock data |
+| -- | detail | `details/QOL.md` | In progress -- dashboard QOL (Live, Intel, Arsenal done; Recon remains). Session 78: Arsenal v2 split-bar chart, per-model token breakdown, session history redesign |
+| -- | mockup | `docs/mockups/arsenal-v2.html` | 98% -- split-bar design approved (green actual + red saved), needs port to live app.js |
 | -- | detail | `details/2026-02-26-throughput-telemetry-model.md` | Complete -- telemetry data hierarchy, throughput/conv speed formulas, phased roadmap |
 | -- | detail | `docs/research/dashboard-metrics.md` | Updated -- 138 lines, L9 data sources, shadow ring metrics, 17 inferrable metrics |
 
