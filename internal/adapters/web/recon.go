@@ -77,12 +77,17 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 	// No recon data available — return install prompt
 	w.Header().Set("Content-Type", "application/json")
 	reconAvailable := s.queries != nil && s.queries.ReconAvailable()
+	var invFiles []string
+	if s.queries != nil {
+		invFiles = s.queries.InvestigatedFiles()
+	}
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"files_scanned":   0,
-		"total_findings":  0,
-		"recon_available": reconAvailable,
-		"install_prompt":  "Run 'aoa recon init' to enable structural analysis",
-		"tree":            map[string]interface{}{},
+		"files_scanned":      0,
+		"total_findings":     0,
+		"recon_available":    reconAvailable,
+		"install_prompt":     "Run 'aoa recon init' to enable structural analysis",
+		"tree":               map[string]interface{}{},
+		"investigated_files": invFiles,
 	})
 }
 
@@ -156,19 +161,23 @@ func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[s
 	}
 
 	reconAvailable := false
+	var invFiles []string
 	if s.queries != nil {
 		reconAvailable = s.queries.ReconAvailable()
+		invFiles = s.queries.InvestigatedFiles()
 	}
 	response := struct {
 		*reconResult
-		ReconAvailable  bool  `json:"recon_available"`
-		DimensionalMode bool  `json:"dimensional_mode"`
-		ScannedAt       int64 `json:"scanned_at"`
+		ReconAvailable    bool     `json:"recon_available"`
+		DimensionalMode   bool     `json:"dimensional_mode"`
+		ScannedAt         int64    `json:"scanned_at"`
+		InvestigatedFiles []string `json:"investigated_files"`
 	}{
-		reconResult:     result,
-		ReconAvailable:  reconAvailable,
-		DimensionalMode: true,
-		ScannedAt:       time.Now().Unix(),
+		reconResult:       result,
+		ReconAvailable:    reconAvailable,
+		DimensionalMode:   true,
+		ScannedAt:         time.Now().Unix(),
+		InvestigatedFiles: invFiles,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

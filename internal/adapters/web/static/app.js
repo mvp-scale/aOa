@@ -98,6 +98,11 @@ function fmtDollar(amount) {
   if (amount > 0) return '<$0.01';
   return '$0.00';
 }
+function guidedColor(pct) {
+  if (pct >= 60) return 'var(--green)';
+  if (pct >= 30) return 'var(--yellow)';
+  return 'var(--red)';
+}
 function calcSessionCost(input, output, cacheRead, model) {
   var p = getModelPricing(model);
   return (input * p.input + output * p.output + cacheRead * p.cacheRead) / 1000000;
@@ -1254,9 +1259,13 @@ function renderArsenal() {
     roi = ((costAvoidance + lifetimeCacheSavings) / totalSpent).toFixed(1) + 'x';
   }
 
+  // Lifetime minutes saved: total tokens saved / current burn rate
+  var burnPerMin = rw.burn_rate_per_min || 0;
+  var lifetimeMinSaved = burnPerMin > 0 ? (totalSaved / burnPerMin) : 0;
+
   // Hero metrics: cost avoidance → extended → cache savings → efficiency
   setGlow('hm-arsenal-0', costAvoidance > 0 ? fmtDollar(costAvoidance) : '-');
-  setGlow('hm-arsenal-1', rw.delta_minutes ? fmtMin(rw.delta_minutes) : '-');
+  setGlow('hm-arsenal-1', lifetimeMinSaved > 0 ? fmtMin(lifetimeMinSaved) : '-');
   setGlow('hm-arsenal-2', lifetimeCacheSavings > 0 ? fmtDollar(lifetimeCacheSavings) : '-');
   setGlow('hm-arsenal-3', efficiencyScore + '%');
 
@@ -1279,7 +1288,7 @@ function renderArsenal() {
   setText('savingsLabel', fmtK(totalSaved) + ' saved');
 
   // Savings Chart
-  renderSavingsChart(sessions);
+  renderSavingsChart(sessions, cm, rw);
 
   // Session History Table — clean columns, no jargon
   var shtml = '';
@@ -1288,18 +1297,40 @@ function renderArsenal() {
     var shortId = (sess.session_id || '').substring(0, 8);
     var gr = sess.guided_ratio !== undefined ? (sess.guided_ratio * 100).toFixed(0) : 0;
     var grWidth = Math.min(100, Math.max(0, Number(gr)));
-    var focus = sess.prompt_count > 0 ? ((sess.read_count || 0) / sess.prompt_count).toFixed(1) : '-';
+    // Model percentage breakdown from per-model token tracking
+    var mt = sess.model_tokens || {};
+    var mtTotal = 0;
+    var opusTok = 0, sonnetTok = 0, haikuTok = 0;
+    for (var mk in mt) {
+      mtTotal += mt[mk];
+      if (mk.indexOf('opus') !== -1) opusTok += mt[mk];
+      else if (mk.indexOf('sonnet') !== -1) sonnetTok += mt[mk];
+      else if (mk.indexOf('haiku') !== -1) haikuTok += mt[mk];
+    }
+    // Fallback for old sessions without model_tokens: use model field
+    if (mtTotal === 0 && sess.model) {
+      mtTotal = 1;
+      if (sess.model.indexOf('opus') !== -1) opusTok = 1;
+      else if (sess.model.indexOf('sonnet') !== -1) sonnetTok = 1;
+      else if (sess.model.indexOf('haiku') !== -1) haikuTok = 1;
+    }
+    var opusPct = mtTotal > 0 ? Math.round(opusTok / mtTotal * 100) : 0;
+    var sonnetPct = mtTotal > 0 ? Math.round(sonnetTok / mtTotal * 100) : 0;
+    var haikuPct = mtTotal > 0 ? Math.round(haikuTok / mtTotal * 100) : 0;
 
+    var sessNum = sessions.length - j;
     shtml += '<tr>' +
+      '<td class="mono text-mute" style="font-size:10px;text-align:center">' + sessNum + '</td>' +
       '<td class="session-id" title="' + escapeHtml(sess.session_id) + '">' + escapeHtml(shortId) + '</td>' +
       '<td class="mono text-dim" style="font-size:11px;white-space:nowrap">' + fmtDate(sess.start_time) + '</td>' +
       '<td class="mono text-dim" style="font-size:11px">' + fmtDuration(sess.start_time, sess.end_time) + '</td>' +
-      '<td class="mono" style="font-size:11px">' + (sess.prompt_count || 0) + '</td>' +
-      '<td class="mono" style="font-size:11px">' + (sess.read_count || 0) + '</td>' +
-      '<td class="mono" style="font-size:11px">' + gr + '%<span class="mini-bar-wrap"><span class="mini-bar" style="width:' + grWidth + '%"></span></span></td>' +
+      '<td class="mono" style="font-size:10px;text-align:center;' + (opusPct > 0 ? 'color:var(--purple);font-weight:600' : 'color:var(--mute)') + '">' + (opusPct > 0 ? opusPct + '%' : '\u2014') + '</td>' +
+      '<td class="mono" style="font-size:10px;text-align:center;' + (sonnetPct > 0 ? 'color:var(--blue);font-weight:600' : 'color:var(--mute)') + '">' + (sonnetPct > 0 ? sonnetPct + '%' : '\u2014') + '</td>' +
+      '<td class="mono" style="font-size:10px;text-align:center;' + (haikuPct > 0 ? 'color:var(--green);font-weight:600' : 'color:var(--mute)') + '">' + (haikuPct > 0 ? haikuPct + '%' : '\u2014') + '</td>' +
+      '<td class="mono" style="font-size:11px"><div class="ratio-wrap"><div class="ratio-bar"><div class="ratio-fill" style="width:' + grWidth + '%;background:' + guidedColor(Number(gr)) + '"></div></div><span class="ratio-text" style="color:' + guidedColor(Number(gr)) + '">' + gr + '%</span></div></td>' +
       '<td class="mono text-green" style="font-size:11px">' + fmtK(sess.tokens_saved || 0) + '</td>' +
       '<td class="mono text-blue" style="font-size:11px">' + (sess.time_saved_ms > 0 ? fmtTime(sess.time_saved_ms) : '-') + '</td>' +
-      '<td class="mono text-dim" style="font-size:11px">' + focus + '</td>' +
+      '<td class="mono" style="font-size:11px">' + fmtK((sess.input_tokens || 0) + (sess.output_tokens || 0) + (sess.cache_read_tokens || 0)) + '</td>' +
       '</tr>';
   }
   document.getElementById('sessionTbody').innerHTML = shtml;
@@ -1323,7 +1354,7 @@ function renderArsenal() {
 }
 
 /* ── Daily Token Usage Chart — trailing 14 days, fixed slots ── */
-function renderSavingsChart(sessions) {
+function renderSavingsChart(sessions, cm, rw) {
   var area = document.getElementById('savingsChartArea');
   if (!area) return;
 
@@ -1363,6 +1394,17 @@ function renderSavingsChart(sessions) {
     }
   }
 
+  // Inject current live session into today's slot
+  var todayKey = slots[slots.length - 1].key;
+  if (slotMap[todayKey] && cm) {
+    var liveInput = cm.input_tokens || 0;
+    var liveSaved = (rw && rw.tokens_saved) ? rw.tokens_saved : 0;
+    slotMap[todayKey].actual += liveInput;
+    slotMap[todayKey].counterfact += liveInput + liveSaved;
+    totalActual += liveInput;
+    totalCf += liveInput + liveSaved;
+  }
+
   // Find max for scaling (across the 14-day window only)
   var maxVal = 0;
   for (var k = 0; k < slots.length; k++) {
@@ -1375,15 +1417,15 @@ function renderSavingsChart(sessions) {
   var html = '';
   for (var b = 0; b < slots.length; b++) {
     var entry = slots[b];
-    var actualPct = Math.max(1, Math.round((entry.actual / maxVal) * 100));
-    var cfPct = Math.max(1, Math.round((entry.counterfact / maxVal) * 100));
     var hasData = entry.actual > 0 || entry.counterfact > 0;
+    var actualPct = hasData ? Math.round((entry.actual / maxVal) * 100) : 0;
+    var cfPct = hasData ? Math.round((entry.counterfact / maxVal) * 100) : 0;
     html += '<div class="chart-bar-group">' +
       '<div class="chart-bars">' +
       (hasData
         ? '<div class="chart-bar counterfact" style="height:' + cfPct + '%" title="Without aOa: ' + fmtK(entry.counterfact) + '"></div>' +
           '<div class="chart-bar actual" style="height:' + actualPct + '%" title="With aOa: ' + fmtK(entry.actual) + '"></div>'
-        : '<div class="chart-bar" style="height:1%;opacity:0.1;background:var(--border)"></div>') +
+        : '') +
       '</div>' +
       '<div class="chart-label">' + entry.label + '</div>' +
       '</div>';
@@ -1424,8 +1466,9 @@ function renderLearningCurve(sessions) {
     var cpp = s.prompt_count > 0 ? (s.input_tokens || 0) / s.prompt_count : 0;
     var ts = s.start_time ? new Date(s.start_time * 1000) : null;
     var dateLabel = ts ? (ts.getMonth() + 1) + '/' + ts.getDate() : '';
-    points.push({ ratio: s.guided_ratio, cpp: cpp, date: dateLabel, ts: s.start_time || 0 });
+    points.push({ ratio: s.guided_ratio, cpp: cpp, date: dateLabel, ts: s.start_time || 0, sessionNum: sessions.length - i });
   }
+  points.reverse(); // oldest (session 1) on left, newest on right
 
   var cs = getComputedStyle(document.documentElement);
   var greenColor = cs.getPropertyValue('--green').trim() || '#34d399';
@@ -1441,7 +1484,7 @@ function renderLearningCurve(sessions) {
     return;
   }
 
-  var padL = 4, padR = 4, padT = 6, padB = 16;
+  var padL = 4, padR = 4, padT = 6, padB = 28;
   var chartW = w - padL - padR;
   var chartH = h - padT - padB;
 
@@ -1534,17 +1577,31 @@ function renderLearningCurve(sessions) {
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // X-axis date labels — show ~5 evenly spaced dates
+  // X-axis session tick marks
   ctx.fillStyle = muteColor;
   ctx.font = '9px JetBrains Mono, monospace';
   ctx.textAlign = 'center';
-  var labelCount = Math.min(points.length, 5);
-  for (var li = 0; li < labelCount; li++) {
-    var idx = labelCount <= 1 ? 0 : Math.round(li * (points.length - 1) / (labelCount - 1));
-    if (points[idx] && points[idx].date) {
-      ctx.fillText(points[idx].date, sx(idx), h - 2);
+  // Pick tick interval: show every session up to ~12, then thin out
+  var tickInterval = 1;
+  if (points.length > 24) tickInterval = 5;
+  else if (points.length > 12) tickInterval = 2;
+  for (var li = 0; li < points.length; li++) {
+    var sn = points[li].sessionNum;
+    if (sn === 1 || sn === points[points.length - 1].sessionNum || sn % tickInterval === 0) {
+      // Tick mark
+      ctx.beginPath();
+      ctx.moveTo(sx(li), padT + chartH);
+      ctx.lineTo(sx(li), padT + chartH + 3);
+      ctx.strokeStyle = muteColor;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+      // Label
+      ctx.fillText(String(sn), sx(li), padT + chartH + 13);
     }
   }
+  // Axis title
+  ctx.font = '8px Inter, sans-serif';
+  ctx.fillText('Session', w / 2, h - 1);
 
   // Footer values
   var first = points[0];

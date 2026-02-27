@@ -131,8 +131,9 @@ type SessionSummary struct {
 	InputTokens       int     `json:"input_tokens"`
 	OutputTokens      int     `json:"output_tokens"`
 	CacheReadTokens   int     `json:"cache_read_tokens"`
-	CacheWriteTokens  int     `json:"cache_write_tokens"`
-	Model             string  `json:"model"`
+	CacheWriteTokens  int                `json:"cache_write_tokens"`
+	Model             string             `json:"model"`
+	ModelTokens       map[string]int64   `json:"model_tokens,omitempty"`
 }
 
 // SearchOptions controls grep/egrep behavior. Passed through the search path

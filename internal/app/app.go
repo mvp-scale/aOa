@@ -34,6 +34,7 @@ type SessionMetrics struct {
 	CacheReadTokens  int
 	CacheWriteTokens int
 	TurnCount        int
+	ModelTokens      map[string]int64 // per-model total token breakdown
 }
 
 // CacheHitRate returns the fraction of cache read tokens vs total input tokens (0.0–1.0).
@@ -837,10 +838,17 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			a.sessionMetrics.OutputTokens += ev.Usage.OutputTokens
 			a.sessionMetrics.CacheReadTokens += ev.Usage.CacheReadTokens
 			a.sessionMetrics.CacheWriteTokens += ev.Usage.CacheWriteTokens
+			// Per-model token tracking
+			total := ev.Usage.InputTokens + ev.Usage.OutputTokens + ev.Usage.CacheReadTokens + ev.Usage.CacheWriteTokens
+			if model := ev.Model; model != "" && total > 0 {
+				if a.sessionMetrics.ModelTokens == nil {
+					a.sessionMetrics.ModelTokens = make(map[string]int64)
+				}
+				a.sessionMetrics.ModelTokens[model] += int64(total)
+			}
 			tb.InputTokens += ev.Usage.InputTokens
 			tb.OutputTokens += ev.Usage.OutputTokens
 			// L0.1: Record burn rate for both actual and counterfactual
-			total := ev.Usage.InputTokens + ev.Usage.OutputTokens + ev.Usage.CacheReadTokens + ev.Usage.CacheWriteTokens
 			a.burnRate.Record(total)
 			a.burnRateCounterfact.Record(total)
 		}
@@ -1370,6 +1378,7 @@ func (a *App) SessionList() socket.SessionListResult {
 			CacheReadTokens:  s.CacheReadTokens,
 			CacheWriteTokens: s.CacheWriteTokens,
 			Model:            s.Model,
+			ModelTokens:      s.ModelTokens,
 		}
 	}
 
@@ -1875,6 +1884,7 @@ func (a *App) flushSessionSummary() {
 		CacheReadTokens:  a.sessionMetrics.CacheReadTokens,
 		CacheWriteTokens: a.sessionMetrics.CacheWriteTokens,
 		Model:            a.currentModel,
+		ModelTokens:      a.sessionMetrics.ModelTokens,
 	}
 	_ = a.Store.SaveSessionSummary(a.ProjectID, summary)
 }
