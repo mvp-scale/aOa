@@ -183,7 +183,6 @@
             <tbody id="domainTbody"></tbody>
           </table>
         </div>
-        <div class="domain-footer"><span class="aoa-brand">aOa</span> learns your workflow &rarr; Claude reads only what it needs.</div>
       </div>
 
       <div class="card">
@@ -290,56 +289,73 @@
       <div class="stat-card yellow" data-tooltip="Average number of file reads per prompt across all sessions. Shows how much information Claude needs to gather for each question you ask."><div class="stat-value" id="as-velocity">-</div><div class="stat-label">Read Velocity</div><div class="stat-sub">reads per prompt</div></div>
     </div>
 
-    <!-- Savings Chart -->
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Daily Savings</span>
-        <span class="card-badge" id="savingsLabel">-</span>
+    <!-- Dual chart row: Daily Token Usage + Learning Curve side by side -->
+    <div class="arsenal-chart-row">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Daily Token Usage</span>
+          <div style="display:flex;gap:16px;align-items:center">
+            <span class="chart-legend-inline"><span class="chart-legend-dot green"></span>With aOa</span>
+            <span class="chart-legend-inline"><span class="chart-legend-dot red"></span>Without aOa</span>
+            <span class="card-badge" id="savingsLabel">-</span>
+          </div>
+        </div>
+        <div class="chart-area" id="savingsChartArea"></div>
+        <div class="chart-summary-line">
+          <span>You used <span class="text-green" id="chartActual">-</span> tokens</span>
+          <span>Without aOa: <span class="text-red" id="chartCf">-</span></span>
+          <span>Saved: <span class="text-green" id="chartDiff">-</span></span>
+        </div>
       </div>
-      <div class="chart-area" id="savingsChartArea"></div>
-      <div class="chart-legend">
-        <span><span class="chart-legend-dot green"></span>Actual</span>
-        <span><span class="chart-legend-dot red"></span>Counterfactual (without aOa)</span>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Learning Curve</span>
+          <div style="display:flex;gap:16px;align-items:center">
+            <span class="chart-legend-inline"><span class="chart-legend-dot green"></span>Guided Ratio</span>
+            <span class="chart-legend-inline"><span class="chart-legend-dot blue"></span>Cost / Prompt</span>
+          </div>
+        </div>
+        <div class="curve-canvas-wrap">
+          <canvas id="learningCurveCanvas"></canvas>
+        </div>
+        <div class="chart-summary-line">
+          <span>Guided: <span class="text-red" id="curveStart">-</span> &rarr; <span class="text-green" id="curveEnd">-</span></span>
+          <span>Cost/prompt: <span class="text-red" id="costStart">-</span> &rarr; <span class="text-green" id="costEnd">-</span></span>
+          <span class="text-cyan" id="curveImprovement">-</span>
+        </div>
       </div>
     </div>
 
-    <!-- Bottom split: Session table + Learning curve + System status -->
-    <div class="arsenal-bottom">
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">Session History</span>
-          <span class="card-badge" id="sessionCount">0</span>
-        </div>
-        <div class="domain-table-wrap">
-          <table class="session-table">
-            <thead><tr>
-              <th>ID</th><th>Date</th><th>Dur</th><th>P</th><th>R</th><th>Guided</th><th>Saved</th><th>Time</th><th>Waste</th><th>R/P</th>
-            </tr></thead>
-            <tbody id="sessionTbody"></tbody>
-          </table>
-        </div>
+    <!-- Session History — full width -->
+    <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column">
+      <div class="card-header">
+        <span class="card-title">Session History</span>
+        <span class="card-badge" id="sessionCount">0</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:16px;min-height:0">
-        <div class="card" style="flex:0 0 auto">
-          <div class="card-header">
-            <span class="card-title">Learning Curve</span>
-          </div>
-          <div class="curve-canvas-wrap">
-            <canvas id="learningCurveCanvas" height="120"></canvas>
-          </div>
-        </div>
-        <div class="card" style="flex:0 0 auto">
-          <div class="card-header">
-            <span class="card-title">System Status</span>
-          </div>
-          <div class="sys-strip">
-            <div class="sys-pair"><span class="sys-key">PID</span><span class="sys-val" id="sys-pid">-</span></div>
-            <div class="sys-pair"><span class="sys-key">Uptime</span><span class="sys-val" id="sys-uptime">-</span></div>
-            <div class="sys-pair"><span class="sys-key">DB</span><span class="sys-val" id="sys-db">-</span></div>
-            <div class="sys-pair"><span class="sys-key">Files</span><span class="sys-val" id="sys-files">-</span></div>
-            <div class="sys-pair"><span class="sys-key">Tokens</span><span class="sys-val" id="sys-tokens">-</span></div>
-          </div>
-        </div>
+      <div class="domain-table-wrap" style="flex:1;overflow-y:auto;min-height:0">
+        <table class="session-table">
+          <thead><tr>
+            <th>Session</th><th>Date</th><th>Duration</th><th>Prompts</th><th>Reads</th><th>Guided</th><th>Tokens Saved</th><th>Time Saved</th><th>Focus</th>
+          </tr></thead>
+          <tbody id="sessionTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- System Status — enhanced strip -->
+    <div class="card" style="flex-shrink:0">
+      <div class="sys-strip">
+        <div class="sys-pair"><span class="sys-dot-live"></span><span class="sys-val text-green">Running</span></div>
+        <div class="sys-pair"><span class="sys-key">Up</span><span class="sys-val" id="sys-uptime">-</span></div>
+        <div class="sys-pair"><span class="sys-key">Heap</span><span class="sys-val" id="sys-heap">-</span></div>
+        <div class="sys-pair"><span class="sys-key">Goroutines</span><span class="sys-val" id="sys-goroutines">-</span></div>
+        <div class="sys-pair"><span class="sys-key">DB</span><span class="sys-val" id="sys-db">-</span></div>
+        <div class="sys-sep"></div>
+        <div class="sys-pair"><span class="sys-key">Files</span><span class="sys-val text-cyan" id="sys-files">-</span></div>
+        <div class="sys-pair"><span class="sys-key">Tokens</span><span class="sys-val" id="sys-tokens">-</span></div>
+        <div class="sys-pair"><span class="sys-key">Domains</span><span class="sys-val text-purple" id="sys-domains">-</span></div>
+        <div class="sys-pair"><span class="sys-key">Bigrams</span><span class="sys-val" id="sys-bigrams">-</span></div>
+        <div class="sys-pair"><span class="sys-key">Recon</span><span class="sys-val" id="sys-recon">-</span></div>
       </div>
     </div>
   </div>

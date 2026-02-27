@@ -739,6 +739,113 @@ func TestTailer_SkipsOversizedLines(t *testing.T) {
 }
 
 // =============================================================================
+// T-L9.0: ToolResultSizes — char extraction accuracy
+// =============================================================================
+
+func TestParser_ToolResultSizes_StringContent(t *testing.T) {
+	// tool_result with content as a plain string
+	line := []byte(`{
+		"type": "assistant",
+		"uuid": "tr-str",
+		"message": {
+			"role": "assistant",
+			"content": [
+				{"type": "tool_result", "tool_use_id": "toolu_abc123", "content": "file contents here: 29 chars!"}
+			]
+		}
+	}`)
+
+	ev, err := ParseLine(line)
+	require.NoError(t, err)
+	require.NotNil(t, ev.ToolResultSizes)
+	assert.Equal(t, 29, ev.ToolResultSizes["toolu_abc123"])
+}
+
+func TestParser_ToolResultSizes_ArrayContent(t *testing.T) {
+	// tool_result with content as array of text blocks (common for multi-part results)
+	line := []byte(`{
+		"type": "assistant",
+		"uuid": "tr-arr",
+		"message": {
+			"role": "assistant",
+			"content": [
+				{"type": "tool_result", "tool_use_id": "toolu_arr001", "content": [
+					{"type": "text", "text": "first block"},
+					{"type": "text", "text": "second block"}
+				]}
+			]
+		}
+	}`)
+
+	ev, err := ParseLine(line)
+	require.NoError(t, err)
+	require.NotNil(t, ev.ToolResultSizes)
+	// "first block" (11) + "second block" (12) = 23
+	assert.Equal(t, 23, ev.ToolResultSizes["toolu_arr001"])
+}
+
+func TestParser_ToolResultSizes_TextFieldFallback(t *testing.T) {
+	// tool_result with no "content" field but a "text" field
+	line := []byte(`{
+		"type": "assistant",
+		"uuid": "tr-txt",
+		"message": {
+			"role": "assistant",
+			"content": [
+				{"type": "tool_result", "tool_use_id": "toolu_txt001", "text": "fallback text value"}
+			]
+		}
+	}`)
+
+	ev, err := ParseLine(line)
+	require.NoError(t, err)
+	require.NotNil(t, ev.ToolResultSizes)
+	assert.Equal(t, len("fallback text value"), ev.ToolResultSizes["toolu_txt001"])
+}
+
+func TestParser_ToolResultSizes_ZeroChars(t *testing.T) {
+	// tool_result with empty content — should still record the ID with 0 chars
+	// (L9.3 depends on this: zero-char entries get resolved from persisted files)
+	line := []byte(`{
+		"type": "assistant",
+		"uuid": "tr-zero",
+		"message": {
+			"role": "assistant",
+			"content": [
+				{"type": "tool_result", "tool_use_id": "toolu_empty001"}
+			]
+		}
+	}`)
+
+	ev, err := ParseLine(line)
+	require.NoError(t, err)
+	require.NotNil(t, ev.ToolResultSizes)
+	assert.Equal(t, 0, ev.ToolResultSizes["toolu_empty001"])
+}
+
+func TestParser_ToolResultSizes_MultipleResults(t *testing.T) {
+	// Multiple tool_result blocks in the same message
+	line := []byte(`{
+		"type": "assistant",
+		"uuid": "tr-multi",
+		"message": {
+			"role": "assistant",
+			"content": [
+				{"type": "tool_result", "tool_use_id": "toolu_r1", "content": "short"},
+				{"type": "tool_result", "tool_use_id": "toolu_r2", "content": "a longer result string here"}
+			]
+		}
+	}`)
+
+	ev, err := ParseLine(line)
+	require.NoError(t, err)
+	require.NotNil(t, ev.ToolResultSizes)
+	assert.Len(t, ev.ToolResultSizes, 2)
+	assert.Equal(t, 5, ev.ToolResultSizes["toolu_r1"])
+	assert.Equal(t, 27, ev.ToolResultSizes["toolu_r2"])
+}
+
+// =============================================================================
 // T-03: Signal Extraction helpers
 // =============================================================================
 

@@ -362,7 +362,8 @@ function poll() {
         safeFetch('/api/sessions').then(function(d) { cache.sessions = d; }).catch(function() {}),
         safeFetch('/api/config').then(function(d) { cache.config = d; }).catch(function() {}),
         safeFetch('/api/runway').then(function(d) { cache.runway = d; }).catch(function() {}),
-        safeFetch('/api/conversation/metrics').then(function(d) { cache.convMetrics = d; }).catch(function() {})
+        safeFetch('/api/conversation/metrics').then(function(d) { cache.convMetrics = d; }).catch(function() {}),
+        safeFetch('/api/stats').then(function(d) { cache.stats = d; }).catch(function() {})
       ]).then(function() { renderArsenal(); });
       break;
     case 'recon':
@@ -1280,15 +1281,14 @@ function renderArsenal() {
   // Savings Chart
   renderSavingsChart(sessions);
 
-  // Session History Table
+  // Session History Table — clean columns, no jargon
   var shtml = '';
   for (var j = 0; j < sessions.length; j++) {
     var sess = sessions[j];
     var shortId = (sess.session_id || '').substring(0, 8);
     var gr = sess.guided_ratio !== undefined ? (sess.guided_ratio * 100).toFixed(0) : 0;
     var grWidth = Math.min(100, Math.max(0, Number(gr)));
-    var waste = Math.max(0, (sess.read_count || 0) - (sess.guided_read_count || 0));
-    var rp = sess.prompt_count > 0 ? ((sess.read_count || 0) / sess.prompt_count).toFixed(1) : '-';
+    var focus = sess.prompt_count > 0 ? ((sess.read_count || 0) / sess.prompt_count).toFixed(1) : '-';
 
     shtml += '<tr>' +
       '<td class="session-id" title="' + escapeHtml(sess.session_id) + '">' + escapeHtml(shortId) + '</td>' +
@@ -1298,25 +1298,31 @@ function renderArsenal() {
       '<td class="mono" style="font-size:11px">' + (sess.read_count || 0) + '</td>' +
       '<td class="mono" style="font-size:11px">' + gr + '%<span class="mini-bar-wrap"><span class="mini-bar" style="width:' + grWidth + '%"></span></span></td>' +
       '<td class="mono text-green" style="font-size:11px">' + fmtK(sess.tokens_saved || 0) + '</td>' +
-      '<td class="mono text-green" style="font-size:11px">' + (sess.time_saved_ms > 0 ? fmtTime(sess.time_saved_ms) : '-') + '</td>' +
-      '<td class="mono text-red" style="font-size:11px">' + waste + '</td>' +
-      '<td class="mono text-dim" style="font-size:11px">' + rp + '</td>' +
+      '<td class="mono text-blue" style="font-size:11px">' + (sess.time_saved_ms > 0 ? fmtTime(sess.time_saved_ms) : '-') + '</td>' +
+      '<td class="mono text-dim" style="font-size:11px">' + focus + '</td>' +
       '</tr>';
   }
   document.getElementById('sessionTbody').innerHTML = shtml;
 
-  // System Status
+  // System Status — Go runtime + intelligence state
   setText('sys-uptime', cf.uptime_seconds ? fmtMin(cf.uptime_seconds / 60) : '-');
   setText('sys-db', cf.db_path ? truncPath(cf.db_path, 30) : '-');
   setText('sys-files', cf.index_files || '-');
   setText('sys-tokens', cf.index_tokens || '-');
-  setText('sys-pid', cf.project_id ? cf.project_id.substring(0, 12) : '-');
+  // Go runtime stats (from /api/config if available)
+  setText('sys-heap', cf.heap_alloc_mb ? cf.heap_alloc_mb.toFixed(1) + ' MB' : '-');
+  setText('sys-goroutines', cf.goroutines || '-');
+  // Intelligence state (from /api/stats)
+  var st = cache.stats || {};
+  setText('sys-domains', st.domain_count || '-');
+  setText('sys-bigrams', st.bigram_count || '-');
+  setText('sys-recon', cf.recon_available ? (cf.recon_findings || 0) + ' findings' : 'off');
 
-  // Learning Curve
+  // Learning Curve — dual axis
   renderLearningCurve(sessions);
 }
 
-/* ── Savings Chart (div-based bars) ── */
+/* ── Daily Token Usage Chart — trailing 14 days, fixed slots ── */
 function renderSavingsChart(sessions) {
   var area = document.getElementById('savingsChartArea');
   if (!area) return;
@@ -1326,51 +1332,73 @@ function renderSavingsChart(sessions) {
     return;
   }
 
-  // Group by date
-  var byDate = {};
+  // Build 14-day trailing window
+  var now = new Date();
+  var slots = [];
+  for (var d = 13; d >= 0; d--) {
+    var day = new Date(now);
+    day.setDate(day.getDate() - d);
+    var key = day.getFullYear() + '-' + String(day.getMonth() + 1).padStart(2, '0') + '-' + String(day.getDate()).padStart(2, '0');
+    var label = (day.getMonth() + 1) + '/' + day.getDate();
+    slots.push({ key: key, label: label, actual: 0, counterfact: 0 });
+  }
+
+  // Fill slots from session data
+  var slotMap = {};
+  for (var si = 0; si < slots.length; si++) slotMap[slots[si].key] = slots[si];
+
+  var totalActual = 0, totalCf = 0;
   for (var i = 0; i < sessions.length; i++) {
     var s = sessions[i];
     if (!s.start_time) continue;
-    var d = new Date(s.start_time * 1000);
-    var key = (d.getMonth() + 1) + '/' + d.getDate();
-    if (!byDate[key]) byDate[key] = { actual: 0, counterfact: 0 };
+    var sd = new Date(s.start_time * 1000);
+    var skey = sd.getFullYear() + '-' + String(sd.getMonth() + 1).padStart(2, '0') + '-' + String(sd.getDate()).padStart(2, '0');
     var inputTok = s.input_tokens || 0;
     var saved = s.tokens_saved || 0;
-    byDate[key].actual += inputTok;
-    byDate[key].counterfact += inputTok + saved;
+    totalActual += inputTok;
+    totalCf += inputTok + saved;
+    if (slotMap[skey]) {
+      slotMap[skey].actual += inputTok;
+      slotMap[skey].counterfact += inputTok + saved;
+    }
   }
 
-  var dates = Object.keys(byDate);
-  if (dates.length === 0) {
-    area.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:12px">No session data</div>';
-    return;
-  }
-
+  // Find max for scaling (across the 14-day window only)
   var maxVal = 0;
-  for (var k = 0; k < dates.length; k++) {
-    var v = byDate[dates[k]];
-    if (v.counterfact > maxVal) maxVal = v.counterfact;
-    if (v.actual > maxVal) maxVal = v.actual;
+  for (var k = 0; k < slots.length; k++) {
+    if (slots[k].counterfact > maxVal) maxVal = slots[k].counterfact;
+    if (slots[k].actual > maxVal) maxVal = slots[k].actual;
   }
   if (maxVal === 0) maxVal = 1;
 
+  // Render 14 fixed-width columns
   var html = '';
-  for (var b = 0; b < dates.length; b++) {
-    var entry = byDate[dates[b]];
-    var actualH = Math.max(2, Math.round((entry.actual / maxVal) * 140));
-    var cfH = Math.max(2, Math.round((entry.counterfact / maxVal) * 140));
+  for (var b = 0; b < slots.length; b++) {
+    var entry = slots[b];
+    var actualPct = Math.max(1, Math.round((entry.actual / maxVal) * 100));
+    var cfPct = Math.max(1, Math.round((entry.counterfact / maxVal) * 100));
+    var hasData = entry.actual > 0 || entry.counterfact > 0;
     html += '<div class="chart-bar-group">' +
       '<div class="chart-bars">' +
-      '<div class="chart-bar counterfact" style="height:' + cfH + 'px" title="Counterfactual: ' + fmtK(entry.counterfact) + '"></div>' +
-      '<div class="chart-bar actual" style="height:' + actualH + 'px" title="Actual: ' + fmtK(entry.actual) + '"></div>' +
+      (hasData
+        ? '<div class="chart-bar counterfact" style="height:' + cfPct + '%" title="Without aOa: ' + fmtK(entry.counterfact) + '"></div>' +
+          '<div class="chart-bar actual" style="height:' + actualPct + '%" title="With aOa: ' + fmtK(entry.actual) + '"></div>'
+        : '<div class="chart-bar" style="height:1%;opacity:0.1;background:var(--border)"></div>') +
       '</div>' +
-      '<div class="chart-label">' + dates[b] + '</div>' +
+      '<div class="chart-label">' + entry.label + '</div>' +
       '</div>';
   }
   area.innerHTML = html;
+
+  // Summary line (lifetime, not just the 14-day window)
+  setText('chartActual', fmtK(totalActual));
+  setText('chartCf', fmtK(totalCf));
+  setText('chartDiff', fmtK(Math.max(0, totalCf - totalActual)));
 }
 
-/* ── Learning Curve (canvas) ── */
+/* ── Learning Curve (dual-axis canvas) ── */
+/* Green line (left axis): guided_ratio 0-100% — goes UP as aOa learns    */
+/* Blue dashed line (right axis): input_tokens/prompts — goes DOWN         */
 function renderLearningCurve(sessions) {
   var canvas = document.getElementById('learningCurveCanvas');
   if (!canvas) return;
@@ -1379,8 +1407,8 @@ function renderLearningCurve(sessions) {
   var parent = canvas.parentElement;
   var rect = parent.getBoundingClientRect();
   var dpr = window.devicePixelRatio || 1;
-  var w = rect.width - 24; // padding
-  var h = 120;
+  var w = rect.width - 24;
+  var h = Math.min(rect.height - 4, 200);
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   canvas.style.width = w + 'px';
@@ -1388,69 +1416,146 @@ function renderLearningCurve(sessions) {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, h);
 
-  var ratios = [];
+  // Collect data points: guided ratio + cost per prompt + timestamp
+  var points = [];
   for (var i = 0; i < sessions.length; i++) {
-    if (sessions[i].guided_ratio !== undefined) ratios.push(sessions[i].guided_ratio);
+    var s = sessions[i];
+    if (s.guided_ratio === undefined) continue;
+    var cpp = s.prompt_count > 0 ? (s.input_tokens || 0) / s.prompt_count : 0;
+    var ts = s.start_time ? new Date(s.start_time * 1000) : null;
+    var dateLabel = ts ? (ts.getMonth() + 1) + '/' + ts.getDate() : '';
+    points.push({ ratio: s.guided_ratio, cpp: cpp, date: dateLabel, ts: s.start_time || 0 });
   }
 
-  if (ratios.length < 2) {
-    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--mute').trim() || '#55555f';
+  var cs = getComputedStyle(document.documentElement);
+  var greenColor = cs.getPropertyValue('--green').trim() || '#34d399';
+  var blueColor = cs.getPropertyValue('--blue').trim() || '#60a5fa';
+  var muteColor = cs.getPropertyValue('--mute').trim() || '#55555f';
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+  if (points.length < 2) {
+    ctx.fillStyle = muteColor;
     ctx.font = '12px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('Need 2+ sessions for curve', w / 2, h / 2);
     return;
   }
 
-  var padL = 10, padR = 10, padT = 10, padB = 20;
+  var padL = 4, padR = 4, padT = 6, padB = 16;
   var chartW = w - padL - padR;
   var chartH = h - padT - padB;
 
-  var greenColor = getComputedStyle(document.documentElement).getPropertyValue('--green').trim() || '#34d399';
+  // Grid lines
+  ctx.strokeStyle = cs.getPropertyValue('--border-subtle').trim() || '#1e1e21';
+  ctx.lineWidth = 0.5;
+  for (var g = 0; g <= 4; g++) {
+    var gy = padT + chartH - (g / 4) * chartH;
+    ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(w - padR, gy); ctx.stroke();
+  }
 
-  // Area fill
+  // Find cost-per-prompt range for normalization
+  var maxCpp = 0, minCpp = Infinity;
+  for (var ci = 0; ci < points.length; ci++) {
+    if (points[ci].cpp > maxCpp) maxCpp = points[ci].cpp;
+    if (points[ci].cpp < minCpp) minCpp = points[ci].cpp;
+  }
+  var cppRange = maxCpp - minCpp || 1;
+
+  function sx(idx) { return padL + (idx / (points.length - 1)) * chartW; }
+
+  // --- COST PER PROMPT (blue dashed, behind) ---
   ctx.beginPath();
   ctx.moveTo(padL, padT + chartH);
-  for (var j = 0; j < ratios.length; j++) {
-    var x = padL + (j / (ratios.length - 1)) * chartW;
-    var y = padT + chartH - (ratios[j] * chartH);
-    ctx.lineTo(x, y);
+  for (var bi = 0; bi < points.length; bi++) {
+    var bNorm = (points[bi].cpp - minCpp) / cppRange;
+    ctx.lineTo(sx(bi), padT + chartH - bNorm * chartH);
   }
-  ctx.lineTo(padL + chartW, padT + chartH);
+  ctx.lineTo(sx(points.length - 1), padT + chartH);
   ctx.closePath();
-  ctx.fillStyle = greenColor.replace(')', ',0.12)').replace('rgb', 'rgba');
+  ctx.fillStyle = isDark ? 'rgba(96,165,250,0.06)' : 'rgba(37,99,235,0.04)';
   ctx.fill();
 
-  // Line
   ctx.beginPath();
-  for (var k = 0; k < ratios.length; k++) {
-    var lx = padL + (k / (ratios.length - 1)) * chartW;
-    var ly = padT + chartH - (ratios[k] * chartH);
-    if (k === 0) ctx.moveTo(lx, ly);
-    else ctx.lineTo(lx, ly);
+  for (var bj = 0; bj < points.length; bj++) {
+    var bjNorm = (points[bj].cpp - minCpp) / cppRange;
+    var bjy = padT + chartH - bjNorm * chartH;
+    bj === 0 ? ctx.moveTo(sx(bj), bjy) : ctx.lineTo(sx(bj), bjy);
+  }
+  ctx.strokeStyle = blueColor;
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+
+  // --- GUIDED RATIO (green solid, in front) ---
+  ctx.beginPath();
+  ctx.moveTo(padL, padT + chartH);
+  for (var gi = 0; gi < points.length; gi++) {
+    ctx.lineTo(sx(gi), padT + chartH - points[gi].ratio * chartH);
+  }
+  ctx.lineTo(sx(points.length - 1), padT + chartH);
+  ctx.closePath();
+  ctx.fillStyle = isDark ? 'rgba(52,211,153,0.08)' : 'rgba(22,163,74,0.06)';
+  ctx.fill();
+
+  ctx.beginPath();
+  for (var gj = 0; gj < points.length; gj++) {
+    var gjy = padT + chartH - points[gj].ratio * chartH;
+    gj === 0 ? ctx.moveTo(sx(gj), gjy) : ctx.lineTo(sx(gj), gjy);
   }
   ctx.strokeStyle = greenColor;
   ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
   ctx.stroke();
 
-  // Dots
-  for (var m = 0; m < ratios.length; m++) {
-    var dx = padL + (m / (ratios.length - 1)) * chartW;
-    var dy = padT + chartH - (ratios[m] * chartH);
+  // Green dots
+  for (var gk = 0; gk < points.length; gk++) {
     ctx.beginPath();
-    ctx.arc(dx, dy, 3, 0, Math.PI * 2);
+    ctx.arc(sx(gk), padT + chartH - points[gk].ratio * chartH, 2, 0, Math.PI * 2);
     ctx.fillStyle = greenColor;
     ctx.fill();
   }
 
-  // X-axis labels
-  var muteColor = getComputedStyle(document.documentElement).getPropertyValue('--mute').trim() || '#55555f';
+  // End dots (larger)
+  var last = points[points.length - 1];
+  ctx.beginPath();
+  ctx.arc(sx(points.length - 1), padT + chartH - last.ratio * chartH, 4, 0, Math.PI * 2);
+  ctx.fillStyle = greenColor;
+  ctx.fill();
+
+  var lastBNorm = (last.cpp - minCpp) / cppRange;
+  ctx.beginPath();
+  ctx.arc(sx(points.length - 1), padT + chartH - lastBNorm * chartH, 3, 0, Math.PI * 2);
+  ctx.fillStyle = blueColor;
+  ctx.globalAlpha = 0.6;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // X-axis date labels — show ~5 evenly spaced dates
   ctx.fillStyle = muteColor;
   ctx.font = '9px JetBrains Mono, monospace';
   ctx.textAlign = 'center';
-  for (var n = 0; n < ratios.length; n++) {
-    var tx = padL + (n / (ratios.length - 1)) * chartW;
-    ctx.fillText('S' + (n + 1), tx, h - 4);
+  var labelCount = Math.min(points.length, 5);
+  for (var li = 0; li < labelCount; li++) {
+    var idx = labelCount <= 1 ? 0 : Math.round(li * (points.length - 1) / (labelCount - 1));
+    if (points[idx] && points[idx].date) {
+      ctx.fillText(points[idx].date, sx(idx), h - 2);
+    }
   }
+
+  // Footer values
+  var first = points[0];
+  var startPct = Math.round(first.ratio * 100);
+  var endPct = Math.round(last.ratio * 100);
+  setText('curveStart', startPct + '%');
+  setText('curveEnd', endPct + '%');
+  setText('costStart', fmtK(Math.round(first.cpp)));
+  setText('costEnd', fmtK(Math.round(last.cpp)));
+  var pctDrop = first.cpp > 0 ? Math.round((1 - last.cpp / first.cpp) * 100) : 0;
+  setText('curveImprovement', '+' + (endPct - startPct) + ' pts guided, ' + pctDrop + '% cheaper/prompt');
 }
 
 /* ── Now button: scroll listeners + global handler ── */

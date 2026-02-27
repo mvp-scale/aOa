@@ -2,8 +2,8 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-02-26 (Session 76) | **89% complete.**
-> **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9 + L6 (all) + L7.2 + L8.1-L8.5 + L9.0-L9.8 + P0 (all 7 bugs) (484+ active tests, 32 skipped)
+> **Updated**: 2026-02-26 (Session 77) | **89% complete.**
+> **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9/L5.19 + L6 (all) + L7.2 + L8.1 + L9 (all) + P0 (all 7 bugs) (489+ active tests, 32 skipped)
 > **Archived boards**: `.context/archived/`
 
 ---
@@ -93,33 +93,18 @@
 | **L2** | | | | | | | | | | | | | *All tasks complete -- see COMPLETED.md* | | |
 | **L3** | | | | | | | | | | | | | *All tasks complete -- see COMPLETED.md* | | |
 | [L4](#layer-4) | [L4.4](#l44) | | | x | x | | | | L4.3 | 🟢 | ⚪ | ⚪ | Installation docs -- `go install` or download binary | Friction-free onboarding | New user installs and runs in <2 minutes |
-| [L5](#layer-5) | [L5.7](#l57) | | | | | | | | L5.1 | 🟢 | 🟢 | 🟡 | Performance tier -- 26 rules across 5 dimensions (resources, concurrency, query, memory, hot_path) | Second tier coverage | All 5 dims wired in dashboard. **Gap**: per-rule detection validation. Revalidated 2026-02-25 |
-| [L5](#layer-5) | [L5.8](#l58) | | | | | | | | L5.1 | 🟢 | 🟢 | 🟡 | Quality tier -- 24 rules across 4 dimensions (errors, complexity, dead_code, conventions) | Third tier coverage | All 4 dims wired in dashboard. **Gap**: per-rule detection validation. Revalidated 2026-02-25 |
+| [L5](#layer-5) | [L5.Va](#l5va) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Dimensional rule validation -- per-rule detection tests across all 5 tiers (security 37, perf 26, quality 24, arch, obs). Absorbs L5.7/8/16/17/18 + L8.1 bitmask upgrade | All rules detect what they claim; engine wired to dashboard | Rules load + parse. **Gap**: per-rule detection accuracy untested |
 | [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
 | [L5](#layer-5) | [L5.11](#l511) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Dimension query support -- `--dimension=security --risk=high` | Filter by dimension | CLI filters by tier and severity |
-| [L5](#layer-5) | [L5.16](#l516) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Security dimension expansion -- YAML rework complete, universal concept layer, 37 rules loaded | Complete 5-dimension security tier | All rules load + pass. **Gap**: per-rule detection validation. Revalidated 2026-02-25 |
-| [L5](#layer-5) | [L5.17](#l517) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Architecture dimension expansion -- YAML rework complete, universal concept layer | Complete 3-dimension architecture tier | All rules load + pass. **Gap**: per-rule detection validation |
-| [L5](#layer-5) | [L5.18](#l518) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Observability dimension expansion -- YAML rework complete, universal concept layer | Complete 2-dimension observability tier | All rules load + pass. **Gap**: per-rule detection validation |
-| [L5](#layer-5) | [L5.19](#l519) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | ~~Compliance tier~~ -- **Pivoted**: tier removed, concepts absorbed into security tier (config dimension). `TierReserved` preserves bitmask slot. No YAML file. | ~~Compliance coverage~~ | Superseded. Revalidated 2026-02-25 |
 | **L6** | | | | | | | | | | | | | *All 9 tasks complete -- see COMPLETED.md* | | |
 | [L7](#layer-7) | [L7.1](#l71) | x | | | x | | | x | - | 🟢 | 🟢 | 🟡 | Startup progress feedback -- deferred loading, async cache warming incl. recon | Daemon starts in <1s, caches warm in background | **Gap**: no automated startup time test |
 | [L7](#layer-7) | [L7.4](#l74) | | | | x | x | | | - | 🟢 | 🟢 | 🟢 | .aoa/ directory restructure -- `Paths` struct (18 fields), `EnsureDirs`, `Migrate` (7 files), 1MB log rotation, 13 files updated | Clean project state dir; logs don't grow forever | 7 unit tests, live migration verified on 1.3GB database, all builds clean |
 | G0 | G0.HF1 | x | | | | | | | - | 🟢 | 🟢 | 🟢 | **Build process fix (hotfix)** -- `build.sh` as sole entry point, compile-time build guard, flipped build tags (`recon` opt-in), Makefile rewrite, CLAUDE.md Build Rule. Binary 366MB->8MB. | Standard binary is pure Go, no CGo bleed | `build.sh` enforced, `go build` panics with guard, 8MB binary verified |
-| [L8](#layer-8) | [L8.1](#l81) | | | | | | | x | L5.9 | 🟢 | 🟢 | 🟡 | Recon tab -- dimensional engine with interim scanner fallback | Dashboard dimensional view | API works. **Gap**: dashboard UI upgrade for bitmask scores |
-| [L8](#layer-8) | [L8.2](#l82) | | | | | | | x | L8.1 | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul -- 5 focus modes, tier redesign, code toggle, copy prompt | Recon tab is actionable, not just a finding list | **Gap**: browser-only validation |
-| [L8](#layer-8) | [L8.3](#l83) | x | | | | x | | | L8.1 | 🟢 | 🟢 | 🟡 | Recon cache + incremental updates -- pre-compute at startup, SubtractFile/AddFile on file change | Zero per-poll scan cost, instant API response | **Gap**: no unit tests for incremental path |
+| [L8](#layer-8) | [L8.2](#l82) | | | | | | | x | L5.Va | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul -- 5 focus modes, tier redesign, code toggle, copy prompt | Recon tab is actionable, not just a finding list | **Gap**: browser-only validation |
+| [L8](#layer-8) | [L8.3](#l83) | x | | | | x | | | L5.Va | 🟢 | 🟢 | 🟡 | Recon cache + incremental updates -- pre-compute at startup, SubtractFile/AddFile on file change | Zero per-poll scan cost, instant API response | **Gap**: no unit tests for incremental path |
 | [L8](#layer-8) | [L8.4](#l84) | | | | | | | x | L8.3 | 🟢 | 🟢 | 🟡 | Investigation tracking -- per-file investigated status, persistence, auto-expiry | Users can mark files as reviewed, auto-clears on change | **Gap**: no unit tests |
 | [L8](#layer-8) | [L8.5](#l85) | | | | | | | x | L6.6 | 🟢 | 🟢 | 🟡 | Dashboard Recon tab install prompt -- "npm install aoa-recon" when not detected | Users know how to unlock Recon | **Gap**: browser-only validation |
 | [L8](#layer-8) | [L8.6](#l86) | | | | | | | x | - | 🟡 | ⚪ | ⚪ | Recon source line editor view -- file-level source display | All flagged lines in context, not one-at-a-time | Design conversation needed on layout |
-| [L9](#layer-9) | [L9.0](#l90) | | | | | x | | x | - | 🟢 | 🟢 | 🟡 | Inline tool result char capture -- `ResultChars` on TurnAction, throughput/conversation speed metrics | Throughput reflects actual content volume, not just model output | Live on dashboard. **Gap**: no unit test for char extraction accuracy |
-| [L9](#layer-9) | [L9.1](#l91) | | | | | x | | x | L9.0 | 🟢 | 🟢 | 🟢 | ContentMeter struct -- unified `(chars, timestamp)` accumulator, ring buffer of 50 TurnSnapshots, wired into all event handlers | Single source of truth for session content volume | 8 unit tests passing. `contentmeter.go` + `contentmeter_test.go` |
-| [L9](#layer-9) | [L9.2](#l92) | | | | x | x | | x | L9.0 | 🟢 | 🟢 | 🟢 | Tool call detail capture -- Pattern, FilePath, Command on TurnAction/TurnActionResult, dashboard tooltips | Dashboard shows what each tool call did, not just that it happened | Actions table displays tool details, verified live |
-| [L9](#layer-9) | [L9.3](#l93) | | | | | | | x | L9.1 | 🟢 | 🟢 | 🟢 | Persisted tool result sizes -- tailer resolves `tool-results/toolu_{id}.txt` on disk for zero-inline results | Capture large tool outputs stored on disk | ToolPersistedSizes in parser, pass-through pipeline verified |
-| [L9](#layer-9) | [L9.4](#l94) | | | | | | | x | L9.1 | 🟢 | 🟢 | 🟢 | Subagent JSONL tailing -- tailer discovers `subagents/agent-*.jsonl`, Source field, IsSubagent on canonical events | Capture full internal work of Task tool forks, not just summary | SubagentChars routed to meter, bigrams still processed |
-| [L9](#layer-9) | [L9.5](#l95) | x | | | x | | | x | L9.2 | 🟢 | 🟢 | 🟢 | Counterfactual shadow engine -- ToolShadow + ShadowRing (100-entry), async Grep/Glob dispatch | Proves aOa saves tokens on every search tool call | 6 unit tests passing. `shadow.go` + `shadow_test.go` |
-| [L9](#layer-9) | [L9.6](#l96) | | | | x | | | x | L9.5 | 🟢 | 🟢 | 🟢 | **Pivoted**: Shim counterfactual -- TotalMatchChars in SearchResult, observer computes savings delta, pushes to shadow ring. No bash parsing needed. | Shim-level proof that aOa saves tokens | Observer savings delta live, verified with real queries |
-| [L9](#layer-9) | [L9.7](#l97) | | | | | | | x | L9.1 | 🟢 | 🟢 | 🟢 | Burst throughput & per-turn velocity -- BurstTokensPerSec + TurnVelocities in ContentMeter, wired to RunwayResult | Show how fast the system works when actively working, not diluted by idle | Moved to Debrief tab (not Live -- per user direction). Verified live. |
-| [L9](#layer-9) | [L9.8](#l98) | | | | | | | x | L9.5 | 🟢 | 🟢 | 🟢 | Dashboard shadow savings -- per-action counterfactual in action rows, hero support line, stat cards | User sees "aOa saved X tokens on this grep" inline | Shadow Saved stat card live, hero line shows savings |
 
 ---
 
@@ -166,36 +151,24 @@ Two install paths: `go install` (from source) vs binary download (lean + grammar
 > **ADR**: [Declarative YAML Rules](../decisions/2026-02-23-declarative-yaml-rules.md) -- spec (rework done)
 > **Research**: [Bitmask analysis](../docs/research/bitmask-dimensional-analysis.md) | [AST vs LSP](../docs/research/asv-vs-lsp.md) | [Dimensional taxonomy](details/2026-02-23-dimensional-taxonomy.md)
 
-#### L5.7
+#### L5.Va
 
-**Performance tier** -- green Complete, yellow Per-rule detection validation gap. Revalidated 2026-02-25.
+**Dimensional rule validation** -- green Engine + rules complete, yellow Per-rule detection accuracy untested
 
-26 rules across 5 dimensions, all wired in dashboard. YAML rework done (declarative structural blocks, no lang_map, universal concepts).
+Consolidated from L5.7 (performance), L5.8 (quality), L5.16 (security), L5.17 (architecture), L5.18 (observability), and L8.1 (bitmask dashboard wiring). L5.19 (compliance) superseded — absorbed into security tier.
 
-**Dimensions** (all complete):
-- **Resources** (5 rules): `defer_in_loop`, `open_without_close`, etc.
-- **Concurrency** (5 rules): `lock_in_loop`, `goroutine_in_loop`, `channel_in_loop`, `goroutine_leak`, `sync_primitive_usage`
-- **Query** (5 rules): `query_in_loop`, `exec_in_loop`, `unbounded_query`, `db_without_transaction`, `raw_sql_string`
-- **Memory** (5 rules): `allocation_in_loop`, `append_in_loop`, `string_concat_in_loop`, `large_buffer_alloc`, `regex_compile_in_loop`
-- **Hot Path** (6 rules): `reflection_call`, `json_marshal_in_loop`, `fmt_sprint_in_loop`, `sleep_in_handler`, `sort_in_loop`, `map_lookup_in_loop`
+All tiers have YAML rework complete (declarative `structural:` blocks, universal concept layer, no `lang_map`). Rules load, parse, and wire to dashboard. What's missing: tests proving each rule detects what it claims on real code samples.
 
-**Gap**: No per-rule detection validation tests (rules load and parse, but individual detection accuracy untested).
+**Tiers** (all rules authored, all wired to dashboard):
+- **Security** (37 rules, 5 dims): `security.yaml` + 6 hardcoded fallbacks
+- **Performance** (26 rules, 5 dims): resources, concurrency, query, memory, hot_path
+- **Quality** (24 rules, 4 dims): errors, complexity, dead_code, conventions
+- **Architecture** (3 dims): antipatterns, imports, api_surface
+- **Observability** (2 dims): debug, silent_failures
 
-**Files**: `recon/rules/performance.yaml`, `internal/adapters/web/static/app.js` (RECON_TIERS)
+**What validation needs**: For each rule, a test fixture (synthetic code snippet) + assertion that the rule fires on the snippet and does NOT fire on clean code. Can be a single test file per tier with table-driven subtests.
 
-#### L5.8
-
-**Quality tier** -- green Complete, yellow Per-rule detection validation gap. Revalidated 2026-02-25.
-
-24 rules across 4 dimensions, all wired in dashboard. YAML rework done (declarative structural blocks, no lang_map, universal concepts).
-
-**Dimensions** (all complete):
-- **Errors** (7 rules): `ignored_error`, `panic_in_lib`, `unchecked_type_assertion`, `error_not_checked`, `empty_catch_block`, `error_without_context`, `deprecated_stdlib`
-- **Complexity** (6 rules): `long_function`, `nesting_depth`, `too_many_params`, `large_switch`, `god_function`, `wide_function`
-- **Dead Code** (5 rules): `unreachable_code`, `commented_out_code`, `unused_import`, `empty_function_body`, `disabled_test`
-- **Conventions** (6 rules): `exported_no_doc`, `init_side_effects`, `magic_number`, `boolean_param`, `deeply_nested_callback`, `inconsistent_receiver`
-
-**Gap**: No per-rule detection validation tests (rules load and parse, but individual detection accuracy untested).
+**Files**: `recon/rules/*.yaml`, `internal/domain/analyzer/`, `internal/adapters/treesitter/walker.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
 
 #### L5.10
 
@@ -212,55 +185,6 @@ Append `S:-23 P:0 Q:-4` to grep/egrep output.
 `aoa grep --dimension=security --risk=high <query>` filters by tier and severity.
 
 **Files**: `cmd/aoa/cmd/grep.go`
-
-#### L5.16
-
-**Security dimension expansion** -- green YAML rework complete, yellow Per-rule validation gap. Revalidated 2026-02-25.
-
-37 rules across all 5 security dimensions. Universal concept layer eliminates per-rule `lang_map`. All rules use declarative `structural:` blocks per ADR. LangMap removed from Rule struct, yamlRule, convertRule(), and all hardcoded fallback rules.
-
-**Complete**:
-- `security.yaml` -- 37 rules with proper `structural:` blocks, no `lang_map`, universal header
-- `rules_security.go` -- 6 hardcoded fallback rules, LangMap removed
-- `lang_map.go` -- rewritten with `conceptDefaults` (all 509 langs) + `langOverrides` (10 langs)
-- `walker.go` -- simplified `resolveMatchConcept()` to single `Resolve()` call
-- Dashboard wires all 5 security dimensions
-
-**Gap**: No per-rule detection validation tests (rules load and parse, but individual detection accuracy untested).
-
-**Files**: `recon/rules/security.yaml`, `internal/domain/analyzer/rules_security.go`, `internal/domain/analyzer/lang_map.go`, `internal/adapters/treesitter/walker.go`
-
-#### L5.17
-
-**Architecture dimension expansion** -- green YAML rework complete, yellow Per-rule validation gap
-
-Rules across all 3 architecture dimensions with declarative `structural:` blocks. Universal concept layer, no `lang_map`. Universal header.
-
-**Complete**: `architecture.yaml` reworked, dashboard dimensions (antipatterns, imports, api_surface).
-
-**Gap**: No per-rule detection validation tests.
-
-**Files**: `recon/rules/architecture.yaml`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
-
-#### L5.18
-
-**Observability dimension expansion** -- green YAML rework complete, yellow Per-rule validation gap
-
-Rules across both observability dimensions with declarative `structural:` blocks. Universal concept layer, no `lang_map`. Universal header.
-
-**Complete**: `observability.yaml` reworked, dashboard dimensions (debug, silent_failures).
-
-**Gap**: No per-rule detection validation tests.
-
-**Files**: `recon/rules/observability.yaml`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
-
-#### L5.19
-
-**Compliance tier** -- **Pivoted / Superseded**. Revalidated 2026-02-25.
-
-Compliance tier was removed from the codebase. `TierReserved` in `types.go` preserves the bitmask slot ("formerly compliance -- slot preserved for bitmask compat"). No `compliance.yaml` file exists. Compliance concepts (CVE patterns, licensing, data handling) were absorbed into the security tier's config dimension.
-
-Dashboard `RECON_TIERS` has 5 active tiers (security, performance, quality, architecture, observability) -- compliance is not among them.
 
 ---
 
@@ -325,16 +249,6 @@ Replaced JSON serialization with binary posting lists + gob for the bbolt search
 
 > Scanning dashboard, investigation tracking, source view. Powered by the dimensional engine (L5).
 
-#### L8.1
-
-**Recon tab** -- green Complete (interim scanner), yellow Bitmask upgrade pending
-
-Interim pattern scanner with 10 detectors + `long_function`. `GET /api/recon` returns folder->file->findings tree. Tier toggles, breadcrumb nav, code-only file filtering.
-
-**Gap**: Full bitmask engine (L5.1-L5.5) not yet wired to dashboard. AST-based patterns, AC scanner, cross-language uniformity still on interim scanner.
-
-**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
-
 #### L8.2
 
 **Recon dashboard overhaul** -- green Complete, yellow Browser-only validation
@@ -383,98 +297,6 @@ File-level source display with all flagged lines in context (editor-like, severi
 
 ---
 
-### Layer 9
-
-**Layer 9: Telemetry**
-
-> Unified content metering, tool call capture, counterfactual shadow engine. Every content stream measured in raw characters with timestamps. Counterfactual shadows prove aOa savings on queryable tool calls. Extends the existing `readSavings`/`burnRateCounterfact` system to cover all tool types.
->
-> **Design**: [Throughput Telemetry Model](details/2026-02-26-throughput-telemetry-model.md) -- data hierarchy, calculations, ContentMeter spec, shadow pattern
->
-> **Principle**: Raw character count is the universal measurement unit. Never convert to tokens at capture time. Every measurement is a `(chars, timestamp)` pair. Display converts to tokens (÷4) or any other unit.
-
-#### L9.0
-
-**Inline tool result char capture** -- green Complete, yellow No unit test for extraction accuracy
-
-Phase 0. Shipped 2026-02-26. 7 files changed:
-- `tailer/parser.go`: `ToolResultSizes map[string]int` on SessionEvent, extracts `len(content)` from `tool_result` blocks
-- `ports/session.go`: `ToolResultSizes` on canonical SessionEvent
-- `claude/reader.go`: `translateUser` emits `EventToolResult` with sizes map
-- `app/app.go`: `ToolID` + `ResultChars` on TurnAction, `EventToolResult` handler correlates via tool_use_id
-- `socket/protocol.go`: `ResultChars` on `TurnActionResult`
-- `web/static/app.js`: Throughput = `max(outputTokens, textTokens) + resultTokens`. Conversation Speed = textTokens only.
-- `web/static/index.html`: Accurate tooltips, "Conversation Speed" label
-
-**What's measured**: Just the text content string from tool results. No JSON envelope, no metadata keys. When a Read returns a file, `len("package auth\nfunc Login()...")` — the actual file text.
-
-**Gap**: No unit test asserting char extraction from a synthetic tool_result JSONL line.
-
-**Files**: `internal/adapters/tailer/parser.go`, `internal/ports/session.go`, `internal/adapters/claude/reader.go`, `internal/app/app.go`, `internal/adapters/socket/protocol.go`, `internal/adapters/web/static/app.js`, `internal/adapters/web/static/index.html`
-
-#### L9.1
-
-**ContentMeter struct** -- Complete (Session 76)
-
-Unified `(chars, timestamp)` accumulator in `internal/app/contentmeter.go`. Raw char accumulators for all content streams: UserChars, AssistantChars, ThinkingChars, ToolResultChars, ToolPersistedChars, SubagentChars, APITokens, ActiveMs. Ring buffer of 50 TurnSnapshots with per-turn breakdowns. Wired into all event handlers in app.go. 8 unit tests passing.
-
-**Files**: `internal/app/contentmeter.go`, `internal/app/contentmeter_test.go`, `internal/app/app.go`
-
-#### L9.2
-
-**Tool call detail capture** -- Complete (Session 76)
-
-Added Pattern, FilePath, Command fields to TurnAction and TurnActionResult. Populated from event handlers. Dashboard shows tool details in action tooltips.
-
-**Files**: `internal/app/app.go`, `internal/adapters/socket/protocol.go`, `internal/adapters/web/static/app.js`
-
-#### L9.3
-
-**Persisted tool result sizes** -- Complete (Session 76)
-
-Tailer resolves zero-inline tool result sizes from `tool-results/toolu_{id}.txt` files on disk. Added ToolPersistedIDs to parser, ToolPersistedSizes to canonical SessionEvent. Pass-through in claude reader.
-
-**Files**: `internal/adapters/tailer/parser.go`, `internal/adapters/tailer/tailer.go`, `internal/ports/session.go`, `internal/adapters/claude/reader.go`
-
-#### L9.4
-
-**Subagent JSONL tailing** -- Complete (Session 76)
-
-Tailer discovers and reads `subagents/agent-*.jsonl` files in the active session directory. Added Source field to tailer events, IsSubagent to canonical SessionEvent. Subagent chars route to meter.RecordSubagent. Bigrams still processed for learner.
-
-**Files**: `internal/adapters/tailer/tailer.go`, `internal/adapters/claude/reader.go`, `internal/ports/session.go`
-
-#### L9.5
-
-**Counterfactual shadow engine** -- Complete (Session 76)
-
-New `internal/app/shadow.go` with ToolShadow struct and ShadowRing (100-entry ring buffer). Shadow dispatch for Grep/Glob tool invocations from session log. Async comparison goroutine -- main pipeline never waits. 6 unit tests passing.
-
-**Files**: `internal/app/shadow.go`, `internal/app/shadow_test.go`, `internal/app/app.go`
-
-#### L9.6
-
-**Shim counterfactual** -- Complete (Session 76) -- **PIVOTED** from "Bash command shadow"
-
-Original plan was to parse `grep`/`find`/`rg` from bash commands. Pivoted: the shim IS the measurement. Added TotalMatchChars to SearchResult (computed in buildResult before truncation). Observer computes savings delta and pushes to shadow ring. No bash parsing needed.
-
-**Files**: `internal/domain/index/search.go` (TotalMatchChars), `internal/app/observer.go` (savings delta)
-
-#### L9.7
-
-**Burst throughput & per-turn velocity** -- Complete (Session 76)
-
-BurstTokensPerSec and TurnVelocities implemented in ContentMeter. Wired to RunwayResult. Moved to Debrief tab (not Live -- per user direction). Verified live.
-
-**Files**: `internal/app/contentmeter.go`, `internal/app/app.go`, `internal/adapters/web/static/app.js`
-
-#### L9.8
-
-**Dashboard shadow savings display** -- Complete (Session 76)
-
-Shadow savings displayed in: (1) action rows with counterfactual column, (2) hero support line, (3) Shadow Saved stat card. Session-level rollup shows cumulative savings.
-
-**Files**: `internal/adapters/web/static/app.js`, `internal/adapters/web/static/index.html`
 
 ---
 

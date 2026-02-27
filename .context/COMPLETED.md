@@ -308,6 +308,47 @@ Replaced JSON serialization with binary posting lists + gob for the bbolt search
 
 ---
 
+## L9: Telemetry (Session 76 -- archived 2026-02-26)
+
+**What:** Unified content metering, tool call detail capture, counterfactual shadow engine. 9 tasks (L9.0-L9.8), all triple-green.
+
+**Why:** Prove aOa saves tokens on every search tool call. Measure actual content volume across all streams (user, assistant, thinking, tool results, persisted results, subagents). Show throughput, burst velocity, and per-action counterfactual savings on the dashboard.
+
+**Design:** [Throughput Telemetry Model](details/2026-02-26-throughput-telemetry-model.md) — raw character count is the universal unit, never convert to tokens at capture time, display converts (÷4).
+
+**Key components:**
+- **L9.0**: Inline tool result char capture — `ToolResultSizes` on parser events, `ResultChars` on TurnAction. 5 unit tests for extraction accuracy (string, array, fallback, zero, multi).
+- **L9.1**: ContentMeter — unified `(chars, timestamp)` accumulator, ring buffer of 50 TurnSnapshots. 8 unit tests.
+- **L9.2**: Tool call detail capture — Pattern, FilePath, Command on TurnAction/TurnActionResult, dashboard tooltips.
+- **L9.3**: Persisted tool result sizes — tailer resolves `tool-results/toolu_{id}.txt` on disk.
+- **L9.4**: Subagent JSONL tailing — discovers `subagents/agent-*.jsonl`, Source field, IsSubagent on events.
+- **L9.5**: Counterfactual shadow engine — ToolShadow + ShadowRing (100-entry), async Grep/Glob dispatch. 6 unit tests.
+- **L9.6**: Shim counterfactual (pivoted from bash parsing) — TotalMatchChars in SearchResult, observer savings delta.
+- **L9.7**: Burst throughput & per-turn velocity — BurstTokensPerSec + TurnVelocities in ContentMeter, Debrief tab.
+- **L9.8**: Dashboard shadow savings display — action rows, hero support line, stat cards. Plus Session 76 QOL: Intel/Debrief tab narrative redesign, task tool titles, session log cleanup, grep token fix, deploy.sh.
+
+**Validation:** 19 unit tests across contentmeter_test.go (8), shadow_test.go (6), tailer_test.go (5). All features verified live on dashboard.
+
+**Key files:** `internal/app/contentmeter.go`, `internal/app/shadow.go`, `internal/adapters/tailer/parser.go`, `internal/ports/session.go`, `internal/adapters/claude/reader.go`, `internal/app/app.go`, `internal/adapters/web/static/app.js`
+
+---
+
+## L5.19: Compliance Tier (superseded, archived 2026-02-26)
+
+**Pivoted**: Compliance tier removed. Concepts (CVE patterns, licensing, data handling) absorbed into security tier's config dimension. `TierReserved` preserves bitmask slot.
+
+---
+
+## L8.1: Recon Tab (absorbed into L5.Va, archived 2026-02-26)
+
+**What:** Interim pattern scanner with 10 detectors + `long_function`. `GET /api/recon` returns folder->file->findings tree. Tier toggles, breadcrumb nav, code-only file filtering.
+
+**Absorbed**: Bitmask dashboard wiring gap merged into consolidated L5.Va (dimensional rule validation).
+
+**Files**: `internal/adapters/recon/scanner.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+
+---
+
 ## Session Log
 
 ### 2026-02-17: Content Search + Tag Correction + Activity Enrichment

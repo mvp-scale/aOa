@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aOa — Arsenal v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ====== @property for gradient angle ====== */
+@property --gradient-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* ====== CSS VARIABLES ====== */
+[data-theme="dark"] {
+  --bg: #0c0c0e;
+  --card: #161618;
+  --card-hover: #1c1c1f;
+  --border: #252528;
+  --border-subtle: #1e1e21;
+  --text: #e8e8ec;
+  --text-secondary: #c4c4cc;
+  --dim: #8b8b96;
+  --mute: #55555f;
+  --green: #34d399;
+  --green-dim: rgba(52,211,153,0.12);
+  --blue: #60a5fa;
+  --blue-dim: rgba(96,165,250,0.12);
+  --purple: #c084fc;
+  --purple-dim: rgba(192,132,252,0.12);
+  --cyan: #22d3ee;
+  --cyan-dim: rgba(34,211,238,0.12);
+  --yellow: #fbbf24;
+  --yellow-dim: rgba(251,191,36,0.12);
+  --red: #f87171;
+  --red-dim: rgba(248,113,113,0.12);
+  --shadow: none;
+  --nav-bg: rgba(12,12,14,0.82);
+  --table-hover: rgba(255,255,255,0.03);
+}
+[data-theme="light"] {
+  --bg: #f5f5f7; --card: #ffffff; --card-hover: #fafafa; --border: #e5e5ea;
+  --border-subtle: #ececee; --text: #1d1d1f; --text-secondary: #3a3a3c;
+  --dim: #6e6e73; --mute: #aeaeb2; --green: #16a34a; --blue: #2563eb;
+  --purple: #9333ea; --cyan: #0891b2; --yellow: #d97706; --red: #dc2626;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06); --nav-bg: rgba(245,245,247,0.82);
+  --table-hover: rgba(0,0,0,0.02);
+  --green-dim: rgba(22,163,74,0.1); --blue-dim: rgba(37,99,235,0.1);
+  --purple-dim: rgba(147,51,234,0.1); --cyan-dim: rgba(8,145,178,0.1);
+  --yellow-dim: rgba(217,119,6,0.1); --red-dim: rgba(220,38,38,0.1);
+}
+
+/* ====== RESET & BODY ====== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes gradient-rotate { 0% { --gradient-angle: 0deg; } 100% { --gradient-angle: 360deg; } }
+
+/* ====== NAV ====== */
+.nav {
+  height: 52px; flex-shrink: 0; position: sticky; top: 0; z-index: 100;
+  background: var(--nav-bg); backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border); padding: 0 24px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-left { display: flex; align-items: center; gap: 8px; }
+.nav-brand { display: flex; align-items: center; gap: 6px; margin-right: 20px; text-decoration: none; }
+.nav-brand .angle { font-size: 22px; color: var(--green); font-weight: 700; line-height: 1; }
+.nav-brand .name { font-size: 16px; font-weight: 700; color: var(--cyan); letter-spacing: 0.5px; }
+.nav-tabs { display: flex; gap: 4px; }
+.nav-tab {
+  padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--dim);
+  cursor: pointer; border: none; background: none; position: relative;
+  text-decoration: none; font-family: inherit;
+}
+.nav-tab:hover { color: var(--text-secondary); }
+.nav-tab.active { color: var(--green); }
+.nav-tab.active::after {
+  content: ''; position: absolute; bottom: -1px; left: 8px; right: 8px;
+  height: 2px; background: var(--green); border-radius: 1px;
+}
+.nav-right { display: flex; align-items: center; gap: 12px; }
+.status-badge { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+.status-badge.mock { background: var(--yellow-dim); color: var(--yellow); }
+.status-badge.mock .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--yellow); animation: blink 2s ease-in-out infinite; }
+.theme-toggle {
+  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--card);
+  cursor: pointer; color: var(--dim);
+}
+.theme-toggle:hover { border-color: var(--mute); color: var(--text); }
+.theme-toggle svg { width: 16px; height: 16px; }
+
+/* ====== MAIN ====== */
+.main {
+  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+
+/* ====== HERO ROW ====== */
+.hero-row { display: flex; gap: 16px; min-height: 160px; flex-shrink: 0; }
+.hero-card-wrapper {
+  flex: 2; min-width: 0; position: relative; border-radius: 18px; padding: 2px;
+  background: conic-gradient(from var(--gradient-angle), var(--green), var(--blue), var(--purple), var(--green));
+  animation: gradient-rotate 6s linear infinite;
+}
+.hero-card {
+  background: var(--card); border-radius: 16px; padding: 18px 24px; height: 100%;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.hero-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500; letter-spacing: 2px; text-transform: uppercase; color: var(--mute); }
+.hero-headline { line-height: 1.4; font-size: 17px; }
+.hero-identity { font-size: 22px; font-weight: 700; background: linear-gradient(135deg, var(--green), var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.hero-outcome { font-weight: 500; color: var(--text-secondary); }
+.hero-pause { font-weight: 700; color: var(--cyan); letter-spacing: 3px; }
+.hero-line2 { display: block; padding-left: 33%; margin-top: 2px; }
+.hero-separator { font-weight: 600; color: var(--cyan); }
+.hero-exclusion { font-weight: 500; color: var(--dim); }
+.hero-support { margin-top: auto; font-size: 13px; color: var(--dim); line-height: 1.5; }
+.hero-support .val { font-weight: 600; }
+.hero-support .val.g { color: var(--green); }
+.hero-support .val.c { color: var(--cyan); }
+.hero-support .val.r { color: var(--red); }
+.hero-support .val.b { color: var(--blue); }
+.hero-support .dot { color: var(--mute); margin: 0 10px; opacity: 0.5; }
+
+/* Hero Metrics — 2×2 cause→effect grid */
+.hero-metrics {
+  flex: 1; flex-shrink: 0; background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 16px 20px; box-shadow: var(--shadow);
+  display: grid; grid-template-columns: 1fr auto 1fr; grid-template-rows: 1fr 1fr;
+  gap: 8px 0; align-items: center;
+}
+.hm-cell { display: flex; flex-direction: column; gap: 2px; }
+.hm-cell.right { padding-left: 12px; }
+.hm-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.hm-value.green { color: var(--green); }
+.hm-value.cyan { color: var(--cyan); }
+.hm-value.blue { color: var(--blue); }
+.hm-value.purple { color: var(--purple); }
+.hm-label { font-size: 11px; color: var(--dim); font-weight: 500; }
+.hm-arrow { color: var(--mute); font-size: 14px; padding: 0 8px; opacity: 0.5; }
+
+/* ====== STATS GRID ====== */
+.stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; flex-shrink: 0; }
+.stat-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+}
+.stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+.stat-card.cyan::before    { background: var(--cyan); }
+.stat-card.green::before   { background: var(--green); }
+.stat-card.blue::before    { background: var(--blue); }
+.stat-card.purple::before  { background: var(--purple); }
+.stat-card.yellow::before  { background: var(--yellow); }
+.stat-card.red::before     { background: var(--red); }
+.stat-value { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; margin-bottom: 2px; }
+.stat-card.cyan .stat-value   { color: var(--cyan); }
+.stat-card.green .stat-value  { color: var(--green); }
+.stat-card.blue .stat-value   { color: var(--blue); }
+.stat-card.purple .stat-value { color: var(--purple); }
+.stat-card.yellow .stat-value { color: var(--yellow); }
+.stat-card.red .stat-value    { color: var(--red); }
+.stat-label { font-size: 12px; font-weight: 500; color: var(--dim); margin-bottom: 2px; }
+.stat-sub { font-size: 11px; color: var(--mute); }
+
+/* ====== DUAL CHART ROW: Savings + Learning Curve side by side ====== */
+.chart-row {
+  display: grid; grid-template-columns: 3fr 2fr; gap: 16px; flex-shrink: 0;
+}
+
+/* ====== SAVINGS CHART ====== */
+.chart-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column;
+}
+.chart-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
+}
+.chart-title {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim);
+}
+.chart-badge {
+  font-size: 10px; font-weight: 600; padding: 2px 10px; border-radius: 10px;
+  background: var(--green-dim); color: var(--green); font-variant-numeric: tabular-nums;
+}
+.chart-legend { display: flex; gap: 16px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--dim); }
+.legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.legend-swatch.with { background: var(--green); }
+.legend-swatch.without { background: var(--red); opacity: 0.4; }
+
+.chart-area {
+  display: flex; align-items: flex-end; gap: 3px; flex: 1; min-height: 120px;
+  border-bottom: 1px solid var(--border-subtle); padding-bottom: 1px;
+}
+.chart-col {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  min-width: 0; height: 100%; justify-content: flex-end;
+}
+.chart-bars { display: flex; gap: 2px; width: 100%; align-items: flex-end; flex: 1; }
+.chart-bar { flex: 1; border-radius: 3px 3px 0 0; min-height: 2px; transition: height 0.3s; cursor: default; }
+.chart-bar.with { background: var(--green); }
+.chart-bar.without { background: var(--red); opacity: 0.3; }
+.chart-bar:hover { filter: brightness(1.15); }
+.chart-date {
+  font-size: 9px; color: var(--mute); font-family: 'JetBrains Mono', monospace;
+  text-align: center; padding-top: 5px; font-variant-numeric: tabular-nums;
+}
+.chart-summary {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 10px; font-size: 12px; color: var(--dim);
+}
+.chart-summary .cs-val { font-weight: 700; }
+.chart-summary .cs-val.green { color: var(--green); }
+.chart-summary .cs-val.red { color: var(--red); }
+
+/* ====== LEARNING CURVE — promoted to chart row ====== */
+.curve-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column;
+}
+.curve-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
+}
+.curve-title {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim);
+}
+.curve-canvas-wrap { flex: 1; min-height: 80px; position: relative; }
+.curve-canvas { width: 100%; height: 100%; display: block; }
+.curve-footer {
+  display: flex; justify-content: space-between; font-size: 12px; color: var(--dim);
+  padding-top: 10px; flex-shrink: 0;
+}
+.curve-footer .val { font-weight: 600; }
+.curve-footer .val.g { color: var(--green); }
+.curve-footer .val.r { color: var(--red); }
+.curve-footer .val.c { color: var(--cyan); }
+.curve-legend { display: flex; gap: 16px; }
+.curve-legend .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--dim); }
+.curve-legend .legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+/* ====== SESSION HISTORY TABLE ====== */
+.table-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden;
+  flex: 1; min-height: 0;
+}
+.table-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.table-title {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim);
+}
+.table-badge {
+  font-size: 10px; font-weight: 600; padding: 2px 10px; border-radius: 10px;
+  background: var(--cyan-dim); color: var(--cyan); font-variant-numeric: tabular-nums;
+}
+.table-wrap { flex: 1; overflow-y: auto; min-height: 0; }
+
+.session-table { width: 100%; border-collapse: collapse; }
+.session-table th {
+  padding: 8px 12px; text-align: left; font-size: 9px; font-weight: 600;
+  color: var(--mute); text-transform: uppercase; letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border); background: var(--card);
+  position: sticky; top: 0; z-index: 2; white-space: nowrap;
+}
+.session-table th:first-child { padding-left: 20px; }
+.session-table th:last-child { padding-right: 20px; }
+.session-table td {
+  padding: 6px 12px; border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle; white-space: nowrap; font-size: 11px;
+}
+.session-table td:first-child { padding-left: 20px; }
+.session-table td:last-child { padding-right: 20px; }
+.session-table tbody tr:hover td { background: var(--table-hover); }
+.session-table tbody tr:last-child td { border-bottom: none; }
+
+.td-id { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--cyan); font-weight: 500; }
+.td-date { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.td-dur { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--mute); }
+.td-num { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.td-saved { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--green); font-variant-numeric: tabular-nums; }
+.td-time { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--blue); font-variant-numeric: tabular-nums; }
+.td-focus { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+.ratio-wrap { display: flex; align-items: center; gap: 5px; }
+.ratio-bar { width: 40px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+.ratio-fill { height: 100%; border-radius: 2px; }
+.ratio-text { font-weight: 600; font-size: 10px; font-variant-numeric: tabular-nums; }
+
+/* ====== SYSTEM STRIP ====== */
+.system-strip {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px 16px; box-shadow: var(--shadow); flex-shrink: 0;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.sys-pair { display: flex; align-items: center; gap: 5px; }
+.sys-k { font-size: 10px; color: var(--mute); }
+.sys-v { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.sys-v.green { color: var(--green); }
+.sys-v.cyan { color: var(--cyan); }
+.sys-v.purple { color: var(--purple); }
+.sys-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; animation: blink 2s ease-in-out infinite; }
+.sys-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; width: 100%; }
+.sys-sep { width: 1px; height: 14px; background: var(--border); flex-shrink: 0; }
+
+/* ====== FOOTER ====== */
+.footer {
+  height: 36px; flex-shrink: 0; background: var(--card); border-top: 1px solid var(--border);
+  padding: 0 24px; display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: var(--mute);
+}
+.footer-left { display: flex; align-items: center; gap: 16px; }
+.footer-online { display: flex; align-items: center; gap: 6px; }
+.footer-online .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 2s ease-in-out infinite; }
+.aoa-brand { color: var(--cyan); font-weight: 600; }
+.footer-right { display: flex; align-items: center; gap: 16px; }
+.footer-motto { font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+.footer-motto .way { color: var(--yellow); font-weight: 600; }
+.footer-clock { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; font-size: 10px; }
+
+/* ====== GENERATE MOCK BUTTON ====== */
+.gen-btn {
+  position: fixed; bottom: 52px; right: 24px; z-index: 200;
+  padding: 10px 20px; background: var(--cyan); color: #0c0c0e;
+  font-size: 12px; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+  border: none; border-radius: 24px; cursor: pointer;
+  box-shadow: 0 2px 12px rgba(34,211,238,0.3);
+}
+.gen-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(34,211,238,0.4); }
+
+/* ====== SCROLLBAR ====== */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--mute); }
+
+@media (max-width: 1100px) {
+  .stats-grid { grid-template-columns: repeat(3, 1fr); }
+  .chart-row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ====== NAV ====== -->
+<div class="nav">
+  <div class="nav-left">
+    <a class="nav-brand" href="#">
+      <span class="angle">&ang;</span>
+      <span class="name">aOa</span>
+    </a>
+    <div class="nav-tabs">
+      <a class="nav-tab" href="live.html">Live</a>
+      <a class="nav-tab" href="recon.html">Recon</a>
+      <a class="nav-tab" href="intel.html">Intel</a>
+      <a class="nav-tab" href="debrief.html">Debrief</a>
+      <a class="nav-tab active" href="#">Arsenal</a>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="status-badge mock"><span class="dot"></span><span>mock</span></div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- ====== MAIN ====== -->
+<div class="main">
+
+  <!-- Hero Row -->
+  <div class="hero-row">
+    <div class="hero-card-wrapper">
+      <div class="hero-card">
+        <div class="hero-label">ARSENAL</div>
+        <div class="hero-headline" id="heroHeadline"></div>
+        <div class="hero-support" id="heroSupport"></div>
+      </div>
+    </div>
+    <div class="hero-metrics">
+      <!-- Row 1: Tokens Saved → Cost Avoided -->
+      <div class="hm-cell">
+        <div class="hm-value green" id="hmSaved">0</div>
+        <div class="hm-label">Tokens Saved</div>
+      </div>
+      <div class="hm-arrow">&rarr;</div>
+      <div class="hm-cell right">
+        <div class="hm-value green" id="hmCost">$0</div>
+        <div class="hm-label">Cost Avoided</div>
+      </div>
+      <!-- Row 2: Guided Ratio → Focus Score -->
+      <div class="hm-cell">
+        <div class="hm-value cyan" id="hmRatio">0%</div>
+        <div class="hm-label">Guided Ratio</div>
+      </div>
+      <div class="hm-arrow">&rarr;</div>
+      <div class="hm-cell right">
+        <div class="hm-value purple" id="hmFocus">0</div>
+        <div class="hm-label">Focus Score</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Grid — human terms -->
+  <div class="stats-grid">
+    <div class="stat-card green"><div class="stat-value" id="statSaved">0</div><div class="stat-label">Tokens Saved</div><div class="stat-sub">lifetime total</div></div>
+    <div class="stat-card cyan"><div class="stat-value" id="statCost">$0</div><div class="stat-label">Cost Avoided</div><div class="stat-sub">at model pricing</div></div>
+    <div class="stat-card blue"><div class="stat-value" id="statSessions">0</div><div class="stat-label">Sessions</div><div class="stat-sub">tracked</div></div>
+    <div class="stat-card purple"><div class="stat-value" id="statFocus">0</div><div class="stat-label">Focus Score</div><div class="stat-sub">reads per prompt</div></div>
+    <div class="stat-card yellow"><div class="stat-value" id="statGuided">0%</div><div class="stat-label">Guided Ratio</div><div class="stat-sub">latest session</div></div>
+    <div class="stat-card green"><div class="stat-value" id="statTime">0</div><div class="stat-label">Time Saved</div><div class="stat-sub">cumulative</div></div>
+  </div>
+
+  <!-- DUAL CHART ROW: Daily Savings + Learning Curve side by side -->
+  <div class="chart-row">
+
+    <!-- Savings Chart -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <span class="chart-title">Daily Token Usage</span>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-swatch with"></span> With aOa</span>
+          <span class="legend-item"><span class="legend-swatch without"></span> Without aOa</span>
+          <span class="chart-badge" id="chartBadge">0 saved</span>
+        </div>
+      </div>
+      <div class="chart-area" id="chartArea"></div>
+      <div class="chart-summary">
+        <span>You used <span class="cs-val green" id="chartActual">0</span> tokens</span>
+        <span>Without aOa you'd have used <span class="cs-val red" id="chartCf">0</span></span>
+        <span>Difference: <span class="cs-val green" id="chartDiff">0</span></span>
+      </div>
+    </div>
+
+    <!-- Learning Curve — dual axis: guided ratio UP, cost/prompt DOWN -->
+    <div class="curve-card">
+      <div class="curve-header">
+        <span class="curve-title">Learning Curve</span>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--green)"></span> Guided Ratio</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--blue);opacity:0.5"></span> Cost / Prompt</span>
+        </div>
+      </div>
+      <div class="curve-canvas-wrap">
+        <canvas class="curve-canvas" id="curveCanvas"></canvas>
+      </div>
+      <div class="curve-footer">
+        <span>Guided: <span class="val r" id="curveStart">0%</span> &rarr; <span class="val g" id="curveEnd">0%</span></span>
+        <span>Cost/prompt: <span class="val r" id="costStart">0</span> &rarr; <span class="val g" id="costEnd">0</span></span>
+        <span class="val c" id="curveImprovement"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session History — full width, cleaner columns -->
+  <div class="table-card">
+    <div class="table-header">
+      <span class="table-title">Session History</span>
+      <span class="table-badge" id="sessionCount">0 sessions</span>
+    </div>
+    <div class="table-wrap">
+      <table class="session-table">
+        <thead><tr>
+          <th>Session</th>
+          <th>Date</th>
+          <th>Duration</th>
+          <th>Prompts</th>
+          <th>Reads</th>
+          <th>Guided</th>
+          <th>Tokens Saved</th>
+          <th>Time Saved</th>
+          <th>Focus</th>
+        </tr></thead>
+        <tbody id="sessionBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- System Status — two rows: runtime + intelligence -->
+  <div class="system-strip">
+    <div class="sys-row">
+      <div class="sys-pair"><span class="sys-dot"></span><span class="sys-v green">Running</span></div>
+      <div class="sys-pair"><span class="sys-k">Up</span><span class="sys-v green" id="sysUptime">—</span></div>
+      <div class="sys-pair"><span class="sys-k">Heap</span><span class="sys-v" id="sysHeap">—</span></div>
+      <div class="sys-pair"><span class="sys-k">Goroutines</span><span class="sys-v" id="sysGoroutines">—</span></div>
+      <div class="sys-pair"><span class="sys-k">GC Cycles</span><span class="sys-v" id="sysGC">—</span></div>
+      <div class="sys-pair"><span class="sys-k">DB</span><span class="sys-v" id="sysDb">—</span></div>
+      <div class="sys-sep"></div>
+      <div class="sys-pair"><span class="sys-k">Files</span><span class="sys-v cyan" id="sysFiles">—</span></div>
+      <div class="sys-pair"><span class="sys-k">Tokens</span><span class="sys-v" id="sysTokens">—</span></div>
+      <div class="sys-pair"><span class="sys-k">Domains</span><span class="sys-v purple" id="sysDomains">—</span></div>
+      <div class="sys-pair"><span class="sys-k">Bigrams</span><span class="sys-v" id="sysBigrams">—</span></div>
+      <div class="sys-pair" id="sysReconWrap"><span class="sys-k">Recon</span><span class="sys-v" id="sysRecon">—</span></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ====== FOOTER ====== -->
+<div class="footer">
+  <div class="footer-left">
+    <span class="footer-online"><span class="dot"></span> Online</span>
+    <span>v1.0.0</span>
+  </div>
+  <div class="footer-right">
+    <span class="footer-motto"><span class="aoa-brand">aOa</span> learns &rarr; you build faster. <span class="way">This is the way.</span></span>
+    <span class="footer-clock" id="clock"></span>
+  </div>
+</div>
+
+<button class="gen-btn" id="genBtn">Generate Mock Data</button>
+
+<script>
+(function() {
+  'use strict';
+
+  // ====== THEME ======
+  var savedTheme = localStorage.getItem('aoa-theme');
+  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+  var themeToggle = document.getElementById('themeToggle');
+  var themeIcon = document.getElementById('themeIcon');
+  function updateThemeIcon() {
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    themeIcon.innerHTML = isDark
+      ? '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>'
+      : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+  }
+  themeToggle.addEventListener('click', function() {
+    var current = document.documentElement.getAttribute('data-theme');
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('aoa-theme', next);
+    updateThemeIcon();
+  });
+  updateThemeIcon();
+
+  // ====== CLOCK ======
+  function tick() {
+    var d = new Date();
+    document.getElementById('clock').textContent =
+      String(d.getHours()).padStart(2,'0') + ':' +
+      String(d.getMinutes()).padStart(2,'0') + ':' +
+      String(d.getSeconds()).padStart(2,'0');
+  }
+  tick(); setInterval(tick, 1000);
+
+  // ====== HELPERS ======
+  function randInt(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+  function randFloat(a, b, d) { return parseFloat((Math.random() * (b - a) + a).toFixed(d)); }
+  function randChoice(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function randHex(n) { var s = ''; for (var i = 0; i < n; i++) s += '0123456789abcdef'[randInt(0,15)]; return s; }
+  function fmtK(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 100000) return Math.round(n / 1000) + 'k';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return String(n);
+  }
+  function fmtDur(mins) {
+    if (mins >= 60) return Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
+    return mins + 'm';
+  }
+  function fmtTimeSaved(ms) {
+    var secs = Math.round(ms / 1000);
+    if (secs >= 3600) return Math.floor(secs / 3600) + 'h ' + Math.floor((secs % 3600) / 60) + 'm';
+    if (secs >= 60) return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+    return secs + 's';
+  }
+
+  // Pricing: Claude Opus input = $15/Mtok
+  var PRICE_PER_MTOK = 15;
+
+  // ====== HERO DATA ======
+  var HERO = {
+    identities: ['10x Developers', 'Relentless Builders', 'Precision Engineers', 'Full-Stack Architects', 'High-Velocity Teams'],
+    separators: ['minus the', 'instead of', 'bypassing', 'without'],
+    stories: [
+      { outcome: 'want proof that their tools are earning their keep', exclusion: 'blind faith in tools that never show their impact' },
+      { outcome: 'need to see the savings accumulate session after session', exclusion: 'wondering if the optimization is actually working' },
+      { outcome: 'want the receipts \u2014 every token saved, every session extended', exclusion: 'guessing at ROI with no data to back it up' },
+    ],
+  };
+
+  function renderHero() {
+    var id = randChoice(HERO.identities), s = randChoice(HERO.stories), sep = randChoice(HERO.separators);
+    document.getElementById('heroHeadline').innerHTML =
+      '<span class="hero-identity">' + id + '</span> ' +
+      '<span class="hero-outcome">' + s.outcome + '</span>' +
+      '<span class="hero-pause">\u2009.\u2009.\u2009.</span>' +
+      '<span class="hero-line2"><span class="hero-separator">' + sep + '</span> ' +
+      '<span class="hero-exclusion">' + s.exclusion + '.</span></span>';
+  }
+
+  // ====== SESSION GENERATOR ======
+  function makeSessions(totalSessions) {
+    var sessions = [];
+    var totalDays = Math.ceil(totalSessions * 0.7);
+    var baseDate = new Date();
+    baseDate.setDate(baseDate.getDate() - totalDays);
+    var remaining = totalSessions;
+    var dayIndex = 0;
+
+    while (remaining > 0 && dayIndex < totalDays) {
+      var day = new Date(baseDate);
+      day.setDate(day.getDate() + dayIndex);
+      var sessionsToday = remaining <= 2 ? remaining : (Math.random() < 0.55 ? 1 : (Math.random() < 0.7 ? 2 : 3));
+      sessionsToday = Math.min(sessionsToday, remaining);
+
+      for (var s = 0; s < sessionsToday; s++) {
+        var globalIdx = totalSessions - remaining;
+        var progress = globalIdx / totalSessions;
+
+        // Sigmoid learning curve
+        var noise = randFloat(-0.08, 0.08, 2);
+        var ratio = Math.max(0.05, Math.min(0.95, 0.1 + 0.7 / (1 + Math.exp(-8 * (progress - 0.35))) + noise));
+
+        var prompts = randInt(15, 80);
+        var reads = randInt(Math.floor(prompts * 0.4), Math.floor(prompts * 1.2));
+        var guided = Math.round(reads * ratio);
+        var savedPerRead = randInt(800, 4000);
+        var saved = guided * savedPerRead;
+        var actual = prompts * randInt(3000, 8000);
+        var cf = actual + saved;
+        var dur = randInt(20, 180);
+        // Time saved: ~200ms per guided read (skip vs full file)
+        var timeSavedMs = guided * randInt(150, 400);
+
+        // Cost per prompt: input_tokens / prompts
+        // As guided ratio rises, more reads are partial → fewer input tokens overall
+        // Base cost per prompt ~4000-7000 tokens, reduced by guided ratio
+        var baseCostPerPrompt = randInt(4000, 7000);
+        var costReduction = ratio * randFloat(0.25, 0.45, 2); // guided reads save 25-45% of base
+        var costPerPrompt = Math.round(baseCostPerPrompt * (1 - costReduction));
+
+        sessions.push({
+          id: randHex(6),
+          date: new Date(day),
+          dateStr: day.getFullYear() + '-' + String(day.getMonth()+1).padStart(2,'0') + '-' + String(day.getDate()).padStart(2,'0'),
+          dateShort: (day.getMonth()+1) + '/' + day.getDate(),
+          timeStr: String(randInt(7,22)).padStart(2,'0') + ':' + String(randInt(0,59)).padStart(2,'0'),
+          dur: dur, prompts: prompts, reads: reads,
+          guided: guided, ratio: ratio,
+          saved: saved, actual: actual, cf: cf,
+          timeSavedMs: timeSavedMs,
+          focus: reads > 0 ? (reads / prompts) : 0,
+          costPerPrompt: costPerPrompt,
+        });
+        remaining--;
+      }
+      dayIndex++;
+    }
+    return sessions;
+  }
+
+  function aggregateByDay(sessions) {
+    var map = {};
+    sessions.forEach(function(s) {
+      if (!map[s.dateStr]) {
+        map[s.dateStr] = { dateStr: s.dateStr, dateShort: s.dateShort, actual: 0, cf: 0, saved: 0, sessions: 0 };
+      }
+      map[s.dateStr].actual += s.actual;
+      map[s.dateStr].cf += s.cf;
+      map[s.dateStr].saved += s.saved;
+      map[s.dateStr].sessions++;
+    });
+    var days = [];
+    for (var k in map) days.push(map[k]);
+    days.sort(function(a, b) { return a.dateStr < b.dateStr ? -1 : 1; });
+    return days;
+  }
+
+  // ====== RENDER CHART ======
+  function renderChart(sessions) {
+    var days = aggregateByDay(sessions);
+    var show = days.slice(-14);
+    var max = 0;
+    show.forEach(function(d) { max = Math.max(max, d.cf, d.actual); });
+
+    var html = '';
+    show.forEach(function(d) {
+      var ah = Math.max(2, d.actual / max * 100);
+      var ch = Math.max(2, d.cf / max * 100);
+      var label = d.sessions > 1 ? d.dateShort + ' (' + d.sessions + ')' : d.dateShort;
+      html += '<div class="chart-col"><div class="chart-bars">' +
+        '<div class="chart-bar without" style="height:' + ch + '%" title="Without aOa: ' + fmtK(Math.round(d.cf)) + '"></div>' +
+        '<div class="chart-bar with" style="height:' + ah + '%" title="With aOa: ' + fmtK(Math.round(d.actual)) + '"></div>' +
+        '</div><div class="chart-date">' + label + '</div></div>';
+    });
+    document.getElementById('chartArea').innerHTML = html;
+
+    var totalActual = 0, totalCf = 0, totalSaved = 0;
+    sessions.forEach(function(s) { totalActual += s.actual; totalCf += s.cf; totalSaved += s.saved; });
+    document.getElementById('chartActual').textContent = fmtK(Math.round(totalActual));
+    document.getElementById('chartCf').textContent = fmtK(Math.round(totalCf));
+    document.getElementById('chartDiff').textContent = fmtK(Math.round(totalSaved));
+    document.getElementById('chartBadge').textContent = fmtK(Math.round(totalSaved)) + ' saved';
+  }
+
+  // ====== RENDER LEARNING CURVE — dual axis ======
+  // Green line (left axis): guided_ratio 0-100% — goes UP
+  // Blue line (right axis): cost_per_prompt (input_tokens/prompts) — goes DOWN
+  function renderCurve(sessions) {
+    var canvas = document.getElementById('curveCanvas');
+    var wrap = canvas.parentElement;
+    var rect = wrap.getBoundingClientRect();
+    if (rect.width < 10 || rect.height < 10) return;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    var w = rect.width, h = rect.height;
+    var pad = { l: 2, r: 2, t: 6, b: 4 };
+    var pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+
+    ctx.clearRect(0, 0, w, h);
+
+    var cs = getComputedStyle(document.documentElement);
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // Grid lines
+    ctx.strokeStyle = cs.getPropertyValue('--border-subtle').trim();
+    ctx.lineWidth = 0.5;
+    for (var g = 0; g <= 4; g++) {
+      var gy = pad.t + ph - (g / 4) * ph;
+      ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(w - pad.r, gy); ctx.stroke();
+    }
+
+    if (sessions.length < 2) return;
+
+    // Find cost per prompt range for normalization
+    var maxCpp = 0, minCpp = Infinity;
+    sessions.forEach(function(s) {
+      if (s.costPerPrompt > maxCpp) maxCpp = s.costPerPrompt;
+      if (s.costPerPrompt < minCpp) minCpp = s.costPerPrompt;
+    });
+    var cppRange = maxCpp - minCpp || 1;
+
+    // Helper: x position for session index
+    function sx(i) { return pad.l + (i / (sessions.length - 1)) * pw; }
+
+    // --- COST PER PROMPT (blue, behind) ---
+    // Normalize: high cost = top, low cost = bottom (inverted: cost going down = line going down)
+    // Actually, to show "cost going down" visually, high cost should be at top
+    var bc = cs.getPropertyValue('--blue').trim();
+
+    // Filled area (blue, very subtle)
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t + ph);
+    sessions.forEach(function(s, i) {
+      var norm = (s.costPerPrompt - minCpp) / cppRange; // 0 = lowest cost, 1 = highest cost
+      ctx.lineTo(sx(i), pad.t + ph - norm * ph);
+    });
+    ctx.lineTo(sx(sessions.length - 1), pad.t + ph);
+    ctx.closePath();
+    ctx.fillStyle = isDark ? 'rgba(96,165,250,0.06)' : 'rgba(37,99,235,0.04)';
+    ctx.fill();
+
+    // Blue line
+    ctx.beginPath();
+    sessions.forEach(function(s, i) {
+      var norm = (s.costPerPrompt - minCpp) / cppRange;
+      var y = pad.t + ph - norm * ph;
+      i === 0 ? ctx.moveTo(sx(i), y) : ctx.lineTo(sx(i), y);
+    });
+    ctx.strokeStyle = bc; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]); ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+
+    // --- GUIDED RATIO (green, in front) ---
+    var gc = cs.getPropertyValue('--green').trim();
+
+    // Filled area (green)
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t + ph);
+    sessions.forEach(function(s, i) {
+      ctx.lineTo(sx(i), pad.t + ph - s.ratio * ph);
+    });
+    ctx.lineTo(sx(sessions.length - 1), pad.t + ph);
+    ctx.closePath();
+    ctx.fillStyle = isDark ? 'rgba(52,211,153,0.08)' : 'rgba(22,163,74,0.06)';
+    ctx.fill();
+
+    // Green line
+    ctx.beginPath();
+    sessions.forEach(function(s, i) {
+      var y = pad.t + ph - s.ratio * ph;
+      i === 0 ? ctx.moveTo(sx(i), y) : ctx.lineTo(sx(i), y);
+    });
+    ctx.strokeStyle = gc; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+
+    // Green dots
+    sessions.forEach(function(s, i) {
+      ctx.beginPath(); ctx.arc(sx(i), pad.t + ph - s.ratio * ph, 2, 0, Math.PI * 2);
+      ctx.fillStyle = gc; ctx.fill();
+    });
+
+    // Green end dot (larger)
+    var last = sessions[sessions.length - 1];
+    ctx.beginPath();
+    ctx.arc(sx(sessions.length - 1), pad.t + ph - last.ratio * ph, 4, 0, Math.PI * 2);
+    ctx.fillStyle = gc; ctx.fill();
+
+    // Blue end dot
+    var lastNorm = (last.costPerPrompt - minCpp) / cppRange;
+    ctx.beginPath();
+    ctx.arc(sx(sessions.length - 1), pad.t + ph - lastNorm * ph, 3, 0, Math.PI * 2);
+    ctx.fillStyle = bc; ctx.globalAlpha = 0.6; ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Footer values
+    var startPct = Math.round(sessions[0].ratio * 100);
+    var endPct = Math.round(last.ratio * 100);
+    document.getElementById('curveStart').textContent = startPct + '%';
+    document.getElementById('curveEnd').textContent = endPct + '%';
+    document.getElementById('costStart').textContent = fmtK(sessions[0].costPerPrompt);
+    document.getElementById('costEnd').textContent = fmtK(last.costPerPrompt);
+
+    var pctDrop = sessions[0].costPerPrompt > 0
+      ? Math.round((1 - last.costPerPrompt / sessions[0].costPerPrompt) * 100) : 0;
+    document.getElementById('curveImprovement').textContent =
+      '+' + (endPct - startPct) + ' pts guided, ' + pctDrop + '% cheaper per prompt';
+  }
+
+  // ====== RENDER SESSION TABLE ======
+  function renderTable(sessions) {
+    var rows = sessions.slice().reverse();
+    var html = '';
+    rows.forEach(function(s) {
+      var r = Math.round(s.ratio * 100);
+      var rc = r >= 60 ? 'var(--green)' : r >= 30 ? 'var(--yellow)' : 'var(--red)';
+      html += '<tr>' +
+        '<td class="td-id">' + s.id + '</td>' +
+        '<td class="td-date">' + s.dateStr + ' ' + s.timeStr + '</td>' +
+        '<td class="td-dur">' + fmtDur(s.dur) + '</td>' +
+        '<td class="td-num">' + s.prompts + '</td>' +
+        '<td class="td-num">' + s.reads + '</td>' +
+        '<td><div class="ratio-wrap"><div class="ratio-bar"><div class="ratio-fill" style="width:' + r + '%;background:' + rc + '"></div></div><span class="ratio-text" style="color:' + rc + '">' + r + '%</span></div></td>' +
+        '<td class="td-saved">' + fmtK(Math.round(s.saved)) + '</td>' +
+        '<td class="td-time">' + fmtTimeSaved(s.timeSavedMs) + '</td>' +
+        '<td class="td-focus">' + s.focus.toFixed(1) + '</td>' +
+        '</tr>';
+    });
+    document.getElementById('sessionBody').innerHTML = html;
+    document.getElementById('sessionCount').textContent = sessions.length + ' sessions';
+  }
+
+  // ====== RENDER STATS ======
+  function renderStats(sessions) {
+    var totalSaved = 0, totalTime = 0, totalReads = 0, totalPrompts = 0;
+    sessions.forEach(function(s) {
+      totalSaved += s.saved;
+      totalTime += s.timeSavedMs;
+      totalReads += s.reads;
+      totalPrompts += s.prompts;
+    });
+    var last = sessions[sessions.length - 1];
+    var latestGuided = Math.round(last.ratio * 100);
+    var costAvoided = (totalSaved * PRICE_PER_MTOK / 1000000).toFixed(2);
+    var focus = totalPrompts > 0 ? (totalReads / totalPrompts).toFixed(1) : '0';
+
+    // Hero metrics
+    document.getElementById('hmSaved').textContent = fmtK(Math.round(totalSaved));
+    document.getElementById('hmCost').textContent = '$' + costAvoided;
+    document.getElementById('hmRatio').textContent = latestGuided + '%';
+    document.getElementById('hmFocus').textContent = focus;
+
+    // Hero support
+    document.getElementById('heroSupport').innerHTML =
+      '<span class="val g">' + fmtK(Math.round(totalSaved)) + '</span> tokens saved' +
+      '<span class="dot">&middot;</span>' +
+      '<span class="val g">$' + costAvoided + '</span> cost avoided' +
+      '<span class="dot">&middot;</span>' +
+      '<span class="val c">' + sessions.length + '</span> sessions' +
+      '<span class="dot">&middot;</span>' +
+      'guided <span class="val g">' + latestGuided + '%</span>' +
+      '<span class="dot">&middot;</span>' +
+      '<span class="val b">' + fmtTimeSaved(totalTime) + '</span> saved';
+
+    // Stat cards
+    document.getElementById('statSaved').textContent = fmtK(Math.round(totalSaved));
+    document.getElementById('statCost').textContent = '$' + costAvoided;
+    document.getElementById('statSessions').textContent = sessions.length;
+    document.getElementById('statFocus').textContent = focus;
+    document.getElementById('statGuided').textContent = latestGuided + '%';
+    document.getElementById('statTime').textContent = fmtTimeSaved(totalTime);
+
+    // System — Go runtime stats + intelligence state
+    document.getElementById('sysUptime').textContent = randInt(1, 12) + 'h ' + randInt(0, 59) + 'm';
+    document.getElementById('sysHeap').textContent = randFloat(8, 38, 1) + ' MB';
+    document.getElementById('sysGoroutines').textContent = randInt(12, 45);
+    document.getElementById('sysGC').textContent = randInt(50, 800);
+    document.getElementById('sysDb').textContent = randFloat(0.4, 12, 1) + ' MB';
+    document.getElementById('sysFiles').textContent = randInt(200, 5000).toLocaleString('en-US');
+    document.getElementById('sysTokens').textContent = fmtK(randInt(30000, 200000));
+    document.getElementById('sysDomains').textContent = randInt(8, 24);
+    document.getElementById('sysBigrams').textContent = randInt(40, 200);
+    // Recon: show finding count if enabled, "off" otherwise
+    var reconEnabled = Math.random() > 0.3;
+    var reconEl = document.getElementById('sysRecon');
+    if (reconEnabled) {
+      var findings = randInt(12, 180);
+      reconEl.textContent = findings + ' findings';
+      reconEl.className = 'sys-v cyan';
+    } else {
+      reconEl.textContent = 'off';
+      reconEl.className = 'sys-v';
+    }
+  }
+
+  // ====== GENERATE ======
+  var lastSessions = null;
+  function generate() {
+    renderHero();
+    lastSessions = makeSessions(randInt(18, 60));
+    renderStats(lastSessions);
+    renderChart(lastSessions);
+    renderTable(lastSessions);
+    setTimeout(function() { renderCurve(lastSessions); }, 40);
+  }
+
+  generate();
+  document.getElementById('genBtn').addEventListener('click', generate);
+
+  var resizeTimer;
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function() { if (lastSessions) renderCurve(lastSessions); }, 120);
+  });
+
+})();
+</script>
+</body>
+</html>
