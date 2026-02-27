@@ -89,60 +89,11 @@ func TestSearchParity(t *testing.T) {
 	}
 }
 
-// --- Autotune Parity (F-03, L-01, L-03) ---
-
-func TestAutotuneParity_FreshTo50(t *testing.T) {
-	t.Skip("Fixtures not captured — F-03")
-}
-
-func TestAutotuneParity_50To100(t *testing.T) {
-	t.Skip("Fixtures not captured — F-03")
-}
-
-func TestAutotuneParity_100To200(t *testing.T) {
-	t.Skip("Fixtures not captured — F-03")
-}
-
-func TestAutotuneParity_PostWipe(t *testing.T) {
-	t.Skip("Fixtures not captured — F-03")
-}
-
-// --- Observe Signal Parity (L-02, T-03) ---
-
-func TestObserveSignalParity(t *testing.T) {
-	t.Skip("Observe not implemented — L-02")
-}
-
-// --- Dedup Parity (L-04) ---
-
-func TestDedupParity(t *testing.T) {
-	t.Skip("Dedup not implemented — L-04")
-}
-
-// --- Competitive Displacement Parity (L-05) ---
-
-func TestDisplacementParity(t *testing.T) {
-	t.Skip("Displacement not implemented — L-05")
-}
-
-// --- Enrichment Parity (U-07) ---
-
-func TestEnrichmentParity(t *testing.T) {
-	t.Skip("Enricher not implemented — U-07")
-}
-
-// --- Bigram Parity (T-04) ---
-
-func TestBigramParity(t *testing.T) {
-	t.Skip("Bigrams not implemented — T-04")
-}
-
-// --- Integration: Full Session Simulation (M-01, M-02, M-03) ---
-
-func TestFullSessionParity_200Intents(t *testing.T) {
-	t.Skip("Full system not implemented — M-01")
-}
-
-func TestSearchDiff_100Queries(t *testing.T) {
-	t.Skip("Full system not implemented — M-02")
-}
+// Autotune parity tests live in internal/domain/learner/autotune_test.go:
+//   TestAutotuneParity_FreshTo50, _50To100, _100To200, _PostWipe, _FullReplay
+//
+// Observe, dedup, displacement are exercised end-to-end by TestAutotuneParity_FullReplay
+// which replays 200 intents and validates state at every 50-intent checkpoint.
+//
+// Enrichment parity: internal/domain/enricher/enricher_test.go (14 tests, 134 domains)
+// Bigram parity:     internal/domain/learner/bigrams_test.go (15 tests, incl. MatchesPythonTokenizer)

@@ -1,11 +1,12 @@
-# Session 78 | 2026-02-27 | Arsenal Dashboard + Recon Fixes
+# Session 78 | 2026-02-27 | Arsenal Dashboard + Test Strategy
 
 > **Session**: 78
 
 ## Now
 
-- [ ] Port split-bar chart from mockup to live app.js
-- [ ] Commit Session 78 work
+- [ ] Formal deploy for aOa and Recon
+- [ ] Figure out installation guide (L4.4)
+- [ ] Understand integration between aOa and Recon for test strategy
 
 ## Done
 
@@ -18,20 +19,31 @@
 - [x] Recon: fixed investigated_files missing from /api/recon response (both paths)
 - [x] Recon: fixed build.sh --recon-bin missing -tags "recon"
 - [x] Recon: built and connected aoa-recon binary, ran aoa recon init
-- [x] Board updated with Session 78 work
+- [x] Ported split-bar Daily Token Usage chart from mockup to live dashboard
+- [x] Fixed chart card layout/sizing (340px row height, padding, Learning Curve canvas height, footer symmetry)
+- [x] Fixed Learning Curve cost-per-prompt (smoothed 3-session window averages instead of single-point comparison)
+- [x] Full regression run: 535 tests pass, 0 fail, 0 skip across 7 phases
+- [x] Deleted 26 stale test stubs (index_test.go, format_test.go, parity_test.go -- all empty t.Skip placeholders)
+- [x] Fixed CLI integration tests: added `testing` build tag to build guard, all 50 CLI tests pass
+- [x] Updated test/README.md with full 8-phase test pipeline docs
+- [x] Documented regression baseline: test/testdata/regression-2026-02-27.md
+- [x] Board updated with test counts (535 pass, 0 fail, 0 skip)
 
 ## Decisions
 
 - Split-bar chart design over log scale or side-by-side bars (savings gap visible at scale)
 - Per-model tokens: accumulate by ev.Model in onSessionEvent, backward compatible with old sessions
+- Learning Curve cost-per-prompt: use smoothed 3-session window averages, not first-vs-last
+- Build guard tag: `!lean && !recon && !testing` -- integration tests pass `-tags testing` to compile test binary
 
 ## Next
 
-- Port split-bar chart from mockup to live app.js
+- Formal deploy (aOa + Recon)
+- L4.4: Installation docs
+- Understand aOa/Recon integration for test strategy
 - Recon tab QOL pass (last dashboard tab)
 - L5.Va: per-rule detection validation across all 5 tiers
 - L5.10/L5.11: dimension scores + query support
 - L8.2-5: remaining Va gaps (browser-only, unit tests)
 - L8.6: recon source line editor view
-- L4.4: installation docs
 - L7.1: startup progress timing test

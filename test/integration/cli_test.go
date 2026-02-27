@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 	defer os.RemoveAll(tmp)
 
 	aoaBin = filepath.Join(tmp, "aoa")
-	cmd := exec.Command("go", "build", "-o", aoaBin, "./cmd/aoa/")
+	cmd := exec.Command("go", "build", "-tags", "testing", "-o", aoaBin, "./cmd/aoa/")
 	cmd.Dir = findModuleRoot()
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
