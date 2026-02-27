@@ -2152,11 +2152,11 @@ function renderReconInstallPrompt() {
   wrap.innerHTML =
     '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px;line-height:1.8">' +
     '<div style="font-size:24px;margin-bottom:12px;opacity:0.6">&#x1F50D;</div>' +
-    '<div style="color:#e0e0e0;font-size:16px;margin-bottom:8px">aoa-recon not installed</div>' +
-    '<div>Install the companion binary to unlock full scanning:</div>' +
+    '<div style="color:#e0e0e0;font-size:16px;margin-bottom:8px">No project data</div>' +
+    '<div>Run init to scan your project and download language grammars:</div>' +
     '<div style="margin:16px auto;max-width:400px;background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:12px 16px;font-family:monospace;font-size:13px;color:#4fc3f7;text-align:left">' +
-    'npm install -g aoa-recon</div>' +
-    '<div style="color:#888;font-size:12px;margin-top:8px">Adds tree-sitter parsing + security scanning. Restart the daemon after installing.</div>' +
+    'aoa init</div>' +
+    '<div style="color:#888;font-size:12px;margin-top:8px">Scans your project, downloads the tree-sitter grammars you need, and builds the search index. Restart the daemon after indexing.</div>' +
     '</div>';
 }
 
@@ -2164,8 +2164,8 @@ function renderRecon() {
   var data = cache.recon;
   if (!data) return;
 
-  // Show install prompt when aoa-recon is not available and no scan data
-  if (!data.recon_available && (data.total_findings || 0) === 0 && (data.files_scanned || 0) === 0) {
+  // Show init prompt when no scan data exists (fresh install or after wipe)
+  if ((data.total_findings || 0) === 0 && (data.files_scanned || 0) === 0) {
     renderReconInstallPrompt();
     return;
   }
@@ -2190,7 +2190,7 @@ function renderRecon() {
   sup.push('<span class="g">' + cleanPct + '</span> clean');
   sup.push('<span class="p">' + activeDimCount + '</span> dims active');
   if (!data.recon_available) {
-    sup.push('<span class="p" title="Install aoa-recon for symbol-level scanning">lite mode</span>');
+    sup.push('<span class="p" title="Run aoa init to enable tree-sitter parsing">lite mode</span>');
   }
   if (data.scanned_at) {
     var ago = Math.max(0, Math.floor(Date.now() / 1000 - data.scanned_at));

@@ -5,7 +5,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -143,9 +142,14 @@ func runGrammarInfo(cmd *cobra.Command, args []string) error {
 func runGrammarInstall(cmd *cobra.Command, args []string) error {
 	manifest := treesitter.BuiltinManifest()
 	root := projectRoot()
-	grammarDir := app.NewPaths(root).GrammarsDir
 
-	// Resolve targets — could be pack names or individual grammars
+	// Use global grammar dir (~/.aoa/grammars/) for installs.
+	grammarDir := treesitter.GlobalGrammarDir()
+	if grammarDir == "" {
+		grammarDir = app.NewPaths(root).GrammarsDir
+	}
+
+	// Resolve targets — could be pack names or individual grammars.
 	var targets []string
 	for _, arg := range args {
 		if pack := manifest.PackGrammars(arg); len(pack) > 0 {
@@ -158,7 +162,7 @@ func runGrammarInstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Deduplicate
+	// Deduplicate.
 	seen := make(map[string]bool)
 	var unique []string
 	for _, t := range targets {
@@ -169,34 +173,39 @@ func runGrammarInstall(cmd *cobra.Command, args []string) error {
 	}
 	sort.Strings(unique)
 
-	// Ensure grammar directory exists
-	if err := os.MkdirAll(grammarDir, 0o755); err != nil {
-		return fmt.Errorf("create grammar dir: %w", err)
-	}
+	// Check which are already installed.
+	paths := treesitter.DefaultGrammarPaths(root)
+	loader := treesitter.NewDynamicLoader(paths)
+	ext := treesitter.LibExtension()
+	platform := treesitter.PlatformString()
 
 	out := cmd.OutOrStdout()
 	fmt.Fprintf(out, "Grammar directory: %s\n", grammarDir)
-	fmt.Fprintf(out, "Grammars to install: %d\n\n", len(unique))
+	fmt.Fprintf(out, "Platform:          %s\n\n", platform)
 
-	// TODO: implement actual download from GitHub releases
-	// For now, show what would be installed
+	var missing []string
 	for _, name := range unique {
-		info := manifest.Grammars[name]
-		soFile := treesitter.SOBaseName(name) + treesitter.LibExtension()
-		soPath := filepath.Join(grammarDir, soFile)
-
-		if _, err := os.Stat(soPath); err == nil {
-			fmt.Fprintf(out, "  skip  %-14s (already installed)\n", name)
-			continue
+		if loader.GrammarPath(name) != "" {
+			fmt.Fprintf(out, "  installed  %s\n", name)
+		} else {
+			missing = append(missing, name)
 		}
-
-		fmt.Fprintf(out, "  todo  %-14s %s → %s\n", name, info.RepoURL, soFile)
 	}
 
-	fmt.Fprintln(out, "\nNote: grammar download not yet implemented.")
-	fmt.Fprintln(out, "Build grammars from source:")
-	fmt.Fprintf(out, "  gcc -shared -fPIC -o %s/<lang>%s src/parser.c [src/scanner.c]\n",
-		grammarDir, treesitter.LibExtension())
+	if len(missing) == 0 {
+		fmt.Fprintln(out, "\nAll grammars already installed.")
+		return nil
+	}
+
+	// Print curl commands for the user to run.
+	fmt.Fprintf(out, "\nTo install %d missing grammars, run:\n\n", len(missing))
+	fmt.Fprintf(out, "  mkdir -p %s\n", grammarDir)
+	for _, name := range missing {
+		url := fmt.Sprintf("%s/grammars-v1/%s-%s%s", manifest.BaseURL, name, platform, ext)
+		dest := fmt.Sprintf("%s/%s%s", grammarDir, name, ext)
+		fmt.Fprintf(out, "  curl -fSL -o %s \\\n    %s\n", dest, url)
+	}
+	fmt.Fprintln(out, "\nThen restart the daemon to pick up new grammars.")
 	return nil
 }
 

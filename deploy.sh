@@ -3,8 +3,8 @@
 # Usage: ./deploy.sh
 set -euo pipefail
 
-# 1. Build
-./build.sh
+# 1. Build (core = tree-sitter runtime + dynamic grammar loading)
+./build.sh --core
 
 # 2. Stop any running daemon (graceful first, force if needed)
 PID=$(pgrep -f 'aoa daemon' 2>/dev/null || true)

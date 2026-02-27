@@ -85,7 +85,7 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 		"files_scanned":      0,
 		"total_findings":     0,
 		"recon_available":    reconAvailable,
-		"install_prompt":     "Run 'aoa recon init' to enable structural analysis",
+		"install_prompt":     "Run 'aoa init' to scan your project and enable structural analysis",
 		"tree":               map[string]interface{}{},
 		"investigated_files": invFiles,
 	})

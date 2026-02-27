@@ -8,6 +8,12 @@ import (
 )
 
 // newParser returns a tree-sitter parser when CGo is available.
-func newParser() ports.Parser {
-	return treesitter.NewParser()
+// If root is non-empty, configures dynamic grammar loading from
+// project-local and global grammar directories.
+func newParser(root string) ports.Parser {
+	p := treesitter.NewParser()
+	if root != "" {
+		p.SetGrammarPaths(treesitter.DefaultGrammarPaths(root))
+	}
+	return p
 }

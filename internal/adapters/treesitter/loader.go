@@ -69,10 +69,9 @@ func CSymbolName(lang string) string {
 }
 
 // soFileOverrides maps language names to shared library base names where the
-// grammar lives in a differently-named file (e.g., tsx shares typescript's .so).
-var soFileOverrides = map[string]string{
-	"tsx": "typescript",
-}
+// grammar lives in a differently-named file. In go-sitter-forest, each grammar
+// (including tsx) has its own parser.c and C symbol, so no overrides are needed.
+var soFileOverrides = map[string]string{}
 
 // SOBaseName returns the expected shared library base name for a language.
 func SOBaseName(lang string) string {

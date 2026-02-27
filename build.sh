@@ -4,6 +4,7 @@
 #
 # Usage:
 #   ./build.sh              # Standard build (no recon, no compiled grammars)
+#   ./build.sh --core       # Core build (tree-sitter runtime, dynamic grammars)
 #   ./build.sh --recon      # Opt-in: include recon/dimensional analysis
 #   ./build.sh --recon-bin  # Build standalone aoa-recon binary
 set -euo pipefail
@@ -15,6 +16,13 @@ LDFLAGS="-s -w -X github.com/corey/aoa/internal/version.Version=${VERSION} -X gi
 MODE="${1:-standard}"
 
 case "$MODE" in
+  --core)
+    echo "Building aoa (core — dynamic grammars)..."
+    go build -tags "core" -ldflags "$LDFLAGS" -o aoa ./cmd/aoa/
+    SIZE=$(stat --format=%s aoa 2>/dev/null || stat -f%z aoa)
+    SIZE_MB=$(( SIZE / 1048576 ))
+    echo "Built: aoa (${SIZE_MB} MB) [core, dynamic grammars]"
+    ;;
   --recon)
     echo "Building aoa WITH recon (opt-in)..."
     go build -tags "recon" -ldflags "$LDFLAGS" -o aoa ./cmd/aoa/
@@ -44,7 +52,7 @@ case "$MODE" in
     ;;
   *)
     echo "Unknown mode: $MODE"
-    echo "Usage: ./build.sh [--recon|--recon-bin]"
+    echo "Usage: ./build.sh [--core|--recon|--recon-bin]"
     exit 1
     ;;
 esac

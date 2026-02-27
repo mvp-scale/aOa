@@ -182,7 +182,7 @@ func runDaemonLoop(root, sockPath string) error {
 		fmt.Printf("[%s] "+format+"\n", append([]interface{}{time.Now().Format(time.RFC3339)}, args...)...)
 	}
 
-	a, err := app.New(app.Config{ProjectRoot: root, Parser: newParser()})
+	a, err := app.New(app.Config{ProjectRoot: root, Parser: newParser(root)})
 	if err != nil {
 		if isDBLockError(err) {
 			logf("error: %s", diagnoseDBLock(root))

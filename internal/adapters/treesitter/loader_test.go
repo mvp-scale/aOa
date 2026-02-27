@@ -42,7 +42,7 @@ func TestSOBaseName(t *testing.T) {
 	}{
 		{"python", "python"},
 		{"javascript", "javascript"},
-		{"tsx", "typescript"}, // tsx shares typescript's .so
+		{"tsx", "tsx"}, // tsx has its own .so (separate grammar in go-sitter-forest)
 		{"typescript", "typescript"},
 		{"go", "go"},
 		{"c_sharp", "c_sharp"},
@@ -161,19 +161,33 @@ func TestDynamicLoader_SearchPathPriority(t *testing.T) {
 	assert.Equal(t, path1, dl.GrammarPath("python"))
 }
 
-func TestDynamicLoader_TSXSharesTypescript(t *testing.T) {
+func TestDynamicLoader_TSXSeparateFromTypescript(t *testing.T) {
 	dir := t.TempDir()
 	ext := LibExtension()
 
-	// Only create typescript.so — tsx should find it
-	soPath := filepath.Join(dir, "typescript"+ext)
-	f, err := os.Create(soPath)
+	// TSX and TypeScript each have their own .so
+	tsxPath := filepath.Join(dir, "tsx"+ext)
+	tsPath := filepath.Join(dir, "typescript"+ext)
+	for _, p := range []string{tsxPath, tsPath} {
+		f, err := os.Create(p)
+		require.NoError(t, err)
+		f.Close()
+	}
+
+	dl := NewDynamicLoader([]string{dir})
+	assert.Equal(t, tsxPath, dl.GrammarPath("tsx"))
+	assert.Equal(t, tsPath, dl.GrammarPath("typescript"))
+
+	// Without tsx.so, tsx is not found (no fallback to typescript)
+	dir2 := t.TempDir()
+	tsOnlyPath := filepath.Join(dir2, "typescript"+ext)
+	f, err := os.Create(tsOnlyPath)
 	require.NoError(t, err)
 	f.Close()
 
-	dl := NewDynamicLoader([]string{dir})
-	assert.Equal(t, soPath, dl.GrammarPath("tsx"))
-	assert.Equal(t, soPath, dl.GrammarPath("typescript"))
+	dl2 := NewDynamicLoader([]string{dir2})
+	assert.Equal(t, "", dl2.GrammarPath("tsx"))
+	assert.Equal(t, tsOnlyPath, dl2.GrammarPath("typescript"))
 }
 
 func TestDynamicLoader_Close(t *testing.T) {

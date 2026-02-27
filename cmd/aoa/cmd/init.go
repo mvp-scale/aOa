@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/corey/aoa/internal/adapters/bbolt"
@@ -12,11 +11,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// noGrammarsFlag disables automatic grammar download during init.
+var noGrammarsFlag bool
+
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Index the current project",
 	Long:  "Scans all code files, extracts symbols with tree-sitter, and builds the search index.",
 	RunE:  runInit,
+}
+
+func init() {
+	initCmd.Flags().BoolVar(&noGrammarsFlag, "no-grammars", false, "Skip automatic grammar download")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -36,7 +42,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens (%dms)\n",
 			result.FileCount, result.SymbolCount, result.TokenCount, result.ElapsedMs)
-		runReconIfEnabled(root, dbPath)
 		createShims()
 		return nil
 	}
@@ -56,7 +61,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("open database: %w", err)
 	}
 
-	parser := newParser()
+	parser := newParser(root)
+
+	// Auto-detect and download missing grammars before indexing.
+	scanAndDownloadGrammars(root)
 
 	fmt.Println("⚡ Scanning project...")
 
@@ -71,38 +79,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("save index: %w", err)
 	}
 
-	// Close store before recon to release bbolt single-writer lock.
 	store.Close()
 
 	fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens\n",
 		stats.FileCount, stats.SymbolCount, stats.TokenCount)
-	runReconIfEnabled(root, dbPath)
 	createShims()
 	return nil
-}
-
-// runReconIfEnabled invokes aoa-recon enhance only if recon has been explicitly
-// enabled via `aoa recon init` (which writes .aoa/recon.enabled).
-func runReconIfEnabled(root, dbPath string) {
-	enabledPath := app.NewPaths(root).ReconEnabled
-	if _, err := os.Stat(enabledPath); err != nil {
-		fmt.Println("  Tip: run 'aoa recon init' to enable structural analysis")
-		return
-	}
-
-	reconPath, err := exec.LookPath("aoa-recon")
-	if err != nil {
-		fmt.Println("  warning: recon enabled but aoa-recon not found on PATH")
-		return
-	}
-
-	fmt.Println("⚡ Enhancing with aoa-recon...")
-	cmd := exec.Command(reconPath, "enhance", "--db", dbPath, "--root", root)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: aoa-recon enhance failed: %v\n", err)
-	}
 }
 
 // createShims writes grep and egrep shim scripts to ~/.aoa/shims/.

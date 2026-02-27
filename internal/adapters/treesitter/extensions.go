@@ -1,8 +1,114 @@
 package treesitter
 
+import "sync"
+
 // This file registers file extension mappings and symbol extraction rules.
 // These are always included regardless of build tags — they're needed for
 // both compiled-in and dynamically-loaded grammars.
+
+// extensionMap is a lazily-initialized static map from file extension to language.
+var (
+	extensionMapOnce sync.Once
+	extensionMap     map[string]string
+)
+
+// buildExtensionMap constructs the static extension map from the same data
+// used by Parser.registerExtensions. This allows extension lookups without
+// requiring a Parser instance.
+func buildExtensionMap() map[string]string {
+	m := make(map[string]string, 130)
+	add := func(lang string, exts ...string) {
+		for _, ext := range exts {
+			m[ext] = lang
+		}
+	}
+
+	// Core
+	add("python", ".py", ".pyw")
+	add("javascript", ".js", ".jsx", ".mjs", ".cjs")
+	add("typescript", ".ts", ".mts")
+	add("tsx", ".tsx")
+	add("go", ".go")
+	add("rust", ".rs")
+	add("java", ".java")
+	add("c", ".c", ".h")
+	add("cpp", ".cpp", ".hpp", ".cc", ".cxx", ".hxx")
+	add("c_sharp", ".cs")
+	add("ruby", ".rb")
+	add("php", ".php")
+	add("swift", ".swift")
+	add("kotlin", ".kt", ".kts")
+	add("scala", ".scala", ".sc")
+
+	// Scripting
+	add("bash", ".sh", ".bash")
+	add("lua", ".lua")
+	add("perl", ".pl", ".pm")
+	add("r", ".r", ".R")
+	add("julia", ".jl")
+	add("elixir", ".ex", ".exs")
+	add("erlang", ".erl", ".hrl")
+
+	// Functional
+	add("haskell", ".hs", ".lhs")
+	add("ocaml", ".ml", ".mli")
+	add("gleam", ".gleam")
+	add("elm", ".elm")
+	add("clojure", ".clj", ".cljs", ".cljc")
+	add("purescript", ".purs")
+	add("fennel", ".fnl")
+
+	// Systems
+	add("zig", ".zig")
+	add("d", ".d")
+	add("cuda", ".cu", ".cuh")
+	add("odin", ".odin")
+	add("nim", ".nim")
+	add("objc", ".m", ".mm")
+	add("ada", ".ada", ".adb", ".ads")
+	add("fortran", ".f90", ".f95", ".f03", ".f")
+	add("verilog", ".sv")
+	add("vhdl", ".vhd", ".vhdl")
+
+	// Web
+	add("html", ".html", ".htm")
+	add("css", ".css", ".less")
+	add("scss", ".scss")
+	add("vue", ".vue")
+	add("svelte", ".svelte")
+	add("dart", ".dart")
+
+	// Data & Config
+	add("json", ".json")
+	add("jsonc", ".jsonc")
+	add("yaml", ".yaml", ".yml")
+	add("toml", ".toml")
+	add("sql", ".sql")
+	add("markdown", ".md", ".mdx")
+	add("graphql", ".graphql", ".gql")
+	add("hcl", ".tf", ".hcl")
+	add("dockerfile", "Dockerfile", ".dockerfile")
+	add("nix", ".nix")
+
+	// Build & Infra
+	add("cmake", ".cmake")
+	add("make", ".mk")
+	add("groovy", ".groovy", ".gradle")
+	add("glsl", ".glsl", ".vert", ".frag")
+	add("hlsl", ".hlsl")
+
+	return m
+}
+
+// ExtensionToLanguage returns the tree-sitter language name for a file extension
+// (e.g. ".py" -> "python", ".go" -> "go"). Returns "" for unknown extensions.
+// This is safe to call without a Parser instance.
+func ExtensionToLanguage(ext string) string {
+	extensionMapOnce.Do(func() {
+		extensionMap = buildExtensionMap()
+	})
+	return extensionMap[ext]
+}
 
 // registerExtensions maps file extensions to language names.
 func (p *Parser) registerExtensions() {

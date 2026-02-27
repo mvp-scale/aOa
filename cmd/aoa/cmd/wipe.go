@@ -1,79 +1,22 @@
 package cmd
 
-import (
-	"bufio"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
+import "github.com/spf13/cobra"
 
-	"github.com/corey/aoa/internal/adapters/bbolt"
-	"github.com/corey/aoa/internal/adapters/socket"
-	"github.com/corey/aoa/internal/app"
-	"github.com/spf13/cobra"
-)
-
-var wipeForce bool
-
+// wipeCmd is a hidden alias for "reset" — kept for backward compatibility.
 var wipeCmd = &cobra.Command{
-	Use:   "wipe",
-	Short: "Clear all aOa data for project",
-	Long:  "Deletes all persisted index and learner state. Works with or without daemon.",
-	RunE:  runWipe,
+	Use:    "wipe",
+	Short:  "Alias for 'aoa reset'",
+	Hidden: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Proxy the --force flag.
+		if f, _ := cmd.Flags().GetBool("force"); f {
+			resetForce = true
+		}
+		return runReset(cmd, args)
+	},
 }
 
 func init() {
-	wipeCmd.Flags().BoolVar(&wipeForce, "force", false, "Skip confirmation prompt")
-}
-
-func runWipe(cmd *cobra.Command, args []string) error {
-	root := projectRoot()
-
-	if !wipeForce {
-		fmt.Printf("⚠ This will delete all aOa data for %s. Continue? [y/N] ", filepath.Base(root))
-		reader := bufio.NewReader(os.Stdin)
-		answer, _ := reader.ReadString('\n')
-		answer = strings.TrimSpace(strings.ToLower(answer))
-		if answer != "y" && answer != "yes" {
-			fmt.Println("cancelled")
-			return nil
-		}
-	}
-
-	sockPath := socket.SocketPath(root)
-	client := socket.NewClient(sockPath)
-
-	// If daemon is running, wipe via socket — the daemon holds the lock.
-	if client.Ping() {
-		if err := client.Wipe(); err != nil {
-			return fmt.Errorf("wipe via daemon failed: %w", err)
-		}
-		fmt.Println("⚡ project data wiped (daemon)")
-		return nil
-	}
-
-	// Daemon not running — wipe bbolt directly
-	dbPath := app.NewPaths(root).DB
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		fmt.Println("⚡ no data to wipe")
-		return nil
-	}
-
-	store, err := bbolt.NewStore(dbPath)
-	if err != nil {
-		if isDBLockError(err) {
-			return fmt.Errorf("cannot wipe: %s", diagnoseDBLock(root))
-		}
-		return fmt.Errorf("open database: %w", err)
-	}
-
-	projectID := filepath.Base(root)
-	if err := store.DeleteProject(projectID); err != nil {
-		store.Close()
-		return err
-	}
-	store.Close()
-
-	fmt.Println("⚡ project data wiped")
-	return nil
+	wipeCmd.Flags().Bool("force", false, "Skip confirmation prompt")
+	rootCmd.AddCommand(wipeCmd)
 }
