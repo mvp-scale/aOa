@@ -35,12 +35,7 @@ case "$MODE" in
     echo "  Use ./build.sh (standard) or ./build.sh --light"
     exit 1
     ;;
-  --core)
-    echo "DEPRECATED: --core is now the default build."
-    echo "  Just run: ./build.sh"
-    echo ""
-    ;& # fall through to standard
-  standard|"")
+  --core|standard|"")
     echo "Building aoa..."
     go build -tags "core" -ldflags "$LDFLAGS" -o aoa ./cmd/aoa/
     SIZE=$(stat --format=%s aoa 2>/dev/null || stat -f%z aoa)
