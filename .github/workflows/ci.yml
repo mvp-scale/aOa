@@ -27,6 +27,62 @@ jobs:
       - name: Run tests
         run: go test -tags lean $(go list -tags lean ./... | grep -v /cmd/aoa-recon)
 
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: govulncheck — dependency vulnerability scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: gosec — source security scan
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -tags lean ./...
+
+      - name: Network audit — verify no outbound connections
+        run: |
+          echo "Scanning for outbound network patterns in production code..."
+          FAILED=false
+
+          # Check for HTTP client usage (exclude test files and this CI file)
+          if grep -rn 'http\.Get\|http\.Post\|http\.Do\|http\.NewRequest\|http\.Client{' \
+              --include='*.go' --exclude='*_test.go' .; then
+            echo "::error::Found HTTP client usage in production code"
+            FAILED=true
+          fi
+
+          # Check for outbound dial (exclude unix and localhost patterns)
+          if grep -rn 'net\.Dial\|net\.DialTimeout' --include='*.go' --exclude='*_test.go' . \
+              | grep -v '"unix"' | grep -v 'localhost' | grep -v '127\.0\.0\.1'; then
+            echo "::error::Found non-local net.Dial in production code"
+            FAILED=true
+          fi
+
+          # Check for non-localhost Listen
+          if grep -rn 'net\.Listen' --include='*.go' --exclude='*_test.go' . \
+              | grep -v '"unix"' | grep -v '127\.0\.0\.1'; then
+            echo "::error::Found non-localhost net.Listen in production code"
+            FAILED=true
+          fi
+
+          if [ "$FAILED" = true ]; then
+            exit 1
+          fi
+
+          echo "No outbound network patterns found."
+          echo "  - HTTP client calls: 0"
+          echo "  - External net.Dial: 0"
+          echo "  - Non-localhost Listen: 0"
+
   build:
     name: Build (${{ matrix.os }}-${{ matrix.arch }})
     needs: check
