@@ -4,35 +4,35 @@
 
 ## Now
 
-- [ ] L4.4: Build all 510 grammars locally, verify every one compiles and loads
-- [ ] L4.4: Update manifest with all 510 grammars (maintainer + upstream repo from go-sitter-forest)
-- [ ] L4.4: GitHub Actions workflow to compile grammars per platform with SLSA provenance
-- [ ] L4.4: `aoa init` flow — detect → install → index with progress + attribution
-- [ ] L4.4: `aoa grammar list` shows maintainer and source for each grammar
-- [ ] L4.4: Installation guide document (docs/INSTALL.md)
+- [ ] Check CI and grammar validation workflow results
+- [ ] Write installation guide (docs/INSTALL.md)
+- [ ] Expand manifest from ~59 to all 510 grammars with maintainer data
+- [ ] Wire `aoa init` to fetch pre-built .so from GitHub releases
+- [ ] Implement `aoa grammar list` with maintainer/upstream attribution
 
 ## Done
 
-- [x] L10.1-L10.7: Core build tier, grammar paths, no-network, build script, aoa init, command renames, deploy.sh
-- [x] build.sh simplified: default = tree-sitter + dynamic grammars, --light = pure Go, --recon deprecated
-- [x] All data project-scoped under {root}/.aoa/ — nothing at ~/.aoa/
+- [x] build.sh simplified: default = tree-sitter + dynamic grammars, --light = pure Go, --recon/--core deprecated
+- [x] Everything project-scoped under {root}/.aoa/ -- fixed loader.go, init.go, grammar_cgo.go
 - [x] Advisory Rule added to CLAUDE.md
-- [x] `aoa init` compiles missing grammars from go-sitter-forest source with gcc + progress/ETA
-- [x] Grammar source validated: alexaandru/go-sitter-forest aggregates 510 languages from upstream tree-sitter repos
+- [x] `aoa init` compiles grammars locally from go-sitter-forest C source (gcc, progress+ETA, 11 grammars in 10.6s)
+- [x] All 509 grammars validated: scripts/validate-grammars.sh, 509/509 passed, dist/parsers.json produced
+- [x] Weekly grammar validation workflow: .github/workflows/grammar-validation.yml (Sun 6am UTC, 3 platforms, cppcheck)
+- [x] CI aligned with build.sh: standard (core tags) + light (lean tags), cmd/aoa-recon excluded
+- [x] Grammar source strategy decided: go-sitter-forest = aggregated source, parsers.json = aOa-approved list
+- [x] dist/ added to .gitignore
 
 ## Decisions
 
-- Single install path: `npm install -g @mvpscale/aoa` (lightweight, binary only)
-- Grammar .so files pre-compiled via GitHub Actions with SLSA provenance
-- Grammar source: go-sitter-forest (aggregates official tree-sitter grammars)
-- Maintainer attribution shown per grammar — we give credit to the people who built them
-- Everything project-scoped: grammars, shims, data under {root}/.aoa/
-- No outbound network from aoa binary itself
+- npm install path: `npm install -g @mvpscale/aoa` (lightweight binary only)
+- Grammar .so pre-compiled in GitHub Actions with SLSA provenance
+- parsers.json = aOa-approved list (maintainer, upstream, sha256, security scan, cross-platform)
+- build.sh is guardrails for Claude; ci.yml is the real build pipeline
 - Advisory Rule: surface better approaches early, reference goals, let user choose
 
 ## Next
 
-- L4.4: npm package update (binary only, lightweight)
+- L4.4: npm package update (binary only)
 - L4.4: User config file (.aoa/languages) for manual grammar selection
 - L10.8/L10.9: absorbed into L4.4 grammar pipeline
 - L5.Va: per-rule detection validation

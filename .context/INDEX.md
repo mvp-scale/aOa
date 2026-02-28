@@ -20,7 +20,7 @@ Tasks with no blocking dependencies (or all deps satisfied):
 
 | ID | Cf | St | Va | Task |
 |----|:--:|:--:|:--:|------|
-| L4.4 | 🟢 | ⚪ | ⚪ | Installation docs |
+| L4.4 | 🟢 | 🟡 | ⚪ | Installation docs + grammar pipeline (S79: build.sh simplified, 509/509 grammars validated, CI workflows) |
 | L5.Va | 🟢 | 🟢 | 🟡 | Dimensional rule validation -- all 5 tiers (absorbs L5.7/8/16/17/18 + L8.1) |
 | L5.10 | 🟢 | ⚪ | ⚪ | Dimension scores in search results |
 | L5.11 | 🟢 | ⚪ | ⚪ | Dimension query support |
@@ -58,17 +58,17 @@ Line ranges into BOARD.md for targeted reads:
 | Board Structure | 27-70 | `offset=27, limit=44` |
 | Mission | 76-82 | `offset=76, limit=7` |
 | Board Table | 86-118 | `offset=86, limit=33` |
-| Supporting Detail | 121-385 | `offset=121, limit=265` |
+| Supporting Detail | 121-417 | `offset=121, limit=297` |
 | - Layer 2 | 123-139 | `offset=123, limit=17` |
-| - Layer 4 | 141-153 | `offset=141, limit=13` |
-| - Layer 5 | 155-199 | `offset=155, limit=45` |
-| - Layer 7 | 201-254 | `offset=201, limit=54` |
-| - Layer 8 | 256-308 | `offset=256, limit=53` |
-| - Layer 10 | 310-385 | `offset=310, limit=76` |
-| What Works | 388-410 | `offset=388, limit=23` |
-| What We're NOT Doing | 412-420 | `offset=412, limit=9` |
-| Key Documents | 421-433 | `offset=421, limit=13` |
-| Quick Reference | 434-447 | `offset=434, limit=14` |
+| - Layer 4 | 141-186 | `offset=141, limit=46` |
+| - Layer 5 | 188-232 | `offset=188, limit=45` |
+| - Layer 7 | 234-287 | `offset=234, limit=54` |
+| - Layer 8 | 289-341 | `offset=289, limit=53` |
+| - Layer 10 | 343-417 | `offset=343, limit=75` |
+| What Works | 419-443 | `offset=419, limit=25` |
+| What We're NOT Doing | 445-453 | `offset=445, limit=9` |
+| Key Documents | 454-465 | `offset=454, limit=12` |
+| Quick Reference | 466-480 | `offset=466, limit=15` |
 
 ## Layer Status
 
@@ -79,7 +79,7 @@ Line ranges into BOARD.md for targeted reads:
 | L1 | 8 | 8 | 0 | Complete |
 | L2 | 7 | 7 | 0 | Complete -- all archived to COMPLETED.md |
 | L3 | 15 | 15 | 0 | Complete -- L3.15 archived to COMPLETED.md |
-| L4 | 4 | 2 | 1 | L4.4 not started. L4.2 superseded -> BACKLOG.md |
+| L4 | 4 | 2 | 1 | L4.4 in progress (S79: build.sh, project paths, 509 grammars, CI). L4.2 superseded -> BACKLOG.md |
 | L5 | 15 | 10 | 3 | Active -- L5.Va (consolidated validation), L5.10/11 not started. L5.19 superseded. |
 | L6 | 9 | 9 | 0 | Complete -- all archived to COMPLETED.md. **Superseded by L10.** |
 | L7 | 3 | 3 | 0 | Complete -- L7.1 (Va gap), L7.2 archived, L7.4 triple-green |
@@ -111,7 +111,7 @@ Line ranges into BOARD.md for targeted reads:
 | `.context/COMPLETED.md` | Archived completed work |
 | `.context/BACKLOG.md` | Deferred items |
 | `CLAUDE.md` | Agent instructions, architecture, build commands |
-| `build.sh` | ONLY build entry point -- standard (pure Go, 8MB), core (tree-sitter C runtime + dynamic grammars), and recon (CGo, all grammars) builds |
+| `build.sh` | ONLY build entry point -- default (tree-sitter + dynamic grammars), --light (pure Go, 8MB). --recon/--core deprecated |
 | `deploy.sh` | Single-command deploy: build --core -> graceful stop -> clean socket -> start |
 | `scripts/build-grammars.sh` | Compile grammar .so/.dylib from go-sitter-forest C source |
 | `Makefile` | All targets go through build.sh -- build, build-recon, check, bench-gauntlet, bench-baseline, bench-compare |

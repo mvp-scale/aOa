@@ -93,7 +93,7 @@
 | **L1** | | | | | | | | | | | | | *All 8 tasks complete -- see COMPLETED.md* | | |
 | **L2** | | | | | | | | | | | | | *All tasks complete -- see COMPLETED.md* | | |
 | **L3** | | | | | | | | | | | | | *All tasks complete -- see COMPLETED.md* | | |
-| [L4](#layer-4) | [L4.4](#l44) | x | | x | x | | | | L4.3 | 🟢 | 🟡 | ⚪ | Installation docs + grammar pipeline -- npm install, aoa init, grammar compilation from go-sitter-forest with provenance | Friction-free onboarding, user delight | Build all 510, GH Actions provenance, install guide |
+| [L4](#layer-4) | [L4.4](#l44) | x | | x | x | | | | L4.3 | 🟢 | 🟡 | ⚪ | Installation docs + grammar pipeline -- npm install, aoa init, grammar compilation from go-sitter-forest with provenance. S79: build.sh simplified, project-scoped paths, 509/509 grammars validated, CI + weekly validation workflows | Friction-free onboarding, user delight | Install guide, manifest expansion, `aoa init` fetch from releases, `aoa grammar list` attribution |
 | [L5](#layer-5) | [L5.Va](#l5va) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Dimensional rule validation -- per-rule detection tests across all 5 tiers (security 37, perf 26, quality 24, arch, obs). Absorbs L5.7/8/16/17/18 + L8.1 bitmask upgrade | All rules detect what they claim; engine wired to dashboard | Rules load + parse. **Gap**: per-rule detection accuracy untested |
 | [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
 | [L5](#layer-5) | [L5.11](#l511) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Dimension query support -- `--dimension=security --risk=high` | Filter by dimension | CLI filters by tier and severity |
@@ -148,25 +148,40 @@ Integration tests (`test/integration/cli_test.go`): `TestFileWatcher_NewFile_Aut
 
 Single install path: `npm install -g @mvpscale/aoa` (lightweight, binary only). Grammar `.so` files are pre-compiled from tree-sitter source via GitHub Actions with SLSA provenance. `aoa init` detects project languages and installs only the grammars needed.
 
-**Grammar source**: [alexaandru/go-sitter-forest](https://github.com/alexaandru/go-sitter-forest) — aggregates 510 tree-sitter grammars from upstream repos. Each grammar has `parser.c` + optional `scanner.c`. Compiled with `gcc -shared -fPIC -O2`. Maintainer attribution displayed per grammar.
+**Grammar source**: [alexaandru/go-sitter-forest](https://github.com/alexaandru/go-sitter-forest) -- aggregates 510 tree-sitter grammars from upstream repos. Each grammar has `parser.c` + optional `scanner.c`. Compiled with `gcc -shared -fPIC -O2`. Maintainer attribution displayed per grammar.
 
 **User flow**:
-1. `npm install -g @mvpscale/aoa` — installs binary
-2. `aoa init` — detects languages, compiles/fetches missing grammars, indexes project
-3. `aoa grammar list` — shows all available grammars with maintainer + source repo
-4. `aoa grammar install <lang|pack|all>` — install specific grammars
+1. `npm install -g @mvpscale/aoa` -- installs binary
+2. `aoa init` -- detects languages, compiles missing grammars locally from go-sitter-forest C source (gcc, ~10s for 11 grammars), indexes project
+3. `aoa grammar list` -- shows all available grammars with maintainer + source repo
+4. `aoa grammar install <lang|pack|all>` -- install specific grammars
+
+**Session 79 completed**:
+- [x] `build.sh` simplified: default build = tree-sitter + dynamic grammars. `--light` = pure Go. `--recon`/`--recon-bin`/`--core` deprecated with messages
+- [x] Everything project-scoped: grammars, shims, data all under `{root}/.aoa/`. Nothing writes to `~/.aoa/`. Fixed `loader.go`, `init.go`, `grammar_cgo.go`
+- [x] `aoa init` compiles grammars locally from go-sitter-forest C source with gcc, per-grammar progress + ETA (11 grammars in 10.6s tested)
+- [x] All 509 grammars validated: `scripts/validate-grammars.sh` compiled every grammar from go-sitter-forest. 509/509 passed, zero failures. Produces `dist/parsers.json` (name, version, sha256, size, source)
+- [x] Weekly grammar validation workflow: `.github/workflows/grammar-validation.yml` -- Sunday 6am UTC, linux-amd64/arm64 + darwin-arm64, cppcheck security scan, maintainer attribution from `grammars.json`, commits `GRAMMAR_REPORT.md`
+- [x] CI aligned with build.sh: `.github/workflows/ci.yml` builds standard (core tags) + light (lean tags). `cmd/aoa-recon` excluded from vet/tests
+- [x] Advisory Rule added to CLAUDE.md
+- [x] `dist/` added to `.gitignore`
+
+**Key decisions (Session 79)**:
+- Grammar .so files pre-compiled in GitHub Actions with SLSA provenance
+- Users fetch only the grammars they need from releases
+- `parsers.json` = aOa-approved list with maintainer, upstream repo, sha256, security scan, cross-platform status
+- `build.sh` is guardrails for Claude; `ci.yml` is the real build pipeline
 
 **Remaining work**:
-- [ ] Build all 510 grammars locally, verify every one compiles and loads
-- [ ] GitHub Actions workflow to compile all grammars per platform with provenance
-- [ ] Update manifest with all 510 grammars (maintainer, upstream repo)
-- [ ] `aoa init` flow: detect → install → index, with progress + attribution
+- [ ] Check CI and grammar validation workflow results (running)
+- [ ] Installation guide document (docs/INSTALL.md)
+- [ ] Expand manifest from ~59 grammars to all 510 with maintainer data
+- [ ] Wire `aoa init` to fetch pre-built .so from GitHub releases
 - [ ] `aoa grammar list` shows maintainer and source for each grammar
 - [ ] User config file (`.aoa/languages`) for manual grammar selection
-- [ ] Installation guide document
 - [ ] npm package updated (binary only, lightweight)
 
-**Files**: `cmd/aoa/cmd/init_grammars_cgo.go`, `cmd/aoa/cmd/grammar_cgo.go`, `internal/adapters/treesitter/manifest.go`, `.github/workflows/grammars.yml`, `docs/INSTALL.md`
+**Files**: `build.sh`, `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/init_grammars_cgo.go`, `cmd/aoa/cmd/grammar_cgo.go`, `internal/adapters/treesitter/loader.go`, `internal/adapters/treesitter/grammar_cgo.go`, `internal/adapters/treesitter/manifest.go`, `scripts/validate-grammars.sh`, `scripts/build-grammars.sh`, `.github/workflows/grammar-validation.yml`, `.github/workflows/ci.yml`
 
 ---
 
@@ -335,9 +350,9 @@ File-level source display with all flagged lines in context (editor-like, severi
 
 **Core build tier** -- green Complete, yellow No automated test
 
-`./build.sh --core` mode: compiles tree-sitter C runtime into the binary but includes zero grammars. `languages_core.go` provides empty `registerBuiltinLanguages()`. Build tags: `languages_forest.go` and `build_guard.go` exclude `core`. Three build tiers: standard (pure Go, no parser), core (C runtime + dynamic loading), recon (all 509 grammars compiled in).
+S79 update: `build.sh` simplified. Default build is now tree-sitter + dynamic grammars (what `--core` used to be). `--light` = pure Go. `--core` deprecated (falls through to default). `--recon`/`--recon-bin` deprecated with messages. Two effective tiers: standard (tree-sitter C runtime + dynamic .so loading) and light (pure Go, no parser).
 
-**Files**: `build.sh`, `cmd/aoa/build_guard.go`, `internal/adapters/treesitter/languages_core.go` (new), `internal/adapters/treesitter/languages_forest.go`
+**Files**: `build.sh`, `cmd/aoa/build_guard.go`, `internal/adapters/treesitter/languages_core.go`, `internal/adapters/treesitter/languages_forest.go`
 
 #### L10.2
 
@@ -357,11 +372,11 @@ Removed the Go HTTP downloader entirely. `aoa init` detects missing grammars and
 
 #### L10.4
 
-**Grammar build script** -- green Complete, yellow Cross-platform CI not wired
+**Grammar build script** -- green Complete, yellow Cross-platform CI pending results
 
-`scripts/build-grammars.sh` compiles .so/.dylib from `alexaandru/go-sitter-forest` C source found in the Go module cache. Tested locally: core pack = 11 grammars, 11 MB total. Individual grammars range from 20 KB (json) to 3.5 MB (cpp).
+`scripts/build-grammars.sh` compiles .so/.dylib from `alexaandru/go-sitter-forest` C source. Tested locally: core pack = 11 grammars, 11 MB total. Individual grammars range from 20 KB (json) to 3.5 MB (cpp). S79: `scripts/validate-grammars.sh` compiled all 509 grammars -- 509/509 passed, zero failures. Weekly validation workflow (`.github/workflows/grammar-validation.yml`) runs Sunday 6am UTC on linux-amd64/arm64 + darwin-arm64 with cppcheck security scan. Produces `dist/parsers.json` and commits `GRAMMAR_REPORT.md`. CI workflow running, results pending.
 
-**Files**: `scripts/build-grammars.sh` (new), `scripts/gen-manifest-hashes.go` (new)
+**Files**: `scripts/build-grammars.sh`, `scripts/validate-grammars.sh` (new), `scripts/gen-manifest-hashes.go`, `.github/workflows/grammar-validation.yml` (new)
 
 #### L10.5
 
