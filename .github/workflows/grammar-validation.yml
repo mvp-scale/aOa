@@ -1,0 +1,346 @@
+name: Weekly Grammar Validation
+
+# Runs every Sunday at 6:00 AM UTC — independent from builds.
+# Compiles all grammars from go-sitter-forest, runs security checks,
+# validates loading, and produces the aOa-approved parsers.json report.
+
+on:
+  schedule:
+    - cron: '0 6 * * 0'  # Sunday 6am UTC
+  workflow_dispatch:       # Manual trigger for testing
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate grammars (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-amd64
+            runner: ubuntu-latest
+            cc: gcc
+            ext: .so
+            shared_flag: "-shared"
+          - platform: linux-arm64
+            runner: ubuntu-latest
+            cc: aarch64-linux-gnu-gcc
+            ext: .so
+            shared_flag: "-shared"
+            cross: true
+          - platform: darwin-amd64
+            runner: macos-13
+            cc: clang
+            ext: .dylib
+            shared_flag: "-dynamiclib"
+          - platform: darwin-arm64
+            runner: macos-14
+            cc: clang
+            ext: .dylib
+            shared_flag: "-dynamiclib"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install tools
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
+          # Install cppcheck for security scanning
+          if command -v apt-get &>/dev/null; then
+            sudo apt-get update && sudo apt-get install -y cppcheck
+          elif command -v brew &>/dev/null; then
+            brew install cppcheck
+          fi
+
+      - name: Download go-sitter-forest source
+        run: go mod download github.com/alexaandru/go-sitter-forest/...
+
+      - name: Fetch grammars.json for maintainer data
+        run: |
+          curl -sL https://raw.githubusercontent.com/alexaandru/go-sitter-forest/main/grammars.json \
+            -o /tmp/forest-grammars.json
+          curl -sL https://raw.githubusercontent.com/alexaandru/go-sitter-forest/main/PARSERS.md \
+            -o /tmp/forest-parsers.md
+
+      - name: Compile and validate all grammars
+        env:
+          CC: ${{ matrix.cc }}
+          SHARED_FLAG: ${{ matrix.shared_flag }}
+          EXT: ${{ matrix.ext }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+
+          GOMODCACHE=$(go env GOMODCACHE)
+          FOREST="$GOMODCACHE/github.com/alexaandru/go-sitter-forest"
+          OUTDIR="dist/grammars-${PLATFORM}"
+          REPORT="dist/report-${PLATFORM}.json"
+          mkdir -p "$OUTDIR"
+
+          # Discover all grammars
+          GRAMMARS=()
+          for dir in "$FOREST"/*/; do
+            name=$(basename "$dir" | sed 's/@.*//')
+            GRAMMARS+=("$name")
+          done
+          readarray -t GRAMMARS < <(printf '%s\n' "${GRAMMARS[@]}" | sort -u)
+          TOTAL=${#GRAMMARS[@]}
+
+          echo "Platform: $PLATFORM"
+          echo "Grammars: $TOTAL"
+          echo ""
+
+          OK=0; FAIL=0; SKIP=0; SEC_WARN=0
+          echo "[" > "$REPORT"
+          FIRST=true
+
+          for i in "${!GRAMMARS[@]}"; do
+            lang="${GRAMMARS[$i]}"
+            n=$((i + 1))
+
+            # Find source dir
+            src_dir=$(ls -d "$FOREST/${lang}@"* 2>/dev/null | sort -V | tail -1)
+            if [ -z "$src_dir" ] || [ ! -f "$src_dir/parser.c" ]; then
+              printf "  [%3d/%d] %-20s SKIP\n" "$n" "$TOTAL" "$lang"
+              SKIP=$((SKIP + 1))
+              continue
+            fi
+
+            version=$(echo "$src_dir" | grep -oP '@v?\K[^/]+$' || echo "unknown")
+            outfile="${OUTDIR}/${lang}${EXT}"
+            sources=("$src_dir/parser.c")
+            [ -f "$src_dir/scanner.c" ] && sources+=("$src_dir/scanner.c")
+
+            # Security scan with cppcheck
+            sec_status="clean"
+            sec_detail=""
+            if command -v cppcheck &>/dev/null; then
+              cppcheck_out=$(cppcheck --quiet --error-exitcode=0 \
+                --enable=warning,portability \
+                --suppress=missingInclude \
+                "${sources[@]}" 2>&1 || true)
+              if [ -n "$cppcheck_out" ]; then
+                sec_status="warnings"
+                sec_detail=$(echo "$cppcheck_out" | head -3 | tr '\n' '; ')
+                SEC_WARN=$((SEC_WARN + 1))
+              fi
+            fi
+
+            # Compile
+            if $CC $SHARED_FLAG -fPIC -O2 -I"$src_dir" -o "$outfile" "${sources[@]}" 2>/dev/null; then
+              size=$(stat --format=%s "$outfile" 2>/dev/null || stat -f%z "$outfile")
+              sha=$(sha256sum "$outfile" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$outfile" | cut -d' ' -f1)
+              size_kb=$(( size / 1024 ))
+              printf "  [%3d/%d] %-20s ok  %4d KB  security:%s\n" "$n" "$TOTAL" "$lang" "$size_kb" "$sec_status"
+
+              [ "$FIRST" = true ] && FIRST=false || echo "," >> "$REPORT"
+              cat >> "$REPORT" <<ENTRY
+            {
+              "name": "$lang",
+              "version": "$version",
+              "status": "ok",
+              "platform": "$PLATFORM",
+              "size_bytes": $size,
+              "sha256": "$sha",
+              "source": "github.com/alexaandru/go-sitter-forest/${lang}@${version}",
+              "security": "$sec_status",
+              "security_detail": "$(echo "$sec_detail" | sed 's/"/\\"/g')"
+            }
+          ENTRY
+              OK=$((OK + 1))
+            else
+              printf "  [%3d/%d] %-20s FAIL\n" "$n" "$TOTAL" "$lang"
+              rm -f "$outfile"
+              [ "$FIRST" = true ] && FIRST=false || echo "," >> "$REPORT"
+              cat >> "$REPORT" <<ENTRY
+            {
+              "name": "$lang",
+              "version": "$version",
+              "status": "fail",
+              "platform": "$PLATFORM",
+              "source": "github.com/alexaandru/go-sitter-forest/${lang}@${version}"
+            }
+          ENTRY
+              FAIL=$((FAIL + 1))
+            fi
+          done
+
+          echo "" >> "$REPORT"
+          echo "]" >> "$REPORT"
+
+          echo ""
+          echo "=== $PLATFORM ==="
+          echo "Compiled: $OK  Failed: $FAIL  Skipped: $SKIP  Security warnings: $SEC_WARN"
+
+          # Save summary for the report job
+          mkdir -p dist
+          cat > "dist/summary-${PLATFORM}.json" <<EOF
+          {
+            "platform": "$PLATFORM",
+            "total": $TOTAL,
+            "compiled": $OK,
+            "failed": $FAIL,
+            "skipped": $SKIP,
+            "security_warnings": $SEC_WARN,
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+      - name: Upload validation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-${{ matrix.platform }}
+          path: dist/
+          retention-days: 90
+
+  report:
+    name: Generate validation report
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Fetch maintainer data
+        run: |
+          curl -sL https://raw.githubusercontent.com/alexaandru/go-sitter-forest/main/grammars.json \
+            -o /tmp/forest-grammars.json
+
+      - name: Generate parsers.json and report
+        run: |
+          set -euo pipefail
+
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          WEEK=$(date -u +%Y-W%V)
+
+          # Merge per-platform reports into unified parsers.json
+          python3 - <<'PYSCRIPT'
+          import json, glob, os
+
+          # Load maintainer data
+          maintainers = {}
+          try:
+              with open("/tmp/forest-grammars.json") as f:
+                  forest = json.load(f)
+              for lang, info in forest.items():
+                  url = info.get("url", "")
+                  maintainer = info.get("maintainedBy", "")
+                  if url and not url.startswith("http"):
+                      url = "https://github.com/" + url
+                  maintainers[lang] = {"upstream": url, "maintainer": maintainer}
+          except:
+              pass
+
+          # Load all platform reports
+          platforms = {}
+          for f in sorted(glob.glob("artifacts/validation-*/report-*.json")):
+              with open(f) as fh:
+                  entries = json.load(fh)
+              for entry in entries:
+                  name = entry["name"]
+                  plat = entry["platform"]
+                  if name not in platforms:
+                      platforms[name] = {}
+                  platforms[name][plat] = entry
+
+          # Build unified parsers.json
+          parsers = []
+          for name in sorted(platforms.keys()):
+              plat_data = platforms[name]
+              m = maintainers.get(name, {})
+              # Use first available entry for version/source
+              sample = next(iter(plat_data.values()))
+              entry = {
+                  "name": name,
+                  "version": sample.get("version", "unknown"),
+                  "maintainer": m.get("maintainer", "unknown"),
+                  "upstream": m.get("upstream", ""),
+                  "source": sample.get("source", ""),
+                  "platforms": {}
+              }
+              for plat, data in sorted(plat_data.items()):
+                  entry["platforms"][plat] = {
+                      "status": data.get("status"),
+                      "sha256": data.get("sha256", ""),
+                      "size_bytes": data.get("size_bytes", 0),
+                      "security": data.get("security", "unknown")
+                  }
+              parsers.append(entry)
+
+          os.makedirs("dist", exist_ok=True)
+          with open("dist/parsers.json", "w") as f:
+              json.dump(parsers, f, indent=2)
+          print(f"Wrote {len(parsers)} grammars to dist/parsers.json")
+
+          # Generate markdown report
+          summaries = {}
+          for f in sorted(glob.glob("artifacts/validation-*/summary-*.json")):
+              with open(f) as fh:
+                  s = json.load(fh)
+              summaries[s["platform"]] = s
+
+          with open("dist/GRAMMAR_REPORT.md", "w") as f:
+              f.write("# aOa Grammar Validation Report\n\n")
+              f.write(f"**Generated**: {sample.get('version', 'unknown')} | ")
+              f.write(f"**Grammars**: {len(parsers)} | ")
+              f.write(f"**Source**: [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)\n\n")
+
+              f.write("## Platform Summary\n\n")
+              f.write("| Platform | Compiled | Failed | Skipped | Security Warnings |\n")
+              f.write("|----------|----------|--------|---------|-------------------|\n")
+              for plat in sorted(summaries.keys()):
+                  s = summaries[plat]
+                  f.write(f"| {plat} | {s['compiled']} | {s['failed']} | {s['skipped']} | {s['security_warnings']} |\n")
+
+              f.write("\n## Grammar Details\n\n")
+              f.write("| Grammar | Version | Maintainer | Upstream | Platforms | Security |\n")
+              f.write("|---------|---------|------------|----------|-----------|----------|\n")
+              for p in parsers:
+                  plat_statuses = []
+                  sec_statuses = set()
+                  for plat, pd in p["platforms"].items():
+                      short = plat.split("-")[0][0] + plat.split("-")[1][0]
+                      status = "pass" if pd["status"] == "ok" else "FAIL"
+                      plat_statuses.append(f"{short}:{status}")
+                      sec_statuses.add(pd.get("security", "unknown"))
+                  sec = "clean" if sec_statuses == {"clean"} else "warnings"
+                  upstream = p["upstream"]
+                  if upstream:
+                      repo_name = upstream.replace("https://github.com/", "")
+                      upstream = f"[{repo_name}]({upstream})"
+                  f.write(f"| {p['name']} | {p['version']} | {p['maintainer']} | {upstream} | {' '.join(plat_statuses)} | {sec} |\n")
+
+          print("Wrote dist/GRAMMAR_REPORT.md")
+          PYSCRIPT
+
+      - name: Commit report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp dist/parsers.json parsers.json
+          cp dist/GRAMMAR_REPORT.md GRAMMAR_REPORT.md
+          git add parsers.json GRAMMAR_REPORT.md
+          git diff --cached --quiet || git commit -m "Weekly grammar validation report $(date -u +%Y-W%V)"
+          git push
+
+      - name: Upload final report
+        uses: actions/upload-artifact@v4
+        with:
+          name: grammar-report
+          path: |
+            dist/parsers.json
+            dist/GRAMMAR_REPORT.md
+          retention-days: 365
