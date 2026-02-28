@@ -384,3 +384,62 @@ Replaced JSON serialization with binary posting lists + gob for the bbolt search
 **Known gaps identified:**
 - File watcher (`fsnotify`) built but not wired — `Watch()` never called, no dynamic re-indexing
 - `aoa init` can't run while daemon holds bbolt lock — need in-process reindex command
+
+---
+
+## L7.4: .aoa/ directory restructure (Session 73 -- archived 2026-02-28)
+
+**What:** `Paths` struct (18 fields), `EnsureDirs`, `Migrate` (7 files), 1MB log rotation, 13 files updated. Clean project state directory; logs don't grow forever.
+
+**Validation:** 7 unit tests, live migration verified on 1.3GB database, all builds clean.
+
+**Files:** `internal/app/paths.go`, `internal/app/paths_test.go`
+
+---
+
+## G0.HF1: Build process fix (Session 73 -- archived 2026-02-28)
+
+**What:** `build.sh` as sole entry point, compile-time build guard (`cmd/aoa/build_guard.go`), flipped build tags (`recon` opt-in), Makefile rewrite, CLAUDE.md Build Rule. Binary 366MB->8MB.
+
+**Validation:** `build.sh` enforced, `go build` panics with guard, 8MB binary verified.
+
+**Files:** `build.sh`, `cmd/aoa/build_guard.go`, `Makefile`, `CLAUDE.md`
+
+---
+
+## L10.5: `aoa init` as single command (Session 75 -- archived 2026-02-28)
+
+**What:** Scans project, detects languages via `ExtensionToLanguage`, shows curl commands for missing grammars, indexes with available grammars. Removed `aoa-recon` dependency entirely. TSX fix: each grammar gets its own .so file. Added `--no-grammars` flag.
+
+**Validation:** Init runs end-to-end, no aoa-recon needed.
+
+**Files:** `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/init_grammars_cgo.go`, `cmd/aoa/cmd/init_grammars_nocgo.go`, `internal/adapters/treesitter/extensions.go`, `internal/adapters/treesitter/loader.go`
+
+---
+
+## L10.6: Command rename -- wipe -> reset + remove (Session 75 -- archived 2026-02-28)
+
+**What:** `aoa reset` clears data (what wipe used to do). `aoa remove` stops daemon and deletes `.aoa/` entirely. `aoa wipe` kept as hidden alias for backward compatibility.
+
+**Validation:** Commands registered and working.
+
+**Files:** `cmd/aoa/cmd/reset.go`, `cmd/aoa/cmd/remove.go`, `cmd/aoa/cmd/wipe.go`
+
+---
+
+## Session 81: Security Pipeline + aoa-recon Removal (2026-02-28)
+
+**What:** SECURITY.md trust document, CI security scan (govulncheck + gosec + network audit), Slowloris fix, Go 1.25.7 bump, aoa-recon binary removed (-761 LOC), L4.4 Phase 2 grammar validation pipeline complete.
+
+**Key accomplishments:**
+- SECURITY.md: Human-first document answering SecOps questions (no telemetry, no outbound, no auto-updates, localhost-only daemon)
+- CI security scan on every push: govulncheck (0 vulns), gosec (24 active rules), network audit (grep-enforced zero outbound connections)
+- Fixed real Slowloris vulnerability (G112) -- added ReadHeaderTimeout to HTTP server
+- Bumped Go to 1.25.7 (fixed crypto/tls GO-2026-4337)
+- aoa-recon removed: cmd/aoa-recon/, npm/aoa-recon/, recon_bridge.go, recon.go cmd deleted. DimensionalResults/ReconAvailable moved to dimensional.go
+- L4.4 Phase 2: parsers.json 509/509 provenance, GRAMMAR_REPORT.md, weekly CI, 346 contributor acknowledgments
+- Build strategy decided: compile once per version, embed parsers.json via //go:embed
+- L10.3 triple-green: CI grep-enforces zero net/http imports
+- L10.4 triple-green: weekly CI validates all 509 grammars on 4 platforms
+
+**10 commits shipped.**
