@@ -36,6 +36,12 @@ jobs:
             cc: clang
             ext: .dylib
             shared_flag: "-dynamiclib"
+          - platform: darwin-amd64
+            runner: macos-latest
+            cc: clang
+            ext: .dylib
+            shared_flag: "-dynamiclib"
+            cflags_extra: "-target x86_64-apple-macos11"
 
     steps:
       - uses: actions/checkout@v4
@@ -44,8 +50,8 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Download go-sitter-forest source
-        run: go mod download github.com/alexaandru/go-sitter-forest
+      - name: Download all grammar sources
+        run: go mod download all
 
       - name: Fetch grammars.json for maintainer data
         run: |
@@ -56,10 +62,20 @@ jobs:
         env:
           CC: ${{ matrix.cc }}
           SHARED_FLAG: ${{ matrix.shared_flag }}
+          CFLAGS_EXTRA: ${{ matrix.cflags_extra }}
           EXT: ${{ matrix.ext }}
           PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
+
+          # Portable timeout: GNU timeout, macOS gtimeout, or none
+          if command -v timeout &>/dev/null; then
+            TIMEOUT_CMD="timeout 60"
+          elif command -v gtimeout &>/dev/null; then
+            TIMEOUT_CMD="gtimeout 60"
+          else
+            TIMEOUT_CMD=""
+          fi
 
           GOMODCACHE=$(go env GOMODCACHE)
           FOREST="$GOMODCACHE/github.com/alexaandru/go-sitter-forest"
@@ -107,8 +123,8 @@ jobs:
             # Hash source files for provenance
             source_sha=$(cat "${sources[@]}" | sha256sum | cut -d' ' -f1 2>/dev/null || cat "${sources[@]}" | shasum -a 256 | cut -d' ' -f1)
 
-            # Compile (60s timeout per grammar)
-            if timeout 60 $CC $SHARED_FLAG -fPIC -O2 -Wall -I"$src_dir" -o "$outfile" "${sources[@]}" 2>/dev/null; then
+            # Compile with portable timeout
+            if $TIMEOUT_CMD $CC $SHARED_FLAG $CFLAGS_EXTRA -fPIC -O2 -Wall -I"$src_dir" -o "$outfile" "${sources[@]}" 2>/dev/null; then
               size=$(stat --format=%s "$outfile" 2>/dev/null || stat -f%z "$outfile")
               binary_sha=$(sha256sum "$outfile" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$outfile" | cut -d' ' -f1)
               size_kb=$(( size / 1024 ))
@@ -267,9 +283,12 @@ jobs:
                   s = json.load(fh)
               summaries[s["platform"]] = s
 
+          import datetime
+          timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
           with open("dist/GRAMMAR_REPORT.md", "w") as f:
               f.write("# aOa Grammar Validation Report\n\n")
-              f.write(f"**Generated**: {sample.get('version', 'unknown')} | ")
+              f.write(f"**Generated**: {timestamp} | ")
               f.write(f"**Grammars**: {len(parsers)} | ")
               f.write(f"**Source**: [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)\n\n")
 
