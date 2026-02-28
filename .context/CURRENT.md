@@ -1,49 +1,40 @@
-# Session 78 | 2026-02-27 | Arsenal Dashboard + Test Strategy
+# Session 79 | 2026-02-27 | Dynamic Grammar Download System
 
-> **Session**: 78
+> **Session**: 79
 
 ## Now
 
-- [ ] Formal deploy for aOa and Recon
-- [ ] Figure out installation guide (L4.4)
-- [ ] Understand integration between aOa and Recon for test strategy
+- [ ] L10.8: Build all 509 grammars with `scripts/build-grammars.sh --all` and verify
+- [ ] L10.8: Create GitHub release `grammars-v1` with .so for all 4 platforms
+- [ ] L10.8: Wire CI workflow for cross-platform grammar builds
+- [ ] L10.9: End-to-end test on fresh project
 
 ## Done
 
-- [x] Arsenal: Daily Token Usage -- split-bar design (green actual bottom, red saved top), "now" marker, removed ghost bars, CSS bar height fix
-- [x] Arsenal: Sessions Extended metric -- switched to totalSaved / burn_rate_per_min
-- [x] Arsenal: Learning Curve -- session number ticks (S1, S2...), reversed chronological order, axis label
-- [x] Arsenal: Guided column -- color-coded ratio-wrap (green >= 60%, yellow >= 30%, red below)
-- [x] Arsenal: Session History table -- added # column, Opus/Sonnet/Haiku % columns, removed Prompts/Reads/Cost/Focus, added Total Tokens
-- [x] Backend: per-model token tracking (ModelTokens map in SessionSummary, accumulated in app.go onSessionEvent)
-- [x] Recon: fixed investigated_files missing from /api/recon response (both paths)
-- [x] Recon: fixed build.sh --recon-bin missing -tags "recon"
-- [x] Recon: built and connected aoa-recon binary, ran aoa recon init
-- [x] Ported split-bar Daily Token Usage chart from mockup to live dashboard
-- [x] Fixed chart card layout/sizing (340px row height, padding, Learning Curve canvas height, footer symmetry)
-- [x] Fixed Learning Curve cost-per-prompt (smoothed 3-session window averages instead of single-point comparison)
-- [x] Full regression run: 535 tests pass, 0 fail, 0 skip across 7 phases
-- [x] Deleted 26 stale test stubs (index_test.go, format_test.go, parity_test.go -- all empty t.Skip placeholders)
-- [x] Fixed CLI integration tests: added `testing` build tag to build guard, all 50 CLI tests pass
-- [x] Updated test/README.md with full 8-phase test pipeline docs
-- [x] Documented regression baseline: test/testdata/regression-2026-02-27.md
-- [x] Board updated with test counts (535 pass, 0 fail, 0 skip)
+- [x] L10.1: Core build tier -- `./build.sh --core` with tree-sitter C runtime, zero compiled-in grammars
+- [x] L10.2: Grammar paths wired into parser -- `newParser(root)` configures DefaultGrammarPaths, all callers updated
+- [x] L10.3: No outbound network -- removed Go HTTP downloader, `aoa init` prints curl commands instead
+- [x] L10.4: Grammar build script -- `scripts/build-grammars.sh` compiles from go-sitter-forest C source (11 grammars, 11 MB)
+- [x] L10.5: `aoa init` as single command -- scans project, detects languages, shows curl for missing grammars, removed aoa-recon dependency
+- [x] L10.6: Command rename -- `wipe` -> `reset` (clear data) + `remove` (full uninstall), `wipe` kept as hidden alias
+- [x] L10.7: deploy.sh updated to use `./build.sh --core`
+- [x] TSX fix: removed soFileOverrides["tsx"] = "typescript" -- each grammar gets own .so
+- [x] L8.5 updated: dashboard empty state now shows "Run aoa init" instead of "npm install aoa-recon"
+- [x] Repo renamed: remote origin updated from mvp-scale/aOa-go to mvp-scale/aOa
 
 ## Decisions
 
-- Split-bar chart design over log scale or side-by-side bars (savings gap visible at scale)
-- Per-model tokens: accumulate by ev.Model in onSessionEvent, backward compatible with old sessions
-- Learning Curve cost-per-prompt: use smoothed 3-session window averages, not first-vs-last
-- Build guard tag: `!lean && !recon && !testing` -- integration tests pass `-tags testing` to compile test binary
+- Single binary with dynamic grammars over two-binary model (G2 goal updated)
+- No outbound network from binary -- curl commands for full user transparency
+- Core build tier = C runtime + zero grammars (between pure Go and full recon)
+- `aoa init` replaces `aoa recon init` as sole entry point
 
 ## Next
 
-- Formal deploy (aOa + Recon)
-- L4.4: Installation docs
-- Understand aOa/Recon integration for test strategy
-- Recon tab QOL pass (last dashboard tab)
+- L10.8: Build all 509 grammars + GitHub release
+- L10.9: End-to-end test on fresh project
+- L4.4: Installation docs (now needs L10 context)
 - L5.Va: per-rule detection validation across all 5 tiers
 - L5.10/L5.11: dimension scores + query support
 - L8.2-5: remaining Va gaps (browser-only, unit tests)
 - L8.6: recon source line editor view
-- L7.1: startup progress timing test

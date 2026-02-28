@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-02-27 (Session 78) | **89% complete.**
+> **Updated**: 2026-02-27 (Session 79) | **89% complete.**
 > **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9/L5.19 + L6 (all) + L7.2 + L8.1 + L9 (all) + P0 (all 7 bugs) (535 tests, 0 fail, 0 skip)
 > **Archived boards**: `.context/archived/`
 
@@ -16,7 +16,7 @@
 |------|-----------|
 | **G0** | **Speed** -- 50-120x faster than Python. Sub-ms search, <200ms startup, <50MB memory. No O(n) on hot paths. |
 | **G1** | **Parity** -- Zero behavioral divergence from Python. Test fixtures are source of truth. |
-| **G2** | **Two Binaries, Clean Split** -- `aoa` works standalone with zero deps. `aoa-recon` is optional; when installed it enhances `aoa` through a defined bridge. `aoa` must never depend on `aoa-recon` being present. |
+| **G2** | **Single Binary, Dynamic Grammars** -- One `aoa` binary (core build: tree-sitter C runtime, zero compiled-in grammars). Grammars downloaded as .so/.dylib files via `aoa init` curl commands. No outbound network from the binary. Full transparency and user control. |
 | **G3** | **Agent-First** -- Drop-in shim for grep/egrep/find. Three Unix modes: direct (`grep pat file`), pipe (`cmd | grep pat`), index (`grep pat` -> O(1) daemon). Same flags, same output format, same exit codes. Agents never know it's not GNU grep. |
 | **G4** | **Clean Architecture** -- Hexagonal. Domain logic dependency-free. External concerns behind interfaces. No feature entanglement. |
 | **G5** | **Self-Learning** -- Adaptive pattern recognition. observe(), autotune, competitive displacement. |
@@ -38,10 +38,11 @@
 | **L3** | Migration | Parallel run Python vs Go, parity proof | 100 queries x 5 projects = zero divergence; benchmark confirms speedup |
 | **L4** | Distribution | Goreleaser, grammar loader, install docs | `go install` or binary download works on linux/darwin x amd64/arm64 |
 | **L5** | Dimensional Analysis | Bitmask engine, 6-tier scanning, rule expansion | Security tier catches known vulns in test projects; query time < 10ms |
-| **L6** | Distribution v2 | Two-binary split, npm packaging, zero-friction install | `npm install -g aoa` works; `npm install -g aoa-recon` lights up Recon tab |
+| **L6** | Distribution v2 | Two-binary split, npm packaging, zero-friction install | `npm install -g aoa` works; `npm install -g aoa-recon` lights up Recon tab. **Superseded by L10 single-binary model.** |
 | **L7** | Onboarding UX | First-run experience, progress feedback, project state hygiene | User sees meaningful progress during startup; `.aoa/` is clean and self-documenting |
 | **L8** | Recon | Scanning dashboard, investigation tracking, source view | Recon tab shows findings; cache is instant; investigation tracks reviewed files |
 | **L9** | Telemetry | Unified content metering, tool shadow counterfactual, burst throughput | Every content stream measured; counterfactual proves aOa savings on every tool call |
+| **L10** | Dynamic Grammar Distribution | Core build + dynamic .so loading, `aoa init` as single entry point, grammar build pipeline | One binary, zero compiled-in grammars, user-controlled grammar download via curl |
 
 ### Columns
 
@@ -76,7 +77,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search -- and proves it with measurable savings.
 
-**Current**: Core engine complete (search, learner, dashboard, grep parity). Recon scanning operational with caching and investigation tracking. Two-binary distribution published to npm (`@mvpscale/aoa` + `@mvpscale/aoa-recon` v0.1.7). Dimensional engine with 5 active tiers (security, performance, quality, architecture, observability), 136 YAML rules across 21 dimensions. CI/release pipeline proven across 5 releases.
+**Current**: Core engine complete (search, learner, dashboard, grep parity). Recon scanning integrated into single binary with dynamic grammar loading (core build: tree-sitter C runtime, zero compiled-in grammars). `aoa init` is the single entry point -- scans project, detects languages, prints curl commands for grammar .so files. Grammar build pipeline (`scripts/build-grammars.sh`) compiles from go-sitter-forest C source. Dimensional engine with 5 active tiers (security, performance, quality, architecture, observability), 136 YAML rules across 21 dimensions. Commands renamed: `wipe` -> `reset`/`remove`.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -103,8 +104,17 @@
 | [L8](#layer-8) | [L8.2](#l82) | | | | | | | x | L5.Va | 🟢 | 🟢 | 🟡 | Recon dashboard overhaul -- 5 focus modes, tier redesign, code toggle, copy prompt | Recon tab is actionable, not just a finding list | **Gap**: browser-only validation |
 | [L8](#layer-8) | [L8.3](#l83) | x | | | | x | | | L5.Va | 🟢 | 🟢 | 🟡 | Recon cache + incremental updates -- pre-compute at startup, SubtractFile/AddFile on file change | Zero per-poll scan cost, instant API response | **Gap**: no unit tests for incremental path |
 | [L8](#layer-8) | [L8.4](#l84) | | | | | | | x | L8.3 | 🟢 | 🟢 | 🟡 | Investigation tracking -- per-file investigated status, persistence, auto-expiry | Users can mark files as reviewed, auto-clears on change | **Gap**: no unit tests |
-| [L8](#layer-8) | [L8.5](#l85) | | | | | | | x | L6.6 | 🟢 | 🟢 | 🟡 | Dashboard Recon tab install prompt -- "npm install aoa-recon" when not detected | Users know how to unlock Recon | **Gap**: browser-only validation |
+| [L8](#layer-8) | [L8.5](#l85) | | | | | | | x | L6.6 | 🟢 | 🟢 | 🟡 | Dashboard Recon tab install prompt -- "Run aoa init" when grammars missing | Users know how to get grammars | Updated from "npm install aoa-recon" to "Run aoa init". **Gap**: browser-only validation |
 | [L8](#layer-8) | [L8.6](#l86) | | | | | | | x | - | 🟡 | ⚪ | ⚪ | Recon source line editor view -- file-level source display | All flagged lines in context, not one-at-a-time | Design conversation needed on layout |
+| [L10](#layer-10) | [L10.1](#l101) | | | x | | x | | | - | 🟢 | 🟢 | 🟡 | Core build tier -- `./build.sh --core`: tree-sitter C runtime, zero compiled-in grammars. `languages_core.go` (empty registerBuiltinLanguages), build tags exclude `core` from recon/forest | Single binary with dynamic grammar loading | Core build compiles and runs. **Gap**: no automated test of core-only build path |
+| [L10](#layer-10) | [L10.2](#l102) | | | x | | x | | | - | 🟢 | 🟢 | 🟡 | Grammar paths wired into parser -- `newParser(root)` configures `DefaultGrammarPaths` for dynamic .so loading. All callers updated (init.go, daemon.go) | Grammars load from `.aoa/grammars/` at runtime | Parser loads .so files. **Gap**: no automated test of dynamic loading |
+| [L10](#layer-10) | [L10.3](#l103) | | | x | | | | | - | 🟢 | 🟢 | 🟡 | No outbound network -- removed Go HTTP downloader entirely. `aoa init` detects missing grammars and prints curl commands. Zero outbound connections | Full transparency, user controls all downloads | Curl commands print correctly. **Gap**: no automated test |
+| [L10](#layer-10) | [L10.4](#l104) | | | x | | | | | - | 🟢 | 🟢 | 🟡 | Grammar build script -- `scripts/build-grammars.sh` compiles .so/.dylib from go-sitter-forest C source. Core pack = 11 grammars, 11 MB. Individual grammars 20 KB (json) to 3.5 MB (cpp) | Grammars built from source, reproducible | Script tested locally. **Gap**: cross-platform CI not yet wired |
+| [L10](#layer-10) | [L10.5](#l105) | | | x | | | | | - | 🟢 | 🟢 | 🟢 | `aoa init` as single command -- scans project, detects languages, shows curl for missing grammars, indexes with available. Removed `aoa-recon` dependency. TSX fix (own .so file) | One command to set up any project | Init runs end-to-end, no aoa-recon needed |
+| [L10](#layer-10) | [L10.6](#l106) | | | x | | x | | | - | 🟢 | 🟢 | 🟢 | Command rename: `wipe` -> `reset` + `remove`. `aoa reset` clears data, `aoa remove` stops daemon + deletes .aoa/. `wipe` kept as hidden alias | Clearer UX, destructive actions separated | Commands registered and working |
+| [L10](#layer-10) | [L10.7](#l107) | | | x | | | | | - | 🟢 | 🟢 | 🟡 | deploy.sh updated -- uses `./build.sh --core` instead of lean build | Deploy produces correct binary | **Gap**: not tested on fresh machine |
+| [L10](#layer-10) | [L10.8](#l108) | | | x | | | | | L10.4 | 🟢 | ⚪ | ⚪ | Build all 509 grammars + GitHub release `grammars-v1` with .so for all 4 platforms | Pre-built grammars available for download | CI builds cross-platform, release assets downloadable |
+| [L10](#layer-10) | [L10.9](#l109) | | | x | | | | | L10.8 | 🟢 | ⚪ | ⚪ | End-to-end test on fresh project -- `aoa init` -> curl grammars -> scan -> dashboard | Full flow works from zero state | Fresh project scans successfully with downloaded grammars |
 
 ---
 
@@ -283,7 +293,7 @@ Per-file investigated status with persistence (`.aoa/recon-investigated.json`), 
 
 **Dashboard Recon tab install prompt** -- green Complete, yellow Browser-only
 
-`recon_available` field in API. Install prompt with `npm install -g aoa-recon`. "Lite mode" indicator.
+Updated from "npm install aoa-recon" to "Run aoa init" prompt. Condition fixed to show prompt whenever no data exists (regardless of recon_available flag).
 
 **Files**: `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
 
@@ -297,6 +307,81 @@ File-level source display with all flagged lines in context (editor-like, severi
 
 ---
 
+### Layer 10
+
+**Layer 10: Dynamic Grammar Distribution**
+
+> Single-binary architecture. Core build includes tree-sitter C runtime but zero compiled-in grammars. Grammars downloaded as platform-specific .so/.dylib files. `aoa init` is the sole entry point. No outbound network from the binary -- grammar downloads are user-executed curl commands. Supersedes the L6 two-binary npm model.
+
+#### L10.1
+
+**Core build tier** -- green Complete, yellow No automated test
+
+`./build.sh --core` mode: compiles tree-sitter C runtime into the binary but includes zero grammars. `languages_core.go` provides empty `registerBuiltinLanguages()`. Build tags: `languages_forest.go` and `build_guard.go` exclude `core`. Three build tiers: standard (pure Go, no parser), core (C runtime + dynamic loading), recon (all 509 grammars compiled in).
+
+**Files**: `build.sh`, `cmd/aoa/build_guard.go`, `internal/adapters/treesitter/languages_core.go` (new), `internal/adapters/treesitter/languages_forest.go`
+
+#### L10.2
+
+**Grammar paths wired into parser** -- green Complete, yellow No automated test
+
+`newParser(root string)` now configures `DefaultGrammarPaths` pointing to `.aoa/grammars/` for dynamic .so loading at runtime. All callers updated (init.go, daemon.go).
+
+**Files**: `cmd/aoa/cmd/parser_cgo.go`, `cmd/aoa/cmd/parser_nocgo.go`, `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/daemon.go`
+
+#### L10.3
+
+**No outbound network** -- green Complete, yellow No automated test
+
+Removed the Go HTTP downloader entirely. `aoa init` detects missing grammars and prints `curl` commands for the user to run. Zero outbound connections from the binary. Full transparency and user control.
+
+**Files**: `internal/adapters/treesitter/downloader.go` (rewritten: PlatformString + GlobalGrammarDir only), `internal/adapters/treesitter/downloader_test.go`, `internal/adapters/treesitter/manifest.go`
+
+#### L10.4
+
+**Grammar build script** -- green Complete, yellow Cross-platform CI not wired
+
+`scripts/build-grammars.sh` compiles .so/.dylib from `alexaandru/go-sitter-forest` C source found in the Go module cache. Tested locally: core pack = 11 grammars, 11 MB total. Individual grammars range from 20 KB (json) to 3.5 MB (cpp).
+
+**Files**: `scripts/build-grammars.sh` (new), `scripts/gen-manifest-hashes.go` (new)
+
+#### L10.5
+
+**`aoa init` as single command** -- COMPLETE
+
+Scans project, detects languages via `ExtensionToLanguage`, shows curl commands for missing grammars, indexes with available grammars. Removed `aoa-recon` dependency entirely -- no more "run aoa recon init" tip. TSX fix: removed `soFileOverrides["tsx"] = "typescript"` -- each grammar gets its own .so file. Added `--no-grammars` flag to skip grammar detection.
+
+**Files**: `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/init_grammars_cgo.go` (new), `cmd/aoa/cmd/init_grammars_nocgo.go` (new), `internal/adapters/treesitter/extensions.go`, `internal/adapters/treesitter/loader.go`, `internal/adapters/treesitter/loader_test.go`
+
+#### L10.6
+
+**Command rename: wipe -> reset + remove** -- COMPLETE
+
+`aoa reset` clears data (what wipe used to do). `aoa remove` stops daemon and deletes `.aoa/` entirely. `aoa wipe` kept as hidden alias for backward compatibility.
+
+**Files**: `cmd/aoa/cmd/reset.go` (new), `cmd/aoa/cmd/remove.go` (new), `cmd/aoa/cmd/wipe.go` (hidden alias), `cmd/aoa/cmd/root.go`
+
+#### L10.7
+
+**deploy.sh updated** -- green Complete, yellow Not tested on fresh machine
+
+Now uses `./build.sh --core` instead of lean build.
+
+**Files**: `deploy.sh`
+
+#### L10.8
+
+**Build all 509 grammars + GitHub release** -- Not started
+
+Run `scripts/build-grammars.sh --all` to compile all grammars. Create GitHub release `grammars-v1` with .so files for linux/darwin x amd64/arm64. Wire CI workflow for cross-platform builds.
+
+#### L10.9
+
+**End-to-end test on fresh project** -- Not started
+
+Full flow: `aoa init` on a fresh project -> curl grammars -> scan -> dashboard shows results. Validates the entire dynamic grammar pipeline from zero state.
+
+---
 
 ---
 
@@ -307,14 +392,14 @@ File-level source display with all flagged lines in context (editor-like, severi
 | Search engine (O(1) inverted index) | 26/26 parity tests, 4 search modes, trigram content search (~60us on 500 files), case-sensitive default (G1). **G0 perf**: regex trigram extraction (5s->8ms), symbol search gated on metadata (186ms->4us). All ops sub-25ms. **G0 gauntlet**: 22-shape perf regression suite (`test/gauntlet_test.go`) -- ceiling test in `go test ./...`, benchstat baselines via `make bench-gauntlet/bench-baseline/bench-compare`. Covers every Search() code path including regex trigram, lean-mode guard, brute-force, glob, context, count, quiet, only-matching. |
 | Learner (21-step autotune) | 5/5 fixture parity, float64 precision. Do not change decay/prune constants. |
 | Session Prism (Claude JSONL reader) | Defensive parsing, UUID dedup, compound message decomposition. |
-| Tree-sitter parser (509 languages) | go-sitter-forest, behind `ports.Parser` interface, lives in `aoa-recon` binary. |
-| Two-binary distribution (L6) | `aoa` (pure Go, 11 MB) + `aoa-recon` (CGo, 361 MB). ReconBridge auto-discovery. |
+| Tree-sitter parser (509 languages) | go-sitter-forest, behind `ports.Parser` interface. Core build: C runtime compiled in, grammars loaded dynamically from `.aoa/grammars/*.so`. |
+| Single-binary distribution (L10) | One `aoa` binary (core build with tree-sitter C runtime). Grammars downloaded as .so/.dylib via `aoa init` curl commands. No outbound network from binary. |
 | Socket protocol | JSON-over-socket IPC. Concurrent clients. `Reindex` with extended timeout. |
 | Value engine (L0) | Burn rate, runway projection, session persistence, activity enrichments. |
 | Activity rubric | Three-lane color system. Learned column. Autotune enrichments. |
 | Dashboard (L1, 5-tab SPA) | 3-file split. Tab-aware polling. Soft glow animations. |
 | GNU grep parity (L3.15) | 135 parity tests (77 internal + 58 Unix). 3-route architecture. 22 native flags. |
-| npm distribution (L6.8-L6.10) | 10 npm packages, CI/release pipeline, 5 successful releases (v0.1.3-v0.1.7). |
+| npm distribution (L6.8-L6.10) | 10 npm packages, CI/release pipeline, 5 successful releases (v0.1.3-v0.1.7). **Superseded by L10 single-binary model.** |
 | Recon cache (L8.3) | Pre-computed at startup, incremental on file change. Zero per-poll cost. |
 | Investigation tracking (L8.4) | Per-file status. Persisted. 1-week auto-expiry. Auto-cleared on change. |
 | ContentMeter (L9.1) | Unified char accumulator, 50-turn ring buffer, 8 unit tests. |
@@ -350,9 +435,9 @@ File-level source display with all flagged lines in context (editor-like, severi
 
 | Resource | Location |
 |----------|----------|
-| Build (full) | `make build` -- CGo, all grammars (~76 MB) |
-| Build (pure) | `make build-pure` or `CGO_ENABLED=0 go build ./cmd/aoa/` -- pure Go (~8 MB) |
-| Build (recon) | `make build-recon` or `go build ./cmd/aoa-recon/` -- CGo, tree-sitter (~73 MB) |
+| Build (standard) | `./build.sh` -- pure Go, no CGo (~8 MB) |
+| Build (core) | `./build.sh --core` -- tree-sitter C runtime, zero compiled-in grammars, dynamic .so loading |
+| Build (recon) | `./build.sh --recon` -- CGo, all 509 grammars compiled in (~361 MB) |
 | Test | `go test ./...` |
 | CI check | `make check` |
 | Database | `{ProjectRoot}/.aoa/aoa.db` |
