@@ -293,11 +293,37 @@ jobs:
           all_pass = sum(1 for p in parsers if all(
               pd["status"] == "ok" for pd in p["platforms"].values()))
 
+          # Count unique maintainers
+          unique_maintainers = set()
+          for p in parsers:
+              for m in p.get("maintainer", "").split(","):
+                  m = m.strip()
+                  if m:
+                      unique_maintainers.add(m)
+
           with open("dist/GRAMMAR_REPORT.md", "w") as f:
               f.write("# aOa Grammar Validation Report\n\n")
+              f.write("## Acknowledgments\n\n")
+              f.write("This report exists because of the extraordinary work of the open source community. ")
+              f.write(f"The {len(parsers)} grammars listed below were built and maintained by ")
+              f.write(f"**{len(unique_maintainers)} individual contributors** who have collectively invested ")
+              f.write("thousands of hours writing, testing, and refining tree-sitter grammars ")
+              f.write("for languages spanning every corner of computing.\n\n")
+              f.write("aOa does not own or maintain any of these grammars. We compile, validate, and distribute them ")
+              f.write("so that developers can get structural code intelligence without friction. ")
+              f.write("Every grammar links back to its upstream repository and its maintainer ")
+              f.write("because credit belongs to the people who built them.\n\n")
+              f.write("Special thanks to [**@alexaandru**](https://github.com/alexaandru) for creating and maintaining ")
+              f.write("[go-sitter-forest](https://github.com/alexaandru/go-sitter-forest), ")
+              f.write("which aggregates these grammars into a single coherent ecosystem. ")
+              f.write("And to every maintainer listed in the table below: thank you. ")
+              f.write("This kind of tool is only possible because people like you choose to share your work. ")
+              f.write("We hope aOa gives back by bringing more users and visibility to your projects.\n\n")
+              f.write("---\n\n")
               f.write(f"**Generated**: {timestamp} | ")
               f.write(f"**Grammars**: {len(parsers)} | ")
               f.write(f"**All platforms pass**: {all_pass}/{len(parsers)} | ")
+              f.write(f"**Contributors**: {len(unique_maintainers)} | ")
               f.write(f"**Source**: [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)\n\n")
 
               f.write("## Platform Summary\n\n")
