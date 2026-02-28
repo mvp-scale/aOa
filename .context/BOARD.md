@@ -93,7 +93,7 @@
 | **L1** | | | | | | | | | | | | | *All 8 tasks complete -- see COMPLETED.md* | | |
 | **L2** | | | | | | | | | | | | | *All tasks complete -- see COMPLETED.md* | | |
 | **L3** | | | | | | | | | | | | | *All tasks complete -- see COMPLETED.md* | | |
-| [L4](#layer-4) | [L4.4](#l44) | | | x | x | | | | L4.3 | 🟢 | ⚪ | ⚪ | Installation docs -- `go install` or download binary | Friction-free onboarding | New user installs and runs in <2 minutes |
+| [L4](#layer-4) | [L4.4](#l44) | x | | x | x | | | | L4.3 | 🟢 | 🟡 | ⚪ | Installation docs + grammar pipeline -- npm install, aoa init, grammar compilation from go-sitter-forest with provenance | Friction-free onboarding, user delight | Build all 510, GH Actions provenance, install guide |
 | [L5](#layer-5) | [L5.Va](#l5va) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Dimensional rule validation -- per-rule detection tests across all 5 tiers (security 37, perf 26, quality 24, arch, obs). Absorbs L5.7/8/16/17/18 + L8.1 bitmask upgrade | All rules detect what they claim; engine wired to dashboard | Rules load + parse. **Gap**: per-rule detection accuracy untested |
 | [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
 | [L5](#layer-5) | [L5.11](#l511) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Dimension query support -- `--dimension=security --risk=high` | Filter by dimension | CLI filters by tier and severity |
@@ -144,11 +144,29 @@ Integration tests (`test/integration/cli_test.go`): `TestFileWatcher_NewFile_Aut
 
 #### L4.4
 
-**Installation docs** -- Not started
+**Installation docs + grammar pipeline** -- In progress (Session 79)
 
-Two install paths: `go install` (from source) vs binary download (lean + grammar packs). Post-install: `aoa init`, `aoa daemon start`.
+Single install path: `npm install -g @mvpscale/aoa` (lightweight, binary only). Grammar `.so` files are pre-compiled from tree-sitter source via GitHub Actions with SLSA provenance. `aoa init` detects project languages and installs only the grammars needed.
 
-**Files**: `README.md`
+**Grammar source**: [alexaandru/go-sitter-forest](https://github.com/alexaandru/go-sitter-forest) — aggregates 510 tree-sitter grammars from upstream repos. Each grammar has `parser.c` + optional `scanner.c`. Compiled with `gcc -shared -fPIC -O2`. Maintainer attribution displayed per grammar.
+
+**User flow**:
+1. `npm install -g @mvpscale/aoa` — installs binary
+2. `aoa init` — detects languages, compiles/fetches missing grammars, indexes project
+3. `aoa grammar list` — shows all available grammars with maintainer + source repo
+4. `aoa grammar install <lang|pack|all>` — install specific grammars
+
+**Remaining work**:
+- [ ] Build all 510 grammars locally, verify every one compiles and loads
+- [ ] GitHub Actions workflow to compile all grammars per platform with provenance
+- [ ] Update manifest with all 510 grammars (maintainer, upstream repo)
+- [ ] `aoa init` flow: detect → install → index, with progress + attribution
+- [ ] `aoa grammar list` shows maintainer and source for each grammar
+- [ ] User config file (`.aoa/languages`) for manual grammar selection
+- [ ] Installation guide document
+- [ ] npm package updated (binary only, lightweight)
+
+**Files**: `cmd/aoa/cmd/init_grammars_cgo.go`, `cmd/aoa/cmd/grammar_cgo.go`, `internal/adapters/treesitter/manifest.go`, `.github/workflows/grammars.yml`, `docs/INSTALL.md`
 
 ---
 
