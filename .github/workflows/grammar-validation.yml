@@ -16,6 +16,7 @@ jobs:
   validate:
     name: Validate grammars (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -57,7 +58,7 @@ jobs:
           fi
 
       - name: Download go-sitter-forest source
-        run: go mod download github.com/alexaandru/go-sitter-forest/...
+        run: go mod download all
 
       - name: Fetch grammars.json for maintainer data
         run: |
@@ -109,7 +110,7 @@ jobs:
               continue
             fi
 
-            version=$(echo "$src_dir" | grep -oP '@v?\K[^/]+$' || echo "unknown")
+            version=$(echo "$src_dir" | sed 's/.*@//' || echo "unknown")
             outfile="${OUTDIR}/${lang}${EXT}"
             sources=("$src_dir/parser.c")
             [ -f "$src_dir/scanner.c" ] && sources+=("$src_dir/scanner.c")
@@ -200,6 +201,7 @@ jobs:
     name: Generate validation report
     needs: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 

@@ -9,13 +9,11 @@ on:
 permissions:
   contents: read
 
-env:
-  GO_VERSION_FILE: go.mod
-
 jobs:
   check:
     name: Vet + Test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -24,45 +22,32 @@ jobs:
           go-version-file: go.mod
 
       - name: Go vet
-        run: go vet $(go list ./... | grep -v /cmd/aoa-recon)
+        run: go vet -tags lean $(go list -tags lean ./... | grep -v /cmd/aoa-recon)
 
       - name: Run tests
-        run: go test $(go list ./... | grep -v /cmd/aoa-recon)
+        run: go test -tags lean $(go list -tags lean ./... | grep -v /cmd/aoa-recon)
 
   build:
     name: Build aOa
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: check
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # needed for git describe
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
       - name: Build standard (tree-sitter + dynamic grammars)
-        run: |
-          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          LDFLAGS="-s -w -X github.com/corey/aoa/internal/version.Version=${VERSION} -X github.com/corey/aoa/internal/version.BuildDate=${BUILD_DATE}"
-
-          go build -tags "core" -ldflags "$LDFLAGS" -o aoa ./cmd/aoa/
-
-          SIZE=$(stat --format=%s aoa)
-          SIZE_MB=$((SIZE / 1048576))
-          echo "aoa binary: ${SIZE_MB} MB"
+        run: ./build.sh
 
       - name: Build light (pure Go, no tree-sitter)
         run: |
-          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          LDFLAGS="-s -w -X github.com/corey/aoa/internal/version.Version=${VERSION} -X github.com/corey/aoa/internal/version.BuildDate=${BUILD_DATE}"
-
-          CGO_ENABLED=0 go build -tags "lean" -ldflags "$LDFLAGS" -o aoa-light ./cmd/aoa/
-
-          SIZE=$(stat --format=%s aoa-light)
+          ./build.sh --light
+          SIZE=$(stat --format=%s aoa)
           SIZE_MB=$((SIZE / 1048576))
           echo "aoa-light binary: ${SIZE_MB} MB"
           if [ "$SIZE" -gt 20971520 ]; then

@@ -144,44 +144,109 @@ Integration tests (`test/integration/cli_test.go`): `TestFileWatcher_NewFile_Aut
 
 #### L4.4
 
-**Installation docs + grammar pipeline** -- In progress (Session 79)
+**Installation guide + grammar pipeline** -- PRIORITY 1 -- In progress (Session 79+)
 
-Single install path: `npm install -g @mvpscale/aoa` (lightweight, binary only). Grammar `.so` files are pre-compiled from tree-sitter source via GitHub Actions with SLSA provenance. `aoa init` detects project languages and installs only the grammars needed.
+## Terminology (non-negotiable)
 
-**Grammar source**: [alexaandru/go-sitter-forest](https://github.com/alexaandru/go-sitter-forest) -- aggregates 510 tree-sitter grammars from upstream repos. Each grammar has `parser.c` + optional `scanner.c`. Compiled with `gcc -shared -fPIC -O2`. Maintainer attribution displayed per grammar.
+- **`core` build tag** = the binary we ship. Tree-sitter runtime, dynamic `.so` loading. Built by `./build.sh` (default).
+- **`lean` build tag** = no tree-sitter, pure Go. Built by `./build.sh --light`. Not shipped to users. Used for fast CI checks only.
+- **`.so` files** = pre-compiled tree-sitter grammar shared libraries. One per language. NOT bundled in the binary. NOT bundled in npm. Downloaded by the user during `aoa init`.
+- **Grammar source** = [alexaandru/go-sitter-forest](https://github.com/alexaandru/go-sitter-forest). 510 grammars aggregated from upstream tree-sitter repos. Each has `parser.c` + optional `scanner.c`.
+- **`parsers.json`** = aOa-approved validated grammar list. Produced weekly by GitHub Actions. Contains: name, version, maintainer, upstream repo, sha256, size, security scan, platform status.
+- **`build.sh`** = local dev guardrails (prevents Claude from running `go build` directly). NOT used in CI/CD.
+- **`ci.yml`** = the real build. Runs in GitHub Actions. Produces the `core` binary for all platforms.
+- **`grammar-validation.yml`** = weekly Sunday run. Compiles all 510 grammars, security scans, produces `parsers.json` + `GRAMMAR_REPORT.md`.
 
-**User flow**:
-1. `npm install -g @mvpscale/aoa` -- installs binary
-2. `aoa init` -- detects languages, compiles missing grammars locally from go-sitter-forest C source (gcc, ~10s for 11 grammars), indexes project
-3. `aoa grammar list` -- shows all available grammars with maintainer + source repo
-4. `aoa grammar install <lang|pack|all>` -- install specific grammars
+## End-to-end installation flow (what the user does)
 
-**Session 79 completed**:
-- [x] `build.sh` simplified: default build = tree-sitter + dynamic grammars. `--light` = pure Go. `--recon`/`--recon-bin`/`--core` deprecated with messages
-- [x] Everything project-scoped: grammars, shims, data all under `{root}/.aoa/`. Nothing writes to `~/.aoa/`. Fixed `loader.go`, `init.go`, `grammar_cgo.go`
-- [x] `aoa init` compiles grammars locally from go-sitter-forest C source with gcc, per-grammar progress + ETA (11 grammars in 10.6s tested)
-- [x] All 509 grammars validated: `scripts/validate-grammars.sh` compiled every grammar from go-sitter-forest. 509/509 passed, zero failures. Produces `dist/parsers.json` (name, version, sha256, size, source)
-- [x] Weekly grammar validation workflow: `.github/workflows/grammar-validation.yml` -- Sunday 6am UTC, linux-amd64/arm64 + darwin-arm64, cppcheck security scan, maintainer attribution from `grammars.json`, commits `GRAMMAR_REPORT.md`
-- [x] CI aligned with build.sh: `.github/workflows/ci.yml` builds standard (core tags) + light (lean tags). `cmd/aoa-recon` excluded from vet/tests
+```
+Step 1: npm install -g @mvpscale/aoa
+        └─ npm pulls the lightweight platform package (binary only, ~8 MB)
+        └─ Binary is the `core` build (tree-sitter runtime, dynamic grammar loading)
+        └─ Binary was built in GitHub Actions, not locally. Provenance verified.
+
+Step 2: cd my-project && aoa init
+        └─ aOa creates .aoa/ directory (project-scoped, everything lives here)
+        └─ Scans project files, detects languages (e.g. python, go, rust, yaml)
+        └─ Checks .aoa/grammars/ for installed .so files
+        └─ For missing grammars:
+           └─ Writes .aoa/grammars/fetch.list (one URL+dest per grammar)
+           └─ Shows user: "11 grammars needed (2.3 MB)"
+           └─ Shows one-liner: xargs -n2 wget -qO < .aoa/grammars/fetch.list
+           └─ URLs point to our GitHub release (pre-built, signed, validated)
+        └─ If all grammars present: indexes project immediately
+        └─ Output: "aOa indexed 6750 files, 5442 symbols, 28916 tokens"
+
+Step 3: User runs the one-liner (or aoa prompts them)
+        └─ Downloads only the .so files they need from our GitHub release
+        └─ Each .so was compiled in GitHub Actions from go-sitter-forest source
+        └─ Each .so has: sha256, cppcheck scan, SLSA provenance, maintainer credit
+
+Step 4: aoa init (re-run)
+        └─ Finds all grammars, indexes project with full structural parsing
+        └─ "11 grammars ready"
+        └─ Done. User is online.
+```
+
+## What must be built (step by step, in order)
+
+### Phase 1: CI produces the binary (must work first)
+- [ ] **1.1** Fix `ci.yml`: vet/test use `-tags lean`, build uses `./build.sh`, timeouts added
+- [ ] **1.2** Verify CI passes: vet, tests, standard build, light build all green
+- [ ] **1.3** CI produces binary artifacts for all 4 platforms (linux/darwin × amd64/arm64)
+- [ ] **1.4** CI uploads artifacts (for release workflow to consume)
+
+### Phase 2: Grammar validation pipeline (weekly, independent)
+- [ ] **2.1** Fix `grammar-validation.yml`: `go mod download all`, portable sed, timeouts
+- [ ] **2.2** Verify weekly workflow passes on all platforms
+- [ ] **2.3** `parsers.json` committed to repo with full provenance per grammar
+- [ ] **2.4** `GRAMMAR_REPORT.md` committed with human-readable summary table
+
+### Phase 3: Grammar release (pre-built .so files hosted)
+- [ ] **3.1** Release workflow: compiles all 510 grammars per platform from go-sitter-forest
+- [ ] **3.2** Uploads .so files to GitHub release with SLSA provenance
+- [ ] **3.3** Release tagged (e.g. `grammars-v1`) with checksums
+- [ ] **3.4** URLs in fetch.list point to this release
+
+### Phase 4: aoa init flow (user-facing)
+- [ ] **4.1** `aoa init` detects languages, checks .aoa/grammars/ for installed .so
+- [ ] **4.2** Writes fetch.list with correct GitHub release URLs
+- [ ] **4.3** Shows user: count, total size, one-liner command
+- [ ] **4.4** On re-run with all grammars present: indexes immediately
+- [ ] **4.5** `aoa grammar list` shows all 510 with maintainer + upstream repo
+- [ ] **4.6** Progress + ETA for any step taking >2 seconds
+
+### Phase 5: npm packaging
+- [ ] **5.1** Platform packages (`@mvpscale/aoa-linux-x64`, etc.) contain only the binary
+- [ ] **5.2** `install.js` postinstall shows next steps clearly
+- [ ] **5.3** Release workflow publishes to npm from GitHub Actions
+- [ ] **5.4** End-to-end test: `npm install -g @mvpscale/aoa && aoa init` on fresh machine
+
+### Phase 6: Installation guide (docs/INSTALL.md)
+- [ ] **6.1** Document the full flow with examples
+- [ ] **6.2** Troubleshooting section (no gcc, no wget, firewall, etc.)
+- [ ] **6.3** `aoa grammar list` output example with attribution
+- [ ] **6.4** Link to GRAMMAR_REPORT.md and parsers.json for trust verification
+
+## Session 79 completed
+- [x] `build.sh` simplified: default = core, `--light` = lean, `--recon`/`--core` deprecated
+- [x] Everything project-scoped under `{root}/.aoa/`
+- [x] All 509 grammars validated locally (509/509 compiled, 0 failures)
+- [x] Weekly grammar validation workflow created
+- [x] CI workflow created (needs fixes from S79 findings)
 - [x] Advisory Rule added to CLAUDE.md
-- [x] `dist/` added to `.gitignore`
+- [x] `deploy.sh` updated to use `./build.sh` (not deprecated `--core`)
 
-**Key decisions (Session 79)**:
+## Key decisions
+- Binary built in GitHub Actions, not locally. CI is the real build.
 - Grammar .so files pre-compiled in GitHub Actions with SLSA provenance
-- Users fetch only the grammars they need from releases
-- `parsers.json` = aOa-approved list with maintainer, upstream repo, sha256, security scan, cross-platform status
-- `build.sh` is guardrails for Claude; `ci.yml` is the real build pipeline
+- Users download only the grammars they need via one-liner from fetch.list
+- aOa never makes outbound network connections itself
+- `parsers.json` is the aOa-approved trust document
+- Maintainer attribution shown per grammar — credit to the people who built them
+- Everything project-scoped: `aoa remove` wipes it all
 
-**Remaining work**:
-- [ ] Check CI and grammar validation workflow results (running)
-- [ ] Installation guide document (docs/INSTALL.md)
-- [ ] Expand manifest from ~59 grammars to all 510 with maintainer data
-- [ ] Wire `aoa init` to fetch pre-built .so from GitHub releases
-- [ ] `aoa grammar list` shows maintainer and source for each grammar
-- [ ] User config file (`.aoa/languages`) for manual grammar selection
-- [ ] npm package updated (binary only, lightweight)
-
-**Files**: `build.sh`, `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/init_grammars_cgo.go`, `cmd/aoa/cmd/grammar_cgo.go`, `internal/adapters/treesitter/loader.go`, `internal/adapters/treesitter/grammar_cgo.go`, `internal/adapters/treesitter/manifest.go`, `scripts/validate-grammars.sh`, `scripts/build-grammars.sh`, `.github/workflows/grammar-validation.yml`, `.github/workflows/ci.yml`
+**Files**: `build.sh`, `deploy.sh`, `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/init_grammars_cgo.go`, `cmd/aoa/cmd/grammar_cgo.go`, `internal/adapters/treesitter/loader.go`, `internal/adapters/treesitter/manifest.go`, `scripts/validate-grammars.sh`, `scripts/build-grammars.sh`, `.github/workflows/grammar-validation.yml`, `.github/workflows/ci.yml`, `npm/`
 
 ---
 
