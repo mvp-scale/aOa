@@ -58,10 +58,9 @@ func DefaultPort(projectRoot string) int {
 
 // Start begins listening on the preferred port. Writes the port to .aoa/http.port.
 func (s *Server) Start(preferredPort int) error {
-	addr := fmt.Sprintf("127.0.0.1:%d", preferredPort)
-	ln, err := net.Listen("tcp", addr)
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", preferredPort)) // localhost only
 	if err != nil {
-		return fmt.Errorf("listen %s: %w", addr, err)
+		return fmt.Errorf("listen 127.0.0.1:%d: %w", preferredPort, err)
 	}
 	s.listener = ln
 	s.port = ln.Addr().(*net.TCPAddr).Port

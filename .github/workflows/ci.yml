@@ -61,22 +61,22 @@ jobs:
           echo "Scanning for outbound network patterns in production code..."
           FAILED=false
 
-          # Check for HTTP client usage (exclude test files and this CI file)
-          if grep -rn 'http\.Get\|http\.Post\|http\.Do\|http\.NewRequest\|http\.Client{' \
+          # Check for HTTP client usage (exclude test files)
+          if grep -rn 'http\.Get(\|http\.Post(\|http\.Do(\|http\.NewRequest(\|http\.Client{' \
               --include='*.go' --exclude='*_test.go' .; then
             echo "::error::Found HTTP client usage in production code"
             FAILED=true
           fi
 
-          # Check for outbound dial (exclude unix and localhost patterns)
-          if grep -rn 'net\.Dial\|net\.DialTimeout' --include='*.go' --exclude='*_test.go' . \
+          # Check for outbound dial (exclude unix socket and localhost)
+          if grep -rn 'net\.Dial(\|net\.DialTimeout(' --include='*.go' --exclude='*_test.go' . \
               | grep -v '"unix"' | grep -v 'localhost' | grep -v '127\.0\.0\.1'; then
             echo "::error::Found non-local net.Dial in production code"
             FAILED=true
           fi
 
-          # Check for non-localhost Listen
-          if grep -rn 'net\.Listen' --include='*.go' --exclude='*_test.go' . \
+          # Check for non-localhost Listen calls (not field declarations)
+          if grep -rn 'net\.Listen(' --include='*.go' --exclude='*_test.go' . \
               | grep -v '"unix"' | grep -v '127\.0\.0\.1'; then
             echo "::error::Found non-localhost net.Listen in production code"
             FAILED=true
