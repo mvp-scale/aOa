@@ -1,6 +1,6 @@
 module github.com/corey/aoa
 
-go 1.25.6
+go 1.25.7
 
 require (
 	github.com/ebitengine/purego v0.9.1
@@ -522,6 +522,7 @@ require (
 	github.com/alexaandru/go-sitter-forest/ziggy_schema v1.9.1
 	github.com/alexaandru/go-sitter-forest/zoomba v1.9.1
 	github.com/petar-dambovaliev/aho-corasick v0.0.0-20250424160509-463d218d4745
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -531,5 +532,4 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	golang.org/x/sys v0.29.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
