@@ -1,6 +1,16 @@
 # aOa Grammar Validation Report
 
-**Generated**: 2026-02-28 15:57 UTC | **Grammars**: 509 | **All platforms pass**: 507/509 | **Source**: [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)
+## Acknowledgments
+
+This report exists because of the extraordinary work of the open source community. The 509 grammars listed below were built and maintained by **346 individual contributors** who have collectively invested thousands of hours writing, testing, and refining tree-sitter grammars for languages spanning every corner of computing.
+
+aOa does not own or maintain any of these grammars. We compile, validate, and distribute them so that developers can get structural code intelligence without friction. Every grammar links back to its upstream repository and its maintainer because credit belongs to the people who built them.
+
+Special thanks to [**@alexaandru**](https://github.com/alexaandru) for creating and maintaining [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest), which aggregates these grammars into a single coherent ecosystem. And to every maintainer listed in the table below: thank you. This kind of tool is only possible because people like you choose to share your work. We hope aOa gives back by bringing more users and visibility to your projects.
+
+---
+
+**Generated**: 2026-02-28 16:14 UTC | **Grammars**: 509 | **All platforms pass**: 507/509 | **Contributors**: 346 | **Source**: [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)
 
 ## Platform Summary
 
