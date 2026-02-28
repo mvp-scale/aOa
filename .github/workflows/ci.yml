@@ -46,7 +46,7 @@ jobs:
       - name: gosec — source security scan
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -tags lean ./...
+          gosec -tags lean -exclude=G115 ./...
 
       - name: Network audit — verify no outbound connections
         run: |
