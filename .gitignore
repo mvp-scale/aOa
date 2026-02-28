@@ -3,6 +3,9 @@
 /aoa-recon
 /main
 
+# Build artifacts
+dist/
+
 # Runtime state (project-local, not committed)
 .aoa/
 

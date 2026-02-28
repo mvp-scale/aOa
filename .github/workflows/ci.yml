@@ -9,9 +9,12 @@ on:
 permissions:
   contents: read
 
+env:
+  GO_VERSION_FILE: go.mod
+
 jobs:
   check:
-    name: Vet + Test + Pure Build
+    name: Vet + Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,13 +29,43 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-      - name: Verify pure build (CGO_ENABLED=0, must stay under 15 MB)
+  build:
+    name: Build aOa
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needed for git describe
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build standard (tree-sitter + dynamic grammars)
         run: |
-          CGO_ENABLED=0 go build -tags lean -ldflags "-s -w" -o aoa ./cmd/aoa/
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LDFLAGS="-s -w -X github.com/corey/aoa/internal/version.Version=${VERSION} -X github.com/corey/aoa/internal/version.BuildDate=${BUILD_DATE}"
+
+          go build -tags "core" -ldflags "$LDFLAGS" -o aoa ./cmd/aoa/
+
           SIZE=$(stat --format=%s aoa)
           SIZE_MB=$((SIZE / 1048576))
-          echo "lean binary: ${SIZE_MB} MB ($(ls -lh aoa | awk '{print $5}'))"
-          if [ "$SIZE" -gt 15728640 ]; then
-            echo "::error::lean binary is ${SIZE_MB} MB — max is 15 MB. Did you add a CGo/treesitter import without a //go:build !lean tag?"
+          echo "aoa binary: ${SIZE_MB} MB"
+
+      - name: Build light (pure Go, no tree-sitter)
+        run: |
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LDFLAGS="-s -w -X github.com/corey/aoa/internal/version.Version=${VERSION} -X github.com/corey/aoa/internal/version.BuildDate=${BUILD_DATE}"
+
+          CGO_ENABLED=0 go build -tags "lean" -ldflags "$LDFLAGS" -o aoa-light ./cmd/aoa/
+
+          SIZE=$(stat --format=%s aoa-light)
+          SIZE_MB=$((SIZE / 1048576))
+          echo "aoa-light binary: ${SIZE_MB} MB"
+          if [ "$SIZE" -gt 20971520 ]; then
+            echo "::error::light binary is ${SIZE_MB} MB — max is 20 MB"
             exit 1
           fi

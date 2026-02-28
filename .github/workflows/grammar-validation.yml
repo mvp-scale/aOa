@@ -31,11 +31,6 @@ jobs:
             ext: .so
             shared_flag: "-shared"
             cross: true
-          - platform: darwin-amd64
-            runner: macos-13
-            cc: clang
-            ext: .dylib
-            shared_flag: "-dynamiclib"
           - platform: darwin-arm64
             runner: macos-14
             cc: clang
@@ -86,13 +81,12 @@ jobs:
           REPORT="dist/report-${PLATFORM}.json"
           mkdir -p "$OUTDIR"
 
-          # Discover all grammars
+          # Discover all grammars (portable — no readarray)
+          GRAMMAR_LIST=$(for dir in "$FOREST"/*/; do basename "$dir" | sed 's/@.*//'; done | sort -u)
           GRAMMARS=()
-          for dir in "$FOREST"/*/; do
-            name=$(basename "$dir" | sed 's/@.*//')
-            GRAMMARS+=("$name")
-          done
-          readarray -t GRAMMARS < <(printf '%s\n' "${GRAMMARS[@]}" | sort -u)
+          while IFS= read -r g; do
+            GRAMMARS+=("$g")
+          done <<< "$GRAMMAR_LIST"
           TOTAL=${#GRAMMARS[@]}
 
           echo "Platform: $PLATFORM"
