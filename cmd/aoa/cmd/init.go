@@ -42,7 +42,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens (%dms)\n",
 			result.FileCount, result.SymbolCount, result.TokenCount, result.ElapsedMs)
-		createShims()
+		createShims(root)
 		return nil
 	}
 
@@ -83,21 +83,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens\n",
 		stats.FileCount, stats.SymbolCount, stats.TokenCount)
-	createShims()
+	createShims(root)
 	return nil
 }
 
-// createShims writes grep and egrep shim scripts to ~/.aoa/shims/.
+// createShims writes grep and egrep shim scripts to {root}/.aoa/shims/.
 // Each shim execs the corresponding aoa subcommand, transparently replacing
-// system binaries when ~/.aoa/shims is prepended to PATH.
-func createShims() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not determine home directory: %v\n", err)
-		return
-	}
-
-	shimDir := filepath.Join(home, ".aoa", "shims")
+// system binaries when .aoa/shims is prepended to PATH.
+func createShims(root string) {
+	shimDir := filepath.Join(root, ".aoa", "shims")
 	if err := os.MkdirAll(shimDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not create shims directory: %v\n", err)
 		return
@@ -126,9 +120,9 @@ func createShims() {
 	}
 
 	if wrote {
-		fmt.Printf("\n⚡ aOa shims created in ~/.aoa/shims/\n\n")
+		fmt.Printf("\n⚡ aOa shims created in .aoa/shims/\n\n")
 		fmt.Printf("  To activate for AI tools, add to ~/.bashrc or ~/.zshrc:\n\n")
-		fmt.Printf("    alias claude='PATH=\"$HOME/.aoa/shims:$PATH\" claude'\n")
-		fmt.Printf("    alias gemini='PATH=\"$HOME/.aoa/shims:$PATH\" gemini'\n")
+		fmt.Printf("    alias claude='PATH=\"%s:$PATH\" claude'\n", shimDir)
+		fmt.Printf("    alias gemini='PATH=\"%s:$PATH\" gemini'\n", shimDir)
 	}
 }

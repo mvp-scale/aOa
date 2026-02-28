@@ -32,17 +32,13 @@ func NewDynamicLoader(searchPaths []string) *DynamicLoader {
 	}
 }
 
-// DefaultGrammarPaths returns the default search paths for grammar shared libraries.
-// Project-local (.aoa/grammars/) is searched first, then global (~/.aoa/grammars/).
+// DefaultGrammarPaths returns the search path for grammar shared libraries.
+// Grammars are project-scoped: {projectRoot}/.aoa/grammars/
 func DefaultGrammarPaths(projectRoot string) []string {
-	var paths []string
 	if projectRoot != "" {
-		paths = append(paths, filepath.Join(projectRoot, ".aoa", "grammars"))
+		return []string{filepath.Join(projectRoot, ".aoa", "grammars")}
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		paths = append(paths, filepath.Join(home, ".aoa", "grammars"))
-	}
-	return paths
+	return nil
 }
 
 // LibExtension returns the shared library extension for the current platform.

@@ -143,11 +143,8 @@ func runGrammarInstall(cmd *cobra.Command, args []string) error {
 	manifest := treesitter.BuiltinManifest()
 	root := projectRoot()
 
-	// Use global grammar dir (~/.aoa/grammars/) for installs.
-	grammarDir := treesitter.GlobalGrammarDir()
-	if grammarDir == "" {
-		grammarDir = app.NewPaths(root).GrammarsDir
-	}
+	// Grammars are project-scoped: {root}/.aoa/grammars/
+	grammarDir := app.NewPaths(root).GrammarsDir
 
 	// Resolve targets — could be pack names or individual grammars.
 	var targets []string

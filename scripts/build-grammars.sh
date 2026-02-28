@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # build-grammars.sh — Compile tree-sitter grammar .so/.dylib files from
-# go-sitter-forest C source.
+# alexaandru/go-sitter-forest C source (509 grammars).
 #
 # Usage:
-#   ./scripts/build-grammars.sh python go typescript   # specific grammars
+#   ./scripts/build-grammars.sh python go typescript   # specific
 #   ./scripts/build-grammars.sh --pack core            # P1 tier
 #   ./scripts/build-grammars.sh --pack common          # P2 tier
 #   ./scripts/build-grammars.sh --all                  # all manifest grammars
@@ -37,15 +37,15 @@ OUTDIR="${OUTDIR:-dist/grammars}"
 mkdir -p "$OUTDIR"
 
 CC="${CC:-gcc}"
-
-# Find go-sitter-forest in the Go module cache.
 GOMODCACHE=$(go env GOMODCACHE)
-FOREST_DIR=$(find "$GOMODCACHE" -maxdepth 1 -name 'github.com' -type d)/smacker
-if [ ! -d "$FOREST_DIR" ]; then
-  echo "go-sitter-forest not found in module cache. Run: go mod download"
+FOREST_BASE="$GOMODCACHE/github.com/alexaandru/go-sitter-forest"
+
+# Verify go-sitter-forest exists in the module cache.
+if ! ls -d "$FOREST_BASE"/* >/dev/null 2>&1; then
+  echo "go-sitter-forest not found in module cache."
+  echo "Run: go mod download"
   exit 1
 fi
-FOREST_BASE=$(ls -d "$GOMODCACHE/github.com/smacker/go-tree-sitter"* 2>/dev/null | sort -V | tail -1)
 
 # Pack definitions (grammar names per tier).
 P1_CORE="python javascript typescript tsx go rust java c cpp bash json"
@@ -53,68 +53,42 @@ P2_COMMON="c_sharp ruby php kotlin yaml html css toml markdown dockerfile sql"
 P3_EXTENDED="scala lua svelte hcl swift r vue dart elixir erlang groovy graphql clojure gleam cmake make nix"
 P4_SPECIALIST="ocaml verilog haskell cuda zig julia d fortran nim objc vhdl purescript odin ada elm fennel glsl hlsl"
 
-# Map grammar names to go-sitter-forest package directory names.
-# Most grammars use their name directly. Override exceptions here.
-grammar_dir_name() {
+find_grammar_dir() {
   local lang="$1"
-  case "$lang" in
-    c_sharp)    echo "csharp" ;;
-    cpp)        echo "cpp" ;;
-    tsx)        echo "tsx" ;;
-    typescript) echo "typescript" ;;
-    *)          echo "$lang" ;;
-  esac
-}
-
-# Map grammar names to C symbol names.
-c_symbol_name() {
-  local lang="$1"
-  echo "tree_sitter_${lang//-/_}"
+  # Find the latest version of this grammar in the module cache.
+  local dir
+  dir=$(ls -d "$FOREST_BASE/${lang}@"* 2>/dev/null | sort -V | tail -1)
+  if [ -n "$dir" ] && [ -d "$dir" ]; then
+    echo "$dir"
+  fi
 }
 
 compile_grammar() {
   local lang="$1"
-  local dirname
-  dirname=$(grammar_dir_name "$lang")
   local outfile="${OUTDIR}/${lang}-${PLATFORM}${EXT}"
 
-  # Find the grammar source directory.
-  local src_dir=""
-  # Try go-sitter-forest layout first (smacker/go-tree-sitter).
-  if [ -n "$FOREST_BASE" ] && [ -d "$FOREST_BASE/$dirname" ]; then
-    src_dir="$FOREST_BASE/$dirname"
-  fi
+  local src_dir
+  src_dir=$(find_grammar_dir "$lang")
 
   if [ -z "$src_dir" ]; then
-    echo "  SKIP  $lang (source not found)"
+    echo "  SKIP  $lang (not found in go-sitter-forest)"
     return 1
   fi
 
-  # Find parser.c — it may be at the top level or in src/.
-  local parser_c=""
-  if [ -f "$src_dir/parser.c" ]; then
-    parser_c="$src_dir/parser.c"
-  elif [ -f "$src_dir/src/parser.c" ]; then
-    parser_c="$src_dir/src/parser.c"
-  else
-    echo "  SKIP  $lang (no parser.c found in $src_dir)"
+  # parser.c is at the top level in go-sitter-forest.
+  if [ ! -f "$src_dir/parser.c" ]; then
+    echo "  SKIP  $lang (no parser.c in $src_dir)"
     return 1
   fi
 
-  local src_base
-  src_base=$(dirname "$parser_c")
-
-  # Collect source files: parser.c + optional scanner.c/scanner.cc.
-  local sources=("$parser_c")
-  if [ -f "$src_base/scanner.c" ]; then
-    sources+=("$src_base/scanner.c")
+  # Collect source files: parser.c + optional scanner.c
+  local sources=("$src_dir/parser.c")
+  if [ -f "$src_dir/scanner.c" ]; then
+    sources+=("$src_dir/scanner.c")
   fi
-
-  # Include path: parser.h is typically alongside parser.c.
-  local include_dir="$src_base"
 
   echo -n "  BUILD $lang ... "
-  if $CC $SHARED_FLAG -fPIC -O2 -I"$include_dir" -o "$outfile" "${sources[@]}" 2>/dev/null; then
+  if $CC $SHARED_FLAG -fPIC -O2 -I"$src_dir" -o "$outfile" "${sources[@]}" 2>/dev/null; then
     local size
     size=$(stat --format=%s "$outfile" 2>/dev/null || stat -f%z "$outfile")
     echo "ok ($(( size / 1024 )) KB)"
@@ -166,6 +140,7 @@ fi
 echo "Platform: $PLATFORM"
 echo "Output:   $OUTDIR/"
 echo "Compiler: $CC"
+echo "Source:   $FOREST_BASE/"
 echo "Grammars: ${#GRAMMARS[@]}"
 echo ""
 
@@ -173,9 +148,9 @@ OK=0
 FAIL=0
 for lang in "${GRAMMARS[@]}"; do
   if compile_grammar "$lang"; then
-    ((OK++))
+    OK=$((OK + 1))
   else
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
   fi
 done
 
