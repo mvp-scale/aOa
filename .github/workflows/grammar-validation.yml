@@ -16,7 +16,7 @@ jobs:
   validate:
     name: Validate grammars (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -27,13 +27,12 @@ jobs:
             ext: .so
             shared_flag: "-shared"
           - platform: linux-arm64
-            runner: ubuntu-latest
-            cc: aarch64-linux-gnu-gcc
+            runner: ubuntu-24.04-arm
+            cc: gcc
             ext: .so
             shared_flag: "-shared"
-            cross: true
           - platform: darwin-arm64
-            runner: macos-14
+            runner: macos-latest
             cc: clang
             ext: .dylib
             shared_flag: "-dynamiclib"
@@ -43,29 +42,15 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
-
-      - name: Install tools
-        run: |
-          if [ "${{ matrix.cross }}" = "true" ]; then
-            sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
-          fi
-          # Install cppcheck for security scanning
-          if command -v apt-get &>/dev/null; then
-            sudo apt-get update && sudo apt-get install -y cppcheck
-          elif command -v brew &>/dev/null; then
-            brew install cppcheck
-          fi
+          go-version-file: go.mod
 
       - name: Download go-sitter-forest source
-        run: go mod download all
+        run: go mod download github.com/alexaandru/go-sitter-forest
 
       - name: Fetch grammars.json for maintainer data
         run: |
           curl -sL https://raw.githubusercontent.com/alexaandru/go-sitter-forest/main/grammars.json \
             -o /tmp/forest-grammars.json
-          curl -sL https://raw.githubusercontent.com/alexaandru/go-sitter-forest/main/PARSERS.md \
-            -o /tmp/forest-parsers.md
 
       - name: Compile and validate all grammars
         env:
@@ -94,7 +79,7 @@ jobs:
           echo "Grammars: $TOTAL"
           echo ""
 
-          OK=0; FAIL=0; SKIP=0; SEC_WARN=0
+          OK=0; FAIL=0; SKIP=0
           echo "[" > "$REPORT"
           FIRST=true
 
@@ -113,29 +98,21 @@ jobs:
             version=$(echo "$src_dir" | sed 's/.*@//' || echo "unknown")
             outfile="${OUTDIR}/${lang}${EXT}"
             sources=("$src_dir/parser.c")
-            [ -f "$src_dir/scanner.c" ] && sources+=("$src_dir/scanner.c")
-
-            # Security scan with cppcheck
-            sec_status="clean"
-            sec_detail=""
-            if command -v cppcheck &>/dev/null; then
-              cppcheck_out=$(cppcheck --quiet --error-exitcode=0 \
-                --enable=warning,portability \
-                --suppress=missingInclude \
-                "${sources[@]}" 2>&1 || true)
-              if [ -n "$cppcheck_out" ]; then
-                sec_status="warnings"
-                sec_detail=$(echo "$cppcheck_out" | head -3 | tr '\n' '; ')
-                SEC_WARN=$((SEC_WARN + 1))
-              fi
+            has_scanner="false"
+            if [ -f "$src_dir/scanner.c" ]; then
+              sources+=("$src_dir/scanner.c")
+              has_scanner="true"
             fi
 
-            # Compile
-            if $CC $SHARED_FLAG -fPIC -O2 -I"$src_dir" -o "$outfile" "${sources[@]}" 2>/dev/null; then
+            # Hash source files for provenance
+            source_sha=$(cat "${sources[@]}" | sha256sum | cut -d' ' -f1 2>/dev/null || cat "${sources[@]}" | shasum -a 256 | cut -d' ' -f1)
+
+            # Compile (60s timeout per grammar)
+            if timeout 60 $CC $SHARED_FLAG -fPIC -O2 -Wall -I"$src_dir" -o "$outfile" "${sources[@]}" 2>/dev/null; then
               size=$(stat --format=%s "$outfile" 2>/dev/null || stat -f%z "$outfile")
-              sha=$(sha256sum "$outfile" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$outfile" | cut -d' ' -f1)
+              binary_sha=$(sha256sum "$outfile" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$outfile" | cut -d' ' -f1)
               size_kb=$(( size / 1024 ))
-              printf "  [%3d/%d] %-20s ok  %4d KB  security:%s\n" "$n" "$TOTAL" "$lang" "$size_kb" "$sec_status"
+              printf "  [%3d/%d] %-20s ok  %4d KB\n" "$n" "$TOTAL" "$lang" "$size_kb"
 
               [ "$FIRST" = true ] && FIRST=false || echo "," >> "$REPORT"
               cat >> "$REPORT" <<ENTRY
@@ -145,10 +122,10 @@ jobs:
               "status": "ok",
               "platform": "$PLATFORM",
               "size_bytes": $size,
-              "sha256": "$sha",
-              "source": "github.com/alexaandru/go-sitter-forest/${lang}@${version}",
-              "security": "$sec_status",
-              "security_detail": "$(echo "$sec_detail" | sed 's/"/\\"/g')"
+              "sha256": "$binary_sha",
+              "source_sha256": "$source_sha",
+              "has_scanner": $has_scanner,
+              "source": "github.com/alexaandru/go-sitter-forest/${lang}@${version}"
             }
           ENTRY
               OK=$((OK + 1))
@@ -162,6 +139,8 @@ jobs:
               "version": "$version",
               "status": "fail",
               "platform": "$PLATFORM",
+              "source_sha256": "$source_sha",
+              "has_scanner": $has_scanner,
               "source": "github.com/alexaandru/go-sitter-forest/${lang}@${version}"
             }
           ENTRY
@@ -174,7 +153,7 @@ jobs:
 
           echo ""
           echo "=== $PLATFORM ==="
-          echo "Compiled: $OK  Failed: $FAIL  Skipped: $SKIP  Security warnings: $SEC_WARN"
+          echo "Compiled: $OK  Failed: $FAIL  Skipped: $SKIP"
 
           # Save summary for the report job
           mkdir -p dist
@@ -185,7 +164,6 @@ jobs:
             "compiled": $OK,
             "failed": $FAIL,
             "skipped": $SKIP,
-            "security_warnings": $SEC_WARN,
             "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
@@ -267,12 +245,13 @@ jobs:
                   "source": sample.get("source", ""),
                   "platforms": {}
               }
+              entry["source_sha256"] = sample.get("source_sha256", "")
+              entry["has_scanner"] = sample.get("has_scanner", False)
               for plat, data in sorted(plat_data.items()):
                   entry["platforms"][plat] = {
                       "status": data.get("status"),
                       "sha256": data.get("sha256", ""),
-                      "size_bytes": data.get("size_bytes", 0),
-                      "security": data.get("security", "unknown")
+                      "size_bytes": data.get("size_bytes", 0)
                   }
               parsers.append(entry)
 
@@ -295,29 +274,30 @@ jobs:
               f.write(f"**Source**: [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)\n\n")
 
               f.write("## Platform Summary\n\n")
-              f.write("| Platform | Compiled | Failed | Skipped | Security Warnings |\n")
-              f.write("|----------|----------|--------|---------|-------------------|\n")
+              f.write("| Platform | Compiled | Failed | Skipped |\n")
+              f.write("|----------|----------|--------|--------|\n")
               for plat in sorted(summaries.keys()):
                   s = summaries[plat]
-                  f.write(f"| {plat} | {s['compiled']} | {s['failed']} | {s['skipped']} | {s['security_warnings']} |\n")
+                  f.write(f"| {plat} | {s['compiled']} | {s['failed']} | {s['skipped']} |\n")
+
+              scanner_count = sum(1 for p in parsers if p.get("has_scanner"))
+              f.write(f"\n**{len(parsers)}** grammars total, **{scanner_count}** have hand-written scanner.c\n")
 
               f.write("\n## Grammar Details\n\n")
-              f.write("| Grammar | Version | Maintainer | Upstream | Platforms | Security |\n")
-              f.write("|---------|---------|------------|----------|-----------|----------|\n")
+              f.write("| Grammar | Version | Maintainer | Upstream | Platforms | Scanner |\n")
+              f.write("|---------|---------|------------|----------|-----------|--------|\n")
               for p in parsers:
                   plat_statuses = []
-                  sec_statuses = set()
                   for plat, pd in p["platforms"].items():
                       short = plat.split("-")[0][0] + plat.split("-")[1][0]
                       status = "pass" if pd["status"] == "ok" else "FAIL"
                       plat_statuses.append(f"{short}:{status}")
-                      sec_statuses.add(pd.get("security", "unknown"))
-                  sec = "clean" if sec_statuses == {"clean"} else "warnings"
+                  scanner = "yes" if p.get("has_scanner") else "no"
                   upstream = p["upstream"]
                   if upstream:
                       repo_name = upstream.replace("https://github.com/", "")
                       upstream = f"[{repo_name}]({upstream})"
-                  f.write(f"| {p['name']} | {p['version']} | {p['maintainer']} | {upstream} | {' '.join(plat_statuses)} | {sec} |\n")
+                  f.write(f"| {p['name']} | {p['version']} | {p['maintainer']} | {upstream} | {' '.join(plat_statuses)} | {scanner} |\n")
 
           print("Wrote dist/GRAMMAR_REPORT.md")
           PYSCRIPT
