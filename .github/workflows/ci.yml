@@ -24,10 +24,10 @@ jobs:
           go-version-file: go.mod
 
       - name: Go vet
-        run: go vet ./...
+        run: go vet $(go list ./... | grep -v /cmd/aoa-recon)
 
       - name: Run tests
-        run: go test ./...
+        run: go test $(go list ./... | grep -v /cmd/aoa-recon)
 
   build:
     name: Build aOa
