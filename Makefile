@@ -2,22 +2,19 @@
 # Run `make check` before committing. That's the CI.
 #
 # IMPORTANT: All builds go through build.sh. Never run "go build" directly.
-# Standard build = no recon, no CGo, no compiled grammars.
-# Recon is opt-in only: make build-recon
+# Two build modes:
+#   ./build.sh         — core (tree-sitter + dynamic grammars)
+#   ./build.sh --light — lean (pure Go, no tree-sitter)
 
-.PHONY: build build-recon build-recon-bin test test-v test-active lint vet bench bench-gauntlet bench-baseline bench-compare coverage check status
+.PHONY: build build-light test test-v test-active lint vet bench bench-gauntlet bench-baseline bench-compare coverage check status
 
-# Standard build — no recon, no CGo, pure Go (~12 MB)
+# Core build — tree-sitter + dynamic grammar loading
 build:
 	./build.sh
 
-# Build with recon/dimensional analysis (opt-in only)
-build-recon:
-	./build.sh --recon
-
-# Build standalone aoa-recon binary
-build-recon-bin:
-	./build.sh --recon-bin
+# Lean build — pure Go, no tree-sitter, no CGo
+build-light:
+	./build.sh --light
 
 # Run all tests (skipped tests are expected during development)
 test:
@@ -56,7 +53,7 @@ check: vet lint test build
 	 if [ "$$SIZE" -gt 20971520 ]; then \
 	   echo ""; \
 	   echo "FAIL: binary is $${SIZE_MB} MB — max 20 MB"; \
-	   echo "  Something dragged in CGo/treesitter/recon."; \
+	   echo "  Something dragged in unexpected dependencies."; \
 	   exit 1; \
 	 fi
 	@echo ""

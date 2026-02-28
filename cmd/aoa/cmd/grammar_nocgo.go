@@ -10,12 +10,12 @@ import (
 
 var grammarCmd = &cobra.Command{
 	Use:   "grammar",
-	Short: "Manage tree-sitter grammar packs (requires aoa-recon)",
-	Long:  "Grammar management requires CGo. Install aoa-recon for full grammar support.",
+	Short: "Manage tree-sitter grammar packs (requires core build)",
+	Long:  "Grammar management requires the core build with CGo/tree-sitter. This is the lean build.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("Grammar management requires tree-sitter (CGo).")
-		fmt.Println("Install aoa-recon for full grammar and scanning support:")
-		fmt.Println("  npm install -g aoa-recon")
+		fmt.Println("Grammar management requires the core build (tree-sitter + CGo).")
+		fmt.Println("This is the lean build. Install the standard aOa package:")
+		fmt.Println("  npm install -g @mvpscale/aoa")
 		return nil
 	},
 }

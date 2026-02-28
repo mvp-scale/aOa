@@ -173,11 +173,6 @@ func (a *App) onFileChanged(absPath string) {
 	a.updateReconOrDimForFile(fileID, relPath)
 	a.clearFileInvestigated(relPath)
 
-	// If aoa-recon is available and parser is nil, trigger incremental enhancement.
-	// When parser is non-nil, symbols are already extracted above.
-	if a.Parser == nil {
-		a.TriggerReconEnhanceFile(absPath)
-	}
 }
 
 // onContextFileChanged reads .aoa/context.jsonl and stores the last 5 snapshots.

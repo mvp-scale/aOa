@@ -1,8 +1,7 @@
 // Package recon provides code quality pattern scanning. It detects security issues,
 // performance problems, and code quality concerns by scanning source files line-by-line.
 //
-// This is a shared package used by both the web dashboard (GET /api/recon) and
-// the aoa-recon CLI binary (aoa-recon enhance).
+// Used by the dimensional analysis engine and the web dashboard (GET /api/recon).
 package recon
 
 import (

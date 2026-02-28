@@ -170,7 +170,6 @@ type App struct {
 	Reader    *claude.Reader
 	Index     *ports.Index
 
-	reconBridge    *ReconBridge            // discovers and invokes aoa-recon companion binary
 	dimEngine      any                    // *recon.Engine in full builds, nil in lean
 	dimRules       []analyzer.Rule         // loaded from YAML at startup
 	debug          bool                   // AOA_DEBUG=1 enables verbose event logging
@@ -377,9 +376,6 @@ func New(cfg Config) (*App, error) {
 	// Wire search observer: search results → learning signals
 	engine.SetObserver(a.searchObserver)
 
-	// Discover aoa-recon companion binary (non-fatal if not found)
-	a.initReconBridge()
-
 	// Load YAML-defined dimensional analysis rules and create engine
 	a.initDimEngine()
 
@@ -572,8 +568,8 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 func (a *App) Start() error {
 	a.started = time.Now()
 	if a.debug {
-		a.debugf("starting daemon — root=%s parser=%v reconBridge=%v dimEngine=%v",
-			a.ProjectRoot, a.Parser != nil, a.reconBridge != nil, a.dimEngine != nil)
+		a.debugf("starting daemon — root=%s parser=%v dimEngine=%v",
+			a.ProjectRoot, a.Parser != nil, a.dimEngine != nil)
 	}
 	if err := a.Server.Start(); err != nil {
 		return fmt.Errorf("start server: %w", err)
@@ -2267,11 +2263,6 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 		if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
 			return socket.ReindexResult{}, fmt.Errorf("save index: %w", err)
 		}
-	}
-
-	// If parser is nil and aoa-recon is available, trigger enhancement in background.
-	if a.Parser == nil {
-		a.TriggerReconEnhance()
 	}
 
 	// Re-scan dimensional analysis in the background after full reindex

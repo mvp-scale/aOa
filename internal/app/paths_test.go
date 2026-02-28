@@ -26,7 +26,6 @@ func TestNewPaths(t *testing.T) {
 	assert.Equal(t, filepath.Join("/project", ".aoa", "hook", "context.jsonl"), p.ContextJSONL)
 	assert.Equal(t, filepath.Join("/project", ".aoa", "hook", "usage.txt"), p.UsageTxt)
 	assert.Equal(t, filepath.Join("/project", ".aoa", "bin"), p.BinDir)
-	assert.Equal(t, filepath.Join("/project", ".aoa", "bin", "aoa-recon"), p.ReconBin)
 	assert.Equal(t, filepath.Join("/project", ".aoa", "grammars"), p.GrammarsDir)
 }
 

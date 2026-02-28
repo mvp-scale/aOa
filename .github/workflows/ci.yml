@@ -22,10 +22,10 @@ jobs:
           go-version-file: go.mod
 
       - name: Go vet
-        run: go vet -tags lean $(go list -tags lean ./... | grep -v /cmd/aoa-recon)
+        run: go vet -tags lean ./...
 
       - name: Run tests
-        run: go test -tags lean $(go list -tags lean ./... | grep -v /cmd/aoa-recon)
+        run: go test -tags lean ./...
 
   security:
     name: Security scan
@@ -41,7 +41,7 @@ jobs:
       - name: govulncheck — dependency vulnerability scan
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+          govulncheck -tags lean ./...
 
       - name: gosec — source security scan
         run: |

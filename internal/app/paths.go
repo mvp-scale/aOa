@@ -28,7 +28,6 @@ type Paths struct {
 	UsageTxt     string // .aoa/hook/usage.txt
 
 	BinDir   string // .aoa/bin/
-	ReconBin string // .aoa/bin/aoa-recon
 
 	GrammarsDir string // .aoa/grammars/
 }
@@ -57,7 +56,6 @@ func NewPaths(projectRoot string) *Paths {
 		UsageTxt:     filepath.Join(root, "hook", "usage.txt"),
 
 		BinDir:   filepath.Join(root, "bin"),
-		ReconBin: filepath.Join(root, "bin", "aoa-recon"),
 
 		GrammarsDir: filepath.Join(root, "grammars"),
 	}
