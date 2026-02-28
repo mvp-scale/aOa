@@ -218,21 +218,26 @@ jobs:
 
           # Merge per-platform reports into unified parsers.json
           python3 - <<'PYSCRIPT'
-          import json, glob, os
+          import json, glob, os, datetime
 
-          # Load maintainer data
-          maintainers = {}
+          # Load maintainer data from go-sitter-forest (array of objects)
+          upstream_data = {}
           try:
               with open("/tmp/forest-grammars.json") as f:
                   forest = json.load(f)
-              for lang, info in forest.items():
-                  url = info.get("url", "")
-                  maintainer = info.get("maintainedBy", "")
-                  if url and not url.startswith("http"):
-                      url = "https://github.com/" + url
-                  maintainers[lang] = {"upstream": url, "maintainer": maintainer}
-          except:
-              pass
+              for entry in forest:
+                  lang = entry.get("language", "")
+                  if not lang:
+                      continue
+                  upstream_data[lang] = {
+                      "url": entry.get("url", ""),
+                      "maintainer": entry.get("maintainedBy", ""),
+                      "revision": entry.get("revision", ""),
+                  }
+          except Exception as e:
+              print(f"WARNING: Failed to load maintainer data: {e}")
+
+          print(f"Loaded upstream data for {len(upstream_data)} grammars")
 
           # Load all platform reports
           platforms = {}
@@ -247,28 +252,29 @@ jobs:
                   platforms[name][plat] = entry
 
           # Build unified parsers.json
+          PLATFORM_ORDER = ["linux-amd64", "linux-arm64", "darwin-arm64", "darwin-amd64"]
           parsers = []
           for name in sorted(platforms.keys()):
               plat_data = platforms[name]
-              m = maintainers.get(name, {})
-              # Use first available entry for version/source
+              u = upstream_data.get(name, {})
               sample = next(iter(plat_data.values()))
               entry = {
                   "name": name,
                   "version": sample.get("version", "unknown"),
-                  "maintainer": m.get("maintainer", "unknown"),
-                  "upstream": m.get("upstream", ""),
-                  "source": sample.get("source", ""),
+                  "upstream_url": u.get("url", ""),
+                  "maintainer": u.get("maintainer", ""),
+                  "upstream_revision": u.get("revision", ""),
+                  "source_sha256": sample.get("source_sha256", ""),
                   "platforms": {}
               }
-              entry["source_sha256"] = sample.get("source_sha256", "")
-              entry["has_scanner"] = sample.get("has_scanner", False)
-              for plat, data in sorted(plat_data.items()):
-                  entry["platforms"][plat] = {
-                      "status": data.get("status"),
-                      "sha256": data.get("sha256", ""),
-                      "size_bytes": data.get("size_bytes", 0)
-                  }
+              for plat in PLATFORM_ORDER:
+                  if plat in plat_data:
+                      data = plat_data[plat]
+                      entry["platforms"][plat] = {
+                          "status": data.get("status"),
+                          "sha256": data.get("sha256", ""),
+                          "size_bytes": data.get("size_bytes", 0)
+                      }
               parsers.append(entry)
 
           os.makedirs("dist", exist_ok=True)
@@ -283,40 +289,58 @@ jobs:
                   s = json.load(fh)
               summaries[s["platform"]] = s
 
-          import datetime
           timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+          all_pass = sum(1 for p in parsers if all(
+              pd["status"] == "ok" for pd in p["platforms"].values()))
 
           with open("dist/GRAMMAR_REPORT.md", "w") as f:
               f.write("# aOa Grammar Validation Report\n\n")
               f.write(f"**Generated**: {timestamp} | ")
               f.write(f"**Grammars**: {len(parsers)} | ")
+              f.write(f"**All platforms pass**: {all_pass}/{len(parsers)} | ")
               f.write(f"**Source**: [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)\n\n")
 
               f.write("## Platform Summary\n\n")
               f.write("| Platform | Compiled | Failed | Skipped |\n")
               f.write("|----------|----------|--------|--------|\n")
-              for plat in sorted(summaries.keys()):
-                  s = summaries[plat]
-                  f.write(f"| {plat} | {s['compiled']} | {s['failed']} | {s['skipped']} |\n")
+              for plat in PLATFORM_ORDER:
+                  if plat in summaries:
+                      s = summaries[plat]
+                      f.write(f"| {plat} | {s['compiled']} | {s['failed']} | {s['skipped']} |\n")
 
-              scanner_count = sum(1 for p in parsers if p.get("has_scanner"))
-              f.write(f"\n**{len(parsers)}** grammars total, **{scanner_count}** have hand-written scanner.c\n")
+              f.write(f"\nEach grammar is compiled from C source into a shared library ")
+              f.write(f"(`.so` on Linux, `.dylib` on macOS) per platform.\n")
 
-              f.write("\n## Grammar Details\n\n")
-              f.write("| Grammar | Version | Maintainer | Upstream | Platforms | Scanner |\n")
-              f.write("|---------|---------|------------|----------|-----------|--------|\n")
+              f.write("\n## Validated Grammars\n\n")
+              f.write("| Grammar | Version | Linux | macOS | Maintainer | Upstream |\n")
+              f.write("|---------|---------|:-----:|:-----:|------------|----------|\n")
               for p in parsers:
-                  plat_statuses = []
-                  for plat, pd in p["platforms"].items():
-                      short = plat.split("-")[0][0] + plat.split("-")[1][0]
-                      status = "pass" if pd["status"] == "ok" else "FAIL"
-                      plat_statuses.append(f"{short}:{status}")
-                  scanner = "yes" if p.get("has_scanner") else "no"
-                  upstream = p["upstream"]
-                  if upstream:
-                      repo_name = upstream.replace("https://github.com/", "")
-                      upstream = f"[{repo_name}]({upstream})"
-                  f.write(f"| {p['name']} | {p['version']} | {p['maintainer']} | {upstream} | {' '.join(plat_statuses)} | {scanner} |\n")
+                  linux_ok = all(
+                      p["platforms"].get(pl, {}).get("status") == "ok"
+                      for pl in ["linux-amd64", "linux-arm64"])
+                  darwin_ok = all(
+                      p["platforms"].get(pl, {}).get("status") == "ok"
+                      for pl in ["darwin-arm64", "darwin-amd64"])
+                  linux_mark = "Y" if linux_ok else "N"
+                  darwin_mark = "Y" if darwin_ok else "N"
+                  maintainer = p["maintainer"] or "-"
+                  url = p["upstream_url"]
+                  if url:
+                      repo_name = url.replace("https://github.com/", "")
+                      upstream_col = f"[{repo_name}]({url})"
+                  else:
+                      upstream_col = "-"
+                  f.write(f"| {p['name']} | {p['version']} | {linux_mark} | {darwin_mark} | {maintainer} | {upstream_col} |\n")
+
+              # List failures at the bottom for quick reference
+              failures = [(p["name"], plat)
+                  for p in parsers
+                  for plat, pd in p["platforms"].items()
+                  if pd["status"] != "ok"]
+              if failures:
+                  f.write("\n## Failures\n\n")
+                  for name, plat in failures:
+                      f.write(f"- **{name}** on {plat}\n")
 
           print("Wrote dist/GRAMMAR_REPORT.md")
           PYSCRIPT
