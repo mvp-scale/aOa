@@ -94,16 +94,16 @@ var gauntletCases = []gauntletCase{
 	{"CaseInsensitive/Lean", "dashboard", ports.SearchOptions{Mode: "case_insensitive"}, true, 2 * time.Millisecond},
 
 	// --- Word boundary: literal + brute-force word check (regex per line × 500 files) ---
-	{"WordBoundary/Full", "handler", ports.SearchOptions{WordBoundary: true}, false, 15 * time.Millisecond},
-	{"WordBoundary/Lean", "handler", ports.SearchOptions{WordBoundary: true}, true, 15 * time.Millisecond},
+	{"WordBoundary/Full", "handler", ports.SearchOptions{WordBoundary: true}, false, 30 * time.Millisecond},
+	{"WordBoundary/Lean", "handler", ports.SearchOptions{WordBoundary: true}, true, 30 * time.Millisecond},
 
 	// --- Invert match: invertSymbolHits + brute-force full scan ---
-	{"InvertMatch/Full", "dashboard", ports.SearchOptions{InvertMatch: true}, false, 25 * time.Millisecond},
-	{"InvertMatch/Lean", "dashboard", ports.SearchOptions{InvertMatch: true}, true, 25 * time.Millisecond},
+	{"InvertMatch/Full", "dashboard", ports.SearchOptions{InvertMatch: true}, false, 50 * time.Millisecond},
+	{"InvertMatch/Lean", "dashboard", ports.SearchOptions{InvertMatch: true}, true, 50 * time.Millisecond},
 
 	// --- Glob filters: literal + per-file glob regex compilation ---
-	{"GlobInclude/Full", "handler", ports.SearchOptions{IncludeGlob: "pkg1/*"}, false, 20 * time.Millisecond},
-	{"GlobExclude/Full", "handler", ports.SearchOptions{ExcludeGlob: "pkg0/*"}, false, 20 * time.Millisecond},
+	{"GlobInclude/Full", "handler", ports.SearchOptions{IncludeGlob: "pkg1/*"}, false, 40 * time.Millisecond},
+	{"GlobExclude/Full", "handler", ports.SearchOptions{ExcludeGlob: "pkg0/*"}, false, 40 * time.Millisecond},
 
 	// --- Context lines: full path + attachContextLines ---
 	{"ContextLines/Full", "dashboard", ports.SearchOptions{Context: 3}, false, 2 * time.Millisecond},

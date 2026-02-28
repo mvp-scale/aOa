@@ -28,10 +28,26 @@ jobs:
         run: go test -tags lean $(go list -tags lean ./... | grep -v /cmd/aoa-recon)
 
   build:
-    name: Build aOa
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: Build (${{ matrix.os }}-${{ matrix.arch }})
     needs: check
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            os: linux
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            os: linux
+            arch: arm64
+          - runner: macos-latest
+            os: darwin
+            arch: arm64
+          - runner: macos-13
+            os: darwin
+            arch: amd64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,9 +60,34 @@ jobs:
       - name: Build standard (tree-sitter + dynamic grammars)
         run: ./build.sh
 
+      - name: Rename binary
+        run: mv aoa aoa-${{ matrix.os }}-${{ matrix.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aoa-${{ matrix.os }}-${{ matrix.arch }}
+          path: aoa-${{ matrix.os }}-${{ matrix.arch }}
+
+  build-light:
+    name: Build Light
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
       - name: Build light (pure Go, no tree-sitter)
+        run: ./build.sh --light
+
+      - name: Validate binary size
         run: |
-          ./build.sh --light
           SIZE=$(stat --format=%s aoa)
           SIZE_MB=$((SIZE / 1048576))
           echo "aoa-light binary: ${SIZE_MB} MB"

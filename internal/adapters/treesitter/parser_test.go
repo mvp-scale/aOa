@@ -1,3 +1,5 @@
+//go:build !lean
+
 package treesitter
 
 import (
