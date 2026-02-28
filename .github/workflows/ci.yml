@@ -49,9 +49,11 @@ jobs:
           # Excluded rules (false positives for a local CLI tool):
           #   G115: uint->uint16 for tree-sitter line positions (bounded by file size)
           #   G204: subprocess with variable (daemon re-exec, open browser, grammar build)
+          #   G301/G302/G306: .aoa/ permissions (0755 dirs, 0644 files — standard for
+          #     project-local tool data, same as .git/. Not secrets.)
           #   G304: file read with variable (reading project files is our core purpose)
           #   G702/G703: taint-based variants of G204/G304
-          gosec -tags lean -exclude=G115,G204,G304,G702,G703 ./...
+          gosec -tags lean -exclude=G115,G204,G301,G302,G304,G306,G702,G703 ./...
 
       - name: Network audit — verify no outbound connections
         run: |

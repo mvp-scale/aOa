@@ -95,7 +95,10 @@ func (s *Server) Start(preferredPort int) error {
 	mux.HandleFunc("GET /api/source-line", s.handleSourceLine)
 	mux.HandleFunc("GET /api/usage", s.handleUsage)
 
-	s.httpSrv = &http.Server{Handler: mux}
+	s.httpSrv = &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 
 	// Write port file for discovery
 	if s.portFilePath != "" {
