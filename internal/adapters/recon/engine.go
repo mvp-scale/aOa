@@ -3,6 +3,7 @@
 package recon
 
 import (
+	"bytes"
 	"regexp"
 	"time"
 
@@ -72,10 +73,28 @@ func NewEngine(rules []analyzer.Rule, parser *treesitter.Parser) *Engine {
 
 // AnalyzeFile runs the full dimensional analysis pipeline on a single file.
 // Returns nil if no findings are detected.
+// generatedMarker is the Go standard marker for generated files (go generate convention).
+// Files containing this marker in the first 2KB are skipped from analysis.
+var generatedMarker = []byte("Code generated")
+
+// isGeneratedFile checks the first 2KB of source for the standard generated-file marker.
+func isGeneratedFile(source []byte) bool {
+	header := source
+	if len(header) > 2048 {
+		header = header[:2048]
+	}
+	return bytes.Contains(header, generatedMarker)
+}
+
 func (e *Engine) AnalyzeFile(filePath string, source []byte, isTest, isMain bool) *analyzer.FileAnalysis {
 	start := time.Now()
 
 	if len(source) == 0 {
+		return nil
+	}
+
+	// Skip generated files — they produce massive noise and aren't authored code.
+	if isGeneratedFile(source) {
 		return nil
 	}
 

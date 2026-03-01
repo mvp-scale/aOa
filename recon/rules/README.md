@@ -98,6 +98,7 @@ The rule's **kind** is inferred from which layers are present:
 | `skip_main` | bool | | Skip main/cmd packages |
 | `code_only` | bool | | Only scan code files |
 | `skip_langs` | []string | | Languages to skip entirely |
+| `amplifier` | float64 | | Signal amplifier — bypasses density requirement (see scoring) |
 
 ### Structural Block
 
@@ -325,3 +326,128 @@ Source file (any of 509 languages)
     ▼
     FileAnalysis { bitmask, methods[], findings[] }
 ```
+
+## Method-Level Scoring (Signal Score)
+
+After the pipeline produces per-file findings, they're attributed to enclosing methods via tree-sitter symbol spans. Each method accumulates a **per-line bitmask matrix** — a binary matrix of (lines × bits) showing which rules fired on which lines.
+
+The unit of detection is the **method**, not the line. A method surfaces as a finding only when its **signal score** meets the gate threshold (≥ 3). The score combines six independent signals from the bitmask matrix:
+
+### The Formula
+
+```
+score = base + co_occurrence + clustering + breadth
+```
+
+Where `base` is the sum of per-bit contributions, each modulated by severity and density.
+
+### Component 1: Severity-Anchored Base
+
+Each unique (tier, bit) pair that fires in the method contributes to the base score. The contribution depends on **severity** and **density** (fraction of method lines where this bit fires):
+
+| Severity | Weight | Density Requirement |
+|----------|--------|---------------------|
+| `critical` | 10 | None — always full weight. One secret = one finding. |
+| `high` | 7 | Floored at 50%. Even sparse high findings contribute ≥ 3.5. |
+| `warning` | 3 | Scaled by density × 10, capped at 1.0. Needs ~10% density for full weight. |
+| `info` | 1 | Scaled by density × 5, capped at 1.0. Needs ~20% density for full weight. |
+
+**Why density modulation?** A single `info`-level finding in a 500-line method is noise. The same finding on 40% of lines is a pattern. Density distinguishes signal from noise for low-severity rules. Critical/high bypass density because their presence alone is significant.
+
+### Component 2: Rule Amplifier
+
+Some rules are categorically meaningful — their presence alone is actionable regardless of density. These carry an `amplifier` field in the YAML definition:
+
+```yaml
+- id: domain_imports_adapter
+  severity: warning
+  amplifier: 3.0    # presence alone = weight × 3.0 = 9.0, clears gate
+```
+
+Amplified rules contribute:
+
+```
+base_contribution = weight × amplifier + density × weight × 10
+```
+
+The amplifier provides a floor (always at least `weight × amplifier`), and density adds on top without capping. This means an amplified info rule at 30% density scores higher than a non-amplified warning at 1% density — which is the correct behavior for rules like `print_statement` (left-in debugging).
+
+**Rules with amplifier:**
+
+| Rule | Severity | Amplifier | Rationale |
+|------|----------|-----------|-----------|
+| `domain_imports_adapter` | warning | 3.0 | Hexagonal violation is always wrong |
+| `banned_import` | warning | 2.0 | Deprecated import is always actionable |
+| `panic_in_lib` | warning | 2.0 | Panic in library code is always wrong |
+| `panic_in_handler` | warning | 2.0 | Panic in handler crashes the server |
+| `os_exit_in_lib` | warning | 2.0 | os.Exit in library kills the caller |
+| `fatal_log_in_lib` | warning | 2.0 | log.Fatal in library kills the caller |
+| `recovered_panic_no_log` | warning | 2.0 | Silent panic recovery hides failures |
+| `test_import_in_prod` | info | 2.0 | Test code in production is always wrong |
+| `print_statement` | info | 1.5 | Left-in debugging, density makes it actionable |
+
+### Component 3: Co-occurrence (+2.0 per pair)
+
+When two or more distinct bits fire on the **same line**, they describe the same code statement. This is a compound finding — stronger than two independent hits.
+
+Example: SQL concatenation (bit 0) + raw SQL without params (bit 2) on the same line = definite SQL injection, not two separate observations.
+
+```
+co_occurrence = Σ_lines[ pairs × 2.0 ]
+  where pairs = n × (n-1) / 2 for lines with n ≥ 2 distinct bits
+```
+
+### Component 4: Clustering (+1.0 per unique bit in cluster)
+
+Signal-bearing lines within ±2 lines of each other form a **cluster** — a single code block with concentrated issues. The bonus scales with the number of unique bits in the largest cluster:
+
+```
+clustering = unique_bits_in_largest_cluster × 1.0   (if cluster ≥ 2 lines)
+```
+
+Example: 3 different warning bits on lines 50, 51, 52 (adjacent) = cluster with 3 unique bits = +3.0 bonus. The same 3 bits scattered across lines 10, 150, 290 = no cluster = no bonus.
+
+### Component 5: Breadth (+1.0 per warning bit beyond 2)
+
+Many distinct findings in one method signal systematic debt, even if each individual finding has low density:
+
+```
+breadth = max(
+    (warning_bits - 2) × 1.0,     if warning_bits ≥ 3
+    (total_unique_bits - 3) × 0.5, if total_bits ≥ 4
+)
+```
+
+Example: 4 distinct warning bits each at 1% density individually score ~0.3 each (base ≈ 1.2). But breadth adds 2.0, pushing total above the gate. The method has 4 different quality problems — that's worth reporting.
+
+### Gate Threshold
+
+Methods with signal score **≥ 3** surface as findings. Below that is suppressed as noise.
+
+What clears the gate:
+- Any single critical-severity rule (score = 10)
+- Any single high-severity rule (score ≥ 3.5)
+- Any amplified warning rule (e.g., hexagonal violation: 3 × 3.0 = 9)
+- Dense warning pattern at ≥10% density (3 × 1.0 = 3)
+- 3+ distinct warning bits with breadth bonus
+- Co-occurring bits on the same line
+- Clustered compound findings
+
+What stays suppressed:
+- 1 info finding in a 500-line method (score ≈ 0.01)
+- 2 scattered warnings in a 400-line method (score ≈ 0.15)
+- 3 sparse info hits across 200 lines (score ≈ 0.08)
+
+### `SevHigh` → `warning` Collapse
+
+The `high` severity level (weight 7) exists internally for scoring — it distinguishes rules that need less evidence than `warning` but aren't as categorical as `critical`. In dashboard output, `high` maps to `"warning"` to match the existing filter buttons (critical / warning / info). No UI changes needed.
+
+### Severity vs Amplifier — Two Axes
+
+| | Low Amplifier (0) | High Amplifier (2-3) |
+|---|---|---|
+| **Critical** | Always surfaces (weight 10 > gate 3) | N/A — critical doesn't need amplifier |
+| **Warning** | Needs density/breadth/co-occurrence | Surfaces on presence alone |
+| **Info** | Needs high density (≥20%) | Surfaces when dense enough (amplifier + density compound) |
+
+Severity answers "**how bad** is this type of issue?" Amplifier answers "**how much evidence** do I need before reporting it?"

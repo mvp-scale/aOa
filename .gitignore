@@ -17,3 +17,6 @@ dist/
 _throwaway_data/
 _throwaway_uploads/
 _tmp_sitter_forest/
+
+# Generated test fixtures (regenerate with: go run ./cmd/dim-dump/)
+internal/domain/analyzer/testdata/real_methods.json

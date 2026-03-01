@@ -107,7 +107,7 @@ func TestCompose_MultipleMethodsScored(t *testing.T) {
 
 	methods := Compose(findings, symbols, rules)
 	assert.Len(t, methods, 1)
-	assert.Equal(t, 17, methods[0].Score) // critical(10) + high(7)
+	assert.Equal(t, 13, methods[0].Score) // SignalScore: critical(10) + high(7×0.5 density floor) = 13
 	assert.Equal(t, 2, methods[0].Bitmask.PopCount())
 }
 

@@ -483,10 +483,53 @@ func (ctx *walkContext) checkChildCountThreshold(n *tree_sitter.Node, matchConce
 		return ctx.countImportSpecs(n) > threshold
 	case analyzer.ConceptInterface:
 		return ctx.countInterfaceMethods(n) > threshold
+	case analyzer.ConceptCatchClause:
+		return ctx.countCatchBodyStatements(n) == 0
 	default:
 		// Generic child count
 		return int(n.ChildCount()) > threshold
 	}
+}
+
+// countCatchBodyStatements counts executable statements inside a catch/except/rescue block.
+// Searches for the body child (block, statement_block, compound_statement, body_statement)
+// and counts its non-punctuation children. Returns 0 for empty catch bodies.
+func (ctx *walkContext) countCatchBodyStatements(n *tree_sitter.Node) int {
+	// Walk children looking for the body block
+	bodyKinds := map[string]bool{
+		"block": true, "statement_block": true, "compound_statement": true,
+		"body_statement": true, "then": true,
+	}
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		c := n.Child(i)
+		if bodyKinds[c.Kind()] {
+			// Count non-punctuation, non-keyword children
+			stmts := 0
+			for j := uint(0); j < uint(c.ChildCount()); j++ {
+				ck := c.Child(j).Kind()
+				if ck != "{" && ck != "}" && ck != "comment" {
+					stmts++
+				}
+			}
+			return stmts
+		}
+	}
+	// Python except_clause: statements are direct children after the colon
+	// Count children that aren't the exception type/name or punctuation
+	stmts := 0
+	skip := map[string]bool{
+		"catch": true, "except": true, "rescue": true, "=>": true,
+		"(": true, ")": true, ":": true, ",": true,
+		"identifier": true, "type_identifier": true, "dotted_name": true,
+		"catch_declaration": true, "exception_type": true, "catch_parameter": true,
+	}
+	for i := uint(0); i < uint(n.ChildCount()); i++ {
+		ck := n.Child(i).Kind()
+		if !skip[ck] {
+			stmts++
+		}
+	}
+	return stmts
 }
 
 // countFunctionParams counts parameter declarations in a function node.

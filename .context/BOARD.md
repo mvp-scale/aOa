@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-03-01 (Session 84) | **91% complete.**
+> **Updated**: 2026-03-01 (Session 85) | **91% complete.**
 > **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9/L5.19 + L6 (all) + L7.2/L7.4 + L8.1 + L9 (all) + L10.5/L10.6 + G0.HF1 + P0 (all 7 bugs) (535 tests, 0 fail, 0 skip)
 > **Archived boards**: `.context/archived/`
 
@@ -341,6 +341,8 @@ All tiers have YAML rework complete (declarative `structural:` blocks, universal
 - **Architecture** (3 dims): antipatterns, imports, api_surface
 - **Observability** (2 dims): debug, silent_failures
 
+**S85 scoring update**: `SignalScore()` (Formula P) validated against real-world data (4,149 findings from live project scan). Gate raised to 6. `TestRealWorldDistribution` provides per-severity breakdown + score distribution histograms for all formula variants (0.28s, no rebuild). 9 priority rules have `amplifier` values.
+
 **What validation needs**: For each rule, a test fixture (synthetic code snippet) + assertion that the rule fires on the snippet and does NOT fire on clean code. Can be a single test file per tier with table-driven subtests.
 
 **Files**: `recon/rules/*.yaml`, `internal/domain/analyzer/`, `internal/adapters/treesitter/walker.go`, `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
@@ -438,6 +440,26 @@ Per-file investigated status with persistence (`.aoa/recon-investigated.json`), 
 Updated from "npm install aoa-recon" to "Run aoa init" prompt. Condition fixed to show prompt whenever no data exists (regardless of recon_available flag).
 
 **Files**: `internal/adapters/web/recon.go`, `internal/adapters/web/static/app.js`
+
+#### L8 Scoring + Noise Reduction (S85)
+
+**Formula P + Source Data Cleanup** -- 92% finding reduction (49,838 -> 4,149)
+
+Three fixes applied in S85 after the Formula P scoring algorithm (designed in late S84/early S85) revealed that the noise problem was in the source data, not the formula:
+
+1. **Gitignore-aware indexing**: `filepath.Walk` with hardcoded `skipDirs` replaced by `git ls-files --cached --others --exclude-standard`. `_tmp_sitter_forest/` (vendored tree-sitter grammar source) was in `.gitignore` but not excluded -- 79% of all findings. Added index membership filtering to `loadDimensionalFromStore` to prune stale bbolt entries.
+
+2. **Generated file detection**: Files with `// Code generated ... DO NOT EDIT` marker in first 2KB skipped by `AnalyzeFile`. `languages_forest.go` alone contributed 509 false positives.
+
+3. **`error_not_checked` replaced by `empty_catch_body`**: Old rule fired on every bare function call without adjacent error check -- 4,406 false positives, near-zero true positive rate (no type info to distinguish `os.Remove()` from `mutex.Lock()`). New rule detects empty catch/except/rescue blocks across all 500+ tree-sitter languages. Added `ConceptCatchClause` to lang_map with overrides for Python (`except_clause`) and Ruby (`rescue`).
+
+**Results**: quality 33,501->1,468 (96%), architecture 6,811->934 (86%), 247->71 clean files.
+
+**Infrastructure**: `cmd/dim-dump/` tool exports method-level data from bbolt as JSON fixture. `TestRealWorldDistribution` in scoring_experiment_test.go loads fixture, runs all formulas, reports per-severity suppression stats + score distribution histograms. Fast iteration: edit formula -> `go test -run TestRealWorld -v` (0.28s).
+
+**Key files**: `internal/app/indexer.go` (gitignore-aware file discovery), `internal/adapters/recon/engine.go` (generated file skip), `recon/rules/quality.yaml` (error_not_checked -> empty_catch_body)
+
+**All files changed**: `internal/app/indexer.go`, `internal/app/dimensional.go`, `internal/app/dim_engine.go`, `internal/adapters/bbolt/store.go`, `internal/adapters/recon/engine.go`, `internal/adapters/treesitter/walker.go`, `internal/domain/analyzer/lang_map.go`, `internal/domain/analyzer/score.go`, `internal/domain/analyzer/scoring_experiment_test.go`, `internal/domain/analyzer/score_test.go`, `internal/adapters/web/recon.go`, `recon/rules/quality.yaml`, `cmd/dim-dump/main.go`, `internal/domain/analyzer/testdata/real_methods.json`
 
 #### L8.6
 

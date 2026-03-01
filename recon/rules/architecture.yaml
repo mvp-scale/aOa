@@ -84,6 +84,7 @@
   tier: architecture
   bit: 6
   severity: warning
+  amplifier: 2.0
   code_only: true
   text_patterns:
     - '"io/ioutil"'
@@ -100,6 +101,7 @@
   tier: architecture
   bit: 7
   severity: warning
+  amplifier: 3.0
   code_only: true
   text_patterns:
     - '"adapters/'
@@ -278,6 +280,7 @@
   tier: architecture
   bit: 22
   severity: info
+  amplifier: 2.0
   skip_test: true
   code_only: true
   text_patterns:

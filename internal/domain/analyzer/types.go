@@ -189,6 +189,7 @@ type Rule struct {
 	SkipMain     bool             // skip main/cmd packages
 	CodeOnly     bool             // only scan code files
 	SkipLangs    []string         // languages to skip this rule for
+	Amplifier    float64          // signal amplifier (0 = normal, >0 = bypass density; see scoring)
 }
 
 // StructuralBlock describes declarative AST matching constraints.

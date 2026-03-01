@@ -10,6 +10,7 @@
   tier: observability
   bit: 0
   severity: info
+  amplifier: 1.5
   skip_test: true
   code_only: true
   text_patterns:
@@ -83,6 +84,7 @@
   tier: observability
   bit: 5
   severity: warning
+  amplifier: 2.0
   code_only: true
   text_patterns:
     - "recover()"
@@ -215,6 +217,7 @@
   tier: observability
   bit: 15
   severity: warning
+  amplifier: 2.0
   code_only: true
   text_patterns:
     - "panic("
@@ -228,6 +231,7 @@
   tier: observability
   bit: 16
   severity: warning
+  amplifier: 2.0
   skip_main: true
   code_only: true
   text_patterns:
@@ -242,6 +246,7 @@
   tier: observability
   bit: 17
   severity: warning
+  amplifier: 2.0
   skip_main: true
   code_only: true
   text_patterns:

@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -85,36 +86,15 @@ func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, e
 		return nil, nil, err
 	}
 
-	var files []string
-	err = filepath.Walk(absRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // skip unreadable
-		}
-		if info.IsDir() {
-			if skipDirs[info.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		ext := strings.ToLower(filepath.Ext(path))
-		if ext == "" {
-			return nil
-		}
-		// When parser is available, use its extension support; otherwise fall back
-		// to the built-in defaultCodeExtensions list for tokenization-only mode.
-		if parser != nil {
-			if parser.SupportsExtension(ext) {
-				files = append(files, path)
-			}
-		} else {
-			if defaultCodeExtensions[ext] {
-				files = append(files, path)
-			}
-		}
-		return nil
-	})
+	// Prefer git ls-files to respect .gitignore. Falls back to filepath.Walk
+	// if not in a git repo or git is unavailable.
+	files, err := gitTrackedFiles(absRoot, parser)
 	if err != nil {
-		return nil, nil, err
+		// Fallback: walk with hardcoded skipDirs (non-git projects)
+		files, err = walkFiles(absRoot, parser)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	sort.Strings(files)
@@ -196,4 +176,73 @@ func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, e
 	}
 
 	return idx, result, nil
+}
+
+// gitTrackedFiles uses "git ls-files" to enumerate files that are tracked
+// (or untracked but not ignored), respecting .gitignore, .git/info/exclude,
+// and nested gitignore files. Returns absolute paths filtered by parser support.
+func gitTrackedFiles(absRoot string, parser ports.Parser) ([]string, error) {
+	// --cached: tracked files. --others --exclude-standard: untracked but not ignored.
+	cmd := exec.Command("git", "ls-files", "--cached", "--others", "--exclude-standard", "-z")
+	cmd.Dir = absRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var files []string
+	for _, rel := range strings.Split(string(out), "\x00") {
+		rel = strings.TrimSpace(rel)
+		if rel == "" {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(rel))
+		if ext == "" {
+			continue
+		}
+		if parser != nil {
+			if !parser.SupportsExtension(ext) {
+				continue
+			}
+		} else {
+			if !defaultCodeExtensions[ext] {
+				continue
+			}
+		}
+		files = append(files, filepath.Join(absRoot, rel))
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+// walkFiles is the fallback file discovery for non-git projects.
+// Uses the hardcoded skipDirs list.
+func walkFiles(absRoot string, parser ports.Parser) ([]string, error) {
+	var files []string
+	err := filepath.Walk(absRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			if skipDirs[info.Name()] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext == "" {
+			return nil
+		}
+		if parser != nil {
+			if parser.SupportsExtension(ext) {
+				files = append(files, path)
+			}
+		} else {
+			if defaultCodeExtensions[ext] {
+				files = append(files, path)
+			}
+		}
+		return nil
+	})
+	return files, err
 }

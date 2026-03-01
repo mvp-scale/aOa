@@ -176,8 +176,9 @@ func (a *App) warmDimCache(logFn func(string)) (int, int, bool) {
 	a.dimCacheSet = true
 	a.reconMu.Unlock()
 
-	// Persist to bbolt so subsequent restarts can skip re-scanning
-	if scanned > 0 {
+	// Persist to bbolt so subsequent restarts can skip re-scanning.
+	// Only save analyses for files still in the index (prunes gitignored/deleted files).
+	if scanned > 0 || (persisted != nil && len(analyses) < len(persisted)) {
 		_ = a.Store.SaveAllDimensions(a.ProjectID, analyses)
 	}
 

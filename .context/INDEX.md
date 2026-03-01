@@ -1,14 +1,14 @@
 # Index
 
-> **Updated**: 2026-03-01 (Session 84)
+> **Updated**: 2026-03-01 (Session 85 -- board updated)
 
 ## Active Layer
 
 **L4** (Distribution) -- L4.4 in progress -- 4-phase roadmap. **Phase 1 COMPLETE (S80)**, **Phase 2 COMPLETE (S81)**, **Phase 3 ~95% (S84)**: L4.4-3.1 through L4.4-3.5 done (pre-built .so distribution, UX rewrite, SHA-256 verification, `--update` full sync). L4.4-3.6 (fresh machine e2e) remains. Phase 4: npm + e2e. L4.2 superseded -> BACKLOG.md. L4.4-4.2 (npm postinstall) done.
 
-**L5** (Dimensional Analysis) -- YAML rework complete. L5.Va consolidates all per-rule validation (was L5.7/8/16/17/18 + L8.1) into one task. L5.19 superseded (archived). L5.10/11 not started (dimension scores + query support).
+**L5** (Dimensional Analysis) -- YAML rework complete. L5.Va consolidates all per-rule validation (was L5.7/8/16/17/18 + L8.1) into one task. L5.19 superseded (archived). L5.10/11 not started (dimension scores + query support). **S85**: `SignalScore()` (Formula P) validated against real-world data -- gate raised to 6. `TestRealWorldDistribution` fixture-driven test. 9 priority rules amplified. `error_not_checked` replaced by `empty_catch_body` (structural, cross-language).
 
-**L8** (Recon) -- L8.1 absorbed into L5.Va. L8.2-L8.5 green with Va gaps (browser-only / unit tests). L8.5 updated: "Run aoa init" instead of "npm install aoa-recon". L8.6 not started. **S81**: aoa-recon removed (-761 LOC), recon_bridge.go deleted.
+**L8** (Recon) -- L8.1 absorbed into L5.Va. L8.2-L8.5 green with Va gaps (browser-only / unit tests). L8.6 not started. **S81**: aoa-recon removed. **S85**: 92% noise reduction (49,838 -> 4,149 findings). Three fixes: gitignore-aware indexing (79% of findings from vendored tree-sitter source), generated file detection (`languages_forest.go` = 509 FPs), `error_not_checked` replaced by `empty_catch_body` (4,406 FPs eliminated). Formula P scoring validated against real data, gate=6. `TestRealWorldDistribution` fixture test. `cmd/dim-dump/` tool for bbolt data export.
 
 **L9** (Telemetry) -- **Complete, archived.** All 9 tasks triple-green. See COMPLETED.md.
 
@@ -59,17 +59,17 @@ Line ranges into BOARD.md for targeted reads:
 | Board Structure | 27-70 | `offset=27, limit=44` |
 | Mission | 76-84 | `offset=76, limit=9` |
 | Board Table | 86-117 | `offset=86, limit=32` |
-| Supporting Detail | 120-504 | `offset=120, limit=385` |
-| - Layer 2 | 122-138 | `offset=122, limit=17` |
-| - Layer 4 | 140-307 | `offset=140, limit=168` |
-| - Layer 5 | 309-353 | `offset=309, limit=45` |
-| - Layer 7 | 355-385 | `offset=355, limit=31` |
-| - Layer 8 | 387-439 | `offset=387, limit=53` |
-| - Layer 10 | 441-501 | `offset=441, limit=61` |
-| What Works | 503-527 | `offset=503, limit=25` |
-| What We're NOT Doing | 529-536 | `offset=529, limit=8` |
-| Key Documents | 538-550 | `offset=538, limit=13` |
-| Quick Reference | 552-564 | `offset=552, limit=13` |
+| Supporting Detail | 120-534 | `offset=120, limit=415` |
+| - Layer 2 | 128-144 | `offset=128, limit=17` |
+| - Layer 4 | 146-317 | `offset=146, limit=172` |
+| - Layer 5 | 320-365 | `offset=320, limit=46` |
+| - Layer 7 | 368-397 | `offset=368, limit=30` |
+| - Layer 8 | 400-472 | `offset=400, limit=73` |
+| - Layer 10 | 474-533 | `offset=474, limit=60` |
+| What Works | 536-559 | `offset=536, limit=24` |
+| What We're NOT Doing | 562-569 | `offset=562, limit=8` |
+| Key Documents | 571-583 | `offset=571, limit=13` |
+| Quick Reference | 585-597 | `offset=585, limit=13` |
 
 ## Layer Status
 

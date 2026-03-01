@@ -24,6 +24,7 @@
   tier: quality
   bit: 1
   severity: warning
+  amplifier: 2.0
   skip_main: true
   code_only: true
   structural:
@@ -42,17 +43,16 @@
     without_sibling: comma_ok
   skip_langs: ["python", "javascript", "typescript", "tsx", "ruby", "java", "c", "cpp", "rust"]
 
-- id: error_not_checked
-  label: Error return value not checked
+- id: empty_catch_body
+  label: Empty exception handler (catch/except/rescue with no statements)
   dimension: errors
   tier: quality
   bit: 3
   severity: warning
   code_only: true
   structural:
-    match: call
-    without_sibling: error_check
-  skip_langs: ["python", "javascript", "typescript", "tsx", "ruby", "java", "c", "cpp", "rust"]
+    match: catch_clause
+    child_count_threshold: 1
 
 - id: empty_catch_block
   label: Empty catch/recover block swallows error

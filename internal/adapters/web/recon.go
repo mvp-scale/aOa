@@ -95,7 +95,7 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 // Score weights: info=1, warning=3, high=7, critical=10.
 // Score >= 3 means at least one warning-level rule, or 3+ distinct info rules,
 // or any high/critical rule — i.e., meaningful correlated signal.
-const MinMethodScore = 3
+const MinMethodScore = 6
 
 // serveDimensionalResults converts dimensional analysis results to the
 // reconResult JSON shape for backward compatibility with the dashboard.

@@ -17,6 +17,7 @@ const (
 	ConceptFormatCall      = "format_call"
 	ConceptTypeAssertion   = "type_assertion"
 	ConceptInterface       = "interface"
+	ConceptCatchClause     = "catch_clause"
 )
 
 // conceptDefaults provides universal AST node kinds for all 509 tree-sitter languages.
@@ -38,6 +39,7 @@ var conceptDefaults = map[string][]string{
 	ConceptFormatCall:    {"macro_invocation"},
 	ConceptTypeAssertion: {"type_assertion_expression"},
 	ConceptInterface:     {"interface_declaration"},
+	ConceptCatchClause:   {"catch_clause"},
 }
 
 // langOverrides contains only the languages that diverge from conceptDefaults.
@@ -63,6 +65,7 @@ var langOverrides = map[string]map[string][]string{
 		ConceptFunction:      {"function_definition"},
 		ConceptClass:         {"class_definition"},
 		ConceptSwitch:        {"match_statement"},
+		ConceptCatchClause:   {"except_clause"},
 	},
 	"javascript": {
 		ConceptStringLiteral: {"string", "template_string"},
@@ -135,6 +138,7 @@ var langOverrides = map[string]map[string][]string{
 		ConceptClass:         {"class", "module"},
 		ConceptBlock:         {"body_statement"},
 		ConceptSwitch:        {"case"},
+		ConceptCatchClause:   {"rescue"},
 	},
 }
 

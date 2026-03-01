@@ -25,6 +25,7 @@ type yamlRule struct {
 	SkipMain     bool                         `yaml:"skip_main,omitempty"`
 	CodeOnly     bool                         `yaml:"code_only,omitempty"`
 	SkipLangs    []string                     `yaml:"skip_langs,omitempty"`
+	Amplifier    float64                     `yaml:"amplifier,omitempty"`
 }
 
 // yamlStructuralBlock is the YAML form of StructuralBlock.
@@ -188,5 +189,6 @@ func convertRule(yr yamlRule) (Rule, error) {
 		SkipMain:     yr.SkipMain,
 		CodeOnly:     yr.CodeOnly,
 		SkipLangs:    yr.SkipLangs,
+		Amplifier:    yr.Amplifier,
 	}, nil
 }

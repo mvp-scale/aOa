@@ -50,6 +50,16 @@ func NewStore(path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
+// NewReadOnlyStore opens a bbolt database in read-only mode.
+// This allows reading while another process holds the write lock.
+func NewReadOnlyStore(path string) (*Store, error) {
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true, Timeout: 1 * time.Second})
+	if err != nil {
+		return nil, fmt.Errorf("bbolt open readonly: %w", err)
+	}
+	return &Store{db: db}, nil
+}
+
 // Close closes the underlying bbolt database.
 func (s *Store) Close() error {
 	return s.db.Close()

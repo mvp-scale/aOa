@@ -31,6 +31,7 @@ func (a *App) DimensionalResults() map[string]*socket.DimensionalFileResult {
 }
 
 // loadDimensionalFromStore reads dimensional analysis from bbolt and converts to DTOs.
+// Only includes files that exist in the current index (respects gitignore changes).
 func (a *App) loadDimensionalFromStore() map[string]*socket.DimensionalFileResult {
 	if a.Store == nil {
 		return nil
@@ -40,8 +41,17 @@ func (a *App) loadDimensionalFromStore() map[string]*socket.DimensionalFileResul
 		return nil
 	}
 
+	// Build set of indexed paths for fast lookup
+	indexedPaths := make(map[string]bool, len(a.Index.Files))
+	for _, fm := range a.Index.Files {
+		indexedPaths[fm.Path] = true
+	}
+
 	results := make(map[string]*socket.DimensionalFileResult, len(analyses))
 	for path, fa := range analyses {
+		if !indexedPaths[path] {
+			continue // file no longer in index (gitignored, deleted, etc.)
+		}
 		methods := make([]socket.DimensionalMethodResult, len(fa.Methods))
 		for i, m := range fa.Methods {
 			findings := make([]socket.DimensionalFindingResult, len(m.Findings))
