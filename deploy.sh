@@ -7,7 +7,7 @@ set -euo pipefail
 ./build.sh
 
 # 2. Install to PATH (if ~/bin exists)
-[ -d "$HOME/bin" ] && ln -sf "$(pwd)/aoa" "$HOME/bin/aoa"
+if [ -d "$HOME/bin" ]; then ln -sf "$(pwd)/aoa" "$HOME/bin/aoa"; fi
 
 # 3. Stop any running daemon (graceful first, force if needed)
 PID=$(pgrep -f 'aoa daemon' 2>/dev/null || true)

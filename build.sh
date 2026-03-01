@@ -41,7 +41,7 @@ case "$MODE" in
     SIZE=$(stat --format=%s aoa 2>/dev/null || stat -f%z aoa)
     SIZE_MB=$(( SIZE / 1048576 ))
     echo "Built: aoa (${SIZE_MB} MB)"
-    [ -d "$HOME/bin" ] && ln -sf "$(pwd)/aoa" "$HOME/bin/aoa"
+    if [ -d "$HOME/bin" ]; then ln -sf "$(pwd)/aoa" "$HOME/bin/aoa"; fi
     ;;
   *)
     echo "Unknown mode: $MODE"
