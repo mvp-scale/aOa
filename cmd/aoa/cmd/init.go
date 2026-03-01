@@ -251,8 +251,15 @@ func configureStatusLine(root string) bool {
 	}
 
 	// Configure .claude/settings.local.json to use the deployed hook.
+	// Match Claude Code's own layout: .claude/ at 0755, settings files at 0644.
 	claudeDir := filepath.Join(root, ".claude")
 	settingsPath := filepath.Join(claudeDir, "settings.local.json")
+
+	// Ensure .claude/ directory exists first — before any read/write attempts.
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not create .claude directory: %v\n", err)
+		return false
+	}
 
 	// Read existing settings (or start fresh).
 	var settings map[string]interface{}
@@ -292,12 +299,6 @@ func configureStatusLine(root string) bool {
 	settings["statusLine"] = map[string]interface{}{
 		"type":    "command",
 		"command": `bash "$CLAUDE_PROJECT_DIR/.aoa/hooks/aoa-status-line.sh"`,
-	}
-
-	// Ensure .claude/ directory exists.
-	if err := os.MkdirAll(claudeDir, 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not create .claude directory: %v\n", err)
-		return false
 	}
 
 	// Write back with indentation.
