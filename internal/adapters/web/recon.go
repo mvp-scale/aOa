@@ -91,6 +91,12 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// MinMethodScore is the minimum bitmask score a method must reach to surface findings.
+// Score weights: info=1, warning=3, high=7, critical=10.
+// Score >= 3 means at least one warning-level rule, or 3+ distinct info rules,
+// or any high/critical rule — i.e., meaningful correlated signal.
+const MinMethodScore = 3
+
 // serveDimensionalResults converts dimensional analysis results to the
 // reconResult JSON shape for backward compatibility with the dashboard.
 func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[string]*socket.DimensionalFileResult) {
@@ -100,8 +106,9 @@ func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[s
 		Tree:       make(map[string]map[string]reconFileInfo),
 	}
 
-	// Map severity int to string
-	sevNames := [4]string{"info", "warning", "high", "critical"}
+	// Map severity int to string. SevHigh (2) collapses to "warning" so it
+	// matches the dashboard filter buttons (critical/warning/info).
+	sevNames := [4]string{"info", "warning", "warning", "critical"}
 
 	for relPath, fa := range dimResults {
 		result.FilesScanned++
@@ -110,34 +117,37 @@ func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[s
 		base := filepath.Base(relPath)
 
 		var findings []reconFinding
-		for _, f := range fa.Findings {
-			sevStr := "info"
-			if f.Severity >= 0 && f.Severity < len(sevNames) {
-				sevStr = sevNames[f.Severity]
+		for _, method := range fa.Methods {
+			if method.Score < MinMethodScore {
+				continue // insufficient signal — suppress
 			}
-			tierID, dimID := inferTierDim(f.RuleID)
-			findings = append(findings, reconFinding{
-				Symbol:   f.Symbol,
-				DimID:    dimID,
-				TierID:   tierID,
-				ID:       f.RuleID,
-				Label:    inferLabel(f.RuleID),
-				Severity: sevStr,
-				Line:     f.Line,
-			})
+			for _, f := range method.Findings {
+				sevStr := "info"
+				if f.Severity >= 0 && f.Severity < len(sevNames) {
+					sevStr = sevNames[f.Severity]
+				}
+				tierID, dimID := inferTierDim(f.RuleID)
+				findings = append(findings, reconFinding{
+					Symbol:   method.Name,
+					DimID:    dimID,
+					TierID:   tierID,
+					ID:       f.RuleID,
+					Label:    inferLabel(f.RuleID),
+					Severity: sevStr,
+					Line:     f.Line,
+				})
 
-			result.TotalFindings++
-			result.TierCounts[tierID]++
-			result.DimCounts[dimID]++
-			switch sevStr {
-			case "critical":
-				result.Critical++
-			case "warning":
-				result.Warnings++
-			case "high":
-				result.Warnings++
-			case "info":
-				result.Info++
+				result.TotalFindings++
+				result.TierCounts[tierID]++
+				result.DimCounts[dimID]++
+				switch sevStr {
+				case "critical":
+					result.Critical++
+				case "warning":
+					result.Warnings++
+				case "info":
+					result.Info++
+				}
 			}
 		}
 
