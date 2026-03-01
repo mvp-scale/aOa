@@ -32,24 +32,21 @@ try {
 // Detect if this was a global install (bin goes on PATH automatically)
 const isGlobal = process.env.npm_config_global === "true";
 
-const home = os.homedir();
-const shimDir = path.join(home, ".aoa", "shims");
-
 console.log("");
-console.log("  \x1b[36maOa installed.\x1b[0m");
+console.log("  \x1b[36m\u2713 aOa installed.\x1b[0m");
+console.log("");
+console.log("  aOa has no embedded downloader \u2014 for security, you control");
+console.log("  all downloads using tools you already have.");
 console.log("");
 
 if (isGlobal) {
   console.log("  Get started:");
-  console.log("    aoa init");
+  console.log("    cd your-project && aoa init");
 } else {
   console.log("  Get started:");
-  console.log("    npx aoa init");
+  console.log("    cd your-project && npx aoa init");
 }
 
 console.log("");
-console.log("  To intercept AI tool searches, add to ~/.bashrc or ~/.zshrc:");
-console.log("");
-console.log(`    alias claude='PATH="${shimDir}:$PATH" claude'`);
-console.log(`    alias gemini='PATH="${shimDir}:$PATH" gemini'`);
+console.log("  aoa init will guide you through setting up grammar support.");
 console.log("");

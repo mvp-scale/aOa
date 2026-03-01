@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **aOa is a standalone project.** Do NOT import, reference, copy, or depend on anything from outside the `aOa/` directory. No imports from the parent `aOa/` codebase. All dependencies come from Go modules (`go.mod`) or are written fresh here. This is a clean-room rewrite guided by behavioral specs and test fixtures in `test/fixtures/`, not by copying Python code.
 
+## Communication Rule
+
+**Always reference work by task ID.** Use board IDs (L4.4-3.1, L10.3, L5.Va) not abstract labels ("Phase 3", "the grammar work"). Task IDs are the shared language — anything else creates ambiguity.
+
 ## Advisory Rule
 
 **When you see a better approach, say so before writing code.** Reference the specific goal it aligns to (G0–G6 from `.context/GOALS.md`) and explain why. For example: "This speaks to G3 (Agent-First) — there's an approach using X that would be simpler. Want to explore it?" Let the user choose. Do not silently go along with an approach you know is suboptimal, and do not unilaterally switch approaches without explaining why. Build trust through transparent recommendations, not through compliance or surprise rewrites.

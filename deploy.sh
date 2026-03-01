@@ -6,7 +6,10 @@ set -euo pipefail
 # 1. Build (tree-sitter runtime + dynamic grammar loading)
 ./build.sh
 
-# 2. Stop any running daemon (graceful first, force if needed)
+# 2. Install to PATH (if ~/bin exists)
+[ -d "$HOME/bin" ] && ln -sf "$(pwd)/aoa" "$HOME/bin/aoa"
+
+# 3. Stop any running daemon (graceful first, force if needed)
 PID=$(pgrep -f 'aoa daemon' 2>/dev/null || true)
 if [ -n "$PID" ]; then
   ./aoa daemon stop 2>/dev/null && sleep 0.5 || {

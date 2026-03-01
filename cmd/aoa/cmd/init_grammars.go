@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -62,6 +61,30 @@ func grammarLibExt() string {
 
 func detectPlatform() string {
 	return fmt.Sprintf("%s-%s", runtime.GOOS, runtime.GOARCH)
+}
+
+// sha256File computes the SHA-256 hex digest of a file.
+func sha256File(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// findEntry returns the ParserEntry for a grammar name.
+func findEntry(entries []ParserEntry, name string) *ParserEntry {
+	for i := range entries {
+		if entries[i].Name == name {
+			return &entries[i]
+		}
+	}
+	return nil
 }
 
 func scanProjectLanguages(root string) []string {
@@ -133,64 +156,43 @@ func checkInstalledGrammars(grammarDir string, langs []string) (installed, missi
 	return
 }
 
-// fetchFile downloads a URL to a local path using curl. No net/http in the binary.
-func fetchFile(url, dest string) error {
-	if _, err := exec.LookPath("curl"); err != nil {
-		return fmt.Errorf("curl not found — install curl to continue")
-	}
-	cmd := exec.Command("curl", "-sfL", "--retry", "2", url, "-o", dest)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		os.Remove(dest)
-		return fmt.Errorf("download failed: %s", strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-// sha256File computes the SHA-256 hex digest of a file.
-func sha256File(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// confirmDownload prompts the user and returns true if they accept.
-func confirmDownload() bool {
-	fmt.Printf("  Download and install? [Y/n] ")
-	reader := bufio.NewReader(os.Stdin)
-	line, _ := reader.ReadString('\n')
-	line = strings.TrimSpace(strings.ToLower(line))
-	return line == "" || line == "y" || line == "yes"
-}
-
-// findEntry returns the ParserEntry for a grammar name.
-func findEntry(entries []ParserEntry, name string) *ParserEntry {
-	for i := range entries {
-		if entries[i].Name == name {
-			return &entries[i]
+// verifyInstalledGrammars checks SHA-256 of installed grammars against parsers.json.
+func verifyInstalledGrammars(grammarDir string, entries []ParserEntry, names []string) (verified int, failed int) {
+	platform := detectPlatform()
+	ext := grammarLibExt()
+	for _, name := range names {
+		path := filepath.Join(grammarDir, name+ext)
+		actual, err := sha256File(path)
+		if err != nil {
+			continue
+		}
+		entry := findEntry(entries, name)
+		if entry == nil {
+			continue
+		}
+		ps, ok := entry.Platforms[platform]
+		if !ok {
+			continue
+		}
+		if actual == ps.SHA256 {
+			verified++
+		} else {
+			fmt.Printf("  WARNING: %s SHA mismatch (expected %s, got %s)\n", name, ps.SHA256[:12], actual[:12])
+			failed++
 		}
 	}
-	return nil
+	return
 }
 
 // --- init flow ---
 
-// grammarSetupFlow handles the complete grammar setup:
-//   - Fetches parsers.json if missing (via curl)
-//   - Scans project languages
-//   - Shows download plan
-//   - Downloads pre-built .so/.dylib, verifies SHA-256
+// grammarSetupFlow handles grammar setup. aOa makes zero outbound network
+// connections — this function generates a download.sh for the user to run.
 //
 // Returns (handled, pending):
 //   - handled=true, pending=false: grammars ready, proceed to indexing
-//   - handled=true, pending=true:  user needs to take action, halt init
-//   - handled=false: could not set up (no curl, etc.), caller may try fallback
+//   - handled=true, pending=true:  user has steps to complete, halt init
+//   - handled=false: could not set up, caller may try fallback
 func grammarSetupFlow(root string) (handled bool, pending bool) {
 	if os.Getenv("AOA_NO_GRAMMAR_DOWNLOAD") == "1" || noGrammarsFlag {
 		return true, false
@@ -201,45 +203,47 @@ func grammarSetupFlow(root string) (handled bool, pending bool) {
 	platform := detectPlatform()
 	ext := grammarLibExt()
 
-	// Handle --update: fetch fresh parsers.json, then continue to check/download.
+	// Handle --update: rescan, regenerate download.sh, run it, continue to indexing.
 	if updateFlag {
-		os.MkdirAll(grammarDir, 0755)
-		fmt.Println("")
-		if info, err := os.Stat(pjPath); err == nil {
-			fmt.Printf("  parsers.json last updated: %s\n", info.ModTime().Format("2006-01-02"))
+		if handleUpdateFlag(root) {
+			return true, false // success — continue to indexing
 		}
-		fmt.Println("  Fetching latest parsers.json...")
-		if err := fetchFile(parsersJSONURL, pjPath); err != nil {
-			fmt.Printf("  %v\n", err)
-			printManualCurlMessage()
-			return true, true
-		}
-		fmt.Println("  Updated.")
-		// Fall through to check/download grammars below.
+		return true, true // failed — halt
 	}
 
-	// Fetch parsers.json if missing.
+	// Scan project languages — needed whether or not parsers.json exists.
+	langs := scanProjectLanguages(root)
+	if len(langs) == 0 {
+		return true, false
+	}
+
+	// If no parsers.json, generate download.sh that fetches everything
+	// (parsers.json + .so files). SHA verification happens on re-run.
 	if _, err := os.Stat(pjPath); err != nil {
 		os.MkdirAll(grammarDir, 0755)
+		generateFullDownloadSh(grammarDir, langs, platform, ext)
+		generateGrammarsConf(grammarDir, langs)
+
 		fmt.Println("")
-		fmt.Println("  Fetching grammar manifest...")
-		if err := fetchFile(parsersJSONURL, pjPath); err != nil {
-			fmt.Printf("  %v\n", err)
-			fmt.Println("")
-			printManualCurlMessage()
-			return true, true
-		}
+		fmt.Printf("  Nice project — %d languages detected.\n", len(langs))
+		fmt.Println("")
+		fmt.Println("  Zero outbound network policy. Grammars download from github.com/mvp-scale/aOa via download.sh — just curl.")
+		fmt.Println("  Everything aOa needs lives in .aoa/ — grammars, index, config. One folder, fully portable.")
+		fmt.Println("")
+		fmt.Println("    sh .aoa/grammars/download.sh && aoa init")
+		fmt.Println("")
+		fmt.Println("  Next time: aoa init --update — rescans your project, checks for new languages, and regenerates download.sh.")
+		fmt.Println("")
+		fmt.Println("  Enjoy.")
+		fmt.Println("")
+		return true, true
 	}
 
+	// parsers.json exists — use it for matching and SHA verification.
 	entries, err := loadParsersJSON(pjPath)
 	if err != nil {
 		fmt.Printf("  parsers.json error: %v\n", err)
 		return false, false
-	}
-
-	langs := scanProjectLanguages(root)
-	if len(langs) == 0 {
-		return true, false
 	}
 
 	matched := matchParsersJSON(entries, langs)
@@ -255,13 +259,29 @@ func grammarSetupFlow(root string) (handled bool, pending bool) {
 	// Check what's already installed.
 	installed, missing := checkInstalledGrammars(grammarDir, matchedNames)
 	if len(missing) == 0 {
-		fmt.Printf("  %d grammars ready\n", len(installed))
+		// Verify SHA-256 of installed grammars.
+		verified, failed := verifyInstalledGrammars(grammarDir, entries, installed)
+		if failed > 0 {
+			fmt.Printf("  %d grammars ready (%d SHA-256 verified, %d mismatched)\n", len(installed), verified, failed)
+		} else {
+			fmt.Printf("  %d grammars ready, SHA-256 verified\n", len(installed))
+		}
 		return true, false
 	}
 
-	// Show download plan.
+	// Generate download.sh for missing grammars (with SHA verification).
+	os.MkdirAll(grammarDir, 0755)
+	generateGrammarsConf(grammarDir, matchedNames)
+	generateDownloadSh(grammarDir, missing, entries, platform, ext)
+
+	fmt.Printf("\n  %d languages detected", len(matchedNames))
+	if len(installed) > 0 {
+		fmt.Printf(", %d ready", len(installed))
+	}
+	fmt.Printf(", %d to download.\n\n", len(missing))
+
+	// Show what the script will do.
 	totalSize := int64(0)
-	fmt.Printf("\n  Your project uses %d languages. Grammars needed:\n\n", len(matchedNames))
 	for _, name := range missing {
 		entry := findEntry(entries, name)
 		if entry == nil {
@@ -279,74 +299,16 @@ func grammarSetupFlow(root string) (handled bool, pending bool) {
 		fmt.Printf("    %-14s %4d KB   sha256:%s...\n", name, ps.SizeBytes/1024, shaPreview)
 		totalSize += ps.SizeBytes
 	}
-	fmt.Printf("\n  Total: %d KB from grammars/%s/\n", totalSize/1024, platform)
-	if len(installed) > 0 {
-		fmt.Printf("  Already installed: %s\n", strings.Join(installed, ", "))
-	}
+	fmt.Printf("\n  Total: %d KB from github.com/mvp-scale/aOa\n", totalSize/1024)
+	fmt.Println("  SHA-256 verified against the repository manifest.")
+	fmt.Println("")
+	fmt.Println("  Next:")
+	fmt.Println("")
+	fmt.Println("    1. sh .aoa/grammars/download.sh")
+	fmt.Println("    2. aoa init")
 	fmt.Println("")
 
-	// Prompt for confirmation.
-	if !confirmDownload() {
-		fmt.Println("  Skipped. Re-run aoa init when ready.")
-		return true, true
-	}
-
-	// Download and verify each grammar.
-	fmt.Println("")
-	start := time.Now()
-	downloaded := 0
-	for _, name := range missing {
-		entry := findEntry(entries, name)
-		if entry == nil {
-			continue
-		}
-		ps, ok := entry.Platforms[platform]
-		if !ok || ps.Status != "ok" {
-			continue
-		}
-
-		url := fmt.Sprintf("%s/%s/%s%s", grammarsBaseURL, platform, name, ext)
-		dest := filepath.Join(grammarDir, name+ext)
-
-		if err := fetchFile(url, dest); err != nil {
-			fmt.Printf("    %-14s FAILED: %v\n", name, err)
-			continue
-		}
-
-		// Verify SHA-256.
-		actual, err := sha256File(dest)
-		if err != nil {
-			fmt.Printf("    %-14s SHA error: %v\n", name, err)
-			os.Remove(dest)
-			continue
-		}
-		if actual != ps.SHA256 {
-			fmt.Printf("    %-14s SHA MISMATCH\n", name)
-			fmt.Printf("                expected: %s\n", ps.SHA256)
-			fmt.Printf("                     got: %s\n", actual)
-			os.Remove(dest)
-			continue
-		}
-
-		fmt.Printf("    %-14s %4d KB   verified\n", name, ps.SizeBytes/1024)
-		downloaded++
-	}
-
-	elapsed := time.Since(start)
-	fmt.Printf("\n  %d grammars downloaded in %v\n", downloaded, elapsed.Round(time.Millisecond))
-
-	// Generate grammars.conf for reference.
-	generateGrammarsConf(grammarDir, matchedNames)
-
-	// Re-check — all installed now?
-	installed2, missing2 := checkInstalledGrammars(grammarDir, matchedNames)
-	if len(missing2) > 0 {
-		fmt.Printf("  %d grammars still missing: %s\n", len(missing2), strings.Join(missing2, ", "))
-		return true, true
-	}
-
-	fmt.Printf("  %d grammars ready\n", len(installed2))
-	return true, false
+	return true, true
 }
 
 // generateGrammarsConf writes .aoa/grammars/grammars.conf — just names, one per line.
@@ -360,13 +322,147 @@ func generateGrammarsConf(grammarDir string, names []string) {
 	os.WriteFile(filepath.Join(grammarDir, "grammars.conf"), []byte(b.String()), 0644)
 }
 
-func printManualCurlMessage() {
-	fmt.Println("  Download manually:")
-	fmt.Printf("    curl -sL %s \\\n", parsersJSONURL)
-	fmt.Printf("      -o .aoa/grammars/parsers.json\n")
-	fmt.Println("")
-	fmt.Println("  Then re-run: aoa init")
-	fmt.Println("")
+// generateFullDownloadSh writes .aoa/grammars/download.sh that fetches everything:
+// parsers.json first, extracts SHA-256 hashes with awk, then downloads and verifies
+// pre-built .so/.dylib files listed in grammars.conf.
+func generateFullDownloadSh(grammarDir string, langs []string, platform, ext string) {
+	var b strings.Builder
+	b.WriteString("#!/bin/sh\n")
+	b.WriteString("# aOa grammar download — pre-built binaries from GitHub\n")
+	b.WriteString("# Generated by: aoa init\n")
+	b.WriteString("#\n")
+	b.WriteString("# Source: github.com/mvp-scale/aOa\n")
+	b.WriteString("# Just curl + awk + sha256sum. Nothing else.\n")
+	b.WriteString("#\n")
+	fmt.Fprintf(&b, "# Platform: %s\n", platform)
+	fmt.Fprintf(&b, "# Extension: %s\n\n", ext)
+
+	b.WriteString("DIR=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n")
+	b.WriteString("CONF=\"$DIR/grammars.conf\"\n")
+	fmt.Fprintf(&b, "BASE=\"%s/%s\"\n\n", grammarsBaseURL, platform)
+
+	// Step 1: parsers.json
+	b.WriteString("echo \"\"\n")
+	b.WriteString("echo \"  Downloading from github.com/mvp-scale/aOa\"\n")
+	fmt.Fprintf(&b, "echo \"  Saving to .aoa/grammars/ (*%s)\"\n", ext)
+	b.WriteString("echo \"\"\n")
+	fmt.Fprintf(&b, "curl -sfL \"%s\" -o \"$DIR/parsers.json\"\n", parsersJSONURL)
+	b.WriteString("if [ -f \"$DIR/parsers.json\" ]; then\n")
+	b.WriteString("  echo \"    parsers.json  downloaded\"\n")
+	b.WriteString("else\n")
+	b.WriteString("  echo \"    parsers.json  FAILED\"\n")
+	b.WriteString("  exit 1\n")
+	b.WriteString("fi\n\n")
+
+	// Extract SHA-256 hashes from parsers.json into a shell variable
+	b.WriteString("# Extract expected SHA-256 hashes from manifest\n")
+	fmt.Fprintf(&b, "SHA_MAP=$(awk -v p=\"%s\" '\n", platform)
+	b.WriteString("  /\"name\":/ { gsub(/.*\": *\"/, \"\"); gsub(/\".*/, \"\"); name=$0 }\n")
+	b.WriteString("  $0 ~ \"\\\"\" p \"\\\"\" { in_p=1 }\n")
+	b.WriteString("  in_p && /\"sha256\":/ { gsub(/.*\": *\"/, \"\"); gsub(/\".*/, \"\"); sha=$0 }\n")
+	b.WriteString("  in_p && /\"size_bytes\":/ { gsub(/.*: */, \"\"); gsub(/[^0-9].*/, \"\"); print name, sha, int($0/1024); in_p=0 }\n")
+	b.WriteString("' \"$DIR/parsers.json\")\n\n")
+
+	// Download and verify grammars against parsers.json
+	b.WriteString("echo \"\"\n")
+	b.WriteString("grep -v '^#' \"$CONF\" | while read -r name; do\n")
+	b.WriteString("  [ -z \"$name\" ] && continue\n")
+	fmt.Fprintf(&b, "  file=\"${name}%s\"\n", ext)
+	b.WriteString("  curl -sfL \"$BASE/$file\" -o \"$DIR/$file\"\n")
+	b.WriteString("  if [ -f \"$DIR/$file\" ]; then\n")
+	b.WriteString("    EXPECTED=$(echo \"$SHA_MAP\" | grep \"^$name \" | cut -d' ' -f2)\n")
+	b.WriteString("    SIZE_KB=$(echo \"$SHA_MAP\" | grep \"^$name \" | cut -d' ' -f3)\n")
+	b.WriteString("    if [ -n \"$EXPECTED\" ]; then\n")
+	b.WriteString("      ACTUAL=$(sha256sum \"$DIR/$file\" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 \"$DIR/$file\" | cut -d' ' -f1)\n")
+	b.WriteString("      SHORT_E=$(echo \"$EXPECTED\" | cut -c1-12)\n")
+	b.WriteString("      SHORT_A=$(echo \"$ACTUAL\" | cut -c1-12)\n")
+	b.WriteString("      if [ \"$ACTUAL\" = \"$EXPECTED\" ]; then\n")
+	b.WriteString("        printf \"    %-14s %4s KB   github %s  local %s\\n\" \"$name\" \"$SIZE_KB\" \"$SHORT_E\" \"$SHORT_A\"\n")
+	b.WriteString("      else\n")
+	b.WriteString("        printf \"    %-14s SHA-256 MISMATCH  github %s  local %s\\n\" \"$name\" \"$SHORT_E\" \"$SHORT_A\"\n")
+	b.WriteString("        rm -f \"$DIR/$file\"\n")
+	b.WriteString("      fi\n")
+	b.WriteString("    else\n")
+	b.WriteString("      SIZE=$(( $(stat --format=%s \"$DIR/$file\" 2>/dev/null || stat -f%z \"$DIR/$file\") / 1024 ))\n")
+	b.WriteString("      printf \"    %-14s %4d KB   downloaded\\n\" \"$name\" \"$SIZE\"\n")
+	b.WriteString("    fi\n")
+	b.WriteString("  else\n")
+	b.WriteString("    printf \"    %-14s FAILED\\n\" \"$name\"\n")
+	b.WriteString("  fi\n")
+	b.WriteString("done\n\n")
+
+	b.WriteString("echo \"\"\n")
+	b.WriteString("echo \"  Done. Finish setup:\"\n")
+	b.WriteString("echo \"\"\n")
+	b.WriteString("echo \"    aoa init\"\n")
+	b.WriteString("echo \"\"\n")
+
+	os.WriteFile(filepath.Join(grammarDir, "download.sh"), []byte(b.String()), 0755)
+}
+
+// generateDownloadSh writes .aoa/grammars/download.sh — loops over grammars.conf,
+// curls pre-built .so/.dylib files, and verifies SHA-256 from parsers.json.
+func generateDownloadSh(grammarDir string, missing []string, entries []ParserEntry, platform, ext string) {
+	var b strings.Builder
+	b.WriteString("#!/bin/sh\n")
+	b.WriteString("# aOa grammar download — pre-built binaries from GitHub\n")
+	b.WriteString("# Generated by: aoa init\n")
+	b.WriteString("#\n")
+	b.WriteString("# Source: github.com/mvp-scale/aOa\n")
+	b.WriteString("# Just curl + awk + sha256sum. Nothing else.\n")
+	b.WriteString("#\n")
+	fmt.Fprintf(&b, "# Platform: %s\n", platform)
+	fmt.Fprintf(&b, "# Extension: %s\n\n", ext)
+
+	b.WriteString("DIR=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n")
+	fmt.Fprintf(&b, "BASE=\"%s/%s\"\n\n", grammarsBaseURL, platform)
+
+	// Extract SHA-256 hashes from parsers.json into a shell variable
+	b.WriteString("# Extract expected SHA-256 hashes from parsers.json\n")
+	fmt.Fprintf(&b, "SHA_MAP=$(awk -v p=\"%s\" '\n", platform)
+	b.WriteString("  /\"name\":/ { gsub(/.*\": *\"/, \"\"); gsub(/\".*/, \"\"); name=$0 }\n")
+	b.WriteString("  $0 ~ \"\\\"\" p \"\\\"\" { in_p=1 }\n")
+	b.WriteString("  in_p && /\"sha256\":/ { gsub(/.*\": *\"/, \"\"); gsub(/\".*/, \"\"); sha=$0 }\n")
+	b.WriteString("  in_p && /\"size_bytes\":/ { gsub(/.*: */, \"\"); gsub(/[^0-9].*/, \"\"); print name, sha, int($0/1024); in_p=0 }\n")
+	b.WriteString("' \"$DIR/parsers.json\")\n\n")
+
+	b.WriteString("echo \"\"\n")
+	b.WriteString("echo \"  Downloading from github.com/mvp-scale/aOa\"\n")
+	fmt.Fprintf(&b, "echo \"  Saving to .aoa/grammars/ (*%s)\"\n", ext)
+	b.WriteString("echo \"\"\n\n")
+
+	// Read grammars.conf, download each, verify SHA from parsers.json
+	b.WriteString("grep -v '^#' \"$DIR/grammars.conf\" | while read -r name; do\n")
+	b.WriteString("  [ -z \"$name\" ] && continue\n")
+	fmt.Fprintf(&b, "  file=\"${name}%s\"\n", ext)
+	b.WriteString("  # Skip already installed\n")
+	b.WriteString("  [ -f \"$DIR/$file\" ] && continue\n")
+	b.WriteString("  curl -sfL \"$BASE/$file\" -o \"$DIR/$file\"\n")
+	b.WriteString("  EXPECTED=$(echo \"$SHA_MAP\" | grep \"^$name \" | cut -d' ' -f2)\n")
+	b.WriteString("  SIZE_KB=$(echo \"$SHA_MAP\" | grep \"^$name \" | cut -d' ' -f3)\n")
+	b.WriteString("  if [ -n \"$EXPECTED\" ]; then\n")
+	b.WriteString("    ACTUAL=$(sha256sum \"$DIR/$file\" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 \"$DIR/$file\" | cut -d' ' -f1)\n")
+	b.WriteString("    SHORT_E=$(echo \"$EXPECTED\" | cut -c1-12)\n")
+	b.WriteString("    SHORT_A=$(echo \"$ACTUAL\" | cut -c1-12)\n")
+	b.WriteString("    if [ \"$ACTUAL\" = \"$EXPECTED\" ]; then\n")
+	b.WriteString("      printf \"    %-14s %4s KB   github %s  local %s\\n\" \"$name\" \"$SIZE_KB\" \"$SHORT_E\" \"$SHORT_A\"\n")
+	b.WriteString("    else\n")
+	b.WriteString("      printf \"    %-14s SHA-256 MISMATCH  github %s  local %s\\n\" \"$name\" \"$SHORT_E\" \"$SHORT_A\"\n")
+	b.WriteString("      rm -f \"$DIR/$file\"\n")
+	b.WriteString("    fi\n")
+	b.WriteString("  else\n")
+	b.WriteString("    SIZE=$(( $(stat --format=%s \"$DIR/$file\" 2>/dev/null || stat -f%z \"$DIR/$file\") / 1024 ))\n")
+	b.WriteString("    printf \"    %-14s %4d KB   downloaded\\n\" \"$name\" \"$SIZE\"\n")
+	b.WriteString("  fi\n")
+	b.WriteString("done\n\n")
+
+	b.WriteString("echo \"\"\n")
+	b.WriteString("echo \"  Done. Finish setup:\"\n")
+	b.WriteString("echo \"\"\n")
+	b.WriteString("echo \"    aoa init\"\n")
+	b.WriteString("echo \"\"\n")
+
+	os.WriteFile(filepath.Join(grammarDir, "download.sh"), []byte(b.String()), 0755)
 }
 
 func printParsersJSONMessage(root string) {
@@ -376,7 +472,48 @@ func printParsersJSONMessage(root string) {
 	fmt.Println("  parsers.json is a weekly-audited registry of tree-sitter")
 	fmt.Println("  grammars — SHA-verified, open source, traced to maintainers.")
 	fmt.Println("")
-	printManualCurlMessage()
+	fmt.Println("  Download it:")
+	fmt.Printf("    curl -sL %s \\\n", parsersJSONURL)
+	fmt.Printf("      -o .aoa/grammars/parsers.json\n")
+	fmt.Println("")
+	fmt.Println("  Then re-run: aoa init")
+	fmt.Println("")
+}
+
+// handleUpdateFlag runs the full update cycle: scan, generate download.sh, run it.
+// Returns true on success (caller should continue to indexing).
+func handleUpdateFlag(root string) bool {
+	grammarDir := filepath.Join(root, ".aoa", "grammars")
+	platform := detectPlatform()
+	ext := grammarLibExt()
+
+	langs := scanProjectLanguages(root)
+	if len(langs) == 0 {
+		fmt.Println("")
+		fmt.Println("  No languages detected in project.")
+		fmt.Println("")
+		return true
+	}
+
+	fmt.Println("")
+	fmt.Printf("  Scanned project — %d languages.\n", len(langs))
+	fmt.Println("")
+
+	os.MkdirAll(grammarDir, 0755)
+	generateGrammarsConf(grammarDir, langs)
+	generateFullDownloadSh(grammarDir, langs, platform, ext)
+
+	// Run the download script we just generated
+	scriptPath := filepath.Join(grammarDir, "download.sh")
+	cmd := exec.Command("sh", scriptPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("\n  download.sh failed: %v\n\n", err)
+		return false
+	}
+
+	return true
 }
 
 // --- extension map ---
