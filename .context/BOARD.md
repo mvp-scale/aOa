@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-02-28 (Session 82) | **91% complete.**
+> **Updated**: 2026-02-28 (Session 83) | **91% complete.**
 > **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9/L5.19 + L6 (all) + L7.2/L7.4 + L8.1 + L9 (all) + L10.5/L10.6 + G0.HF1 + P0 (all 7 bugs) (535 tests, 0 fail, 0 skip)
 > **Archived boards**: `.context/archived/`
 
@@ -16,7 +16,7 @@
 |------|-----------|
 | **G0** | **Speed** -- 50-120x faster than Python. Sub-ms search, <200ms startup, <50MB memory. No O(n) on hot paths. |
 | **G1** | **Parity** -- Zero behavioral divergence from Python. Test fixtures are source of truth. |
-| **G2** | **Single Binary, Dynamic Grammars** -- One `aoa` binary (core build: tree-sitter C runtime, zero compiled-in grammars). Grammars downloaded as .so/.dylib files via `aoa init` curl commands. No outbound network from the binary. Full transparency and user control. |
+| **G2** | **Single Binary, Pre-built Grammars** -- One `aoa` binary (core build: tree-sitter C runtime, zero compiled-in grammars). Grammars distributed as pre-built platform-specific .so/.dylib from `grammars/` in the aOa repo. Weekly CI compiles all grammars, commits binaries with SHA-256 verification. `aoa init` downloads what the project needs — no local compilation, no C compiler required. |
 | **G3** | **Agent-First** -- Drop-in shim for grep/egrep/find. Three Unix modes: direct (`grep pat file`), pipe (`cmd | grep pat`), index (`grep pat` -> O(1) daemon). Same flags, same output format, same exit codes. Agents never know it's not GNU grep. |
 | **G4** | **Clean Architecture** -- Hexagonal. Domain logic dependency-free. External concerns behind interfaces. No feature entanglement. |
 | **G5** | **Self-Learning** -- Adaptive pattern recognition. observe(), autotune, competitive displacement. |
@@ -77,7 +77,7 @@
 
 **North Star**: One binary that makes every AI agent faster by replacing slow, expensive tool calls with O(1) indexed search -- and proves it with measurable savings.
 
-**Current**: Core engine complete (search, learner, dashboard, grep parity). Single binary with dynamic grammar loading (core build: tree-sitter C runtime, zero compiled-in grammars). `aoa init` is the single entry point -- scans project, detects languages, prints curl commands for grammar .so files. Grammar validation pipeline (weekly CI) validates all 509 grammars on 4 platforms, produces `parsers.json` with full provenance + `GRAMMAR_REPORT.md`. Dimensional engine with 5 active tiers (security, performance, quality, architecture, observability), 136 YAML rules across 21 dimensions. **aoa-recon removed** -- two build modes: standard (`./build.sh`) and light (`./build.sh --light`). **Security pipeline**: SECURITY.md trust document, govulncheck + gosec + network audit CI on every push.
+**Current**: Core engine complete (search, learner, dashboard, grep parity). Single binary with dynamic grammar loading (core build: tree-sitter C runtime, zero compiled-in grammars). `aoa init` is the single entry point -- downloads pre-built .so/.dylib from `grammars/` in the aOa repo, verifies SHA-256, copies to `.aoa/grammars/`. No local compilation, no C compiler required. Grammar validation pipeline (weekly CI) compiles all 509 grammars on 4 platforms, commits pre-built binaries to `grammars/{platform}/`, produces `parsers.json` with full provenance + `GRAMMAR_REPORT.md`. Dimensional engine with 5 active tiers (security, performance, quality, architecture, observability), 136 YAML rules across 21 dimensions. **aoa-recon removed** -- two build modes: standard (`./build.sh`) and light (`./build.sh --light`). **Security pipeline**: SECURITY.md trust document, govulncheck + gosec + network audit CI on every push.
 
 **Approach**: TDD. Each layer validated before the next. Completed work archived to keep the board focused on what's next.
 
@@ -93,7 +93,13 @@
 | **L1** | | | | | | | | | | | | | *All 8 tasks complete -- see COMPLETED.md* | | |
 | **L2** | | | | | | | | | | | | | *All tasks complete -- see COMPLETED.md* | | |
 | **L3** | | | | | | | | | | | | | *All tasks complete -- see COMPLETED.md* | | |
-| [L4](#layer-4) | [L4.4](#l44) | x | | x | x | | | | L4.3 | 🟢 | 🟡 | ⚪ | Installation docs + grammar pipeline -- 6-phase roadmap. **Phase 1 DONE** (S80). **Phase 2 DONE** (S81): parsers.json 509/509 provenance, GRAMMAR_REPORT.md, weekly CI (Sun 6am UTC), 346 contributors acknowledged. **Next: Phase 3** (grammar release -- pre-built .so on GitHub) | Friction-free onboarding, user delight | Install guide, manifest expansion, `aoa init` fetch from releases, `aoa grammar list` attribution |
+| [L4](#layer-4) | [L4.4](#l44) | x | | x | x | | | | L4.3 | 🟢 | 🟡 | ⚪ | Installation + grammar pipeline -- Phase 1 DONE (S80), Phase 2 DONE (S81), **Phase 3: pre-built .so distribution (S83)**, Phase 4: npm + e2e | Friction-free onboarding, user delight, trust-building | `aoa init` fetches parsers.json → downloads pre-built .so → SHA verify → indexed |
+| [L4](#layer-4) | [L4.4-3.1](#l44-phase-3) | | | x | | | | | L10.4 | 🟢 | ⚪ | ⚪ | Update `grammar-validation.yml` — commit .so/.dylib to `grammars/{platform}/` in mvp-scale/aOa. Git LFS for binaries. Move parsers.json + GRAMMAR_REPORT.md into `grammars/` | Pre-built binaries available for download | CI commits binaries, parsers.json has matching SHAs |
+| [L4](#layer-4) | [L4.4-3.2](#l44-phase-3) | | | x | | | | | L4.4-3.1 | 🟢 | ⚪ | ⚪ | Create `grammars/README.md` — directory structure, platforms, SHA verification, link to grammar report | Users understand what they're downloading | README present, structure documented |
+| [L4](#layer-4) | [L4.4-3.3](#l44-phase-3) | | | x | x | | | | L4.4-3.1 | 🟢 | ⚪ | ⚪ | Simplify `aoa init` — fetch parsers.json → detect languages → show download plan → user confirms → download .so → SHA verify → copy → index | One-step grammar install, no C compiler | `aoa init` downloads + indexes in single run |
+| [L4](#layer-4) | [L4.4-3.4](#l44-phase-3) | | | x | | x | | | L4.4-3.3 | 🟢 | ⚪ | ⚪ | Remove obsolete compile-from-source code — download.sh generation, `aoa grammar compile`, GitHub API source listing | Clean codebase, no dead paths | Removed code, `make check` passes |
+| [L4](#layer-4) | [L4.4-3.5](#l44-phase-3) | | | x | | | | | L4.4-3.3 | 🟢 | ⚪ | ⚪ | `aoa init --update` — fetch fresh parsers.json, compare installed SHAs vs latest, download only changes | Grammar updates without full reinstall | Update downloads only changed grammars |
+| [L4](#layer-4) | [L4.4-3.6](#l44-phase-3) | | | x | x | | | | L4.4-3.3 | 🟢 | ⚪ | ⚪ | End-to-end verify — `aoa init` on fresh project downloads pre-built .so, SHA matches, grammars load, project indexes | Proves the flow works | Fresh project: init → download → index → search |
 | [L5](#layer-5) | [L5.Va](#l5va) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Dimensional rule validation -- per-rule detection tests across all 5 tiers (security 37, perf 26, quality 24, arch, obs). Absorbs L5.7/8/16/17/18 + L8.1 bitmask upgrade | All rules detect what they claim; engine wired to dashboard | Rules load + parse. **Gap**: per-rule detection accuracy untested |
 | [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
 | [L5](#layer-5) | [L5.11](#l511) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Dimension query support -- `--dimension=security --risk=high` | Filter by dimension | CLI filters by tier and severity |
@@ -112,8 +118,8 @@
 | [L10](#layer-10) | [L10.4](#l104) | | | x | | | | | - | 🟢 | 🟢 | 🟢 | Grammar build script -- `scripts/build-grammars.sh` compiles .so/.dylib from go-sitter-forest C source. Core pack = 11 grammars, 11 MB. Individual grammars 20 KB (json) to 3.5 MB (cpp). **S81**: Weekly CI validates all 509 grammars cross-platform (linux/darwin x amd64/arm64) | Grammars built from source, reproducible | Script tested locally + CI validates weekly on all 4 platforms |
 | [L10](#layer-10) | | | | | | | | | | | | | *L10.5/L10.6 complete -- see COMPLETED.md* | | |
 | [L10](#layer-10) | [L10.7](#l107) | | | x | | | | | - | 🟢 | 🟢 | 🟡 | deploy.sh updated -- uses `./build.sh --core` instead of lean build | Deploy produces correct binary | **Gap**: not tested on fresh machine |
-| [L10](#layer-10) | [L10.8](#l108) | | | x | | | | | L10.4 | 🟢 | ⚪ | ⚪ | Build all 509 grammars + GitHub release `grammars-v1` with .so for all 4 platforms | Pre-built grammars available for download | CI builds cross-platform, release assets downloadable |
-| [L10](#layer-10) | [L10.9](#l109) | | | x | | | | | L10.8 | 🟢 | ⚪ | ⚪ | End-to-end test on fresh project -- `aoa init` -> curl grammars -> scan -> dashboard | Full flow works from zero state | Fresh project scans successfully with downloaded grammars |
+| [L10](#layer-10) | [L10.8](#l108) | | | x | | | | | L10.4 | 🟢 | ⚪ | ⚪ | **Superseded by L4.4 Phase 3.** Grammar distribution now handled via `aoa init` → parsers.json → grammars.conf → setup.sh (compile from source). No pre-built .so hosting. | -- | -- |
+| [L10](#layer-10) | [L10.9](#l109) | | | x | | | | | L4.4 | 🟢 | ⚪ | ⚪ | End-to-end test on fresh machine -- `npm install` → `aoa init` → parsers.json → setup.sh → indexed. **Now L4.4 Phase 4.4.** | Full flow works from zero state | Fresh machine: npm install → aoa init → grammars compiled → project indexed |
 
 ---
 
@@ -143,50 +149,58 @@ Integration tests (`test/integration/cli_test.go`): `TestFileWatcher_NewFile_Aut
 
 #### L4.4
 
-**Installation guide + grammar pipeline** -- PRIORITY 1 -- In progress (Session 79+). **Phase 1 COMPLETE (S80). Phase 2 COMPLETE (S81).**
+**Installation + onboarding pipeline** -- PRIORITY 1 -- In progress (Session 79+). **Phase 1 COMPLETE (S80). Phase 2 COMPLETE (S81). Phase 3 ~90% (S82): code complete, needs verify.**
 
 ## Terminology (non-negotiable)
 
 - **`core` build tag** = the binary we ship. Tree-sitter runtime, dynamic `.so` loading. Built by `./build.sh` (default).
 - **`lean` build tag** = no tree-sitter, pure Go. Built by `./build.sh --light`. Not shipped to users. Used for fast CI checks only.
-- **`.so` files** = pre-compiled tree-sitter grammar shared libraries. One per language. NOT bundled in the binary. NOT bundled in npm. Downloaded by the user during `aoa init`.
-- **Grammar source** = [alexaandru/go-sitter-forest](https://github.com/alexaandru/go-sitter-forest). 510 grammars aggregated from upstream tree-sitter repos. Each has `parser.c` + optional `scanner.c`.
-- **`parsers.json`** = aOa-approved validated grammar list. Produced weekly by GitHub Actions. Contains: name, version, maintainer, upstream repo, sha256, size, security scan, platform status.
+- **`.so` files** = tree-sitter grammar shared libraries. One per language. NOT bundled in the binary. NOT bundled in npm. Pre-built by weekly CI and committed to `grammars/{platform}/` in the aOa repo. Downloaded by `aoa init`, verified via SHA-256.
+- **Grammar source** = [alexaandru/go-sitter-forest](https://github.com/alexaandru/go-sitter-forest). 509 grammars aggregated from upstream tree-sitter repos. Each has `parser.c` + optional `scanner.c`.
+- **`grammars/` directory** = pre-built grammar distribution folder in [mvp-scale/aOa](https://github.com/mvp-scale/aOa/tree/main/grammars). Contains: `parsers.json`, `GRAMMAR_REPORT.md`, `README.md`, and 4 platform subdirectories (`linux-amd64/`, `linux-arm64/`, `darwin-arm64/`, `darwin-amd64/`) each with compiled .so/.dylib files. Weekly CI compiles from source, commits binaries here. Git LFS for binary files.
+- **`parsers.json`** = aOa-approved validated grammar manifest. Produced weekly by GitHub Actions. Contains: name, version, maintainer, upstream repo, source SHA-256, binary SHA-256 per platform, size. Lives in `grammars/parsers.json` in the aOa repo (fetched by `aoa init`, not embedded in binary). Source of truth for grammar provenance and SHA verification.
+- **`grammars.conf`** = project-specific grammar list generated by `aoa init`. One grammar name per line, maximally clean. Used internally to track which grammars the project needs.
 - **`build.sh`** = local dev guardrails (prevents Claude from running `go build` directly). NOT used in CI/CD.
 - **`ci.yml`** = the real build. Runs in GitHub Actions. Produces the `core` binary for all platforms.
-- **`grammar-validation.yml`** = weekly Sunday run (6am UTC). Compiles all 509 grammars on 4 platforms, produces `parsers.json` + `GRAMMAR_REPORT.md`. No security scan (cppcheck too slow for auto-generated parser.c; scanner.c scanning deferred).
+- **`grammar-validation.yml`** = weekly Sunday run (6am UTC). Compiles all 509 grammars on 4 platforms, commits pre-built binaries to `grammars/{platform}/`, produces `parsers.json` + `GRAMMAR_REPORT.md`. The grammar report is the validation gate — nothing lands in `grammars/` without passing through it.
 - **`security.yml`** = CI security scan on every push. govulncheck (0 vulns), gosec (24 active rules), network audit (grep-enforced zero outbound connections).
 
 ## End-to-end installation flow (what the user does)
+
+> **Design principle**: Hearts and minds are won by onboarding. Simple, transparent, trust-building. `aoa init` shows the user exactly what it will download — pre-built .so files from the aOa repo, SHA-256 verified against the weekly grammar report. User confirms, files download, done. No compilation, no C compiler, no multi-step dance.
 
 ```
 Step 1: npm install -g @mvpscale/aoa
         └─ npm pulls the lightweight platform package (binary only, ~8 MB)
         └─ Binary is the `core` build (tree-sitter runtime, dynamic grammar loading)
-        └─ Binary was built in GitHub Actions, not locally. Provenance verified.
+        └─ Postinstall message: trust explanation + overview
+           "Run `aoa init` in your project to get started."
 
 Step 2: cd my-project && aoa init
         └─ aOa creates .aoa/ directory (project-scoped, everything lives here)
-        └─ Scans project files, detects languages (e.g. python, go, rust, yaml)
-        └─ Checks .aoa/grammars/ for installed .so files
-        └─ For missing grammars:
-           └─ Writes .aoa/grammars/fetch.list (one URL+dest per grammar)
-           └─ Shows user: "11 grammars needed (2.3 MB)"
-           └─ Shows one-liner: xargs -n2 wget -qO < .aoa/grammars/fetch.list
-           └─ URLs point to our GitHub release (pre-built, signed, validated)
-        └─ If all grammars present: indexes project immediately
-        └─ Output: "aOa indexed 6750 files, 5442 symbols, 28916 tokens"
-
-Step 3: User runs the one-liner (or aoa prompts them)
-        └─ Downloads only the .so files they need from our GitHub release
-        └─ Each .so was compiled in GitHub Actions from go-sitter-forest source
-        └─ Each .so has: sha256, cppcheck scan, SLSA provenance, maintainer credit
-
-Step 4: aoa init (re-run)
-        └─ Finds all grammars, indexes project with full structural parsing
-        └─ "11 grammars ready"
+        └─ Fetches parsers.json from grammars/ in aOa repo (one HTTP GET, tiny file)
+        └─ Scans project files, detects languages (e.g. python, go, typescript)
+        └─ Matches against parsers.json → identifies needed grammars
+        └─ Shows the user:
+           "Your project uses 3 languages. I need these grammars:
+              go        245 KB   sha256:abc123...
+              python    312 KB   sha256:def456...
+              yaml       89 KB   sha256:789abc...
+            Total: 646 KB from grammars/darwin-arm64/ in the aOa repo.
+            Download and install? [Y/n]"
+        └─ User confirms → downloads .so/.dylib files, verifies SHA-256
+        └─ Copies to .aoa/grammars/
+        └─ Indexes project with full structural parsing
+        └─ "3 grammars ready. aOa indexed 6750 files, 5442 symbols, 28916 tokens"
         └─ Done. User is online.
+
+Update: aoa init --update
+        └─ Fetches fresh parsers.json
+        └─ Compares SHA-256 of installed grammars vs latest
+        └─ Downloads only what changed
 ```
+
+> **Resilient**: If user skips steps or is offline, `aoa init` catches them. Can't reach parsers.json → "Download manually: curl ..." Already has grammars → indexes immediately. Partial install → downloads only what's missing.
 
 ## What must be built (step by step, in order)
 
@@ -204,31 +218,24 @@ Step 4: aoa init (re-run)
 - [x] **2.5** Acknowledgments section thanking 346 individual contributors + @alexaandru for go-sitter-forest
 - [x] **2.6** Array-vs-dict bug fixed: upstream URL + revision now populated for all 509 grammars
 
-### Phase 3: Grammar release (pre-built .so files hosted)
-- [ ] **3.1** Release workflow: compiles all 510 grammars per platform from go-sitter-forest
-- [ ] **3.2** Uploads .so files to GitHub release with SLSA provenance
-- [ ] **3.3** Release tagged (e.g. `grammars-v1`) with checksums
-- [ ] **3.4** URLs in fetch.list point to this release
+### Phase 3: Pre-built grammar distribution -- REDIRECTED (Session 83)
 
-### Phase 4: aoa init flow (user-facing)
-- [ ] **4.1** `aoa init` detects languages, checks .aoa/grammars/ for installed .so
-- [ ] **4.2** Writes fetch.list with correct GitHub release URLs
-- [ ] **4.3** Shows user: count, total size, one-liner command
-- [ ] **4.4** On re-run with all grammars present: indexes immediately
-- [ ] **4.5** `aoa grammar list` shows all 510 with maintainer + upstream repo
-- [ ] **4.6** Progress + ETA for any step taking >2 seconds
+Previous approach (compile from source via download.sh) superseded by pre-built .so distribution. S82 code retained where reusable: parsers.json loading, language scanning, grammars.conf, checkInstalledGrammars. Compile-from-source code (download.sh generation, `aoa grammar compile`, GitHub API source listing) to be removed.
 
-### Phase 5: npm packaging
-- [ ] **5.1** Platform packages (`@mvpscale/aoa-linux-x64`, etc.) contain only the binary
-- [ ] **5.2** `install.js` postinstall shows next steps clearly
-- [ ] **5.3** Release workflow publishes to npm from GitHub Actions
-- [ ] **5.4** End-to-end test: `npm install -g @mvpscale/aoa && aoa init` on fresh machine
+**Prerequisite**: This phase must complete before Phase 4 (npm packaging + installation guide). Pre-built distribution is the foundation — everything downstream depends on it.
 
-### Phase 6: Installation guide (docs/INSTALL.md)
-- [ ] **6.1** Document the full flow with examples
-- [ ] **6.2** Troubleshooting section (no gcc, no wget, firewall, etc.)
-- [ ] **6.3** `aoa grammar list` output example with attribution
-- [ ] **6.4** Link to GRAMMAR_REPORT.md and parsers.json for trust verification
+- [ ] **3.1** Update `grammar-validation.yml`: after compiling all grammars, commit .so/.dylib files to `grammars/{platform}/` in mvp-scale/aOa repo. Git LFS for binary files. Existing parsers.json + GRAMMAR_REPORT.md move into `grammars/` folder.
+- [ ] **3.2** Create `grammars/README.md` in mvp-scale/aOa: directory structure, platform folders, how parsers.json maps to files, SHA-256 verification process, link to grammar report.
+- [ ] **3.3** Simplify `aoa init`: fetch `parsers.json` from `grammars/` → detect project languages → show user what will be downloaded (names, sizes, SHAs) → user confirms → download platform-specific .so/.dylib → verify SHA-256 → copy to `.aoa/grammars/` → index. One step, no re-runs.
+- [ ] **3.4** Remove obsolete compile-from-source code: `generateDownloadSh`, `runGrammarCompile`, `checkSourceDownloaded`, `forestRawURL`, download.sh template. Keep `grammarSetupFlow` skeleton, `loadParsersJSON`, `scanProjectLanguages`, `matchParsersJSON`, `checkInstalledGrammars`.
+- [ ] **3.5** `aoa init --update`: fetch fresh parsers.json, compare SHA-256 of installed .so vs latest, download only what changed.
+- [ ] **3.6** End-to-end verify: `aoa init` on fresh project downloads pre-built .so, SHA matches parsers.json, grammars load, project indexes.
+
+### Phase 4: npm packaging + postinstall trust message
+- [ ] **4.1** Platform packages (`@mvpscale/aoa-linux-x64`, etc.) contain only the binary
+- [x] **4.2** `install.js` postinstall: trust explanation ("no embedded downloader, you control all downloads") + 3-step overview pointing to `aoa init`
+- [ ] **4.3** Release workflow publishes to npm from GitHub Actions
+- [ ] **4.4** End-to-end test: `npm install -g @mvpscale/aoa && aoa init` → parsers.json → download.sh → indexed — on fresh machine
 
 ## Session 79 completed
 - [x] `build.sh` simplified: default = core, `--light` = lean, `--recon`/`--core` deprecated
@@ -267,20 +274,33 @@ Step 4: aoa init (re-run)
 - [x] **aoa-recon removed** (-761 LOC) -- cmd/aoa-recon/, npm/aoa-recon/, recon_bridge.go, recon.go cmd deleted
 - [x] DimensionalResults/ReconAvailable moved to dimensional.go (dashboard still works)
 - [x] CI simplified: no more grep -v /cmd/aoa-recon exclusion hacks
-- [x] Build strategy decided: compile aOa once per version, embed parsers.json via //go:embed
+- [x] Build strategy decided: compile aOa once per version. parsers.json downloaded by user (not embedded) — stays fresh independently of binary version.
+
+## Session 82 completed
+- [x] **Phase 3 ~90% code complete**: L4.4-3.1 through L4.4-3.5 implemented, L4.4-3.6 done
+- [x] **NEW** `cmd/aoa/cmd/init_grammars.go` — shared grammar setup logic (no build tags): ParserEntry types, parsers.json loading, project language scanning, grammars.conf generation, download.sh generation, grammarSetupFlow coordinator, `aoa grammar compile` subcommand, extension map
+- [x] Refactored `init_grammars_cgo.go` — parsers.json priority flow, GOMODCACHE compile gated behind AOA_DEV_COMPILE=1
+- [x] Full implementation of `init_grammars_nocgo.go` (was no-op) — calls grammarSetupFlow then printParsersJSONMessage
+- [x] `init.go` — added --update flag, scanAndDownloadGrammars returns bool (pending=true halts init before indexing)
+- [x] `npm/aoa/install.js` — trust message about no embedded downloader + guided setup (L4.4-4.2)
+- [x] download.sh uses GitHub API to list .c/.h files per grammar directory — handles grammars with non-standard source files (e.g. yaml: schema.core.c, schema.json.c)
+- [x] download.sh --dry-run shows 3-step preview (read conf, download each, compile each)
+- [ ] **Remaining**: ~~regenerate download.sh, verify compile~~ **SUPERSEDED by S83 pre-built .so approach.** Compile-from-source code (download.sh, `aoa grammar compile`) replaced by pre-built binary distribution. Reusable code retained: parsers.json loading, language scanning, grammars.conf, checkInstalledGrammars.
 
 ## Key decisions
 - Binary built in GitHub Actions, not locally. CI is the real build.
-- Grammar .so files pre-compiled in GitHub Actions with SLSA provenance
-- Users download only the grammars they need via one-liner from fetch.list
-- aOa never makes outbound network connections itself
-- `parsers.json` is the aOa-approved trust document
-- Maintainer attribution shown per grammar -- credit to the people who built them
+- **Pre-built .so distribution** (S83): grammars compiled by weekly CI, committed to `grammars/{platform}/` in the aOa repo. Users download pre-built binaries, not source. No C compiler required. SHA-256 verification against parsers.json.
+- **Grammar report is the validation gate**: weekly CI compiles from upstream source, validates all 509 grammars on 4 platforms, produces grammar report + parsers.json. Nothing lands in `grammars/` without passing the report.
+- `parsers.json` fetched fresh by `aoa init` every time — not embedded in binary. Always current. Contains source lineage + binary SHA-256 per platform.
+- `aoa init` shows user exactly what will download (names, sizes, SHAs), user confirms, downloads happen, SHA verified, done in one step.
+- GOMODCACHE compile path gated behind `AOA_DEV_COMPILE=1` — dev-only, not user-facing.
+- Maintainer attribution shown per grammar — credit to the people who built them
 - Everything project-scoped: `aoa remove` wipes it all
-- Build strategy: compile aOa once per version, embed parsers.json via //go:embed. Grammar metadata updated weekly independently.
-- aoa-recon removed entirely -- two build modes: core (./build.sh) and lean (./build.sh --light)
+- Onboarding is the product — trust-building, expectation-setting, delightful at every step
+- aoa-recon removed entirely — two build modes: core (./build.sh) and lean (./build.sh --light)
+- **Superseded** (S82→S83): compile-from-source approach (download.sh, `aoa grammar compile`, GitHub API source listing) replaced by pre-built distribution. Code retained in git history.
 
-**Files**: `build.sh`, `deploy.sh`, `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/init_grammars_cgo.go`, `cmd/aoa/cmd/grammar_cgo.go`, `internal/adapters/treesitter/loader.go`, `internal/adapters/treesitter/manifest.go`, `scripts/validate-grammars.sh`, `scripts/build-grammars.sh`, `.github/workflows/grammar-validation.yml`, `.github/workflows/ci.yml`, `.github/workflows/security.yml`, `SECURITY.md`, `dist/parsers.json`, `GRAMMAR_REPORT.md`, `npm/`
+**Files**: `build.sh`, `deploy.sh`, `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/init_grammars.go`, `cmd/aoa/cmd/init_grammars_cgo.go`, `cmd/aoa/cmd/init_grammars_nocgo.go`, `internal/adapters/treesitter/loader.go`, `internal/adapters/treesitter/manifest.go`, `scripts/validate-grammars.sh`, `scripts/build-grammars.sh`, `.github/workflows/grammar-validation.yml`, `.github/workflows/ci.yml`, `.github/workflows/security.yml`, `SECURITY.md`, `npm/`
 
 ---
 
@@ -420,7 +440,7 @@ File-level source display with all flagged lines in context (editor-like, severi
 
 **Layer 10: Dynamic Grammar Distribution**
 
-> Single-binary architecture. Core build includes tree-sitter C runtime but zero compiled-in grammars. Grammars downloaded as platform-specific .so/.dylib files. `aoa init` is the sole entry point. No outbound network from the binary -- grammar downloads are user-executed curl commands. Supersedes the L6 two-binary npm model.
+> Single-binary architecture. Core build includes tree-sitter C runtime but zero compiled-in grammars. Grammars distributed as pre-built platform-specific .so/.dylib from `grammars/` in the aOa repo. `aoa init` is the sole entry point — downloads pre-built binaries, verifies SHA-256, copies to `.aoa/grammars/`. No local compilation required. Supersedes the L6 two-binary npm model.
 
 #### L10.1
 
@@ -468,15 +488,13 @@ Now uses `./build.sh --core` instead of lean build.
 
 #### L10.8
 
-**Build all 509 grammars + GitHub release** -- Not started
-
-Run `scripts/build-grammars.sh --all` to compile all grammars. Create GitHub release `grammars-v1` with .so files for linux/darwin x amd64/arm64. Wire CI workflow for cross-platform builds.
+**Superseded by L4.4 Phase 3.** Grammar distribution now handled via `aoa init` → fetch parsers.json → download pre-built .so/.dylib from `grammars/{platform}/` → SHA-256 verify → copy to `.aoa/grammars/`. No local compilation.
 
 #### L10.9
 
-**End-to-end test on fresh project** -- Not started
+**End-to-end test on fresh machine** -- Not started. **Now L4.4 Phase 4.4.**
 
-Full flow: `aoa init` on a fresh project -> curl grammars -> scan -> dashboard shows results. Validates the entire dynamic grammar pipeline from zero state.
+Full flow on a fresh machine (no Go, no GOMODCACHE): `npm install -g @mvpscale/aoa` → `aoa init` → download parsers.json → `sh setup.sh` → grammars compiled → `aoa init` → project indexed → dashboard shows results.
 
 ---
 
@@ -488,9 +506,9 @@ Full flow: `aoa init` on a fresh project -> curl grammars -> scan -> dashboard s
 | Learner (21-step autotune) | 5/5 fixture parity, float64 precision. Do not change decay/prune constants. |
 | Session Prism (Claude JSONL reader) | Defensive parsing, UUID dedup, compound message decomposition. |
 | Tree-sitter parser (509 languages) | go-sitter-forest, behind `ports.Parser` interface. Core build: C runtime compiled in, grammars loaded dynamically from `.aoa/grammars/*.so`. |
-| Single-binary distribution (L10) | One `aoa` binary (core build with tree-sitter C runtime). Grammars downloaded as .so/.dylib via `aoa init` curl commands. No outbound network from binary. CI-enforced (grep audit). |
+| Single-binary distribution (L10) | One `aoa` binary (core build with tree-sitter C runtime). Grammars distributed as pre-built .so/.dylib from `grammars/` in aOa repo. `aoa init` downloads + SHA-verifies. No local compilation required. |
 | Security pipeline (S81) | SECURITY.md trust document, govulncheck + gosec + network audit CI on every push. Slowloris fix (ReadHeaderTimeout). |
-| Grammar validation (L4.4 P2) | Weekly CI: 509/509 grammars validated on 4 platforms, parsers.json provenance, GRAMMAR_REPORT.md, 346 contributor acknowledgments. |
+| Grammar validation (L4.4 P2) | Weekly CI: 509/509 grammars validated on 4 platforms, pre-built binaries committed to `grammars/{platform}/`, parsers.json provenance, GRAMMAR_REPORT.md, 346 contributor acknowledgments. |
 | Socket protocol | JSON-over-socket IPC. Concurrent clients. `Reindex` with extended timeout. |
 | Value engine (L0) | Burn rate, runway projection, session persistence, activity enrichments. |
 | Activity rubric | Three-lane color system. Learned column. Autotune enrichments. |

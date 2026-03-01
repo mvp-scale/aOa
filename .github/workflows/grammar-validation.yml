@@ -371,14 +371,46 @@ jobs:
           print("Wrote dist/GRAMMAR_REPORT.md")
           PYSCRIPT
 
-      - name: Commit report
+      - name: Organize grammars directory
+        run: |
+          set -euo pipefail
+
+          # Create platform directories
+          mkdir -p grammars/linux-amd64 grammars/linux-arm64 grammars/darwin-arm64 grammars/darwin-amd64
+
+          # Copy compiled binaries from artifacts into grammars/{platform}/
+          echo "Organizing pre-built grammars:"
+          for platform in linux-amd64 linux-arm64 darwin-arm64 darwin-amd64; do
+            src="artifacts/validation-${platform}/grammars-${platform}"
+            if [ -d "$src" ]; then
+              cp "$src"/* "grammars/${platform}/"
+              count=$(ls "grammars/${platform}" | wc -l)
+              echo "  ${platform}: ${count} grammars"
+            else
+              echo "  ${platform}: no artifacts found"
+            fi
+          done
+
+          # Copy manifest and report into grammars/
+          cp dist/parsers.json grammars/parsers.json
+          cp dist/GRAMMAR_REPORT.md grammars/GRAMMAR_REPORT.md
+
+          # Total size
+          total=$(du -sh grammars/ | cut -f1)
+          echo ""
+          echo "Total grammars directory: ${total}"
+
+      - name: Commit grammars
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          cp dist/parsers.json parsers.json
-          cp dist/GRAMMAR_REPORT.md GRAMMAR_REPORT.md
-          git add parsers.json GRAMMAR_REPORT.md
-          git diff --cached --quiet || git commit -m "Weekly grammar validation report $(date -u +%Y-W%V)"
+
+          # Remove old root-level files (moved into grammars/)
+          git rm -f parsers.json GRAMMAR_REPORT.md 2>/dev/null || true
+
+          # Add entire grammars directory
+          git add grammars/
+          git diff --cached --quiet || git commit -m "Weekly grammar report $(date -u +%Y-W%V)"
           git push
 
       - name: Upload final report
@@ -386,6 +418,6 @@ jobs:
         with:
           name: grammar-report
           path: |
-            dist/parsers.json
-            dist/GRAMMAR_REPORT.md
+            grammars/parsers.json
+            grammars/GRAMMAR_REPORT.md
           retention-days: 365

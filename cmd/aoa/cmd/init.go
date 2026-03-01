@@ -23,6 +23,7 @@ var initCmd = &cobra.Command{
 
 func init() {
 	initCmd.Flags().BoolVar(&noGrammarsFlag, "no-grammars", false, "Skip automatic grammar download")
+	initCmd.Flags().BoolVar(&updateFlag, "update", false, "Update parsers.json and regenerate grammar config")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -63,8 +64,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	parser := newParser(root)
 
-	// Auto-detect and download missing grammars before indexing.
-	scanAndDownloadGrammars(root)
+	// Auto-detect and set up missing grammars before indexing.
+	// Fetches parsers.json, downloads pre-built .so files, verifies SHA-256.
+	// Returns true when download was declined or failed — halt init.
+	if scanAndDownloadGrammars(root) {
+		store.Close()
+		return nil
+	}
 
 	fmt.Println("⚡ Scanning project...")
 

@@ -15,98 +15,79 @@ import (
 	"github.com/corey/aoa/internal/adapters/treesitter"
 )
 
-// scanAndCompileGrammars walks the project, detects needed languages,
-// and compiles missing grammars from go-sitter-forest C source in the
-// Go module cache. No network calls — source is already local.
-func scanAndDownloadGrammars(root string) {
-	if os.Getenv("AOA_NO_GRAMMAR_DOWNLOAD") == "1" {
-		return
-	}
-	if noGrammarsFlag {
-		return
+// scanAndDownloadGrammars detects needed languages and sets up grammars.
+// Returns true when the user has pending steps — caller should halt init.
+//
+// Flow priority:
+//  1. grammarSetupFlow: fetch parsers.json → download pre-built .so → verify SHA
+//  2. AOA_DEV_COMPILE=1: compile from GOMODCACHE (dev shortcut only)
+//  3. Fall back to manual parsers.json download message
+func scanAndDownloadGrammars(root string) bool {
+	// Primary: pre-built .so download flow.
+	handled, pending := grammarSetupFlow(root)
+	if handled {
+		return pending
 	}
 
+	// Dev shortcut: compile from go-sitter-forest in GOMODCACHE.
+	// Only when explicitly opted in — normal users see the parsers.json flow.
+	if os.Getenv("AOA_DEV_COMPILE") != "1" {
+		printParsersJSONMessage(root)
+		return true
+	}
+
+	forestBase := findForestBase()
+	if forestBase == "" {
+		printParsersJSONMessage(root)
+		return true
+	}
+
+	// Dev path: GOMODCACHE available, compile directly.
 	manifest := treesitter.BuiltinManifest()
+	langs := scanProjectLanguages(root)
 
-	// Quick-scan: walk the project collecting file extensions.
-	extCount := make(map[string]int)
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if info.IsDir() {
-			name := info.Name()
-			switch name {
-			case ".git", "node_modules", ".venv", "__pycache__", "vendor",
-				".idea", ".vscode", "dist", "build", ".aoa", ".next",
-				"target", ".claude":
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		ext := strings.ToLower(filepath.Ext(path))
-		if ext != "" {
-			extCount[ext]++
-		}
-		base := filepath.Base(path)
-		lang := treesitter.ExtensionToLanguage(base)
-		if lang != "" {
-			extCount[base]++
-		}
-		return nil
-	})
-
-	// Map extensions to grammar names.
-	needed := make(map[string]bool)
-	for ext := range extCount {
-		lang := treesitter.ExtensionToLanguage(ext)
-		if lang != "" {
-			if _, ok := manifest.Grammars[lang]; ok {
-				needed[lang] = true
-			}
+	var needed []string
+	for _, lang := range langs {
+		if _, ok := manifest.Grammars[lang]; ok {
+			needed = append(needed, lang)
 		}
 	}
-
 	if len(needed) == 0 {
-		return
+		return false
 	}
 
-	// Grammars are project-scoped: {root}/.aoa/grammars/
 	grammarDir := filepath.Join(root, ".aoa", "grammars")
 	paths := treesitter.DefaultGrammarPaths(root)
 	loader := treesitter.NewDynamicLoader(paths)
 
-	var installed []string
-	var missing []string
-	for lang := range needed {
+	var installed, missing []string
+	for _, lang := range needed {
 		if loader.GrammarPath(lang) != "" {
 			installed = append(installed, lang)
 		} else {
 			missing = append(missing, lang)
 		}
 	}
-
 	sort.Strings(installed)
 	sort.Strings(missing)
 
 	if len(missing) == 0 {
 		fmt.Printf("  %d grammars ready\n", len(needed))
-		return
+		return false
 	}
 
-	// Show what we found.
 	fmt.Printf("\n  Detected %d languages in your project\n", len(needed))
 	if len(installed) > 0 {
 		fmt.Printf("  Ready:   %s\n", strings.Join(installed, ", "))
 	}
 	fmt.Printf("  Missing: %s\n", strings.Join(missing, ", "))
 
-	// Compile from go-sitter-forest source.
 	compileGrammars(missing, grammarDir)
+	return false
 }
 
 // compileGrammars compiles missing grammars from go-sitter-forest C source
-// in the Go module cache. Requires gcc.
+// in the Go module cache. Requires gcc. Dev-only path (AOA_DEV_COMPILE=1).
 func compileGrammars(langs []string, grammarDir string) {
 	// Locate go-sitter-forest in the module cache.
 	forestBase := findForestBase()

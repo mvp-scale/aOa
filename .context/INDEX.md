@@ -1,10 +1,10 @@
 # Index
 
-> **Updated**: 2026-02-28 (Session 82)
+> **Updated**: 2026-02-28 (Session 83)
 
 ## Active Layer
 
-**L4** (Distribution) -- L4.4 in progress -- 6-phase roadmap. **Phase 1 COMPLETE (S80)**, **Phase 2 COMPLETE (S81)**: parsers.json 509/509 provenance, GRAMMAR_REPORT.md, weekly CI, 346 contributors. L4.2 superseded -> BACKLOG.md. **Next: Phase 3** (grammar release -- pre-built .so on GitHub).
+**L4** (Distribution) -- L4.4 in progress -- 4-phase roadmap. **Phase 1 COMPLETE (S80)**, **Phase 2 COMPLETE (S81)**, **Phase 3 REDIRECTED (S83)**: compile-from-source approach superseded by pre-built .so distribution. Weekly CI commits binaries to `grammars/{platform}/` in aOa repo. `aoa init` fetches parsers.json → downloads pre-built .so → SHA-256 verify → done. No local compilation, no C compiler. L4.2 superseded -> BACKLOG.md. L4.4-4.2 (npm postinstall) done.
 
 **L5** (Dimensional Analysis) -- YAML rework complete. L5.Va consolidates all per-rule validation (was L5.7/8/16/17/18 + L8.1) into one task. L5.19 superseded (archived). L5.10/11 not started (dimension scores + query support).
 
@@ -12,7 +12,7 @@
 
 **L9** (Telemetry) -- **Complete, archived.** All 9 tasks triple-green. See COMPLETED.md.
 
-**L10** (Dynamic Grammar Distribution) -- Single-binary architecture replacing two-binary model. L10.3/L10.4/L10.5/L10.6 triple-green (L10.5/L10.6 archived). L10.1/L10.2/L10.7 green (Va gaps). L10.8 now unblocked (L10.4 complete). L10.9 blocked on L10.8.
+**L10** (Dynamic Grammar Distribution) -- Single-binary architecture. L10.3/L10.4/L10.5/L10.6 triple-green (L10.5/L10.6 archived). L10.1/L10.2/L10.7 green (Va gaps). **L10.8 superseded by L4.4 Phase 3.** L10.9 now L4.4 Phase 4.4 (end-to-end test).
 
 **G0** (Speed) -- G0.HF1 triple-green, archived to COMPLETED.md.
 
@@ -22,7 +22,13 @@ Tasks with no blocking dependencies (or all deps satisfied):
 
 | ID | Cf | St | Va | Task |
 |----|:--:|:--:|:--:|------|
-| L4.4 | 🟢 | 🟡 | ⚪ | Installation docs + grammar pipeline -- 6-phase roadmap. **Phase 1+2 DONE**. **Next: Phase 3** (grammar release -- pre-built .so on GitHub) |
+| L4.4 | 🟢 | 🟡 | ⚪ | Installation + onboarding pipeline -- Phase 1+2 DONE. Phase 3 REDIRECTED (S83): pre-built .so distribution |
+| L4.4-3.1 | 🟢 | ⚪ | ⚪ | Update grammar-validation.yml — commit .so/.dylib to `grammars/{platform}/`, Git LFS |
+| L4.4-3.2 | 🟢 | ⚪ | ⚪ | Create `grammars/README.md` — structure, platforms, SHA verification |
+| L4.4-3.3 | 🟢 | ⚪ | ⚪ | Simplify `aoa init` — fetch parsers.json → download .so → SHA verify → index (blocked by 3.1) |
+| L4.4-3.4 | 🟢 | ⚪ | ⚪ | Remove obsolete compile-from-source code (blocked by 3.3) |
+| L4.4-3.5 | 🟢 | ⚪ | ⚪ | `aoa init --update` — compare SHAs, download changes (blocked by 3.3) |
+| L4.4-3.6 | 🟢 | ⚪ | ⚪ | End-to-end verify (blocked by 3.3) |
 | L5.Va | 🟢 | 🟢 | 🟡 | Dimensional rule validation -- all 5 tiers (absorbs L5.7/8/16/17/18 + L8.1) |
 | L5.10 | 🟢 | ⚪ | ⚪ | Dimension scores in search results |
 | L5.11 | 🟢 | ⚪ | ⚪ | Dimension query support |
@@ -37,13 +43,10 @@ Tasks with no blocking dependencies (or all deps satisfied):
 | L10.3 | 🟢 | 🟢 | 🟢 | No outbound network -- CI grep-enforced. **TRIPLE-GREEN** |
 | L10.4 | 🟢 | 🟢 | 🟢 | Grammar build script -- weekly CI validates cross-platform. **TRIPLE-GREEN** |
 | L10.7 | 🟢 | 🟢 | 🟡 | deploy.sh updated (gap: not tested on fresh machine) |
-| L10.8 | 🟢 | ⚪ | ⚪ | Build all 509 grammars + GitHub release (**NEWLY UNBLOCKED** -- L10.4 complete) |
 
 ## Blocked Tasks
 
-| ID | Cf | St | Va | Task | Blocked By |
-|----|:--:|:--:|:--:|------|------------|
-| L10.9 | 🟢 | ⚪ | ⚪ | End-to-end test on fresh project | L10.8 (needs downloadable grammars) |
+None. L10.8 superseded by L4.4 Phase 3. L10.9 absorbed into L4.4 Phase 4.4.
 
 ## Board Pointers
 
@@ -56,17 +59,17 @@ Line ranges into BOARD.md for targeted reads:
 | Board Structure | 27-70 | `offset=27, limit=44` |
 | Mission | 76-84 | `offset=76, limit=9` |
 | Board Table | 86-117 | `offset=86, limit=32` |
-| Supporting Detail | 120-480 | `offset=120, limit=361` |
+| Supporting Detail | 120-504 | `offset=120, limit=385` |
 | - Layer 2 | 122-138 | `offset=122, limit=17` |
-| - Layer 4 | 140-285 | `offset=140, limit=146` |
-| - Layer 5 | 287-331 | `offset=287, limit=45` |
-| - Layer 7 | 333-363 | `offset=333, limit=31` |
-| - Layer 8 | 365-417 | `offset=365, limit=53` |
-| - Layer 10 | 419-481 | `offset=419, limit=63` |
-| What Works | 483-507 | `offset=483, limit=25` |
-| What We're NOT Doing | 509-516 | `offset=509, limit=8` |
-| Key Documents | 518-530 | `offset=518, limit=13` |
-| Quick Reference | 532-544 | `offset=532, limit=13` |
+| - Layer 4 | 140-307 | `offset=140, limit=168` |
+| - Layer 5 | 309-353 | `offset=309, limit=45` |
+| - Layer 7 | 355-385 | `offset=355, limit=31` |
+| - Layer 8 | 387-439 | `offset=387, limit=53` |
+| - Layer 10 | 441-501 | `offset=441, limit=61` |
+| What Works | 503-527 | `offset=503, limit=25` |
+| What We're NOT Doing | 529-536 | `offset=529, limit=8` |
+| Key Documents | 538-550 | `offset=538, limit=13` |
+| Quick Reference | 552-564 | `offset=552, limit=13` |
 
 ## Layer Status
 
@@ -77,14 +80,14 @@ Line ranges into BOARD.md for targeted reads:
 | L1 | 8 | 8 | 0 | Complete |
 | L2 | 7 | 7 | 0 | Complete -- all archived to COMPLETED.md |
 | L3 | 15 | 15 | 0 | Complete -- L3.15 archived to COMPLETED.md |
-| L4 | 4 | 2 | 1 | L4.4 in progress -- **Phase 1+2 COMPLETE**. Phase 3 next (grammar release). L4.2 superseded -> BACKLOG.md |
+| L4 | 4 | 2 | 1 | L4.4 in progress -- **Phase 1+2 COMPLETE. Phase 3 REDIRECTED (S83)**: pre-built .so distribution replaces compile-from-source. L4.2 superseded -> BACKLOG.md |
 | L5 | 15 | 10 | 3 | Active -- L5.Va (consolidated validation), L5.10/11 not started. L5.19 superseded. |
 | L6 | 9 | 9 | 0 | Complete -- all archived to COMPLETED.md. **Superseded by L10.** |
 | L7 | 3 | 3 | 0 | Complete -- L7.1 (Va gap), L7.2/L7.4 archived to COMPLETED.md |
 | G0 | 1 | 1 | 0 | Complete -- G0.HF1 archived to COMPLETED.md |
 | L8 | 6 | 2 | 4 | Recon -- L8.1 absorbed into L5.Va. L8.2-5 green (Va gaps), L8.6 not started. S81: aoa-recon removed |
 | L9 | 9 | 9 | 0 | Complete -- archived to COMPLETED.md |
-| L10 | 9 | 4 | 5 | Dynamic Grammar Distribution. L10.3/L10.4/L10.5/L10.6 triple-green (L10.5/L10.6 archived). L10.1/L10.2/L10.7 green (Va gaps). L10.8 unblocked. L10.9 blocked on L10.8. |
+| L10 | 9 | 6 | 3 | Dynamic Grammar Distribution. L10.3/L10.4/L10.5/L10.6 triple-green (L10.5/L10.6 archived). L10.1/L10.2/L10.7 green (Va gaps). **L10.8 superseded by L4.4 Phase 3. L10.9 absorbed into L4.4 Phase 4.4.** |
 
 ## Active Documents
 
