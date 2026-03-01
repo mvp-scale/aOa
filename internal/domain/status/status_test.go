@@ -22,7 +22,7 @@ func TestGenerate_Basic(t *testing.T) {
 		},
 	}
 
-	data := Generate(state, nil)
+	data := Generate(state, nil, Metrics{})
 	assert.Equal(t, uint32(150), data.Intents)
 	assert.Equal(t, 3, data.Domains)
 	assert.Contains(t, data.TopDomains, "authentication")
@@ -45,7 +45,7 @@ func TestGenerate_WithAutotune(t *testing.T) {
 		Pruned:   3,
 	}
 
-	data := Generate(state, result)
+	data := Generate(state, result, Metrics{})
 	assert.Equal(t, uint32(200), data.Intents)
 	require.NotNil(t, data.Autotune)
 	assert.Equal(t, 1, data.Autotune.Promoted)
@@ -59,7 +59,7 @@ func TestGenerate_EmptyState(t *testing.T) {
 		DomainMeta: map[string]*ports.DomainMeta{},
 	}
 
-	data := Generate(state, nil)
+	data := Generate(state, nil, Metrics{})
 	assert.Equal(t, uint32(0), data.Intents)
 	assert.Equal(t, 0, data.Domains)
 	assert.Empty(t, data.TopDomains)
@@ -77,7 +77,7 @@ func TestGenerate_TopDomainsLimitedTo3(t *testing.T) {
 		},
 	}
 
-	data := Generate(state, nil)
+	data := Generate(state, nil, Metrics{})
 	require.Len(t, data.TopDomains, 3)
 	assert.Equal(t, "a", data.TopDomains[0])
 	assert.Equal(t, "b", data.TopDomains[1])
@@ -93,7 +93,7 @@ func TestGenerate_SkipsDeprecatedDomains(t *testing.T) {
 		},
 	}
 
-	data := Generate(state, nil)
+	data := Generate(state, nil, Metrics{})
 	require.Len(t, data.TopDomains, 1)
 	assert.Equal(t, "active_one", data.TopDomains[0])
 }
@@ -107,7 +107,7 @@ func TestGenerate_SkipsZeroHitDomains(t *testing.T) {
 		},
 	}
 
-	data := Generate(state, nil)
+	data := Generate(state, nil, Metrics{})
 	require.Len(t, data.TopDomains, 1)
 	assert.Equal(t, "active", data.TopDomains[0])
 }
@@ -171,7 +171,7 @@ func TestGenerate_JSONRoundtrip(t *testing.T) {
 		DomainMeta:  map[string]*ports.DomainMeta{},
 	}
 
-	data := Generate(state, nil)
+	data := Generate(state, nil, Metrics{})
 	b, err := json.Marshal(data)
 	require.NoError(t, err)
 

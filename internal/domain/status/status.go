@@ -3,6 +3,8 @@
 // The daemon writes a JSON status file on every state change (observe, autotune).
 // A hook script reads this JSON, combines it with Claude Code stdin data
 // (context window, model), and formats the display.
+//
+// Every field in StatusData maps to a segment name in .aoa/status-line.conf.
 package status
 
 import (
@@ -18,11 +20,40 @@ import (
 const StatusFile = "status.json"
 
 // StatusData is the JSON payload the daemon writes for the hook to read.
+// All fields are available as segments in .aoa/status-line.conf.
 type StatusData struct {
-	Intents    uint32   `json:"intents"`
-	Domains    int      `json:"domains"`
-	TopDomains []string `json:"top_domains"`
-	Autotune   *Tune    `json:"autotune,omitempty"`
+	// Live
+	Intents          uint32   `json:"intents"`
+	Domains          int      `json:"domains"`
+	TopDomains       []string `json:"top_domains"`
+	TokensSaved      int64    `json:"tokens_saved"`
+	TimeSavedMs      int64    `json:"time_saved_ms"`
+	BurnRatePerMin   float64  `json:"burn_rate_per_min"`
+	GuidedRatio      float64  `json:"guided_ratio"`
+	ReadCount        int      `json:"read_count"`
+	GuidedReadCount  int      `json:"guided_read_count"`
+	ShadowSaved      int64    `json:"shadow_saved"`
+	CacheHitRate     float64  `json:"cache_hit_rate"`
+	AutotuneProgress int      `json:"autotune_progress"`
+
+	// Runway
+	RunwayMinutes float64 `json:"runway_minutes"`
+	DeltaMinutes  float64 `json:"delta_minutes"`
+
+	// Intel (learner state)
+	Mastered   int     `json:"mastered"`   // core domain count
+	Observed   int     `json:"observed"`   // files learned from
+	Vocabulary int     `json:"vocabulary"` // keywords extracted
+	Concepts   int     `json:"concepts"`   // terms resolved
+	Patterns   int     `json:"patterns"`   // bigrams captured
+	Evidence   float64 `json:"evidence"`   // cumulative domain hits
+
+	// Debrief (session metrics)
+	InputTokens  int     `json:"input_tokens"`
+	OutputTokens int     `json:"output_tokens"`
+	Flow         float64 `json:"flow"` // burst throughput tok/s
+
+	Autotune *Tune `json:"autotune,omitempty"`
 }
 
 // Tune holds the most recent autotune results.
@@ -33,12 +64,71 @@ type Tune struct {
 	Pruned   int `json:"pruned"`
 }
 
-// Generate produces a StatusData from current learner state.
-func Generate(state *ports.LearnerState, autotune *learner.AutotuneResult) *StatusData {
+// Metrics holds runtime values passed from the app layer into Generate.
+type Metrics struct {
+	// Live
+	TokensSaved     int64
+	TimeSavedMs     int64
+	BurnRatePerMin  float64
+	GuidedRatio     float64
+	ReadCount       int
+	GuidedReadCount int
+	ShadowSaved     int64
+	CacheHitRate    float64
+
+	// Runway
+	RunwayMinutes float64
+	DeltaMinutes  float64
+
+	// Debrief
+	InputTokens  int
+	OutputTokens int
+	Flow         float64
+}
+
+// Generate produces a StatusData from current learner state and runtime metrics.
+func Generate(state *ports.LearnerState, autotune *learner.AutotuneResult, m Metrics) *StatusData {
+	// Intel metrics from learner state
+	var totalEvidence float64
+	var coreCount int
+	for _, dm := range state.DomainMeta {
+		totalEvidence += dm.Hits
+		if dm.Tier == "core" && dm.State != "deprecated" {
+			coreCount++
+		}
+	}
+
 	sd := &StatusData{
-		Intents:    state.PromptCount,
-		Domains:    len(state.DomainMeta),
-		TopDomains: topDomains(state, 3),
+		// Live
+		Intents:          state.PromptCount,
+		Domains:          len(state.DomainMeta),
+		TopDomains:       topDomains(state, 3),
+		TokensSaved:      m.TokensSaved,
+		TimeSavedMs:      m.TimeSavedMs,
+		BurnRatePerMin:   m.BurnRatePerMin,
+		GuidedRatio:      m.GuidedRatio,
+		ReadCount:        m.ReadCount,
+		GuidedReadCount:  m.GuidedReadCount,
+		ShadowSaved:      m.ShadowSaved,
+		CacheHitRate:     m.CacheHitRate,
+		AutotuneProgress: int(state.PromptCount % 50),
+
+		// Runway
+		RunwayMinutes: m.RunwayMinutes,
+		DeltaMinutes:  m.DeltaMinutes,
+
+		// Intel
+		Mastered:   coreCount,
+		Observed:   len(state.FileHits),
+		Vocabulary: len(state.KeywordHits),
+		Concepts:   len(state.TermHits),
+		Patterns:   len(state.Bigrams),
+		Evidence:   totalEvidence,
+
+		// Debrief
+		InputTokens:  m.InputTokens,
+		OutputTokens: m.OutputTokens,
+		Flow:         m.Flow,
 	}
 	if autotune != nil {
 		sd.Autotune = &Tune{

@@ -1128,7 +1128,48 @@ func (a *App) writeStatus(autotune *learner.AutotuneResult) {
 	if autotune != nil {
 		a.lastAutotune = autotune
 	}
-	data := status.Generate(a.Learner.State(), a.lastAutotune)
+	// Compute runway metrics for status.json (same data the dashboard uses).
+	burnRate := a.burnRate.TokensPerMin()
+	counterfactRate := a.burnRateCounterfact.TokensPerMin()
+	model := a.currentModel
+	windowMax := ContextWindowSize(model)
+	tokensUsed := a.burnRate.TotalTokens()
+	remaining := int64(windowMax) - tokensUsed
+	if remaining < 0 {
+		remaining = 0
+	}
+	var runwayMin, counterfactMin float64
+	if burnRate > 0 {
+		runwayMin = float64(remaining) / burnRate
+	}
+	if counterfactRate > 0 {
+		counterfactMin = float64(remaining) / counterfactRate
+	}
+
+	var guidedRatio float64
+	if a.sessionReadCount > 0 {
+		guidedRatio = float64(a.sessionGuidedCount) / float64(a.sessionReadCount)
+	}
+
+	m := status.Metrics{
+		TokensSaved:     a.counterfactTokensSaved,
+		TimeSavedMs:     a.sessionTimeSavedMs,
+		BurnRatePerMin:  burnRate,
+		GuidedRatio:     guidedRatio,
+		ReadCount:       a.sessionReadCount,
+		GuidedReadCount: a.sessionGuidedCount,
+		RunwayMinutes:   runwayMin,
+		DeltaMinutes:    runwayMin - counterfactMin,
+		CacheHitRate:    a.sessionMetrics.CacheHitRate(),
+		ShadowSaved:     a.shadowRing.TotalCharsSaved() / 4,
+
+		// Debrief
+		InputTokens:  a.sessionMetrics.InputTokens,
+		OutputTokens: a.sessionMetrics.OutputTokens,
+		Flow:         a.meter.BurstTokensPerSec(),
+	}
+
+	data := status.Generate(a.Learner.State(), a.lastAutotune, m)
 	_ = status.WriteJSON(a.statusLinePath, data)
 }
 
