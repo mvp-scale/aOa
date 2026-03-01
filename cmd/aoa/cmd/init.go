@@ -90,6 +90,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("⚡ aOa indexed %d files, %d symbols, %d tokens\n",
 		stats.FileCount, stats.SymbolCount, stats.TokenCount)
 	createShims(root)
+
+	// Auto-start daemon so grep, dashboard, and tailing work immediately.
+	if !client.Ping() {
+		fmt.Println()
+		if err := spawnDaemon(root, sockPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not auto-start daemon: %v\n", err)
+			fmt.Fprintf(os.Stderr, "  → start manually: aoa daemon start\n")
+		}
+	}
 	return nil
 }
 

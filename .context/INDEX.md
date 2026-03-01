@@ -1,10 +1,10 @@
 # Index
 
-> **Updated**: 2026-02-28 (Session 83)
+> **Updated**: 2026-03-01 (Session 84)
 
 ## Active Layer
 
-**L4** (Distribution) -- L4.4 in progress -- 4-phase roadmap. **Phase 1 COMPLETE (S80)**, **Phase 2 COMPLETE (S81)**, **Phase 3 REDIRECTED (S83)**: compile-from-source approach superseded by pre-built .so distribution. Weekly CI commits binaries to `grammars/{platform}/` in aOa repo. `aoa init` fetches parsers.json → downloads pre-built .so → SHA-256 verify → done. No local compilation, no C compiler. L4.2 superseded -> BACKLOG.md. L4.4-4.2 (npm postinstall) done.
+**L4** (Distribution) -- L4.4 in progress -- 4-phase roadmap. **Phase 1 COMPLETE (S80)**, **Phase 2 COMPLETE (S81)**, **Phase 3 ~95% (S84)**: L4.4-3.1 through L4.4-3.5 done (pre-built .so distribution, UX rewrite, SHA-256 verification, `--update` full sync). L4.4-3.6 (fresh machine e2e) remains. Phase 4: npm + e2e. L4.2 superseded -> BACKLOG.md. L4.4-4.2 (npm postinstall) done.
 
 **L5** (Dimensional Analysis) -- YAML rework complete. L5.Va consolidates all per-rule validation (was L5.7/8/16/17/18 + L8.1) into one task. L5.19 superseded (archived). L5.10/11 not started (dimension scores + query support).
 
@@ -22,13 +22,13 @@ Tasks with no blocking dependencies (or all deps satisfied):
 
 | ID | Cf | St | Va | Task |
 |----|:--:|:--:|:--:|------|
-| L4.4 | 🟢 | 🟡 | ⚪ | Installation + onboarding pipeline -- Phase 1+2 DONE. Phase 3 REDIRECTED (S83): pre-built .so distribution |
-| L4.4-3.1 | 🟢 | ⚪ | ⚪ | Update grammar-validation.yml — commit .so/.dylib to `grammars/{platform}/`, Git LFS |
-| L4.4-3.2 | 🟢 | ⚪ | ⚪ | Create `grammars/README.md` — structure, platforms, SHA verification |
-| L4.4-3.3 | 🟢 | ⚪ | ⚪ | Simplify `aoa init` — fetch parsers.json → download .so → SHA verify → index (blocked by 3.1) |
-| L4.4-3.4 | 🟢 | ⚪ | ⚪ | Remove obsolete compile-from-source code (blocked by 3.3) |
-| L4.4-3.5 | 🟢 | ⚪ | ⚪ | `aoa init --update` — compare SHAs, download changes (blocked by 3.3) |
-| L4.4-3.6 | 🟢 | ⚪ | ⚪ | End-to-end verify (blocked by 3.3) |
+| L4.4 | 🟢 | 🟡 | ⚪ | Installation + onboarding pipeline -- Phase 1+2 DONE. Phase 3 ~95% (S84): 3.1-3.5 done, 3.6 remains |
+| L4.4-3.1 | 🟢 | 🟢 | ⚪ | Update grammar-validation.yml -- commit .so/.dylib to `grammars/{platform}/`, Git LFS. **DONE S83** |
+| L4.4-3.2 | 🟢 | 🟢 | ⚪ | Create `grammars/README.md` -- structure, platforms, SHA verification. **DONE S83** |
+| L4.4-3.3 | 🟢 | 🟢 | ⚪ | `aoa init` UX rewrite -- fresh path (educational, trust-building), returning path (concise), download.sh SHA-256 via awk. **DONE S84** |
+| L4.4-3.4 | 🟢 | 🟢 | ⚪ | Remove compile-from-source code, eliminated download.sha256 sidecar. **DONE S84** |
+| L4.4-3.5 | 🟢 | 🟢 | ⚪ | `aoa init --update` full sync -- scan, generate, execute, index. One command. **DONE S84** |
+| L4.4-3.6 | 🟢 | ⚪ | ⚪ | End-to-end verify on fresh machine |
 | L5.Va | 🟢 | 🟢 | 🟡 | Dimensional rule validation -- all 5 tiers (absorbs L5.7/8/16/17/18 + L8.1) |
 | L5.10 | 🟢 | ⚪ | ⚪ | Dimension scores in search results |
 | L5.11 | 🟢 | ⚪ | ⚪ | Dimension query support |
@@ -80,7 +80,7 @@ Line ranges into BOARD.md for targeted reads:
 | L1 | 8 | 8 | 0 | Complete |
 | L2 | 7 | 7 | 0 | Complete -- all archived to COMPLETED.md |
 | L3 | 15 | 15 | 0 | Complete -- L3.15 archived to COMPLETED.md |
-| L4 | 4 | 2 | 1 | L4.4 in progress -- **Phase 1+2 COMPLETE. Phase 3 REDIRECTED (S83)**: pre-built .so distribution replaces compile-from-source. L4.2 superseded -> BACKLOG.md |
+| L4 | 4 | 2 | 1 | L4.4 in progress -- **Phase 1+2 COMPLETE. Phase 3 ~95% (S84)**: L4.4-3.1 through 3.5 done, L4.4-3.6 (fresh machine e2e) remains. L4.2 superseded -> BACKLOG.md |
 | L5 | 15 | 10 | 3 | Active -- L5.Va (consolidated validation), L5.10/11 not started. L5.19 superseded. |
 | L6 | 9 | 9 | 0 | Complete -- all archived to COMPLETED.md. **Superseded by L10.** |
 | L7 | 3 | 3 | 0 | Complete -- L7.1 (Va gap), L7.2/L7.4 archived to COMPLETED.md |

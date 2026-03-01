@@ -2,7 +2,7 @@
 
 [Board](#board) | [Supporting Detail](#supporting-detail) | [Completed](COMPLETED.md) | [Backlog](BACKLOG.md)
 
-> **Updated**: 2026-02-28 (Session 83) | **91% complete.**
+> **Updated**: 2026-03-01 (Session 84) | **91% complete.**
 > **Completed work**: See [COMPLETED.md](COMPLETED.md) -- Phases 1-8c + L0 + L1 + L2 (all) + L3 (all) + L4.1/L4.3 + L5.1-L5.6/L5.9/L5.19 + L6 (all) + L7.2/L7.4 + L8.1 + L9 (all) + L10.5/L10.6 + G0.HF1 + P0 (all 7 bugs) (535 tests, 0 fail, 0 skip)
 > **Archived boards**: `.context/archived/`
 
@@ -94,11 +94,11 @@
 | **L2** | | | | | | | | | | | | | *All tasks complete -- see COMPLETED.md* | | |
 | **L3** | | | | | | | | | | | | | *All tasks complete -- see COMPLETED.md* | | |
 | [L4](#layer-4) | [L4.4](#l44) | x | | x | x | | | | L4.3 | 🟢 | 🟡 | ⚪ | Installation + grammar pipeline -- Phase 1 DONE (S80), Phase 2 DONE (S81), **Phase 3: pre-built .so distribution (S83)**, Phase 4: npm + e2e | Friction-free onboarding, user delight, trust-building | `aoa init` fetches parsers.json → downloads pre-built .so → SHA verify → indexed |
-| [L4](#layer-4) | [L4.4-3.1](#l44-phase-3) | | | x | | | | | L10.4 | 🟢 | ⚪ | ⚪ | Update `grammar-validation.yml` — commit .so/.dylib to `grammars/{platform}/` in mvp-scale/aOa. Git LFS for binaries. Move parsers.json + GRAMMAR_REPORT.md into `grammars/` | Pre-built binaries available for download | CI commits binaries, parsers.json has matching SHAs |
-| [L4](#layer-4) | [L4.4-3.2](#l44-phase-3) | | | x | | | | | L4.4-3.1 | 🟢 | ⚪ | ⚪ | Create `grammars/README.md` — directory structure, platforms, SHA verification, link to grammar report | Users understand what they're downloading | README present, structure documented |
-| [L4](#layer-4) | [L4.4-3.3](#l44-phase-3) | | | x | x | | | | L4.4-3.1 | 🟢 | ⚪ | ⚪ | Simplify `aoa init` — fetch parsers.json → detect languages → show download plan → user confirms → download .so → SHA verify → copy → index | One-step grammar install, no C compiler | `aoa init` downloads + indexes in single run |
-| [L4](#layer-4) | [L4.4-3.4](#l44-phase-3) | | | x | | x | | | L4.4-3.3 | 🟢 | ⚪ | ⚪ | Remove obsolete compile-from-source code — download.sh generation, `aoa grammar compile`, GitHub API source listing | Clean codebase, no dead paths | Removed code, `make check` passes |
-| [L4](#layer-4) | [L4.4-3.5](#l44-phase-3) | | | x | | | | | L4.4-3.3 | 🟢 | ⚪ | ⚪ | `aoa init --update` — fetch fresh parsers.json, compare installed SHAs vs latest, download only changes | Grammar updates without full reinstall | Update downloads only changed grammars |
+| [L4](#layer-4) | [L4.4-3.1](#l44-phase-3) | | | x | | | | | L10.4 | 🟢 | 🟢 | ⚪ | Update `grammar-validation.yml` — commit .so/.dylib to `grammars/{platform}/` in mvp-scale/aOa. Git LFS for binaries. Move parsers.json + GRAMMAR_REPORT.md into `grammars/` | Pre-built binaries available for download | CI commits binaries, parsers.json has matching SHAs |
+| [L4](#layer-4) | [L4.4-3.2](#l44-phase-3) | | | x | | | | | L4.4-3.1 | 🟢 | 🟢 | ⚪ | Create `grammars/README.md` — directory structure, platforms, SHA verification, link to grammar report | Users understand what they're downloading | README present, structure documented |
+| [L4](#layer-4) | [L4.4-3.3](#l44-phase-3) | | | x | x | | | | L4.4-3.1 | 🟢 | 🟢 | ⚪ | Simplify `aoa init` — fresh path UX rewrite (positive tone, zero-outbound policy, GitHub provenance, .aoa/ portability), returning path (count/ready/missing), download.sh SHA-256 inline verification via awk from parsers.json | One-step grammar install, no C compiler | `aoa init` downloads + indexes in single run |
+| [L4](#layer-4) | [L4.4-3.4](#l44-phase-3) | | | x | | x | | | L4.4-3.3 | 🟢 | 🟢 | ⚪ | Remove obsolete compile-from-source code — download.sh generation, `aoa grammar compile`, GitHub API source listing. Eliminated download.sha256 sidecar (SHAs from parsers.json via awk) | Clean codebase, no dead paths | Removed code, `make check` passes |
+| [L4](#layer-4) | [L4.4-3.5](#l44-phase-3) | | | x | | | | | L4.4-3.3 | 🟢 | 🟢 | ⚪ | `aoa init --update` — full sync: scan languages, generate download.sh, execute via `sh`, continue to indexing. One command for returning users | Grammar updates without full reinstall | Update downloads only changed grammars |
 | [L4](#layer-4) | [L4.4-3.6](#l44-phase-3) | | | x | x | | | | L4.4-3.3 | 🟢 | ⚪ | ⚪ | End-to-end verify — `aoa init` on fresh project downloads pre-built .so, SHA matches, grammars load, project indexes | Proves the flow works | Fresh project: init → download → index → search |
 | [L5](#layer-5) | [L5.Va](#l5va) | | | | | | | x | L5.1 | 🟢 | 🟢 | 🟡 | Dimensional rule validation -- per-rule detection tests across all 5 tiers (security 37, perf 26, quality 24, arch, obs). Absorbs L5.7/8/16/17/18 + L8.1 bitmask upgrade | All rules detect what they claim; engine wired to dashboard | Rules load + parse. **Gap**: per-rule detection accuracy untested |
 | [L5](#layer-5) | [L5.10](#l510) | | | | x | | | | L5.5 | 🟢 | ⚪ | ⚪ | Add dimension scores to search results (`S:-1 P:0 C:+2`) | Scores visible inline | Scores appear in grep/egrep output |
@@ -149,7 +149,7 @@ Integration tests (`test/integration/cli_test.go`): `TestFileWatcher_NewFile_Aut
 
 #### L4.4
 
-**Installation + onboarding pipeline** -- PRIORITY 1 -- In progress (Session 79+). **Phase 1 COMPLETE (S80). Phase 2 COMPLETE (S81). Phase 3 ~90% (S82): code complete, needs verify.**
+**Installation + onboarding pipeline** -- PRIORITY 1 -- In progress (Session 79+). **Phase 1 COMPLETE (S80). Phase 2 COMPLETE (S81). Phase 3 ~95% (S84): L4.4-3.1 through L4.4-3.5 done, L4.4-3.6 (fresh machine e2e) remains.**
 
 ## Terminology (non-negotiable)
 
@@ -224,11 +224,11 @@ Previous approach (compile from source via download.sh) superseded by pre-built 
 
 **Prerequisite**: This phase must complete before Phase 4 (npm packaging + installation guide). Pre-built distribution is the foundation — everything downstream depends on it.
 
-- [ ] **3.1** Update `grammar-validation.yml`: after compiling all grammars, commit .so/.dylib files to `grammars/{platform}/` in mvp-scale/aOa repo. Git LFS for binary files. Existing parsers.json + GRAMMAR_REPORT.md move into `grammars/` folder.
-- [ ] **3.2** Create `grammars/README.md` in mvp-scale/aOa: directory structure, platform folders, how parsers.json maps to files, SHA-256 verification process, link to grammar report.
-- [ ] **3.3** Simplify `aoa init`: fetch `parsers.json` from `grammars/` → detect project languages → show user what will be downloaded (names, sizes, SHAs) → user confirms → download platform-specific .so/.dylib → verify SHA-256 → copy to `.aoa/grammars/` → index. One step, no re-runs.
-- [ ] **3.4** Remove obsolete compile-from-source code: `generateDownloadSh`, `runGrammarCompile`, `checkSourceDownloaded`, `forestRawURL`, download.sh template. Keep `grammarSetupFlow` skeleton, `loadParsersJSON`, `scanProjectLanguages`, `matchParsersJSON`, `checkInstalledGrammars`.
-- [ ] **3.5** `aoa init --update`: fetch fresh parsers.json, compare SHA-256 of installed .so vs latest, download only what changed.
+- [x] **3.1** Update `grammar-validation.yml`: after compiling all grammars, commit .so/.dylib files to `grammars/{platform}/` in mvp-scale/aOa repo. Git LFS for binary files. Existing parsers.json + GRAMMAR_REPORT.md move into `grammars/` folder.
+- [x] **3.2** Create `grammars/README.md` in mvp-scale/aOa: directory structure, platform folders, how parsers.json maps to files, SHA-256 verification process, link to grammar report.
+- [x] **3.3** Simplify `aoa init`: fresh path UX rewrite ("Nice project -- N languages detected", zero-outbound policy, GitHub provenance, .aoa/ portability, two-step instructions, hints at `--update`). Returning path shows count detected/ready/missing, file sizes, GitHub source. download.sh SHA-256 inline verification via awk from parsers.json (no sidecar file).
+- [x] **3.4** Remove obsolete compile-from-source code. Eliminated download.sha256 sidecar -- SHAs extracted directly from parsers.json via awk into shell variable.
+- [x] **3.5** `aoa init --update`: full sync -- scan languages, generate download.sh, execute via `sh` (the script just generated, inspectable), continue to indexing. One command for returning users.
 - [ ] **3.6** End-to-end verify: `aoa init` on fresh project downloads pre-built .so, SHA matches parsers.json, grammars load, project indexes.
 
 ### Phase 4: npm packaging + postinstall trust message
@@ -287,6 +287,15 @@ Previous approach (compile from source via download.sh) superseded by pre-built 
 - [x] download.sh --dry-run shows 3-step preview (read conf, download each, compile each)
 - [ ] **Remaining**: ~~regenerate download.sh, verify compile~~ **SUPERSEDED by S83 pre-built .so approach.** Compile-from-source code (download.sh, `aoa grammar compile`) replaced by pre-built binary distribution. Reusable code retained: parsers.json loading, language scanning, grammars.conf, checkInstalledGrammars.
 
+## Session 84 completed
+- [x] `build.sh`/`deploy.sh` symlink: changed from `cp` to `ln -sf` so `~/bin/aoa` always points to latest build. Fixed CI `set -euo pipefail` failure with `if/then` form.
+- [x] L4.4-3.3: Complete UX rewrite for `aoa init` fresh path -- positive tone ("Nice project"), zero-outbound policy explanation, GitHub provenance, .aoa/ portability messaging, two-step instructions, `--update` hint
+- [x] L4.4-3.3: Returning path -- concise count detected/ready/missing, file sizes, GitHub source, SHA verification against manifest
+- [x] L4.4-3.4: download.sh SHA-256 verification via awk extraction from parsers.json -- eliminated download.sha256 sidecar file entirely. Inline github/local SHA comparison per grammar.
+- [x] L4.4-3.5: `aoa init --update` full sync -- scans project, generates download.sh, executes via `sh`, continues to indexing. One command, full cycle for returning users.
+- [x] `os/exec` used only for `--update` to run generated download.sh -- not embedding curl
+- [x] CI green after symlink fix
+
 ## Key decisions
 - Binary built in GitHub Actions, not locally. CI is the real build.
 - **Pre-built .so distribution** (S83): grammars compiled by weekly CI, committed to `grammars/{platform}/` in the aOa repo. Users download pre-built binaries, not source. No C compiler required. SHA-256 verification against parsers.json.
@@ -298,7 +307,11 @@ Previous approach (compile from source via download.sh) superseded by pre-built 
 - Everything project-scoped: `aoa remove` wipes it all
 - Onboarding is the product — trust-building, expectation-setting, delightful at every step
 - aoa-recon removed entirely — two build modes: core (./build.sh) and lean (./build.sh --light)
-- **Superseded** (S82→S83): compile-from-source approach (download.sh, `aoa grammar compile`, GitHub API source listing) replaced by pre-built distribution. Code retained in git history.
+- **Superseded** (S82->S83): compile-from-source approach (download.sh, `aoa grammar compile`, GitHub API source listing) replaced by pre-built distribution. Code retained in git history.
+- **No download.sha256 sidecar** (S84): SHAs extracted directly from parsers.json via awk. Inline github/local SHA comparison per grammar in download.sh output.
+- **Two UX paths** (S84): fresh (educational, trust-building, two-step) vs returning (`--update`, one command, full sync)
+- **`os/exec` for `--update` only** (S84): runs the generated download.sh via `sh` -- not embedding curl in the binary
+- **Symlink over copy** (S84): `~/bin/aoa` is `ln -sf` to build output, always points to latest
 
 **Files**: `build.sh`, `deploy.sh`, `cmd/aoa/cmd/init.go`, `cmd/aoa/cmd/init_grammars.go`, `cmd/aoa/cmd/init_grammars_cgo.go`, `cmd/aoa/cmd/init_grammars_nocgo.go`, `internal/adapters/treesitter/loader.go`, `internal/adapters/treesitter/manifest.go`, `scripts/validate-grammars.sh`, `scripts/build-grammars.sh`, `.github/workflows/grammar-validation.yml`, `.github/workflows/ci.yml`, `.github/workflows/security.yml`, `SECURITY.md`, `npm/`
 

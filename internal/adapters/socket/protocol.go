@@ -323,15 +323,17 @@ type SessionListResult struct {
 
 // ProjectConfigResult is the result of a config request.
 type ProjectConfigResult struct {
-	ProjectRoot   string `json:"project_root"`
-	ProjectID     string `json:"project_id"`
-	DBPath        string `json:"db_path"`
-	SocketPath    string `json:"socket_path"`
-	IndexFiles    int    `json:"index_files"`
-	IndexTokens   int    `json:"index_tokens"`
-	UptimeSeconds int64  `json:"uptime_seconds"`
-	Version       string `json:"version"`
-	BuildDate     string `json:"build_date"`
+	ProjectRoot   string  `json:"project_root"`
+	ProjectID     string  `json:"project_id"`
+	DBPath        string  `json:"db_path"`
+	SocketPath    string  `json:"socket_path"`
+	IndexFiles    int     `json:"index_files"`
+	IndexTokens   int     `json:"index_tokens"`
+	UptimeSeconds int64   `json:"uptime_seconds"`
+	Version       string  `json:"version"`
+	BuildDate     string  `json:"build_date"`
+	HeapAllocMB   float64 `json:"heap_alloc_mb"`
+	Goroutines    int     `json:"goroutines"`
 }
 
 // ReindexResult is the result of a reindex request.

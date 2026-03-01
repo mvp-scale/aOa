@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -1402,6 +1403,9 @@ func (a *App) ProjectConfig() socket.ProjectConfigResult {
 		uptimeSeconds = int64(time.Since(a.started).Seconds())
 	}
 
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+
 	return socket.ProjectConfigResult{
 		ProjectRoot:   a.ProjectRoot,
 		ProjectID:     a.ProjectID,
@@ -1412,6 +1416,8 @@ func (a *App) ProjectConfig() socket.ProjectConfigResult {
 		UptimeSeconds: uptimeSeconds,
 		Version:       version.Version,
 		BuildDate:     version.BuildDate,
+		HeapAllocMB:   float64(mem.HeapAlloc) / (1024 * 1024),
+		Goroutines:    runtime.NumGoroutine(),
 	}
 }
 

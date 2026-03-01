@@ -423,7 +423,7 @@ body {
 }
 
 /* ── N-gram metrics ── */
-.ngram-wrap { flex: 1; overflow: hidden; padding: 20px 24px; }
+.ngram-wrap { flex: 1; overflow-y: auto; padding: 20px 24px; }
 .ngram-section { margin-bottom: 28px; }
 .ngram-section:last-child { margin-bottom: 0; }
 .ngram-section-title {

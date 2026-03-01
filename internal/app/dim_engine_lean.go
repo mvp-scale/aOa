@@ -1,4 +1,4 @@
-//go:build !recon
+//go:build !core
 
 package app
 

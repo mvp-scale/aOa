@@ -777,7 +777,7 @@ function renderBigrams(bigramsResult) {
   var ctd = bigramsResult.cohit_term_domain || {};
 
   var bgSorted = Object.keys(bg).map(function(k) { return [k, bg[k]]; })
-    .sort(function(a, b) { return b[1] - a[1]; }).slice(0, 10);
+    .sort(function(a, b) { return b[1] - a[1]; }).slice(0, 8);
   var ckSorted = Object.keys(ckw).map(function(k) { return [k, ckw[k]]; })
     .sort(function(a, b) { return b[1] - a[1]; }).slice(0, 5);
   var ctSorted = Object.keys(ctd).map(function(k) { return [k, ctd[k]]; })
@@ -1292,6 +1292,9 @@ function renderArsenal() {
 
   // Session History Table — clean columns, no jargon
   var shtml = '';
+  if (sessions.length === 0) {
+    shtml = '<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--mute);font-size:12px;line-height:1.6">Sessions are recorded as you work. Data appears at session end.</td></tr>';
+  }
   for (var j = 0; j < sessions.length; j++) {
     var sess = sessions[j];
     var shortId = (sess.session_id || '').substring(0, 8);
@@ -1361,7 +1364,7 @@ function renderSavingsChart(sessions, cm, rw) {
   var legendEl = document.getElementById('chartDataLegend');
 
   if (sessions.length === 0) {
-    area.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:12px">No session data</div>';
+    area.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:12px;text-align:center;line-height:1.6">Token usage appears here as you work.<br>Start a Claude session to begin tracking.</div>';
     if (legendEl) legendEl.innerHTML = '';
     return;
   }
@@ -2156,7 +2159,18 @@ function renderReconInstallPrompt() {
     '<div>Run init to scan your project and download language grammars:</div>' +
     '<div style="margin:16px auto;max-width:400px;background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:12px 16px;font-family:monospace;font-size:13px;color:#4fc3f7;text-align:left">' +
     'aoa init</div>' +
-    '<div style="color:#888;font-size:12px;margin-top:8px">Scans your project, downloads the tree-sitter grammars you need, and builds the search index. Restart the daemon after indexing.</div>' +
+    '<div style="color:#888;font-size:12px;margin-top:8px">Scans your project, downloads the tree-sitter grammars you need, and builds the search index.</div>' +
+    '</div>';
+}
+
+function renderReconWaitingPrompt() {
+  var wrap = document.getElementById('reconTreeWrap');
+  if (!wrap) return;
+  wrap.innerHTML =
+    '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px;line-height:1.8">' +
+    '<div style="font-size:24px;margin-bottom:12px;opacity:0.6">&#x23F3;</div>' +
+    '<div style="color:#e0e0e0;font-size:16px;margin-bottom:8px">Recon available</div>' +
+    '<div style="color:#888;font-size:13px">Waiting for first scan. Data will appear here automatically.</div>' +
     '</div>';
 }
 
@@ -2164,9 +2178,13 @@ function renderRecon() {
   var data = cache.recon;
   if (!data) return;
 
-  // Show init prompt when no scan data exists (fresh install or after wipe)
+  // Show init prompt when no scan data and recon not available (fresh install or after wipe)
   if ((data.total_findings || 0) === 0 && (data.files_scanned || 0) === 0) {
-    renderReconInstallPrompt();
+    if (data.recon_available) {
+      renderReconWaitingPrompt();
+    } else {
+      renderReconInstallPrompt();
+    }
     return;
   }
 
