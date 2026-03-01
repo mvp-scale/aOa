@@ -30,7 +30,7 @@ Claude: "I see the issue. Line 47."
 
 ## Why a Go Port?
 
-The [original aOa](https://github.com/CTGS-Innovations/aOa) runs as a Python service in Docker. It works. But it can be better.
+The [original aOa](https://github.com/MVP-Scale/aOa) ran as a Python service in Docker. It worked. But it could be better.
 
 **aOa is a clean-room rewrite** that eliminates Docker entirely and delivers order-of-magnitude performance improvements:
 
@@ -77,10 +77,13 @@ All angles converge into **one confident answer**.
 ### Install
 
 ```bash
+# Via npm (recommended)
+npm install -g @mvpscale/aoa
+
 # From source
-git clone https://github.com/CTGS-Innovations/aOa
+git clone https://github.com/MVP-Scale/aOa.git
 cd aOa
-go build ./cmd/aoa/
+./build.sh
 ```
 
 ### Initialize a Project
@@ -253,7 +256,7 @@ Python, JavaScript, TypeScript, Go, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, S
 
 R, Julia, Markdown, Elixir, Erlang, Dart, Nim, Clojure, D, Gleam, Elm, PureScript, Odin, V, Ada, Fortran, Fennel, Groovy, GraphQL, CMake, Make, Nix, Objective-C, VHDL, GLSL, HLSL, SQL, Dockerfile, Vue
 
-**101 file extensions** mapped total. See [languages.md](docs/languages.md) for the full breakdown.
+**101 file extensions** mapped total.
 
 ---
 
@@ -268,7 +271,7 @@ aOa generates a status line that shows your session at a glance:
 | Confident | `aOa 69 \| 80k saved \| ctx:36k/200k (18%)` |
 | Long session | `aOa 247 \| 1.8M saved \| ctx:142k/200k (71%)` |
 
-Written to `/tmp/aoa-status-line.txt` on every state change. Use the included hook or read it however you like.
+Written to `.aoa/status.json` on every state change. Use the included hook or read it however you like.
 
 ---
 
@@ -276,7 +279,7 @@ Written to `/tmp/aoa-status-line.txt` on every state change. Use the included ho
 
 - **Local-only** -- single binary, no network calls, no containers
 - **No data leaves** -- your code stays on your machine
-- **Open source** -- MIT licensed, fully auditable
+- **Open source** -- Apache 2.0 licensed, fully auditable
 - **Explainable** -- `aoa intent recent` shows exactly what it learned
 
 ---
@@ -299,16 +302,43 @@ Nothing else to clean up. No containers. No services. No config files scattered 
 
 ## Project Status
 
-aOa is in active development. **211 tests passing, 0 failing.**
+**631 tests passing.** Single binary ships with O(1) search, 28-language structural parsing, 134 semantic domains, self-learning, and GNU grep parity.
 
-- Phases 1-5: Complete (foundation, search, domains, learning, session integration)
-- Phase 6: In progress (CLI complete, daemon wired, release pipeline pending)
-- Phase 7: Planned (migration validation, parallel run with Python version)
+See [CHANGELOG.md](CHANGELOG.md) for release history.
 
-See [BOARD.md](.context/BOARD.md) for the full project board.
+---
+
+## From the Founder
+
+aOa started because I watched Claude Code burn through tokens rediscovering code it already found. Every session, the same searches. The same files. The same wasted context.
+
+The fix isn't more AI. It's a map. aOa builds that map — locally, silently, from the signals Claude already produces. No network calls. No cloud services. Just a binary that watches and learns.
+
+This is open source because the best tools are shared ones. If aOa saves you tokens, saves you time, or teaches you something about how AI agents actually work — pay it forward. File an issue. Submit a fix. Tell someone.
+
+Build something that matters.
+
+— Corey, [MVP-Scale.com](https://mvp-scale.com)
+
+---
+
+## Acknowledgments
+
+aOa builds on outstanding open-source work:
+
+- **[tree-sitter](https://tree-sitter.github.io/tree-sitter/)** -- incremental parsing framework powering 28-language structural analysis
+- **[go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)** -- Go bindings for 509 tree-sitter grammars, maintained by 346 contributors
+- **[cobra](https://github.com/spf13/cobra)** -- CLI framework
+- **[bbolt](https://go.etcd.io/bbolt)** -- embedded key-value store (crash-safe, zero-config)
+- **[fsnotify](https://github.com/fsnotify/fsnotify)** -- cross-platform file system notifications
+- **[purego](https://github.com/ebitengine/purego)** -- calling C from Go without CGO (used in grammar loading)
+- **[testify](https://github.com/stretchr/testify)** -- test assertions and requirements
+- **[aho-corasick](https://github.com/petar-dambovaliev/aho-corasick)** -- multi-pattern string matching
 
 ---
 
 ## License
 
-MIT
+Apache License 2.0. See [LICENSE](LICENSE) for the full text.
+
+Copyright 2025-2026 [MVP-Scale.com](https://mvp-scale.com)

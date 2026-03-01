@@ -55,4 +55,4 @@ You're not seeing the true token economics of your AI tools. The waste is hidden
 
 ## License
 
-MIT
+Apache License 2.0. See [LICENSE](https://github.com/MVP-Scale/aOa/blob/main/LICENSE).

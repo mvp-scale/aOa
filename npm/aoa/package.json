@@ -10,7 +10,7 @@
     "@mvpscale/aoa-darwin-x64": "0.0.0",
     "@mvpscale/aoa-darwin-arm64": "0.0.0"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": { "type": "git", "url": "https://github.com/mvp-scale/aOa" },
   "keywords": ["code-search", "semantic-search", "developer-tools"]
 }

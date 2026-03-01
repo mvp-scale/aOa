@@ -1,0 +1,36 @@
+aOa - Angle O(1)f Attack
+Copyright 2025-2026 MVP-Scale.com
+
+MVP-Scale.com is building the world's first SaaS foundry -- a community
+and pipeline for launching foundational MVPs at 5-10x speed. This tool
+is one piece of that pipeline.
+
+aOa started because we watched Claude Code burn through tokens
+rediscovering code it already found. Every session, the same searches.
+The same files. The same wasted context. The fix isn't more AI -- it's
+a map. aOa builds that map locally, silently, from the signals Claude
+already produces.
+
+The original aOa was a Python prototype that validated semantic code
+intelligence for Claude Code. It worked -- but it needed Docker, Redis,
+and Python just to run. The Go rewrite eliminates all of that. One binary.
+No containers. No services. No runtime dependencies.
+
+It went through a clean-room rewrite -- not porting Python line by line,
+but rebuilding from behavioral specs and test fixtures. The result:
+100,000x faster autotune, 16-30x faster search, 8x less memory, and a
+single 4.9MB binary that handles 28 languages with structural parsing
+and 134 semantic domains embedded at compile time.
+
+We're not building through vibe coding or AI hype. We're taking real
+ideas, pushing them fast, iterating relentlessly, and shipping things
+that work. This is our pipeline in practice.
+
+If you build on this, fork it, extend it, or just find it useful --
+we'd love to hear from you. We're building more tools like this, and
+your use case might shape what comes next.
+
+  https://github.com/MVP-Scale/aOa/discussions
+  https://mvp-scale.com
+
+This is the way.
