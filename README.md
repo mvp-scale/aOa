@@ -158,10 +158,10 @@ score = base + co_occurrence + clustering + breadth
 All bit operations are hardware-accelerated (`math/bits.OnesCount64`). The entire file analysis pipeline runs in 10-30ms. No neural networks. No embeddings server. No API calls. Just bit math.
 
 
+</details>
+
 > [!TIP]
 > Thanks for reading. It's all configured by YAML. Create your own rules, your own dimensions — enhance it, configure it, whatever you need. You're the 1%. Make it yours.
-
-</details>
 
 ---
 
