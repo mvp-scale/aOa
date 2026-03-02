@@ -28,3 +28,12 @@ _tmp_sitter_forest/
 
 # Generated test fixtures (regenerate with: go run ./cmd/dim-dump/)
 internal/domain/analyzer/testdata/real_methods.json
+TEMP.md
+temp_chain_haiku.md
+temp_chain_results.md
+temp_gauntlet_haiku.md
+temp_gauntlet_opus.md
+temp_gauntlet_sonnet.md
+temp_results_haiku.md
+temp_results_opus.md
+temp_results_sonnet.md

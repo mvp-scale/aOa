@@ -152,22 +152,27 @@ func setupTestDir(t *testing.T) string {
 // sysGrep runs system grep and returns stdout, stderr, and exit code.
 func sysGrep(t *testing.T, dir string, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
-	grepPath, err := exec.LookPath("grep")
-	if err != nil {
-		t.Skip("system grep not found")
+	// Use /usr/bin/grep explicitly to avoid aOa shim in PATH.
+	grepPath := "/usr/bin/grep"
+	if _, err := os.Stat(grepPath); err != nil {
+		var lookupErr error
+		grepPath, lookupErr = exec.LookPath("grep")
+		if lookupErr != nil {
+			t.Skip("system grep not found")
+		}
 	}
 	cmd := exec.Command(grepPath, args...)
 	cmd.Dir = dir
 	var outBuf, errBuf strings.Builder
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
-	err = cmd.Run()
+	runErr := cmd.Run()
 	exitCode = 0
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+	if runErr != nil {
+		if exitErr, ok := runErr.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		} else {
-			t.Fatalf("grep exec error: %v", err)
+			t.Fatalf("grep exec error: %v", runErr)
 		}
 	}
 	return outBuf.String(), errBuf.String(), exitCode
@@ -184,18 +189,23 @@ func sysEgrep(t *testing.T, dir string, args ...string) (stdout, stderr string, 
 // sysGrepStdin runs system grep with stdin input.
 func sysGrepStdin(t *testing.T, input string, args ...string) (stdout string, exitCode int) {
 	t.Helper()
-	grepPath, err := exec.LookPath("grep")
-	if err != nil {
-		t.Skip("system grep not found")
+	// Use /usr/bin/grep explicitly to avoid aOa shim in PATH.
+	grepPath := "/usr/bin/grep"
+	if _, err := os.Stat(grepPath); err != nil {
+		var lookupErr error
+		grepPath, lookupErr = exec.LookPath("grep")
+		if lookupErr != nil {
+			t.Skip("system grep not found")
+		}
 	}
 	cmd := exec.Command(grepPath, args...)
 	cmd.Stdin = strings.NewReader(input)
 	var outBuf strings.Builder
 	cmd.Stdout = &outBuf
-	err = cmd.Run()
+	runErr := cmd.Run()
 	exitCode = 0
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+	if runErr != nil {
+		if exitErr, ok := runErr.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		}
 	}

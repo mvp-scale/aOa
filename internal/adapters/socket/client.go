@@ -174,6 +174,27 @@ func (c *Client) Reindex() (*ReindexResult, error) {
 	return &result, nil
 }
 
+// Peek sends a peek request to resolve codes to method source.
+func (c *Client) Peek(codes []string) (*PeekResult, error) {
+	resp, err := c.call(Request{
+		ID:     "1",
+		Method: MethodPeek,
+		Params: PeekParams{Codes: codes},
+	})
+	if err != nil {
+		return nil, err
+	}
+	resultJSON, err := json.Marshal(resp.Result)
+	if err != nil {
+		return nil, fmt.Errorf("marshal result: %w", err)
+	}
+	var result PeekResult
+	if err := json.Unmarshal(resultJSON, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal result: %w", err)
+	}
+	return &result, nil
+}
+
 // Wipe sends a wipe request to clear all project data.
 func (c *Client) Wipe() error {
 	_, err := c.call(Request{

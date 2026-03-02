@@ -800,6 +800,24 @@ func (e *SearchEngine) attachContextLines(hits []Hit, opts ports.SearchOptions) 
 	}
 }
 
+// PeekRef returns the fileID and startLine for this hit, suitable for peek.Encode.
+// Uses Range[0] (the symbol start line) so that content hits within the same
+// method naturally dedup to the same peek code.
+func (h *Hit) PeekRef() (fileID uint32, startLine uint16) {
+	return h.fileID, uint16(h.Range[0])
+}
+
+// ProjectRoot returns the project root path for this engine.
+func (e *SearchEngine) ProjectRoot() string {
+	return e.projectRoot
+}
+
+// EnrichRef returns the domain and tags for a given TokenRef.
+// This wraps the private enrichment methods for use by the peek handler.
+func (e *SearchEngine) EnrichRef(ref ports.TokenRef) (domain string, tags []string) {
+	return e.assignDomain(ref), e.generateTags(ref)
+}
+
 // sortByFileIDLine sorts hits by file_id ascending, then line ascending.
 func sortByFileIDLine(hits []Hit) {
 	sort.SliceStable(hits, func(i, j int) bool {

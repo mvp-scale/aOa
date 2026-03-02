@@ -68,13 +68,29 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	os.Remove(sockPath)
 
 	// Clean up status line config from .claude/settings.local.json.
-	unconfigureStatusLine(root)
+	statusRemoved := unconfigureStatusLine(root)
+
+	// Clean up guidance block from CLAUDE.md.
+	guidanceRemoved := removeClaudeMDGuidance(root)
 
 	// Remove the entire .aoa/ directory.
 	if err := os.RemoveAll(aOaDir); err != nil {
 		return fmt.Errorf("remove %s: %w", aOaDir, err)
 	}
 
-	fmt.Printf("aOa removed from %s\n", filepath.Base(root))
+	fmt.Println("⚡ aOa removed")
+	fmt.Println()
+	fmt.Println("  ✓ .aoa/ directory deleted")
+	if statusRemoved {
+		fmt.Println("  ✓ status line hook removed from .claude/settings.local.json")
+	}
+	if guidanceRemoved {
+		fmt.Println("  ✓ aOa guidance removed from CLAUDE.md")
+	} else {
+		claudeMD := filepath.Join(root, "CLAUDE.md")
+		if data, err := os.ReadFile(claudeMD); err == nil && strings.Contains(string(data), "aOa") {
+			fmt.Println("  ⚠ CLAUDE.md contains aOa references — review manually")
+		}
+	}
 	return nil
 }

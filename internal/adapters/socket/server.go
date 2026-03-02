@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/corey/aoa/internal/domain/index"
+	"github.com/corey/aoa/internal/peek"
 	"github.com/corey/aoa/internal/ports"
 )
 
@@ -191,6 +192,8 @@ func (s *Server) handleRequest(req Request) Response {
 		return s.handleWipe(req)
 	case MethodReindex:
 		return s.handleReindex(req)
+	case MethodPeek:
+		return s.handlePeek(req)
 	default:
 		return Response{ID: req.ID, Error: fmt.Sprintf("unknown method: %s", req.Method)}
 	}
@@ -223,6 +226,12 @@ func (s *Server) handleSearch(req Request) Response {
 			Kind:         h.Kind,
 			Content:      h.Content,
 			ContextLines: h.ContextLines,
+		}
+		// Compute peek code for symbols within MaxRange
+		rangeSize := h.Range[1] - h.Range[0]
+		if rangeSize > 0 && rangeSize <= peek.MaxRange {
+			fileID, startLine := h.PeekRef()
+			hits[i].PeekCode = peek.Encode(fileID, startLine)
 		}
 	}
 
@@ -417,6 +426,69 @@ func (s *Server) handleReindex(req Request) Response {
 		return Response{ID: req.ID, Error: err.Error()}
 	}
 	return Response{ID: req.ID, Result: result}
+}
+
+func (s *Server) handlePeek(req Request) Response {
+	paramsJSON, err := json.Marshal(req.Params)
+	if err != nil {
+		return Response{ID: req.ID, Error: "invalid peek params"}
+	}
+	var params PeekParams
+	if err := json.Unmarshal(paramsJSON, &params); err != nil {
+		return Response{ID: req.ID, Error: "invalid peek params"}
+	}
+
+	root := s.engine.ProjectRoot()
+	symbols := make([]PeekSymbol, len(params.Codes))
+
+	for i, code := range params.Codes {
+		symbols[i].Code = code
+
+		fileID, startLine, err := peek.Decode(code)
+		if err != nil {
+			symbols[i].Error = err.Error()
+			continue
+		}
+
+		ref := ports.TokenRef{FileID: fileID, Line: startLine}
+		sym := s.idx.Metadata[ref]
+		if sym == nil {
+			symbols[i].Error = "symbol not found"
+			continue
+		}
+		file := s.idx.Files[fileID]
+		if file == nil {
+			symbols[i].Error = "file not found"
+			continue
+		}
+
+		domain, tags := s.engine.EnrichRef(ref)
+		symbols[i].File = file.Path
+		symbols[i].Symbol = index.FormatSymbol(sym)
+		symbols[i].Range = [2]int{int(sym.StartLine), int(sym.EndLine)}
+		symbols[i].Domain = domain
+		symbols[i].Tags = tags
+
+		// Read source lines from disk
+		absPath := filepath.Join(root, file.Path)
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			symbols[i].Error = fmt.Sprintf("read file: %v", err)
+			continue
+		}
+		allLines := strings.Split(string(data), "\n")
+		start := int(sym.StartLine) - 1 // 0-indexed
+		end := int(sym.EndLine)          // exclusive
+		if start < 0 {
+			start = 0
+		}
+		if end > len(allLines) {
+			end = len(allLines)
+		}
+		symbols[i].Lines = allLines[start:end]
+	}
+
+	return Response{ID: req.ID, Result: PeekResult{Symbols: symbols}}
 }
 
 func (s *Server) handleWipe(req Request) Response {

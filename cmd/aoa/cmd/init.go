@@ -48,6 +48,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		shimsOK := createShims(root)
 		statusOK := configureStatusLine(root)
 		seedStatusFile(paths)
+		appendClaudeMDGuidance(root)
 
 		// Read dashboard URL from running daemon.
 		dashURL := ""
@@ -103,6 +104,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	shimsOK := createShims(root)
 	statusOK := configureStatusLine(root)
 	seedStatusFile(paths)
+	appendClaudeMDGuidance(root)
 
 	// Auto-start daemon so grep, dashboard, and tailing work immediately.
 	daemonOK := false
@@ -195,9 +197,22 @@ func createShims(root string) bool {
 		return false
 	}
 
+	// Resolve the absolute path to the running aoa binary so shims work
+	// regardless of install method (global npm, local npm, npx, manual).
+	aoaBin, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not resolve aoa binary path: %v\n", err)
+		return false
+	}
+	aoaBin, err = filepath.EvalSymlinks(aoaBin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not resolve aoa binary symlink: %v\n", err)
+		return false
+	}
+
 	shims := map[string]string{
-		"grep":  "#!/usr/bin/env bash\nexport AOA_SHIM=1\nexec aoa grep \"$@\"\n",
-		"egrep": "#!/usr/bin/env bash\nexport AOA_SHIM=1\nexec aoa egrep \"$@\"\n",
+		"grep":  fmt.Sprintf("#!/usr/bin/env bash\nexport AOA_SHIM=1\nexec %q grep \"$@\"\n", aoaBin),
+		"egrep": fmt.Sprintf("#!/usr/bin/env bash\nexport AOA_SHIM=1\nexec %q egrep \"$@\"\n", aoaBin),
 	}
 
 	ok := true
@@ -392,29 +407,30 @@ model
 // unconfigureStatusLine removes the aOa status line entry from
 // .claude/settings.local.json. If the file becomes empty, restores backup
 // or deletes it. Safe to call when .claude/ doesn't exist.
-func unconfigureStatusLine(root string) {
+// Returns true if the status line was found and removed.
+func unconfigureStatusLine(root string) bool {
 	claudeDir := filepath.Join(root, ".claude")
 	settingsPath := filepath.Join(claudeDir, "settings.local.json")
 	backupPath := settingsPath + ".bak"
 
 	data, err := os.ReadFile(settingsPath)
 	if err != nil {
-		return // file missing, nothing to undo
+		return false // file missing, nothing to undo
 	}
 
 	var settings map[string]interface{}
 	if err := json.Unmarshal(data, &settings); err != nil {
-		return // unparseable, don't touch it
+		return false // unparseable, don't touch it
 	}
 
 	// Only remove if we put it there.
 	sl, ok := settings["statusLine"].(map[string]interface{})
 	if !ok {
-		return
+		return false
 	}
 	cmd, ok := sl["command"].(string)
 	if !ok || !strings.Contains(cmd, "aoa-status-line.sh") {
-		return
+		return false
 	}
 
 	delete(settings, "statusLine")
@@ -422,9 +438,7 @@ func unconfigureStatusLine(root string) {
 	if len(settings) == 0 {
 		// Settings map is empty — restore backup or delete file.
 		if _, err := os.Stat(backupPath); err == nil {
-			if err := os.Rename(backupPath, settingsPath); err == nil {
-				fmt.Println("restored .claude/settings.local.json from backup")
-			}
+			os.Rename(backupPath, settingsPath)
 		} else {
 			os.Remove(settingsPath)
 			// If .claude/ is now empty, remove it too.
@@ -432,22 +446,22 @@ func unconfigureStatusLine(root string) {
 			if err == nil && len(entries) == 0 {
 				os.Remove(claudeDir)
 			}
-			fmt.Println("removed .claude/settings.local.json")
 		}
-		return
+		return true
 	}
 
 	// Other keys remain — write back without statusLine.
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
-		return
+		return false
 	}
 	out = append(out, '\n')
-	if err := os.WriteFile(settingsPath, out, 0644); err == nil {
-		fmt.Println("removed aOa status line from .claude/settings.local.json")
+	if err := os.WriteFile(settingsPath, out, 0644); err != nil {
+		return false
 	}
 	// Clean up backup since we've preserved their other settings.
 	os.Remove(backupPath)
+	return true
 }
 
 // seedStatusFile writes a minimal status.json so the hook doesn't show
@@ -457,6 +471,104 @@ func seedStatusFile(paths *app.Paths) {
 		return // already exists, don't overwrite
 	}
 	_ = status.WriteJSON(paths.Status, &status.StatusData{})
+}
+
+// aOaGuidanceSentinel is the marker checked before appending guidance to CLAUDE.md.
+// If this string exists in the file, guidance has already been added.
+const aOaGuidanceSentinel = "<!-- aOa-guidance -->"
+
+// aOaGuidance is the block appended to CLAUDE.md during init.
+// Compact, one-time guidance that persists in the agent's context window.
+// aOaGuidanceEnd is the closing sentinel for the guidance block.
+const aOaGuidanceEnd = "<!-- /aOa-guidance -->"
+
+const aOaGuidance = `
+<!-- aOa-guidance -->
+## aOa — Semantic Search
+
+grep is shimmed to aOa. Results are **semantic**: ranked by session intent, scoped to methods.
+
+Each result line has a **peek code** (e.g. ` + "`9tzj`" + `) — a short identifier on the left.
+Run ` + "`aoa peek <code>`" + ` to see the full method body. Multiple codes in one call: ` + "`aoa peek 9tzj b2c1 a7e3`" + `.
+
+**One grep + one peek = complete understanding. No file scanning needed.**
+
+Result anatomy: ` + "`<peek> file:symbol[start-end]:line @domain #tag1 #tag2`" + `
+- ` + "`[start-end]`" + ` = method boundary. Read only that range if you use Read instead of peek.
+- ` + "`@domain`" + ` = semantic area (learned from your session).
+- ` + "`#tags`" + ` = scoping terms for the method.
+- ` + "`--`" + ` instead of a peek code = symbol too large for peek.
+<!-- /aOa-guidance -->
+`
+
+// appendClaudeMDGuidance appends aOa guidance to CLAUDE.md if not already present.
+// Idempotent: checks for sentinel before writing. Creates the file if missing.
+func appendClaudeMDGuidance(root string) {
+	claudeMD := filepath.Join(root, "CLAUDE.md")
+
+	existing, err := os.ReadFile(claudeMD)
+	if err == nil && strings.Contains(string(existing), aOaGuidanceSentinel) {
+		return // already present
+	}
+
+	f, err := os.OpenFile(claudeMD, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not append to CLAUDE.md: %v\n", err)
+		return
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString(aOaGuidance); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not write aOa guidance to CLAUDE.md: %v\n", err)
+	}
+}
+
+// removeClaudeMDGuidance removes the aOa guidance block from CLAUDE.md.
+// Only removes if the block matches exactly (sentinel-delimited).
+// Returns true if guidance was found and removed, false otherwise.
+func removeClaudeMDGuidance(root string) bool {
+	claudeMD := filepath.Join(root, "CLAUDE.md")
+
+	data, err := os.ReadFile(claudeMD)
+	if err != nil {
+		return false // no file, nothing to remove
+	}
+
+	content := string(data)
+	startIdx := strings.Index(content, aOaGuidanceSentinel)
+	if startIdx < 0 {
+		return false // sentinel not found
+	}
+
+	endIdx := strings.Index(content, aOaGuidanceEnd)
+	if endIdx < 0 {
+		return false // no closing sentinel — modified by user, leave it
+	}
+
+	// Include the closing sentinel and any trailing newline
+	endIdx += len(aOaGuidanceEnd)
+	if endIdx < len(content) && content[endIdx] == '\n' {
+		endIdx++
+	}
+
+	// Trim leading newline before opening sentinel if present
+	if startIdx > 0 && content[startIdx-1] == '\n' {
+		startIdx--
+	}
+
+	cleaned := content[:startIdx] + content[endIdx:]
+
+	// If CLAUDE.md is now empty (we created it), remove the file entirely
+	if strings.TrimSpace(cleaned) == "" {
+		os.Remove(claudeMD)
+		return true
+	}
+
+	if err := os.WriteFile(claudeMD, []byte(cleaned), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not update CLAUDE.md: %v\n", err)
+		return false
+	}
+	return true
 }
 
 func writeDefaultStatusLineConf(root string) {

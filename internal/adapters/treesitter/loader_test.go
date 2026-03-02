@@ -80,11 +80,8 @@ func TestDefaultGrammarPaths(t *testing.T) {
 
 func TestDefaultGrammarPaths_EmptyRoot(t *testing.T) {
 	paths := DefaultGrammarPaths("")
-	// Should still have global path
-	if home, err := os.UserHomeDir(); err == nil {
-		require.Equal(t, 1, len(paths))
-		assert.Equal(t, filepath.Join(home, ".aoa", "grammars"), paths[0])
-	}
+	// No project root → no grammar paths (everything is project-scoped).
+	assert.Equal(t, 0, len(paths))
 }
 
 func TestDynamicLoader_LoadGrammar_NotFound(t *testing.T) {

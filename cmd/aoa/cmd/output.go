@@ -37,6 +37,9 @@ func formatSearchResult(result *socket.SearchResult, countOnly, quiet, noFilenam
 	}
 
 	if countOnly {
+		if noColor {
+			return fmt.Sprintf("aOa: %d hits", result.Count)
+		}
 		return fmt.Sprintf("%s⚡ %d hits%s │ %s", cBold, result.Count, cReset, result.Elapsed)
 	}
 
@@ -46,9 +49,38 @@ func formatSearchResult(result *socket.SearchResult, countOnly, quiet, noFilenam
 		fileSet[hit.File] = struct{}{}
 	}
 
+	// Count total lines in ranges for utility signal
+	totalRangeLines := 0
+	for _, hit := range result.Hits {
+		if hit.Range[1] > hit.Range[0] {
+			totalRangeLines += hit.Range[1] - hit.Range[0]
+		}
+	}
+
+	peek := showPeekCodes()
+	hints := showHints()
+
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s⚡ %d hits%s │ %d files │ %s\n",
-		cBold, len(result.Hits), cReset, len(fileSet), result.Elapsed))
+	if noColor {
+		if len(result.Hits) == 0 && hints {
+			sb.WriteString(fmt.Sprintf("aOa: 0 hits | 0 files | %s\n", pickZeroResultHint()))
+		} else if peek {
+			sb.WriteString(fmt.Sprintf("aOa: %d hits | %d files | %d lines in ranges\n",
+				len(result.Hits), len(fileSet), totalRangeLines))
+		} else {
+			sb.WriteString(fmt.Sprintf("aOa: %d hits | %d files\n",
+				len(result.Hits), len(fileSet)))
+		}
+	} else if len(result.Hits) == 0 && hints {
+		sb.WriteString(fmt.Sprintf("%s⚡ 0 hits%s │ %s\n",
+			cBold, cReset, pickZeroResultHint()))
+	} else if peek {
+		sb.WriteString(fmt.Sprintf("%s⚡ %d hits%s │ %d files │ %d lines in ranges │ %s\n",
+			cBold, len(result.Hits), cReset, len(fileSet), totalRangeLines, result.Elapsed))
+	} else {
+		sb.WriteString(fmt.Sprintf("%s⚡ %d hits%s │ %d files │ %s\n",
+			cBold, len(result.Hits), cReset, len(fileSet), result.Elapsed))
+	}
 
 	for _, hit := range result.Hits {
 		// -L file-only hits
@@ -67,6 +99,9 @@ func formatSearchResult(result *socket.SearchResult, countOnly, quiet, noFilenam
 
 		if hit.Kind == "content" {
 			// Content hit: file:symbol[range]:line: content + tags (no domain)
+			if peek {
+				writePeekPrefix(&sb, hit.PeekCode)
+			}
 			if !noFilename {
 				sb.WriteString(fmt.Sprintf("  %s%s%s:", cCyan, hit.File, cReset))
 			} else {
@@ -98,6 +133,9 @@ func formatSearchResult(result *socket.SearchResult, countOnly, quiet, noFilenam
 			sb.WriteString("\n")
 		} else {
 			// Symbol hit: file:symbol[range]:line  @domain  #tags
+			if peek {
+				writePeekPrefix(&sb, hit.PeekCode)
+			}
 			if !noFilename {
 				sb.WriteString(fmt.Sprintf("  %s%s%s:", cCyan, hit.File, cReset))
 			} else {
@@ -178,6 +216,16 @@ func sortedContextLines(ctx map[int]string) []int {
 	}
 	sort.Ints(nums)
 	return nums
+}
+
+// writePeekPrefix writes a left-aligned 6-char peek code field.
+// Empty code (oversized symbol) renders as "--" padded to 6 chars.
+func writePeekPrefix(sb *strings.Builder, code string) {
+	if code == "" {
+		sb.WriteString("  --  ")
+	} else {
+		sb.WriteString(fmt.Sprintf("  %-4s", code))
+	}
 }
 
 // formatGrepCompat formats a SearchResult as GNU grep-compatible output.

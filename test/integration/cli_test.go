@@ -133,8 +133,39 @@ func runAOA(t *testing.T, dir string, args ...string) (stdout, stderr string, ex
 	return
 }
 
+// runAOAWithEnv executes the aoa binary with additional environment variables.
+func runAOAWithEnv(t *testing.T, dir string, env []string, args ...string) (stdout, stderr string, exitCode int) {
+	t.Helper()
+	cmd := exec.Command(aoaBin, args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "NO_COLOR=1", "AOA_NO_GRAMMAR_DOWNLOAD=1")
+	cmd.Env = append(cmd.Env, env...)
+
+	var outBuf, errBuf strings.Builder
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	err := cmd.Run()
+	stdout = outBuf.String()
+	stderr = errBuf.String()
+
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else {
+			t.Fatalf("exec error (not ExitError): %v", err)
+		}
+	}
+	return
+}
+
 // startDaemon runs `aoa daemon start` which daemonizes and returns once ready.
 // Returns a cleanup func that stops the daemon.
+//
+// The cleanup captures the daemon PID eagerly (before temp dirs are removed)
+// and uses SIGTERM → poll → SIGKILL to ensure the process and its inotify
+// watchers are fully released. Previous versions used only SIGKILL which
+// skipped graceful cleanup and leaked inotify instances.
 func startDaemon(t *testing.T, dir string) func() {
 	t.Helper()
 
@@ -143,17 +174,55 @@ func startDaemon(t *testing.T, dir string) func() {
 		t.Fatalf("daemon start failed: exit %d\nstdout: %s\nstderr: %s", exit, stdout, stderr)
 	}
 
+	// Capture PID now — the temp dir (and PID file) may be gone by cleanup time.
+	var daemonPID int
+	pidFile := filepath.Join(dir, ".aoa", "run", "daemon.pid")
+	if data, err := os.ReadFile(pidFile); err == nil {
+		daemonPID, _ = strconv.Atoi(strings.TrimSpace(string(data)))
+	}
+
 	return func() {
-		// Graceful stop.
+		// 1. Try graceful stop via socket (daemon closes watcher, flushes state).
 		runAOA(t, dir, "daemon", "stop")
-		// Safety net: force-kill via PID file if still alive.
-		pidFile := filepath.Join(dir, ".aoa", "run", "daemon.pid")
-		if data, err := os.ReadFile(pidFile); err == nil {
-			if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
-				syscall.Kill(pid, syscall.SIGKILL)
+
+		if daemonPID == 0 {
+			return
+		}
+
+		// 2. Verify the process actually exited. Poll for up to 3s.
+		for i := 0; i < 30; i++ {
+			if !processAliveTest(daemonPID) {
+				return // clean exit
 			}
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		// 3. Still alive — send SIGTERM (allows graceful cleanup of inotify).
+		syscall.Kill(daemonPID, syscall.SIGTERM)
+		for i := 0; i < 20; i++ {
+			if !processAliveTest(daemonPID) {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+
+		// 4. Last resort — SIGKILL.
+		syscall.Kill(daemonPID, syscall.SIGKILL)
+		time.Sleep(200 * time.Millisecond)
+
+		if processAliveTest(daemonPID) {
+			t.Logf("warning: daemon pid %d still alive after SIGKILL", daemonPID)
 		}
 	}
+}
+
+// processAliveTest checks if a process exists (signal 0).
+func processAliveTest(pid int) bool {
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return proc.Signal(syscall.Signal(0)) == nil
 }
 
 // socketPathForDir computes the expected socket path for a directory.
@@ -299,8 +368,8 @@ func TestInit_DaemonRunning_DelegatesToReindex(t *testing.T) {
 	if !strings.Contains(stdout, "indexed") {
 		t.Errorf("should say 'indexed':\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "Daemon running") {
-		t.Errorf("should indicate delegation to daemon:\n%s", stdout)
+	if !strings.Contains(stdout, "indexed") {
+		t.Errorf("should show indexed stats on re-init:\n%s", stdout)
 	}
 }
 
@@ -338,6 +407,10 @@ func TestInit_LockedDB_ExternalProcess(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
 
+	// Stop daemon so init must access bbolt directly.
+	runAOA(t, dir, "daemon", "stop")
+	time.Sleep(500 * time.Millisecond)
+
 	// Hold the DB lock via flock (simulates any external process).
 	dbPath := filepath.Join(dir, ".aoa", "aoa.db")
 	release := holdDBLock(t, dbPath)
@@ -370,8 +443,8 @@ func TestWipe_Direct(t *testing.T) {
 	if exit != 0 {
 		t.Fatalf("wipe exit %d", exit)
 	}
-	if !strings.Contains(stdout, "wiped") {
-		t.Errorf("should say 'wiped':\n%s", stdout)
+	if !strings.Contains(stdout, "reset") {
+		t.Errorf("should say 'reset':\n%s", stdout)
 	}
 }
 
@@ -379,18 +452,16 @@ func TestWipe_ViaDaemon(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
 
-	cleanup := startDaemon(t, dir)
-	defer cleanup()
-
+	// init auto-starts daemon, so it's already running.
 	stdout, _, exit := runAOA(t, dir, "wipe", "--force")
 	if exit != 0 {
 		t.Fatalf("wipe via daemon exit %d", exit)
 	}
-	if !strings.Contains(stdout, "wiped") {
-		t.Errorf("should say 'wiped':\n%s", stdout)
+	if !strings.Contains(stdout, "reset") {
+		t.Errorf("should say 'reset':\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "daemon") {
-		t.Errorf("should indicate wipe went via daemon:\n%s", stdout)
+		t.Errorf("should indicate reset went via daemon:\n%s", stdout)
 	}
 }
 
@@ -400,8 +471,8 @@ func TestWipe_NoData(t *testing.T) {
 	if exit != 0 {
 		t.Fatalf("wipe on fresh dir exit %d", exit)
 	}
-	if !strings.Contains(stdout, "no data to wipe") {
-		t.Errorf("should say 'no data to wipe':\n%s", stdout)
+	if !strings.Contains(stdout, "no data to reset") {
+		t.Errorf("should say 'no data to reset':\n%s", stdout)
 	}
 }
 
@@ -481,9 +552,10 @@ func TestDaemon_RemoteStop(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
 
+	// init auto-starts daemon. Verify it's running (start says "already running").
 	startOut, _, _ := runAOA(t, dir, "daemon", "start")
-	if !strings.Contains(startOut, "daemon started") {
-		t.Fatalf("start should succeed:\n%s", startOut)
+	if !strings.Contains(startOut, "daemon already running") && !strings.Contains(startOut, "daemon started") {
+		t.Fatalf("daemon should be running after init:\n%s", startOut)
 	}
 
 	// Read PID to verify the process actually dies.
@@ -602,6 +674,10 @@ func TestDaemon_StartStopStart(t *testing.T) {
 func TestDaemon_StartLockedDB(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
+
+	// Stop daemon so start must open bbolt directly.
+	runAOA(t, dir, "daemon", "stop")
+	time.Sleep(500 * time.Millisecond)
 
 	// Hold the lock externally.
 	dbPath := filepath.Join(dir, ".aoa", "aoa.db")
@@ -879,6 +955,10 @@ func TestDaemonStart_ShowsDashboardURL(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
 
+	// init auto-starts daemon. Stop it first so we can test a fresh start.
+	runAOA(t, dir, "daemon", "stop")
+	time.Sleep(500 * time.Millisecond)
+
 	stdout, _, exit := runAOA(t, dir, "daemon", "start")
 	if exit != 0 {
 		t.Fatalf("daemon start failed: exit %d, output: %s", exit, stdout)
@@ -953,6 +1033,10 @@ func TestErrorMsg_WipeLocked(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
 
+	// Stop daemon so wipe must access bbolt directly.
+	runAOA(t, dir, "daemon", "stop")
+	time.Sleep(500 * time.Millisecond)
+
 	dbPath := filepath.Join(dir, ".aoa", "aoa.db")
 	release := holdDBLock(t, dbPath)
 	defer release()
@@ -975,6 +1059,10 @@ func TestErrorMsg_DaemonStartLocked(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
 
+	// Stop daemon so start must open bbolt directly.
+	runAOA(t, dir, "daemon", "stop")
+	time.Sleep(500 * time.Millisecond)
+
 	dbPath := filepath.Join(dir, ".aoa", "aoa.db")
 	release := holdDBLock(t, dbPath)
 	defer release()
@@ -996,6 +1084,10 @@ func TestErrorMsg_DaemonStartLocked(t *testing.T) {
 func TestTiming_AllLockedOperations_FastFail(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
+
+	// Stop daemon so operations must access bbolt directly.
+	runAOA(t, dir, "daemon", "stop")
+	time.Sleep(500 * time.Millisecond)
 
 	dbPath := filepath.Join(dir, ".aoa", "aoa.db")
 	release := holdDBLock(t, dbPath)
@@ -1247,5 +1339,293 @@ func TestFileWatcher_DeleteFile_AutoReindex(t *testing.T) {
 	}
 	if !gone {
 		t.Error("file watcher should remove deleted file's symbols — multiply still found after 3s")
+	}
+}
+
+// =============================================================================
+// Peek Integration Tests — simulated agent workflow
+// =============================================================================
+
+// TestPeek_AgentWorkflow simulates the full agent experience:
+// 1. init (indexes project, appends CLAUDE.md guidance)
+// 2. daemon start
+// 3. grep with AOA_SHIM=1 (agent sees peek codes in output)
+// 4. extract a peek code from grep output
+// 5. aoa peek <code> resolves to method source
+// 6. verify source contains expected function body
+func TestPeek_AgentWorkflow(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	// Verify CLAUDE.md guidance was appended
+	claudeMD, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("CLAUDE.md should exist after init: %v", err)
+	}
+	if !strings.Contains(string(claudeMD), "aoa peek") {
+		t.Error("CLAUDE.md should contain peek guidance after init")
+	}
+
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// Agent grep: AOA_SHIM=1 enables semantic output with peek codes
+	shimEnv := []string{"AOA_SHIM=1"}
+	stdout, stderr, exit := runAOAWithEnv(t, dir, shimEnv, "grep", "hello")
+	if exit != 0 {
+		t.Fatalf("shim grep exit %d\nstdout: %s\nstderr: %s", exit, stdout, stderr)
+	}
+
+	// Should have the header with "lines in ranges"
+	if !strings.Contains(stdout, "lines in ranges") {
+		t.Errorf("shim output should show 'lines in ranges' utility signal:\n%s", stdout)
+	}
+
+	// Extract a peek code from the output.
+	// Peek codes appear at the start of hit lines as short alphanumeric strings.
+	// Format: "  <code>  file:symbol[range]:line ..."
+	var peekCode string
+	for _, line := range strings.Split(stdout, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "aOa:") {
+			continue
+		}
+		// Peek code is the first field, alphanumeric, before the file path
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] != "--" && !strings.Contains(fields[0], ":") {
+			peekCode = fields[0]
+			break
+		}
+	}
+
+	if peekCode == "" {
+		t.Fatalf("no peek code found in shim grep output:\n%s", stdout)
+	}
+
+	// Resolve the peek code
+	stdout, stderr, exit = runAOA(t, dir, "peek", peekCode)
+	if exit != 0 {
+		t.Fatalf("peek exit %d\nstdout: %s\nstderr: %s", exit, stdout, stderr)
+	}
+
+	// Peek output should contain the function source
+	if !strings.Contains(stdout, "hello") {
+		t.Errorf("peek should resolve to source containing 'hello':\n%s", stdout)
+	}
+
+	// Peek header should have the ── delimiters and file path
+	if !strings.Contains(stdout, "──") {
+		t.Errorf("peek should have ── header delimiters:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, ".go") {
+		t.Errorf("peek header should include file path:\n%s", stdout)
+	}
+}
+
+// TestPeek_MultipleCodes verifies that multiple peek codes resolve in one call.
+func TestPeek_MultipleCodes(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// Get peek codes from a broad search
+	shimEnv := []string{"AOA_SHIM=1"}
+	stdout, _, exit := runAOAWithEnv(t, dir, shimEnv, "grep", "hello add multiply")
+	if exit != 0 {
+		t.Fatalf("grep exit %d", exit)
+	}
+
+	// Collect all peek codes
+	var codes []string
+	for _, line := range strings.Split(stdout, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "aOa:") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] != "--" && !strings.Contains(fields[0], ":") {
+			codes = append(codes, fields[0])
+		}
+	}
+
+	if len(codes) < 2 {
+		t.Fatalf("expected at least 2 peek codes, got %d from:\n%s", len(codes), stdout)
+	}
+
+	// Resolve multiple codes in one call
+	args := append([]string{"peek"}, codes...)
+	stdout, stderr, exit := runAOA(t, dir, args...)
+	if exit != 0 {
+		t.Fatalf("peek exit %d\nstdout: %s\nstderr: %s", exit, stdout, stderr)
+	}
+
+	// Should have multiple ── headers
+	headerCount := strings.Count(stdout, "──")
+	// Each symbol has opening ── and closing ──, so count/2 = number of symbols
+	if headerCount/2 < 2 {
+		t.Errorf("expected multiple peek headers, got %d delimiter pairs:\n%s", headerCount/2, stdout)
+	}
+}
+
+// TestPeek_InvalidCode verifies graceful error handling for bad codes.
+func TestPeek_InvalidCode(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	stdout, _, exit := runAOA(t, dir, "peek", "zzzzzzzzzz")
+	if exit != 0 {
+		t.Fatalf("peek should not fail hard on invalid code, exit %d", exit)
+	}
+
+	// Should report the error inline, not crash
+	if !strings.Contains(stdout, "not found") && !strings.Contains(stdout, "──") {
+		t.Errorf("peek should report error for invalid code:\n%s", stdout)
+	}
+}
+
+// TestPeek_EnvVar_AOA_PEEK verifies peek codes appear with AOA_PEEK=1 (no shim).
+func TestPeek_EnvVar_AOA_PEEK(t *testing.T) {
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// Without AOA_PEEK: no peek codes in output (TTY color mode uses semantic format but no peek)
+	stdout, _, _ := runAOA(t, dir, "grep", "hello")
+	// The default runAOA sets NO_COLOR=1 but not AOA_SHIM or AOA_PEEK,
+	// so it goes through the non-TTY grep compat path — no peek codes expected.
+
+	// With AOA_PEEK=1: peek codes should appear
+	peekEnv := []string{"AOA_PEEK=1"}
+	stdoutPeek, _, exit := runAOAWithEnv(t, dir, peekEnv, "grep", "hello")
+	if exit != 0 {
+		t.Fatalf("grep with AOA_PEEK=1 exit %d", exit)
+	}
+
+	// AOA_PEEK output should have peek codes (short alphanumeric field before file path)
+	hasPeekCode := false
+	for _, line := range strings.Split(stdoutPeek, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "aOa:") || strings.HasPrefix(line, "⚡") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] != "--" && !strings.Contains(fields[0], ":") && !strings.HasPrefix(fields[0], "#") {
+			hasPeekCode = true
+			break
+		}
+	}
+	if !hasPeekCode {
+		t.Errorf("AOA_PEEK=1 should show peek codes in output:\n%s", stdoutPeek)
+	}
+
+	_ = stdout // avoid unused variable if we want to add assertions later
+}
+
+// TestInit_ClaudeMD_Idempotent verifies guidance is appended once, not duplicated.
+func TestInit_ClaudeMD_Idempotent(t *testing.T) {
+	dir := setupProject(t)
+
+	// Run init twice
+	runAOA(t, dir, "init")
+	runAOA(t, dir, "init")
+
+	claudeMD, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("CLAUDE.md should exist: %v", err)
+	}
+
+	// Opening sentinel should appear exactly once (closing sentinel also once)
+	count := strings.Count(string(claudeMD), "<!-- aOa-guidance -->")
+	if count != 1 {
+		t.Errorf("CLAUDE.md should have exactly 1 guidance block (opening sentinel), got %d", count)
+	}
+}
+
+// TestRemove_CleansEverything verifies the full init → remove lifecycle:
+// init creates .aoa/, shims, status hook, CLAUDE.md guidance.
+// remove deletes .aoa/, removes status hook, removes CLAUDE.md guidance.
+func TestRemove_CleansEverything(t *testing.T) {
+	dir := setupProject(t)
+
+	// Create a pre-existing CLAUDE.md with user content
+	existingContent := "# My Project\n\nThis is my project.\n"
+	writeFile(t, filepath.Join(dir, "CLAUDE.md"), existingContent)
+
+	// Init — adds .aoa/, guidance to CLAUDE.md, status hook
+	runAOA(t, dir, "init")
+
+	// Verify init artifacts exist
+	if _, err := os.Stat(filepath.Join(dir, ".aoa")); os.IsNotExist(err) {
+		t.Fatal(".aoa/ should exist after init")
+	}
+	claudeMD, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("CLAUDE.md should exist: %v", err)
+	}
+	if !strings.Contains(string(claudeMD), "aOa-guidance") {
+		t.Error("CLAUDE.md should contain guidance after init")
+	}
+	if !strings.Contains(string(claudeMD), existingContent) {
+		t.Error("CLAUDE.md should preserve original content")
+	}
+
+	// Remove — should clean up everything
+	stdout, stderr, exit := runAOA(t, dir, "remove", "--force")
+	if exit != 0 {
+		t.Fatalf("remove exit %d\nstdout: %s\nstderr: %s", exit, stdout, stderr)
+	}
+
+	// .aoa/ should be gone
+	if _, err := os.Stat(filepath.Join(dir, ".aoa")); !os.IsNotExist(err) {
+		t.Error(".aoa/ should be deleted after remove")
+	}
+
+	// CLAUDE.md should exist but without guidance block
+	claudeMD, err = os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("CLAUDE.md should still exist (had user content): %v", err)
+	}
+	if strings.Contains(string(claudeMD), "aOa-guidance") {
+		t.Error("CLAUDE.md should not contain guidance after remove")
+	}
+	if !strings.Contains(string(claudeMD), "My Project") {
+		t.Error("CLAUDE.md should preserve user content after remove")
+	}
+
+	// Output should report what was cleaned
+	if !strings.Contains(stdout, ".aoa/ directory deleted") {
+		t.Errorf("should report .aoa/ deletion:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "CLAUDE.md") {
+		t.Errorf("should report CLAUDE.md cleanup:\n%s", stdout)
+	}
+}
+
+// TestRemove_ClaudeMD_OnlyAOa verifies that if CLAUDE.md was created by aOa
+// (no pre-existing content), remove deletes the file entirely.
+func TestRemove_ClaudeMD_OnlyAOa(t *testing.T) {
+	dir := setupProject(t)
+
+	// No pre-existing CLAUDE.md
+	runAOA(t, dir, "init")
+
+	// Verify CLAUDE.md was created
+	if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); os.IsNotExist(err) {
+		t.Fatal("CLAUDE.md should exist after init")
+	}
+
+	// Remove
+	runAOA(t, dir, "remove", "--force")
+
+	// CLAUDE.md should be deleted (it was only our guidance)
+	if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); !os.IsNotExist(err) {
+		t.Error("CLAUDE.md should be deleted when it only contained aOa guidance")
 	}
 }

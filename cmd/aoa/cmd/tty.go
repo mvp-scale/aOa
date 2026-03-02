@@ -35,6 +35,26 @@ func isStdinPipe() bool {
 	return fi.Mode()&os.ModeCharDevice == 0
 }
 
+// showPeekCodes returns true when peek codes should appear in search output.
+// Enabled by AOA_PEEK=1, or automatically when AOA_SHIM=1.
+// Explicitly disabled by AOA_PEEK=0 (overrides shim default).
+func showPeekCodes() bool {
+	if v := os.Getenv("AOA_PEEK"); v != "" {
+		return v == "1"
+	}
+	return isShimMode()
+}
+
+// showHints returns true when guidance hints should appear in search output.
+// Enabled by AOA_HINTS=1, or automatically when AOA_SHIM=1.
+// Explicitly disabled by AOA_HINTS=0 (overrides shim default).
+func showHints() bool {
+	if v := os.Getenv("AOA_HINTS"); v != "" {
+		return v == "1"
+	}
+	return isShimMode()
+}
+
 // resolveColor determines whether to use color output based on flags and TTY status.
 // colorFlag is the --color value: "auto", "always", or "never".
 // noColorFlag is the --no-color boolean flag.

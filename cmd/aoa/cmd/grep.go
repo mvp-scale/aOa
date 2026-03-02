@@ -205,8 +205,14 @@ func executeSearch(query string, opts ports.SearchOptions, useColor bool) error 
 		return err
 	}
 
-	// Choose output format based on TTY
-	if isStdoutTTY() && useColor {
+	// Choose output format:
+	// - Shim mode or feature env vars: semantic format (symbols, ranges, domains, tags, peek codes).
+	// - TTY with color: semantic compression with ANSI color codes.
+	// - Non-TTY (piped, file grep with -H, etc.): GNU grep-compatible output.
+	if isShimMode() || showPeekCodes() || showHints() {
+		noColor := !useColor || !isStdoutTTY()
+		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, grepNoFilename, noColor))
+	} else if isStdoutTTY() && useColor {
 		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, grepNoFilename, false))
 	} else {
 		fmt.Print(formatGrepCompat(result, grepLineNumber, grepNoFilename, grepFilesMatch, grepCountOnly, grepQuiet))

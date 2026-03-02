@@ -44,4 +44,5 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(openCmd)
 	rootCmd.AddCommand(grammarCmd)
+	rootCmd.AddCommand(peekCmd)
 }

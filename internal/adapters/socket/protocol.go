@@ -32,6 +32,7 @@ const (
 	MethodStats    = "stats"
 	MethodWipe     = "wipe"
 	MethodReindex  = "reindex"
+	MethodPeek     = "peek"
 )
 
 // Request is the wire format for client-to-server messages.
@@ -73,6 +74,7 @@ type SearchHit struct {
 	Kind         string         `json:"kind,omitempty"`
 	Content      string         `json:"content,omitempty"`
 	ContextLines map[int]string `json:"context_lines,omitempty"`
+	PeekCode     string         `json:"peek_code,omitempty"`
 }
 
 // HealthResult is the result of a health request.
@@ -379,4 +381,26 @@ type DimensionalFindingResult struct {
 	Line     int    `json:"line"`
 	Symbol   string `json:"symbol"`
 	Severity int    `json:"severity"`
+}
+
+// PeekParams is the params for a peek request.
+type PeekParams struct {
+	Codes []string `json:"codes"`
+}
+
+// PeekResult is the result of a peek request.
+type PeekResult struct {
+	Symbols []PeekSymbol `json:"symbols"`
+}
+
+// PeekSymbol is a single resolved peek code with source lines.
+type PeekSymbol struct {
+	Code   string   `json:"code"`
+	File   string   `json:"file"`
+	Symbol string   `json:"symbol"`
+	Range  [2]int   `json:"range"`
+	Domain string   `json:"domain,omitempty"`
+	Tags   []string `json:"tags,omitempty"`
+	Lines  []string `json:"lines"`
+	Error  string   `json:"error,omitempty"`
 }

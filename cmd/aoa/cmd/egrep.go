@@ -167,7 +167,9 @@ func runEgrepIndex(pattern string, useColor bool) error {
 		return err
 	}
 
-	if isStdoutTTY() && useColor {
+	if isShimMode() {
+		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, egrepNoFilename, true))
+	} else if isStdoutTTY() && useColor {
 		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, egrepNoFilename, false))
 	} else {
 		fmt.Print(formatGrepCompat(result, egrepLineNumber, egrepNoFilename, egrepFilesMatch, egrepCountOnly, egrepQuiet))
