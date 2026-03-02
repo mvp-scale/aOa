@@ -253,14 +253,16 @@ tests/test_auth.py:37:    def test_login_invalid_password(self):
 
 Claude sees flat text. No structure. No ranking. It has to read files to figure out what matters.
 
-**aOa returns this:**
+**aOa returns semantic compression** — a launch pad of rapid context in every line:
 ```
 services/auth/handler.py:AuthHandler.login(self, user, password)[15-45]:15  @authentication  #login #user
 services/api/router.py:Router.handle_login(self, request)[37-55]:37  @api  #login #request
 tests/test_auth.py:TestAuth.test_login_success(self)[15-35]:15  @testing  #login #test
 ```
 
-Every result has the full signature (`AuthHandler.login`), the parent class, the exact line range (`[15-45]`), the semantic domain (`@authentication`), and tags. Claude reads this and *knows* — the auth handler's login method, lines 15-45, in the authentication domain. No file read needed. No follow-up searches.
+Full signature (`AuthHandler.login`), parent class, exact line range (`[15-45]`), semantic domain (`@authentication`), and tags. The `@` domains and `#` tags aren't static — they're based on what you're doing in the code right now. As your intent changes, they change. They align to the meaning of the files and methods you're working on, driven by self-learning.
+
+Claude reads this and *knows* — the auth handler's login method, lines 15-45, in the authentication domain. No file read needed. No follow-up searches.
 
 **The system learns what you're working on.** As you refactor code — not greenfield, *existing* code — aOa tracks your intent and ranks results by the code you've been touching. The top 10 results are usually all you need. Claude can dive into specific methods instead of reading entire files. That's one of the 12 patterns we save.
 
