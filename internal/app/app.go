@@ -182,6 +182,13 @@ type App struct {
 	dimCache     map[string]*socket.DimensionalFileResult
 	dimCacheSet  bool // true once loaded (distinguishes nil "no data" from "not loaded")
 
+	// Dim scan progress (atomic — read from HTTP handlers without locking)
+	dimScanTotal   int64 // total files to scan
+	dimScanDone    int64 // files completed so far
+	dimScanCached  int64 // files loaded from persisted cache
+	dimScanRunning int32 // 1 while scan is in progress
+	dimScanStarted int64 // unix nano when scan started
+
 	// Investigated files (user-triaged, excluded from active recon view)
 	investigatedFiles map[string]int64 // relPath -> unix timestamp
 	promptN        uint32                 // prompt counter (incremented on each user input)
@@ -669,28 +676,18 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 		return r
 	}
 
-	// 3. Warm file cache (always) and recon cache (only if recon is available).
+	// 3. Warm file cache first, then dim scan.
+	// Sequential: dim scan reads from the warm file cache instead of re-reading
+	// every file from disk (avoids duplicating 24K+ file reads on large repos).
 	logFn(fmt.Sprintf("warming file cache (%d files)...", r.FileCount))
-	var wg sync.WaitGroup
-
-	wg.Add(1)
 	fileCacheStart := time.Now()
-	go func() {
-		defer wg.Done()
-		a.Engine.WarmCache()
-	}()
+	a.Engine.WarmCache()
+	r.CacheTime = time.Since(fileCacheStart).Seconds()
 
 	reconStart := time.Now()
 	if a.dimEngine != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			r.ReconCached, r.ReconScanned, r.FirstRun = a.warmDimCache(logFn)
-		}()
+		r.ReconCached, r.ReconScanned, r.FirstRun = a.warmDimCache(logFn)
 	}
-
-	wg.Wait()
-	r.CacheTime = time.Since(fileCacheStart).Seconds()
 	r.ReconTime = time.Since(reconStart).Seconds()
 	a.loadInvestigated()
 

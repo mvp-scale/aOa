@@ -41,6 +41,7 @@ type AppQueries interface {
 	SetFileInvestigated(relPath string, investigated bool)
 	ClearInvestigated()
 	UsageQuota() *UsageQuotaResult
+	DimScanProgress() DimScanProgress
 }
 
 // Server is the daemon that listens on a Unix socket and serves search requests.

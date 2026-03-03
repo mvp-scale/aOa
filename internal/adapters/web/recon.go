@@ -74,12 +74,15 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// No recon data available — return install prompt
+	// No recon data available — return install prompt (with scan progress if running)
 	w.Header().Set("Content-Type", "application/json")
 	reconAvailable := s.queries != nil && s.queries.ReconAvailable()
 	var invFiles []string
+	var scanProgress *socket.DimScanProgress
 	if s.queries != nil {
 		invFiles = s.queries.InvestigatedFiles()
+		sp := s.queries.DimScanProgress()
+		scanProgress = &sp
 	}
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"files_scanned":      0,
@@ -88,6 +91,7 @@ func (s *Server) handleRecon(w http.ResponseWriter, r *http.Request) {
 		"install_prompt":     "Run 'aoa init' to scan your project and enable structural analysis",
 		"tree":               map[string]interface{}{},
 		"investigated_files": invFiles,
+		"scan_progress":      scanProgress,
 	})
 }
 
@@ -172,22 +176,27 @@ func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[s
 
 	reconAvailable := false
 	var invFiles []string
+	var scanProgress *socket.DimScanProgress
 	if s.queries != nil {
 		reconAvailable = s.queries.ReconAvailable()
 		invFiles = s.queries.InvestigatedFiles()
+		sp := s.queries.DimScanProgress()
+		scanProgress = &sp
 	}
 	response := struct {
 		*reconResult
-		ReconAvailable    bool     `json:"recon_available"`
-		DimensionalMode   bool     `json:"dimensional_mode"`
-		ScannedAt         int64    `json:"scanned_at"`
-		InvestigatedFiles []string `json:"investigated_files"`
+		ReconAvailable    bool                   `json:"recon_available"`
+		DimensionalMode   bool                   `json:"dimensional_mode"`
+		ScannedAt         int64                  `json:"scanned_at"`
+		InvestigatedFiles []string               `json:"investigated_files"`
+		ScanProgress      *socket.DimScanProgress `json:"scan_progress"`
 	}{
 		reconResult:       result,
 		ReconAvailable:    reconAvailable,
 		DimensionalMode:   true,
 		ScannedAt:         time.Now().Unix(),
 		InvestigatedFiles: invFiles,
+		ScanProgress:      scanProgress,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

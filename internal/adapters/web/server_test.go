@@ -127,6 +127,10 @@ func (m *mockQueries) UsageQuota() *socket.UsageQuotaResult {
 	return nil
 }
 
+func (m *mockQueries) DimScanProgress() socket.DimScanProgress {
+	return socket.DimScanProgress{}
+}
+
 func newTestState() *ports.LearnerState {
 	return &ports.LearnerState{
 		PromptCount: 42,

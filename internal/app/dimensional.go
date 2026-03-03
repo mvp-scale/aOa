@@ -1,6 +1,11 @@
 package app
 
-import "github.com/corey/aoa/internal/adapters/socket"
+import (
+	"sync/atomic"
+	"time"
+
+	"github.com/corey/aoa/internal/adapters/socket"
+)
 
 // ReconAvailable returns true if dimensional analysis is available.
 // In the core build this is true when the dimensional engine is loaded.
@@ -91,6 +96,40 @@ func (a *App) loadDimensionalFromStore() map[string]*socket.DimensionalFileResul
 		}
 	}
 	return results
+}
+
+// DimScanProgress returns the current progress of the background dimensional scan.
+// All fields are read via atomics — no lock needed.
+func (a *App) DimScanProgress() socket.DimScanProgress {
+	running := atomic.LoadInt32(&a.dimScanRunning) == 1
+	total := int(atomic.LoadInt64(&a.dimScanTotal))
+	done := int(atomic.LoadInt64(&a.dimScanDone))
+	cached := int(atomic.LoadInt64(&a.dimScanCached))
+	startedNano := atomic.LoadInt64(&a.dimScanStarted)
+
+	var pct float64
+	if total > 0 {
+		pct = float64(done) / float64(total) * 100
+	}
+
+	var elapsed, eta float64
+	if startedNano > 0 {
+		elapsed = time.Since(time.Unix(0, startedNano)).Seconds()
+		if done > 0 && running {
+			rate := elapsed / float64(done)
+			eta = rate * float64(total-done)
+		}
+	}
+
+	return socket.DimScanProgress{
+		Running: running,
+		Total:   total,
+		Done:    done,
+		Cached:  cached,
+		Pct:     pct,
+		Elapsed: elapsed,
+		ETA:     eta,
+	}
 }
 
 // invalidateDimCache clears the dimensional results cache so the next call reloads from bbolt.

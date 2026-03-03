@@ -396,6 +396,17 @@ type DimensionalFindingResult struct {
 	Severity int    `json:"severity"`
 }
 
+// DimScanProgress holds progress state for an in-flight dimensional scan.
+type DimScanProgress struct {
+	Running bool    `json:"running"`
+	Total   int     `json:"total"`
+	Done    int     `json:"done"`
+	Cached  int     `json:"cached"`
+	Pct     float64 `json:"pct"`
+	Elapsed float64 `json:"elapsed"`
+	ETA     float64 `json:"eta"`
+}
+
 // PeekParams is the params for a peek request.
 type PeekParams struct {
 	Codes []string `json:"codes"`
