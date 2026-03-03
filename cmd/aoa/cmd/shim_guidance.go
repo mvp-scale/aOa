@@ -1,6 +1,6 @@
 package cmd
 
-import "math/rand"
+import "math/rand/v2"
 
 // zeroResultHints are shown when a shim search returns no matches.
 // These guide the agent to use aOa's capabilities instead of falling
@@ -15,5 +15,5 @@ var zeroResultHints = []string{
 
 // pickZeroResultHint returns a random hint for when shim search finds nothing.
 func pickZeroResultHint() string {
-	return zeroResultHints[rand.Intn(len(zeroResultHints))]
+	return zeroResultHints[rand.IntN(len(zeroResultHints))]
 }

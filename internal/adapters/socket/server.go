@@ -163,10 +163,16 @@ func (s *Server) handleConn(conn net.Conn) {
 		}
 
 		resp := s.handleRequest(req)
+
+		// Close shutdown channel before writing the response so that
+		// ShutdownCh() is readable by the time the client returns.
+		if req.Method == MethodShutdown {
+			s.shutdownOnce.Do(func() { close(s.shutdownCh) })
+		}
+
 		s.writeResponse(conn, resp)
 
 		if req.Method == MethodShutdown {
-			s.shutdownOnce.Do(func() { close(s.shutdownCh) })
 			return
 		}
 	}
