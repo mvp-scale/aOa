@@ -35,7 +35,25 @@ func runInit(cmd *cobra.Command, args []string) error {
 	paths := app.NewPaths(root)
 	dbPath := paths.DB
 	projectID := filepath.Base(root)
-	shimDir := filepath.Join(root, ".aoa", "shims")
+
+	summary := initSummary{}
+
+	// Step 1-3: Global install (non-fatal — falls back to per-project behavior).
+	binPath, installed, err := selfInstall()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not self-install binary: %v\n", err)
+	} else if binPath != "" {
+		summary.binaryPath = binPath
+		summary.binaryInstalled = installed
+		summary.globalShimsOK = createGlobalShims(binPath)
+		rcFile, rcModified, rcErr := configureShellRC()
+		if rcErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not configure shell: %v\n", rcErr)
+		} else {
+			summary.rcFile = rcFile
+			summary.rcModified = rcModified
+		}
+	}
 
 	// If daemon is running, delegate reindex via socket (avoids bbolt lock contention).
 	sockPath := socket.SocketPath(root)
@@ -45,21 +63,21 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("reindex via daemon: %w", err)
 		}
-		shimsOK := createShims(root)
-		statusOK := configureStatusLine(root)
+		summary.files = result.FileCount
+		summary.symbols = result.SymbolCount
+		summary.tokens = result.TokenCount
+		summary.shimsOK = createShims(root)
+		summary.statusOK = configureStatusLine(root)
 		seedStatusFile(paths)
 		appendClaudeMDGuidance(root)
 
 		// Read dashboard URL from running daemon.
-		dashURL := ""
 		if portData, err := os.ReadFile(paths.PortFile); err == nil {
-			dashURL = "http://localhost:" + strings.TrimSpace(string(portData))
+			summary.dashURL = "http://localhost:" + strings.TrimSpace(string(portData))
 		}
+		summary.daemonOK = true
 
-		printInitSummary(
-			result.FileCount, result.SymbolCount, result.TokenCount,
-			shimsOK, statusOK, true, dashURL, shimDir,
-		)
+		printInitSummary(summary)
 		return nil
 	}
 
@@ -101,69 +119,117 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	store.Close()
 
-	shimsOK := createShims(root)
-	statusOK := configureStatusLine(root)
+	summary.files = stats.FileCount
+	summary.symbols = stats.SymbolCount
+	summary.tokens = stats.TokenCount
+	summary.shimsOK = createShims(root)
+	summary.statusOK = configureStatusLine(root)
 	seedStatusFile(paths)
 	appendClaudeMDGuidance(root)
 
 	// Auto-start daemon so grep, dashboard, and tailing work immediately.
-	daemonOK := false
-	dashURL := ""
 	if !client.Ping() {
-		var err error
-		dashURL, err = spawnDaemon(root, sockPath)
+		dashURL, err := spawnDaemon(root, sockPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not auto-start daemon: %v\n", err)
 			fmt.Fprintf(os.Stderr, "  → start manually: aoa daemon start\n")
 		} else {
-			daemonOK = true
+			summary.daemonOK = true
+			summary.dashURL = dashURL
 		}
 	}
 
-	printInitSummary(
-		stats.FileCount, stats.SymbolCount, stats.TokenCount,
-		shimsOK, statusOK, daemonOK, dashURL, shimDir,
-	)
+	printInitSummary(summary)
 	return nil
 }
 
+// initSummary holds all results from init for the summary output.
+type initSummary struct {
+	files, symbols, tokens int
+
+	// Global install results
+	binaryPath      string
+	binaryInstalled bool
+	globalShimsOK   bool
+	rcFile          string
+	rcModified      bool
+
+	// Per-project results
+	shimsOK  bool
+	statusOK bool
+	daemonOK bool
+	dashURL  string
+}
+
 // printInitSummary prints the cohesive checklist output for aoa init.
-func printInitSummary(files, symbols, tokens int, shimsOK, statusOK, daemonOK bool, dashURL, shimDir string) {
+func printInitSummary(s initSummary) {
 	fmt.Println("⚡ aOa initialized")
 	fmt.Println()
 
-	// Checklist
+	// Index stats
 	fmt.Printf("  ✓ indexed %s files, %s symbols, %s tokens\n",
-		commaInt(files), commaInt(symbols), commaInt(tokens))
-	if shimsOK {
-		fmt.Println("  ✓ shims installed (grep, egrep)")
+		commaInt(s.files), commaInt(s.symbols), commaInt(s.tokens))
+
+	// Global install results
+	if s.binaryInstalled {
+		fmt.Printf("  ✓ installed to %s\n", abbreviateHome(s.binaryPath))
+	} else if s.binaryPath != "" {
+		fmt.Printf("  ✓ binary up to date (%s)\n", abbreviateHome(s.binaryPath))
 	}
-	if statusOK {
+	if s.globalShimsOK {
+		fmt.Println("  ✓ global shims installed (grep, egrep)")
+	}
+	if s.rcFile != "" {
+		if s.rcModified {
+			fmt.Printf("  ✓ shell configured (%s)\n", abbreviateHome(s.rcFile))
+		} else {
+			fmt.Printf("  ✓ shell already configured (%s)\n", abbreviateHome(s.rcFile))
+		}
+	}
+
+	// Per-project results
+	if s.statusOK {
 		fmt.Println("  ✓ status line configured")
 	}
-	if daemonOK {
-		if dashURL != "" {
-			fmt.Printf("  ✓ daemon started — %s\n", dashURL)
+	if s.daemonOK {
+		if s.dashURL != "" {
+			fmt.Printf("  ✓ daemon started — %s\n", s.dashURL)
 		} else {
 			fmt.Println("  ✓ daemon started")
 		}
 	}
 
-	// Activation block
-	fmt.Println()
-	fmt.Println("  To activate, add to ~/.bashrc or ~/.zshrc:")
-	fmt.Println()
-	fmt.Printf("    alias claude='PATH=\"%s:$PATH\" claude'\n", shimDir)
-	fmt.Printf("    alias gemini='PATH=\"%s:$PATH\" gemini'\n", shimDir)
-	fmt.Println()
-	fmt.Println("  aOa intercepts grep and egrep with semantic search.")
-	fmt.Println("  Results point to methods and functions — not just matching lines.")
-	fmt.Println("  Claude navigates directly to what matters. No file scanning.")
-	fmt.Println("  Self-learning, O(1) indexed, sub-ms — pure math, zero AI overhead.")
+	// Shell activation hint
+	if s.rcModified && s.rcFile != "" {
+		fmt.Println()
+		fmt.Printf("  Restart your shell or run: source %s\n", abbreviateHome(s.rcFile))
+	} else if s.rcFile == "" && s.binaryPath == "" {
+		// Fallback: no global install succeeded — show manual instructions
+		home, _ := os.UserHomeDir()
+		shimDir := filepath.Join(home, ".local", "share", "aoa", "shims")
+		fmt.Println()
+		fmt.Println("  To activate, add to ~/.bashrc or ~/.zshrc:")
+		fmt.Println()
+		fmt.Printf("    export PATH=\"$HOME/.local/bin:$PATH\"\n")
+		fmt.Printf("    alias claude='PATH=\"%s:$PATH\" claude'\n", shimDir)
+		fmt.Printf("    alias gemini='PATH=\"%s:$PATH\" gemini'\n", shimDir)
+	}
 
 	// Branded sign-off (yellow)
 	fmt.Println()
 	fmt.Println("  \033[93maOa learns. You build faster.\033[0m")
+}
+
+// abbreviateHome replaces the user's home directory prefix with ~.
+func abbreviateHome(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	if strings.HasPrefix(path, home) {
+		return "~" + path[len(home):]
+	}
+	return path
 }
 
 // commaInt formats an integer with comma separators (e.g. 1563 -> "1,563").
@@ -197,17 +263,21 @@ func createShims(root string) bool {
 		return false
 	}
 
-	// Resolve the absolute path to the running aoa binary so shims work
-	// regardless of install method (global npm, local npm, npx, manual).
-	aoaBin, err := os.Executable()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not resolve aoa binary path: %v\n", err)
-		return false
-	}
-	aoaBin, err = filepath.EvalSymlinks(aoaBin)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not resolve aoa binary symlink: %v\n", err)
-		return false
+	// Prefer the stable self-installed binary path (~/.local/bin/aoa) over
+	// the running binary (which may be in an ephemeral npx cache).
+	aoaBin := selfInstalledBinaryPath()
+	if aoaBin == "" {
+		var err error
+		aoaBin, err = os.Executable()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not resolve aoa binary path: %v\n", err)
+			return false
+		}
+		aoaBin, err = filepath.EvalSymlinks(aoaBin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not resolve aoa binary symlink: %v\n", err)
+			return false
+		}
 	}
 
 	shims := map[string]string{

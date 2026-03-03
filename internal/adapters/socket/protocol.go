@@ -5,6 +5,7 @@ package socket
 import (
 	"crypto/sha256"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/corey/aoa/internal/ports"
@@ -12,7 +13,19 @@ import (
 
 // SocketPath returns the Unix socket path for a given project root.
 // Format: /tmp/aoa-{first12hex}.sock
+// Includes UID in the hash for multi-user safety on shared systems.
 func SocketPath(projectRoot string) string {
+	abs, err := filepath.Abs(projectRoot)
+	if err != nil {
+		abs = projectRoot
+	}
+	h := sha256.Sum256([]byte(fmt.Sprintf("%d:%s", os.Getuid(), abs)))
+	return fmt.Sprintf("/tmp/aoa-%x.sock", h[:6])
+}
+
+// LegacySocketPath returns the pre-UID socket path for migration.
+// Used by daemon stop and init to clean up sockets from older versions.
+func LegacySocketPath(projectRoot string) string {
 	abs, err := filepath.Abs(projectRoot)
 	if err != nil {
 		abs = projectRoot

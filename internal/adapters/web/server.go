@@ -97,6 +97,9 @@ func (s *Server) Start(preferredPort int) error {
 	s.httpSrv = &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Write port file for discovery

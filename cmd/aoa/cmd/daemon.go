@@ -274,6 +274,26 @@ func runDaemonStop(cmd *cobra.Command, args []string) error {
 			"  → kill it:           kill <PID>")
 	}
 
+	// Try legacy socket path (pre-UID) in case daemon was started before upgrade.
+	legacySockPath := socket.LegacySocketPath(root)
+	if legacySockPath != sockPath {
+		legacyClient := socket.NewClient(legacySockPath)
+		if legacyClient.Ping() {
+			if err := legacyClient.Shutdown(); err != nil {
+				return fmt.Errorf("shutdown request failed (legacy socket): %w", err)
+			}
+			for i := 0; i < 30; i++ {
+				if !legacyClient.Ping() {
+					os.Remove(legacySockPath)
+					fmt.Printf("⚡ daemon stopped (migrated from legacy socket) — aOa %s\n", version.String())
+					return nil
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			return fmt.Errorf("daemon did not stop within 3 seconds (legacy socket)")
+		}
+	}
+
 	// Socket not reachable — try PID file to find an orphaned daemon.
 	if pid, err := readPID(pidPath); err == nil {
 		if processAlive(pid) {
@@ -300,12 +320,14 @@ func runDaemonStop(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Check for stale socket with no PID file.
-	if _, err := os.Stat(sockPath); err == nil {
-		os.Remove(sockPath)
-		fmt.Println("⚡ removed stale daemon socket")
-		fmt.Println("  → if a process is still running: ps aux | grep 'aoa daemon'")
-		return nil
+	// Check for stale socket with no PID file (current or legacy).
+	for _, sp := range []string{sockPath, legacySockPath} {
+		if _, err := os.Stat(sp); err == nil {
+			os.Remove(sp)
+			fmt.Println("⚡ removed stale daemon socket")
+			fmt.Println("  → if a process is still running: ps aux | grep 'aoa daemon'")
+			return nil
+		}
 	}
 
 	fmt.Println("⚡ daemon is not running")

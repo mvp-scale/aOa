@@ -13,16 +13,18 @@ import (
 )
 
 var removeForce bool
+var removeGlobal bool
 
 var removeCmd = &cobra.Command{
 	Use:   "remove",
 	Short: "Completely remove aOa from this project",
-	Long:  "Stops the daemon, deletes the .aoa/ directory and all data. Use 'aoa reset' to just clear data without removing.",
+	Long:  "Stops the daemon, deletes the .aoa/ directory and all data. Use 'aoa reset' to just clear data without removing.\nWith --global, also removes the global binary, shims, and shell configuration.",
 	RunE:  runRemove,
 }
 
 func init() {
 	removeCmd.Flags().BoolVar(&removeForce, "force", false, "Skip confirmation prompt")
+	removeCmd.Flags().BoolVar(&removeGlobal, "global", false, "Also remove global binary, shims, and shell configuration")
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {
@@ -92,5 +94,33 @@ func runRemove(cmd *cobra.Command, args []string) error {
 			fmt.Println("  ⚠ CLAUDE.md contains aOa references — review manually")
 		}
 	}
+
+	// Global removal
+	if removeGlobal {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			// Remove shell RC block
+			if unconfigureShellRC() {
+				fmt.Println("  ✓ shell configuration removed")
+			}
+
+			// Remove entire ~/.local/share/aoa/ (shims + versioned binaries)
+			globalDataPath := filepath.Join(home, globalDataDir)
+			if err := os.RemoveAll(globalDataPath); err == nil {
+				fmt.Println("  ✓ global data removed (~/.local/share/aoa/)")
+			}
+
+			// Remove symlink at ~/.local/bin/aoa
+			globalBin := filepath.Join(home, globalBinDir, "aoa")
+			if _, err := os.Lstat(globalBin); err == nil {
+				if err := os.Remove(globalBin); err == nil {
+					fmt.Println("  ✓ global binary removed (~/.local/bin/aoa)")
+				} else {
+					fmt.Fprintf(os.Stderr, "  warning: could not remove %s: %v\n", globalBin, err)
+				}
+			}
+		}
+	}
+
 	return nil
 }
