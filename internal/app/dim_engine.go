@@ -60,11 +60,17 @@ func (a *App) warmDimCache(logFn func(string)) (int, int, bool) {
 		return 0, 0, false
 	}
 
+	// Skip if a scan is already running (e.g., Reindex during WarmCaches).
+	if !atomic.CompareAndSwapInt32(&a.dimScanRunning, 0, 1) {
+		logFn("dim scan already running, skipping")
+		return 0, 0, false
+	}
+
 	total := len(a.Index.Files)
 	atomic.StoreInt64(&a.dimScanTotal, int64(total))
 	atomic.StoreInt64(&a.dimScanDone, 0)
 	atomic.StoreInt64(&a.dimScanCached, 0)
-	atomic.StoreInt32(&a.dimScanRunning, 1)
+	// dimScanRunning already set to 1 by CAS above
 	atomic.StoreInt64(&a.dimScanStarted, time.Now().UnixNano())
 
 	results := make(map[string]*socket.DimensionalFileResult, total)
@@ -95,7 +101,9 @@ func (a *App) warmDimCache(logFn func(string)) (int, int, bool) {
 	for fileID, fm := range a.Index.Files {
 		if persisted != nil {
 			if fa, ok := persisted[fm.Path]; ok {
-				if fm.LastModified <= fa.ScanTime/1e6 {
+				// ScanTime is Unix microseconds; LastModified is Unix seconds.
+				// File is cached if it hasn't been modified since the scan.
+				if fm.LastModified <= fa.ScanTime/1_000_000 {
 					results[fm.Path] = convertFileAnalysis(fa, fileID)
 					analyses[fm.Path] = fa
 					cached++
