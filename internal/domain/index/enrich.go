@@ -30,18 +30,12 @@ func (e *SearchEngine) assignDomainByKeywords(ref ports.TokenRef) string {
 	bestDomain := ""
 	bestScore := 0
 
-	domainNames := make([]string, 0, len(e.domains))
-	for name := range e.domains {
-		domainNames = append(domainNames, name)
-	}
-	sort.Strings(domainNames)
-
-	for _, domainName := range domainNames {
+	for _, domainName := range e.sortedDomainNames {
 		domain := e.domains[domainName]
 		score := 0
 		for _, keywords := range domain.Terms {
 			for _, kw := range keywords {
-				if symTokens[strings.ToLower(kw)] {
+				if symTokens[e.domainKeywordsLower[kw]] {
 					score++
 				}
 			}

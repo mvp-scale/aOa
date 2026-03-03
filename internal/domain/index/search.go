@@ -39,6 +39,14 @@ type SearchEngine struct {
 	// Used to resolve raw tokens to atlas terms for tag generation.
 	keywordToTerms map[string][]string
 
+	// sortedDomainNames is the sorted list of domain names, cached to avoid
+	// allocating and sorting on every assignDomainByKeywords call.
+	sortedDomainNames []string
+
+	// domainKeywordsLower maps raw keyword -> lowercased form, cached to avoid
+	// per-call strings.ToLower in assignDomainByKeywords.
+	domainKeywordsLower map[string]string
+
 	// fileSpans caches per-file symbol spans for content scanning.
 	// Rebuilt in NewSearchEngine() and Rebuild() instead of per-search.
 	fileSpans map[uint32][]symbolSpan
@@ -113,6 +121,22 @@ func NewSearchEngine(idx *ports.Index, domains map[string]Domain, projectRoot st
 					kwTermSeen[kwLower][term] = true
 					e.keywordToTerms[kwLower] = append(e.keywordToTerms[kwLower], term)
 				}
+			}
+		}
+	}
+
+	// Pre-compute sorted domain names and lowercased keywords for enrichment.
+	e.sortedDomainNames = make([]string, 0, len(domains))
+	for name := range domains {
+		e.sortedDomainNames = append(e.sortedDomainNames, name)
+	}
+	sort.Strings(e.sortedDomainNames)
+
+	e.domainKeywordsLower = make(map[string]string)
+	for _, domain := range domains {
+		for _, keywords := range domain.Terms {
+			for _, kw := range keywords {
+				e.domainKeywordsLower[kw] = strings.ToLower(kw)
 			}
 		}
 	}
@@ -656,9 +680,16 @@ func matchesGlobs(path, include, exclude string) bool {
 	return true
 }
 
-// fnmatchGlob matches a glob pattern against a path, allowing * to match /.
-// Converts the glob to a regex: * → .*, ? → ., rest escaped.
-func fnmatchGlob(pattern, path string) bool {
+// globCache caches compiled regexes for glob patterns.
+// A sync.Map is ideal here: patterns are written once, read many times, and
+// the set of unique patterns per search is tiny (1-3).
+var globCache sync.Map // pattern string → *regexp.Regexp
+
+// compileGlob converts a glob pattern to a compiled regex, caching the result.
+func compileGlob(pattern string) *regexp.Regexp {
+	if v, ok := globCache.Load(pattern); ok {
+		return v.(*regexp.Regexp)
+	}
 	var regexBuf strings.Builder
 	regexBuf.WriteString("^")
 	for i := 0; i < len(pattern); i++ {
@@ -677,6 +708,18 @@ func fnmatchGlob(pattern, path string) bool {
 	regexBuf.WriteString("$")
 	re, err := regexp.Compile(regexBuf.String())
 	if err != nil {
+		return nil
+	}
+	globCache.Store(pattern, re)
+	return re
+}
+
+// fnmatchGlob matches a glob pattern against a path, allowing * to match /.
+// Converts the glob to a regex: * → .*, ? → ., rest escaped.
+// Compiled regexes are cached — first call compiles, subsequent calls are O(1) lookup.
+func fnmatchGlob(pattern, path string) bool {
+	re := compileGlob(pattern)
+	if re == nil {
 		return false
 	}
 	return re.MatchString(path)

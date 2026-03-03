@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -20,14 +22,53 @@ import (
 // aoaBin is the path to the compiled binary, set by TestMain.
 var aoaBin string
 
+// daemonPIDs tracks all daemon PIDs spawned during testing.
+// killAllDaemons drains it on exit (normal or interrupted) to prevent leaks.
+var (
+	daemonPIDs   []int
+	daemonPIDsMu sync.Mutex
+)
+
+func trackDaemonPID(pid int) {
+	daemonPIDsMu.Lock()
+	daemonPIDs = append(daemonPIDs, pid)
+	daemonPIDsMu.Unlock()
+}
+
+func killAllDaemons() {
+	daemonPIDsMu.Lock()
+	pids := append([]int(nil), daemonPIDs...)
+	daemonPIDsMu.Unlock()
+	for _, pid := range pids {
+		if pid == 0 {
+			continue
+		}
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			continue
+		}
+		if proc.Signal(syscall.Signal(0)) == nil {
+			syscall.Kill(pid, syscall.SIGKILL)
+		}
+	}
+}
+
 func TestMain(m *testing.M) {
+	// Kill any leaked daemons on interrupt (Ctrl+C, timeout, etc.).
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		killAllDaemons()
+		os.Exit(1)
+	}()
+
 	// Build binary once for all tests.
 	tmp, err := os.MkdirTemp("", "aoa-integration-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create temp dir: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(tmp)
 
 	aoaBin = filepath.Join(tmp, "aoa")
 	cmd := exec.Command("go", "build", "-tags", "testing", "-o", aoaBin, "./cmd/aoa/")
@@ -39,7 +80,10 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	os.Exit(m.Run())
+	code := m.Run()
+	killAllDaemons()
+	os.RemoveAll(tmp)
+	os.Exit(code)
 }
 
 // =============================================================================
@@ -166,6 +210,11 @@ func runAOAWithEnv(t *testing.T, dir string, env []string, args ...string) (stdo
 // and uses SIGTERM → poll → SIGKILL to ensure the process and its inotify
 // watchers are fully released. Previous versions used only SIGKILL which
 // skipped graceful cleanup and leaked inotify instances.
+//
+// Safety net: the PID is registered in the global tracker so killAllDaemons
+// can reap it even if the test binary is interrupted (SIGINT/SIGTERM) before
+// cleanup runs. t.Cleanup is also registered so the daemon is stopped even
+// if the test calls t.Fatal (which skips defers).
 func startDaemon(t *testing.T, dir string) func() {
 	t.Helper()
 
@@ -181,39 +230,52 @@ func startDaemon(t *testing.T, dir string) func() {
 		daemonPID, _ = strconv.Atoi(strings.TrimSpace(string(data)))
 	}
 
-	return func() {
-		// 1. Try graceful stop via socket (daemon closes watcher, flushes state).
-		runAOA(t, dir, "daemon", "stop")
+	// Register in global tracker for signal-handler cleanup.
+	if daemonPID != 0 {
+		trackDaemonPID(daemonPID)
+	}
 
-		if daemonPID == 0 {
-			return
-		}
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			// 1. Try graceful stop via socket (daemon closes watcher, flushes state).
+			runAOA(t, dir, "daemon", "stop")
 
-		// 2. Verify the process actually exited. Poll for up to 3s.
-		for i := 0; i < 30; i++ {
-			if !processAliveTest(daemonPID) {
-				return // clean exit
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-
-		// 3. Still alive — send SIGTERM (allows graceful cleanup of inotify).
-		syscall.Kill(daemonPID, syscall.SIGTERM)
-		for i := 0; i < 20; i++ {
-			if !processAliveTest(daemonPID) {
+			if daemonPID == 0 {
 				return
 			}
-			time.Sleep(100 * time.Millisecond)
-		}
 
-		// 4. Last resort — SIGKILL.
-		syscall.Kill(daemonPID, syscall.SIGKILL)
-		time.Sleep(200 * time.Millisecond)
+			// 2. Verify the process actually exited. Poll for up to 3s.
+			for i := 0; i < 30; i++ {
+				if !processAliveTest(daemonPID) {
+					return // clean exit
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
 
-		if processAliveTest(daemonPID) {
-			t.Logf("warning: daemon pid %d still alive after SIGKILL", daemonPID)
-		}
+			// 3. Still alive — send SIGTERM (allows graceful cleanup of inotify).
+			syscall.Kill(daemonPID, syscall.SIGTERM)
+			for i := 0; i < 20; i++ {
+				if !processAliveTest(daemonPID) {
+					return
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+
+			// 4. Last resort — SIGKILL.
+			syscall.Kill(daemonPID, syscall.SIGKILL)
+			time.Sleep(200 * time.Millisecond)
+
+			if processAliveTest(daemonPID) {
+				t.Logf("warning: daemon pid %d still alive after SIGKILL", daemonPID)
+			}
+		})
 	}
+
+	// Safety net: t.Cleanup runs even on t.Fatal (unlike defer).
+	t.Cleanup(stop)
+
+	return stop
 }
 
 // processAliveTest checks if a process exists (signal 0).
