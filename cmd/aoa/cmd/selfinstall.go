@@ -52,8 +52,8 @@ func selfInstall() (path string, installed bool, err error) {
 		ver = "dev"
 	}
 
-	versionsDir := filepath.Join(home, globalVersionsDir)
-	versionedBin := filepath.Join(versionsDir, ver)
+	versionDir := filepath.Join(home, globalVersionsDir, ver)
+	versionedBin := filepath.Join(versionDir, "aoa")
 	symlink := filepath.Join(home, globalBinDir, "aoa")
 
 	src, err := os.Executable()
@@ -73,8 +73,8 @@ func selfInstall() (path string, installed bool, err error) {
 
 	// Copy binary to versioned path if not identical.
 	if !binaryIdentical(src, versionedBin) {
-		if err := os.MkdirAll(versionsDir, 0755); err != nil {
-			return "", false, fmt.Errorf("create %s: %w", versionsDir, err)
+		if err := os.MkdirAll(versionDir, 0755); err != nil {
+			return "", false, fmt.Errorf("create %s: %w", versionDir, err)
 		}
 		if err := copyFileTo(src, versionedBin); err != nil {
 			return "", false, fmt.Errorf("copy binary: %w", err)

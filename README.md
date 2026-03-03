@@ -16,7 +16,7 @@ aoa init
 
 **Option B — No root needed** (use `npx` to run):
 ```bash
-npm install @mvpscale/aoa init
+npm install @mvpscale/aoa
 npx aoa init
 
 ```
