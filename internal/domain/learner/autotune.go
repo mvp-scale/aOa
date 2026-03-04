@@ -3,16 +3,13 @@ package learner
 import (
 	"math"
 	"sort"
+
+	"github.com/corey/aoa/internal/ports"
 )
 
-// AutotuneResult summarizes what RunMathTune changed.
-// Used by the status line to report autotune activity.
-type AutotuneResult struct {
-	Promoted int // domains promoted context→core
-	Demoted  int // domains demoted core→context
-	Decayed  int // domains whose hits were decayed
-	Pruned   int // domains removed (hits < PruneFloor)
-}
+// AutotuneResult is an alias for ports.AutotuneResult.
+// Kept for backward compatibility within the learner package.
+type AutotuneResult = ports.AutotuneResult
 
 // RunMathTune executes the 21-step autotune algorithm.
 // Matches Python's run_autotune() from compute_fixtures.py exactly.

@@ -12,7 +12,6 @@ import (
 	"os"
 	"sort"
 
-	"github.com/corey/aoa/internal/domain/learner"
 	"github.com/corey/aoa/internal/ports"
 )
 
@@ -111,7 +110,7 @@ type Metrics struct {
 }
 
 // Generate produces a StatusData from current learner state and runtime metrics.
-func Generate(state *ports.LearnerState, autotune *learner.AutotuneResult, m Metrics) *StatusData {
+func Generate(state *ports.LearnerState, autotune *ports.AutotuneResult, m Metrics) *StatusData {
 	// Intel metrics from learner state
 	var totalEvidence float64
 	var coreCount int

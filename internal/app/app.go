@@ -233,7 +233,7 @@ type App struct {
 	// Investigated files (user-triaged, excluded from active recon view)
 	investigatedFiles map[string]int64 // relPath -> unix timestamp
 	promptN        uint32                 // prompt counter (incremented on each user input)
-	lastAutotune   *learner.AutotuneResult // most recent autotune result (for status line)
+	lastAutotune   *ports.AutotuneResult // most recent autotune result (for status line)
 	statusLinePath string                 // project-local path for status line file
 	httpPort       int                    // preferred HTTP port (0 = auto from project root)
 	dbPath         string                 // path to bbolt database file
@@ -1337,7 +1337,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 
 // writeStatus generates and writes status JSON to the project-local file.
 // Must be called with a.mu held.
-func (a *App) writeStatus(autotune *learner.AutotuneResult) {
+func (a *App) writeStatus(autotune *ports.AutotuneResult) {
 	if autotune != nil {
 		a.lastAutotune = autotune
 	}

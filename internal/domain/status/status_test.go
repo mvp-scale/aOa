@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/corey/aoa/internal/domain/learner"
 	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,7 +37,7 @@ func TestGenerate_WithAutotune(t *testing.T) {
 			"auth": {Hits: 9.0, State: "active", Tier: "core"},
 		},
 	}
-	result := &learner.AutotuneResult{
+	result := &ports.AutotuneResult{
 		Promoted: 1,
 		Demoted:  2,
 		Decayed:  8,
