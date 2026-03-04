@@ -586,7 +586,7 @@ grep/egrep are shimmed to aOa. Results are **semantic**: ranked by session inten
 <!-- /aOa-guidance -->
 `
 
-// appendClaudeMDGuidance appends aOa guidance to CLAUDE.md if not already present.
+// appendClaudeMDGuidance prepends aOa guidance to the top of CLAUDE.md if not already present.
 // Idempotent: checks for sentinel before writing. Creates the file if missing.
 func appendClaudeMDGuidance(root string) {
 	claudeMD := filepath.Join(root, "CLAUDE.md")
@@ -596,14 +596,15 @@ func appendClaudeMDGuidance(root string) {
 		return // already present
 	}
 
-	f, err := os.OpenFile(claudeMD, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not append to CLAUDE.md: %v\n", err)
-		return
+	// Prepend guidance to the top so the agent sees it first.
+	var content string
+	if err == nil {
+		content = aOaGuidance + "\n" + string(existing)
+	} else {
+		content = aOaGuidance
 	}
-	defer f.Close()
 
-	if _, err := f.WriteString(aOaGuidance); err != nil {
+	if err := os.WriteFile(claudeMD, []byte(content), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not write aOa guidance to CLAUDE.md: %v\n", err)
 	}
 }
