@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/corey/aoa/internal/domain/analyzer"
 	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -671,32 +670,32 @@ func TestStore_OpenTimeout_ConcurrentAttempts(t *testing.T) {
 // Dimensional analysis persistence tests (L5)
 // =============================================================================
 
-func makeTestDimensions() map[string]*analyzer.FileAnalysis {
-	var mask1 analyzer.Bitmask
-	mask1.Set(analyzer.TierSecurity, 0)
-	mask1.Set(analyzer.TierSecurity, 1)
+func makeTestDimensions() map[string]*ports.FileAnalysis {
+	var mask1 ports.Bitmask
+	mask1.Set(ports.TierSecurity, 0)
+	mask1.Set(ports.TierSecurity, 1)
 
-	var mask2 analyzer.Bitmask
-	mask2.Set(analyzer.TierQuality, 5)
+	var mask2 ports.Bitmask
+	mask2.Set(ports.TierQuality, 5)
 
-	return map[string]*analyzer.FileAnalysis{
+	return map[string]*ports.FileAnalysis{
 		"handler.go": {
 			Path:     "handler.go",
 			Language: "go",
 			Bitmask:  mask1,
-			Findings: []analyzer.RuleFinding{
-				{RuleID: "hardcoded_secret", Line: 10, Severity: analyzer.SevCritical},
-				{RuleID: "command_injection", Line: 15, Severity: analyzer.SevCritical},
+			Findings: []ports.RuleFinding{
+				{RuleID: "hardcoded_secret", Line: 10, Severity: ports.SevCritical},
+				{RuleID: "command_injection", Line: 15, Severity: ports.SevCritical},
 			},
-			Methods: []analyzer.MethodAnalysis{
+			Methods: []ports.MethodAnalysis{
 				{
 					Name:    "processInput",
 					Line:    5,
 					EndLine: 20,
 					Bitmask: mask1,
 					Score:   20,
-					Findings: []analyzer.RuleFinding{
-						{RuleID: "hardcoded_secret", Line: 10, Severity: analyzer.SevCritical},
+					Findings: []ports.RuleFinding{
+						{RuleID: "hardcoded_secret", Line: 10, Severity: ports.SevCritical},
 					},
 				},
 			},
@@ -706,8 +705,8 @@ func makeTestDimensions() map[string]*analyzer.FileAnalysis {
 			Path:     "util.go",
 			Language: "go",
 			Bitmask:  mask2,
-			Findings: []analyzer.RuleFinding{
-				{RuleID: "ignored_error", Line: 22, Severity: analyzer.SevWarning},
+			Findings: []ports.RuleFinding{
+				{RuleID: "ignored_error", Line: 22, Severity: ports.SevWarning},
 			},
 			ScanTime: 80,
 		},
@@ -745,7 +744,7 @@ func TestStore_Dimensions_Overwrite(t *testing.T) {
 	require.NoError(t, store.SaveAllDimensions("proj-1", orig))
 
 	// Overwrite with smaller set
-	updated := map[string]*analyzer.FileAnalysis{
+	updated := map[string]*ports.FileAnalysis{
 		"new.go": {Path: "new.go", Language: "go"},
 	}
 	require.NoError(t, store.SaveAllDimensions("proj-1", updated))
@@ -768,7 +767,7 @@ func TestStore_Dimensions_EmptyProject(t *testing.T) {
 func TestStore_Dimensions_EmptyAnalyses(t *testing.T) {
 	store, _ := newTestStore(t)
 
-	err := store.SaveAllDimensions("proj-1", map[string]*analyzer.FileAnalysis{})
+	err := store.SaveAllDimensions("proj-1", map[string]*ports.FileAnalysis{})
 	require.NoError(t, err)
 
 	loaded, err := store.LoadAllDimensions("proj-1")

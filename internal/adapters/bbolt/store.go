@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/corey/aoa/internal/domain/analyzer"
 	"github.com/corey/aoa/internal/ports"
 	bolt "go.etcd.io/bbolt"
 )
@@ -458,7 +457,7 @@ func (s *Store) DeleteProject(projectID string) error {
 // SaveAllDimensions persists all dimensional analysis results for a project.
 // Keys are relative file paths, values are JSON-serialized FileAnalysis.
 // Overwrites any prior dimensions for this projectID.
-func (s *Store) SaveAllDimensions(projectID string, analyses map[string]*analyzer.FileAnalysis) error {
+func (s *Store) SaveAllDimensions(projectID string, analyses map[string]*ports.FileAnalysis) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		proj, err := tx.CreateBucketIfNotExists([]byte(projectID))
 		if err != nil {
@@ -485,8 +484,8 @@ func (s *Store) SaveAllDimensions(projectID string, analyses map[string]*analyze
 
 // LoadAllDimensions retrieves all dimensional analysis results for a project.
 // Returns nil, nil if no dimensions exist.
-func (s *Store) LoadAllDimensions(projectID string) (map[string]*analyzer.FileAnalysis, error) {
-	var results map[string]*analyzer.FileAnalysis
+func (s *Store) LoadAllDimensions(projectID string) (map[string]*ports.FileAnalysis, error) {
+	var results map[string]*ports.FileAnalysis
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		proj := tx.Bucket([]byte(projectID))
@@ -497,9 +496,9 @@ func (s *Store) LoadAllDimensions(projectID string) (map[string]*analyzer.FileAn
 		if db == nil {
 			return nil
 		}
-		results = make(map[string]*analyzer.FileAnalysis)
+		results = make(map[string]*ports.FileAnalysis)
 		return db.ForEach(func(k, v []byte) error {
-			var analysis analyzer.FileAnalysis
+			var analysis ports.FileAnalysis
 			if err := json.Unmarshal(v, &analysis); err != nil {
 				return nil // skip corrupt entries
 			}

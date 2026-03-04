@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/corey/aoa/internal/adapters/socket"
-	"github.com/corey/aoa/internal/domain/analyzer"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // Local dashboard types — field-for-field identical JSON shape to recon.Result,
@@ -53,11 +53,11 @@ type ruleMeta struct {
 
 // SetRuleIndex populates the rule metadata index from loaded rules.
 // Called once at startup after YAML rules are loaded.
-func SetRuleIndex(rules []analyzer.Rule) {
+func SetRuleIndex(rules []ports.Rule) {
 	ruleIndex = make(map[string]ruleMeta, len(rules))
 	for _, r := range rules {
 		ruleIndex[r.ID] = ruleMeta{
-			tier:      analyzer.TierName(r.Tier),
+			tier:      ports.TierName(r.Tier),
 			dimension: r.Dimension,
 			label:     r.Label,
 		}
