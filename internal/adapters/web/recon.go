@@ -206,7 +206,7 @@ func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[s
 // handleSourceLine returns source lines from the in-memory file cache.
 // GET /api/source-line?file=relative/path.go&line=12&context=2
 func (s *Server) handleSourceLine(w http.ResponseWriter, r *http.Request) {
-	if s.idx == nil || s.engine == nil {
+	if s.idx == nil || s.lineCache == nil {
 		http.Error(w, `{"error":"index not available"}`, http.StatusServiceUnavailable)
 		return
 	}
@@ -237,13 +237,6 @@ func (s *Server) handleSourceLine(w http.ResponseWriter, r *http.Request) {
 		ctxLines = 5
 	}
 
-	// Find file ID by path
-	fc := s.engine.Cache()
-	if fc == nil {
-		http.Error(w, `{"error":"file cache not available"}`, http.StatusServiceUnavailable)
-		return
-	}
-
 	var fileID uint32
 	found := false
 	for id, fm := range s.idx.Files {
@@ -258,7 +251,7 @@ func (s *Server) handleSourceLine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lines := fc.GetLines(fileID)
+	lines := s.lineCache.GetLines(fileID)
 	if lines == nil {
 		http.Error(w, `{"error":"file not in cache"}`, http.StatusNotFound)
 		return

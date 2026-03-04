@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/peek"
 	"github.com/corey/aoa/internal/ports"
 )
@@ -47,7 +46,7 @@ type AppQueries interface {
 
 // Server is the daemon that listens on a Unix socket and serves search requests.
 type Server struct {
-	engine   *index.SearchEngine
+	searcher ports.Searcher
 	idx      *ports.Index
 	queries  AppQueries
 	listener net.Listener
@@ -62,11 +61,11 @@ type Server struct {
 	wg           sync.WaitGroup
 }
 
-// NewServer creates a daemon server backed by the given search engine.
+// NewServer creates a daemon server backed by the given searcher.
 // The queries parameter may be nil if learner/wipe features are not needed.
-func NewServer(engine *index.SearchEngine, idx *ports.Index, sockPath string, queries AppQueries) *Server {
+func NewServer(searcher ports.Searcher, idx *ports.Index, sockPath string, queries AppQueries) *Server {
 	return &Server{
-		engine:     engine,
+		searcher:   searcher,
 		idx:        idx,
 		queries:    queries,
 		sockPath:   sockPath,
@@ -242,7 +241,7 @@ func (s *Server) handleSearch(req Request) Response {
 	}
 
 	start := time.Now()
-	result := s.engine.Search(params.Query, params.Options)
+	result := s.searcher.Search(params.Query, params.Options)
 	elapsed := time.Since(start)
 
 	hits := make([]SearchHit, len(result.Hits))
@@ -257,12 +256,7 @@ func (s *Server) handleSearch(req Request) Response {
 			Kind:         h.Kind,
 			Content:      h.Content,
 			ContextLines: h.ContextLines,
-		}
-		// Compute peek code for symbols within MaxRange
-		rangeSize := h.Range[1] - h.Range[0]
-		if rangeSize > 0 && rangeSize <= peek.MaxRange {
-			fileID, startLine := h.PeekRef()
-			hits[i].PeekCode = peek.Encode(fileID, startLine)
+			PeekCode:     h.PeekCode,
 		}
 	}
 
@@ -470,7 +464,7 @@ func (s *Server) handlePeek(req Request) Response {
 		return Response{ID: req.ID, Error: "invalid peek params"}
 	}
 
-	root := s.engine.ProjectRoot()
+	root := s.searcher.ProjectRoot()
 	symbols := make([]PeekSymbol, len(params.Codes))
 
 	for i, code := range params.Codes {
@@ -494,9 +488,9 @@ func (s *Server) handlePeek(req Request) Response {
 			continue
 		}
 
-		domain, tags := s.engine.EnrichRef(ref)
+		domain, tags := s.searcher.EnrichRef(ref)
 		symbols[i].File = file.Path
-		symbols[i].Symbol = index.FormatSymbol(sym)
+		symbols[i].Symbol = s.searcher.FormatSymbol(sym)
 		symbols[i].Range = [2]int{int(sym.StartLine), int(sym.EndLine)}
 		symbols[i].Domain = domain
 		symbols[i].Tags = tags

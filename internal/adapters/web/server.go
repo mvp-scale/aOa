@@ -15,31 +15,31 @@ import (
 	"time"
 
 	"github.com/corey/aoa/internal/adapters/socket"
-	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/ports"
 )
 
 // Server serves the web dashboard and JSON API over HTTP.
 type Server struct {
-	queries  socket.AppQueries
-	idx      *ports.Index
-	engine   *index.SearchEngine
-	listener net.Listener
-	httpSrv  *http.Server
-	port     int
-	started  time.Time
-	stopOnce sync.Once
+	queries   socket.AppQueries
+	idx       *ports.Index
+	lineCache ports.LineCache
+	listener  net.Listener
+	httpSrv   *http.Server
+	port      int
+	started   time.Time
+	stopOnce  sync.Once
 
 	portFilePath string // .aoa/http.port
 }
 
 // NewServer creates an HTTP server for the dashboard.
 // The portFilePath is where the bound port is written for discovery.
-func NewServer(queries socket.AppQueries, idx *ports.Index, engine *index.SearchEngine, portFilePath string) *Server {
+// lineCache may be nil if source line serving is not needed.
+func NewServer(queries socket.AppQueries, idx *ports.Index, lineCache ports.LineCache, portFilePath string) *Server {
 	return &Server{
 		queries:      queries,
 		idx:          idx,
-		engine:       engine,
+		lineCache:    lineCache,
 		portFilePath: portFilePath,
 	}
 }

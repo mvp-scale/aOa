@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/corey/aoa/internal/adapters/socket"
-	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -161,11 +160,9 @@ func setupTestServer(t *testing.T) *httptest.Server {
 		Metadata: make(map[ports.TokenRef]*ports.SymbolMeta),
 		Files:    map[uint32]*ports.FileMeta{1: {Path: "auth.go", Language: "go"}},
 	}
-	domains := make(map[string]index.Domain)
-	engine := index.NewSearchEngine(idx, domains, "")
 	queries := &mockQueries{state: newTestState()}
 
-	srv := NewServer(queries, idx, engine, "")
+	srv := NewServer(queries, idx, nil, "")
 	mux := http.NewServeMux()
 	staticSub, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /", http.FileServerFS(staticSub))

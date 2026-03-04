@@ -436,12 +436,15 @@ func New(cfg Config) (*App, error) {
 		stopCh:              make(chan struct{}),
 	}
 
+	// Create search adapter for ports.Searcher interface
+	searcher := index.NewSearchAdapter(engine)
+
 	// Create server with App as query provider (for domains, stats, etc.)
 	sockPath := socket.SocketPath(cfg.ProjectRoot)
-	a.Server = socket.NewServer(engine, idx, sockPath, a)
+	a.Server = socket.NewServer(searcher, idx, sockPath, a)
 
-	// Create HTTP server for web dashboard
-	a.WebServer = web.NewServer(a, idx, engine, paths.PortFile)
+	// Create HTTP server for web dashboard (pass file cache for source line serving)
+	a.WebServer = web.NewServer(a, idx, cache, paths.PortFile)
 
 	// Wire search observer: search results → learning signals
 	engine.SetObserver(a.searchObserver)

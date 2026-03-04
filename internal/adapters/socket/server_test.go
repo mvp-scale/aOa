@@ -83,7 +83,7 @@ func TestServer_SearchRoundtrip(t *testing.T) {
 	engine, idx := testFixtures()
 	sockPath := testSocketPath(t)
 
-	srv := NewServer(engine, idx, sockPath, nil)
+	srv := NewServer(index.NewSearchAdapter(engine), idx, sockPath, nil)
 	require.NoError(t, srv.Start())
 	defer srv.Stop()
 
@@ -111,7 +111,7 @@ func TestServer_Health(t *testing.T) {
 	engine, idx := testFixtures()
 	sockPath := testSocketPath(t)
 
-	srv := NewServer(engine, idx, sockPath, nil)
+	srv := NewServer(index.NewSearchAdapter(engine), idx, sockPath, nil)
 	require.NoError(t, srv.Start())
 	defer srv.Stop()
 
@@ -129,7 +129,7 @@ func TestServer_Shutdown(t *testing.T) {
 	engine, idx := testFixtures()
 	sockPath := testSocketPath(t)
 
-	srv := NewServer(engine, idx, sockPath, nil)
+	srv := NewServer(index.NewSearchAdapter(engine), idx, sockPath, nil)
 	require.NoError(t, srv.Start())
 
 	client := NewClient(sockPath)
@@ -161,7 +161,7 @@ func TestServer_ConcurrentClients(t *testing.T) {
 	engine, idx := testFixtures()
 	sockPath := testSocketPath(t)
 
-	srv := NewServer(engine, idx, sockPath, nil)
+	srv := NewServer(index.NewSearchAdapter(engine), idx, sockPath, nil)
 	require.NoError(t, srv.Start())
 	defer srv.Stop()
 
@@ -203,7 +203,7 @@ func TestServer_StaleSocket(t *testing.T) {
 	require.NoError(t, os.WriteFile(sockPath, []byte("stale"), 0600))
 
 	engine, idx := testFixtures()
-	srv := NewServer(engine, idx, sockPath, nil)
+	srv := NewServer(index.NewSearchAdapter(engine), idx, sockPath, nil)
 	err := srv.Start()
 	require.NoError(t, err, "should replace stale socket")
 	defer srv.Stop()
