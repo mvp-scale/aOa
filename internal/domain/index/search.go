@@ -338,6 +338,20 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 		e.applyOnlyMatching(hits, query, opts)
 	}
 
+	// L16.4: Scope filter — restrict results to files matching path substring.
+	if opts.Scope != "" && len(hits) > 0 {
+		hits = filterByScope(hits, opts.Scope)
+	}
+
+	// L16.2 + L16.3: Rank hits by relevance before truncation.
+	// Exact symbol name matches surface first; generated files sink to bottom.
+	// Skip for modes that already have their own ranking (OR uses density sort,
+	// regex uses sortByFileIDLine after candidate filtering).
+	if len(hits) > 1 && !opts.CountOnly && !opts.Quiet && !opts.InvertMatch &&
+		opts.Mode != "regex" && !opts.AndMode {
+		rankHits(hits, query)
+	}
+
 	result := e.buildResult(hits, opts, maxCount)
 
 	// Enrich symbol hits (domain + tags) only for survivors after truncation
@@ -1193,6 +1207,88 @@ func (e *SearchEngine) ProjectRoot() string {
 // This wraps the private enrichment methods for use by the peek handler.
 func (e *SearchEngine) EnrichRef(ref ports.TokenRef) (domain string, tags []string) {
 	return e.assignDomain(ref), e.generateTags(ref)
+}
+
+// filterByScope keeps only hits whose file path contains the scope substring.
+// Case-insensitive match so --scope tainteviction matches TaintEviction/.
+func filterByScope(hits []Hit, scope string) []Hit {
+	scopeLower := strings.ToLower(scope)
+	filtered := hits[:0]
+	for _, h := range hits {
+		if strings.Contains(strings.ToLower(h.File), scopeLower) {
+			filtered = append(filtered, h)
+		}
+	}
+	return filtered
+}
+
+// rankHits reorders hits by relevance:
+//  1. Exact symbol name match (case-insensitive) → top
+//  2. Symbol name contains query as substring → next
+//  3. Normal results → middle
+//  4. Generated/deepcopy files → bottom
+//
+// Within each tier, original order is preserved (stable sort).
+func rankHits(hits []Hit, query string) {
+	queryLower := strings.ToLower(query)
+	sort.SliceStable(hits, func(i, j int) bool {
+		return hitRank(hits[i], queryLower) < hitRank(hits[j], queryLower)
+	})
+}
+
+// hitRank returns a sort key: lower = better rank.
+//
+//	0 = exact symbol name match
+//	1 = symbol name contains query as substring
+//	2 = normal result
+//	3 = generated/deepcopy file (deprioritized)
+func hitRank(h Hit, queryLower string) int {
+	if isGeneratedFile(h.File) {
+		return 3
+	}
+	if h.Kind == "symbol" {
+		nameLower := strings.ToLower(symbolName(h.Symbol))
+		if nameLower == queryLower {
+			return 0
+		}
+		if strings.Contains(nameLower, queryLower) {
+			return 1
+		}
+	}
+	return 2
+}
+
+// symbolName extracts the bare function/method name from a formatted symbol.
+// FormatSymbol produces: "Parent.signature(args)" or "signature(args)".
+// We want just the function name part before the "(" and after the last ".".
+func symbolName(formatted string) string {
+	// Strip args: "handlePodUpdate(ctx)" → "handlePodUpdate"
+	if idx := strings.IndexByte(formatted, '('); idx >= 0 {
+		formatted = formatted[:idx]
+	}
+	// Strip parent: "Controller.handlePodUpdate" → "handlePodUpdate"
+	if idx := strings.LastIndexByte(formatted, '.'); idx >= 0 {
+		formatted = formatted[idx+1:]
+	}
+	return formatted
+}
+
+// isGeneratedFile returns true for auto-generated files that should be
+// deprioritized in search results. Matches common Go codegen patterns.
+func isGeneratedFile(path string) bool {
+	base := filepath.Base(path)
+	baseLower := strings.ToLower(base)
+	switch {
+	case strings.HasPrefix(baseLower, "zz_generated"):
+		return true
+	case strings.HasSuffix(baseLower, "_generated.go"):
+		return true
+	case strings.Contains(baseLower, "deepcopy"):
+		return true
+	case strings.Contains(baseLower, "conversion") && strings.HasPrefix(baseLower, "zz_"):
+		return true
+	}
+	return false
 }
 
 // sortByFileIDLine sorts hits by file_id ascending, then line ascending.

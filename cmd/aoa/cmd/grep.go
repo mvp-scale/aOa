@@ -37,6 +37,7 @@ var (
 	grepFilesMatch     bool
 	grepColor          string
 	grepClaudeGuidance bool
+	grepScope          string
 )
 
 var grepCmd = &cobra.Command{
@@ -79,6 +80,7 @@ func init() {
 	f.BoolVar(&grepNoFilename, "no-filename", false, "Suppress filename prefix")
 	f.StringVar(&grepColor, "color", "auto", "Color output: auto, always, never")
 	f.BoolVar(&grepClaudeGuidance, "claude-guidance", false, "Print detailed search guidance for AI agents")
+	f.StringVar(&grepScope, "scope", "", "Filter index results by file path substring (e.g. --scope controller/foo)")
 }
 
 func runGrep(cmd *cobra.Command, args []string) error {
@@ -160,6 +162,7 @@ func runGrepIndex(query string, useColor bool) error {
 		AfterContext:       grepAfterCtx,
 		BeforeContext:      grepBeforeCtx,
 		Context:            grepContext,
+		Scope:             grepScope,
 	}
 	if grepCaseInsens {
 		opts.Mode = "case_insensitive"
@@ -236,7 +239,11 @@ func isConnectError(err error) bool {
 
 const claudeGuidanceText = `aOa Search — Quick Reference
 
-  SEARCH:
+  SEARCH MODES:
+    grep symbolName              Index search (no file arg → semantic index)
+    grep pattern file_or_dir     File grep (auto-recurses into directories)
+
+  INDEX SEARCH:
     grep symbolName          Symbol search (OR mode)
     egrep 'funcA|funcB'      Regex alternation
     grep -e pat1 -e pat2     Multi-pattern OR
@@ -244,6 +251,12 @@ const claudeGuidanceText = `aOa Search — Quick Reference
     grep -i pattern          Case-insensitive
     grep -w pattern          Word boundary
     grep -m 10 pattern       Limit to N results
+    grep --scope pkg/foo pat Scope index results to path substring
+
+  DIRECTORY SEARCH:
+    grep pattern pkg/foo/    Auto-recurses — no -r needed
+    egrep 'A|B' src/         Regex in directory
+    grep -rn pattern dir/    Explicit -r also works
 
   INSPECT:
     aoa peek <code>          Full method body (batch: aoa peek a1 b2 c3)

@@ -151,6 +151,9 @@ type SearchOptions struct {
 	Since        int64  // --since: unix timestamp, files modified after
 	Before       int64  // --before: unix timestamp, files modified before
 
+	// L16.4: path scoping for index search
+	Scope string // --scope: filter index results by file path substring
+
 	// L3.6-L3.14: additional GNU grep parity flags
 	ExcludeDirGlob   string // --exclude-dir: directory pattern filter
 	OnlyMatching     bool   // -o: print only the matching part

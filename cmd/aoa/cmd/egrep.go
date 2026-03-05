@@ -34,6 +34,7 @@ var (
 	egrepFilesMatch     bool
 	egrepColor          string
 	egrepClaudeGuidance bool
+	egrepScope          string
 )
 
 var egrepCmd = &cobra.Command{
@@ -74,6 +75,7 @@ func init() {
 	f.BoolVar(&egrepNoFilename, "no-filename", false, "Suppress filename prefix")
 	f.StringVar(&egrepColor, "color", "auto", "Color output: auto, always, never")
 	f.BoolVar(&egrepClaudeGuidance, "claude-guidance", false, "Print detailed search guidance for AI agents")
+	f.StringVar(&egrepScope, "scope", "", "Filter index results by file path substring (e.g. --scope controller/foo)")
 }
 
 func runEgrep(cmd *cobra.Command, args []string) error {
@@ -152,6 +154,7 @@ func runEgrepIndex(pattern string, useColor bool) error {
 		AfterContext:       egrepAfterCtx,
 		BeforeContext:      egrepBeforeCtx,
 		Context:            egrepContext,
+		Scope:             egrepScope,
 	}
 	if egrepCaseInsens {
 		opts.Mode = "case_insensitive"

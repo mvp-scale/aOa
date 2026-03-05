@@ -84,6 +84,19 @@
     "flags": {},
     "expected": [
       {
+        "file": "services/cache/redis_client.py",
+        "line": 52,
+        "symbol": "RedisCache.invalidate(self, key)",
+        "range": [
+          52,
+          65
+        ],
+        "domain": "@caching",
+        "tags": [
+          "invalidate"
+        ]
+      },
+      {
         "file": "services/database/queries.py",
         "line": 107,
         "symbol": "SessionQueries.invalidate_session(self, session_id)",
@@ -95,19 +108,6 @@
         "tags": [
           "invalidate",
           "session"
-        ]
-      },
-      {
-        "file": "services/cache/redis_client.py",
-        "line": 52,
-        "symbol": "RedisCache.invalidate(self, key)",
-        "range": [
-          52,
-          65
-        ],
-        "domain": "@caching",
-        "tags": [
-          "invalidate"
         ]
       },
       {
@@ -1058,6 +1058,20 @@
     },
     "expected": [
       {
+        "file": "lib/utils/logger.py",
+        "line": 30,
+        "symbol": "Logger.log(self, level, message)",
+        "range": [
+          30,
+          45
+        ],
+        "domain": "@logging",
+        "tags": [
+          "level",
+          "logger"
+        ]
+      },
+      {
         "file": "services/api/router.py",
         "line": 112,
         "symbol": "Router.log_request(self, request, response)",
@@ -1081,20 +1095,6 @@
         ],
         "domain": "@database",
         "tags": [
-          "logger"
-        ]
-      },
-      {
-        "file": "lib/utils/logger.py",
-        "line": 30,
-        "symbol": "Logger.log(self, level, message)",
-        "range": [
-          30,
-          45
-        ],
-        "domain": "@logging",
-        "tags": [
-          "level",
           "logger"
         ]
       },

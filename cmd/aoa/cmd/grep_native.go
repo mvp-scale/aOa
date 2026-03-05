@@ -356,11 +356,8 @@ func expandFileArgs(fileArgs []string, oOpts grepOutputOpts) ([]string, bool) {
 			continue
 		}
 		if info.IsDir() {
-			if !oOpts.recursive {
-				fmt.Fprintf(os.Stderr, "grep: %s: Is a directory\n", arg)
-				errOccurred = true
-				continue
-			}
+			// Auto-recurse into directories — aOa is the smarter layer.
+			// GNU grep requires explicit -r; we detect IsDir() and handle it.
 			dirFiles := walkDir(arg, oOpts)
 			files = append(files, dirFiles...)
 		} else {

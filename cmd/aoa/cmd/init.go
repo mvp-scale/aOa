@@ -571,6 +571,11 @@ REQUIRED:
 DO NOT USE the Grep tool or Glob tool — they bypass the semantic index
 and require 5-10x more follow-up calls to reach the same understanding.
 
+Two search modes:
+- ` + "`grep pattern`" + ` (no file arg) → semantic index search via daemon
+- ` + "`grep pattern file_or_dir`" + ` → literal file grep (auto-recurses into directories)
+- ` + "`grep --scope pkg/controller pattern`" + ` → index search filtered to path substring
+
 Result format: ` + "`<peek> file:symbol[start-end]:line @domain #tags`" + `
 - ` + "`aoa peek <code>`" + ` → full method body (batch: ` + "`aoa peek a1 b2 c3`" + `)
 - ` + "`[start-end]`" + ` → use as Read offset/limit when ` + "`--`" + ` appears (symbol too large for peek)
