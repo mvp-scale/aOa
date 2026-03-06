@@ -137,7 +137,9 @@ jobs:
             mkdir -p "$pkg_dir/bin"
             cp "dist/aoa-${suffix}/aoa-${suffix}" "$pkg_dir/bin/aoa"
             chmod +x "$pkg_dir/bin/aoa"
+            cp LICENSE NOTICE "$pkg_dir/"
           done
+          cp LICENSE NOTICE npm/aoa/
 
       - name: Set versions in all package.json files
         run: |

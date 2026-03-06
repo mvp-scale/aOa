@@ -556,4 +556,4 @@ aOa builds on outstanding open-source work:
 
 Apache License 2.0. See [LICENSE](LICENSE) for the full text.
 
-Copyright 2025-2026 [MVP-Scale.com](https://mvp-scale.com)
+Copyright 2025-2026 Corey Gorman / [MVP-Scale.com](https://mvp-scale.com)

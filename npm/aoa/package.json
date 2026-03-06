@@ -10,6 +10,7 @@
     "@mvpscale/aoa-darwin-x64": "0.0.0",
     "@mvpscale/aoa-darwin-arm64": "0.0.0"
   },
+  "author": "Corey Gorman <github@mvp-scale.com> (https://mvp-scale.com)",
   "license": "Apache-2.0",
   "homepage": "https://mvp-scale.com",
   "repository": { "type": "git", "url": "https://github.com/mvp-scale/aOa" },

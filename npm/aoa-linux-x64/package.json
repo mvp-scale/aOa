@@ -4,6 +4,7 @@
   "description": "aOa platform binary (linux-x64)",
   "os": ["linux"],
   "cpu": ["x64"],
+  "author": "Corey Gorman <github@mvp-scale.com> (https://mvp-scale.com)",
   "license": "Apache-2.0",
   "homepage": "https://mvp-scale.com",
   "repository": { "type": "git", "url": "https://github.com/mvp-scale/aOa" },
