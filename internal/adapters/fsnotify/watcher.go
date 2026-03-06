@@ -52,6 +52,11 @@ type Watcher struct {
 	// before any other filtering. Used to ignore paths that aOa itself writes
 	// (e.g. .aoa/, .claude/settings.local.json). Set via Exclude().
 	excludePrefixes []string
+
+	// gitIgnoredPrefixes holds absolute path prefixes derived from .gitignore.
+	// Updated at startup and whenever a .gitignore file changes. Protected by mu
+	// for safe concurrent access from the event loop.
+	gitIgnoredPrefixes []string
 }
 
 // NewWatcher creates a new file system watcher.
@@ -77,15 +82,31 @@ func (w *Watcher) Exclude(prefixes []string) {
 	w.excludePrefixes = append(w.excludePrefixes, prefixes...)
 }
 
-// isExcluded returns true if path matches any registered exclude prefix.
-// Uses string prefix comparison for efficiency (no regex).
+// isExcluded returns true if path matches any registered exclude prefix
+// (static or gitignore-derived). Uses string prefix comparison for efficiency.
 func (w *Watcher) isExcluded(path string) bool {
 	for _, pfx := range w.excludePrefixes {
 		if strings.HasPrefix(path, pfx) {
 			return true
 		}
 	}
+	w.mu.Lock()
+	gitPrefixes := w.gitIgnoredPrefixes
+	w.mu.Unlock()
+	for _, pfx := range gitPrefixes {
+		if strings.HasPrefix(path, pfx) {
+			return true
+		}
+	}
 	return false
+}
+
+// SetGitIgnored replaces the gitignore-derived exclude prefixes.
+// Safe for concurrent use — called from the event loop when .gitignore changes.
+func (w *Watcher) SetGitIgnored(prefixes []string) {
+	w.mu.Lock()
+	w.gitIgnoredPrefixes = prefixes
+	w.mu.Unlock()
 }
 
 // Watch starts monitoring projectPath recursively.

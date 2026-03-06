@@ -215,6 +215,32 @@ func gitTrackedFiles(absRoot string, parser ports.Parser) ([]string, error) {
 	return files, nil
 }
 
+// GitIgnoredDirs returns absolute paths of directories ignored by .gitignore.
+// Uses "git ls-files --others --ignored --exclude-standard --directory" which
+// respects all .gitignore files (root, nested, .git/info/exclude).
+// Returns nil if not in a git repo or git is unavailable.
+func GitIgnoredDirs(absRoot string) []string {
+	cmd := exec.Command("git", "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z")
+	cmd.Dir = absRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	var dirs []string
+	for _, rel := range strings.Split(string(out), "\x00") {
+		rel = strings.TrimSpace(rel)
+		if rel == "" {
+			continue
+		}
+		// Only collect directories (trailing /)
+		if strings.HasSuffix(rel, "/") {
+			dirs = append(dirs, filepath.Join(absRoot, rel))
+		}
+	}
+	return dirs
+}
+
 // walkFiles is the fallback file discovery for non-git projects.
 // Uses the hardcoded skipDirs list.
 func walkFiles(absRoot string, parser ports.Parser) ([]string, error) {

@@ -32,6 +32,14 @@ func (a *App) onFileChanged(absPath string) {
 		return
 	}
 
+	// L15.4: When a .gitignore file changes, refresh the watcher's ignore list.
+	if filepath.Base(absPath) == ".gitignore" {
+		if gitIgnored := GitIgnoredDirs(a.ProjectRoot); len(gitIgnored) > 0 {
+			a.Watcher.SetGitIgnored(gitIgnored)
+		}
+		return
+	}
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 

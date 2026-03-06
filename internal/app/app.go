@@ -689,6 +689,11 @@ func (a *App) Start() error {
 		filepath.Join(a.ProjectRoot, ".aoa") + string(filepath.Separator),
 		filepath.Join(a.ProjectRoot, ".claude", "settings.local.json"),
 	})
+	// L15.4: Respect .gitignore — load ignored directories from git and pass
+	// to the watcher. Re-parsed automatically when .gitignore changes.
+	if gitIgnored := GitIgnoredDirs(a.ProjectRoot); len(gitIgnored) > 0 {
+		a.Watcher.SetGitIgnored(gitIgnored)
+	}
 	// Start file watcher — non-fatal if setup fails
 	if err := a.Watcher.Watch(a.ProjectRoot, a.onFileChanged); err != nil {
 		fmt.Printf("[warning] file watcher unavailable: %v\n", err)
