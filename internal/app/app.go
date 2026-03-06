@@ -2878,6 +2878,7 @@ func (a *App) SetFileInvestigated(relPath string, investigated bool) {
 		delete(a.investigatedFiles, relPath)
 	}
 	a.saveInvestigated()
+	a.bumpRevision()
 }
 
 // ClearInvestigated removes all investigation markers.
@@ -2886,6 +2887,7 @@ func (a *App) ClearInvestigated() {
 	defer a.reconMu.Unlock()
 	a.investigatedFiles = make(map[string]int64)
 	a.saveInvestigated()
+	a.bumpRevision()
 }
 
 // saveInvestigated persists the investigated files to .aoa/recon/investigated.json.

@@ -1929,6 +1929,9 @@ function reconSetInvestigated(relPath, investigated) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ file: relPath, action: investigated ? 'add' : 'remove' })
   }).then(function() {
+    // Invalidate ETag cache so re-fetch gets fresh data after mutation
+    delete etagCache['/api/recon'];
+    delete etagCache['/api/recon/summary'];
     // Re-fetch recon data to update annotations
     safeFetch('/api/recon').then(function(d) {
       cache.recon = d;
@@ -1944,6 +1947,8 @@ function reconClearAllInvestigated() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'clear' })
   }).then(function() {
+    delete etagCache['/api/recon'];
+    delete etagCache['/api/recon/summary'];
     safeFetch('/api/recon').then(function(d) {
       cache.recon = d;
       reconAnnotateInvestigated(d);
