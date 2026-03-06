@@ -1,3 +1,9 @@
+// Copyright 2025-2026 Corey Gorman / MVP-Scale.com
+// Licensed under the Apache License, Version 2.0
+//
+// Patent Pending: The one-bit embedding model and dimensional signal
+// scoring system are Patent Pending. See NOTICE for details.
+
 //go:build core
 
 package recon

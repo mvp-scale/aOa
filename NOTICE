@@ -16,6 +16,21 @@ limitations under the License.
 
 ---
 
+Patent Notice
+
+The one-bit embedding model and dimensional signal scoring system
+implemented in this software are Patent Pending. This includes the
+method of encoding code quality signals as single-bit positions within
+a tiered bitmask vector, and the multi-signal scoring formula that
+combines severity, density, co-occurrence, clustering, and breadth
+signals from per-line bitmask topology.
+
+Use of these methods within this licensed software is granted under
+Apache License 2.0, Section 3 (Grant of Patent License). Use of these
+methods outside this software may require a separate license.
+
+---
+
 A Word from the Founder
 
 MVP-Scale.com is building the world's first SaaS foundry -- a community

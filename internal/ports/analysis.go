@@ -1,3 +1,9 @@
+// Copyright 2025-2026 Corey Gorman / MVP-Scale.com
+// Licensed under the Apache License, Version 2.0
+//
+// Patent Pending: The one-bit embedding model (tiered bitmask vector encoding
+// of code quality signals) is Patent Pending. See NOTICE for details.
+
 package ports
 
 import "math/bits"

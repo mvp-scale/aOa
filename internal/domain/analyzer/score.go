@@ -1,3 +1,9 @@
+// Copyright 2025-2026 Corey Gorman / MVP-Scale.com
+// Licensed under the Apache License, Version 2.0
+//
+// Patent Pending: The SignalScore algorithm (multi-signal scoring from
+// per-line bitmask topology) is Patent Pending. See NOTICE for details.
+
 package analyzer
 
 import (
