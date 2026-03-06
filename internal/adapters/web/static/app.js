@@ -496,6 +496,7 @@ function renderLive() {
   var cm = cache.convMetrics || {};
   var cacheReadTokens = cm.cache_read_tokens || 0;
   if (cacheReadTokens > 0) cacheSavings = calcCacheSavings(cacheReadTokens, rw.model);
+  var sessions = ((cache.sessions || {}).sessions) || [];
   for (var j = 0; j < sessions.length; j++) {
     if (sessions[j].cache_read_tokens) cacheSavings += calcCacheSavings(sessions[j].cache_read_tokens, sessions[j].model || rw.model);
   }

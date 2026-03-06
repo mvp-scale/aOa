@@ -766,9 +766,33 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 	r.LearnerTime = time.Since(start).Seconds()
 
 	if r.FileCount == 0 {
-		logFn("no files in index, skipping cache warm")
-		r.TotalTime = time.Since(totalStart).Seconds()
-		return r
+		// No persisted index — build from project files (git ls-files / walk).
+		logFn("no persisted index, building from project files...")
+		buildStart := time.Now()
+		freshIdx, stats, buildErr := BuildIndex(a.ProjectRoot, a.Parser)
+		if buildErr != nil {
+			logFn(fmt.Sprintf("warning: failed to build index: %v", buildErr))
+			r.TotalTime = time.Since(totalStart).Seconds()
+			return r
+		}
+		a.mu.Lock()
+		a.Index.Tokens = freshIdx.Tokens
+		a.Index.Metadata = freshIdx.Metadata
+		a.Index.Files = freshIdx.Files
+		a.mu.Unlock()
+		a.Engine.Rebuild()
+		r.FileCount = stats.FileCount
+		r.TokenCount = stats.TokenCount
+		logFn(fmt.Sprintf("index built: %d files, %d symbols, %d tokens (%.1fs)",
+			stats.FileCount, stats.SymbolCount, stats.TokenCount, time.Since(buildStart).Seconds()))
+		r.IndexTime += time.Since(buildStart).Seconds()
+
+		// Persist so next startup is instant.
+		if a.Store != nil {
+			if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
+				logFn(fmt.Sprintf("warning: failed to persist index: %v", err))
+			}
+		}
 	}
 
 	// 3. Warm file cache first, then dim scan.
