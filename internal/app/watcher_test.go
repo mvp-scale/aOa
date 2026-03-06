@@ -96,15 +96,14 @@ func TestOnFileChanged_ModifyFile(t *testing.T) {
 	require.NoError(t, err)
 	a.onFileChanged(goFile)
 
-	// Old name gone
+	// Old name gone — trigram fallback may return approximate matches,
+	// but the exact symbol "OldFunc" must not appear.
 	result = a.Engine.Search("oldfunc", ports.SearchOptions{})
-	symbolHits := 0
 	for _, h := range result.Hits {
 		if h.Kind == "symbol" {
-			symbolHits++
+			assert.NotContains(t, h.Symbol, "OldFunc", "OldFunc should be removed from index")
 		}
 	}
-	assert.Equal(t, 0, symbolHits, "OldFunc should be removed")
 
 	// New name present
 	result = a.Engine.Search("newfunc", ports.SearchOptions{})

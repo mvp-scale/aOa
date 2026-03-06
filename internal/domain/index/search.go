@@ -51,6 +51,12 @@ type SearchEngine struct {
 	// Rebuilt in NewSearchEngine() and Rebuild() instead of per-search.
 	fileSpans map[uint32][]symbolSpan
 
+	// symTrigramPosting maps 3-byte trigrams extracted from lowercased
+	// symbol names to the TokenRefs that contain them. Used as a fallback
+	// when exact token lookup returns zero results — ensures the agent
+	// always gets approximate matches instead of empty output.
+	symTrigramPosting map[[3]byte][]ports.TokenRef
+
 	// cache holds pre-read file contents to avoid disk I/O during search.
 	cache *FileCache
 
@@ -144,6 +150,9 @@ func NewSearchEngine(idx *ports.Index, domains map[string]Domain, projectRoot st
 	// Pre-compute file spans for content scanning
 	e.fileSpans = e.buildFileSpans()
 
+	// Build trigram index over symbol names for zero-result fallback
+	e.buildSymTrigrams()
+
 	return e
 }
 
@@ -211,6 +220,9 @@ func (e *SearchEngine) Rebuild() {
 
 	// Rebuild file spans for content scanning
 	e.fileSpans = e.buildFileSpans()
+
+	// Rebuild trigram index for zero-result fallback
+	e.buildSymTrigrams()
 }
 
 // SetObserver registers a callback invoked after every search.
@@ -308,6 +320,20 @@ func (e *SearchEngine) Search(query string, opts ports.SearchOptions) *SearchRes
 	if e.debug {
 		fmt.Printf("[%s] [debug] search phase=symbols query=%q hits=%d elapsed=%v\n",
 			time.Now().Format("15:04:05.000"), query, len(hits), time.Since(tSym))
+	}
+
+	// Trigram fallback: when exact token lookup returns zero symbol hits,
+	// search symbol names by trigram overlap. This ensures the agent always
+	// gets approximate matches instead of empty results that cause tool abandonment.
+	// Skip for: regex (intentional pattern), AND (explicit intersection),
+	// InvertMatch (needs full set).
+	if len(hits) == 0 && len(e.idx.Metadata) > 0 && opts.Mode != "regex" && !opts.AndMode && !opts.InvertMatch {
+		tFallback := time.Now()
+		hits = e.searchTrigramFallback(query, opts, maxCount, allowedFiles)
+		if e.debug {
+			fmt.Printf("[%s] [debug] search phase=trigram-fallback query=%q hits=%d elapsed=%v\n",
+				time.Now().Format("15:04:05.000"), query, len(hits), time.Since(tFallback))
+		}
 	}
 
 	// Invert symbol hits: replace with all symbols NOT in the matched set
@@ -758,6 +784,129 @@ func intersectSortedRefs(a, b []ports.TokenRef) []ports.TokenRef {
 		}
 	}
 	return out
+}
+
+// buildSymTrigrams builds the symbol name trigram index.
+// For each symbol, extracts 3-byte trigrams from the lowercased name
+// and maps them to the symbol's TokenRef.
+func (e *SearchEngine) buildSymTrigrams() {
+	e.symTrigramPosting = make(map[[3]byte][]ports.TokenRef)
+	for ref, sym := range e.idx.Metadata {
+		if sym == nil || len(sym.Name) < 3 {
+			continue
+		}
+		name := strings.ToLower(sym.Name)
+		seen := make(map[[3]byte]bool)
+		for i := 0; i <= len(name)-3; i++ {
+			tri := [3]byte{name[i], name[i+1], name[i+2]}
+			if !seen[tri] {
+				seen[tri] = true
+				e.symTrigramPosting[tri] = append(e.symTrigramPosting[tri], ref)
+			}
+		}
+	}
+}
+
+// searchTrigramFallback finds symbols whose names approximately match the query
+// by trigram overlap. Used when exact token lookup returns zero results.
+//
+// Algorithm:
+//  1. Extract trigrams from the lowercased query.
+//  2. For each trigram, look up the posting list and count hits per ref.
+//  3. Filter to refs matching ≥30% of query trigrams (minimum 1).
+//  4. Sort by match count descending, return top maxCount hits.
+func (e *SearchEngine) searchTrigramFallback(query string, opts ports.SearchOptions, maxCount int, allowedFiles map[uint32]bool) []Hit {
+	if len(e.symTrigramPosting) == 0 {
+		return nil
+	}
+
+	// For AND mode, join comma-separated terms into a single string for trigram extraction
+	q := query
+	if opts.AndMode {
+		q = strings.ReplaceAll(q, ",", " ")
+	}
+	lower := strings.ToLower(q)
+
+	// extractTrigrams is defined in content.go — reuse it
+	trigrams := extractTrigrams(lower)
+	if len(trigrams) == 0 {
+		return nil
+	}
+
+	// Count how many query trigrams each symbol ref matches
+	refCount := make(map[ports.TokenRef]int)
+	for _, tri := range trigrams {
+		for _, ref := range e.symTrigramPosting[tri] {
+			if allowedFiles != nil && !allowedFiles[ref.FileID] {
+				continue
+			}
+			refCount[ref]++
+		}
+	}
+
+	if len(refCount) == 0 {
+		return nil
+	}
+
+	// Minimum threshold: 30% of query trigrams (at least 1)
+	minTrigrams := len(trigrams) * 3 / 10
+	if minTrigrams < 1 {
+		minTrigrams = 1
+	}
+
+	// Collect qualifying matches
+	type scored struct {
+		ref   ports.TokenRef
+		count int
+	}
+	var matches []scored
+	for ref, count := range refCount {
+		if count >= minTrigrams {
+			matches = append(matches, scored{ref, count})
+		}
+	}
+
+	if len(matches) == 0 {
+		return nil
+	}
+
+	// Sort by score descending, then file ID / line for stability
+	sort.SliceStable(matches, func(i, j int) bool {
+		if matches[i].count != matches[j].count {
+			return matches[i].count > matches[j].count
+		}
+		if matches[i].ref.FileID != matches[j].ref.FileID {
+			return matches[i].ref.FileID < matches[j].ref.FileID
+		}
+		return matches[i].ref.Line < matches[j].ref.Line
+	})
+
+	// Convert to hits
+	limit := maxCount
+	if limit <= 0 {
+		limit = 20
+	}
+
+	var hits []Hit
+	for _, m := range matches {
+		sym := e.idx.Metadata[m.ref]
+		if sym == nil {
+			continue
+		}
+		file := e.idx.Files[m.ref.FileID]
+		if file == nil {
+			continue
+		}
+		if allowedFiles == nil && !matchesAllGlobs(file.Path, opts) {
+			continue
+		}
+		hits = append(hits, e.buildHit(m.ref, sym, file))
+		if len(hits) >= limit {
+			break
+		}
+	}
+
+	return hits
 }
 
 // searchRegex compiles a regex and scans symbols.

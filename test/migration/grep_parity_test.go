@@ -224,7 +224,8 @@ func TestGrep_Flag_a_ANDMode(t *testing.T) {
 }
 
 func TestGrep_Flag_a_ANDMode_NoIntersection(t *testing.T) {
-	// grep -a login,expose → no symbol has both
+	// grep -a login,expose → no symbol has both tokens in the AND intersection.
+	// AND mode is explicit intersection — trigram fallback does not fire.
 	engine := loadTestIndex(t)
 	result := engine.Search("login,expose", ports.SearchOptions{
 		AndMode:  true,
