@@ -160,10 +160,24 @@ function fmtDuration(startTs, endTs) {
 function randChoice(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
+var etagCache = {}; // url -> { etag: string, data: any }
 function safeFetch(url) {
-  return fetch(url).then(function(r) {
+  var headers = {};
+  if (etagCache[url]) {
+    headers['If-None-Match'] = etagCache[url].etag;
+  }
+  return fetch(url, { headers: headers }).then(function(r) {
+    if (r.status === 304) {
+      return etagCache[url].data;
+    }
     if (!r.ok) throw new Error(r.status);
-    return r.json();
+    var etag = r.headers.get('ETag');
+    return r.json().then(function(data) {
+      if (etag) {
+        etagCache[url] = { etag: etag, data: data };
+      }
+      return data;
+    });
   });
 }
 function isNearBottom(el) {
@@ -355,7 +369,7 @@ function poll() {
       Promise.all([
         safeFetch('/api/runway').then(function(d) { cache.runway = d; }).catch(function() {}),
         safeFetch('/api/stats').then(function(d) { cache.stats = d; }).catch(function() {}),
-        safeFetch('/api/sessions').then(function(d) { cache.sessions = d; }).catch(function() {}),
+        safeFetch('/api/telemetry').then(function(d) { cache.telemetry = d; }).catch(function() {}),
         safeFetch('/api/conversation/metrics').then(function(d) { cache.convMetrics = d; }).catch(function() {}),
         safeFetch('/api/activity/feed').then(function(d) { cache.activity = d; }).catch(function() {})
       ]).then(function() {
@@ -381,6 +395,7 @@ function poll() {
     case 'arsenal':
       Promise.all([
         safeFetch('/api/sessions').then(function(d) { cache.sessions = d; }).catch(function() {}),
+        safeFetch('/api/telemetry').then(function(d) { cache.telemetry = d; }).catch(function() {}),
         safeFetch('/api/config').then(function(d) { cache.config = d; }).catch(function() {}),
         safeFetch('/api/runway').then(function(d) { cache.runway = d; }).catch(function() {}),
         safeFetch('/api/conversation/metrics').then(function(d) { cache.convMetrics = d; }).catch(function() {}),
@@ -388,11 +403,29 @@ function poll() {
       ]).then(function() { renderArsenal(); });
       break;
     case 'recon':
-      safeFetch('/api/recon').then(function(d) {
-        cache.recon = d;
-        reconAnnotateInvestigated(d);
-        renderRecon();
-      }).catch(function() {});
+      if (!cache.recon || !cache.recon.files_scanned) {
+        // First load or no data yet — fetch full tree
+        safeFetch('/api/recon').then(function(d) {
+          cache.recon = d;
+          reconAnnotateInvestigated(d);
+          renderRecon();
+        }).catch(function() {});
+      } else {
+        // Subsequent polls — summary only (L17.9: avoid re-serializing full tree)
+        safeFetch('/api/recon/summary').then(function(d) {
+          // Merge summary counts into cached data
+          cache.recon.files_scanned = d.files_scanned;
+          cache.recon.total_findings = d.total_findings;
+          cache.recon.critical = d.critical;
+          cache.recon.warnings = d.warnings;
+          cache.recon.info = d.info;
+          cache.recon.clean_files = d.clean_files;
+          cache.recon.tier_counts = d.tier_counts;
+          cache.recon.dim_counts = d.dim_counts;
+          cache.recon.scan_progress = d.scan_progress;
+          renderRecon();
+        }).catch(function() {});
+      }
       break;
   }
 }
@@ -410,21 +443,12 @@ function renderLive() {
   var rw = cache.runway || {};
   var st = cache.stats || {};
 
-  // Compute all-time totals from cached sessions + current session runway
-  var ss = cache.sessions || {};
-  var sessions = ss.sessions || [];
-  var totalReads = 0, totalGuided = 0, totalSaved = 0, totalTimeSavedMs = 0;
-  for (var i = 0; i < sessions.length; i++) {
-    totalReads += (sessions[i].read_count || 0);
-    totalGuided += (sessions[i].guided_read_count || 0);
-    totalSaved += (sessions[i].tokens_saved || 0);
-    totalTimeSavedMs += (sessions[i].time_saved_ms || 0);
-  }
-  // Include current session counts from runway
-  totalReads += (rw.read_count || 0);
-  totalGuided += (rw.guided_read_count || 0);
-  totalSaved += (rw.tokens_saved || 0);
-  totalTimeSavedMs += (rw.time_saved_ms || 0);
+  // L17.4: Lifetime totals from telemetry endpoint (survives session pruning)
+  var tl = (cache.telemetry || {}).lifetime || {};
+  var totalReads = tl.reads || 0;
+  var totalGuided = tl.guided_reads || 0;
+  var totalSaved = tl.tokens_saved || 0;
+  var totalTimeSavedMs = tl.time_saved_ms || 0;
   var ratio = totalReads > 0 ? totalGuided / totalReads : 0;
 
   // Cost: prefer real total_cost_usd from status line, fallback to estimate
@@ -1290,27 +1314,15 @@ function renderArsenal() {
   var sessions = ss.sessions || [];
   var sessionCount = ss.count || sessions.length;
 
-  // Aggregate stats across all sessions
-  var totalSaved = rw.tokens_saved || 0;
-  var totalTimeSavedMs = rw.time_saved_ms || 0;
-  var totalReads = 0, totalGuidedReads = 0, totalPrompts = 0;
-  var totalInputTokens = 0, totalCacheRead = 0;
-
-  for (var i = 0; i < sessions.length; i++) {
-    var s = sessions[i];
-    totalReads += (s.read_count || 0);
-    totalGuidedReads += (s.guided_read_count || 0);
-    totalPrompts += (s.prompt_count || 0);
-    totalSaved += (s.tokens_saved || 0);
-    totalTimeSavedMs += (s.time_saved_ms || 0);
-    totalInputTokens += (s.input_tokens || 0);
-    totalCacheRead += (s.cache_read_tokens || 0);
-  }
-  // Include current session from live metrics
-  totalInputTokens += (cm.input_tokens || 0);
-  totalCacheRead += (cm.cache_read_tokens || 0);
-  totalReads += (rw.read_count || 0);
-  totalGuidedReads += (rw.guided_read_count || 0);
+  // L17.4: Lifetime totals from telemetry endpoint (survives session pruning)
+  var tl = (cache.telemetry || {}).lifetime || {};
+  var totalSaved = tl.tokens_saved || 0;
+  var totalTimeSavedMs = tl.time_saved_ms || 0;
+  var totalReads = tl.reads || 0;
+  var totalGuidedReads = tl.guided_reads || 0;
+  var totalPrompts = tl.prompts || 0;
+  var totalInputTokens = tl.input_tokens || 0;
+  var totalCacheRead = tl.cache_read_tokens || 0;
 
   var overallRatio = totalReads > 0 ? totalGuidedReads / totalReads : 0;
   var totalUnguided = Math.max(0, totalReads - totalGuidedReads);

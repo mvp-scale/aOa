@@ -404,22 +404,25 @@ func TestTelemetry_ProjectScoped(t *testing.T) {
 }
 
 func TestTelemetry_NilDelta(t *testing.T) {
-	// Nil delta should save session but not modify telemetry.
+	// Nil delta should save session but not create a telemetry record.
+	// A subsequent LoadTelemetry will backfill from the session — that's expected.
 	store, _ := newTestStore(t)
 
 	err := store.SaveSessionWithTelemetry("proj-1",
-		&ports.SessionSummary{SessionID: "s1", TokensSaved: 500}, nil)
+		&ports.SessionSummary{SessionID: "s1", TokensSaved: 500, ReadCount: 3}, nil)
 	require.NoError(t, err)
 
 	// Session saved
 	loaded, err := store.LoadSessionSummary("proj-1", "s1")
 	require.NoError(t, err)
 	require.NotNil(t, loaded)
+	assert.Equal(t, int64(500), loaded.TokensSaved)
 
-	// Telemetry unchanged (zero)
+	// LoadTelemetry backfills from the session (no telemetry bucket was created)
 	telem, err := store.LoadTelemetry("proj-1")
 	require.NoError(t, err)
-	assert.Equal(t, int64(0), telem.TokensSaved)
+	assert.Equal(t, int64(500), telem.TokensSaved, "backfill from session data")
+	assert.Equal(t, 3, telem.Reads, "backfill from session data")
 }
 
 func TestTelemetry_NilSummary_Errors(t *testing.T) {

@@ -418,8 +418,10 @@ const defaultStatusLineConf = `# aOa Status Line Configuration
 # Segments are separated by │ on the status line.
 
 # ─── active segments ─────────────────────────────────────────────
-tokens_saved
-time_saved_range
+lifetime_saved
+lifetime_time_saved
+#tokens_saved
+#time_saved_range
 #burn_rate
 #cost_saved
 #cost
@@ -429,15 +431,20 @@ model
 
 # ─── all available segments ──────────────────────────────────────
 #
-#   Live (aOa session metrics)
-#     tokens_saved        Tokens saved from guided reads         ↓93k
-#     time_saved_range    Time saved estimate (low-high)         ⚡5m-52m saved
-#     cost_saved          Est. dollars saved from guided reads   $0.42 saved
+#   Lifetime (across all sessions)
+#     lifetime_saved      Total tokens saved (all sessions)      ↓15.0M lifetime
+#     lifetime_time_saved Total time saved (all sessions)        5h20m lifetime
+#     lifetime_sessions   Number of sessions tracked             11 sessions
+#
+#   Session (current session only)
+#     tokens_saved        Tokens saved this session              ↓93k
+#     time_saved_range    Time saved this session                2m saved
+#     cost_saved          Est. dollars saved this session        $0.42 saved
 #     burn_rate           Context burn rate                      🔥1.5k/min
-#     guided_ratio        Guided read percentage                 guided 70%
-#     shadow_saved        Shadow engine savings                  shadow ↓5k
-#     cache_hit_rate      Prompt cache hit rate                  cache 85%
-#     cache_saved         Cache read dollar savings              cache $1.20
+#     guided_ratio        Guided read percentage                 70% guided
+#     shadow_saved        Shadow engine savings                  ↓5k shadow
+#     cache_hit_rate      Prompt cache hit rate                  85% cache
+#     cache_saved         Cache read dollar savings              $1.20 cache
 #     read_count          Guided/total reads                     8/15 reads
 #     autotune            Autotune progress                      23/50
 #

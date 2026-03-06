@@ -296,18 +296,36 @@ func runDaemonStop(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("shutdown request failed: %w", err)
 		}
 
-		// Verify the daemon actually stopped.
+		// Wait for the socket to stop responding.
 		for i := 0; i < 30; i++ {
 			if !client.Ping() {
-				fmt.Printf("⚡ daemon stopped — aOa %s\n", version.String())
-				return nil
+				break
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
 
-		return fmt.Errorf("daemon did not stop within 3 seconds\n" +
-			"  → find the process:  ps aux | grep 'aoa daemon'\n" +
-			"  → kill it:           kill <PID>")
+		// Also wait for the process to actually exit (flush, cleanup).
+		pid, pidErr := readPID(pidPath)
+		if pidErr == nil && processAlive(pid) {
+			for i := 0; i < 30; i++ {
+				if !processAlive(pid) {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			// Still alive after 3s — force kill.
+			if processAlive(pid) {
+				syscall.Kill(pid, syscall.SIGKILL)
+				time.Sleep(200 * time.Millisecond)
+			}
+		}
+
+		// Clean up PID and socket files.
+		os.Remove(pidPath)
+		os.Remove(sockPath)
+
+		fmt.Printf("⚡ daemon stopped — aOa %s\n", version.String())
+		return nil
 	}
 
 	// Try legacy socket path (pre-UID) in case daemon was started before upgrade.

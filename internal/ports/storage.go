@@ -41,6 +41,18 @@ type Storage interface {
 	// ListSessionSummaries returns all session summaries for a project.
 	// Returns nil if no summaries exist.
 	ListSessionSummaries(projectID string) ([]*SessionSummary, error)
+
+	// SaveSessionWithTelemetry atomically saves a session summary and increments
+	// lifetime telemetry counters in a single transaction. The delta contains only
+	// the increment since last flush — callers must track what was previously flushed.
+	// If delta is nil, only the session is saved (telemetry unchanged).
+	SaveSessionWithTelemetry(projectID string, summary *SessionSummary, delta *ProjectTelemetry) error
+
+	// LoadTelemetry retrieves lifetime telemetry for a project.
+	// If no telemetry record exists but sessions do, performs a one-time backfill
+	// by summing all existing session summaries. Returns a zero-value struct (not nil)
+	// for projects with no data.
+	LoadTelemetry(projectID string) (*ProjectTelemetry, error)
 }
 
 // Index represents the searchable code index
@@ -113,6 +125,24 @@ type DomainMeta struct {
 	HitsLastCycle float64 `json:"hits_last_cycle"` // Snapshot from previous cycle (for stale detection)
 	LastHitAt     uint32  `json:"last_hit_at"`     // Prompt count when domain was last hit
 	CreatedAt     int64   `json:"created_at"`      // Unix timestamp of domain creation
+}
+
+// ProjectTelemetry holds lifetime counters that survive session pruning.
+// These are incremented atomically with each session save via deltas.
+// CostUSD is NOT stored — raw token totals are stored and the dashboard
+// computes dollar amounts (keeps pricing logic in one place).
+type ProjectTelemetry struct {
+	TokensSaved     int64 `json:"tokens_saved"`
+	TimeSavedMs     int64 `json:"time_saved_ms"`
+	Reads           int   `json:"reads"`
+	GuidedReads     int   `json:"guided_reads"`
+	Sessions        int   `json:"sessions"`
+	Prompts         int   `json:"prompts"`
+	InputTokens     int64 `json:"input_tokens"`
+	OutputTokens    int64 `json:"output_tokens"`
+	CacheReadTokens int64 `json:"cache_read_tokens"`
+	ShadowSaved     int64 `json:"shadow_saved"`
+	FirstSessionAt  int64 `json:"first_session_at"`
 }
 
 // SessionSummary holds aggregated metrics for a single Claude session.

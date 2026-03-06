@@ -29,6 +29,7 @@ var (
 	bucketLearner    = []byte("learner")
 	bucketSessions   = []byte("sessions")
 	bucketDimensions = []byte("dimensions")
+	bucketTelemetry  = []byte("telemetry")
 	keyTokens        = []byte("tokens")
 	keyMetadata      = []byte("metadata")
 	keyFiles         = []byte("files")

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"time"
 
@@ -201,6 +202,272 @@ func (s *Server) serveDimensionalResults(w http.ResponseWriter, dimResults map[s
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// handleReconSummary returns aggregate counts only — no tree, no findings (L17.8).
+// GET /api/recon/summary
+func (s *Server) handleReconSummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.queries == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{"files_scanned": 0})
+		return
+	}
+
+	dimResults := s.queries.DimensionalResults()
+	if dimResults == nil || len(dimResults) == 0 {
+		sp := s.queries.DimScanProgress()
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"files_scanned": 0,
+			"scan_progress": &sp,
+		})
+		return
+	}
+
+	sevNames := [4]string{"info", "warning", "warning", "critical"}
+	summary := struct {
+		FilesScanned  int            `json:"files_scanned"`
+		TotalFindings int            `json:"total_findings"`
+		Critical      int            `json:"critical"`
+		Warnings      int            `json:"warnings"`
+		Info          int            `json:"info"`
+		CleanFiles    int            `json:"clean_files"`
+		TierCounts    map[string]int `json:"tier_counts"`
+		DimCounts     map[string]int `json:"dim_counts"`
+		ScanProgress  *socket.DimScanProgress `json:"scan_progress"`
+	}{
+		TierCounts: make(map[string]int),
+		DimCounts:  make(map[string]int),
+	}
+
+	for _, fa := range dimResults {
+		summary.FilesScanned++
+		hasFindings := false
+		for _, method := range fa.Methods {
+			if method.Score < MinMethodScore {
+				continue
+			}
+			for _, f := range method.Findings {
+				hasFindings = true
+				summary.TotalFindings++
+				sevStr := "info"
+				if f.Severity >= 0 && f.Severity < len(sevNames) {
+					sevStr = sevNames[f.Severity]
+				}
+				tierID, dimID := inferTierDim(f.RuleID)
+				summary.TierCounts[tierID]++
+				summary.DimCounts[dimID]++
+				switch sevStr {
+				case "critical":
+					summary.Critical++
+				case "warning":
+					summary.Warnings++
+				case "info":
+					summary.Info++
+				}
+			}
+		}
+		if !hasFindings {
+			summary.CleanFiles++
+		}
+	}
+
+	sp := s.queries.DimScanProgress()
+	summary.ScanProgress = &sp
+	json.NewEncoder(w).Encode(summary)
+}
+
+// reconTreeEntry is one directory or file in the tree response.
+type reconTreeEntry struct {
+	Name         string `json:"name"`
+	IsDir        bool   `json:"is_dir"`
+	ChildCount   int    `json:"child_count,omitempty"`   // dirs: number of children
+	FindingCount int    `json:"finding_count"`
+	Language     string `json:"language,omitempty"`       // files only
+}
+
+// handleReconTree returns one level of the directory tree with finding counts (L17.8).
+// GET /api/recon/tree?dir=.&depth=1
+func (s *Server) handleReconTree(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.queries == nil {
+		json.NewEncoder(w).Encode([]reconTreeEntry{})
+		return
+	}
+
+	dimResults := s.queries.DimensionalResults()
+	if dimResults == nil {
+		json.NewEncoder(w).Encode([]reconTreeEntry{})
+		return
+	}
+
+	queryDir := r.URL.Query().Get("dir")
+	if queryDir == "" {
+		queryDir = "."
+	}
+
+	// Collect immediate children of queryDir
+	type childInfo struct {
+		isDir        bool
+		findingCount int
+		childCount   int
+		language     string
+	}
+	children := make(map[string]*childInfo)
+
+	sevNames := [4]string{"info", "warning", "warning", "critical"}
+	_ = sevNames // used in counting below
+
+	for relPath, fa := range dimResults {
+		dir := filepath.Dir(relPath)
+		base := filepath.Base(relPath)
+
+		// Count findings for this file
+		fileFindingCount := 0
+		for _, method := range fa.Methods {
+			if method.Score < MinMethodScore {
+				continue
+			}
+			fileFindingCount += len(method.Findings)
+		}
+
+		if dir == queryDir {
+			// Direct child file
+			children[base] = &childInfo{
+				isDir:        false,
+				findingCount: fileFindingCount,
+				language:     fa.Language,
+			}
+		} else {
+			// Check if this file is under a subdirectory of queryDir
+			var subDir string
+			if queryDir == "." {
+				// Top-level: first path component
+				parts := splitPath(relPath)
+				if len(parts) > 1 {
+					subDir = parts[0]
+				}
+			} else if len(dir) > len(queryDir) && dir[:len(queryDir)] == queryDir {
+				rest := dir[len(queryDir):]
+				if len(rest) > 0 && rest[0] == '/' {
+					rest = rest[1:]
+				}
+				parts := splitPath(rest)
+				if len(parts) > 0 {
+					subDir = parts[0]
+				}
+			}
+			if subDir != "" {
+				ci, ok := children[subDir]
+				if !ok {
+					ci = &childInfo{isDir: true}
+					children[subDir] = ci
+				}
+				ci.findingCount += fileFindingCount
+				ci.childCount++
+			}
+		}
+	}
+
+	entries := make([]reconTreeEntry, 0, len(children))
+	for name, ci := range children {
+		entries = append(entries, reconTreeEntry{
+			Name:         name,
+			IsDir:        ci.isDir,
+			ChildCount:   ci.childCount,
+			FindingCount: ci.findingCount,
+			Language:     ci.language,
+		})
+	}
+
+	// Sort: dirs first, then alphabetically
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].IsDir != entries[j].IsDir {
+			return entries[i].IsDir
+		}
+		return entries[i].Name < entries[j].Name
+	})
+
+	json.NewEncoder(w).Encode(entries)
+}
+
+// handleReconFindings returns findings for a single file (L17.8).
+// GET /api/recon/findings?file=relative/path.go
+func (s *Server) handleReconFindings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	filePath := r.URL.Query().Get("file")
+	if filePath == "" {
+		http.Error(w, `{"error":"file parameter required"}`, http.StatusBadRequest)
+		return
+	}
+
+	dimResults := s.queries.DimensionalResults()
+	if dimResults == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{"findings": []reconFinding{}})
+		return
+	}
+
+	fa, ok := dimResults[filePath]
+	if !ok {
+		json.NewEncoder(w).Encode(map[string]interface{}{"findings": []reconFinding{}})
+		return
+	}
+
+	sevNames := [4]string{"info", "warning", "warning", "critical"}
+	var findings []reconFinding
+	for _, method := range fa.Methods {
+		if method.Score < MinMethodScore {
+			continue
+		}
+		for _, f := range method.Findings {
+			sevStr := "info"
+			if f.Severity >= 0 && f.Severity < len(sevNames) {
+				sevStr = sevNames[f.Severity]
+			}
+			tierID, dimID := inferTierDim(f.RuleID)
+			findings = append(findings, reconFinding{
+				Symbol:   method.Name,
+				DimID:    dimID,
+				TierID:   tierID,
+				ID:       f.RuleID,
+				Label:    inferLabel(f.RuleID),
+				Severity: sevStr,
+				Line:     f.Line,
+			})
+		}
+	}
+
+	symbols := make([]string, len(fa.Methods))
+	for i, m := range fa.Methods {
+		symbols[i] = m.Name
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"file":     filePath,
+		"language": fa.Language,
+		"symbols":  symbols,
+		"findings": findings,
+	})
+}
+
+// splitPath splits a path into its components.
+func splitPath(p string) []string {
+	var parts []string
+	for p != "" && p != "." {
+		dir, base := filepath.Split(p)
+		if base != "" {
+			parts = append([]string{base}, parts...)
+		}
+		if dir == "" || dir == p {
+			break
+		}
+		p = dir[:len(dir)-1] // strip trailing /
+	}
+	return parts
 }
 
 // handleSourceLine returns source lines from the in-memory file cache.

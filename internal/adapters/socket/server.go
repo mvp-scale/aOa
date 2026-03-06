@@ -42,6 +42,7 @@ type AppQueries interface {
 	UsageQuota() *UsageQuotaResult
 	DimScanProgress() DimScanProgress
 	GenerateHints(query string, opts ports.SearchOptions) []string
+	TelemetrySnapshot() TelemetryResult
 }
 
 // Server is the daemon that listens on a Unix socket and serves search requests.

@@ -65,6 +65,11 @@ type StatusData struct {
 	CostSavedUSD    float64 `json:"cost_saved_usd"`   // est. cost saved from guided reads
 	TurnCount       int     `json:"turn_count"`
 
+	// L17.5: Lifetime totals (survive session pruning)
+	LifetimeTokensSaved int64 `json:"lifetime_tokens_saved"`
+	LifetimeTimeSavedMs int64 `json:"lifetime_time_saved_ms"`
+	LifetimeSessions    int   `json:"lifetime_sessions"`
+
 	Autotune *Tune `json:"autotune,omitempty"`
 }
 
@@ -107,6 +112,11 @@ type Metrics struct {
 	UserChars       int64
 	AssistantChars  int64
 	ToolCount       int
+
+	// L17.5: Lifetime totals
+	LifetimeTokensSaved int64
+	LifetimeTimeSavedMs int64
+	LifetimeSessions    int
 }
 
 // Generate produces a StatusData from current learner state and runtime metrics.
@@ -192,6 +202,11 @@ func Generate(state *ports.LearnerState, autotune *ports.AutotuneResult, m Metri
 		CacheSavedUSD:   m.CacheSavedUSD,
 		CostSavedUSD:    m.CostSavedUSD,
 		TurnCount:       m.TurnCount,
+
+		// L17.5: Lifetime
+		LifetimeTokensSaved: m.LifetimeTokensSaved,
+		LifetimeTimeSavedMs: m.LifetimeTimeSavedMs,
+		LifetimeSessions:    m.LifetimeSessions,
 	}
 	if autotune != nil {
 		sd.Autotune = &Tune{

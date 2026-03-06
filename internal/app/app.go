@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/corey/aoa/atlas"
@@ -225,6 +226,10 @@ type App struct {
 	dimCache     map[string]*socket.DimensionalFileResult
 	dimCacheSet  bool // true once loaded (distinguishes nil "no data" from "not loaded")
 
+	// L17.6: Global state revision counter (atomic — bumped on every mutation,
+	// read by ETag middleware without locking)
+	revision atomic.Uint64
+
 	// Dim scan progress (atomic — read from HTTP handlers without locking)
 	dimScanTotal   int64 // total files to scan
 	dimScanDone    int64 // files completed so far
@@ -288,6 +293,18 @@ type App struct {
 	currentSessionStart int64  // unix timestamp of session start
 	sessionPrompts      int    // prompt count within current session
 
+	// L17.2: Delta tracking for telemetry — stores values at last flush
+	// so we can compute the increment (delta) on each subsequent flush.
+	lastFlushedTokensSaved     int64
+	lastFlushedTimeSavedMs     int64
+	lastFlushedReads           int
+	lastFlushedGuidedReads     int
+	lastFlushedPrompts         int
+	lastFlushedInputTokens     int
+	lastFlushedOutputTokens    int
+	lastFlushedCacheReadTokens int
+	sessionIsNew               bool // true if this session hasn't been flushed yet
+
 	// Context snapshot ring buffer (from status line hook via .aoa/context.jsonl)
 	ctxSnapshots [5]ContextSnapshot // ring buffer of last 5 snapshots
 	ctxSnapHead  int                // write index
@@ -324,6 +341,14 @@ type Config struct {
 
 // debugf logs a timestamped debug message when debug mode is enabled.
 // No-op when debug is off. Safe to call from any goroutine.
+// Revision returns the current global state revision (L17.6).
+// Used by the web server's ETag middleware.
+func (a *App) Revision() uint64 { return a.revision.Load() }
+
+// bumpRevision increments the global state revision counter.
+// Call after any state mutation that should invalidate cached responses.
+func (a *App) bumpRevision() { a.revision.Add(1) }
+
 func (a *App) debugf(format string, args ...interface{}) {
 	if !a.debug {
 		return
@@ -445,6 +470,7 @@ func New(cfg Config) (*App, error) {
 
 	// Create HTTP server for web dashboard (pass file cache for source line serving)
 	a.WebServer = web.NewServer(a, idx, cache, paths.PortFile)
+	a.WebServer.SetRevisionSource(a.Revision)
 
 	// Wire search observer: search results → learning signals
 	engine.SetObserver(a.searchObserver)
@@ -535,6 +561,7 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 	a.debugf("search query=%q hits=%d elapsed=%v", query, len(result.Hits), elapsed)
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.bumpRevision() // L17.6: invalidate ETag cache
 
 	a.promptN++
 
@@ -842,6 +869,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 	a.debugf("session-event kind=%d", ev.Kind)
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.bumpRevision() // L17.6: invalidate ETag cache
 
 	// Track current model from every event
 	if ev.Model != "" {
@@ -1433,6 +1461,19 @@ func (a *App) writeStatus(autotune *ports.AutotuneResult) {
 		ToolCount:       totalTools,
 	}
 
+	// L17.5: Load lifetime telemetry for status line
+	if a.Store != nil {
+		if telem, err := a.Store.LoadTelemetry(a.ProjectID); err == nil && telem != nil {
+			// Add in-flight delta to persisted lifetime
+			m.LifetimeTokensSaved = telem.TokensSaved + (a.counterfactTokensSaved - a.lastFlushedTokensSaved)
+			m.LifetimeTimeSavedMs = telem.TimeSavedMs + (a.sessionTimeSavedMs - a.lastFlushedTimeSavedMs)
+			m.LifetimeSessions = telem.Sessions
+			if a.sessionIsNew {
+				m.LifetimeSessions++
+			}
+		}
+	}
+
 	data := status.Generate(a.Learner.State(), a.lastAutotune, m)
 	_ = status.WriteJSON(a.statusLinePath, data)
 }
@@ -1690,6 +1731,65 @@ func (a *App) SessionList() socket.SessionListResult {
 	}
 }
 
+// TelemetrySnapshot returns lifetime + current session telemetry (L17.3).
+// Lifetime = persisted totals + in-flight delta (unflushed session counters).
+// Session = current session counters only.
+// Implements socket.AppQueries.
+func (a *App) TelemetrySnapshot() socket.TelemetryResult {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	var lifetime socket.TelemetryCounters
+	var session socket.TelemetryCounters
+
+	// Current session counters
+	session = socket.TelemetryCounters{
+		TokensSaved:     a.counterfactTokensSaved,
+		TimeSavedMs:     a.sessionTimeSavedMs,
+		Reads:           a.sessionReadCount,
+		GuidedReads:     a.sessionGuidedCount,
+		Sessions:        1,
+		Prompts:         a.sessionPrompts,
+		InputTokens:     int64(a.sessionMetrics.InputTokens),
+		OutputTokens:    int64(a.sessionMetrics.OutputTokens),
+		CacheReadTokens: int64(a.sessionMetrics.CacheReadTokens),
+	}
+
+	// Load persisted lifetime telemetry
+	if a.Store != nil {
+		telem, err := a.Store.LoadTelemetry(a.ProjectID)
+		if err == nil && telem != nil {
+			lifetime = socket.TelemetryCounters{
+				TokensSaved:     telem.TokensSaved,
+				TimeSavedMs:     telem.TimeSavedMs,
+				Reads:           telem.Reads,
+				GuidedReads:     telem.GuidedReads,
+				Sessions:        telem.Sessions,
+				Prompts:         telem.Prompts,
+				InputTokens:     telem.InputTokens,
+				OutputTokens:    telem.OutputTokens,
+				CacheReadTokens: telem.CacheReadTokens,
+				ShadowSaved:     telem.ShadowSaved,
+			}
+		}
+
+		// Add in-flight delta: current counters minus what was last flushed
+		lifetime.TokensSaved += a.counterfactTokensSaved - a.lastFlushedTokensSaved
+		lifetime.TimeSavedMs += a.sessionTimeSavedMs - a.lastFlushedTimeSavedMs
+		lifetime.Reads += a.sessionReadCount - a.lastFlushedReads
+		lifetime.GuidedReads += a.sessionGuidedCount - a.lastFlushedGuidedReads
+		lifetime.Prompts += a.sessionPrompts - a.lastFlushedPrompts
+		lifetime.InputTokens += int64(a.sessionMetrics.InputTokens - a.lastFlushedInputTokens)
+		lifetime.OutputTokens += int64(a.sessionMetrics.OutputTokens - a.lastFlushedOutputTokens)
+		lifetime.CacheReadTokens += int64(a.sessionMetrics.CacheReadTokens - a.lastFlushedCacheReadTokens)
+	}
+
+	return socket.TelemetryResult{
+		Lifetime: lifetime,
+		Session:  session,
+	}
+}
+
 // ProjectConfig returns project metadata and runtime configuration.
 // Implements socket.AppQueries.
 func (a *App) ProjectConfig() socket.ProjectConfigResult {
@@ -1901,7 +2001,7 @@ func (a *App) ConversationTurns() socket.ConversationFeedResult {
 	}
 
 	// Start from most recent (convHead - 1) and walk backwards
-	for i := 0; i < a.convCount && i < 20; i++ {
+	for i := 0; i < a.convCount && i < 50; i++ {
 		idx := (a.convHead - 1 - i + 50) % 50
 		turn := a.convRing[idx]
 		var actions []socket.TurnActionResult
@@ -2221,12 +2321,32 @@ func (a *App) handleSessionBoundary(ev ports.SessionEvent) {
 			a.counterfactTokensSaved = existing.TokensSaved
 			a.sessionTimeSavedMs = existing.TimeSavedMs
 			a.currentSessionStart = existing.StartTime
+			// L17.2: Restore lastFlushed so next flush produces correct delta
+			a.lastFlushedTokensSaved = existing.TokensSaved
+			a.lastFlushedTimeSavedMs = existing.TimeSavedMs
+			a.lastFlushedReads = existing.ReadCount
+			a.lastFlushedGuidedReads = existing.GuidedReadCount
+			a.lastFlushedPrompts = existing.PromptCount
+			a.lastFlushedInputTokens = existing.InputTokens
+			a.lastFlushedOutputTokens = existing.OutputTokens
+			a.lastFlushedCacheReadTokens = existing.CacheReadTokens
+			a.sessionIsNew = false
 		} else {
 			a.sessionPrompts = 0
 			a.sessionReadCount = 0
 			a.sessionGuidedCount = 0
 			a.sessionTimeSavedMs = 0
 			a.currentSessionStart = ev.Timestamp.Unix()
+			// L17.2: New session — zero lastFlushed, mark for Sessions increment
+			a.lastFlushedTokensSaved = 0
+			a.lastFlushedTimeSavedMs = 0
+			a.lastFlushedReads = 0
+			a.lastFlushedGuidedReads = 0
+			a.lastFlushedPrompts = 0
+			a.lastFlushedInputTokens = 0
+			a.lastFlushedOutputTokens = 0
+			a.lastFlushedCacheReadTokens = 0
+			a.sessionIsNew = true
 		}
 	} else {
 		a.sessionPrompts = 0
@@ -2234,13 +2354,15 @@ func (a *App) handleSessionBoundary(ev ports.SessionEvent) {
 		a.sessionGuidedCount = 0
 		a.sessionTimeSavedMs = 0
 		a.currentSessionStart = ev.Timestamp.Unix()
+		a.sessionIsNew = true
 	}
 	a.currentSessionID = ev.SessionID
 	// L9.1: Reset content meter on session boundary
 	a.meter.Reset()
 }
 
-// flushSessionSummary builds a SessionSummary from current counters and persists it.
+// flushSessionSummary builds a SessionSummary from current counters and persists it
+// atomically with a telemetry delta increment (L17.2).
 // Must be called with a.mu held.
 func (a *App) flushSessionSummary() {
 	if a.currentSessionID == "" || a.Store == nil {
@@ -2267,7 +2389,35 @@ func (a *App) flushSessionSummary() {
 		Model:            a.currentModel,
 		ModelTokens:      a.sessionMetrics.ModelTokens,
 	}
-	_ = a.Store.SaveSessionSummary(a.ProjectID, summary)
+
+	// Compute telemetry delta (diff since last flush)
+	delta := &ports.ProjectTelemetry{
+		TokensSaved:     a.counterfactTokensSaved - a.lastFlushedTokensSaved,
+		TimeSavedMs:     a.sessionTimeSavedMs - a.lastFlushedTimeSavedMs,
+		Reads:           a.sessionReadCount - a.lastFlushedReads,
+		GuidedReads:     a.sessionGuidedCount - a.lastFlushedGuidedReads,
+		Prompts:         a.sessionPrompts - a.lastFlushedPrompts,
+		InputTokens:     int64(a.sessionMetrics.InputTokens - a.lastFlushedInputTokens),
+		OutputTokens:    int64(a.sessionMetrics.OutputTokens - a.lastFlushedOutputTokens),
+		CacheReadTokens: int64(a.sessionMetrics.CacheReadTokens - a.lastFlushedCacheReadTokens),
+	}
+	if a.sessionIsNew {
+		delta.Sessions = 1
+		delta.FirstSessionAt = a.currentSessionStart
+		a.sessionIsNew = false
+	}
+
+	_ = a.Store.SaveSessionWithTelemetry(a.ProjectID, summary, delta)
+
+	// Update lastFlushed to current values
+	a.lastFlushedTokensSaved = a.counterfactTokensSaved
+	a.lastFlushedTimeSavedMs = a.sessionTimeSavedMs
+	a.lastFlushedReads = a.sessionReadCount
+	a.lastFlushedGuidedReads = a.sessionGuidedCount
+	a.lastFlushedPrompts = a.sessionPrompts
+	a.lastFlushedInputTokens = a.sessionMetrics.InputTokens
+	a.lastFlushedOutputTokens = a.sessionMetrics.OutputTokens
+	a.lastFlushedCacheReadTokens = a.sessionMetrics.CacheReadTokens
 }
 
 // turnFromBuilder converts a turnBuilder into a ConversationTurn.
@@ -2814,6 +2964,17 @@ func (a *App) WipeProject() error {
 	a.currentSessionID = ""
 	a.currentSessionStart = 0
 	a.sessionPrompts = 0
+
+	// Reset telemetry delta tracking (L17.2)
+	a.lastFlushedTokensSaved = 0
+	a.lastFlushedTimeSavedMs = 0
+	a.lastFlushedReads = 0
+	a.lastFlushedGuidedReads = 0
+	a.lastFlushedPrompts = 0
+	a.lastFlushedInputTokens = 0
+	a.lastFlushedOutputTokens = 0
+	a.lastFlushedCacheReadTokens = 0
+	a.sessionIsNew = false
 
 	// Reset dimensional cache
 	a.reconMu.Lock()

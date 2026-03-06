@@ -344,6 +344,28 @@ type SessionListResult struct {
 	Count    int                    `json:"count"`
 }
 
+// TelemetryResult is the result of a telemetry snapshot request (L17.3).
+// Lifetime includes persisted totals plus in-flight session delta.
+// Session contains only the current session's counters.
+type TelemetryResult struct {
+	Lifetime TelemetryCounters `json:"lifetime"`
+	Session  TelemetryCounters `json:"session"`
+}
+
+// TelemetryCounters holds a set of metric counters for either lifetime or session scope.
+type TelemetryCounters struct {
+	TokensSaved     int64 `json:"tokens_saved"`
+	TimeSavedMs     int64 `json:"time_saved_ms"`
+	Reads           int   `json:"reads"`
+	GuidedReads     int   `json:"guided_reads"`
+	Sessions        int   `json:"sessions"`
+	Prompts         int   `json:"prompts"`
+	InputTokens     int64 `json:"input_tokens"`
+	OutputTokens    int64 `json:"output_tokens"`
+	CacheReadTokens int64 `json:"cache_read_tokens"`
+	ShadowSaved     int64 `json:"shadow_saved"`
+}
+
 // ProjectConfigResult is the result of a config request.
 type ProjectConfigResult struct {
 	ProjectRoot   string  `json:"project_root"`

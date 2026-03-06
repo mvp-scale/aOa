@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -29,7 +30,8 @@ type Server struct {
 	started   time.Time
 	stopOnce  sync.Once
 
-	portFilePath string // .aoa/http.port
+	portFilePath string          // .aoa/http.port
+	revisionFn   func() uint64  // L17.6: returns current global state revision
 }
 
 // NewServer creates an HTTP server for the dashboard.
@@ -42,6 +44,12 @@ func NewServer(queries socket.AppQueries, idx *ports.Index, lineCache ports.Line
 		lineCache:    lineCache,
 		portFilePath: portFilePath,
 	}
+}
+
+// SetRevisionSource configures the global state revision function for ETag gating (L17.6).
+// If not set, ETag middleware is a no-op.
+func (s *Server) SetRevisionSource(fn func() uint64) {
+	s.revisionFn = fn
 }
 
 // DefaultPort computes a project-specific port: 19000 + (hash(abs_path) % 1000).
@@ -75,24 +83,28 @@ func (s *Server) Start(preferredPort int) error {
 	}
 	mux.Handle("GET /", http.FileServerFS(staticSub))
 
-	mux.HandleFunc("GET /api/health", s.handleHealth)
-	mux.HandleFunc("GET /api/stats", s.handleStats)
-	mux.HandleFunc("GET /api/domains", s.handleDomains)
-	mux.HandleFunc("GET /api/bigrams", s.handleBigrams)
-	mux.HandleFunc("GET /api/conversation/metrics", s.handleConvMetrics)
-	mux.HandleFunc("GET /api/conversation/tools", s.handleConvTools)
-	mux.HandleFunc("GET /api/conversation/feed", s.handleConvFeed)
-	mux.HandleFunc("GET /api/top-keywords", s.handleTopKeywords)
-	mux.HandleFunc("GET /api/top-terms", s.handleTopTerms)
-	mux.HandleFunc("GET /api/top-files", s.handleTopFiles)
-	mux.HandleFunc("GET /api/activity/feed", s.handleActivityFeed)
-	mux.HandleFunc("GET /api/runway", s.handleRunway)
-	mux.HandleFunc("GET /api/sessions", s.handleSessions)
-	mux.HandleFunc("GET /api/config", s.handleConfig)
-	mux.HandleFunc("GET /api/recon", s.handleRecon)
-	mux.HandleFunc("POST /api/recon-investigate", s.handleReconInvestigate)
-	mux.HandleFunc("GET /api/source-line", s.handleSourceLine)
-	mux.HandleFunc("GET /api/usage", s.handleUsage)
+	mux.HandleFunc("GET /api/telemetry", s.withETag(s.handleTelemetry))
+	mux.HandleFunc("GET /api/health", s.handleHealth) // no ETag — liveness check
+	mux.HandleFunc("GET /api/stats", s.withETag(s.handleStats))
+	mux.HandleFunc("GET /api/domains", s.withETag(s.handleDomains))
+	mux.HandleFunc("GET /api/bigrams", s.withETag(s.handleBigrams))
+	mux.HandleFunc("GET /api/conversation/metrics", s.withETag(s.handleConvMetrics))
+	mux.HandleFunc("GET /api/conversation/tools", s.withETag(s.handleConvTools))
+	mux.HandleFunc("GET /api/conversation/feed", s.withETag(s.handleConvFeed))
+	mux.HandleFunc("GET /api/top-keywords", s.withETag(s.handleTopKeywords))
+	mux.HandleFunc("GET /api/top-terms", s.withETag(s.handleTopTerms))
+	mux.HandleFunc("GET /api/top-files", s.withETag(s.handleTopFiles))
+	mux.HandleFunc("GET /api/activity/feed", s.withETag(s.handleActivityFeed))
+	mux.HandleFunc("GET /api/runway", s.withETag(s.handleRunway))
+	mux.HandleFunc("GET /api/sessions", s.withETag(s.handleSessions))
+	mux.HandleFunc("GET /api/config", s.withETag(s.handleConfig))
+	mux.HandleFunc("GET /api/recon", s.withETag(s.handleRecon))
+	mux.HandleFunc("GET /api/recon/summary", s.withETag(s.handleReconSummary))
+	mux.HandleFunc("GET /api/recon/tree", s.withETag(s.handleReconTree))
+	mux.HandleFunc("GET /api/recon/findings", s.withETag(s.handleReconFindings))
+	mux.HandleFunc("POST /api/recon-investigate", s.handleReconInvestigate) // POST — no ETag
+	mux.HandleFunc("GET /api/source-line", s.handleSourceLine) // no ETag — file content
+	mux.HandleFunc("GET /api/usage", s.withETag(s.handleUsage))
 
 	s.httpSrv = &http.Server{
 		Handler:           mux,
@@ -133,6 +145,25 @@ func (s *Server) Port() int {
 // URL returns the dashboard URL.
 func (s *Server) URL() string {
 	return fmt.Sprintf("http://localhost:%d", s.port)
+}
+
+// withETag wraps a handler with ETag/revision gating (L17.6).
+// If the client's If-None-Match header matches the current revision, returns 304.
+// Otherwise, sets the ETag header and calls the underlying handler.
+func (s *Server) withETag(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.revisionFn == nil {
+			next(w, r)
+			return
+		}
+		rev := strconv.FormatUint(s.revisionFn(), 10)
+		if r.Header.Get("If-None-Match") == rev {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("ETag", rev)
+		next(w, r)
+	}
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -339,6 +370,16 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result := s.queries.SessionList()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
+	if s.queries == nil {
+		http.Error(w, `{"error":"not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	result := s.queries.TelemetrySnapshot()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }

@@ -102,6 +102,10 @@ if [ -f "$STATUS_FILE" ]; then
     CACHE_SAVED_USD=$(jq -r '.cache_saved_usd // 0' "$STATUS_FILE" 2>/dev/null)
     COST_SAVED_USD=$(jq -r '.cost_saved_usd // 0' "$STATUS_FILE" 2>/dev/null)
     TURN_COUNT=$(jq -r '.turn_count // 0' "$STATUS_FILE" 2>/dev/null)
+    # L17.5: Lifetime totals
+    LIFETIME_TOKENS_SAVED=$(jq -r '.lifetime_tokens_saved // 0' "$STATUS_FILE" 2>/dev/null)
+    LIFETIME_TIME_SAVED_MS=$(jq -r '.lifetime_time_saved_ms // 0' "$STATUS_FILE" 2>/dev/null)
+    LIFETIME_SESSIONS=$(jq -r '.lifetime_sessions // 0' "$STATUS_FILE" 2>/dev/null)
     # Defaults
     INPUTS=${INPUTS:-0}; TOKENS_SAVED=${TOKENS_SAVED:-0}; TIME_SAVED_MS=${TIME_SAVED_MS:-0}
 fi
@@ -207,11 +211,23 @@ render_tokens_saved() {
 }
 
 render_time_saved_range() {
-    [ "$TOKENS_SAVED" -gt 0 ] 2>/dev/null || return
-    local low_fmt high_fmt
-    low_fmt=$(format_time $TIME_SAVED_MS)
-    high_fmt=$(format_time $((TOKENS_SAVED * 200)))
-    [ "$TIME_SAVED_MS" -gt 0 ] 2>/dev/null && echo "${CYAN}${low_fmt}-${high_fmt}${RESET}${DIM} saved${RESET}"
+    [ "$TIME_SAVED_MS" -gt 0 ] 2>/dev/null || return
+    echo "${CYAN}$(format_time $TIME_SAVED_MS)${RESET}${DIM} saved${RESET}"
+}
+
+render_lifetime_saved() {
+    [ "$LIFETIME_TOKENS_SAVED" -gt 0 ] 2>/dev/null || return
+    echo "${GREEN}↓$(format_tokens $LIFETIME_TOKENS_SAVED)${RESET}${DIM} lifetime${RESET}"
+}
+
+render_lifetime_time_saved() {
+    [ "$LIFETIME_TIME_SAVED_MS" -gt 0 ] 2>/dev/null || return
+    echo "${CYAN}$(format_time $LIFETIME_TIME_SAVED_MS)${RESET}${DIM} lifetime${RESET}"
+}
+
+render_lifetime_sessions() {
+    [ "$LIFETIME_SESSIONS" -gt 0 ] 2>/dev/null || return
+    echo "${CYAN}${LIFETIME_SESSIONS}${RESET}${DIM} sessions${RESET}"
 }
 
 render_cost_saved() {
@@ -499,6 +515,9 @@ else
             cache_hit_rate)   result=$(render_cache_hit_rate) ;;
             read_count)       result=$(render_read_count) ;;
             autotune)         result=$(render_autotune) ;;
+            lifetime_saved)      result=$(render_lifetime_saved) ;;
+            lifetime_time_saved) result=$(render_lifetime_time_saved) ;;
+            lifetime_sessions)   result=$(render_lifetime_sessions) ;;
             lines_changed)    result=$(render_lines_changed) ;;
             # Runway
             runway)           result=$(render_runway) ;;

@@ -134,6 +134,27 @@ func (m *mockQueries) GenerateHints(query string, opts ports.SearchOptions) []st
 	return nil
 }
 
+func (m *mockQueries) TelemetrySnapshot() socket.TelemetryResult {
+	return socket.TelemetryResult{
+		Lifetime: socket.TelemetryCounters{
+			TokensSaved: 5000,
+			TimeSavedMs: 40000,
+			Reads:       25,
+			GuidedReads: 15,
+			Sessions:    3,
+			Prompts:     100,
+		},
+		Session: socket.TelemetryCounters{
+			TokensSaved: 1200,
+			TimeSavedMs: 9600,
+			Reads:       8,
+			GuidedReads: 5,
+			Sessions:    1,
+			Prompts:     20,
+		},
+	}
+}
+
 func newTestState() *ports.LearnerState {
 	return &ports.LearnerState{
 		PromptCount: 42,
