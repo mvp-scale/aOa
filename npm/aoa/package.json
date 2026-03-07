@@ -1,14 +1,14 @@
 {
   "name": "@mvpscale/aoa",
-  "version": "0.0.0",
+  "version": "2.4.1",
   "description": "Semantic compression for Claude and Gemini. O(1) indexed search resolves meaning, depth, and intent in under 5\u00b5s. Self-learning, single binary, zero config. 90%+ fewer tokens.",
   "bin": { "aoa": "bin/aoa" },
   "scripts": { "postinstall": "node install.js" },
   "optionalDependencies": {
-    "@mvpscale/aoa-linux-x64": "0.0.0",
-    "@mvpscale/aoa-linux-arm64": "0.0.0",
-    "@mvpscale/aoa-darwin-x64": "0.0.0",
-    "@mvpscale/aoa-darwin-arm64": "0.0.0"
+    "@mvpscale/aoa-linux-x64": "2.4.1",
+    "@mvpscale/aoa-linux-arm64": "2.4.1",
+    "@mvpscale/aoa-darwin-x64": "2.4.1",
+    "@mvpscale/aoa-darwin-arm64": "2.4.1"
   },
   "author": "Corey Gorman <github@mvp-scale.com> (https://mvp-scale.com)",
   "license": "Apache-2.0",
