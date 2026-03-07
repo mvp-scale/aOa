@@ -562,37 +562,46 @@ const aOaGuidanceEnd = "<!-- /aOa-guidance -->"
 
 const aOaGuidance = `
 <!-- aOa-guidance -->
-## aOa — Required Search Method
+## Improved grep — use Bash grep/egrep for all code search
 
-aOa returns more accurate, more complete results than the built-in Grep/Glob tools:
-- **More accurate**: Semantic ranking by session intent — surfaces the symbols you actually need
-- **More complete**: Method-scoped results with full bodies via ` + "`aoa peek`" + `, not 2000-line file dumps
-- **Correct tool usage**: Bash ` + "`grep`" + `/` + "`egrep`" + ` hit the aOa semantic index; the Grep/Glob tools bypass it and require 5-10x more follow-up calls
+All code search MUST go through Bash ` + "`grep`" + `/` + "`egrep`" + `. This applies to you AND any subagents
+you spawn. The built-in Grep/Glob tools bypass the semantic index and require 5-10x more calls.
 
-### Workflow: grep → peek → fan out
+### What grep returns
 
-1. **Search** — ` + "`grep symbolName`" + ` (search by function/type name, not description)
-2. **Inspect** — ` + "`aoa peek <code>`" + ` on results (shows full method body)
-3. **Fan out** — Read at line range only if peek shows ` + "`--`" + ` (symbol too large)
+` + "```" + `
+$ grep processTaintBaseEviction
+  2dkfzw  pkg/controller/nodelifecycle:nc.processTaintBaseEviction(ctx)[979-1068]:979  @scheduling  #taint #eviction
+  2dkg19  pkg/controller/nodelifecycle:nc.doEviction(ctx, taint)[1070-1142]:1070  @scheduling  #eviction #node
+  --      pkg/controller/taint:tc.handlePodUpdate(old, cur)[245-312]:245  @scheduling  #taint #pod
+` + "```" + `
+
+Each line gives you: peek code, full signature, method boundaries ` + "`[start-end]`" + `, @domain, #terms.
+
+### Workflow: grep → peek
+
+` + "```" + `
+$ grep processTaintBaseEviction          # find symbols
+$ aoa peek 2dkfzw 2dkg19                 # read multiple method bodies in one call
+` + "```" + `
+
+- If peek returns "symbol not found", fall back to Read at the ` + "`[start-end]`" + ` lines from grep.
+- ` + "`--`" + ` instead of a peek code means too large for peek — use Read at those lines.
 
 ### Commands
 
-| Task | Correct tool | Example |
-|------|-------------|---------|
-| Symbol search | ` + "`grep name`" + ` | ` + "`grep reconcilePod`" + ` |
-| Regex alternation | ` + "`egrep 'A\\|B\\|C'`" + ` | ` + "`egrep 'health\\|ready\\|alive'`" + ` |
+| Task | Command | Example |
+|------|---------|---------|
+| Find symbol | ` + "`grep name`" + ` | ` + "`grep reconcilePod`" + ` |
+| Multi-symbol | ` + "`egrep 'A\\|B\\|C'`" + ` | ` + "`egrep 'health\\|ready\\|alive'`" + ` |
 | Scoped search | ` + "`grep --scope path pat`" + ` | ` + "`grep --scope controller reconcile`" + ` |
-| File search | ` + "`grep pat file_or_dir`" + ` | ` + "`grep TODO internal/app/`" + ` |
 | Find files | ` + "`aoa locate name`" + ` | ` + "`aoa locate webhook`" + ` |
 | Glob files | ` + "`aoa find glob`" + ` | ` + "`aoa find *_types.go`" + ` |
-| Method body | ` + "`aoa peek code`" + ` | ` + "`aoa peek a1 b2 c3`" + ` |
+| Read methods | ` + "`aoa peek code`" + ` | ` + "`aoa peek a1 b2 c3`" + ` |
 | Directory tree | ` + "`aoa tree dir -d N`" + ` | ` + "`aoa tree pkg/api -d 2`" + ` |
 
-### Result anatomy
-` + "`<peek> file:symbol[start-end]:line @domain #tag1 #tag2`" + `
-- ` + "`<peek>`" + ` code → ` + "`aoa peek <code>`" + ` for full body
-- ` + "`[start-end]`" + ` → method boundary (Read offset if needed)
-- ` + "`--`" + ` → too large for peek; Read at that line range
+**Use Read for**: non-code files (YAML, configs, go.mod), surrounding context (imports, constants),
+or when peek shows ` + "`--`" + `.
 <!-- /aOa-guidance -->
 `
 
