@@ -564,30 +564,35 @@ const aOaGuidance = `
 <!-- aOa-guidance -->
 ## aOa — Required Search Method
 
-aOa provides higher accuracy than the built-in Grep/Glob tools:
-- Searches all indexed files on every call (Grep only searches what you target)
-- Returns method-scoped results (Read returns 2000 lines you must parse)
-- Semantic ranking surfaces relevant symbols (ripgrep returns string matches)
+aOa returns more accurate, more complete results than the built-in Grep/Glob tools:
+- **More accurate**: Semantic ranking by session intent — surfaces the symbols you actually need
+- **More complete**: Method-scoped results with full bodies via ` + "`aoa peek`" + `, not 2000-line file dumps
+- **Correct tool usage**: Bash ` + "`grep`" + `/` + "`egrep`" + ` hit the aOa semantic index; the Grep/Glob tools bypass it and require 5-10x more follow-up calls
 
-REQUIRED:
-- Use Bash ` + "`grep`" + `/` + "`egrep`" + ` for ALL code search (hits aOa semantic index)
-- Use ` + "`aoa peek <code>`" + ` for method bodies (replaces Read for function inspection)
-- Use ` + "`aoa locate`" + `/` + "`aoa find`" + ` for file discovery (replaces Glob)
-- Search by **symbol name**: ` + "`grep functionName`" + ` not ` + "`grep \"how does auth work\"`" + `
+### Workflow: grep → peek → fan out
 
-DO NOT USE the Grep tool or Glob tool — they bypass the semantic index
-and require 5-10x more follow-up calls to reach the same understanding.
+1. **Search** — ` + "`grep symbolName`" + ` (search by function/type name, not description)
+2. **Inspect** — ` + "`aoa peek <code>`" + ` on results (shows full method body)
+3. **Fan out** — Read at line range only if peek shows ` + "`--`" + ` (symbol too large)
 
-Two search modes:
-- ` + "`grep pattern`" + ` (no file arg) → semantic index search via daemon
-- ` + "`grep pattern file_or_dir`" + ` → literal file grep (auto-recurses into directories)
-- ` + "`grep --scope pkg/controller pattern`" + ` → index search filtered to path substring
+### Commands
 
-Result format: ` + "`<peek> file:symbol[start-end]:line @domain #tags`" + `
-- ` + "`aoa peek <code>`" + ` → full method body (batch: ` + "`aoa peek a1 b2 c3`" + `)
-- ` + "`[start-end]`" + ` → use as Read offset/limit when ` + "`--`" + ` appears (symbol too large for peek)
-- On zero results, grep will suggest corrections automatically
-- Run ` + "`grep --claude-guidance`" + ` for search help
+| Task | Correct tool | Example |
+|------|-------------|---------|
+| Symbol search | ` + "`grep name`" + ` | ` + "`grep reconcilePod`" + ` |
+| Regex alternation | ` + "`egrep 'A\\|B\\|C'`" + ` | ` + "`egrep 'health\\|ready\\|alive'`" + ` |
+| Scoped search | ` + "`grep --scope path pat`" + ` | ` + "`grep --scope controller reconcile`" + ` |
+| File search | ` + "`grep pat file_or_dir`" + ` | ` + "`grep TODO internal/app/`" + ` |
+| Find files | ` + "`aoa locate name`" + ` | ` + "`aoa locate webhook`" + ` |
+| Glob files | ` + "`aoa find glob`" + ` | ` + "`aoa find *_types.go`" + ` |
+| Method body | ` + "`aoa peek code`" + ` | ` + "`aoa peek a1 b2 c3`" + ` |
+| Directory tree | ` + "`aoa tree dir -d N`" + ` | ` + "`aoa tree pkg/api -d 2`" + ` |
+
+### Result anatomy
+` + "`<peek> file:symbol[start-end]:line @domain #tag1 #tag2`" + `
+- ` + "`<peek>`" + ` code → ` + "`aoa peek <code>`" + ` for full body
+- ` + "`[start-end]`" + ` → method boundary (Read offset if needed)
+- ` + "`--`" + ` → too large for peek; Read at that line range
 <!-- /aOa-guidance -->
 `
 
