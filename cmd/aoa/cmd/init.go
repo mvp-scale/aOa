@@ -605,14 +605,18 @@ or when peek shows ` + "`--`" + `.
 <!-- /aOa-guidance -->
 `
 
-// appendClaudeMDGuidance prepends aOa guidance to the top of CLAUDE.md if not already present.
-// Idempotent: checks for sentinel before writing. Creates the file if missing.
+// appendClaudeMDGuidance writes aOa guidance to the top of CLAUDE.md.
+// On upgrade: strips old guidance block and writes the new one.
+// Creates the file if missing.
 func appendClaudeMDGuidance(root string) {
 	claudeMD := filepath.Join(root, "CLAUDE.md")
 
 	existing, err := os.ReadFile(claudeMD)
+
+	// Strip old guidance block if present (upgrade path).
 	if err == nil && strings.Contains(string(existing), aOaGuidanceSentinel) {
-		return // already present
+		removeClaudeMDGuidance(root)
+		existing, err = os.ReadFile(claudeMD)
 	}
 
 	// Prepend guidance to the top so the agent sees it first.
