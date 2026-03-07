@@ -1,6 +1,6 @@
 {
   "name": "@mvpscale/aoa-linux-x64",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "aOa platform binary (linux-x64)",
   "os": ["linux"],
   "cpu": ["x64"],
