@@ -1,6 +1,6 @@
 {
   "name": "@mvpscale/aoa-darwin-x64",
-  "version": "2.4.3",
+  "version": "0.0.0",
   "description": "aOa platform binary (darwin-x64)",
   "os": ["darwin"],
   "cpu": ["x64"],

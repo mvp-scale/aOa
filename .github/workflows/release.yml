@@ -141,6 +141,17 @@ jobs:
           done
           cp LICENSE NOTICE npm/aoa/
 
+      - name: Verify npm packages use placeholder versions
+        run: |
+          bad=$(grep -rl '"version"' npm/*/package.json npm/aoa-*/package.json | xargs grep '"version"' | grep -v '"0.0.0"' || true)
+          if [ -n "$bad" ]; then
+            echo "FATAL: npm package.json files must use \"0.0.0\" placeholder."
+            echo "The release workflow replaces it with the tag version at publish time."
+            echo "Found hardcoded versions:"
+            echo "$bad"
+            exit 1
+          fi
+
       - name: Set versions in all package.json files
         run: |
           for pkg in npm/aoa/package.json npm/aoa-linux-*/package.json npm/aoa-darwin-*/package.json; do
