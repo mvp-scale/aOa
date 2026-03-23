@@ -225,6 +225,177 @@ func TestGrepSignal_BigramPromotion(t *testing.T) {
 		"7× same grep pattern should promote bigram past threshold")
 }
 
+// --- stripCodeBlocks tests ---
+
+func TestStripCodeBlocks_RemovesFencedCode(t *testing.T) {
+	input := "Here is the fix:\n```go\nfunc auth() {}\n```\nThis handles authentication."
+	got := stripCodeBlocks(input)
+	assert.Contains(t, got, "Here is the fix:")
+	assert.Contains(t, got, "This handles authentication.")
+	assert.NotContains(t, got, "func auth()")
+}
+
+func TestStripCodeBlocks_MultipleBlocks(t *testing.T) {
+	input := "First ```code1``` middle ```code2``` end"
+	got := stripCodeBlocks(input)
+	assert.Equal(t, "First  middle  end", got)
+}
+
+func TestStripCodeBlocks_NoBlocks(t *testing.T) {
+	input := "plain text about authentication"
+	assert.Equal(t, input, stripCodeBlocks(input))
+}
+
+func TestStripCodeBlocks_UnclosedFence(t *testing.T) {
+	input := "before ```unclosed code block"
+	got := stripCodeBlocks(input)
+	assert.Equal(t, "before ", got)
+}
+
+func TestConversationSignal_IgnoresCodeBlocks(t *testing.T) {
+	a := newTestAppWithStore(t)
+	a.promptN = 1
+
+	// "auth" is in prose (intent), "oauth" is only in code block (not intent)
+	text := "Fix the auth handler:\n```go\nfunc oauth() { return nil }\n```"
+	a.processConversationSignal(text, false)
+
+	state := a.Learner.State()
+	assert.Greater(t, state.KeywordHits["auth"], uint32(0),
+		"prose keyword should be captured")
+	assert.Equal(t, uint32(0), state.KeywordHits["oauth"],
+		"code block keyword should not be captured")
+}
+
+// --- processConversationSignal tests ---
+
+func TestConversationSignal_UserInput_ProducesKeywordHits(t *testing.T) {
+	a := newTestAppWithStore(t)
+	a.promptN = 1
+
+	a.processConversationSignal("the auth handler validates tokens", true)
+
+	state := a.Learner.State()
+	// "auth" is a known atlas keyword — should resolve through enricher
+	assert.Greater(t, state.KeywordHits["auth"], uint32(0),
+		"conversation text with atlas keyword should produce keyword_hits")
+}
+
+func TestConversationSignal_ResolvesTermsAndDomains(t *testing.T) {
+	a := newTestAppWithStore(t)
+	a.promptN = 1
+
+	// "auth" resolves to terms and domains via the atlas enricher
+	a.processConversationSignal("implement auth middleware", true)
+
+	state := a.Learner.State()
+	assert.Greater(t, len(state.KeywordHits), 0, "should have keyword_hits")
+	assert.Greater(t, len(state.TermHits), 0, "should have term_hits")
+	assert.Greater(t, len(state.DomainMeta), 0, "should have domain_meta")
+	assert.Greater(t, len(state.CohitKwTerm), 0, "should have cohit_kw_term")
+	assert.Greater(t, len(state.CohitTermDomain), 0, "should have cohit_term_domain")
+}
+
+func TestConversationSignal_ObserveTrue_TriggersAutotune(t *testing.T) {
+	a := newTestAppWithStore(t)
+	a.promptN = 50 // autotune fires at multiples of 50
+
+	a.processConversationSignal("implement auth middleware", true)
+
+	// After autotune, domain_meta entries get their HitsLastCycle set
+	state := a.Learner.State()
+	for _, dm := range state.DomainMeta {
+		// Autotune step 7 snapshots hits → hits_last_cycle
+		assert.Greater(t, dm.HitsLastCycle, float64(0),
+			"observe=true at promptN=50 should trigger autotune (snapshot hits_last_cycle)")
+		break
+	}
+}
+
+func TestConversationSignal_ObserveFalse_NoAutotune(t *testing.T) {
+	a := newTestAppWithStore(t)
+	a.promptN = 50
+
+	a.processConversationSignal("implement auth middleware", false)
+
+	// observe=false means only Observe() is called, not ObserveAndMaybeTune
+	state := a.Learner.State()
+	for _, dm := range state.DomainMeta {
+		assert.Equal(t, float64(0), dm.HitsLastCycle,
+			"observe=false should not trigger autotune")
+		break
+	}
+}
+
+func TestConversationSignal_EmptyText_Noop(t *testing.T) {
+	a := newTestAppWithStore(t)
+	a.processConversationSignal("", false)
+	state := a.Learner.State()
+	assert.Empty(t, state.KeywordHits, "empty text should produce no signals")
+}
+
+func TestConversationSignal_NoEnricherMatches_Noop(t *testing.T) {
+	a := newTestAppWithStore(t)
+	// gibberish that won't match any atlas keywords
+	a.processConversationSignal("xyzzy plugh foobar", false)
+	state := a.Learner.State()
+	assert.Empty(t, state.DomainMeta, "non-atlas words should produce no domain signals")
+}
+
+// --- Integration: conversation events in onSessionEvent produce enricher signals ---
+
+func TestSessionEvent_UserInput_ProducesEnricherSignals(t *testing.T) {
+	a := newTestAppWithStore(t)
+
+	ev := ports.SessionEvent{
+		Kind:      ports.EventUserInput,
+		TurnID:    "turn-user-1",
+		Timestamp: time.Now(),
+		Text:      "fix the authentication handler",
+	}
+	a.onSessionEvent(ev)
+
+	state := a.Learner.State()
+	assert.Greater(t, len(state.KeywordHits), 0,
+		"user input should produce keyword_hits via enricher")
+	assert.Greater(t, len(state.DomainMeta), 0,
+		"user input should produce domain signals via enricher")
+}
+
+func TestSessionEvent_AIThinking_ProducesEnricherSignals(t *testing.T) {
+	a := newTestAppWithStore(t)
+	a.promptN = 1
+
+	ev := ports.SessionEvent{
+		Kind:      ports.EventAIThinking,
+		TurnID:    "turn-think-1",
+		Timestamp: time.Now(),
+		Text:      "I need to look at the authentication middleware",
+	}
+	a.onSessionEvent(ev)
+
+	state := a.Learner.State()
+	assert.Greater(t, len(state.KeywordHits), 0,
+		"AI thinking should produce keyword_hits via enricher")
+}
+
+func TestSessionEvent_AIResponse_ProducesEnricherSignals(t *testing.T) {
+	a := newTestAppWithStore(t)
+	a.promptN = 1
+
+	ev := ports.SessionEvent{
+		Kind:      ports.EventAIResponse,
+		TurnID:    "turn-resp-1",
+		Timestamp: time.Now(),
+		Text:      "The authentication handler validates the JWT token",
+	}
+	a.onSessionEvent(ev)
+
+	state := a.Learner.State()
+	assert.Greater(t, len(state.KeywordHits), 0,
+		"AI response should produce keyword_hits via enricher")
+}
+
 // --- Integration: Grep in onSessionEvent produces learning signals ---
 
 func TestGrepSessionEvent_LearnerReceivesSignals(t *testing.T) {
