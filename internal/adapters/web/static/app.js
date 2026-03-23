@@ -23,8 +23,10 @@ function setHtml(id, val) {
   if (el) el.innerHTML = val;
 }
 /* Change-detecting value setter: if the displayed text differs,
-   update it and fire a color-matched glow that fades over 2s.
-   Skips glow on first render (prev was empty or placeholder). */
+   update it and fire a color-matched glow that holds for 1.5s then
+   fades out over 2s via the CSS transition. Re-triggerable: if data
+   changes again during the hold, the glow resets cleanly. Skips glow
+   on first render (prev was empty or placeholder). */
 function setGlow(id, val) {
   var el = document.getElementById(id);
   if (!el) return;
@@ -36,7 +38,7 @@ function setGlow(id, val) {
     el.classList.remove('num-glow');
     void el.offsetWidth;
     el.classList.add('num-glow');
-    setTimeout(function() { el.classList.remove('num-glow'); }, 60);
+    setTimeout(function() { el.classList.remove('num-glow'); }, 1500);
   }
 }
 function escapeHtml(s) {
@@ -697,12 +699,14 @@ function glowTermPills(container, domainName, changedTerms) {
     hitsCell.classList.add('text-glow');
   }
   // Soft diffuse glow on each changed term pill — .lit adds glow + green tint,
-  // then removing it after a frame lets the 2.5s CSS transition fade it back
+  // holds for 1.5s so the user sees it, then removing lets the 2.5s CSS transition
+  // fade it back smoothly. Re-triggerable: adding .lit again resets the hold.
   for (var i = 0; i < changedTerms.length; i++) {
     var pill = row.querySelector('[data-term="' + CSS.escape(changedTerms[i]) + '"]');
     if (pill) {
+      pill.classList.remove('lit'); void pill.offsetWidth;
       pill.classList.add('lit');
-      setTimeout((function(p) { return function() { p.classList.remove('lit'); }; })(pill), 60);
+      setTimeout((function(p) { return function() { p.classList.remove('lit'); }; })(pill), 1500);
     }
   }
 }
@@ -843,9 +847,9 @@ function renderBigrams(bigramsResult) {
 
   // Target the three containers
   var containers = [
-    { id: 'ngramBigrams', sorted: bgSorted, bar: 'bar-cyan', prefix: 'bg', title: 'BIGRAMS' },
-    { id: 'ngramCohitKw', sorted: ckSorted, bar: 'bar-green', prefix: 'ck', title: 'COHITS: KW \u2192 TERM' },
-    { id: 'ngramCohitTd', sorted: ctSorted, bar: 'bar-purple', prefix: 'ct', title: 'COHITS: TERM \u2192 DOMAIN' }
+    { id: 'ngramBigrams', sorted: bgSorted, bar: 'bar-cyan', rowColor: 'row-cyan', prefix: 'bg', title: 'BIGRAMS' },
+    { id: 'ngramCohitKw', sorted: ckSorted, bar: 'bar-green', rowColor: 'row-green', prefix: 'ck', title: 'COHITS: KW \u2192 TERM' },
+    { id: 'ngramCohitTd', sorted: ctSorted, bar: 'bar-purple', rowColor: 'row-purple', prefix: 'ct', title: 'COHITS: TERM \u2192 DOMAIN' }
   ];
 
   if (sig !== prevSig) {
@@ -861,7 +865,7 @@ function renderBigrams(bigramsResult) {
       for (var r = 0; r < ct.sorted.length; r++) {
         var pct2 = (ct.sorted[r][1] / maxVal * 100).toFixed(1);
         var ngkey = ct.prefix + ':' + ct.sorted[r][0];
-        html += '<div class="ngram-row" data-ngkey="' + escapeHtml(ngkey) + '">' +
+        html += '<div class="ngram-row ' + ct.rowColor + '" data-ngkey="' + escapeHtml(ngkey) + '">' +
           '<span class="ngram-name">' + escapeHtml(ct.sorted[r][0]) + '</span>' +
           '<span class="ngram-bar-track"><span class="ngram-bar-fill ' + ct.bar + '" style="width:' + pct2 + '%"></span></span>' +
           '<span class="ngram-count">' + ct.sorted[r][1] + '</span></div>';
@@ -872,7 +876,7 @@ function renderBigrams(bigramsResult) {
       el.innerHTML = html;
     }
 
-    // Pulse changed values
+    // Pulse changed rows — glow the entire row as a unit
     var allSorted = [bgSorted, ckSorted, ctSorted];
     var prefixes = ['bg', 'ck', 'ct'];
     var parentIds = ['ngramBigrams', 'ngramCohitKw', 'ngramCohitTd'];
@@ -884,16 +888,15 @@ function renderBigrams(bigramsResult) {
         if (prevMap[nkey] !== undefined && prevMap[nkey] !== allSorted[si][ri][1]) {
           var nrow = parent.querySelector('[data-ngkey="' + CSS.escape(nkey) + '"]');
           if (nrow) {
-            var ncnt = nrow.querySelector('.ngram-count');
-            if (ncnt) { ncnt.classList.remove('soft-glow'); void ncnt.offsetWidth; ncnt.classList.add('soft-glow'); }
-            var nname = nrow.querySelector('.ngram-name');
-            if (nname) { nname.classList.remove('text-glow'); void nname.offsetWidth; nname.classList.add('text-glow'); }
+            nrow.classList.remove('row-lit'); void nrow.offsetWidth;
+            nrow.classList.add('row-lit');
+            setTimeout((function(r) { return function() { r.classList.remove('row-lit'); }; })(nrow), 1500);
           }
         }
       }
     }
   } else {
-    // Surgical update — only update changed counts + flash
+    // Surgical update — only update changed counts + glow the whole row
     var allSorted2 = [bgSorted, ckSorted, ctSorted];
     var prefixes2 = ['bg', 'ck', 'ct'];
     var parentIds2 = ['ngramBigrams', 'ngramCohitKw', 'ngramCohitTd'];
@@ -908,9 +911,9 @@ function renderBigrams(bigramsResult) {
         var cntEl = nrow2.querySelector('.ngram-count');
         if (cntEl && cntEl.textContent !== String(allSorted2[si2][ri2][1])) {
           cntEl.textContent = allSorted2[si2][ri2][1];
-          cntEl.classList.remove('soft-glow'); void cntEl.offsetWidth; cntEl.classList.add('soft-glow');
-          var nname2 = nrow2.querySelector('.ngram-name');
-          if (nname2) { nname2.classList.remove('text-glow'); void nname2.offsetWidth; nname2.classList.add('text-glow'); }
+          nrow2.classList.remove('row-lit'); void nrow2.offsetWidth;
+          nrow2.classList.add('row-lit');
+          setTimeout((function(r) { return function() { r.classList.remove('row-lit'); }; })(nrow2), 1500);
         }
         var barEl = nrow2.querySelector('.ngram-bar-fill');
         if (barEl) barEl.style.width = (allSorted2[si2][ri2][1] / maxV * 100).toFixed(1) + '%';

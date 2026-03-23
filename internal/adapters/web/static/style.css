@@ -278,8 +278,8 @@ body {
 }
 
 /* ── Numeric change glow system ──
-   When a value changes, JS adds .num-glow (instant on),
-   then removes it after 60ms — the base 2s transition fades the shadow out.
+   When a value changes, JS adds .num-glow (instant on, holds 1.5s),
+   then removes it — the base 2s transition fades the shadow out smoothly.
    Color-matched via --glow-rgb cascading from parent color class.
 */
 .stat-card.cyan   { --glow-rgb: var(--cyan-rgb); }
@@ -430,7 +430,19 @@ body {
   font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
   color: var(--mute); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-subtle);
 }
-.ngram-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; margin-bottom: 3px; border-radius: 4px; }
+.ngram-row {
+  display: flex; align-items: center; gap: 10px; padding: 5px 4px; margin-bottom: 3px; border-radius: 4px;
+  transition: background 2s ease-out, box-shadow 2s ease-out;
+  --row-rgb: var(--green-rgb); /* default, overridden per section */
+}
+.ngram-row.row-cyan  { --row-rgb: var(--cyan-rgb); }
+.ngram-row.row-green { --row-rgb: var(--green-rgb); }
+.ngram-row.row-purple { --row-rgb: var(--purple-rgb); }
+.ngram-row.row-lit {
+  background: rgba(var(--row-rgb), 0.06);
+  box-shadow: 0 0 10px rgba(var(--row-rgb), 0.15), 0 0 20px rgba(var(--row-rgb), 0.06);
+  transition: none;
+}
 .ngram-name {
   font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary);
   width: 130px; min-width: 130px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
