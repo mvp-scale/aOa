@@ -919,6 +919,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 		if ev.IsSubagent {
 			a.meter.RecordSubagent(len(ev.Text))
 			a.Learner.ProcessBigrams(ev.Text)
+			a.processConversationSignal(ev.Text, false)
 			break
 		}
 		// Flush the current exchange builder before starting new user input
@@ -928,6 +929,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 		a.sessionMetrics.TurnCount++
 		a.meter.RecordUser(len(ev.Text))
 		a.Learner.ProcessBigrams(ev.Text)
+		a.processConversationSignal(ev.Text, true) // observe=true: may trigger autotune
 		a.writeStatus(nil)
 		// Push user turn to ring
 		a.pushTurn(ConversationTurn{
@@ -946,6 +948,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				a.meter.RecordThinking(len(ev.Text))
 			}
 			a.Learner.ProcessBigrams(ev.Text)
+			a.processConversationSignal(ev.Text, false)
 			tb := a.ensureTurnBuilder(ev.TurnID, ts, ev.Model)
 			if tb.ThinkingText.Len() > 0 {
 				tb.ThinkingText.WriteString("\n")
@@ -961,6 +964,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				a.meter.RecordAssistant(len(ev.Text))
 			}
 			a.Learner.ProcessBigrams(ev.Text)
+			a.processConversationSignal(ev.Text, false)
 		}
 		if ev.IsSubagent {
 			// Capture subagent API tokens before breaking
