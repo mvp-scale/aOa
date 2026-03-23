@@ -405,81 +405,91 @@ func configureStatusLine(root string) bool {
 // defaultStatusLineConf is the template for .aoa/status-line.conf.
 // Uncommented lines are the default segments shown on the status line.
 // Users can comment/uncomment and reorder to customize.
-const defaultStatusLineConf = `# aOa Status Line Configuration
-# Edit and save — changes take effect on the next status line refresh.
-#
-# Layout:  ⚡ aOa <traffic light> │ <segments...>
-#
-# The left section is always shown:
-#   ⚡ aOa    Clickable link to dashboard (when daemon is running)
-#   ⚪/🟡/🟢   Learning maturity (input count: ⚪ <30, 🟡 30-99, 🟢 100+)
-#
-# Uncomment segments to show them. Order = display order.
-# Segments are separated by │ on the status line.
+const defaultStatusLineConf = `# aOa Status Line — uncomment to show, order = display order.
+# ⚡ aOa <traffic light> is always shown. Segments separated by │.
 
-# ─── active segments ─────────────────────────────────────────────
+# ─── active ─────────────────────────────────────────────────────
 lifetime_saved
 lifetime_time_saved
-#tokens_saved
-#time_saved_range
-#burn_rate
-#cost_saved
-#cost
-#lines_changed
+rate_5h_combo
+rate_7d_combo
 context
 model
 
-# ─── all available segments ──────────────────────────────────────
+# ─── quick add (uncomment to enable) ───────────────────────────
+#cost
+#burn_rate
+#session_time
+#autotune
+#tokens_saved
+#read_count
+#lines_changed
+#turn_count
+
+# ─── available ──────────────────────────────────────────────────
 #
 #   Lifetime (across all sessions)
-#     lifetime_saved      Total tokens saved (all sessions)      ↓15.0M lifetime
-#     lifetime_time_saved Total time saved (all sessions)        5h20m lifetime
-#     lifetime_sessions   Number of sessions tracked             11 sessions
+#     lifetime_saved       ↓15.0M           Total tokens saved
+#     lifetime_time_saved  5h20m            Total time saved
+#     lifetime_sessions    11               Sessions tracked
 #
-#   Session (current session only)
-#     tokens_saved        Tokens saved this session              ↓93k
-#     time_saved_range    Time saved this session                2m saved
-#     cost_saved          Est. dollars saved this session        $0.42 saved
-#     burn_rate           Context burn rate                      🔥1.5k/min
-#     guided_ratio        Guided read percentage                 70% guided
-#     shadow_saved        Shadow engine savings                  ↓5k shadow
-#     cache_hit_rate      Prompt cache hit rate                  85% cache
-#     cache_saved         Cache read dollar savings              $1.20 cache
-#     read_count          Guided/total reads                     8/15 reads
-#     autotune            Autotune progress                      23/50
+#   Session (current session)
+#     tokens_saved         ↓93k             Tokens saved this session
+#     time_saved_range     2m               Time saved this session
+#     cost_saved           $0.42            Est. dollars saved
+#     burn_rate            🔥1.5k/min       Context burn rate
+#     guided_ratio         70%              Guided read percentage
+#     shadow_saved         ↓5k              Shadow engine savings
+#     cache_hit_rate       85%              Prompt cache hit rate
+#     cache_saved          $1.20            Cache read dollar savings
+#     read_count           8/15             Guided/total reads
+#     autotune             23/50            Autotune progress
 #
 #   Intel (learning engine)
-#     domains             Active domain count                    58 domains
-#     mastered            Core domains (survived autotune)       4 mastered
-#     observed            Files learned from                     284 observed
-#     vocabulary          Keywords extracted                     1.2k keywords
-#     concepts            Terms resolved                         89 concepts
-#     patterns            Bigrams captured                       256 patterns
-#     evidence            Cumulative domain hits                 42.5 evidence
-#     learning_speed      Domains discovered per prompt          0.8 d/prompt
-#     signal_clarity      Term-to-keyword resolution rate        signal 42%
-#     conversion          Domain-to-keyword conversion rate      conv 12%
+#     domains              58               Active domain count
+#     mastered             4                Core domains
+#     observed             284              Files learned from
+#     vocabulary           1.2k             Keywords extracted
+#     concepts             89               Terms resolved
+#     patterns             256              Bigrams captured
+#     evidence             42.5             Cumulative domain hits
+#     learning_speed       0.8 d/prompt     Domains per prompt
+#     signal_clarity       42%              Term-to-keyword resolution
+#     conversion           12%              Domain-to-keyword conversion
 #
 #   Debrief (session analysis)
-#     input_tokens        Session input tokens                   in:50k
-#     output_tokens       Session output tokens                  out:12k
-#     flow                Burst throughput (all streams)         45.2 tok/s
-#     pace                Visible conversation speed             pace 12.3/s
-#     turn_time           Average turn duration                  turn 8s
-#     turn_count          Exchange count                         42 turns
-#     leverage            Tools invoked per turn                 3.2 tools/turn
-#     amplification       Output/input character ratio           4.5x amp
-#     cost_per_exchange   Cost per turn                          $0.55/turn
+#     input_tokens         50k              Session input tokens
+#     output_tokens        12k              Session output tokens
+#     flow                 45.2 tok/s       Burst throughput
+#     pace                 12.3/s           Conversation speed
+#     turn_time            8s/turn          Average turn duration
+#     turn_count           42               Exchange count
+#     leverage             3.2 tools/turn   Tools per turn
+#     amplification        4.5x             Output/input ratio
+#     cost_per_exchange    $0.55/turn       Cost per turn
 #
-#   Runway (context window projections)
-#     runway              Context runway estimate                runway 45m
-#     delta_minutes       Extra runway gained from aOa           +12m
+#   Runway (context projections)
+#     runway               45m              Context runway estimate
+#     delta_minutes        +12m             Extra runway from aOa
 #
-#   Claude Code (from Claude, not aOa)
-#     context             Context window usage                   ctx:60k/200k (30%)
-#     model               Active model name                      Opus 4.6
-#     cost                Session cost                           $23.05
-#     lines_changed       Lines added/removed                    +772/-109L
+#   Session (from Claude Code)
+#     session_time         12m35s           Wall-clock session duration
+#     api_time             2m10s            Time waiting for API
+#     session_tokens       50kin 12kout     Cumulative in/out tokens
+#
+#   Rate Limits (from Claude Code — Pro/Max only)
+#     rate_5h              2h15m            5-hour countdown to reset
+#     rate_5h_pct          42%              5-hour usage percentage
+#     rate_5h_combo        2h15m 42%        Countdown + pct (pct grays out <80%)
+#     rate_7d              3d12h            7-day countdown to reset
+#     rate_7d_pct          23%              7-day usage percentage
+#     rate_7d_combo        3d12h 23%        Countdown + pct (pct grays out <80%)
+#
+#   Claude Code
+#     context              ctx:60k/200k     Context window usage
+#     model                Opus 4.6         Active model
+#     cost                 $23.05           Session cost
+#     lines_changed        +772/-109L       Lines added/removed
 `
 
 // unconfigureStatusLine removes the aOa status line entry from
@@ -683,11 +693,8 @@ func removeClaudeMDGuidance(root string) bool {
 func writeDefaultStatusLineConf(root string) {
 	confPath := filepath.Join(root, ".aoa", "status-line.conf")
 
-	// Don't overwrite user customizations.
-	if _, err := os.Stat(confPath); err == nil {
-		return
-	}
-
+	// Always overwrite — the conf is refreshed on upgrade so new segments
+	// are available. Users can re-customize after init.
 	if err := os.WriteFile(confPath, []byte(defaultStatusLineConf), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not write status-line.conf: %v\n", err)
 	}

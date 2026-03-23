@@ -76,12 +76,18 @@ func (s *Server) Start(preferredPort int) error {
 
 	mux := http.NewServeMux()
 
-	// Serve static files from embedded FS (strip "static/" prefix so / → static/index.html)
+	// Serve static files from embedded FS (strip "static/" prefix so / → static/index.html).
+	// no-cache ensures the browser revalidates on every load — after a daemon restart
+	// with new embedded files, the user gets them without a hard refresh.
 	staticSub, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		return fmt.Errorf("create static sub-fs: %w", err)
 	}
-	mux.Handle("GET /", http.FileServerFS(staticSub))
+	staticHandler := http.FileServerFS(staticSub)
+	mux.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		staticHandler.ServeHTTP(w, r)
+	}))
 
 	mux.HandleFunc("GET /api/telemetry", s.withETag(s.handleTelemetry))
 	mux.HandleFunc("GET /api/health", s.handleHealth) // no ETag — liveness check

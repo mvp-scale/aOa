@@ -53,6 +53,28 @@ LINES_ADD=${LINES_ADD:-0}
 LINES_REM=${LINES_REM:-0}
 COST_USD=${COST_USD:-0}
 
+# Session timing
+SESSION_DURATION_MS=$(echo "$input" | jq -r '.cost.total_duration_ms // 0' 2>/dev/null)
+SESSION_API_MS=$(echo "$input" | jq -r '.cost.total_api_duration_ms // 0' 2>/dev/null)
+SESSION_DURATION_MS=${SESSION_DURATION_MS:-0}
+SESSION_API_MS=${SESSION_API_MS:-0}
+
+# Context (direct from Claude)
+CTX_USED_PCT=$(echo "$input" | jq -r '.context_window.used_percentage // 0' 2>/dev/null)
+CTX_REMAINING_PCT=$(echo "$input" | jq -r '.context_window.remaining_percentage // 0' 2>/dev/null)
+CTX_TOTAL_IN=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0' 2>/dev/null)
+CTX_TOTAL_OUT=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0' 2>/dev/null)
+
+# Rate limits
+RATE_5H_PCT=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // 0' 2>/dev/null)
+RATE_5H_RESETS=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // 0' 2>/dev/null)
+RATE_7D_PCT=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // 0' 2>/dev/null)
+RATE_7D_RESETS=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // 0' 2>/dev/null)
+RATE_5H_PCT=${RATE_5H_PCT:-0}
+RATE_5H_RESETS=${RATE_5H_RESETS:-0}
+RATE_7D_PCT=${RATE_7D_PCT:-0}
+RATE_7D_RESETS=${RATE_7D_RESETS:-0}
+
 # === READ DAEMON STATUS ===
 DAEMON_ONLINE=false
 INPUTS=0; TOKENS_SAVED=0; TIME_SAVED_MS=0; BURN_RATE=0
@@ -182,8 +204,26 @@ format_minutes() {
 
 gt0() { [ "$(awk "BEGIN {print ($1 > 0)}")" = "1" ]; }
 format_pct() { awk "BEGIN {printf \"%.0f%%\", $1 * 100}"; }
+format_pct_direct() { awk "BEGIN {printf \"%.0f%%\", $1}"; }
 format_dollars() { awk "BEGIN {printf \"\$%.2f\", $1}"; }
 format_float1() { awk "BEGIN {printf \"%.1f\", $1}"; }
+
+# Countdown: convert a UTC epoch timestamp to compact "Xd Yh Zm" or "XhYm"
+format_countdown() {
+    local resets_at=$1
+    local now=$(date +%s)
+    local diff=$((resets_at - now))
+    if [ "$diff" -le 0 ]; then echo "now"; return; fi
+    local days=$((diff / 86400))
+    local hours=$(( (diff % 86400) / 3600 ))
+    local mins=$(( (diff % 3600) / 60 ))
+    if [ "$days" -gt 0 ]; then
+        if [ "$hours" -gt 0 ]; then echo "${days}d${hours}h"
+        else echo "${days}d"; fi
+    elif [ "$hours" -gt 0 ]; then echo "${hours}h${mins}m"
+    else echo "${mins}m"
+    fi
+}
 
 # === SEGMENT RENDERERS ===
 # Each render_* outputs its text. Empty output = segment hidden.
@@ -212,27 +252,27 @@ render_tokens_saved() {
 
 render_time_saved_range() {
     [ "$TIME_SAVED_MS" -gt 0 ] 2>/dev/null || return
-    echo "${CYAN}$(format_time $TIME_SAVED_MS)${RESET}${DIM} saved${RESET}"
+    echo "${CYAN}$(format_time $TIME_SAVED_MS)${RESET}"
 }
 
 render_lifetime_saved() {
     [ "$LIFETIME_TOKENS_SAVED" -gt 0 ] 2>/dev/null || return
-    echo "${GREEN}↓$(format_tokens $LIFETIME_TOKENS_SAVED)${RESET}${DIM} lifetime${RESET}"
+    echo "${GREEN}↓$(format_tokens $LIFETIME_TOKENS_SAVED)${RESET}"
 }
 
 render_lifetime_time_saved() {
     [ "$LIFETIME_TIME_SAVED_MS" -gt 0 ] 2>/dev/null || return
-    echo "${CYAN}$(format_time $LIFETIME_TIME_SAVED_MS)${RESET}${DIM} lifetime${RESET}"
+    echo "${CYAN}$(format_time $LIFETIME_TIME_SAVED_MS)${RESET}"
 }
 
 render_lifetime_sessions() {
     [ "$LIFETIME_SESSIONS" -gt 0 ] 2>/dev/null || return
-    echo "${CYAN}${LIFETIME_SESSIONS}${RESET}${DIM} sessions${RESET}"
+    echo "${CYAN}${LIFETIME_SESSIONS}${RESET}"
 }
 
 render_cost_saved() {
     gt0 "$COST_SAVED_USD" || return
-    echo "${GREEN}$(format_dollars $COST_SAVED_USD)${RESET}${DIM} saved${RESET}"
+    echo "${GREEN}$(format_dollars $COST_SAVED_USD)${RESET}"
 }
 
 render_burn_rate() {
@@ -247,27 +287,27 @@ render_cost() {
 
 render_guided_ratio() {
     [ "$READ_COUNT" -gt 0 ] 2>/dev/null || return
-    echo "${GREEN}$(format_pct $GUIDED_RATIO)${RESET}${DIM} guided${RESET}"
+    echo "${GREEN}$(format_pct $GUIDED_RATIO)${RESET}"
 }
 
 render_shadow_saved() {
     [ "$SHADOW_SAVED" -gt 0 ] 2>/dev/null || return
-    echo "${GREEN}↓$(format_tokens $SHADOW_SAVED)${RESET}${DIM} shadow${RESET}"
+    echo "${GREEN}↓$(format_tokens $SHADOW_SAVED)${RESET}"
 }
 
 render_cache_hit_rate() {
     gt0 "$CACHE_HIT" || return
-    echo "${PURPLE}$(format_pct $CACHE_HIT)${RESET}${DIM} cache${RESET}"
+    echo "${PURPLE}$(format_pct $CACHE_HIT)${RESET}"
 }
 
 render_cache_saved() {
     gt0 "$CACHE_SAVED_USD" || return
-    echo "${PURPLE}$(format_dollars $CACHE_SAVED_USD)${RESET}${DIM} cache${RESET}"
+    echo "${PURPLE}$(format_dollars $CACHE_SAVED_USD)${RESET}"
 }
 
 render_read_count() {
     [ "$READ_COUNT" -gt 0 ] 2>/dev/null || return
-    echo "${GREEN}${GUIDED_READ_COUNT}/${READ_COUNT}${RESET}${DIM} reads${RESET}"
+    echo "${GREEN}${GUIDED_READ_COUNT}/${READ_COUNT}${RESET}"
 }
 
 render_autotune() {
@@ -284,7 +324,7 @@ render_lines_changed() {
 
 render_runway() {
     gt0 "$RUNWAY_MIN" || return
-    echo "${CYAN}$(format_minutes $RUNWAY_MIN)${RESET}${DIM} runway${RESET}"
+    echo "${CYAN}$(format_minutes $RUNWAY_MIN)${RESET}"
 }
 
 render_delta_minutes() {
@@ -296,37 +336,37 @@ render_delta_minutes() {
 
 render_domains() {
     [ "$DOMAINS" -gt 0 ] 2>/dev/null || return
-    echo "${PURPLE}${DOMAINS}${RESET}${DIM} domains${RESET}"
+    echo "${PURPLE}${DOMAINS}${RESET}"
 }
 
 render_mastered() {
     [ "$MASTERED" -gt 0 ] 2>/dev/null || return
-    echo "${PURPLE}${MASTERED}${RESET}${DIM} mastered${RESET}"
+    echo "${PURPLE}${MASTERED}${RESET}"
 }
 
 render_observed() {
     [ "$OBSERVED" -gt 0 ] 2>/dev/null || return
-    echo "${BLUE}${OBSERVED}${RESET}${DIM} observed${RESET}"
+    echo "${BLUE}${OBSERVED}${RESET}"
 }
 
 render_vocabulary() {
     [ "$VOCABULARY" -gt 0 ] 2>/dev/null || return
-    echo "${CYAN}$(format_tokens $VOCABULARY)${RESET}${DIM} keywords${RESET}"
+    echo "${CYAN}$(format_tokens $VOCABULARY)${RESET}"
 }
 
 render_concepts() {
     [ "$CONCEPTS" -gt 0 ] 2>/dev/null || return
-    echo "${GREEN}${CONCEPTS}${RESET}${DIM} concepts${RESET}"
+    echo "${GREEN}${CONCEPTS}${RESET}"
 }
 
 render_patterns() {
     [ "$PATTERNS" -gt 0 ] 2>/dev/null || return
-    echo "${YELLOW}$(format_tokens $PATTERNS)${RESET}${DIM} patterns${RESET}"
+    echo "${YELLOW}$(format_tokens $PATTERNS)${RESET}"
 }
 
 render_evidence() {
     gt0 "$EVIDENCE" || return
-    echo "${RED}$(format_float1 $EVIDENCE)${RESET}${DIM} evidence${RESET}"
+    echo "${RED}$(format_float1 $EVIDENCE)${RESET}"
 }
 
 render_learning_speed() {
@@ -336,24 +376,24 @@ render_learning_speed() {
 
 render_signal_clarity() {
     gt0 "$SIGNAL_CLARITY" || return
-    echo "${CYAN}$(format_pct $SIGNAL_CLARITY)${RESET}${DIM} signal${RESET}"
+    echo "${CYAN}$(format_pct $SIGNAL_CLARITY)${RESET}"
 }
 
 render_conversion() {
     gt0 "$CONVERSION" || return
-    echo "${YELLOW}$(format_pct $CONVERSION)${RESET}${DIM} conv${RESET}"
+    echo "${YELLOW}$(format_pct $CONVERSION)${RESET}"
 }
 
 # ── Debrief (dashboard: cyan/green/blue/green/cyan/yellow/purple/purple) ──
 
 render_input_tokens() {
     [ "$INPUT_TOKENS" -gt 0 ] 2>/dev/null || return
-    echo "${CYAN}$(format_tokens $INPUT_TOKENS)${RESET}${DIM} in${RESET}"
+    echo "${CYAN}$(format_tokens $INPUT_TOKENS)${RESET}"
 }
 
 render_output_tokens() {
     [ "$OUTPUT_TOKENS" -gt 0 ] 2>/dev/null || return
-    echo "${GREEN}$(format_tokens $OUTPUT_TOKENS)${RESET}${DIM} out${RESET}"
+    echo "${GREEN}$(format_tokens $OUTPUT_TOKENS)${RESET}"
 }
 
 render_flow() {
@@ -388,7 +428,7 @@ render_cost_per_exchange() {
 
 render_turn_count() {
     [ "$TURN_COUNT" -gt 0 ] 2>/dev/null || return
-    echo "${CYAN}${TURN_COUNT}${RESET}${DIM} turns${RESET}"
+    echo "${CYAN}${TURN_COUNT}${RESET}"
 }
 
 # ── Right side ──
@@ -413,6 +453,83 @@ render_context() {
 
 render_model() {
     echo "${MODEL}"
+}
+
+# ── Session timing (from Claude Code) ──
+
+render_session_time() {
+    [ "$SESSION_DURATION_MS" -gt 0 ] 2>/dev/null || return
+    echo "${CYAN}$(format_time $SESSION_DURATION_MS)${RESET}"
+}
+
+render_api_time() {
+    [ "$SESSION_API_MS" -gt 0 ] 2>/dev/null || return
+    echo "${BLUE}$(format_time $SESSION_API_MS)${RESET}"
+}
+
+render_session_tokens() {
+    [ "$CTX_TOTAL_IN" -gt 0 ] 2>/dev/null || return
+    echo "${CYAN}$(format_tokens $CTX_TOTAL_IN)${RESET}${DIM}in${RESET} ${GREEN}$(format_tokens $CTX_TOTAL_OUT)${RESET}${DIM}out${RESET}"
+}
+
+# ── Rate limits (from Claude Code) ──
+
+render_rate_5h() {
+    [ "$RATE_5H_RESETS" -gt 0 ] 2>/dev/null || return
+    local countdown=$(format_countdown $RATE_5H_RESETS)
+    local color=$GREEN
+    local pct_int=$(awk "BEGIN {printf \"%d\", $RATE_5H_PCT}")
+    if [ "$pct_int" -gt 84 ]; then color=$RED
+    elif [ "$pct_int" -gt 60 ]; then color=$YELLOW; fi
+    echo "${color}${countdown}${RESET}"
+}
+
+render_rate_5h_pct() {
+    gt0 "$RATE_5H_PCT" || return
+    local color=$GREEN
+    local pct_int=$(awk "BEGIN {printf \"%d\", $RATE_5H_PCT}")
+    if [ "$pct_int" -gt 84 ]; then color=$RED
+    elif [ "$pct_int" -gt 60 ]; then color=$YELLOW; fi
+    echo "${color}$(format_pct_direct $RATE_5H_PCT)${RESET}"
+}
+
+render_rate_7d() {
+    [ "$RATE_7D_RESETS" -gt 0 ] 2>/dev/null || return
+    local countdown=$(format_countdown $RATE_7D_RESETS)
+    local color=$GREEN
+    local pct_int=$(awk "BEGIN {printf \"%d\", $RATE_7D_PCT}")
+    if [ "$pct_int" -gt 84 ]; then color=$RED
+    elif [ "$pct_int" -gt 60 ]; then color=$YELLOW; fi
+    echo "${color}${countdown}${RESET}"
+}
+
+render_rate_7d_pct() {
+    gt0 "$RATE_7D_PCT" || return
+    local color=$GREEN
+    local pct_int=$(awk "BEGIN {printf \"%d\", $RATE_7D_PCT}")
+    if [ "$pct_int" -gt 84 ]; then color=$RED
+    elif [ "$pct_int" -gt 60 ]; then color=$YELLOW; fi
+    echo "${color}$(format_pct_direct $RATE_7D_PCT)${RESET}"
+}
+
+render_rate_5h_combo() {
+    [ "$RATE_5H_RESETS" -gt 0 ] 2>/dev/null || return
+    local countdown=$(format_countdown $RATE_5H_RESETS)
+    local pct_int=$(awk "BEGIN {printf \"%d\", $RATE_5H_PCT}")
+    local pct_color=$GRAY
+    if [ "$pct_int" -ge 90 ]; then pct_color=$RED
+    elif [ "$pct_int" -ge 80 ]; then pct_color=$YELLOW; fi
+    echo "${CYAN}${countdown}${RESET} ${pct_color}$(format_pct_direct $RATE_5H_PCT)${RESET}"
+}
+
+render_rate_7d_combo() {
+    [ "$RATE_7D_RESETS" -gt 0 ] 2>/dev/null || return
+    local countdown=$(format_countdown $RATE_7D_RESETS)
+    local pct_int=$(awk "BEGIN {printf \"%d\", $RATE_7D_PCT}")
+    local pct_color=$GRAY
+    if [ "$pct_int" -ge 90 ]; then pct_color=$RED
+    elif [ "$pct_int" -ge 80 ]; then pct_color=$YELLOW; fi
+    echo "${CYAN}${countdown}${RESET} ${pct_color}$(format_pct_direct $RATE_7D_PCT)${RESET}"
 }
 
 render_dashboard() {
@@ -497,6 +614,15 @@ if [ "$DAEMON_ONLINE" = "false" ]; then
             model)   LINE2="${LINE2} ${SEP} $(render_model)" ;;
             cost)    result=$(render_cost); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
             lines_changed) result=$(render_lines_changed); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
+            session_time) result=$(render_session_time); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
+            api_time) result=$(render_api_time); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
+            session_tokens) result=$(render_session_tokens); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
+            rate_5h) result=$(render_rate_5h); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
+            rate_5h_pct) result=$(render_rate_5h_pct); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
+            rate_5h_combo) result=$(render_rate_5h_combo); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
+            rate_7d) result=$(render_rate_7d); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
+            rate_7d_pct) result=$(render_rate_7d_pct); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
+            rate_7d_combo) result=$(render_rate_7d_combo); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
             dashboard) result=$(render_dashboard); [ -n "$result" ] && LINE2="${LINE2} ${SEP} ${result}" ;;
         esac
     done
@@ -545,6 +671,17 @@ else
             cache_saved)      result=$(render_cache_saved) ;;
             cost_saved)       result=$(render_cost_saved) ;;
             turn_count)       result=$(render_turn_count) ;;
+            # Session timing (from Claude Code)
+            session_time)     result=$(render_session_time) ;;
+            api_time)         result=$(render_api_time) ;;
+            session_tokens)   result=$(render_session_tokens) ;;
+            # Rate limits (from Claude Code)
+            rate_5h)          result=$(render_rate_5h) ;;
+            rate_5h_pct)      result=$(render_rate_5h_pct) ;;
+            rate_5h_combo)    result=$(render_rate_5h_combo) ;;
+            rate_7d)          result=$(render_rate_7d) ;;
+            rate_7d_pct)      result=$(render_rate_7d_pct) ;;
+            rate_7d_combo)    result=$(render_rate_7d_combo) ;;
             # Right side
             context)          result=$(render_context) ;;
             model)            result=$(render_model) ;;
