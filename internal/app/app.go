@@ -982,7 +982,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			a.sessionMetrics.CacheReadTokens += ev.Usage.CacheReadTokens
 			a.sessionMetrics.CacheWriteTokens += ev.Usage.CacheWriteTokens
 			// Per-model token tracking
-			total := ev.Usage.InputTokens + ev.Usage.OutputTokens + ev.Usage.CacheReadTokens + ev.Usage.CacheWriteTokens
+			total := ev.Usage.InputTokens + ev.Usage.OutputTokens + ev.Usage.CacheWriteTokens
 			if model := ev.Model; model != "" && total > 0 {
 				if a.sessionMetrics.ModelTokens == nil {
 					a.sessionMetrics.ModelTokens = make(map[string]int64)
