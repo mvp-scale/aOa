@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "claude_code_version": "2.1.126",
+  "captured_at": "2026-05-02",
+  "capture_method": "partial — fields verified via .aoa/hook/context.jsonl derived snapshot; raw stdin not yet captured",
+  "stdin_paths_consumed": [
+    "cwd",
+    "session_id",
+    "version",
+    "model.id",
+    "model.display_name",
+    "cost.total_cost_usd",
+    "cost.total_lines_added",
+    "cost.total_lines_removed",
+    "cost.total_duration_ms",
+    "cost.total_api_duration_ms",
+    "context_window.context_window_size",
+    "context_window.used_percentage",
+    "context_window.remaining_percentage",
+    "context_window.total_input_tokens",
+    "context_window.total_output_tokens",
+    "context_window.current_usage.input_tokens",
+    "context_window.current_usage.cache_creation_input_tokens",
+    "context_window.current_usage.cache_read_input_tokens",
+    "rate_limits.five_hour.used_percentage",
+    "rate_limits.five_hour.resets_at",
+    "rate_limits.seven_day.used_percentage",
+    "rate_limits.seven_day.resets_at"
+  ],
+  "stdin_paths_dropped": [
+    "(unknown — requires raw stdin capture; see compliance/claude-statusline/README.md)"
+  ],
+  "settings_json_shape": {
+    "statusLine.type":    "command",
+    "statusLine.command": "bash \"$CLAUDE_PROJECT_DIR/.aoa/hooks/aoa-status-line.sh\""
+  },
+  "env_vars_required": ["CLAUDE_PROJECT_DIR"],
+  "drift_summary": {
+    "vs_inferred": "no breaking changes — all 21 inferred paths still populated",
+    "additive_unknown": "raw stdin capture needed to enumerate fields Claude Code emits but the hook drops"
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "claude_code_version": "2.1.126",
+  "captured_at": "2026-05-02",
+  "captured_from": "~/.claude/projects/-home-corey-aOa-go/",
+  "sample": {
+    "files_inspected": 1,
+    "total_events": 83,
+    "event_counts_by_type": {
+      "assistant": 36,
+      "user": 23,
+      "permission-mode": 5,
+      "attachment": 5,
+      "system": 5,
+      "ai-title": 5,
+      "last-prompt": 4
+    }
+  },
+  "topology": {
+    "session_dir": "~/.claude/projects/{encoded-project-path}/",
+    "encoded_project_path_rule": "absolute path with / replaced by -",
+    "main_session_file": "{session-uuid}.jsonl (top level)",
+    "session_artifacts_dir": "{session-uuid}/ (sibling of main JSONL)",
+    "subagent_files": "{session-uuid}/subagents/agent-{shortid}.jsonl",
+    "persisted_tool_results": "{session-uuid}/tool-results/{tool_use_id}.txt"
+  },
+  "top_level_envelope_fields": {
+    "ai-title": ["aiTitle", "sessionId", "type"],
+    "assistant": [
+      "cwd", "entrypoint", "gitBranch", "isSidechain", "message",
+      "parentUuid", "requestId", "sessionId", "timestamp", "type",
+      "userType", "uuid", "version"
+    ],
+    "attachment": [
+      "attachment", "cwd", "entrypoint", "gitBranch", "isSidechain",
+      "parentUuid", "sessionId", "timestamp", "type", "userType",
+      "uuid", "version"
+    ],
+    "last-prompt": ["lastPrompt", "leafUuid", "sessionId", "type"],
+    "permission-mode": ["permissionMode", "sessionId", "type"],
+    "system": [
+      "cwd", "durationMs", "entrypoint", "gitBranch", "isMeta",
+      "isSidechain", "messageCount", "parentUuid", "sessionId",
+      "subtype", "timestamp", "type", "userType", "uuid", "version"
+    ],
+    "user": [
+      "cwd", "entrypoint", "gitBranch", "isSidechain", "message",
+      "parentUuid", "permissionMode", "promptId", "sessionId",
+      "sourceToolAssistantUUID", "timestamp", "toolUseResult",
+      "type", "userType", "uuid", "version"
+    ]
+  },
+  "message_fields_by_role": {
+    "user": ["content", "role"],
+    "assistant": [
+      "content", "id", "model", "role", "stop_details",
+      "stop_reason", "stop_sequence", "type", "usage"
+    ]
+  },
+  "content_block_types": {
+    "thinking": 12,
+    "tool_use": 26,
+    "tool_result": 23,
+    "text": 8
+  },
+  "tool_input_fields_by_name": {
+    "Agent": ["description", "prompt", "subagent_type"],
+    "Bash": ["command", "description"],
+    "Read": ["file_path"],
+    "TaskCreate": ["activeForm", "description", "subject"],
+    "ToolSearch": ["max_results", "query"]
+  },
+  "usage_fields": [
+    "cache_creation",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "inference_geo",
+    "input_tokens",
+    "iterations",
+    "output_tokens",
+    "server_tool_use",
+    "service_tier",
+    "speed"
+  ],
+  "usage_field_shapes": {
+    "cache_creation": {"type": "object", "fields": ["ephemeral_1h_input_tokens", "ephemeral_5m_input_tokens"], "notes": "TTL-bucket breakdown; flat cache_creation_input_tokens is the sum"},
+    "server_tool_use": {"type": "object", "fields": ["web_search_requests", "web_fetch_requests"]},
+    "iterations": {"type": "array", "notes": "empty in observed sessions"},
+    "speed": {"type": "string", "examples": ["standard"]},
+    "inference_geo": {"type": "string", "notes": "empty in local sessions"}
+  },
+  "tool_use_result_shapes": {
+    "Bash": ["interrupted", "isImage", "noOutputExpected", "stderr", "stdout"],
+    "Edit": ["filePath", "newString", "oldString", "originalFile", "replaceAll", "structuredPatch", "userModified"],
+    "Agent": ["agentId", "agentType", "content", "prompt", "status", "toolStats", "totalDurationMs", "totalTokens", "totalToolUseCount", "usage"],
+    "other": ["file", "type"]
+  },
+  "system_subtypes": ["turn_duration", "away_summary"],
+  "system_subtype_payloads": {
+    "turn_duration": {"reads": ["durationMs"]},
+    "away_summary":  {"reads": ["content"], "notes": "resume-summary text emitted when Claude Code reattaches to a paused session"}
+  },
+  "drift_summary": {
+    "new_top_level_types": [
+      "permission-mode",
+      "attachment",
+      "ai-title",
+      "last-prompt"
+    ],
+    "new_envelope_fields": [
+      "cwd",
+      "entrypoint",
+      "gitBranch",
+      "isSidechain",
+      "userType",
+      "requestId",
+      "promptId",
+      "sourceToolAssistantUUID",
+      "toolUseResult",
+      "messageCount",
+      "permissionMode",
+      "content"
+    ],
+    "new_message_fields_assistant": [
+      "id",
+      "type",
+      "stop_details",
+      "stop_reason",
+      "stop_sequence"
+    ],
+    "new_usage_fields": [
+      "cache_creation",
+      "inference_geo",
+      "iterations",
+      "server_tool_use",
+      "speed"
+    ]
+  }
+}
