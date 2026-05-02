@@ -9,7 +9,7 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 <!-- BEGIN claude-session -->
 ## Claude Code Session JSONL — v2.1.126
 
-*Last regenerated: 2026-05-02 16:25 UTC*
+*Last regenerated: 2026-05-02 17:15 UTC*
 
 ### Coverage
 
@@ -18,7 +18,7 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 | Event types                 | 3        | 7     | 42%       |
 | Envelope fields (assistant) | 7        | 13    | 53%      |
 | Envelope fields (system   ) | 9        | 15    | 60%      |
-| Envelope fields (user     ) | 7        | 16    | 43%      |
+| Envelope fields (user     ) | 7        | 17    | 41%      |
 | Usage fields                | 5        | 10    | 50%      |
 | Message fields (assistant)  | 4        | 9     | 44%      |
 | System subtypes             | 1        | 2     | 50%      |
@@ -36,7 +36,7 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 **[Medium] Envelope context fields dropped on every recognized event**
 - `assistant`: [cwd entrypoint gitBranch isSidechain requestId userType]
 - `system`: [cwd entrypoint gitBranch isSidechain messageCount userType]
-- `user`: [cwd entrypoint gitBranch isSidechain permissionMode promptId sourceToolAssistantUUID toolUseResult userType]
+- `user`: [cwd entrypoint gitBranch isSidechain origin permissionMode promptId sourceToolAssistantUUID toolUseResult userType]
 
 **[Medium-Low] Usage metadata dropped — 5/10**
 - fields: [cache_creation inference_geo iterations server_tool_use speed]
@@ -55,7 +55,7 @@ See `versions/v2.1.126-observed/observations.md` §8 for ranked follow-up.
 <!-- BEGIN claude-statusline -->
 ## Claude Code Status Line — v2.1.126
 
-*Last regenerated: 2026-05-02 16:25 UTC*
+*Last regenerated: 2026-05-02 17:15 UTC*
 
 ### Coverage
 

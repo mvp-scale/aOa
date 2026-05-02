@@ -66,6 +66,7 @@ ignored by `parser.go:128-138`:
 | `toolUseResult`             | user                      | **structured per-tool result**, separate from inline `tool_result` content blocks. Tool-specific shape — see §6. |
 | `messageCount`              | system                    | session message count                    |
 | `permissionMode`            | user                      | per-message permission mode              |
+| `origin` (object)           | user                      | **caught by drift detection** — `{kind: "task-notification" \| ...}`; tags injected events to distinguish from real user input. Critical for learner quality — without this, task-notifications inflate user-prompt counts. |
 
 `sourceToolAssistantUUID` is the most interesting — it makes the user→assistant
 back-link explicit instead of having us correlate through `tool_use_id`.

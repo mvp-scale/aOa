@@ -45,9 +45,9 @@
     ],
     "user": [
       "cwd", "entrypoint", "gitBranch", "isSidechain", "message",
-      "parentUuid", "permissionMode", "promptId", "sessionId",
-      "sourceToolAssistantUUID", "timestamp", "toolUseResult",
-      "type", "userType", "uuid", "version"
+      "origin", "parentUuid", "permissionMode", "promptId",
+      "sessionId", "sourceToolAssistantUUID", "timestamp",
+      "toolUseResult", "type", "userType", "uuid", "version"
     ]
   },
   "message_fields_by_role": {
@@ -119,8 +119,12 @@
       "toolUseResult",
       "messageCount",
       "permissionMode",
-      "content"
+      "content",
+      "origin"
     ],
+    "envelope_field_shapes": {
+      "origin": {"type": "object", "fields": ["kind"], "kind_values": ["task-notification"], "notes": "tags injected events (agent completion notifications, etc.) to distinguish from real user input"}
+    },
     "new_message_fields_assistant": [
       "id",
       "type",

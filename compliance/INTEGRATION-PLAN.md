@@ -82,6 +82,7 @@ Most "High Value" rows cite **G5** (signal for the learner) or **G6** (token eco
 | S1.E10  | `toolUseResult` (user)       | [DROPPED]    | [READ+USED]   | Y   | Critical (G5/G6) | N    | structured per-tool result — see §1F |
 | S1.E11  | `messageCount` (system)      | [DROPPED]    | [READ+HOLD]   | Y   | Low            | N      | session-message-count analytic |
 | S1.E12  | `permissionMode` (user)      | [DROPPED]    | [READ+USED]   | Y   | Medium (G5)    | N      | per-message mode; pairs with S1.T4 |
+| S1.E13  | `origin` (user) — `{kind: "task-notification" \| ...}` | [DROPPED] | [READ+USED] | Y | **Critical (G5)** | N | **Caught by real-time drift detection during integration plan work.** Distinguishes injected events (agent completion notifications, etc.) from real user input. Without this, learner counts task-notifications as user prompts — direct signal contamination. Filter non-real-user events before bigram/intent extraction. |
 
 ### 1C. Message body fields
 
@@ -159,9 +160,9 @@ These are the single highest-signal gap in the report. Each tool's result is a d
 
 | Metric                                | Current | Target |
 |---------------------------------------|---------|--------|
-| Rows total                            | 32      | 32     |
-| Integrated (READ+USED + READ+HOLD)    | 9       | 31     |
-| Processed (READ+USED only)            | 9       | 21     |
+| Rows total                            | 33      | 33     |
+| Integrated (READ+USED + READ+HOLD)    | 9       | 32     |
+| Processed (READ+USED only)            | 9       | 22     |
 | SKIP (with documented reason)         | 0       | 1      |
 | DROPPED / IGNORED                     | 23      | 0      |
 

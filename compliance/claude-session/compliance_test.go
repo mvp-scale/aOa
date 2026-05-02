@@ -88,6 +88,7 @@ var knownUnconsumedEnvelopeFields = map[string]bool{
 	"leafUuid":   true,
 	"attachment": true,
 	"content":    true, // observed on system events with subtype=away_summary
+	"origin":     true, // observed on user events: {kind: "task-notification" | ...} — distinguishes injected events from real user input
 }
 
 // Known-but-unhandled system subtypes — observed but not branched on.
