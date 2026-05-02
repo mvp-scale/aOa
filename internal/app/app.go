@@ -922,6 +922,12 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			a.processConversationSignal(ev.Text, false)
 			break
 		}
+		// Filter injected events (task-notifications, etc.) — they carry an
+		// `origin` tag and would otherwise contaminate user-prompt counts and
+		// bigram extraction. Real user input has Origin == nil.
+		if !ev.IsRealUser() {
+			break
+		}
 		// Flush the current exchange builder before starting new user input
 		a.flushCurrentBuilder()
 		a.promptN++

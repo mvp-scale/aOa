@@ -31,46 +31,44 @@ import (
 // Recognized top-level event types — the set our parser actively translates.
 // Any type outside this set is reported as drift.
 var recognizedTypes = map[string]bool{
-	"user":      true,
-	"assistant": true,
-	"system":    true,
+	"user":            true,
+	"assistant":       true,
+	"system":          true,
+	"permission-mode": true, // translated by translatePermissionMode
+	"attachment":      true, // translated by translateAttachment
+	"last-prompt":     true, // translated by translateLastPrompt
+	"ai-title":        true, // translated by translateAITitle
 }
 
 // Known-but-unhandled top-level types — silently dropped by the parser.
 // Listed here so they are not flagged as "new drift" repeatedly.
 // To raise the bar (treat unhandled as drift), remove from this set.
 var knownUnhandledTypes = map[string]bool{
-	"progress":              true,
-	"queue-operation":       true,
-	"file-history-snapshot": true,
-	"last-prompt":           true, // observed v2.1.126
-	"permission-mode":       true, // observed v2.1.126
-	"attachment":            true, // observed v2.1.126
-	"ai-title":              true, // observed v2.1.126
+	"progress":              true, // mentioned in reader.go but not actively consumed
+	"queue-operation":       true, // mentioned in reader.go but not actively consumed
+	"file-history-snapshot": true, // mentioned in reader.go but not actively consumed
 }
 
 // Top-level envelope fields the parser consumes. New fields beyond this set
 // are reported as informational drift (signal we are dropping).
 var consumedEnvelopeFields = map[string]bool{
-	"type":       true,
-	"uuid":       true,
-	"id":         true, // alternate uuid key
-	"timestamp":  true,
-	"version":    true,
-	"sessionId":  true,
-	"session_id": true,
-	"isMeta":     true,
-	"subtype":    true,
-	"parentUuid": true,
+	// Identity envelope (always-consumed)
+	"type":        true,
+	"uuid":        true,
+	"id":          true, // alternate uuid key
+	"timestamp":   true,
+	"version":     true,
+	"sessionId":   true,
+	"session_id":  true,
+	"isMeta":      true,
+	"subtype":     true,
+	"parentUuid":  true,
 	"parent_uuid": true,
-	"parentId":   true,
-	"durationMs": true,
-	"message":    true, // body, recursed into separately
-}
+	"parentId":    true,
+	"durationMs":  true,
+	"message":     true, // body, recursed into separately
 
-// Known-but-unconsumed envelope fields — observed in v2.1.126 but not yet
-// mapped. Listed so they are not flagged repeatedly.
-var knownUnconsumedEnvelopeFields = map[string]bool{
+	// Envelope context (v2.1.126+) — all consumed by parser into tailer.SessionEvent
 	"cwd":                     true,
 	"entrypoint":              true,
 	"gitBranch":               true,
@@ -82,14 +80,19 @@ var knownUnconsumedEnvelopeFields = map[string]bool{
 	"toolUseResult":           true,
 	"messageCount":            true,
 	"permissionMode":          true,
+	"origin":                  true,
 	// Type-scoped envelope fields on new event types
 	"aiTitle":    true,
 	"lastPrompt": true,
 	"leafUuid":   true,
 	"attachment": true,
-	"content":    true, // observed on system events with subtype=away_summary
-	"origin":     true, // observed on user events: {kind: "task-notification" | ...} — distinguishes injected events from real user input
+	"content":    true, // system events with subtype=away_summary carry resume text here
 }
+
+// Known-but-unconsumed envelope fields — currently empty. All observed
+// fields at v2.1.126 are consumed. New fields would land here pending a
+// processing decision.
+var knownUnconsumedEnvelopeFields = map[string]bool{}
 
 // Known-but-unhandled system subtypes — observed but not branched on.
 // system events with these subtypes are passed through with subtype only.
@@ -114,34 +117,57 @@ var knownUnhandledContentBlockTypes = map[string]bool{
 // Reference sets used by the non-compliance coverage report (Pass 5).
 // These mirror what parser.go actually consumes.
 
-// Usage fields the parser reads (parser.go:148-156).
+// Usage fields the parser reads. All v2.1.126 usage fields are consumed.
 var consumedUsageFields = map[string]bool{
 	"input_tokens":                true,
 	"output_tokens":               true,
 	"cache_read_input_tokens":     true,
 	"cache_creation_input_tokens": true,
 	"service_tier":                true,
+	"cache_creation":              true, // nested TTL bucket breakdown
+	"server_tool_use":             true, // nested web search/fetch counts
+	"inference_geo":               true,
+	"iterations":                  true,
+	"speed":                       true,
 }
 
-// Message-level fields the parser reads (parser.go:141-157).
+// Message-level fields the parser reads.
 var consumedMessageFields = map[string]bool{
-	"role":    true,
-	"model":   true,
-	"content": true,
-	"usage":   true,
+	"role":          true,
+	"model":         true,
+	"content":       true,
+	"usage":         true,
+	"id":            true, // Anthropic API message ID
+	"stop_reason":   true,
+	"stop_sequence": true,
+	"stop_details":  true,
+	// `type` (literal "message") is intentionally [SKIP] — see CONTRACT.md §3.6
 }
 
-// System subtypes whose payload the parser actually consumes. The parser
-// does not branch on subtype value, but for `turn_duration` it reads the
-// associated `durationMs` field, so the data is captured.
+// Message fields explicitly skipped (pure API echo, no value on canonical event).
+// Listed here so the report distinguishes intentional skips from drift.
+var skippedMessageFields = map[string]bool{
+	"type": true, // Anthropic API response type literal
+}
+
+// System subtypes whose payload the parser consumes. The parser does not
+// branch on subtype value during translation, but each subtype's relevant
+// payload is extracted: turn_duration -> durationMs, away_summary -> content.
 var consumedSystemSubtypes = map[string]bool{
 	"turn_duration": true, // durationMs is read
-	// away_summary: content is dropped
+	"away_summary":  true, // content is read into AwaySummary
 }
 
-// Tools whose toolUseResult shape we consume. None — the entire envelope-level
-// field is dropped today.
-var consumedToolUseResultShapes = map[string]bool{}
+// Tools whose toolUseResult shape we read into a typed struct.
+// Per the integration plan: all four discriminated shapes are integrated.
+// Processing differs (Bash/Agent USED; Edit/other on HOLD) but integration
+// coverage is 100%.
+var consumedToolUseResultShapes = map[string]bool{
+	"Bash":  true,
+	"Edit":  true,
+	"Agent": true,
+	"other": true,
+}
 
 // Required fields per recognized type. These MUST be present; absence is FAIL.
 // (Required from aOa's perspective — i.e., what the parser would silently miss.)
@@ -777,19 +803,27 @@ func TestPass5_NonComplianceReport(t *testing.T) {
 	}
 	sort.Strings(usageCov.gaps)
 
-	// Message-level fields (assistant — superset of user)
+	// Message-level fields (assistant — superset of user). Fields explicitly
+	// marked SKIP in the integration plan count as "consumed" for compliance
+	// purposes (intentional decisions, not drift).
 	msgCov := cov{}
+	var skippedMsgFields []string
 	if assistantFields := msgByRole["assistant"]; assistantFields != nil {
 		for f := range assistantFields {
 			msgCov.total++
-			if consumedMessageFields[f] {
+			switch {
+			case consumedMessageFields[f]:
 				msgCov.consumed++
-			} else {
+			case skippedMessageFields[f]:
+				msgCov.consumed++
+				skippedMsgFields = append(skippedMsgFields, f)
+			default:
 				msgCov.gaps = append(msgCov.gaps, f)
 			}
 		}
 	}
 	sort.Strings(msgCov.gaps)
+	sort.Strings(skippedMsgFields)
 
 	// System subtypes
 	subCov := cov{}
@@ -843,33 +877,66 @@ func TestPass5_NonComplianceReport(t *testing.T) {
 	wf("| System subtypes             | %d        | %d     | %s      |", subCov.consumed, subCov.total, pct(subCov))
 	wf("| toolUseResult shapes        | %d        | %d     | %s       |", turCov.consumed, turCov.total, pct(turCov))
 	wf("")
-	wf("### Top gaps (ranked by signal)")
+	wf("### Gaps")
 	wf("")
-	wf("**[Critical] toolUseResult shapes — %d/%d consumed**", turCov.consumed, turCov.total)
-	wf("- tools dropped: %v", turCov.gaps)
-	wf("- highest-leverage signals dropped: `Edit.userModified`, `Edit.structuredPatch`, `Bash.interrupted`, full Agent recap (`agentId`, `totalTokens`, `toolStats`)")
-	wf("")
-	wf("**[High] Unhandled event types — %d ignored**", len(typeCov.gaps))
-	wf("- types: %v", typeCov.gaps)
-	wf("")
-	wf("**[Medium] Envelope context fields dropped on every recognized event**")
-	for _, typ := range envTypes {
-		c := envCovByType[typ]
-		if len(c.gaps) > 0 {
-			wf("- `%s`: %v", typ, c.gaps)
+
+	totalGaps := len(turCov.gaps) + len(typeCov.gaps) + len(usageCov.gaps) + len(msgCov.gaps) + len(subCov.gaps)
+	for _, c := range envCovByType {
+		totalGaps += len(c.gaps)
+	}
+	if totalGaps == 0 {
+		wf("**Fully integrated.** No DROPPED fields remain at this baseline.")
+		wf("")
+		if len(skippedMsgFields) > 0 {
+			wf("Intentionally skipped (documented [SKIP] decisions):")
+			wf("- message-level: %v — pure API echo, no value on canonical event", skippedMsgFields)
+			wf("")
+		}
+	} else {
+		if len(turCov.gaps) > 0 {
+			wf("**[Critical] toolUseResult shapes — %d/%d consumed**", turCov.consumed, turCov.total)
+			wf("- tools dropped: %v", turCov.gaps)
+			wf("")
+		}
+		if len(typeCov.gaps) > 0 {
+			wf("**[High] Unhandled event types — %d ignored**", len(typeCov.gaps))
+			wf("- types: %v", typeCov.gaps)
+			wf("")
+		}
+		envHasGaps := false
+		for _, c := range envCovByType {
+			if len(c.gaps) > 0 {
+				envHasGaps = true
+				break
+			}
+		}
+		if envHasGaps {
+			wf("**[Medium] Envelope context fields dropped**")
+			for _, typ := range envTypes {
+				c := envCovByType[typ]
+				if len(c.gaps) > 0 {
+					wf("- `%s`: %v", typ, c.gaps)
+				}
+			}
+			wf("")
+		}
+		if len(usageCov.gaps) > 0 {
+			wf("**[Medium-Low] Usage metadata dropped — %d/%d**", usageCov.total-usageCov.consumed, usageCov.total)
+			wf("- fields: %v", usageCov.gaps)
+			wf("")
+		}
+		if len(msgCov.gaps) > 0 {
+			wf("**[Low] Message-level assistant fields dropped — %d/%d**", msgCov.total-msgCov.consumed, msgCov.total)
+			wf("- fields: %v", msgCov.gaps)
+			wf("")
+		}
+		if len(subCov.gaps) > 0 {
+			wf("**[Low] System subtypes not branched on — %d/%d**", subCov.total-subCov.consumed, subCov.total)
+			wf("- subtypes: %v", subCov.gaps)
+			wf("")
 		}
 	}
-	wf("")
-	wf("**[Medium-Low] Usage metadata dropped — %d/%d**", usageCov.total-usageCov.consumed, usageCov.total)
-	wf("- fields: %v", usageCov.gaps)
-	wf("")
-	wf("**[Low] Message-level assistant fields dropped — %d/%d**", msgCov.total-msgCov.consumed, msgCov.total)
-	wf("- fields: %v", msgCov.gaps)
-	wf("")
-	wf("**[Low] System subtypes not branched on — %d/%d**", subCov.total-subCov.consumed, subCov.total)
-	wf("- subtypes: %v", subCov.gaps)
-	wf("")
-	wf("See `versions/v%s-observed/observations.md` §8 for ranked follow-up.", baseline.Version)
+	wf("See `versions/v%s-observed/observations.md` for the version-specific narrative.", baseline.Version)
 
 	writeReportSection(t, "claude-session", "Claude Code Session JSONL", baseline.Version, b.String())
 }

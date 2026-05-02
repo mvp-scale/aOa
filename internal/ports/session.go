@@ -96,7 +96,10 @@ type SessionEvent struct {
 	// persisted tool-results/ files on disk (L9.3). Non-nil only on EventToolResult.
 	ToolPersistedSizes map[string]int
 
-	// IsSubagent is true when this event originated from a subagent JSONL file (L9.4).
+	// IsSubagent is true when this event originated from a subagent context.
+	// Set when either the source JSONL file is a subagent file (L9.4) OR the
+	// canonical `isSidechain` field is true on the source event (v2.1.126+).
+	// These two signals were validated 1:1 equivalent.
 	IsSubagent bool
 
 	// SubagentID is the agent identifier from the subagent filename
@@ -108,6 +111,65 @@ type SessionEvent struct {
 	// Linked to the AI turn via TurnID.
 	DurationMs int
 
+	// --- Envelope Context (v2.1.126+) ---
+
+	// Cwd is the working directory at the time of the event.
+	Cwd string
+
+	// GitBranch is the git branch at the time of the event.
+	GitBranch string
+
+	// RequestID is the Anthropic API request ID (assistant events only).
+	RequestID string
+
+	// PromptID groups events that trace to the same user prompt revision.
+	PromptID string
+
+	// SourceToolAssistantUUID is the explicit back-link from a user
+	// (tool_result) event to the assistant (tool_use) event that triggered it.
+	SourceToolAssistantUUID string
+
+	// PermissionMode is the per-message permission mode (user events only).
+	PermissionMode string
+
+	// Origin tags injected events. Non-nil with `kind` set on injected events
+	// (task-notification, etc.). Real user input has Origin == nil.
+	// Consumers should check `IsRealUser()` before counting as user prompt.
+	Origin map[string]any
+
+	// MessageCount is the per-session message count (system events).
+	MessageCount int
+
+	// --- Tool Result Detail (envelope-level toolUseResult, v2.1.126+) ---
+
+	// ToolResult carries the structured per-tool result emitted at envelope
+	// level (separate from inline tool_result content blocks). Non-nil on
+	// user events that follow a tool invocation.
+	ToolResult *ToolResultDetail
+
+	// --- Message-level (assistant) ---
+
+	// StopReason is end_turn / tool_use / max_tokens / refusal / etc.
+	StopReason string
+
+	// --- New event-type payloads ---
+
+	// PermissionModeValue is set on EventPermissionMode events.
+	PermissionModeValue string
+
+	// AITitle is set on EventAITitle events.
+	AITitle string
+
+	// LastPromptUUID is the leaf UUID on EventLastPrompt events.
+	LastPromptUUID string
+
+	// Attachment is the raw attachment payload on EventAttachment events.
+	Attachment map[string]any
+
+	// AwaySummary is the resume-summary text from system events with
+	// subtype == "away_summary". Useful as a learner intent signal.
+	AwaySummary string
+
 	// --- Agent Metadata ---
 
 	// Model identifies which AI model handled this turn (e.g., "claude-opus-4-6").
@@ -115,6 +177,54 @@ type SessionEvent struct {
 
 	// AgentVersion is the AI agent's version string (e.g., "2.1.42").
 	AgentVersion string
+}
+
+// IsRealUser returns true when this event represents real user input (a typed
+// prompt) rather than an injected event such as a task-notification. Consumers
+// counting user-prompt activity (intent counters, bigrams) should gate on this.
+func (e *SessionEvent) IsRealUser() bool {
+	return e.Kind == EventUserInput && e.Origin == nil
+}
+
+// ToolResultDetail is the structured per-tool result emitted at envelope
+// level (`user.toolUseResult`). SourceTool is "Bash" | "Edit" | "Agent" |
+// "other"; tool-specific fields are populated based on SourceTool. Raw
+// preserves the full payload for downstream consumers.
+type ToolResultDetail struct {
+	SourceTool string
+	Raw        map[string]any
+
+	// Bash
+	Stdout           string
+	Stderr           string
+	Interrupted      bool
+	IsImage          bool
+	NoOutputExpected bool
+
+	// Edit
+	EditFilePath        string
+	EditNewString       string
+	EditOldString       string
+	EditOriginalFile    string
+	EditReplaceAll      bool
+	EditUserModified    bool
+	EditStructuredPatch any
+
+	// Agent (subagent invocation result)
+	AgentID                string
+	AgentType              string
+	AgentContent           any
+	AgentPrompt            string
+	AgentStatus            string
+	AgentToolStats         map[string]any
+	AgentTotalDurationMs   int
+	AgentTotalTokens       int
+	AgentTotalToolUseCount int
+	AgentUsage             map[string]any
+
+	// other (Read/Glob/etc.)
+	OtherFile string
+	OtherType string
 }
 
 // EventKind classifies a SessionEvent. Each event is exactly one kind.
@@ -143,6 +253,18 @@ const (
 	// EventSystemMeta is a session lifecycle or metadata event
 	// (turn duration, session start/stop, etc.).
 	EventSystemMeta
+
+	// EventPermissionMode is a permission-mode transition (default/acceptEdits/plan/etc.).
+	EventPermissionMode
+
+	// EventAttachment is a file/image attachment to a message.
+	EventAttachment
+
+	// EventLastPrompt is a resume/checkpoint pointer to the last user prompt.
+	EventLastPrompt
+
+	// EventAITitle is an AI-generated session title.
+	EventAITitle
 )
 
 // String returns the event kind name.
@@ -162,6 +284,14 @@ func (k EventKind) String() string {
 		return "file_access"
 	case EventSystemMeta:
 		return "system_meta"
+	case EventPermissionMode:
+		return "permission_mode"
+	case EventAttachment:
+		return "attachment"
+	case EventLastPrompt:
+		return "last_prompt"
+	case EventAITitle:
+		return "ai_title"
 	default:
 		return "unknown"
 	}
@@ -217,6 +347,28 @@ type TokenUsage struct {
 
 	// ServiceTier indicates the pricing/priority tier (e.g., "standard").
 	ServiceTier string
+
+	// CacheCreation1hInputTokens is the 1-hour TTL bucket of cache writes.
+	// Subset of CacheWriteTokens (which is the flat sum across buckets).
+	CacheCreation1hInputTokens int
+
+	// CacheCreation5mInputTokens is the 5-minute TTL bucket of cache writes.
+	// Subset of CacheWriteTokens.
+	CacheCreation5mInputTokens int
+
+	// ServerToolWebSearchRequests is the count of server-side web_search calls
+	// in this turn. Likely separate from InputTokens/OutputTokens — consumers
+	// computing total burn rate should add these in.
+	ServerToolWebSearchRequests int
+
+	// ServerToolWebFetchRequests is the count of server-side web_fetch calls.
+	ServerToolWebFetchRequests int
+
+	// InferenceGeo is the inference region (e.g., "us-east-1"). Empty in local sessions.
+	InferenceGeo string
+
+	// Speed is the priority/throughput tier (e.g., "standard").
+	Speed string
 }
 
 // CacheHitRate returns the fraction of context tokens served from cache.

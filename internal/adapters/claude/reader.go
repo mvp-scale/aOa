@@ -176,6 +176,14 @@ func (r *Reader) translate(raw *tailer.SessionEvent) []ports.SessionEvent {
 		events = r.translateAssistant(raw)
 	case "system":
 		events = r.translateSystem(raw)
+	case "permission-mode":
+		events = r.translatePermissionMode(raw)
+	case "attachment":
+		events = r.translateAttachment(raw)
+	case "last-prompt":
+		events = r.translateLastPrompt(raw)
+	case "ai-title":
+		events = r.translateAITitle(raw)
 	default:
 		// progress, file-history-snapshot, queue-operation, etc.
 		r.mu.Lock()
@@ -183,11 +191,24 @@ func (r *Reader) translate(raw *tailer.SessionEvent) []ports.SessionEvent {
 		r.mu.Unlock()
 		return nil
 	}
-	// L9.4: Tag subagent events
-	if raw.Source == "subagent" {
+	// Tag subagent events. Two equivalent signals:
+	//   - raw.Source == "subagent" (filesystem-derived, L9.4)
+	//   - raw.IsSidechain (canonical Claude Code field, v2.1.126+)
+	// Validated 1:1 equivalent. Use either as a positive signal.
+	isSubagent := raw.Source == "subagent" || raw.IsSidechain
+	if isSubagent {
 		for i := range events {
 			events[i].IsSubagent = true
 			events[i].SubagentID = raw.SubagentID
+		}
+	}
+	// Forward envelope context to every emitted event
+	for i := range events {
+		if events[i].Cwd == "" {
+			events[i].Cwd = raw.Cwd
+		}
+		if events[i].GitBranch == "" {
+			events[i].GitBranch = raw.GitBranch
 		}
 	}
 	return events
@@ -200,17 +221,21 @@ func (r *Reader) translateUser(raw *tailer.SessionEvent) []ports.SessionEvent {
 
 	if raw.UserText != "" {
 		events = append(events, ports.SessionEvent{
-			ID:           raw.UUID,
-			TurnID:       raw.UUID,
-			SessionID:    raw.SessionID,
-			Timestamp:    raw.Timestamp,
-			Kind:         ports.EventUserInput,
-			Text:         raw.UserText,
-			AgentVersion: raw.Version,
+			ID:                      raw.UUID,
+			TurnID:                  raw.UUID,
+			SessionID:               raw.SessionID,
+			Timestamp:               raw.Timestamp,
+			Kind:                    ports.EventUserInput,
+			Text:                    raw.UserText,
+			AgentVersion:            raw.Version,
+			Origin:                  raw.Origin,
+			PromptID:                raw.PromptID,
+			SourceToolAssistantUUID: raw.SourceToolAssistantUUID,
+			PermissionMode:          raw.PermissionMode,
 		})
 	}
 
-	if len(raw.ToolResultSizes) > 0 {
+	if len(raw.ToolResultSizes) > 0 || raw.ToolUseResult != nil {
 		// L9.3: Build persisted sizes map from resolved IDs
 		var persistedSizes map[string]int
 		if len(raw.ToolPersistedIDs) > 0 {
@@ -219,17 +244,23 @@ func (r *Reader) translateUser(raw *tailer.SessionEvent) []ports.SessionEvent {
 				persistedSizes[id] = raw.ToolResultSizes[id]
 			}
 		}
-		events = append(events, ports.SessionEvent{
-			ID:                 raw.UUID + ":toolresult",
-			TurnID:             raw.UUID,
-			SessionID:          raw.SessionID,
-			Timestamp:          raw.Timestamp,
-			Kind:               ports.EventToolResult,
-			ToolResultSizes:    raw.ToolResultSizes,
-			ToolResultTexts:    raw.ToolResultTexts,
-			ToolPersistedSizes: persistedSizes,
-			AgentVersion:       raw.Version,
-		})
+		ev := ports.SessionEvent{
+			ID:                      raw.UUID + ":toolresult",
+			TurnID:                  raw.UUID,
+			SessionID:               raw.SessionID,
+			Timestamp:               raw.Timestamp,
+			Kind:                    ports.EventToolResult,
+			ToolResultSizes:         raw.ToolResultSizes,
+			ToolResultTexts:         raw.ToolResultTexts,
+			ToolPersistedSizes:      persistedSizes,
+			AgentVersion:            raw.Version,
+			SourceToolAssistantUUID: raw.SourceToolAssistantUUID,
+		}
+		// Forward envelope-level toolUseResult detail.
+		if raw.ToolUseResult != nil {
+			ev.ToolResult = forwardToolResultDetail(raw.ToolUseResult)
+		}
+		events = append(events, ev)
 	}
 
 	if len(events) == 0 {
@@ -239,6 +270,46 @@ func (r *Reader) translateUser(raw *tailer.SessionEvent) []ports.SessionEvent {
 	}
 
 	return events
+}
+
+// forwardToolResultDetail copies the parser's typed shape into the canonical
+// ports type. Identical layout — separation maintains hexagonal boundary.
+func forwardToolResultDetail(d *tailer.ToolUseResultDetail) *ports.ToolResultDetail {
+	if d == nil {
+		return nil
+	}
+	return &ports.ToolResultDetail{
+		SourceTool: d.SourceTool,
+		Raw:        d.Raw,
+
+		Stdout:           d.Stdout,
+		Stderr:           d.Stderr,
+		Interrupted:      d.Interrupted,
+		IsImage:          d.IsImage,
+		NoOutputExpected: d.NoOutputExpected,
+
+		EditFilePath:        d.EditFilePath,
+		EditNewString:       d.EditNewString,
+		EditOldString:       d.EditOldString,
+		EditOriginalFile:    d.EditOriginalFile,
+		EditReplaceAll:      d.EditReplaceAll,
+		EditUserModified:    d.EditUserModified,
+		EditStructuredPatch: d.EditStructuredPatch,
+
+		AgentID:                d.AgentID,
+		AgentType:              d.AgentType,
+		AgentContent:           d.AgentContent,
+		AgentPrompt:            d.AgentPrompt,
+		AgentStatus:            d.AgentStatus,
+		AgentToolStats:         d.AgentToolStats,
+		AgentTotalDurationMs:   d.AgentTotalDurationMs,
+		AgentTotalTokens:       d.AgentTotalTokens,
+		AgentTotalToolUseCount: d.AgentTotalToolUseCount,
+		AgentUsage:             d.AgentUsage,
+
+		OtherFile: d.OtherFile,
+		OtherType: d.OtherType,
+	}
 }
 
 // translateAssistant decomposes an assistant message into atomic events:
@@ -274,14 +345,22 @@ func (r *Reader) translateAssistant(raw *tailer.SessionEvent) []ports.SessionEve
 			Text:         raw.AssistantText,
 			Model:        raw.Model,
 			AgentVersion: raw.Version,
+			RequestID:    raw.RequestID,
+			StopReason:   raw.StopReason,
 		}
 		if raw.Usage != nil {
 			ev.Usage = &ports.TokenUsage{
-				InputTokens:      raw.Usage.InputTokens,
-				OutputTokens:     raw.Usage.OutputTokens,
-				CacheReadTokens:  raw.Usage.CacheReadTokens,
-				CacheWriteTokens: raw.Usage.CacheWriteTokens,
-				ServiceTier:      raw.Usage.ServiceTier,
+				InputTokens:                 raw.Usage.InputTokens,
+				OutputTokens:                raw.Usage.OutputTokens,
+				CacheReadTokens:             raw.Usage.CacheReadTokens,
+				CacheWriteTokens:            raw.Usage.CacheWriteTokens,
+				ServiceTier:                 raw.Usage.ServiceTier,
+				CacheCreation1hInputTokens:  raw.Usage.CacheCreation1hInputTokens,
+				CacheCreation5mInputTokens:  raw.Usage.CacheCreation5mInputTokens,
+				ServerToolWebSearchRequests: raw.Usage.ServerToolWebSearchRequests,
+				ServerToolWebFetchRequests:  raw.Usage.ServerToolWebFetchRequests,
+				InferenceGeo:                raw.Usage.InferenceGeo,
+				Speed:                       raw.Usage.Speed,
 			}
 		}
 		events = append(events, ev)
@@ -328,7 +407,7 @@ func (r *Reader) translateAssistant(raw *tailer.SessionEvent) []ports.SessionEve
 
 // translateSystem converts a system event to EventSystemMeta.
 func (r *Reader) translateSystem(raw *tailer.SessionEvent) []ports.SessionEvent {
-	return []ports.SessionEvent{{
+	ev := ports.SessionEvent{
 		ID:           raw.UUID,
 		TurnID:       raw.ParentUUID,
 		SessionID:    raw.SessionID,
@@ -336,6 +415,61 @@ func (r *Reader) translateSystem(raw *tailer.SessionEvent) []ports.SessionEvent 
 		Kind:         ports.EventSystemMeta,
 		Text:         raw.Subtype,
 		DurationMs:   raw.DurationMs,
+		AgentVersion: raw.Version,
+		MessageCount: raw.MessageCount,
+	}
+	// away_summary subtype carries a resume-summary text in `content`.
+	if raw.Subtype == "away_summary" {
+		ev.AwaySummary = raw.SystemContent
+	}
+	return []ports.SessionEvent{ev}
+}
+
+// translatePermissionMode converts a permission-mode transition event.
+func (r *Reader) translatePermissionMode(raw *tailer.SessionEvent) []ports.SessionEvent {
+	return []ports.SessionEvent{{
+		ID:                  raw.UUID, // may be empty — these events lack uuid
+		SessionID:           raw.SessionID,
+		Timestamp:           raw.Timestamp,
+		Kind:                ports.EventPermissionMode,
+		PermissionModeValue: raw.PermissionModeValue,
+		AgentVersion:        raw.Version,
+	}}
+}
+
+// translateAttachment converts a file/image attachment event.
+func (r *Reader) translateAttachment(raw *tailer.SessionEvent) []ports.SessionEvent {
+	return []ports.SessionEvent{{
+		ID:           raw.UUID,
+		TurnID:       raw.ParentUUID,
+		SessionID:    raw.SessionID,
+		Timestamp:    raw.Timestamp,
+		Kind:         ports.EventAttachment,
+		Attachment:   raw.Attachment,
+		AgentVersion: raw.Version,
+	}}
+}
+
+// translateLastPrompt converts a resume/checkpoint pointer event.
+func (r *Reader) translateLastPrompt(raw *tailer.SessionEvent) []ports.SessionEvent {
+	return []ports.SessionEvent{{
+		ID:             raw.UUID,
+		SessionID:      raw.SessionID,
+		Timestamp:      raw.Timestamp,
+		Kind:           ports.EventLastPrompt,
+		LastPromptUUID: raw.LastPromptUUID,
+		AgentVersion:   raw.Version,
+	}}
+}
+
+// translateAITitle converts an AI-generated session title event.
+func (r *Reader) translateAITitle(raw *tailer.SessionEvent) []ports.SessionEvent {
+	return []ports.SessionEvent{{
+		ID:           raw.UUID,
+		SessionID:    raw.SessionID,
+		Timestamp:    raw.Timestamp,
+		Kind:         ports.EventAITitle,
+		AITitle:      raw.AITitle,
 		AgentVersion: raw.Version,
 	}}
 }

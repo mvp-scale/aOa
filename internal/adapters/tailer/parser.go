@@ -56,6 +56,7 @@ type SessionEvent struct {
 	ToolPersistedIDs map[string]bool
 
 	// Source identifies where this event came from: "main" or "subagent".
+	// Derived from filesystem (which file the event came from).
 	Source string
 
 	// SubagentID is the agent identifier extracted from the subagent filename
@@ -63,9 +64,131 @@ type SessionEvent struct {
 	SubagentID string
 
 	// System event details
-	Subtype    string // e.g., "turn_duration"
+	Subtype    string // e.g., "turn_duration", "away_summary"
 	ParentUUID string // links system events to parent AI turn
 	DurationMs int    // turn duration in milliseconds
+
+	// SystemContent is the `content` field on system events. Carries the
+	// resume-summary text when subtype == "away_summary".
+	SystemContent string
+
+	// --- Envelope context (v2.1.126+) ---
+
+	// Cwd is the working directory at the time of the event.
+	Cwd string
+
+	// GitBranch is the git branch at the time of the event.
+	GitBranch string
+
+	// Entrypoint records how Claude Code was launched.
+	Entrypoint string
+
+	// UserType distinguishes external/internal users.
+	UserType string
+
+	// IsSidechain is Claude Code's canonical marker for subagent events.
+	// True for events emitted in subagent JSONL files; false/null otherwise.
+	// Validated 1:1 equivalent to Source == "subagent".
+	IsSidechain bool
+
+	// RequestID is the Anthropic API request ID (assistant events only).
+	RequestID string
+
+	// PromptID groups events that trace to the same user prompt revision.
+	PromptID string
+
+	// SourceToolAssistantUUID is the explicit back-link from a user
+	// (tool_result) event to the assistant (tool_use) event that triggered it.
+	// Replaces correlation synthesized via tool_use_id.
+	SourceToolAssistantUUID string
+
+	// MessageCount is the per-session message count (system events).
+	MessageCount int
+
+	// PermissionMode is the per-message permission mode (user events only).
+	PermissionMode string
+
+	// Origin tags injected events. Real user input has Origin == nil; injected
+	// events carry {kind: "task-notification" | ...}. Used to filter out
+	// non-real-user events from learner intent counts.
+	Origin map[string]any
+
+	// ToolUseResult is the structured per-tool result at envelope level,
+	// separate from inline `tool_result` content blocks. Tool-specific shape;
+	// SourceTool field discriminates.
+	ToolUseResult *ToolUseResultDetail
+
+	// --- New event-type payloads (v2.1.126+) ---
+
+	// AITitle is the AI-generated session title (type == "ai-title" events).
+	AITitle string
+
+	// LastPromptUUID is the leaf UUID pointer (type == "last-prompt" events).
+	LastPromptUUID string
+
+	// PermissionModeValue is the mode value on type == "permission-mode" events.
+	PermissionModeValue string
+
+	// Attachment is the raw attachment payload (type == "attachment" events).
+	Attachment map[string]any
+
+	// --- Message-level fields (assistant) ---
+
+	// MessageID is the Anthropic API message ID.
+	MessageID string
+
+	// StopReason is end_turn / tool_use / max_tokens / refusal / etc.
+	StopReason string
+
+	// StopSequence is the matched stop sequence if any.
+	StopSequence string
+
+	// StopDetails is the nested stop-details object (refusal, pause, etc.).
+	StopDetails map[string]any
+}
+
+// ToolUseResultDetail is the structured per-tool result emitted at envelope
+// level (`user.toolUseResult`). Tool-specific fields are populated based on
+// the source tool, identified via SourceTool. Raw preserves the full payload
+// for downstream consumers that want fields not surfaced individually.
+type ToolUseResultDetail struct {
+	// SourceTool is "Bash" | "Edit" | "Agent" | "other". Inferred from key set.
+	SourceTool string
+
+	// Raw is the unmodified toolUseResult object from the JSONL.
+	Raw map[string]any
+
+	// --- Bash shape ---
+	Stdout           string
+	Stderr           string
+	Interrupted      bool
+	IsImage          bool
+	NoOutputExpected bool
+
+	// --- Edit shape ---
+	EditFilePath     string
+	EditNewString    string
+	EditOldString    string
+	EditOriginalFile string
+	EditReplaceAll   bool
+	EditUserModified bool
+	EditStructuredPatch any
+
+	// --- Agent shape (subagent invocation result) ---
+	AgentID                string
+	AgentType              string
+	AgentContent           any
+	AgentPrompt            string
+	AgentStatus            string
+	AgentToolStats         map[string]any
+	AgentTotalDurationMs   int
+	AgentTotalTokens       int
+	AgentTotalToolUseCount int
+	AgentUsage             map[string]any
+
+	// --- "other" shape (Read/Glob/etc.) ---
+	OtherFile string
+	OtherType string
 }
 
 // ToolUse represents a single tool invocation extracted from an assistant message.
@@ -88,6 +211,26 @@ type MessageUsage struct {
 	CacheReadTokens  int
 	CacheWriteTokens int
 	ServiceTier      string
+
+	// CacheCreation breaks cache writes down by TTL bucket. Flat
+	// CacheWriteTokens is the sum (both fields coexist; neither deprecated).
+	CacheCreation1hInputTokens int
+	CacheCreation5mInputTokens int
+
+	// ServerToolUse counts server-side tool invocations (web search/fetch).
+	// These tokens are likely separate from InputTokens/OutputTokens; consumers
+	// should add them when computing total burn rate.
+	ServerToolWebSearchRequests int
+	ServerToolWebFetchRequests  int
+
+	// InferenceGeo is the inference region (empty in local sessions).
+	InferenceGeo string
+
+	// Iterations is reserved — observed empty in current sessions.
+	Iterations []any
+
+	// Speed is the priority/throughput tier enum (e.g., "standard").
+	Speed string
 }
 
 // AllText returns all conversation text concatenated for bigram extraction.
@@ -135,6 +278,33 @@ func ParseLine(line []byte) (*SessionEvent, error) {
 		Subtype:    getString(raw, "subtype"),
 		ParentUUID: getStringAny(raw, "parentUuid", "parent_uuid", "parentId"),
 		DurationMs: getInt(raw, "durationMs"),
+
+		// Envelope context (v2.1.126+) — present on every recognized type
+		Cwd:                     getString(raw, "cwd"),
+		GitBranch:               getString(raw, "gitBranch"),
+		Entrypoint:              getString(raw, "entrypoint"),
+		UserType:                getString(raw, "userType"),
+		IsSidechain:             getBool(raw, "isSidechain"),
+		RequestID:               getString(raw, "requestId"),
+		PromptID:                getString(raw, "promptId"),
+		SourceToolAssistantUUID: getString(raw, "sourceToolAssistantUUID"),
+		MessageCount:            getInt(raw, "messageCount"),
+		PermissionMode:          getString(raw, "permissionMode"),
+		Origin:                  getMap(raw, "origin"),
+
+		// New event-type payloads — populated only on the matching type
+		AITitle:             getString(raw, "aiTitle"),
+		LastPromptUUID:      getString(raw, "leafUuid"),
+		PermissionModeValue: getString(raw, "permissionMode"),
+		Attachment:          getMap(raw, "attachment"),
+
+		// System content (carries away_summary text when subtype matches)
+		SystemContent: getString(raw, "content"),
+	}
+
+	// toolUseResult is an envelope-level structured result (user events only).
+	if turRaw := getMap(raw, "toolUseResult"); turRaw != nil {
+		ev.ToolUseResult = parseToolUseResult(turRaw)
 	}
 
 	// Extract message content — the core of the parser
@@ -144,15 +314,38 @@ func ParseLine(line []byte) (*SessionEvent, error) {
 		role := getStringAny(msg, "role")
 		ev.extractContent(msg, role)
 
+		// Message-level metadata (assistant API passthrough)
+		ev.MessageID = getString(msg, "id")
+		ev.StopReason = getString(msg, "stop_reason")
+		ev.StopSequence = getString(msg, "stop_sequence")
+		ev.StopDetails = getMap(msg, "stop_details")
+
 		// Extract usage (token economics)
 		if usage := getMap(msg, "usage"); usage != nil {
-			ev.Usage = &MessageUsage{
+			u := &MessageUsage{
 				InputTokens:      getInt(usage, "input_tokens"),
 				OutputTokens:     getInt(usage, "output_tokens"),
 				CacheReadTokens:  getInt(usage, "cache_read_input_tokens"),
 				CacheWriteTokens: getInt(usage, "cache_creation_input_tokens"),
 				ServiceTier:      getString(usage, "service_tier"),
+				InferenceGeo:     getString(usage, "inference_geo"),
+				Speed:            getString(usage, "speed"),
 			}
+			// cache_creation nested object: TTL bucket breakdown.
+			if cc := getMap(usage, "cache_creation"); cc != nil {
+				u.CacheCreation1hInputTokens = getInt(cc, "ephemeral_1h_input_tokens")
+				u.CacheCreation5mInputTokens = getInt(cc, "ephemeral_5m_input_tokens")
+			}
+			// server_tool_use nested object: web search/fetch counts.
+			if stu := getMap(usage, "server_tool_use"); stu != nil {
+				u.ServerToolWebSearchRequests = getInt(stu, "web_search_requests")
+				u.ServerToolWebFetchRequests = getInt(stu, "web_fetch_requests")
+			}
+			// iterations: array, observed empty in current sessions.
+			if iters, ok := usage["iterations"].([]any); ok {
+				u.Iterations = iters
+			}
+			ev.Usage = u
 		}
 	}
 
@@ -167,6 +360,59 @@ func ParseLine(line []byte) (*SessionEvent, error) {
 	}
 
 	return ev, nil
+}
+
+// parseToolUseResult extracts the discriminated-union shape of envelope-level
+// toolUseResult into a typed struct. SourceTool is inferred from key set.
+func parseToolUseResult(raw map[string]any) *ToolUseResultDetail {
+	d := &ToolUseResultDetail{Raw: raw}
+
+	// Discriminate by signature keys.
+	switch {
+	case hasAnyKey(raw, "stdout", "stderr", "interrupted"):
+		d.SourceTool = "Bash"
+		d.Stdout = getString(raw, "stdout")
+		d.Stderr = getString(raw, "stderr")
+		d.Interrupted = getBool(raw, "interrupted")
+		d.IsImage = getBool(raw, "isImage")
+		d.NoOutputExpected = getBool(raw, "noOutputExpected")
+	case hasAnyKey(raw, "oldString", "newString", "structuredPatch", "userModified", "originalFile"):
+		d.SourceTool = "Edit"
+		d.EditFilePath = getString(raw, "filePath")
+		d.EditNewString = getString(raw, "newString")
+		d.EditOldString = getString(raw, "oldString")
+		d.EditOriginalFile = getString(raw, "originalFile")
+		d.EditReplaceAll = getBool(raw, "replaceAll")
+		d.EditUserModified = getBool(raw, "userModified")
+		d.EditStructuredPatch = raw["structuredPatch"]
+	case hasAnyKey(raw, "agentId", "agentType", "totalTokens", "toolStats"):
+		d.SourceTool = "Agent"
+		d.AgentID = getString(raw, "agentId")
+		d.AgentType = getString(raw, "agentType")
+		d.AgentContent = raw["content"]
+		d.AgentPrompt = getString(raw, "prompt")
+		d.AgentStatus = getString(raw, "status")
+		d.AgentToolStats = getMap(raw, "toolStats")
+		d.AgentTotalDurationMs = getInt(raw, "totalDurationMs")
+		d.AgentTotalTokens = getInt(raw, "totalTokens")
+		d.AgentTotalToolUseCount = getInt(raw, "totalToolUseCount")
+		d.AgentUsage = getMap(raw, "usage")
+	default:
+		d.SourceTool = "other"
+		d.OtherFile = getString(raw, "file")
+		d.OtherType = getString(raw, "type")
+	}
+	return d
+}
+
+// hasAnyKey returns true if m contains any of the given keys.
+func hasAnyKey(m map[string]any, keys ...string) bool {
+	for _, k := range keys {
+		if _, ok := m[k]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // extractContent extracts text and tool uses from a message-like map.

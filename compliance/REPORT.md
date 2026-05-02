@@ -9,45 +9,33 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 <!-- BEGIN claude-session -->
 ## Claude Code Session JSONL — v2.1.126
 
-*Last regenerated: 2026-05-02 17:15 UTC*
+*Last regenerated: 2026-05-02 18:32 UTC*
 
 ### Coverage
 
 | Surface area                | Consumed | Total | Coverage |
 |-----------------------------|----------|-------|----------|
-| Event types                 | 3        | 7     | 42%       |
-| Envelope fields (assistant) | 7        | 13    | 53%      |
-| Envelope fields (system   ) | 9        | 15    | 60%      |
-| Envelope fields (user     ) | 7        | 17    | 41%      |
-| Usage fields                | 5        | 10    | 50%      |
-| Message fields (assistant)  | 4        | 9     | 44%      |
-| System subtypes             | 1        | 2     | 50%      |
-| toolUseResult shapes        | 0        | 4     | 0%       |
+| Event types                 | 7        | 7     | 100%       |
+| Envelope fields (ai-title ) | 3        | 3    | 100%      |
+| Envelope fields (assistant) | 13        | 13    | 100%      |
+| Envelope fields (attachment) | 12        | 12    | 100%      |
+| Envelope fields (last-prompt) | 4        | 4    | 100%      |
+| Envelope fields (permission-mode) | 3        | 3    | 100%      |
+| Envelope fields (system   ) | 15        | 15    | 100%      |
+| Envelope fields (user     ) | 17        | 17    | 100%      |
+| Usage fields                | 10        | 10    | 100%      |
+| Message fields (assistant)  | 9        | 9     | 100%      |
+| System subtypes             | 2        | 2     | 100%      |
+| toolUseResult shapes        | 4        | 4     | 100%       |
 
-### Top gaps (ranked by signal)
+### Gaps
 
-**[Critical] toolUseResult shapes — 0/4 consumed**
-- tools dropped: [Agent Bash Edit other]
-- highest-leverage signals dropped: `Edit.userModified`, `Edit.structuredPatch`, `Bash.interrupted`, full Agent recap (`agentId`, `totalTokens`, `toolStats`)
+**Fully integrated.** No DROPPED fields remain at this baseline.
 
-**[High] Unhandled event types — 4 ignored**
-- types: [ai-title attachment last-prompt permission-mode]
+Intentionally skipped (documented [SKIP] decisions):
+- message-level: [type] — pure API echo, no value on canonical event
 
-**[Medium] Envelope context fields dropped on every recognized event**
-- `assistant`: [cwd entrypoint gitBranch isSidechain requestId userType]
-- `system`: [cwd entrypoint gitBranch isSidechain messageCount userType]
-- `user`: [cwd entrypoint gitBranch isSidechain origin permissionMode promptId sourceToolAssistantUUID toolUseResult userType]
-
-**[Medium-Low] Usage metadata dropped — 5/10**
-- fields: [cache_creation inference_geo iterations server_tool_use speed]
-
-**[Low] Message-level assistant fields dropped — 5/9**
-- fields: [id stop_details stop_reason stop_sequence type]
-
-**[Low] System subtypes not branched on — 1/2**
-- subtypes: [away_summary]
-
-See `versions/v2.1.126-observed/observations.md` §8 for ranked follow-up.
+See `versions/v2.1.126-observed/observations.md` for the version-specific narrative.
 <!-- END claude-session -->
 
 ---
@@ -55,7 +43,7 @@ See `versions/v2.1.126-observed/observations.md` §8 for ranked follow-up.
 <!-- BEGIN claude-statusline -->
 ## Claude Code Status Line — v2.1.126
 
-*Last regenerated: 2026-05-02 17:15 UTC*
+*Last regenerated: 2026-05-02 18:32 UTC*
 
 ### Coverage
 
