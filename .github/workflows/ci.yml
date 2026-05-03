@@ -13,7 +13,9 @@ jobs:
   check:
     name: Vet + Test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 20 min is generous headroom — local runs ~3 min; CI runners are slower
+    # and integration tests have grown. Bump again if we exceed.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -25,7 +27,7 @@ jobs:
         run: go vet -tags lean ./...
 
       - name: Run tests
-        run: go test -tags lean ./...
+        run: go test -tags lean ./... -timeout 15m
 
   security:
     name: Security scan
