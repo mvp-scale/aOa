@@ -339,6 +339,14 @@ if (hashTab && document.getElementById('tab-' + hashTab)) {
   switchTab(hashTab);
 }
 
+// Screenshot mode: ?view=hero hides everything except nav/hero/stats;
+// ?view=main hides nav/hero/stats and shows body+footer. CSS does the
+// hiding (style.css `body.screenshot-*` rules); JS just sets the class.
+var viewParam = new URLSearchParams(location.search).get('view');
+if (viewParam) {
+  document.body.classList.add('screenshot-' + viewParam);
+}
+
 /* ══════════════════════════════════════════════════════════
    POLLING
    ══════════════════════════════════════════════════════════ */

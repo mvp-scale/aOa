@@ -1249,3 +1249,45 @@ body {
   .fr-spot-headline { font-size: 18px; }
   .fr-spot-body { font-size: 12px; }
 }
+
+/* ══════════════════════════════════════════════════════════
+   SCREENSHOT MODES (driven by ?view=hero | ?view=main)
+   Used by scripts/screenshots-dashboard.sh to capture
+   docs/screenshots/{tab}-{hero|main}.png with no overlap.
+   ══════════════════════════════════════════════════════════ */
+
+/* Both modes: collapse the page to natural content height so the
+   footer flows after content (instead of being pinned by 100vh flex). */
+body.screenshot-hero,
+body.screenshot-main {
+  height: auto !important;
+  overflow: visible !important;
+}
+body.screenshot-hero .main,
+body.screenshot-main .main {
+  flex: none !important;
+  overflow: visible !important;
+}
+body.screenshot-hero .tab-content,
+body.screenshot-main .tab-content {
+  flex: none !important;
+}
+
+/* Hero: only nav + hero-row + stats-grid visible. Hide footer + everything
+   below stats-grid in the active tab. */
+body.screenshot-hero footer,
+body.screenshot-hero .tab-content.active > *:not(.hero-row):not(.stats-grid) {
+  display: none !important;
+}
+
+/* Main: hide top nav (brand + tabs + status) + hero-row + stats-grid +
+   footer; keep only the body content. The whole .nav element wraps
+   brand, tabs, and status badge — hide it as a unit. Footer is hidden
+   here too because the screenshot-mode trimmer crops to the bottom of
+   visible content; including the footer would leave it floating. */
+body.screenshot-main .nav,
+body.screenshot-main footer,
+body.screenshot-main .tab-content.active > .hero-row,
+body.screenshot-main .tab-content.active > .stats-grid {
+  display: none !important;
+}
