@@ -113,7 +113,10 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Ensure npm >= 11.5.1 for trusted publishing
-        run: npm install -g npm@latest && npm --version
+        # Pinned to 11.5.1 (minimum required) instead of @latest because
+        # newer npm releases on Node 22 break self-upgrade with
+        # "Cannot find module 'promise-retry'". Bump deliberately when needed.
+        run: npm install -g npm@11.5.1 && npm --version
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
