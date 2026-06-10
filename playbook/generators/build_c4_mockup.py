@@ -909,29 +909,29 @@ function Flow(){
     color:a?T.text:T.dim,borderRadius:7,padding:"5px 11px",fontSize:12,cursor:"pointer",fontWeight:550});
   return html`<div style=${{height:"100vh",display:"flex",flexDirection:"column",background:T.bg,
     font:"13px -apple-system,Segoe UI,Inter,Roboto,sans-serif",color:T.text}}>
-    <div style=${{padding:"10px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:12}}>
-      <div style=${{fontWeight:750,fontSize:15}}>aOa <span style=${{color:T.dim,fontWeight:400}}>· architecture</span></div>
+    <div style=${{padding:"9px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10}}>
+      <div style=${{fontWeight:750,fontSize:15,flexShrink:0}}>aOa <span style=${{color:T.dim,fontWeight:400}}>· architecture</span></div>
       <select value=${estate} onChange=${e=>goEstate(e.target.value)}
         style=${{background:T.card,color:ESTATES[estate].sim?T.yellow:T.green,border:`1px solid ${T.border}`,
-        borderRadius:7,padding:"4px 8px",fontSize:11.5,fontWeight:600,cursor:"pointer"}}>
+        borderRadius:7,padding:"4px 8px",fontSize:11.5,fontWeight:600,cursor:"pointer",flexShrink:0,maxWidth:230}}>
         ${Object.entries(ESTATES).map(([eid,ev])=>html`<option key=${eid} value=${eid}>${ev.sim?"◌ ":"● "}${ev.label}</option>`)}
       </select>
-      <span style=${{color:T.mute}}>·</span>
-      <span style=${{fontSize:12.5,color:T.blue,fontWeight:650,whiteSpace:"nowrap"}}>${sys.label}</span>
-      <span style=${{color:T.mute}}>▸</span>
-      <span style=${{fontSize:12.5,color:T.text,fontWeight:600,whiteSpace:"nowrap"}}>${view.title}</span>
-      ${view.prov?html`<span style=${(pk=>({fontSize:9,fontWeight:700,letterSpacing:.5,whiteSpace:"nowrap",
-        color:pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan,
-        border:`1px solid ${pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan}`,
-        borderRadius:5,padding:"1px 7px"}))(view.prov.kind)}>${view.prov.label}</span>`:null}
-      <span style=${{fontSize:11.5,color:T.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>${view.count}</span>
-      ${els&&els.problems&&els.problems.length?html`<span title=${els.problems.join("\n")}
-        style=${{fontSize:9.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:5,
-        padding:"1px 7px",whiteSpace:"nowrap",cursor:"help"}}>⚠ ${els.problems.length} pattern problem${els.problems.length>1?"s":""}</span>`:null}
-      ${ISSUES.length?html`<span title=${ISSUES.join("\n")}
-        style=${{fontSize:9.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:5,
-        padding:"1px 7px",whiteSpace:"nowrap",cursor:"help"}}>◌ ${ISSUES.length} model issue${ISSUES.length>1?"s":""}</span>`:null}
-      <div style=${{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+      <div style=${{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:8,overflow:"hidden"}}>
+        <span style=${{fontSize:12.5,color:T.blue,fontWeight:650,whiteSpace:"nowrap"}}>${sys.label}</span>
+        <span style=${{color:T.mute}}>▸</span>
+        <span style=${{fontSize:12.5,color:T.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${view.title}</span>
+        ${view.prov?html`<span title=${view.prov.label} style=${(pk=>({fontSize:9,fontWeight:700,letterSpacing:.5,whiteSpace:"nowrap",cursor:"help",flexShrink:0,
+          color:pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan,
+          border:`1px solid ${pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan}`,
+          borderRadius:5,padding:"1px 7px"}))(view.prov.kind)}>${view.prov.kind==="derived"?"REAL":view.prov.kind==="simulated"?"SIMULATED":"MIXED"}</span>`:null}
+        ${els&&els.problems&&els.problems.length?html`<span title=${els.problems.join("\n")}
+          style=${{fontSize:9.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:5,
+          padding:"1px 7px",whiteSpace:"nowrap",cursor:"help",flexShrink:0}}>⚠ ${els.problems.length}</span>`:null}
+        ${ISSUES.length?html`<span title=${ISSUES.join("\n")}
+          style=${{fontSize:9.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:5,
+          padding:"1px 7px",whiteSpace:"nowrap",cursor:"help",flexShrink:0}}>◌ ${ISSUES.length}</span>`:null}
+      </div>
+      <div style=${{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
         <button style=${btn(ov.concerns)} onClick=${()=>setOv({...ov,concerns:!ov.concerns})}
           title="Recon findings per package (bitmask)">⚠ Concerns</button>
         <button style=${btn(ov.changed)} onClick=${()=>setOv({...ov,changed:!ov.changed})}
@@ -945,6 +945,11 @@ function Flow(){
         <button style=${btn(dirOv==="DOWN")} onClick=${()=>setDirOv("DOWN")} title="Top–Bottom">↓</button>
         <button style=${btn(dirOv==="RIGHT")} onClick=${()=>setDirOv("RIGHT")} title="Left–Right">→</button>
       </div></div>
+    <div style=${{padding:"3px 18px",borderBottom:`1px solid ${T.border}`,fontSize:10.5,color:T.dim,
+      whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}
+      title=${view.count+(view.prov?" · "+view.prov.label:"")}>
+      ${view.count}${view.prov?html`<span style=${{color:T.mute}}> · ${view.prov.label}</span>`:null}
+    </div>
     <div style=${{flex:1,display:"flex",minHeight:0}}>
       <${Sidebar} estate=${estate} scopes=${SC} simEstate=${ESTATES[estate].sim}
         scope=${scope} goScope=${goScope} level=${level} go=${go} open=${open} setOpen=${setOpen}
