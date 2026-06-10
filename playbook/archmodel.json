@@ -1,0 +1,1772 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "generated": {
+  "tool": "build_c4_mockup.py",
+  "timestamp": "2026-06-10 15:40 UTC",
+  "inputs": [
+   "go list",
+   "repo/graphify/*.py imports",
+   "store.go",
+   "arch_proxy.jsonl",
+   "git log"
+  ]
+ },
+ "estates": {
+  "local": {
+   "label": "Local \u00b7 this workspace",
+   "sim": false,
+   "scopes": {
+    "aoa": {
+     "label": "aOa",
+     "tech": "Go \u00b7 single binary",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "System Context",
+       "count": "4 elements",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "mixed",
+        "label": "MIXED \u00b7 system real \u00b7 externals inferred"
+       },
+       "nodes": [
+        {
+         "id": "aoa",
+         "type": "sys",
+         "icon": "sys",
+         "label": "aOa",
+         "sub": "Code-intelligence engine",
+         "drillTo": "container",
+         "real": true
+        },
+        {
+         "id": "logs",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Claude Session Logs",
+         "sub": "[sourceable \u00b7 config]",
+         "real": false
+        },
+        {
+         "id": "repo",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Source Repository",
+         "sub": "[sourceable \u00b7 fs]",
+         "real": false
+        },
+        {
+         "id": "grammars",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Tree-sitter Grammars",
+         "sub": "[sourceable \u00b7 .so]",
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "x1",
+         "source": "logs",
+         "target": "aoa",
+         "label": "tails"
+        },
+        {
+         "id": "x2",
+         "source": "repo",
+         "target": "aoa",
+         "label": "parses"
+        },
+        {
+         "id": "x3",
+         "source": "aoa",
+         "target": "grammars",
+         "label": "loads"
+        }
+       ]
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Container diagram",
+       "count": "4 containers",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "mixed",
+        "label": "MIXED \u00b7 system real \u00b7 externals inferred"
+       },
+       "nodes": [
+        {
+         "id": "bin",
+         "type": "container",
+         "icon": "container",
+         "label": "aoa",
+         "sub": "[Go \u00b7 single binary]",
+         "drillTo": "component",
+         "real": true
+        },
+        {
+         "id": "db",
+         "type": "store",
+         "icon": "store",
+         "label": "bbolt",
+         "sub": "[embedded KV]",
+         "drillTo": "datamodel",
+         "real": true
+        },
+        {
+         "id": "logs2",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Session Logs",
+         "sub": "[sourceable]",
+         "real": false
+        },
+        {
+         "id": "repo2",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Repository",
+         "sub": "[28 languages]",
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "k1",
+         "source": "bin",
+         "target": "db",
+         "label": "reads/writes"
+        },
+        {
+         "id": "k2",
+         "source": "logs2",
+         "target": "bin",
+         "label": "tails"
+        },
+        {
+         "id": "k3",
+         "source": "repo2",
+         "target": "bin",
+         "label": "parses"
+        }
+       ]
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component diagram",
+       "dir": "DOWN",
+       "count": "25 packages \u00b7 42 dependencies",
+       "prov": {
+        "kind": "derived",
+        "label": "REAL \u00b7 derived from code"
+       },
+       "buckets": [
+        {
+         "id": "b_cmd",
+         "layer": "cmd",
+         "label": "cmd",
+         "part": 0,
+         "members": [
+          {
+           "id": "m_cmd_aoa_cmd",
+           "label": "cmd",
+           "sub": "in 1",
+           "concerns": 888,
+           "changed": false
+          },
+          {
+           "id": "m_cmd_aoa",
+           "label": "aoa",
+           "sub": "in 0",
+           "concerns": 5,
+           "changed": false
+          },
+          {
+           "id": "m_cmd_dim_dump",
+           "label": "dim-dump",
+           "sub": "in 0",
+           "concerns": 50,
+           "changed": false
+          }
+         ]
+        },
+        {
+         "id": "b_app",
+         "layer": "app",
+         "label": "app",
+         "part": 1,
+         "members": [
+          {
+           "id": "m_internal_app",
+           "label": "app",
+           "sub": "in 1",
+           "concerns": 937,
+           "changed": true
+          }
+         ]
+        },
+        {
+         "id": "b_adapters",
+         "layer": "adapters",
+         "label": "adapters",
+         "part": 2,
+         "members": [
+          {
+           "id": "m_internal_adapters_bbolt",
+           "label": "bbolt",
+           "sub": "in 3",
+           "concerns": 398,
+           "changed": false
+          },
+          {
+           "id": "m_internal_adapters_socket",
+           "label": "socket",
+           "sub": "in 3",
+           "concerns": 140,
+           "changed": false
+          },
+          {
+           "id": "m_internal_adapters_claude",
+           "label": "claude",
+           "sub": "in 1",
+           "concerns": 83,
+           "changed": true
+          },
+          {
+           "id": "m_internal_adapters_fsnotify",
+           "label": "fsnotify",
+           "sub": "in 1",
+           "concerns": 115,
+           "changed": false
+          },
+          {
+           "id": "m_internal_adapters_tailer",
+           "label": "tailer",
+           "sub": "in 1",
+           "concerns": 256,
+           "changed": true
+          },
+          {
+           "id": "m_internal_adapters_treesitter",
+           "label": "treesitter",
+           "sub": "in 1",
+           "concerns": 411,
+           "changed": false
+          },
+          {
+           "id": "m_internal_adapters_web",
+           "label": "web",
+           "sub": "in 1",
+           "concerns": 291,
+           "changed": false
+          },
+          {
+           "id": "m_internal_adapters_ahocorasick",
+           "label": "ahocorasick",
+           "sub": "in 0",
+           "concerns": 50,
+           "changed": false
+          },
+          {
+           "id": "m_internal_adapters_recon",
+           "label": "recon",
+           "sub": "in 0",
+           "concerns": 168,
+           "changed": false
+          }
+         ]
+        },
+        {
+         "id": "b_domain",
+         "layer": "domain",
+         "label": "domain",
+         "part": 3,
+         "members": [
+          {
+           "id": "m_internal_domain_analyzer",
+           "label": "analyzer",
+           "sub": "in 3",
+           "concerns": 336,
+           "changed": false
+          },
+          {
+           "id": "m_internal_domain_enricher",
+           "label": "enricher",
+           "sub": "in 2",
+           "concerns": 56,
+           "changed": false
+          },
+          {
+           "id": "m_internal_domain_status",
+           "label": "status",
+           "sub": "in 2",
+           "concerns": 41,
+           "changed": false
+          },
+          {
+           "id": "m_internal_domain_hints",
+           "label": "hints",
+           "sub": "in 1",
+           "concerns": 47,
+           "changed": false
+          },
+          {
+           "id": "m_internal_domain_index",
+           "label": "index",
+           "sub": "in 1",
+           "concerns": 768,
+           "changed": false
+          },
+          {
+           "id": "m_internal_domain_learner",
+           "label": "learner",
+           "sub": "in 1",
+           "concerns": 192,
+           "changed": false
+          }
+         ]
+        },
+        {
+         "id": "b_ports",
+         "layer": "ports",
+         "label": "ports",
+         "part": 4,
+         "members": [
+          {
+           "id": "m_internal_ports",
+           "label": "ports",
+           "sub": "in 12",
+           "concerns": 55,
+           "changed": true
+          }
+         ]
+        },
+        {
+         "id": "b_atlas",
+         "layer": "atlas",
+         "label": "atlas",
+         "part": 4,
+         "members": [
+          {
+           "id": "m_atlas",
+           "label": "atlas",
+           "sub": "in 1",
+           "concerns": 3,
+           "changed": false
+          }
+         ]
+        },
+        {
+         "id": "b_supporting",
+         "layer": "supporting",
+         "label": "supporting",
+         "part": 5,
+         "members": [
+          {
+           "id": "m_internal_peek",
+           "label": "peek",
+           "sub": "in 2",
+           "concerns": 10,
+           "changed": false
+          },
+          {
+           "id": "m_internal_version",
+           "label": "version",
+           "sub": "in 2",
+           "concerns": 3,
+           "changed": false
+          },
+          {
+           "id": "m_hooks",
+           "label": "hooks",
+           "sub": "in 1",
+           "concerns": 3,
+           "changed": false
+          },
+          {
+           "id": "m_recon",
+           "label": "recon",
+           "sub": "in 1",
+           "concerns": 3,
+           "changed": false
+          }
+         ]
+        }
+       ],
+       "edges": [
+        {
+         "id": "a_adapters_domain",
+         "source": "b_adapters",
+         "target": "b_domain",
+         "count": 1
+        },
+        {
+         "id": "a_adapters_ports",
+         "source": "b_adapters",
+         "target": "b_ports",
+         "count": 6
+        },
+        {
+         "id": "a_adapters_supporting",
+         "source": "b_adapters",
+         "target": "b_supporting",
+         "count": 1
+        },
+        {
+         "id": "a_app_adapters",
+         "source": "b_app",
+         "target": "b_adapters",
+         "count": 5
+        },
+        {
+         "id": "a_app_atlas",
+         "source": "b_app",
+         "target": "b_atlas",
+         "count": 1
+        },
+        {
+         "id": "a_app_domain",
+         "source": "b_app",
+         "target": "b_domain",
+         "count": 6
+        },
+        {
+         "id": "a_app_ports",
+         "source": "b_app",
+         "target": "b_ports",
+         "count": 1
+        },
+        {
+         "id": "a_app_supporting",
+         "source": "b_app",
+         "target": "b_supporting",
+         "count": 1
+        },
+        {
+         "id": "a_cmd_adapters",
+         "source": "b_cmd",
+         "target": "b_adapters",
+         "count": 4
+        },
+        {
+         "id": "a_cmd_app",
+         "source": "b_cmd",
+         "target": "b_app",
+         "count": 1
+        },
+        {
+         "id": "a_cmd_domain",
+         "source": "b_cmd",
+         "target": "b_domain",
+         "count": 2
+        },
+        {
+         "id": "a_cmd_ports",
+         "source": "b_cmd",
+         "target": "b_ports",
+         "count": 1
+        },
+        {
+         "id": "a_cmd_supporting",
+         "source": "b_cmd",
+         "target": "b_supporting",
+         "count": 3
+        },
+        {
+         "id": "a_domain_ports",
+         "source": "b_domain",
+         "target": "b_ports",
+         "count": 4
+        },
+        {
+         "id": "a_domain_supporting",
+         "source": "b_domain",
+         "target": "b_supporting",
+         "count": 1
+        }
+       ]
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Data Flow \u2014 signal pipeline",
+       "dir": "RIGHT",
+       "count": "10 elements",
+       "prov": {
+        "kind": "derived",
+        "label": "REAL \u00b7 derived from code"
+       },
+       "nodes": [
+        {
+         "id": "jsonl",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Claude JSONL",
+         "sub": "~/.claude/projects/*.jsonl",
+         "real": true
+        },
+        {
+         "id": "tailer",
+         "type": "proc",
+         "icon": "app",
+         "label": "tailer",
+         "sub": "defensive JSONL tail",
+         "real": true
+        },
+        {
+         "id": "parser",
+         "type": "proc",
+         "icon": "app",
+         "label": "parser",
+         "sub": "raw \u2192 events",
+         "real": true
+        },
+        {
+         "id": "reader",
+         "type": "proc",
+         "icon": "app",
+         "label": "claude.Reader",
+         "sub": "canonical events",
+         "real": true
+        },
+        {
+         "id": "app",
+         "type": "proc",
+         "icon": "app",
+         "label": "app.onSessionEvent",
+         "sub": "range gate \u00b7 file_hits",
+         "real": true
+        },
+        {
+         "id": "learner",
+         "type": "proc",
+         "icon": "domain",
+         "label": "learner.observe()",
+         "sub": "bigrams \u00b7 autotune",
+         "real": true
+        },
+        {
+         "id": "db2",
+         "type": "store",
+         "icon": "store",
+         "label": "aoa.db",
+         "sub": "bbolt \u00b7 project-scoped",
+         "real": true
+        },
+        {
+         "id": "status",
+         "type": "store",
+         "icon": "store",
+         "label": "status.json",
+         "sub": ".aoa/status.json",
+         "real": true
+        },
+        {
+         "id": "dash",
+         "type": "proc",
+         "icon": "app",
+         "label": "dashboard",
+         "sub": "localhost \u00b7 5 tabs",
+         "real": true
+        },
+        {
+         "id": "agent",
+         "type": "ext",
+         "icon": "ext",
+         "label": "AI agent / CLI",
+         "sub": "grep \u00b7 egrep \u00b7 peek",
+         "real": true
+        }
+       ],
+       "edges": [
+        {
+         "id": "f1",
+         "source": "jsonl",
+         "target": "tailer",
+         "label": "raw lines"
+        },
+        {
+         "id": "f2",
+         "source": "tailer",
+         "target": "parser",
+         "label": "JSONL"
+        },
+        {
+         "id": "f3",
+         "source": "parser",
+         "target": "reader",
+         "label": "raw events"
+        },
+        {
+         "id": "f4",
+         "source": "reader",
+         "target": "app",
+         "label": "SessionEvent"
+        },
+        {
+         "id": "f5",
+         "source": "app",
+         "target": "learner",
+         "label": "observe()"
+        },
+        {
+         "id": "f6",
+         "source": "learner",
+         "target": "db2",
+         "label": "state"
+        },
+        {
+         "id": "f7",
+         "source": "app",
+         "target": "status",
+         "label": "status line"
+        },
+        {
+         "id": "f8",
+         "source": "db2",
+         "target": "dash",
+         "label": "metrics"
+        },
+        {
+         "id": "f9",
+         "source": "agent",
+         "target": "app",
+         "label": "search"
+        },
+        {
+         "id": "f10",
+         "source": "app",
+         "target": "agent",
+         "label": "results <1ms"
+        }
+       ]
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Data Model \u2014 aoa.db (bbolt)",
+       "dir": "DOWN",
+       "count": "6 buckets \u00b7 from store.go",
+       "prov": {
+        "kind": "derived",
+        "label": "REAL \u00b7 derived from code"
+       },
+       "nodes": [
+        {
+         "id": "proj",
+         "type": "entity",
+         "label": "project",
+         "tech": "bucket \u00b7 keyed by projectID",
+         "fields": [
+          "projectID  (root key)"
+         ],
+         "real": true
+        },
+        {
+         "id": "index",
+         "type": "entity",
+         "label": "index",
+         "tech": "bucket \u00b7 format v1",
+         "fields": [
+          "_version  byte",
+          "tokens  posting lists (bin)",
+          "metadata  SymbolMeta (gob)",
+          "files  FileMeta (gob)"
+         ],
+         "real": true
+        },
+        {
+         "id": "learnerB",
+         "type": "entity",
+         "label": "learner",
+         "tech": "bucket",
+         "fields": [
+          "state  LearnerState (json)"
+         ],
+         "real": true
+        },
+        {
+         "id": "sessions",
+         "type": "entity",
+         "label": "sessions",
+         "tech": "bucket",
+         "fields": [
+          "sessionID \u2192 metrics (json)"
+         ],
+         "real": true
+        },
+        {
+         "id": "dims",
+         "type": "entity",
+         "label": "dimensions",
+         "tech": "bucket",
+         "fields": [
+          "path \u2192 FileAnalysis (json)",
+          "  bitmask [6]uint64",
+          "  methods[] + findings[]"
+         ],
+         "real": true
+        },
+        {
+         "id": "telem",
+         "type": "entity",
+         "label": "telemetry",
+         "tech": "bucket",
+         "fields": [
+          "project rollup (json)",
+          "lifetime tokens/savings"
+         ],
+         "real": true
+        }
+       ],
+       "edges": [
+        {
+         "id": "d1",
+         "source": "proj",
+         "target": "index",
+         "label": "contains"
+        },
+        {
+         "id": "d2",
+         "source": "proj",
+         "target": "learnerB",
+         "label": "contains"
+        },
+        {
+         "id": "d3",
+         "source": "proj",
+         "target": "sessions",
+         "label": "contains"
+        },
+        {
+         "id": "d4",
+         "source": "proj",
+         "target": "dims",
+         "label": "contains"
+        },
+        {
+         "id": "d5",
+         "source": "proj",
+         "target": "telem",
+         "label": "contains"
+        }
+       ]
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment \u2014 build \u2192 release \u2192 install",
+       "dir": "RIGHT",
+       "count": "4 environments",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED \u00b7 sourceable, not yet extracted"
+       },
+       "buckets": [
+        {
+         "id": "db_dev",
+         "layer": "dev",
+         "label": "developer machine",
+         "part": 0,
+         "members": [
+          {
+           "id": "p_src",
+           "label": "source repo",
+           "sub": "git"
+          },
+          {
+           "id": "p_build",
+           "label": "build.sh",
+           "sub": "guarded"
+          },
+          {
+           "id": "p_tag",
+           "label": "git tag",
+           "sub": "vX.Y.Z"
+          }
+         ]
+        },
+        {
+         "id": "db_gh",
+         "layer": "ci",
+         "label": "github actions",
+         "part": 1,
+         "members": [
+          {
+           "id": "p_ci",
+           "label": "CI vet+test",
+           "sub": "20m"
+          },
+          {
+           "id": "p_rel",
+           "label": "goreleaser",
+           "sub": "matrix"
+          },
+          {
+           "id": "p_npm",
+           "label": "npm publish",
+           "sub": "on tag"
+          }
+         ]
+        },
+        {
+         "id": "db_reg",
+         "layer": "registry",
+         "label": "registries",
+         "part": 2,
+         "members": [
+          {
+           "id": "p_ghr",
+           "label": "gh releases",
+           "sub": "binaries"
+          },
+          {
+           "id": "p_npmr",
+           "label": "@mvpscale/aoa",
+           "sub": "npm"
+          }
+         ]
+        },
+        {
+         "id": "db_user",
+         "layer": "user",
+         "label": "user machine",
+         "part": 3,
+         "members": [
+          {
+           "id": "p_bin",
+           "label": "aoa binary",
+           "sub": "~/.local/bin"
+          },
+          {
+           "id": "p_daemon",
+           "label": "daemon",
+           "sub": "socket+http"
+          },
+          {
+           "id": "p_aoa",
+           "label": ".aoa/",
+           "sub": "db \u00b7 grammars"
+          },
+          {
+           "id": "p_dash",
+           "label": "dashboard",
+           "sub": "localhost"
+          }
+         ]
+        }
+       ],
+       "edges": [
+        {
+         "id": "dp1",
+         "source": "db_dev",
+         "target": "db_gh",
+         "count": 1,
+         "label": "push tag"
+        },
+        {
+         "id": "dp2",
+         "source": "db_gh",
+         "target": "db_reg",
+         "count": 2,
+         "label": "publish"
+        },
+        {
+         "id": "dp3",
+         "source": "db_reg",
+         "target": "db_user",
+         "count": 2,
+         "label": "install"
+        }
+       ],
+       "palette": "dep",
+       "labeled": true
+      }
+     }
+    },
+    "graphify": {
+     "label": "graphify",
+     "tech": "Python \u00b7 CLI",
+     "views": {
+      "component": {
+       "kind": "buckets",
+       "title": "Component diagram",
+       "dir": "DOWN",
+       "count": "35 modules \u00b7 76 imports",
+       "prov": {
+        "kind": "derived",
+        "label": "REAL \u00b7 imports parsed \u00b7 grouping inferred"
+       },
+       "buckets": [
+        {
+         "id": "gb_cli",
+         "layer": "cli",
+         "label": "cli",
+         "part": 0,
+         "members": [
+          {
+           "id": "g___main__",
+           "label": "__main__",
+           "sub": "in 0"
+          }
+         ]
+        },
+        {
+         "id": "gb_serve",
+         "layer": "serve",
+         "label": "serve",
+         "part": 1,
+         "members": [
+          {
+           "id": "g_querylog",
+           "label": "querylog",
+           "sub": "in 2"
+          },
+          {
+           "id": "g_serve",
+           "label": "serve",
+           "sub": "in 2"
+          },
+          {
+           "id": "g_watch",
+           "label": "watch",
+           "sub": "in 2"
+          },
+          {
+           "id": "g_benchmark",
+           "label": "benchmark",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_diagnostics",
+           "label": "diagnostics",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_hooks",
+           "label": "hooks",
+           "sub": "in 1"
+          }
+         ]
+        },
+        {
+         "id": "gb_ingest",
+         "layer": "ingest",
+         "label": "ingest",
+         "part": 2,
+         "members": [
+          {
+           "id": "g_prs",
+           "label": "prs",
+           "sub": "in 2"
+          },
+          {
+           "id": "g_google_workspace",
+           "label": "google_workspace",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_ingest",
+           "label": "ingest",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_mcp_ingest",
+           "label": "mcp_ingest",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_pg_introspect",
+           "label": "pg_introspect",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_transcribe",
+           "label": "transcribe",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_wiki",
+           "label": "wiki",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_scip_ingest",
+           "label": "scip_ingest",
+           "sub": "in 0"
+          }
+         ]
+        },
+        {
+         "id": "gb_pipeline",
+         "layer": "pipeline",
+         "label": "pipeline",
+         "part": 3,
+         "members": [
+          {
+           "id": "g_build",
+           "label": "build",
+           "sub": "in 9"
+          },
+          {
+           "id": "g_detect",
+           "label": "detect",
+           "sub": "in 6"
+          },
+          {
+           "id": "g_analyze",
+           "label": "analyze",
+           "sub": "in 5"
+          },
+          {
+           "id": "g_cluster",
+           "label": "cluster",
+           "sub": "in 3"
+          },
+          {
+           "id": "g_extract",
+           "label": "extract",
+           "sub": "in 3"
+          },
+          {
+           "id": "g_export",
+           "label": "export",
+           "sub": "in 2"
+          },
+          {
+           "id": "g_report",
+           "label": "report",
+           "sub": "in 2"
+          },
+          {
+           "id": "g_affected",
+           "label": "affected",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_dedup",
+           "label": "dedup",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_global_graph",
+           "label": "global_graph",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_multigraph_compat",
+           "label": "multigraph_compat",
+           "sub": "in 0"
+          },
+          {
+           "id": "g_semantic_cleanup",
+           "label": "semantic_cleanup",
+           "sub": "in 0"
+          },
+          {
+           "id": "g_symbol_resolution",
+           "label": "symbol_resolution",
+           "sub": "in 0"
+          }
+         ]
+        },
+        {
+         "id": "gb_render",
+         "layer": "render",
+         "label": "render",
+         "part": 4,
+         "members": [
+          {
+           "id": "g_callflow_html",
+           "label": "callflow_html",
+           "sub": "in 2"
+          },
+          {
+           "id": "g_tree_html",
+           "label": "tree_html",
+           "sub": "in 1"
+          }
+         ]
+        },
+        {
+         "id": "gb_infra",
+         "layer": "infra",
+         "label": "infra",
+         "part": 5,
+         "members": [
+          {
+           "id": "g_security",
+           "label": "security",
+           "sub": "in 17"
+          },
+          {
+           "id": "g_llm",
+           "label": "llm",
+           "sub": "in 3"
+          },
+          {
+           "id": "g_cache",
+           "label": "cache",
+           "sub": "in 2"
+          },
+          {
+           "id": "g_validate",
+           "label": "validate",
+           "sub": "in 1"
+          },
+          {
+           "id": "g_manifest",
+           "label": "manifest",
+           "sub": "in 0"
+          }
+         ]
+        }
+       ],
+       "edges": [
+        {
+         "id": "ge_cli_infra",
+         "source": "gb_cli",
+         "target": "gb_infra",
+         "count": 3
+        },
+        {
+         "id": "ge_cli_ingest",
+         "source": "gb_cli",
+         "target": "gb_ingest",
+         "count": 4
+        },
+        {
+         "id": "ge_cli_pipeline",
+         "source": "gb_cli",
+         "target": "gb_pipeline",
+         "count": 9
+        },
+        {
+         "id": "ge_cli_render",
+         "source": "gb_cli",
+         "target": "gb_render",
+         "count": 2
+        },
+        {
+         "id": "ge_cli_serve",
+         "source": "gb_cli",
+         "target": "gb_serve",
+         "count": 6
+        },
+        {
+         "id": "ge_infra_pipeline",
+         "source": "gb_infra",
+         "target": "gb_pipeline",
+         "count": 2
+        },
+        {
+         "id": "ge_ingest_infra",
+         "source": "gb_ingest",
+         "target": "gb_infra",
+         "count": 6
+        },
+        {
+         "id": "ge_ingest_pipeline",
+         "source": "gb_ingest",
+         "target": "gb_pipeline",
+         "count": 2
+        },
+        {
+         "id": "ge_pipeline_infra",
+         "source": "gb_pipeline",
+         "target": "gb_infra",
+         "count": 8
+        },
+        {
+         "id": "ge_pipeline_ingest",
+         "source": "gb_pipeline",
+         "target": "gb_ingest",
+         "count": 2
+        },
+        {
+         "id": "ge_render_infra",
+         "source": "gb_render",
+         "target": "gb_infra",
+         "count": 2
+        },
+        {
+         "id": "ge_serve_infra",
+         "source": "gb_serve",
+         "target": "gb_infra",
+         "count": 4
+        },
+        {
+         "id": "ge_serve_ingest",
+         "source": "gb_serve",
+         "target": "gb_ingest",
+         "count": 1
+        },
+        {
+         "id": "ge_serve_pipeline",
+         "source": "gb_serve",
+         "target": "gb_pipeline",
+         "count": 11
+        },
+        {
+         "id": "ge_serve_render",
+         "source": "gb_serve",
+         "target": "gb_render",
+         "count": 1
+        }
+       ],
+       "palette": "gf"
+      }
+     }
+    }
+   }
+  },
+  "monolith": {
+   "label": "Retail Monolith",
+   "sim": true,
+   "scopes": {
+    "mono": {
+     "label": "Retail Monolith",
+     "tech": "Java \u00b7 \u2248480k LOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "System Context",
+       "count": "4 elements",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED \u00b7 would derive from: EDI/API configs + reflexion"
+       },
+       "nodes": [
+        {
+         "id": "mono",
+         "type": "sys",
+         "icon": "sys",
+         "label": "Retail Monolith",
+         "sub": "Java \u00b7 \u2248480k LOC",
+         "real": false
+        },
+        {
+         "id": "pos",
+         "type": "ext",
+         "icon": "ext",
+         "label": "POS Terminals",
+         "sub": "stores \u00b7 2,400 sites",
+         "real": false
+        },
+        {
+         "id": "pay",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Payment Gateway",
+         "sub": "PCI boundary",
+         "real": false
+        },
+        {
+         "id": "wms",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Warehouse Mgmt",
+         "sub": "3PL EDI",
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "me1",
+         "source": "pos",
+         "target": "mono",
+         "label": "sells"
+        },
+        {
+         "id": "me2",
+         "source": "mono",
+         "target": "pay",
+         "label": "charges"
+        },
+        {
+         "id": "me3",
+         "source": "mono",
+         "target": "wms",
+         "label": "ships"
+        }
+       ]
+      },
+      "domains": {
+       "kind": "buckets",
+       "title": "Domain map",
+       "dir": "DOWN",
+       "count": "\u224814,800 elements \u00b7 3 domains + shared kernel",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED \u00b7 would derive from: package roots + reflexion mapping"
+       },
+       "buckets": [
+        {
+         "id": "rb_order",
+         "layer": "order",
+         "label": "order",
+         "part": 0,
+         "ico": "container",
+         "members": [
+          {
+           "id": "ro1",
+           "label": "pricing",
+           "sub": "\u22482,100"
+          },
+          {
+           "id": "ro2",
+           "label": "checkout",
+           "sub": "\u22481,800"
+          },
+          {
+           "id": "ro3",
+           "label": "fulfillment",
+           "sub": "\u22483,200"
+          },
+          {
+           "id": "ro4",
+           "label": "returns",
+           "sub": "\u2248900"
+          }
+         ]
+        },
+        {
+         "id": "rb_inv",
+         "layer": "inventory",
+         "label": "inventory",
+         "part": 0,
+         "ico": "store",
+         "members": [
+          {
+           "id": "ri1",
+           "label": "stock",
+           "sub": "\u22482,400"
+          },
+          {
+           "id": "ri2",
+           "label": "warehouse",
+           "sub": "\u22481,600"
+          },
+          {
+           "id": "ri3",
+           "label": "replenishment",
+           "sub": "\u22481,100"
+          }
+         ]
+        },
+        {
+         "id": "rb_cust",
+         "layer": "customer",
+         "label": "customer",
+         "part": 0,
+         "ico": "user",
+         "members": [
+          {
+           "id": "rc1",
+           "label": "profiles",
+           "sub": "\u22481,900"
+          },
+          {
+           "id": "rc2",
+           "label": "auth",
+           "sub": "\u22481,400"
+          },
+          {
+           "id": "rc3",
+           "label": "loyalty",
+           "sub": "\u2248800"
+          }
+         ]
+        },
+        {
+         "id": "rb_shared",
+         "layer": "shared",
+         "label": "shared kernel",
+         "part": 1,
+         "ico": "infra",
+         "members": [
+          {
+           "id": "rs1",
+           "label": "persistence",
+           "sub": "\u22482,200"
+          },
+          {
+           "id": "rs2",
+           "label": "messaging",
+           "sub": "\u22481,300"
+          },
+          {
+           "id": "rs3",
+           "label": "utils",
+           "sub": "\u22483,000"
+          }
+         ]
+        }
+       ],
+       "edges": [
+        {
+         "id": "re1",
+         "source": "rb_order",
+         "target": "rb_shared",
+         "count": 212
+        },
+        {
+         "id": "re2",
+         "source": "rb_inv",
+         "target": "rb_shared",
+         "count": 167
+        },
+        {
+         "id": "re3",
+         "source": "rb_cust",
+         "target": "rb_shared",
+         "count": 143
+        },
+        {
+         "id": "re4",
+         "source": "rb_order",
+         "target": "rb_inv",
+         "count": 38
+        },
+        {
+         "id": "re5",
+         "source": "rb_order",
+         "target": "rb_cust",
+         "count": 21
+        },
+        {
+         "id": "re6",
+         "source": "rb_inv",
+         "target": "rb_cust",
+         "count": 9
+        }
+       ],
+       "palette": "retail"
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Data Model \u2014 core tables",
+       "dir": "DOWN",
+       "count": "4 of \u2248310 tables",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED \u00b7 would derive from: DB migrations / DDL"
+       },
+       "nodes": [
+        {
+         "id": "t_ord",
+         "type": "entity",
+         "label": "orders",
+         "tech": "table",
+         "fields": [
+          "id PK",
+          "customer_id FK",
+          "status",
+          "total"
+         ],
+         "real": false
+        },
+        {
+         "id": "t_oi",
+         "type": "entity",
+         "label": "order_items",
+         "tech": "table",
+         "fields": [
+          "order_id FK",
+          "sku",
+          "qty",
+          "price"
+         ],
+         "real": false
+        },
+        {
+         "id": "t_inv",
+         "type": "entity",
+         "label": "inventory",
+         "tech": "table",
+         "fields": [
+          "sku PK",
+          "qty_on_hand",
+          "warehouse_id FK"
+         ],
+         "real": false
+        },
+        {
+         "id": "t_cust",
+         "type": "entity",
+         "label": "customers",
+         "tech": "table",
+         "fields": [
+          "id PK",
+          "email",
+          "tier"
+         ],
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "md1",
+         "source": "t_ord",
+         "target": "t_oi",
+         "label": "1:N"
+        },
+        {
+         "id": "md2",
+         "source": "t_cust",
+         "target": "t_ord",
+         "label": "1:N"
+        },
+        {
+         "id": "md3",
+         "source": "t_oi",
+         "target": "t_inv",
+         "label": "sku"
+        }
+       ]
+      }
+     }
+    }
+   }
+  },
+  "cloudflare": {
+   "label": "Cloudflare Edge",
+   "sim": true,
+   "scopes": {
+    "edge": {
+     "label": "Edge",
+     "tech": "Workers \u00b7 TypeScript",
+     "views": {
+      "container": {
+       "kind": "simple",
+       "title": "Container diagram",
+       "count": "7 elements",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED \u00b7 would derive from: wrangler.toml + service bindings"
+       },
+       "nodes": [
+        {
+         "id": "cfb",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Browser",
+         "sub": "global users",
+         "real": false
+        },
+        {
+         "id": "cfw1",
+         "type": "container",
+         "icon": "container",
+         "label": "api-worker",
+         "sub": "[Worker \u00b7 TS]",
+         "real": false
+        },
+        {
+         "id": "cfw2",
+         "type": "container",
+         "icon": "container",
+         "label": "auth-worker",
+         "sub": "[Worker \u00b7 TS]",
+         "real": false
+        },
+        {
+         "id": "cfkv",
+         "type": "store",
+         "icon": "store",
+         "label": "KV",
+         "sub": "[sessions]",
+         "real": false
+        },
+        {
+         "id": "cfd1",
+         "type": "store",
+         "icon": "store",
+         "label": "D1",
+         "sub": "[sqlite]",
+         "real": false
+        },
+        {
+         "id": "cfq",
+         "type": "store",
+         "icon": "store",
+         "label": "Queues",
+         "sub": "[events]",
+         "real": false
+        },
+        {
+         "id": "cfo",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Origin API",
+         "sub": "[Node \u00b7 fallback]",
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "cf1",
+         "source": "cfb",
+         "target": "cfw1",
+         "label": "https"
+        },
+        {
+         "id": "cf2",
+         "source": "cfw1",
+         "target": "cfw2",
+         "label": "service binding"
+        },
+        {
+         "id": "cf3",
+         "source": "cfw2",
+         "target": "cfkv",
+         "label": "sessions"
+        },
+        {
+         "id": "cf4",
+         "source": "cfw1",
+         "target": "cfd1",
+         "label": "sql"
+        },
+        {
+         "id": "cf5",
+         "source": "cfw1",
+         "target": "cfq",
+         "label": "enqueue"
+        },
+        {
+         "id": "cf6",
+         "source": "cfw1",
+         "target": "cfo",
+         "label": "fallback"
+        }
+       ]
+      }
+     }
+    }
+   }
+  },
+  "multicloud": {
+   "label": "Multi-Cloud",
+   "sim": true,
+   "scopes": {
+    "platform": {
+     "label": "Platform",
+     "tech": "AWS + GCP",
+     "views": {
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment topology",
+       "dir": "DOWN",
+       "count": "2 clouds + shared control plane",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED \u00b7 would derive from: terraform state + cloud APIs"
+       },
+       "buckets": [
+        {
+         "id": "mcb_aws",
+         "layer": "aws",
+         "label": "aws \u00b7 us-east-1",
+         "part": 0,
+         "ico": "sys",
+         "members": [
+          {
+           "id": "ma1",
+           "label": "eks-cluster",
+           "sub": "42 pods"
+          },
+          {
+           "id": "ma2",
+           "label": "rds-postgres",
+           "sub": "primary"
+          },
+          {
+           "id": "ma3",
+           "label": "s3-assets",
+           "sub": "cdn"
+          },
+          {
+           "id": "ma4",
+           "label": "lambda-jobs",
+           "sub": "12 fns"
+          }
+         ]
+        },
+        {
+         "id": "mcb_gcp",
+         "layer": "gcp",
+         "label": "gcp \u00b7 europe-west1",
+         "part": 0,
+         "ico": "sys",
+         "members": [
+          {
+           "id": "mg1",
+           "label": "gke-cluster",
+           "sub": "28 pods"
+          },
+          {
+           "id": "mg2",
+           "label": "bigquery",
+           "sub": "analytics"
+          },
+          {
+           "id": "mg3",
+           "label": "pubsub",
+           "sub": "events"
+          }
+         ]
+        },
+        {
+         "id": "mcb_sh",
+         "layer": "shared",
+         "label": "shared control plane",
+         "part": 1,
+         "ico": "infra",
+         "members": [
+          {
+           "id": "ms1",
+           "label": "terraform",
+           "sub": "IaC"
+          },
+          {
+           "id": "ms2",
+           "label": "vault",
+           "sub": "secrets"
+          },
+          {
+           "id": "ms3",
+           "label": "gh-actions",
+           "sub": "CI/CD"
+          }
+         ]
+        }
+       ],
+       "edges": [
+        {
+         "id": "mc1",
+         "source": "mcb_aws",
+         "target": "mcb_sh",
+         "count": 3
+        },
+        {
+         "id": "mc2",
+         "source": "mcb_gcp",
+         "target": "mcb_sh",
+         "count": 3
+        },
+        {
+         "id": "mc3",
+         "source": "mcb_aws",
+         "target": "mcb_gcp",
+         "count": 2
+        }
+       ],
+       "palette": "mc",
+       "labeled": true
+      }
+     }
+    }
+   }
+  }
+ }
+}

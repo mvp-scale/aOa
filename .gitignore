@@ -26,6 +26,7 @@ docs/*
 _throwaway_data/
 _throwaway_uploads/
 _tmp_sitter_forest/
+repo/
 
 # Generated test fixtures (regenerate with: go run ./cmd/dim-dump/)
 internal/domain/analyzer/testdata/real_methods.json
@@ -38,3 +39,4 @@ temp_gauntlet_sonnet.md
 temp_results_haiku.md
 temp_results_opus.md
 temp_results_sonnet.md
+playbook/arch_proxy.jsonl

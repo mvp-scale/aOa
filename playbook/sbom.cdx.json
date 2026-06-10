@@ -1,0 +1,3815 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-06-10T05:34:27Z",
+    "tools": [
+      {
+        "name": "aoa",
+        "vendor": "aOa"
+      }
+    ],
+    "component": {
+      "type": "application",
+      "name": "aoa",
+      "bom-ref": "github.com/corey/aoa"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/abap",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/abap@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/abap@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/abl",
+      "version": "v1.9.7",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/abl@v1.9.7",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/abl@v1.9.7"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ada",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ada@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ada@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/agda",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/agda@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/agda@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/aiken",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/aiken@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/aiken@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/al",
+      "version": "v1.9.14",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/al@v1.9.14",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/al@v1.9.14"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/alcha",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/alcha@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/alcha@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/amber",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/amber@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/amber@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/angular",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/angular@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/angular@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/animationtxt",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/animationtxt@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/animationtxt@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ansible",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ansible@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ansible@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/anzu",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/anzu@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/anzu@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/apex",
+      "version": "v1.9.8",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/apex@v1.9.8",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/apex@v1.9.8"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/applesoft",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/applesoft@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/applesoft@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/arduino",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/arduino@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/arduino@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/asciidoc",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/asciidoc@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/asciidoc@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/asciidoc_inline",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/asciidoc_inline@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/asciidoc_inline@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/asm",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/asm@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/asm@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/astro",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/astro@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/astro@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/august",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/august@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/august@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/authzed",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/authzed@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/authzed@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/awa5_rs",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/awa5_rs@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/awa5_rs@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/awatalk",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/awatalk@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/awatalk@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/awk",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/awk@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/awk@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bara",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bara@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bara@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/barq",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/barq@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/barq@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bash",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bash@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bash@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bass",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bass@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bass@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/beancount",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/beancount@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/beancount@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bend",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bend@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bend@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bibtex",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bibtex@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bibtex@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bicep",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bicep@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bicep@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bitbake",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bitbake@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bitbake@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/blade",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/blade@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/blade@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/blueprint",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/blueprint@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/blueprint@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bluespec",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bluespec@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bluespec@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bond",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bond@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bond@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bp",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bp@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bp@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bqn",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bqn@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bqn@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/brightscript",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/brightscript@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/brightscript@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/bruno",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/bruno@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/bruno@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/c",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/c@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/c@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/c3",
+      "version": "v1.9.25",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/c3@v1.9.25",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/c3@v1.9.25"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/c_sharp",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/c_sharp@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/c_sharp@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ca65",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ca65@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ca65@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/caddy",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/caddy@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/caddy@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cairo",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cairo@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cairo@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/calc",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/calc@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/calc@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/capnp",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/capnp@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/capnp@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/carbon",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/carbon@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/carbon@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cds",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cds@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cds@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cedar",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cedar@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cedar@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cel",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cel@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cel@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cfengine",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cfengine@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cfengine@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cg",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cg@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cg@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cgsql",
+      "version": "v1.9.7",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cgsql@v1.9.7",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cgsql@v1.9.7"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/chatito",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/chatito@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/chatito@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/circom",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/circom@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/circom@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/clarity",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/clarity@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/clarity@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cleancopy",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cleancopy@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cleancopy@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/clingo",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/clingo@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/clingo@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/clojure",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/clojure@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/clojure@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cloudflare",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cloudflare@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cloudflare@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cmake",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cmake@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cmake@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cmdl",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cmdl@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cmdl@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cobol",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cobol@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cobol@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cognate",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cognate@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cognate@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/comment",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/comment@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/comment@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/commonlisp",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/commonlisp@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/commonlisp@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/context",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/context@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/context@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cooklang",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cooklang@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cooklang@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/core",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/core@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/core@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/corn",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/corn@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/corn@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cpon",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cpon@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cpon@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cpp",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cpp@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cpp@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/crystal",
+      "version": "v1.9.29",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/crystal@v1.9.29",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/crystal@v1.9.29"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/css",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/css@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/css@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/csv",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/csv@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/csv@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cuda",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cuda@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cuda@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cue",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cue@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cue@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/cylc",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/cylc@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/cylc@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/d",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/d@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/d@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/d2",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/d2@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/d2@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/dale",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/dale@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/dale@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/dart",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/dart@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/dart@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/dataweave",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/dataweave@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/dataweave@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/dbml",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/dbml@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/dbml@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/desktop",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/desktop@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/desktop@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/devicetree",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/devicetree@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/devicetree@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/dezyne",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/dezyne@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/dezyne@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/dhall",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/dhall@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/dhall@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/diff",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/diff@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/diff@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/disassembly",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/disassembly@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/disassembly@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/djot",
+      "version": "v1.9.7",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/djot@v1.9.7",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/djot@v1.9.7"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/djot_inline",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/djot_inline@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/djot_inline@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/dockerfile",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/dockerfile@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/dockerfile@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/dot",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/dot@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/dot@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/dotenv",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/dotenv@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/dotenv@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/doxygen",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/doxygen@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/doxygen@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/dtd",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/dtd@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/dtd@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/dune",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/dune@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/dune@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/earthfile",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/earthfile@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/earthfile@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ebnf",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ebnf@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ebnf@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/editorconfig",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/editorconfig@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/editorconfig@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/eds",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/eds@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/eds@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/eex",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/eex@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/eex@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/effekt",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/effekt@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/effekt@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/eiffel",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/eiffel@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/eiffel@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/elisp",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/elisp@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/elisp@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/elixir",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/elixir@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/elixir@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/elm",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/elm@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/elm@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/elsa",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/elsa@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/elsa@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/elvish",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/elvish@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/elvish@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/embedded_template",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/embedded_template@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/embedded_template@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/epics_cmd",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/epics_cmd@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/epics_cmd@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/epics_db",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/epics_db@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/epics_db@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/epics_msi_substitution",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/epics_msi_substitution@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/epics_msi_substitution@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/epics_msi_template",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/epics_msi_template@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/epics_msi_template@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/erlang",
+      "version": "v1.9.7",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/erlang@v1.9.7",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/erlang@v1.9.7"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/facility",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/facility@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/facility@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/factor",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/factor@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/factor@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/familymarkup",
+      "version": "v1.9.7",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/familymarkup@v1.9.7",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/familymarkup@v1.9.7"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/faust",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/faust@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/faust@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/fe",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/fe@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/fe@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/fennel",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/fennel@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/fennel@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/fidl",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/fidl@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/fidl@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/fin",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/fin@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/fin@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/firrtl",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/firrtl@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/firrtl@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/fish",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/fish@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/fish@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/flamingo",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/flamingo@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/flamingo@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/fluentbit",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/fluentbit@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/fluentbit@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/foam",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/foam@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/foam@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/forth",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/forth@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/forth@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/fortran",
+      "version": "v1.9.13",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/fortran@v1.9.13",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/fortran@v1.9.13"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/frostlang",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/frostlang@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/frostlang@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/fsh",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/fsh@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/fsh@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/fsharp",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/fsharp@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/fsharp@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/fsharp_signature",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/fsharp_signature@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/fsharp_signature@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/func",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/func@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/func@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/fusion",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/fusion@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/fusion@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gab",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gab@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gab@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/galvan",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/galvan@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/galvan@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gap",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gap@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gap@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gaptst",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gaptst@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gaptst@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gdscript",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gdscript@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gdscript@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gdshader",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gdshader@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gdshader@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gemfilelock",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gemfilelock@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gemfilelock@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gherkin",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gherkin@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gherkin@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ghostty",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ghostty@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ghostty@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/git_config",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/git_config@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/git_config@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/git_rebase",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/git_rebase@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/git_rebase@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gitattributes",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gitattributes@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gitattributes@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gitcommit",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gitcommit@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gitcommit@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gitignore",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gitignore@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gitignore@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gleam",
+      "version": "v1.9.9",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gleam@v1.9.9",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gleam@v1.9.9"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/glimmer",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/glimmer@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/glimmer@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/glimmer_javascript",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/glimmer_javascript@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/glimmer_javascript@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/glimmer_typescript",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/glimmer_typescript@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/glimmer_typescript@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/glint",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/glint@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/glint@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/glsl",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/glsl@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/glsl@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gn",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gn@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gn@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gnuplot",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gnuplot@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gnuplot@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/go",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/go@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/go@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gobra",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gobra@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gobra@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/goctl",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/goctl@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/goctl@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/godot_resource",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/godot_resource@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/godot_resource@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gomod",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gomod@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gomod@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gooscript",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gooscript@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gooscript@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gosum",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gosum@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gosum@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gotmpl",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gotmpl@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gotmpl@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gowork",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gowork@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gowork@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gpg",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gpg@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gpg@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gram",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gram@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gram@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/graphql",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/graphql@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/graphql@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gren",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gren@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gren@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gritql",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gritql@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gritql@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/groovy",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/groovy@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/groovy@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/gstlaunch",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/gstlaunch@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/gstlaunch@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hack",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hack@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hack@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/haml",
+      "version": "v1.9.9",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/haml@v1.9.9",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/haml@v1.9.9"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hare",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hare@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hare@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/haskell",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/haskell@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/haskell@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/haskell_persistent",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/haskell_persistent@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/haskell_persistent@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/haxe",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/haxe@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/haxe@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hcl",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hcl@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hcl@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/heex",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/heex@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/heex@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/helm",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/helm@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/helm@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hjson",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hjson@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hjson@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hl7",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hl7@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hl7@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hlsl",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hlsl@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hlsl@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hlsplaylist",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hlsplaylist@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hlsplaylist@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hocon",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hocon@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hocon@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hoon",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hoon@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hoon@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/html",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/html@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/html@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/htmlaskama",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/htmlaskama@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/htmlaskama@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/htmldjango",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/htmldjango@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/htmldjango@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/http",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/http@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/http@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/http2",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/http2@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/http2@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hungarian",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hungarian@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hungarian@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hurl",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hurl@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hurl@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hy",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hy@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hy@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hygen_template",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hygen_template@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hygen_template@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hylo",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hylo@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hylo@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/hyprlang",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/hyprlang@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/hyprlang@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/i3config",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/i3config@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/i3config@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/idl",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/idl@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/idl@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/idris",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/idris@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/idris@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ignis",
+      "version": "v1.9.7",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ignis@v1.9.7",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ignis@v1.9.7"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ini",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ini@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ini@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ink",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ink@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ink@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/inko",
+      "version": "v1.9.7",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/inko@v1.9.7",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/inko@v1.9.7"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/integerbasic",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/integerbasic@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/integerbasic@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ipkg",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ipkg@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ipkg@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ispc",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ispc@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ispc@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/jai",
+      "version": "v1.9.27",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/jai@v1.9.27",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/jai@v1.9.27"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/janet",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/janet@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/janet@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/jasmin",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/jasmin@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/jasmin@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/java",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/java@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/java@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/javadoc",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/javadoc@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/javadoc@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/javascript",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/javascript@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/javascript@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/jinja",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/jinja@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/jinja@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/jinja_inline",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/jinja_inline@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/jinja_inline@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/jq",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/jq@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/jq@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/jsdoc",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/jsdoc@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/jsdoc@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/json",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/json@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/json@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/json5",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/json5@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/json5@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/jsonc",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/jsonc@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/jsonc@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/jsonnet",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/jsonnet@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/jsonnet@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/jule",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/jule@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/jule@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/julia",
+      "version": "v1.9.10",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/julia@v1.9.10",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/julia@v1.9.10"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/just",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/just@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/just@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/kamailio_cfg",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/kamailio_cfg@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/kamailio_cfg@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/kanshi",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/kanshi@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/kanshi@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/kappa",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/kappa@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/kappa@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/kcl",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/kcl@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/kcl@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/kconfig",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/kconfig@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/kconfig@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/kdl",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/kdl@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/kdl@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/koan",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/koan@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/koan@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/koka",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/koka@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/koka@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/kon",
+      "version": "v1.9.16",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/kon@v1.9.16",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/kon@v1.9.16"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/kos",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/kos@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/kos@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/kotlin",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/kotlin@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/kotlin@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/koto",
+      "version": "v1.9.9",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/koto@v1.9.9",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/koto@v1.9.9"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/kusto",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/kusto@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/kusto@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/lalrpop",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/lalrpop@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/lalrpop@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/lart",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/lart@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/lart@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/lat",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/lat@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/lat@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/latex",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/latex@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/latex@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/latte",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/latte@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/latte@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ldg",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ldg@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ldg@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ledger",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ledger@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ledger@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/leo",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/leo@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/leo@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/lexc",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/lexc@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/lexc@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/lexd",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/lexd@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/lexd@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/lilypond",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/lilypond@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/lilypond@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/lilypond_scheme",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/lilypond_scheme@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/lilypond_scheme@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/linkerscript",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/linkerscript@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/linkerscript@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/liquid",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/liquid@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/liquid@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/liquidsoap",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/liquidsoap@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/liquidsoap@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/lithia",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/lithia@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/lithia@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/llvm",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/llvm@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/llvm@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/lookml",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/lookml@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/lookml@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/lox",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/lox@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/lox@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/lua",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/lua@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/lua@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/luadoc",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/luadoc@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/luadoc@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/luap",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/luap@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/luap@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/luau",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/luau@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/luau@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/m68k",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/m68k@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/m68k@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/magik",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/magik@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/magik@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/make",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/make@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/make@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/mandbconfig",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/mandbconfig@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/mandbconfig@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/markdown",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/markdown@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/markdown@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/markdown_inline",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/markdown_inline@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/markdown_inline@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/marte",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/marte@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/marte@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/matlab",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/matlab@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/matlab@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/mcfuncx",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/mcfuncx@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/mcfuncx@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/menhir",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/menhir@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/menhir@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/merlin6502",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/merlin6502@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/merlin6502@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/mermaid",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/mermaid@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/mermaid@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/meson",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/meson@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/meson@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/mips",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/mips@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/mips@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/mlir",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/mlir@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/mlir@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/modelica",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/modelica@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/modelica@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/moonbit",
+      "version": "v1.9.26",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/moonbit@v1.9.26",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/moonbit@v1.9.26"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/moonscript",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/moonscript@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/moonscript@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/motoko",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/motoko@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/motoko@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/move",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/move@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/move@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/move_on_aptos",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/move_on_aptos@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/move_on_aptos@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/mustache",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/mustache@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/mustache@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/muttrc",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/muttrc@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/muttrc@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/mxml",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/mxml@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/mxml@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/mylang",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/mylang@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/mylang@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/nasm",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/nasm@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/nasm@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/nelua",
+      "version": "v1.9.14",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/nelua@v1.9.14",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/nelua@v1.9.14"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/nesfab",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/nesfab@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/nesfab@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/nftables",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/nftables@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/nftables@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/nginx",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/nginx@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/nginx@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/nickel",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/nickel@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/nickel@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/nim",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/nim@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/nim@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/nim_format_string",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/nim_format_string@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/nim_format_string@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ninja",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ninja@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ninja@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/nix",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/nix@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/nix@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/norg",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/norg@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/norg@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/note",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/note@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/note@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/nqc",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/nqc@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/nqc@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/nu",
+      "version": "v1.9.34",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/nu@v1.9.34",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/nu@v1.9.34"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/objc",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/objc@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/objc@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/objdump",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/objdump@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/objdump@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ocaml",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ocaml@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ocaml@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ocaml_interface",
+      "version": "v1.9.7",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ocaml_interface@v1.9.7",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ocaml_interface@v1.9.7"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ocamllex",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ocamllex@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ocamllex@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/odin",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/odin@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/odin@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/org",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/org@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/org@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ott",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ott@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ott@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pact",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pact@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pact@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pascal",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pascal@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pascal@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/passwd",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/passwd@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/passwd@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pdxinfo",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pdxinfo@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pdxinfo@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pem",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pem@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pem@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/perl",
+      "version": "v1.9.9",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/perl@v1.9.9",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/perl@v1.9.9"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/perm",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/perm@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/perm@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pgn",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pgn@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pgn@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/php",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/php@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/php@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/php_only",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/php_only@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/php_only@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/phpdoc",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/phpdoc@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/phpdoc@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pic",
+      "version": "v1.9.9",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pic@v1.9.9",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pic@v1.9.9"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pint",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pint@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pint@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pioasm",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pioasm@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pioasm@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pkl",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pkl@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pkl@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/plantuml",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/plantuml@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/plantuml@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/po",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/po@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/po@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pod",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pod@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pod@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/poe_filter",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/poe_filter@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/poe_filter@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pony",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pony@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pony@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/postscript",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/postscript@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/postscript@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/poweron",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/poweron@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/poweron@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/powershell",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/powershell@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/powershell@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/printf",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/printf@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/printf@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/prisma",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/prisma@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/prisma@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/problog",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/problog@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/problog@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/prolog",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/prolog@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/prolog@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/promql",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/promql@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/promql@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/properties",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/properties@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/properties@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/proto",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/proto@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/proto@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/proxima",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/proxima@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/proxima@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/prql",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/prql@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/prql@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/psv",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/psv@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/psv@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pug",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pug@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pug@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/puppet",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/puppet@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/puppet@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/purescript",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/purescript@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/purescript@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pymanifest",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pymanifest@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pymanifest@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/pyrope",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/pyrope@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/pyrope@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/python",
+      "version": "v1.9.10",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/python@v1.9.10",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/python@v1.9.10"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/qbe",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/qbe@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/qbe@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ql",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ql@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ql@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/qmldir",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/qmldir@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/qmldir@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/qmljs",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/qmljs@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/qmljs@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/quakec",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/quakec@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/quakec@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/query",
+      "version": "v1.9.9",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/query@v1.9.9",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/query@v1.9.9"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/quint",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/quint@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/quint@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/r",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/r@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/r@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/racket",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/racket@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/racket@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ralph",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ralph@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ralph@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/rasi",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/rasi@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/rasi@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/razor",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/razor@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/razor@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/rbs",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/rbs@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/rbs@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/rcl",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/rcl@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/rcl@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/re2c",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/re2c@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/re2c@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/readline",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/readline@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/readline@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/regex",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/regex@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/regex@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/rego",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/rego@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/rego@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/requirements",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/requirements@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/requirements@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/rescript",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/rescript@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/rescript@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/risor",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/risor@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/risor@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/rnoweb",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/rnoweb@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/rnoweb@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/robot",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/robot@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/robot@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/robots",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/robots@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/robots@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/roc",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/roc@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/roc@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ron",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ron@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ron@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/rstml",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/rstml@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/rstml@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/rsx",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/rsx@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/rsx@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/rtx",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/rtx@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/rtx@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ruby",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ruby@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ruby@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/runescript",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/runescript@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/runescript@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/rust",
+      "version": "v1.9.13",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/rust@v1.9.13",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/rust@v1.9.13"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/rust_with_rstml",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/rust_with_rstml@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/rust_with_rstml@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sage",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sage@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sage@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/scala",
+      "version": "v1.9.8",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/scala@v1.9.8",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/scala@v1.9.8"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/scfg",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/scfg@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/scfg@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/scheme",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/scheme@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/scheme@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/scss",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/scss@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/scss@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sdml",
+      "version": "v1.9.9",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sdml@v1.9.9",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sdml@v1.9.9"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sflog",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sflog@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sflog@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/shosts",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/shosts@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/shosts@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/simula",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/simula@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/simula@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sincere",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sincere@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sincere@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/slang",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/slang@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/slang@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/slim",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/slim@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/slim@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/slint",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/slint@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/slint@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/smali",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/smali@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/smali@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/smith",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/smith@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/smith@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/smithy",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/smithy@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/smithy@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sml",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sml@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sml@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/snakemake",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/snakemake@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/snakemake@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/snl",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/snl@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/snl@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sol",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sol@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sol@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/solidity",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/solidity@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/solidity@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sop",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sop@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sop@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/soql",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/soql@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/soql@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sosl",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sosl@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sosl@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sourcepawn",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sourcepawn@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sourcepawn@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sparql",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sparql@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sparql@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/spicy",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/spicy@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/spicy@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sql",
+      "version": "v1.9.13",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sql@v1.9.13",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sql@v1.9.13"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sql_bigquery",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sql_bigquery@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sql_bigquery@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sqlite",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sqlite@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sqlite@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/squirrel",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/squirrel@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/squirrel@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ssh_client_config",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ssh_client_config@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ssh_client_config@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ssh_config",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ssh_config@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ssh_config@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/starlark",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/starlark@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/starlark@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/strace",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/strace@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/strace@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/streamdevice_proto",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/streamdevice_proto@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/streamdevice_proto@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/structurizr",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/structurizr@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/structurizr@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/styled",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/styled@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/styled@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/supercollider",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/supercollider@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/supercollider@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/superhtml",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/superhtml@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/superhtml@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/surface",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/surface@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/surface@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/surrealql",
+      "version": "v1.9.10",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/surrealql@v1.9.10",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/surrealql@v1.9.10"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sus",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sus@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sus@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/svelte",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/svelte@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/svelte@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sway",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sway@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sway@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/swift",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/swift@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/swift@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/sxhkdrc",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/sxhkdrc@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/sxhkdrc@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/syphon",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/syphon@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/syphon@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/systemtap",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/systemtap@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/systemtap@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/systemverilog",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/systemverilog@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/systemverilog@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/t32",
+      "version": "v1.9.9",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/t32@v1.9.9",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/t32@v1.9.9"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tablegen",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tablegen@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tablegen@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tact",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tact@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tact@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/talon",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/talon@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/talon@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tcl",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tcl@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tcl@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/teal",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/teal@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/teal@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/templ",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/templ@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/templ@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tera",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tera@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tera@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/terra",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/terra@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/terra@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/test",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/test@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/test@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/textproto",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/textproto@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/textproto@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/thrift",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/thrift@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/thrift@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tiger",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tiger@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tiger@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tlaplus",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tlaplus@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tlaplus@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tmux",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tmux@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tmux@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tnsl",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tnsl@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tnsl@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/todolang",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/todolang@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/todolang@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/todotxt",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/todotxt@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/todotxt@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/toml",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/toml@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/toml@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tort",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tort@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tort@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tsv",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tsv@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tsv@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tsx",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tsx@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tsx@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/tup",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/tup@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/tup@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/turtle",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/turtle@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/turtle@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/twig",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/twig@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/twig@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/twolc",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/twolc@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/twolc@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/typescript",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/typescript@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/typescript@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/typespec",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/typespec@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/typespec@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/typoscript",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/typoscript@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/typoscript@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/typst",
+      "version": "v1.9.7",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/typst@v1.9.7",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/typst@v1.9.7"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/udev",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/udev@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/udev@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/uiua",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/uiua@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/uiua@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ungrammar",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ungrammar@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ungrammar@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/unison",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/unison@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/unison@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ursa",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ursa@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ursa@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/usd",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/usd@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/usd@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/uxntal",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/uxntal@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/uxntal@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/v",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/v@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/v@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/vala",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/vala@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/vala@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/vento",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/vento@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/vento@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/verilog",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/verilog@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/verilog@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/vhdl",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/vhdl@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/vhdl@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/vhs",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/vhs@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/vhs@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/vim",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/vim@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/vim@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/vimdoc",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/vimdoc@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/vimdoc@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/virdant",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/virdant@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/virdant@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/virgil",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/virgil@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/virgil@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/vrl",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/vrl@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/vrl@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/vue",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/vue@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/vue@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/walnut",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/walnut@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/walnut@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/wbproto",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/wbproto@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/wbproto@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/wgsl",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/wgsl@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/wgsl@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/wgsl_bevy",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/wgsl_bevy@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/wgsl_bevy@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/wing",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/wing@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/wing@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/wit",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/wit@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/wit@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/woml",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/woml@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/woml@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/wtf",
+      "version": "v1.9.3",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/wtf@v1.9.3",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/wtf@v1.9.3"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/xcompose",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/xcompose@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/xcompose@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/xfst",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/xfst@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/xfst@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/xml",
+      "version": "v1.9.5",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/xml@v1.9.5",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/xml@v1.9.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/xresources",
+      "version": "v1.9.2",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/xresources@v1.9.2",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/xresources@v1.9.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/yadl",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/yadl@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/yadl@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/yaml",
+      "version": "v1.9.6",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/yaml@v1.9.6",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/yaml@v1.9.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/yang",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/yang@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/yang@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/yaral",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/yaral@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/yaral@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/yarnlock",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/yarnlock@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/yarnlock@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/yuck",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/yuck@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/yuck@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/zathurarc",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/zathurarc@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/zathurarc@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/zeek",
+      "version": "v1.9.8",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/zeek@v1.9.8",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/zeek@v1.9.8"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/zig",
+      "version": "v1.9.4",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/zig@v1.9.4",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/zig@v1.9.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ziggy",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ziggy@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ziggy@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/ziggy_schema",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/ziggy_schema@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/ziggy_schema@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/alexaandru/go-sitter-forest/zoomba",
+      "version": "v1.9.1",
+      "purl": "pkg:golang/github.com/alexaandru/go-sitter-forest/zoomba@v1.9.1",
+      "bom-ref": "pkg:golang/github.com/alexaandru/go-sitter-forest/zoomba@v1.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/cpuguy83/go-md2man/v2",
+      "version": "v2.0.6",
+      "purl": "pkg:golang/github.com/cpuguy83/go-md2man/v2@v2.0.6",
+      "bom-ref": "pkg:golang/github.com/cpuguy83/go-md2man/v2@v2.0.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/davecgh/go-spew",
+      "version": "v1.1.1",
+      "purl": "pkg:golang/github.com/davecgh/go-spew@v1.1.1",
+      "bom-ref": "pkg:golang/github.com/davecgh/go-spew@v1.1.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/ebitengine/purego",
+      "version": "v0.9.1",
+      "purl": "pkg:golang/github.com/ebitengine/purego@v0.9.1",
+      "bom-ref": "pkg:golang/github.com/ebitengine/purego@v0.9.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/fsnotify/fsnotify",
+      "version": "v1.9.0",
+      "purl": "pkg:golang/github.com/fsnotify/fsnotify@v1.9.0",
+      "bom-ref": "pkg:golang/github.com/fsnotify/fsnotify@v1.9.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/inconshreveable/mousetrap",
+      "version": "v1.1.0",
+      "purl": "pkg:golang/github.com/inconshreveable/mousetrap@v1.1.0",
+      "bom-ref": "pkg:golang/github.com/inconshreveable/mousetrap@v1.1.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/mattn/go-pointer",
+      "version": "v0.0.1",
+      "purl": "pkg:golang/github.com/mattn/go-pointer@v0.0.1",
+      "bom-ref": "pkg:golang/github.com/mattn/go-pointer@v0.0.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/petar-dambovaliev/aho-corasick",
+      "version": "v0.0.0-20250424160509-463d218d4745",
+      "purl": "pkg:golang/github.com/petar-dambovaliev/aho-corasick@v0.0.0-20250424160509-463d218d4745",
+      "bom-ref": "pkg:golang/github.com/petar-dambovaliev/aho-corasick@v0.0.0-20250424160509-463d218d4745"
+    },
+    {
+      "type": "library",
+      "name": "github.com/pmezard/go-difflib",
+      "version": "v1.0.0",
+      "purl": "pkg:golang/github.com/pmezard/go-difflib@v1.0.0",
+      "bom-ref": "pkg:golang/github.com/pmezard/go-difflib@v1.0.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/russross/blackfriday/v2",
+      "version": "v2.1.0",
+      "purl": "pkg:golang/github.com/russross/blackfriday/v2@v2.1.0",
+      "bom-ref": "pkg:golang/github.com/russross/blackfriday/v2@v2.1.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/spf13/cobra",
+      "version": "v1.10.2",
+      "purl": "pkg:golang/github.com/spf13/cobra@v1.10.2",
+      "bom-ref": "pkg:golang/github.com/spf13/cobra@v1.10.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/spf13/pflag",
+      "version": "v1.0.9",
+      "purl": "pkg:golang/github.com/spf13/pflag@v1.0.9",
+      "bom-ref": "pkg:golang/github.com/spf13/pflag@v1.0.9"
+    },
+    {
+      "type": "library",
+      "name": "github.com/stretchr/objx",
+      "version": "v0.5.2",
+      "purl": "pkg:golang/github.com/stretchr/objx@v0.5.2",
+      "bom-ref": "pkg:golang/github.com/stretchr/objx@v0.5.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/stretchr/testify",
+      "version": "v1.11.1",
+      "purl": "pkg:golang/github.com/stretchr/testify@v1.11.1",
+      "bom-ref": "pkg:golang/github.com/stretchr/testify@v1.11.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/go-tree-sitter",
+      "version": "v0.25.0",
+      "purl": "pkg:golang/github.com/tree-sitter/go-tree-sitter@v0.25.0",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/go-tree-sitter@v0.25.0"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-c",
+      "version": "v0.23.4",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-c@v0.23.4",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-c@v0.23.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-cpp",
+      "version": "v0.23.4",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-cpp@v0.23.4",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-cpp@v0.23.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-embedded-template",
+      "version": "v0.23.2",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-embedded-template@v0.23.2",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-embedded-template@v0.23.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-go",
+      "version": "v0.23.4",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-go@v0.23.4",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-go@v0.23.4"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-html",
+      "version": "v0.23.2",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-html@v0.23.2",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-html@v0.23.2"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-java",
+      "version": "v0.23.5",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-java@v0.23.5",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-java@v0.23.5"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-javascript",
+      "version": "v0.23.1",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-javascript@v0.23.1",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-javascript@v0.23.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-json",
+      "version": "v0.24.8",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-json@v0.24.8",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-json@v0.24.8"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-php",
+      "version": "v0.23.11",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-php@v0.23.11",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-php@v0.23.11"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-python",
+      "version": "v0.23.6",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-python@v0.23.6",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-python@v0.23.6"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-ruby",
+      "version": "v0.23.1",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-ruby@v0.23.1",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-ruby@v0.23.1"
+    },
+    {
+      "type": "library",
+      "name": "github.com/tree-sitter/tree-sitter-rust",
+      "version": "v0.23.2",
+      "purl": "pkg:golang/github.com/tree-sitter/tree-sitter-rust@v0.23.2",
+      "bom-ref": "pkg:golang/github.com/tree-sitter/tree-sitter-rust@v0.23.2"
+    },
+    {
+      "type": "library",
+      "name": "go.etcd.io/bbolt",
+      "version": "v1.4.3",
+      "purl": "pkg:golang/go.etcd.io/bbolt@v1.4.3",
+      "bom-ref": "pkg:golang/go.etcd.io/bbolt@v1.4.3"
+    },
+    {
+      "type": "library",
+      "name": "go.etcd.io/gofail",
+      "version": "v0.2.0",
+      "purl": "pkg:golang/go.etcd.io/gofail@v0.2.0",
+      "bom-ref": "pkg:golang/go.etcd.io/gofail@v0.2.0"
+    },
+    {
+      "type": "library",
+      "name": "go.yaml.in/yaml/v3",
+      "version": "v3.0.4",
+      "purl": "pkg:golang/go.yaml.in/yaml/v3@v3.0.4",
+      "bom-ref": "pkg:golang/go.yaml.in/yaml/v3@v3.0.4"
+    },
+    {
+      "type": "library",
+      "name": "golang.org/x/sync",
+      "version": "v0.10.0",
+      "purl": "pkg:golang/golang.org/x/sync@v0.10.0",
+      "bom-ref": "pkg:golang/golang.org/x/sync@v0.10.0"
+    },
+    {
+      "type": "library",
+      "name": "golang.org/x/sys",
+      "version": "v0.29.0",
+      "purl": "pkg:golang/golang.org/x/sys@v0.29.0",
+      "bom-ref": "pkg:golang/golang.org/x/sys@v0.29.0"
+    },
+    {
+      "type": "library",
+      "name": "gopkg.in/check.v1",
+      "version": "v0.0.0-20161208181325-20d25e280405",
+      "purl": "pkg:golang/gopkg.in/check.v1@v0.0.0-20161208181325-20d25e280405",
+      "bom-ref": "pkg:golang/gopkg.in/check.v1@v0.0.0-20161208181325-20d25e280405"
+    },
+    {
+      "type": "library",
+      "name": "gopkg.in/yaml.v3",
+      "version": "v3.0.1",
+      "purl": "pkg:golang/gopkg.in/yaml.v3@v3.0.1",
+      "bom-ref": "pkg:golang/gopkg.in/yaml.v3@v3.0.1"
+    }
+  ]
+}

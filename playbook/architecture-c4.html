@@ -1,0 +1,551 @@
+<!doctype html><html><head><meta charset="utf-8"><title>aOa — Architecture</title>
+<link rel="stylesheet" href="https://esm.sh/@xyflow/react@12.3.5/dist/style.css">
+<style>html,body,#root{margin:0;height:100%;background:#0c0c0e}
+.react-flow__controls-button{background:#161618!important;border-color:#252528!important;fill:#8b8b96!important}</style>
+</head><body><div id="root"></div><script type="module">
+import React,{useState,useEffect,useCallback,memo} from "https://esm.sh/react@18.3.1";
+import {createRoot} from "https://esm.sh/react-dom@18.3.1/client";
+import {ReactFlow,Background,Controls,Handle,Position,BaseEdge,EdgeLabelRenderer,useReactFlow,ReactFlowProvider}
+ from "https://esm.sh/@xyflow/react@12.3.5?deps=react@18.3.1,react-dom@18.3.1";
+import ELK from "https://esm.sh/elkjs@0.11.1/lib/elk.bundled.js";
+import htm from "https://esm.sh/htm@3.1.1";
+const html=htm.bind(React.createElement); const elk=new ELK();
+// the contract file IS the data source — anything that emits a valid archmodel gets every view
+const MQ=new URLSearchParams(location.search);
+const MODEL=await fetch(MQ.get("model")||"archmodel.json").then(r=>r.json());
+function showFatal(msg){let d=document.getElementById("fatal");if(!d){d=document.createElement("div");d.id="fatal";
+  d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:9999;background:#7f1d1d;color:#fff;font:600 12px ui-monospace,monospace;padding:8px 14px;border-bottom:2px solid #f87171";
+  document.body.appendChild(d);}d.textContent="RENDER FAILURE · "+msg;}
+window.addEventListener("error",ev=>showFatal(ev.message));
+window.addEventListener("unhandledrejection",ev=>showFatal(String(ev.reason&&ev.reason.message||ev.reason)));
+const ISSUES=[];
+for(const[eid,ev]of Object.entries(MODEL.estates||{})){
+ for(const[sid,sv]of Object.entries(ev.scopes||{})){
+  for(const[vid,v]of Object.entries(sv.views||{})){
+   const path=eid+"/"+sid+"/"+vid,nodeIds=new Set(),memIds=new Set();
+   if(v.kind==="buckets"){(v.buckets||[]).forEach(b=>{
+     if(nodeIds.has(b.id))ISSUES.push(path+": duplicate bucket id "+b.id);nodeIds.add(b.id);
+     if(!(b.members||[]).length)ISSUES.push(path+": empty bucket "+b.id);
+     (b.members||[]).forEach(m=>{if(memIds.has(m.id))ISSUES.push(path+": duplicate member id "+m.id);memIds.add(m.id);});
+     if((b.members||[]).length>40)ISSUES.push(path+": bucket "+b.id+" exceeds view budget ("+b.members.length+") — auto-collapsed");});}
+   else{(v.nodes||[]).forEach(n=>{if(nodeIds.has(n.id))ISSUES.push(path+": duplicate node id "+n.id);nodeIds.add(n.id);});}
+   v.edges=(v.edges||[]).filter(e=>{const ok=nodeIds.has(e.source)&&nodeIds.has(e.target);
+     if(!ok)ISSUES.push(path+": edge "+(e.id||"?")+" → missing node ("+e.source+" → "+e.target+") — quarantined");
+     return ok;});
+}}}
+const T={bg:"#0c0c0e",card:"#161618",cardH:"#1c1c1f",band:"#121215",border:"#252528",text:"#e8e8ec",
+ dim:"#8b8b96",mute:"#55555f",green:"#34d399",blue:"#60a5fa",purple:"#c084fc",cyan:"#22d3ee",
+ yellow:"#fbbf24",red:"#f87171",arch:"#fb923c",neutral:"#94a3b8"};
+const PALETTES={
+ aoa:{cmd:T.purple,app:T.blue,adapters:T.arch,domain:T.green,ports:T.red,atlas:T.cyan,supporting:T.neutral},
+ gf:{cli:T.purple,serve:T.blue,ingest:T.cyan,pipeline:T.green,render:T.yellow,infra:T.arch,supporting:T.neutral},
+ dep:{dev:T.blue,ci:T.purple,registry:T.arch,user:T.green},
+ retail:{order:T.arch,inventory:T.cyan,customer:T.purple,shared:T.neutral},
+ mc:{aws:T.yellow,gcp:T.blue,shared:T.neutral}};
+const ESTATES=MODEL.estates;
+const firstScope=e=>Object.keys(ESTATES[e].scopes)[0];
+const firstView=(e,sc)=>Object.keys(ESTATES[e].scopes[sc].views)[0];
+// generic catalog for simulated scopes: derived from the views the scope actually has
+const VIEWFAM={context:["C4 Model","System Context"],container:["C4 Model","Container"],
+ component:["C4 Model","Component"],domains:["C4 Model","Domain map"],
+ deployment:["Technology & Ops","Deployment"],dataflow:["Flows & Behavior","Data Flow (DFD)"],
+ datamodel:["Data","Data Model / ER"]};
+function dynamicCatalog(sv){const groups={};
+  Object.entries(sv.views).forEach(([id,v])=>{const fam=VIEWFAM[id]||["Views",v.title];
+    (groups[fam[0]]=groups[fam[0]]||[]).push({id,label:fam[1],
+      status:v.prov&&v.prov.kind==="simulated"?"sim":"live"});});
+  return Object.entries(groups).map(([grp,items])=>({grp,items}));}
+const snap=v=>Math.round(v/8)*8;
+const IP={
+ cmd:'<polyline points="3,4 7,7 3,10" fill="none"/><line x1="7" y1="10" x2="11" y2="10"/>',
+ app:'<circle cx="7" cy="7" r="2"/><circle cx="7" cy="2" r="1"/><circle cx="7" cy="12" r="1"/><circle cx="2" cy="7" r="1"/><circle cx="12" cy="7" r="1"/><line x1="7" y1="3" x2="7" y2="5"/><line x1="7" y1="9" x2="7" y2="11"/><line x1="3" y1="7" x2="5" y2="7"/><line x1="9" y1="7" x2="11" y2="7"/>',
+ adapters:'<line x1="5" y1="1.5" x2="5" y2="4"/><line x1="9" y1="1.5" x2="9" y2="4"/><path d="M3 4h8v2a4 4 0 0 1-8 0z" fill="none"/><line x1="7" y1="10" x2="7" y2="12.5"/>',
+ domain:'<polygon points="7,1.5 12,4.2 12,9.8 7,12.5 2,9.8 2,4.2" fill="none"/>',
+ ports:'<rect x="2.5" y="2.5" width="9" height="9" rx="2" fill="none"/><circle cx="7" cy="7" r="1.6"/>',
+ atlas:'<path d="M2.5 2.5h4a2 2 0 0 1 2 2v7a2 2 0 0 0-2-1.6h-4z" fill="none"/><path d="M11.5 2.5h-4a2 2 0 0 0-2 2v7a2 2 0 0 1 2-1.6h4z" fill="none"/>',
+ supporting:'<circle cx="7" cy="7" r="3" fill="none"/><line x1="7" y1="1.5" x2="7" y2="3.5"/><line x1="7" y1="10.5" x2="7" y2="12.5"/>',
+ sys:'<polygon points="7,1.5 12,4.2 12,9.8 7,12.5 2,9.8 2,4.2" fill="none"/><circle cx="7" cy="7" r="2"/>',
+ ext:'<path d="M4 10a2.2 2.2 0 0 1 .2-4.3 3 3 0 0 1 5.8-.4 2.2 2.2 0 0 1 .2 4.7z" fill="none"/>',
+ container:'<rect x="2.5" y="2.5" width="9" height="9" rx="1.5" fill="none"/><line x1="2.5" y1="5.5" x2="11.5" y2="5.5"/>',
+ store:'<ellipse cx="7" cy="3.5" rx="4" ry="1.6" fill="none"/><path d="M3 3.5v7a4 1.6 0 0 0 8 0v-7" fill="none"/>',
+ cli:'<polyline points="3,4 7,7 3,10" fill="none"/><line x1="7" y1="10" x2="11" y2="10"/>',
+ serve:'<circle cx="7" cy="7" r="2"/><circle cx="2" cy="7" r="1"/><circle cx="12" cy="7" r="1"/><line x1="3" y1="7" x2="5" y2="7"/><line x1="9" y1="7" x2="11" y2="7"/>',
+ ingest:'<path d="M7 1.5v7" /><polyline points="4,6 7,9 10,6" fill="none"/><line x1="2.5" y1="12" x2="11.5" y2="12"/>',
+ pipeline:'<circle cx="2.5" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="11.5" cy="7" r="1.2"/><line x1="3.7" y1="7" x2="5.8" y2="7"/><line x1="8.2" y1="7" x2="10.3" y2="7"/>',
+ render:'<rect x="2" y="3" width="10" height="8" rx="1" fill="none"/><line x1="2" y1="6" x2="12" y2="6"/>',
+ infra:'<rect x="2.5" y="2.5" width="9" height="9" rx="2" fill="none"/><line x1="2.5" y1="7" x2="11.5" y2="7"/><line x1="7" y1="2.5" x2="7" y2="11.5"/>',
+ dev:'<polyline points="3,4 7,7 3,10" fill="none"/><line x1="7" y1="10" x2="11" y2="10"/>',
+ ci:'<circle cx="7" cy="7" r="4" fill="none"/><polyline points="7,4.5 7,7 9,8.5" fill="none"/>',
+ registry:'<path d="M2.5 4.5l4.5-2.5 4.5 2.5-4.5 2.5z" fill="none"/><path d="M2.5 4.5v5l4.5 2.5 4.5-2.5v-5" fill="none"/>',
+ user:'<circle cx="7" cy="5" r="2.2" fill="none"/><path d="M2.8 12a4.2 4.2 0 0 1 8.4 0" fill="none"/>',
+ proc:'<circle cx="7" cy="7" r="2"/>'};
+function Ico({k,c,s}){return html`<svg width=${s||16} height=${s||16} viewBox="0 0 14 14"
+  stroke=${c} stroke-width="1.3" fill="none" style=${{flexShrink:0}}
+  dangerouslySetInnerHTML=${{__html:IP[k]||IP.supporting}}/>`;}
+
+const ElkEdge=memo(function ElkEdge({id,data,style,markerEnd}){
+  if(!data||!data.section) return null;
+  const s=data.section;
+  const pts=[s.startPoint,...(s.bendPoints||[]),s.endPoint];
+  const d=pts.map((p,i)=>(i===0?"M ":"L ")+p.x+" "+p.y).join(" ");
+  return html`<${React.Fragment}>
+    <${BaseEdge} id=${id} path=${d} markerEnd=${markerEnd} style=${style}/>
+    ${data.label?html`<${EdgeLabelRenderer}>
+      <div className="nodrag nopan" style=${{position:"absolute",
+        transform:`translate(${data.label.x}px,${data.label.y}px)`,
+        background:T.bg,border:`1px solid ${T.border}`,borderRadius:5,
+        padding:"0 5px",height:16,lineHeight:"15px",fontSize:10.5,fontWeight:600,
+        color:T.text,pointerEvents:"all",zIndex:5}}>${data.label.text}</div>
+    <//>`:null}
+  <//>`;});
+
+function BoxNode({data}){
+  const t=data.type,col=t==="sys"?T.blue:t==="container"?T.arch:t==="store"?T.green:t==="proc"?T.blue:t==="ext"?T.dim:T.dim;
+  const mock=data.real===false,drill=!!data.drillTo;
+  return html`<div style=${{background:T.card,border:`1.5px ${mock?"dashed":"solid"} ${col}`,
+    borderRadius:t==="store"?18:t==="proc"?12:8,padding:"9px 13px",width:data.w-2,height:data.h-2,boxSizing:"border-box",
+    color:T.text,opacity:mock?0.88:1,cursor:drill?"pointer":"default"}}>
+    <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
+    <div style=${{display:"flex",alignItems:"center",gap:8}}>
+      <${Ico} k=${data.icon} c=${col} s=${17}/>
+      <span style=${{fontSize:13.5,fontWeight:600}}>${data.label}</span>
+      ${drill?html`<span style=${{marginLeft:"auto",fontSize:10,color:col,border:`1px solid ${col}`,borderRadius:5,padding:"0 5px"}}>open ▸</span>`:null}
+    </div>
+    ${data.sub?html`<div style=${{fontSize:10.5,color:T.dim,marginTop:2,marginLeft:25}}>${data.sub}</div>`:null}
+    <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
+  </div>`;}
+function EntityNode({data}){
+  const c=T.green;
+  return html`<div style=${{background:T.card,border:`1.5px solid ${c}`,borderRadius:6,
+    width:data.w-2,boxSizing:"border-box",color:T.text,overflow:"hidden"}}>
+    <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
+    <div style=${{padding:"7px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:7,background:T.band}}>
+      <${Ico} k="store" c=${c} s=${14}/>
+      <span style=${{fontSize:13,fontWeight:700}}>${data.label}</span>
+      <span style=${{marginLeft:"auto",fontSize:9.5,color:T.dim}}>${data.tech}</span>
+    </div>
+    ${data.fields.map((f,i)=>html`<div key=${i} style=${{padding:"3px 12px",fontSize:10.5,
+      fontFamily:"ui-monospace,monospace",color:f.startsWith(" ")?T.dim:T.text,
+      borderBottom:i<data.fields.length-1?`1px solid ${T.border}22`:"none"}}>${f}</div>`)}
+    <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
+  </div>`;}
+function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting";
+  return html`<div style=${{width:"100%",height:"100%",background:T.band,
+    border:`1.5px ${dash?"dashed":"solid"} ${data._god?T.red:c}`,borderRadius:4,boxSizing:"border-box",
+    opacity:data._dead?0.45:1,
+    boxShadow:data._god?`0 0 0 2px ${T.red}55, 0 0 22px ${T.red}44`:"none"}}>
+    <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
+    <div style=${{display:"flex",alignItems:"center",gap:7,padding:"7px 12px",height:data.head,boxSizing:"border-box"}}>
+      <${Ico} k=${data.ico||data.layer} c=${c} s=${14}/>
+      <span style=${{fontSize:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:1.1}}>${data.label}</span>
+      ${data._cyc?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:4,padding:"0 4px"}}>⟳ CYCLE</span>`:null}
+      ${data._dead?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>ORPHAN</span>`:null}
+      ${data._over?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>${data._over} · COLLAPSED</span>`:null}
+      <span style=${{marginLeft:"auto",fontSize:10.5,color:T.dim}}>${data.members.length}</span>
+    </div>
+    <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
+  </div>`;}
+function SoloNode({data}){const c=data.col;const dash=data.layer==="supporting";
+  return html`<div style=${{background:T.band,border:`1.5px ${dash?"dashed":"solid"} ${c}`,
+    borderRadius:4,padding:"8px 12px",width:data.w-2,height:data.h-2,boxSizing:"border-box",color:T.text}}>
+    <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
+    <div style=${{display:"flex",alignItems:"center",gap:7}}>
+      <${Ico} k=${data.ico||data.layer} c=${c} s=${14}/>
+      <span style=${{fontSize:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:1.1}}>${data.label}</span>
+      <span style=${{fontSize:12.5,fontWeight:600,marginLeft:6}}>${data.member.label}</span>
+      <span style=${{marginLeft:"auto",fontSize:10,color:T.dim}}>${data.member.sub}</span>
+    </div>
+    <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
+  </div>`;}
+function MemberNode({data}){const c=data.col;
+  return html`<div style=${{background:T.card,border:`1px solid ${T.border}`,borderLeft:`3px solid ${c}`,
+    borderRadius:6,padding:"5px 10px",width:data.w,height:data.h,boxSizing:"border-box",color:T.text}}>
+    <div style=${{display:"flex",alignItems:"center",gap:6}}>
+      <${Ico} k=${data.lay} c=${c} s=${12}/>
+      <span style=${{fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>${data.label}</span>
+      ${(data.showC||data.showH)?html`<span title=${(data.concerns?data.concerns+" recon findings · ":"")+(data.changed?"touched in last 15 commits · ":"")+data.sub}
+        style=${{marginLeft:"auto",display:"flex",gap:3,flexShrink:0}}>
+        ${data.showC?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,
+          borderRadius:7,padding:"0 4px",lineHeight:"12px"}}>⚠${data.concerns>99?"99+":data.concerns}</span>`:null}
+        ${data.showH?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,
+          borderRadius:7,padding:"0 4px",lineHeight:"12px"}}>Δ</span>`:null}
+      </span>`:html`<span style=${{marginLeft:"auto",fontSize:9,color:T.dim}}>${data.sub}</span>`}
+    </div>
+  </div>`;}
+const nodeTypes={box:BoxNode,bucket:BucketNode,solo:SoloNode,member:MemberNode,entity:EntityNode};
+const edgeTypes={elk:ElkEdge};
+
+const SP={
+ compact:{layers:"48",edgeNodeBL:"24",edgeNode:"16",edgeEdge:"12",edgeEdgeBL:"12",nodeNode:"32",edgeLabel:"4",
+          head:30,px:10,py:8,iw:144,ih:28,gx:8,gy:6,solo:[232,40]},
+ comfort:{layers:"80",edgeNodeBL:"32",edgeNode:"24",edgeEdge:"16",edgeEdgeBL:"16",nodeNode:"48",edgeLabel:"8",
+          head:40,px:16,py:16,iw:152,ih:48,gx:16,gy:8,solo:[248,56]}};
+const EOPT=(dir,d)=>({"elk.algorithm":"layered","elk.direction":dir,"elk.edgeRouting":"ORTHOGONAL",
+ "elk.layered.nodePlacement.strategy":"NETWORK_SIMPLEX",
+ "elk.layered.nodePlacement.favorStraightEdges":"true",
+ "elk.layered.considerModelOrder.strategy":"NODES_AND_EDGES",
+ "elk.layered.thoroughness":"50",
+ "elk.spacing.edgeNode":d.edgeNode,"elk.layered.spacing.edgeNodeBetweenLayers":d.edgeNodeBL,
+ "elk.spacing.edgeEdge":d.edgeEdge,"elk.layered.spacing.edgeEdgeBetweenLayers":d.edgeEdgeBL,
+ "elk.layered.spacing.nodeNodeBetweenLayers":d.layers,"elk.spacing.nodeNode":d.nodeNode,
+ "elk.spacing.edgeLabel":d.edgeLabel,
+ "elk.edgeLabels.placement":"CENTER","elk.edgeLabels.inline":"true"});
+const lblW=t=>snap(t.length*7+14);
+
+function rfEdge(e,laidById,col){
+  const le=laidById[e.id]||{};
+  const section=(le.sections&&le.sections[0])||null;
+  const lab=(le.labels&&le.labels[0])||null;
+  return {id:e.id,source:e.source,target:e.target,type:"elk",
+    data:{section,label:lab?{x:lab.x,y:lab.y,text:lab.text}:null},
+    markerEnd:{type:"arrowclosed",color:col(e),width:13,height:13},
+    style:{stroke:col(e),strokeWidth:2,opacity:.85}};}
+
+async function layoutSimple(view,dir,d){
+  const ent=view.kind==="entity";
+  const sizes={};
+  view.nodes.forEach(n=>{
+    if(ent){sizes[n.id]={w:264,h:34+n.fields.length*21+2};}
+    else {sizes[n.id]={w:n.type==="sys"?248:208,h:n.sub?60:44};}});
+  const g={id:"root",layoutOptions:EOPT(dir,d),
+    children:view.nodes.map(n=>({id:n.id,width:sizes[n.id].w,height:sizes[n.id].h})),
+    edges:view.edges.map(e=>({id:e.id,sources:[e.source],targets:[e.target],
+      labels:[{text:e.label,width:lblW(e.label),height:16}]}))};
+  const r=await elk.layout(g);
+  const pos={};r.children.forEach(c=>pos[c.id]={x:snap(c.x),y:snap(c.y)});
+  const laidById={};(r.edges||[]).forEach(e=>laidById[e.id]=e);
+  const problems=[];const nById={};view.nodes.forEach(n=>nById[n.id]=n);
+  view.edges.forEach(e=>{if(e.tag){e._viol=true;
+    problems.push(e.tag+": "+((nById[e.source]||{}).label)+" → "+((nById[e.target]||{}).label));}});
+  return {nodes:view.nodes.map(n=>({id:n.id,type:ent?"entity":"box",position:pos[n.id],
+      width:sizes[n.id].w,height:sizes[n.id].h,
+      data:{...n,w:sizes[n.id].w,h:sizes[n.id].h}})),
+    edges:view.edges.map(e=>{const r=rfEdge(e,laidById,()=>T.dim);
+      if(e._viol){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3"};
+        r.markerEnd={...r.markerEnd,color:T.red};
+        if(r.data.label)r.data.label.text="⚠ "+r.data.label.text;}
+      return r;}),problems};}
+
+const CYCLE=[T.arch,T.cyan,T.purple,T.green,T.yellow,T.blue,T.red,T.neutral];
+async function layoutBuckets(view,dir,d,ov){
+  ov=ov||{};
+  const B=view.buckets;
+  const pal=PALETTES[view.palette||"aoa"]||{};
+  const auto={};const colOf=l=>pal[l]||auto[l]||(auto[l]=CYCLE[Object.keys(auto).length%CYCLE.length]);
+  const problems=[];const deg={};B.forEach(b=>deg[b.id]={i:0,o:0});
+  const bById={};B.forEach(b=>bById[b.id]=b);
+  view.edges.forEach(e=>{deg[e.source].o++;deg[e.target].i++;
+    const sp=bById[e.source],tp=bById[e.target];
+    if(sp&&tp&&sp.part>tp.part){e._viol=true;problems.push("band violation: "+sp.label+" → "+tp.label);}
+    if(e.tag){e._viol=true;problems.push(e.tag+": "+sp.label+" → "+tp.label);}});
+  B.forEach(b=>{const dg=deg[b.id];
+    if(dg.i+dg.o===0&&B.length>1){b._dead=true;problems.push("orphan: "+b.label+" — no connections");}
+    if(dg.i>=3&&dg.o>=3){b._god=true;problems.push("god component: "+b.label+" (in "+dg.i+" · out "+dg.o+")");}});
+  (function(){const adj={};view.edges.forEach(e=>{(adj[e.source]=adj[e.source]||[]).push(e.target);});
+   const st={};let cyc=null;
+   function dfs(u,stk){st[u]=1;stk.push(u);
+     for(const v2 of adj[u]||[]){if(st[v2]===1){cyc=stk.slice(stk.indexOf(v2)).concat(v2);return true;}
+       if(!st[v2]&&dfs(v2,stk))return true;}
+     st[u]=2;stk.pop();return false;}
+   for(const b of B){if(!st[b.id]&&dfs(b.id,[]))break;}
+   if(cyc){problems.push("dependency cycle: "+cyc.map(id=>bById[id]?bById[id].label:id).join(" → "));
+     cyc.forEach(id=>{if(bById[id])bById[id]._cyc=true;});}})();
+  B.forEach(b=>{if((b.members||[]).length>40){b._over=b.members.length;
+    b.members=b.members.slice(0,23).concat([{id:b.id+"_more",label:"+"+(b._over-23)+" more…",sub:"over budget"}]);}});
+  B.forEach(b=>{const n=b.members.length;
+    b.solo=(n===1);
+    if(b.solo){b.w=d.solo[0];b.h=d.solo[1];return;}
+    const cols=n<=4?n:Math.min(5,Math.ceil(n/2));
+    const rows=Math.ceil(n/cols);
+    b.cols=cols;
+    b.w=d.px*2+cols*d.iw+(cols-1)*d.gx;
+    b.h=d.head+d.py+rows*d.ih+(rows-1)*d.gy+d.py;});
+  const g={id:"root",
+    layoutOptions:{...EOPT(dir,d),"elk.partitioning.activate":"true"},
+    children:B.map(b=>({id:b.id,width:b.w,height:b.h,
+      layoutOptions:{"elk.partitioning.partition":String(b.part),
+                     "elk.portConstraints":"FIXED_SIDE"}})),
+    edges:view.edges.map(e=>({id:e.id,sources:[e.source],targets:[e.target],
+      labels:[{text:(view.labeled&&e.label)?e.label+" ×"+e.count:"×"+e.count,
+               width:lblW((view.labeled&&e.label)?e.label+" x"+e.count:"x"+e.count),height:16}]}))};
+  const r=await elk.layout(g);
+  const pos={};r.children.forEach(c=>pos[c.id]={x:snap(c.x),y:snap(c.y)});
+  const laidById={};(r.edges||[]).forEach(e=>laidById[e.id]=e);
+  const nodes=[];
+  B.forEach(b=>{const bp=pos[b.id];const col=colOf(b.layer);
+    if(b.solo){
+      nodes.push({id:b.id,type:"solo",position:bp,width:b.w,height:b.h,
+        zIndex:0,draggable:false,selectable:false,
+        data:{layer:b.layer,label:b.label,member:b.members[0],w:b.w,h:b.h,col}});
+      return;}
+    nodes.push({id:b.id,type:"bucket",position:bp,width:b.w,height:b.h,
+      style:{width:b.w,height:b.h},zIndex:0,draggable:false,selectable:false,
+      data:{...b,head:d.head,col}});
+    b.members.forEach((m,i)=>{const c2=i%b.cols,row=Math.floor(i/b.cols);
+      nodes.push({id:m.id,type:"member",draggable:false,selectable:false,zIndex:10,
+        width:d.iw,height:d.ih,
+        position:{x:bp.x+d.px+c2*(d.iw+d.gx),y:bp.y+d.head+d.py+row*(d.ih+d.gy)},
+        data:{...m,lay:b.layer,col,w:d.iw,h:d.ih,
+          showC:!!(ov.concerns&&m.concerns>0),showH:!!(ov.changed&&m.changed)}});});});
+  const bcol={};B.forEach(b=>bcol[b.id]=colOf(b.layer));
+  const edges2=view.edges.map(e=>{const r=rfEdge(e,laidById,ee=>bcol[ee.source]||T.dim);
+    if(e._viol){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3",opacity:.95};
+      r.markerEnd={...r.markerEnd,color:T.red};
+      if(r.data.label)r.data.label.text="⚠ "+r.data.label.text;}
+    return r;});
+  return {nodes,edges:edges2,problems};}
+
+// Docked footer: ONE derived legend — shows only what the current view actually renders —
+// plus the provenance stamp anchored right.
+function Footer({view,ov}){
+  const pal=PALETTES[view.palette||"aoa"];
+  const groups=[];
+  if(view.kind==="buckets"){
+    groups.push({label:"LAYERS",items:view.buckets.map(b=>({txt:b.layer,c:pal[b.layer]||T.neutral,ico:b.ico||b.layer}))});
+    const ed=[{txt:"dependency · color = source layer",glyph:"━"},{txt:"bundled count",glyph:"×N"}];
+    if(view.buckets.some(b=>b.layer==="supporting"))ed.push({txt:"supporting / inferred",glyph:"┄"});
+    groups.push({label:"EDGES",items:ed});
+  } else if(view.kind==="entity"){
+    groups.push({label:"ELEMENTS",items:[{txt:"bucket table",c:T.green,ico:"store"}]});
+    groups.push({label:"EDGES",items:[{txt:"contains",glyph:"━"}]});
+  } else {
+    const seen={};view.nodes.forEach(n=>{if(!seen[n.type])seen[n.type]=n.icon;});
+    const NAME={sys:"system",ext:"external",container:"container",store:"store",proc:"process"};
+    const COLR={sys:T.blue,ext:T.dim,container:T.arch,store:T.green,proc:T.blue};
+    groups.push({label:"ELEMENTS",items:Object.keys(seen).map(t=>({txt:NAME[t]||t,c:COLR[t]||T.dim,ico:seen[t]}))});
+    const ed=[{txt:"labeled flow",glyph:"━"}];
+    if(view.nodes.some(n=>n.real===false))ed.push({txt:"inferred · sourceable",glyph:"┄"});
+    groups.push({label:"EDGES",items:ed});
+  }
+  if(ov&&(ov.concerns||ov.changed)&&view.kind==="buckets"&&(view.palette||"aoa")==="aoa"){
+    const o=[];
+    if(ov.concerns)o.push({txt:"recon findings",glyph:"⚠",c:T.red});
+    if(ov.changed)o.push({txt:"touched · last 15 commits",glyph:"Δ",c:T.yellow});
+    groups.push({label:"OVERLAYS",items:o});}
+  return html`<div style=${{borderTop:`1px solid ${T.border}`,display:"flex",alignItems:"center",
+    gap:14,padding:"7px 16px",fontSize:10.5,color:T.dim,flexWrap:"wrap",background:T.bg}}>
+    ${groups.map((g,gi)=>html`<${React.Fragment} key=${g.label}>
+      ${gi>0?html`<span style=${{color:T.border}}>│</span>`:null}
+      <span style=${{fontSize:9,fontWeight:700,letterSpacing:1,color:T.mute}}>${g.label}</span>
+      ${g.items.map((it,ii)=>html`<span key=${ii} style=${{display:"flex",alignItems:"center",gap:4}}>
+        ${it.ico?html`<${Ico} k=${it.ico} c=${it.c} s=${11}/>`:html`<b style=${{color:it.c||T.text,fontWeight:700}}>${it.glyph}</b>`}
+        ${it.txt}</span>`)}
+    <//>`)}
+    <span style=${{marginLeft:"auto",color:T.mute,flexShrink:0}}>generated ${MODEL.generated.timestamp} · always current</span>
+  </div>`;}
+
+// The model catalog — industry-standard families, each item with render status:
+// live = derived from real data now · sim = simulated, sourceable · planned = gated on an extractor
+// Per-system catalogs — each system's views stay contained within it
+const CATALOGS={
+ aoa:[
+  {grp:"C4 Model",tag:"modern",items:[
+    {id:"context",label:"System Context",status:"live"},
+    {id:"container",label:"Container",status:"live"},
+    {id:"component",label:"Component",status:"live"},
+    {id:"deployment",label:"Deployment",status:"sim",note:"sourceable · CI/IaC"},
+    {label:"Dynamic (sequence)",status:"planned",note:"needs call-edge resolution"},
+    {label:"Code (L4)",status:"planned",note:"symbol table · not drawn by design"}]},
+  {grp:"Flows & Behavior",items:[
+    {id:"dataflow",label:"Data Flow (DFD)",status:"live"},
+    {label:"Trust Boundaries (STRIDE)",status:"planned",note:"DFD overlay · rule-pack"},
+    {label:"State Machine",status:"planned",note:"needs state extraction"}]},
+  {grp:"Journeys",tag:"streaming",items:[
+    {label:"Query path · A → B",status:"planned",note:"capture along the flow · call edges"},
+    {label:"Indexing path · watch → persist",status:"planned",note:"capture along the flow"}]},
+  {grp:"Data",items:[
+    {id:"datamodel",label:"Data Model / ER",status:"live"},
+    {label:"Glossary",status:"planned",note:"atlas seed + writer"}]},
+  {grp:"Technology & Ops",items:[
+    {label:"Technology Portfolio",status:"planned",note:"config scan"},
+    {label:"SBOM (CycloneDX)",status:"planned",note:"document · manifests"}]},
+  {grp:"Classical structure",items:[
+    {id:"component",label:"Layered Architecture",status:"live",alias:true},
+    {label:"Dependency Matrix (DSM)",status:"planned",note:"matrix renderer"},
+    {label:"Cycle / Tangle Report",status:"planned",note:"SCC pass"}]}],
+ graphify:[
+  {grp:"C4 Model",tag:"modern",items:[
+    {label:"System Context",status:"planned",note:"not yet derived for this system"},
+    {label:"Container",status:"planned",note:"not yet derived for this system"},
+    {id:"component",label:"Component",status:"live"},
+    {label:"Deployment",status:"planned",note:"sourceable · CI config"}]},
+  {grp:"Flows & Behavior",items:[
+    {label:"Data Flow (DFD)",status:"planned",note:"not yet derived for this system"}]},
+  {grp:"Data",items:[
+    {label:"Data Model / ER",status:"planned",note:"not yet derived for this system"}]},
+  {grp:"Classical structure",items:[
+    {id:"component",label:"Layered Architecture",status:"live",alias:true},
+    {label:"Cycle / Tangle Report",status:"planned",note:"SCC pass"}]}]};
+const FIRST={aoa:"context",graphify:"component"};
+const STATUS={live:{dot:"●",col:T.green,lbl:"derived live"},
+              sim:{dot:"◌",col:T.yellow,lbl:"simulated · sourceable"},
+              planned:{dot:"○",col:T.mute,lbl:"planned · extractor gated"}};
+
+const ago=t=>{const s=(Date.now()-t)/1000;return s<5?"now":s<60?Math.floor(s)+"s ago":Math.floor(s/60)+"m ago";};
+function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,collapsed,setCollapsed,last}){
+  const CATALOG=(estate==="local"&&CATALOGS[scope])?CATALOGS[scope]:dynamicCatalog(scopes[scope]||{views:{}});
+  if(collapsed) return html`<div style=${{width:44,borderRight:`1px solid ${T.border}`,
+    display:"flex",flexDirection:"column",alignItems:"center",paddingTop:10,flexShrink:0}}>
+    <button onClick=${()=>setCollapsed(false)} title="Show models"
+      style=${{background:"transparent",border:`1px solid ${T.border}`,color:T.dim,
+      borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:13}}>›</button>
+  </div>`;
+  return html`<div style=${{width:252,borderRight:`1px solid ${T.border}`,overflowY:"auto",
+    flexShrink:0,display:"flex",flexDirection:"column"}}>
+    <div style=${{padding:"11px 14px",display:"flex",alignItems:"center",borderBottom:`1px solid ${T.border}`}}>
+      <span style=${{fontSize:11,fontWeight:700,letterSpacing:1.2,color:T.dim}}>SYSTEMS</span>
+      <span style=${{fontSize:8.5,fontWeight:700,marginLeft:7,letterSpacing:.6,
+        color:simEstate?T.yellow:T.green,border:`1px solid ${simEstate?T.yellow:T.green}`,
+        borderRadius:4,padding:"0 5px"}}>${simEstate?"SIMULATED":"LOCAL"}</span>
+      <button onClick=${()=>setCollapsed(true)} title="Hide"
+        style=${{marginLeft:"auto",background:"transparent",border:"none",color:T.mute,cursor:"pointer",fontSize:14}}>‹</button>
+    </div>
+    ${Object.entries(scopes).map(([sid,sv])=>html`<div key=${sid} onClick=${()=>goScope(sid)}
+      style=${{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",cursor:"pointer",
+        background:sid===scope?T.cardH:"transparent",
+        borderLeft:sid===scope?`2px solid ${T.blue}`:"2px solid transparent"}}>
+      <${Ico} k="sys" c=${sid===scope?T.blue:T.dim} s=${13}/>
+      <span style=${{fontSize:12.5,fontWeight:sid===scope?700:500,color:sid===scope?T.text:T.dim}}>${sv.label}</span>
+      <span style=${{marginLeft:"auto",fontSize:9,color:T.mute}}>${sv.tech}</span>
+    </div>`)}
+    <div style=${{padding:"10px 14px 4px",borderTop:`1px solid ${T.border}`,marginTop:4}}>
+      <span style=${{fontSize:11,fontWeight:700,letterSpacing:1.2,color:T.dim}}>MODELS</span>
+      <span style=${{fontSize:9,color:T.mute,marginLeft:6}}>· ${(scopes[scope]||{}).label} only</span>
+    </div>
+    <div style=${{flex:1,padding:"6px 0"}}>
+    ${CATALOG.map(g=>{const isOpen=open[g.grp]!==false;
+      return html`<div key=${g.grp}>
+        <div onClick=${()=>setOpen({...open,[g.grp]:!isOpen})}
+          style=${{display:"flex",alignItems:"center",gap:7,padding:"8px 14px",cursor:"pointer",userSelect:"none"}}>
+          <span style=${{color:T.mute,fontSize:9,transform:isOpen?"rotate(90deg)":"none",transition:"transform .15s",width:8}}>▶</span>
+          <span style=${{fontSize:11.5,fontWeight:700,letterSpacing:.6,color:T.text}}>${g.grp}</span>
+          ${g.tag?html`<span style=${{fontSize:8.5,color:T.blue,border:`1px solid ${T.blue}`,borderRadius:4,
+            padding:"0 4px",letterSpacing:.5,textTransform:"uppercase"}}>${g.tag}</span>`:null}
+        </div>
+        ${isOpen?g.items.map((it,ix)=>{const st=STATUS[it.status];const active=it.id&&it.id===level&&!it.alias;
+          const aliasActive=it.id&&it.id===level&&it.alias;
+          const clickable=!!it.id;
+          return html`<div key=${ix} onClick=${clickable?()=>go(it.id):null}
+            style=${{display:"flex",alignItems:"flex-start",gap:8,padding:"5px 14px 5px 29px",
+              cursor:clickable?"pointer":"default",
+              background:(active||aliasActive)?T.cardH:"transparent",
+              borderLeft:(active||aliasActive)?`2px solid ${T.blue}`:"2px solid transparent"}}>
+            <span style=${{color:st.col,fontSize:10,lineHeight:"17px"}}>${st.dot}</span>
+            <div style=${{minWidth:0,flex:1}}>
+              <div style=${{fontSize:12,fontWeight:active?650:500,
+                color:clickable?T.text:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${it.label}</div>
+              ${it.note?html`<div style=${{fontSize:9.5,color:T.mute}}>${it.note}</div>`:null}
+            </div>
+            ${it.id&&last&&last[estate+":"+scope+":"+it.id]?html`<span style=${{fontSize:8.5,color:T.mute,lineHeight:"17px",flexShrink:0}}>${ago(last[estate+":"+scope+":"+it.id])}</span>`:null}
+          </div>`;}):null}
+      </div>`;})}
+    </div>
+    <div style=${{borderTop:`1px solid ${T.border}`,padding:"9px 14px",fontSize:9.5,color:T.dim,
+      display:"flex",flexDirection:"column",gap:3}}>
+      ${Object.values(STATUS).map((s,i)=>html`<span key=${i}><span style=${{color:s.col}}>${s.dot}</span> ${s.lbl}</span>`)}
+    </div>
+  </div>`;}
+
+function Flow(){
+  const q=new URLSearchParams(location.search);
+  const[estate,setEstate]=useState(q.get("estate")||(ESTATES.local?"local":Object.keys(ESTATES)[0]));
+  const e0=q.get("estate")||(ESTATES.local?"local":Object.keys(ESTATES)[0]);
+  const[scope,setScope]=useState(q.get("scope")||firstScope(e0));
+  const[level,setLevel]=useState(()=>{const sc=q.get("scope")||firstScope(e0);
+    return q.get("level")||firstView(e0,sc);});
+  const[dirOv,setDirOv]=useState(q.get("dir")||null);
+  const[den,setDen]=useState(q.get("density")||"compact");
+  const[els,setEls]=useState(null);
+  const SC=ESTATES[estate].scopes;
+  const sys=SC[scope]||SC[firstScope(estate)];
+  const view=sys.views[level]||sys.views[Object.keys(sys.views)[0]];
+  const[ov,setOv]=useState(()=>{const o=(q.get("ov")||"").split(",");
+    return {concerns:o.includes("concerns"),changed:o.includes("changed")};});
+  const[last,setLast]=useState({});
+  const[autoDir,setAutoDir]=useState(null);
+  const dir=dirOv||autoDir||"DOWN";
+  useEffect(()=>{let on=true;const d=SP[den];
+    setEls(null);   // unmount canvas NOW; remount only with the new layout so initial fitView sees the right nodes
+    const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov):layoutSimple(view,dd,d);
+    // Auto direction: lay out BOTH ways, keep whichever fits the viewport at the larger scale
+    const fitScale=r=>{const xs=r.nodes.map(n=>n.position.x),ys=r.nodes.map(n=>n.position.y),
+      xe=r.nodes.map(n=>n.position.x+(n.width||208)),ye=r.nodes.map(n=>n.position.y+(n.height||64));
+      const w=Math.max(...xe)-Math.min(...xs),h=Math.max(...ye)-Math.min(...ys);
+      const aw=Math.max(window.innerWidth-300,400),ah=Math.max(window.innerHeight-130,300);
+      return Math.min(aw/Math.max(w,1),ah/Math.max(h,1));};
+    const p=dirOv
+      ?run(dirOv).then(e=>({e,dd:dirOv}))
+      :run("DOWN").then(a=>run("RIGHT").then(b=>
+          fitScale(a)>=fitScale(b)?{e:a,dd:"DOWN"}:{e:b,dd:"RIGHT"}));
+    p.then(({e,dd})=>{if(on){setEls(e);setAutoDir(dd);setLast(l=>({...l,[estate+":"+scope+":"+level]:Date.now()}));}});
+    return()=>{on=false;};},[estate,scope,level,dirOv,den,ov]);
+  // test hook: ?auto=<view>:<ms> simulates a user click after ms (verifies the CLICK path, not URL load)
+  useEffect(()=>{const auto=q.get("auto");
+    if(auto){const[lv,ms]=auto.split(":");const t=setTimeout(()=>setLevel(lv),parseInt(ms||"800",10));
+      return()=>clearTimeout(t);}},[]);
+  const onNodeClick=useCallback((_,n)=>{if(n.data&&n.data.drillTo){setLevel(n.data.drillTo);setDirOv(null);}},[]);
+  const[open,setOpen]=useState({});
+  const[collapsed,setCollapsed]=useState(false);
+  const go=useCallback(id=>{setLevel(id);setDirOv(null);},[]);
+  const goScope=useCallback(sid=>{setScope(sid);setLevel(firstView(estate,sid));setDirOv(null);},[estate]);
+  const goEstate=useCallback(eid=>{setEstate(eid);const sc=firstScope(eid);
+    setScope(sc);setLevel(firstView(eid,sc));setDirOv(null);},[]);
+  const btn=a=>({background:a?T.cardH:"transparent",border:`1px solid ${a?T.blue:T.border}`,
+    color:a?T.text:T.dim,borderRadius:7,padding:"5px 11px",fontSize:12,cursor:"pointer",fontWeight:550});
+  return html`<div style=${{height:"100vh",display:"flex",flexDirection:"column",background:T.bg,
+    font:"13px -apple-system,Segoe UI,Inter,Roboto,sans-serif",color:T.text}}>
+    <div style=${{padding:"10px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:12}}>
+      <div style=${{fontWeight:750,fontSize:15}}>aOa <span style=${{color:T.dim,fontWeight:400}}>· architecture</span></div>
+      <select value=${estate} onChange=${e=>goEstate(e.target.value)}
+        style=${{background:T.card,color:ESTATES[estate].sim?T.yellow:T.green,border:`1px solid ${T.border}`,
+        borderRadius:7,padding:"4px 8px",fontSize:11.5,fontWeight:600,cursor:"pointer"}}>
+        ${Object.entries(ESTATES).map(([eid,ev])=>html`<option key=${eid} value=${eid}>${ev.sim?"◌ ":"● "}${ev.label}</option>`)}
+      </select>
+      <span style=${{color:T.mute}}>·</span>
+      <span style=${{fontSize:12.5,color:T.blue,fontWeight:650,whiteSpace:"nowrap"}}>${sys.label}</span>
+      <span style=${{color:T.mute}}>▸</span>
+      <span style=${{fontSize:12.5,color:T.text,fontWeight:600,whiteSpace:"nowrap"}}>${view.title}</span>
+      ${view.prov?html`<span style=${(pk=>({fontSize:9,fontWeight:700,letterSpacing:.5,whiteSpace:"nowrap",
+        color:pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan,
+        border:`1px solid ${pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan}`,
+        borderRadius:5,padding:"1px 7px"}))(view.prov.kind)}>${view.prov.label}</span>`:null}
+      <span style=${{fontSize:11.5,color:T.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>${view.count}</span>
+      ${els&&els.problems&&els.problems.length?html`<span title=${els.problems.join("\n")}
+        style=${{fontSize:9.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:5,
+        padding:"1px 7px",whiteSpace:"nowrap",cursor:"help"}}>⚠ ${els.problems.length} pattern problem${els.problems.length>1?"s":""}</span>`:null}
+      ${ISSUES.length?html`<span title=${ISSUES.join("\n")}
+        style=${{fontSize:9.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:5,
+        padding:"1px 7px",whiteSpace:"nowrap",cursor:"help"}}>◌ ${ISSUES.length} model issue${ISSUES.length>1?"s":""}</span>`:null}
+      <div style=${{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+        <button style=${btn(ov.concerns)} onClick=${()=>setOv({...ov,concerns:!ov.concerns})}
+          title="Recon findings per package (bitmask)">⚠ Concerns</button>
+        <button style=${btn(ov.changed)} onClick=${()=>setOv({...ov,changed:!ov.changed})}
+          title="Touched in last 15 commits (git)">Δ Changed</button>
+        <span style=${{width:8}}></span>
+        <button style=${btn(den==="compact")} onClick=${()=>setDen("compact")}>Compact</button>
+        <button style=${btn(den==="comfort")} onClick=${()=>setDen("comfort")}>Comfort</button>
+        <span style=${{width:8}}></span>
+        <button style=${btn(!dirOv)} onClick=${()=>setDirOv(null)}
+          title="Pick the direction that best fits the viewport">Auto${!dirOv&&autoDir?(autoDir==="DOWN"?" ↓":" →"):""}</button>
+        <button style=${btn(dirOv==="DOWN")} onClick=${()=>setDirOv("DOWN")} title="Top–Bottom">↓</button>
+        <button style=${btn(dirOv==="RIGHT")} onClick=${()=>setDirOv("RIGHT")} title="Left–Right">→</button>
+      </div></div>
+    <div style=${{flex:1,display:"flex",minHeight:0}}>
+      <${Sidebar} estate=${estate} scopes=${SC} simEstate=${ESTATES[estate].sim}
+        scope=${scope} goScope=${goScope} level=${level} go=${go} open=${open} setOpen=${setOpen}
+        collapsed=${collapsed} setCollapsed=${setCollapsed} last=${last}/>
+      <div style=${{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
+        <div style=${{flex:1,position:"relative",minHeight:0}}>
+          ${els?html`<${ReactFlow} key=${estate+"|"+scope+"|"+level+"|"+dir+"|"+den}
+            nodes=${els.nodes} edges=${els.edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
+            onNodeClick=${onNodeClick} fitView fitViewOptions=${{padding:0.12}}
+            minZoom=${0.1} proOptions=${{hideAttribution:true}}>
+            <${Background} color=${T.border} gap=${24} size=${1}/>
+            <${Controls} position="bottom-right"/>
+          <//>`:null}
+        </div>
+        <${Footer} view=${view} ov=${ov}/>
+      </div>
+    </div></div>`;}
+createRoot(document.getElementById("root")).render(html`<${ReactFlowProvider}><${Flow}/><//>`);
+</script></body></html>
