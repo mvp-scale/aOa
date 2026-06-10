@@ -52,3 +52,28 @@ author with the intent block.
 - Sidebar bottom item clips behind scrollbar (scrollable panel — by design).
 - "+N more…" collapsed tile on over-budget buckets is the intended Class B
   containment; the 46-member bucket is lint-flagged to the author.
+
+---
+
+# Round 2 — fully-baked re-author · 2026-06-10 (later)
+
+All 7 scopes re-authored to the FULL 15-view catalog (105 views per variant,
+210 total), with named hover stats, canonical layers, label budgets, and
+F1-F7 preserved exactly (assembler-verified). Renderer round shipped first:
+semantic color system + canvas legend, sidebar drill/detail panel + concerns,
+hover z-index fix, named-stats hover cards.
+
+| Check | Round 1 (28 views) | Round 2 (210 views) |
+|---|---|---|
+| Lint findings | 85 | **1 (the intentional F6 overflow)** |
+| Blind judge | 26/28 | **14/15 sample pass** (one per view kind; full-set judging skipped — logged cap) |
+| Open fail | supply/domains content gap | supply/domains layout density (content now passes) |
+
+Round-2 fail detail: 8 buckets · 43 members force fitView to ~5px text;
+×N counts on perimeter-routed violation edges illegible; ~28% canvas use.
+Author content judged sound — moved to backlog as renderer layout-density
+work (aspect-aware packing, endpoint-anchored edge labels).
+
+Judge praise highlights: ecom/sequence retells BOPIS start-to-finish with
+p95 figures; corp/techportfolio names riskiest platform; data/trust violation
+identified "within seconds"; merch/datamodel schema spine fully sketchable.

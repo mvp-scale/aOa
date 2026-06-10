@@ -3,7 +3,7 @@
  "sharded": true,
  "generated": {
   "tool": "build_c4_mockup.py",
-  "timestamp": "2026-06-10 21:02 UTC",
+  "timestamp": "2026-06-10 21:17 UTC",
   "inputs": [
    "go list",
    "repo/graphify/*.py imports",
@@ -1030,12 +1030,42 @@
    "scopes": {
     "stores": {
      "label": "Store Systems",
-     "tech": "~2,300 stores · POS + edge",
+     "tech": "POS + edge · ≈2,300 stores",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Store Systems — System Context",
+       "count": "1 system · 12 external parties · 13 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB business-service map, MuleSoft/EDI integration catalog, payment switch interface registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/stores/context.json",
+        "hash": "b3b997a29b62",
+        "bytes": 3817
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Inside One Store — Containers",
+       "count": "16 containers · 19 channels · 1 store of ≈2,300",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: per-store CMDB CI snapshot, vCenter edge cluster inventory, Workspace ONE device registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/stores/container.json",
+        "hash": "d5e951ae4968",
+        "bytes": 4607
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Store Systems — Domain Map",
-       "count": "6 domains · 33 subsystems · ≈61,000 fleet elements",
+       "count": "6 domains · 26 subsystems · ≈61,000 fleet elements",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1043,23 +1073,53 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/stores/domains.json",
-        "hash": "fd6e8c355eac",
-        "bytes": 3508
+        "hash": "2b2871a75974",
+        "bytes": 4905
        }
       },
-      "container": {
+      "deployment": {
        "kind": "buckets",
-       "title": "Inside One Store — Container Stack",
-       "count": "1 store of ≈2,300 · ~40 containers · ≈85 devices on the floor",
+       "title": "Store Fleet — What Runs Where",
+       "count": "5 zones · 20 deployed units · ≈2,300 stores",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: per-store CMDB CI snapshot, vCenter edge cluster inventory, MDM device registry"
+        "label": "SIMULATED · would derive from: vCenter/vSAN edge inventory, VeloCloud orchestrator, Workspace ONE device registry, ServiceNow CMDB"
        },
        "shard": {
-        "path": "retail-enterprise-clean/stores/container.json",
-        "hash": "18c4aa415303",
-        "bytes": 2905
+        "path": "retail-enterprise-clean/stores/deployment.json",
+        "hash": "e988e8645327",
+        "bytes": 3834
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Card Sale During WAN Outage",
+       "count": "9 participants · 9 steps · zero lost tenders",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: payment orchestrator trace logs, POS e-journal, SD-WAN event timeline, acquirer settlement reports"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/stores/sequence.json",
+        "hash": "51554d944dc7",
+        "bytes": 2574
+       }
+      },
+      "code": {
+       "kind": "entity",
+       "title": "Store Close & Upload — Job Chain",
+       "count": "5 jobs · runs nightly in ≈2,300 stores",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: store job scheduler definitions, POS vendor EOD runbooks, Splunk store-close dashboards"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/stores/code.json",
+        "hash": "0ab44e1cffa0",
+        "bytes": 1990
        }
       },
       "dataflow": {
@@ -1073,8 +1133,23 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/stores/dataflow.json",
-        "hash": "54fb4adedb11",
-        "bytes": 1954
+        "hash": "9d6214436209",
+        "bytes": 2333
+       }
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Store Trust Zones — PCI Segmentation",
+       "count": "5 zones · 15 members · 6 cross-zone flows · 0 violations",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: PCI-DSS segmentation attestation, Palo Alto ruleset export, P2PE attestation, Workspace ONE posture data"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/stores/trust.json",
+        "hash": "96d9b19a6e1c",
+        "bytes": 3398
        }
       },
       "statemachine": {
@@ -1088,8 +1163,98 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/stores/statemachine.json",
-        "hash": "6ef8cf225055",
-        "bytes": 2164
+        "hash": "0dcf3f65b271",
+        "bytes": 2552
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Store Replica — Core Entities",
+       "count": "8 entities of ≈210 store-replica tables",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SQL Server store replica schema (sys.tables), POS vendor data dictionary, erwin store data model"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/stores/datamodel.json",
+        "hash": "74c0d0c3cfc4",
+        "bytes": 2786
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Store Systems Glossary — steward-approved terms",
+       "count": "12 terms of ≈180 in the store glossary",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Collibra business glossary · store operations steward council"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/stores/glossary.json",
+        "hash": "a270bbbce32d",
+        "bytes": 2264
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Technology portfolio — store systems",
+       "count": "12 of 31 store platforms",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB + Workspace ONE device registry + vendor support matrices + version scan"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/stores/techportfolio.json",
+        "hash": "37f8b0059117",
+        "bytes": 1376
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — store software stack",
+       "count": "12 of ≈1,400 components",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Black Duck scans of POS builds + vendor CycloneDX SBOMs + PIN-pad firmware manifests"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/stores/sbom.json",
+        "hash": "d9dd0cab8e9d",
+        "bytes": 1152
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Store Stack Module DSM",
+       "count": "8 modules · 131 cross-module dependencies · 2 mutual pairs",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: static dependency scan of POS/store-server codelines, store interface catalog, Kafka topic registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/stores/dsm.json",
+        "hash": "9b7e6fdbd240",
+        "bytes": 764
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Dependency Tangles — store stack",
+       "count": "2 tangles across 8 modules · break plan attached",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: static dependency scan of POS/store-server codelines + store interface catalog"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/stores/cycles.json",
+        "hash": "013c4b42fe67",
+        "bytes": 1203
        }
       }
      }
@@ -1098,6 +1263,36 @@
      "label": "Digital / E-Commerce",
      "tech": "web+app · ≈$8B online",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Digital Commerce in Context",
+       "count": "16 systems · 15 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: LeanIX EA repository + Apigee API registry + vendor contract CMDB"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/ecom/context.json",
+        "hash": "030021024a3a",
+        "bytes": 4001
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Digital Runtime Containers",
+       "count": "12 containers · 13 channels",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Backstage service catalog + EKS deployment manifests + Istio service-mesh telemetry"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/ecom/container.json",
+        "hash": "245349744759",
+        "bytes": 3174
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Digital Domain Map",
@@ -1109,8 +1304,53 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/ecom/domains.json",
-        "hash": "59efd21a5db1",
-        "bytes": 3300
+        "hash": "00735a5a6583",
+        "bytes": 4701
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Digital Deployment — edge to on-prem",
+       "count": "5 environments · 23 deployed units · 6 cross-env flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB + Terraform state + Akamai property configs + EKS cluster inventory"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/ecom/deployment.json",
+        "hash": "693e1baf5638",
+        "bytes": 3959
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "BOPIS Happy Path",
+       "count": "9 participants · 8 calls · p95 1.9s order ack",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Dynatrace PurePath traces + Akamai mPulse RUM + Sterling order audit trail"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/ecom/sequence.json",
+        "hash": "c948f9dbea1f",
+        "bytes": 2370
+       }
+      },
+      "code": {
+       "kind": "entity",
+       "title": "Catalog Publish Chain — nightly jobs",
+       "count": "6 jobs of ≈480 scheduled · 5 chain links",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Airflow DAG repo + Control-M job definitions + Stibo STEP export configs"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/ecom/code.json",
+        "hash": "97f46b064925",
+        "bytes": 2254
        }
       },
       "dataflow": {
@@ -1124,23 +1364,38 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/ecom/dataflow.json",
-        "hash": "c1df9237dba3",
-        "bytes": 1972
+        "hash": "185dc839938b",
+        "bytes": 2408
        }
       },
-      "sequence": {
-       "kind": "simple",
-       "title": "BOPIS Happy Path",
-       "count": "8 calls · p95 1.9s order ack · pickup-ready avg 47 min",
+      "trust": {
+       "kind": "buckets",
+       "title": "Digital Trust Zones — PCI & PII boundaries",
+       "count": "5 zones · 17 members · 5 cross-zone flows",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: Dynatrace PurePath traces + Akamai mPulse RUM + Sterling order audit trail"
+        "label": "SIMULATED · would derive from: AWS Network Firewall policy + PCI-DSS segmentation attestation + BigID PII scans + Akamai WAF config"
        },
        "shard": {
-        "path": "retail-enterprise-clean/ecom/sequence.json",
-        "hash": "345f17ba6273",
-        "bytes": 1912
+        "path": "retail-enterprise-clean/ecom/trust.json",
+        "hash": "407796973d00",
+        "bytes": 3419
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "Online Order Lifecycle — Sterling order",
+       "count": "11 states · 13 transitions",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Sterling OMS pipeline/status configuration (YFS status graph) + order audit trail"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/ecom/statemachine.json",
+        "hash": "a0711ec0842b",
+        "bytes": 3165
        }
       },
       "datamodel": {
@@ -1154,8 +1409,83 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/ecom/datamodel.json",
-        "hash": "6b341f3cc7f9",
-        "bytes": 2243
+        "hash": "048a74aa11f5",
+        "bytes": 3081
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Digital Glossary — terms of art",
+       "count": "12 terms · 6 owning domains",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Confluence domain glossary + Sterling data dictionary + retail ops training manuals"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/ecom/glossary.json",
+        "hash": "4b195a72f456",
+        "bytes": 1904
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Digital Technology Portfolio",
+       "count": "12 technologies · 4 flagged",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: LeanIX technology catalog + ServiceNow CMDB lifecycle fields + vendor support contracts"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/ecom/techportfolio.json",
+        "hash": "6b9573f8435c",
+        "bytes": 1324
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — digital commerce estate",
+       "count": "12 of ≈3,400 components · 3 flagged",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Snyk + Syft container scans → CycloneDX + Black Duck for vendor packages"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/ecom/sbom.json",
+        "hash": "f3c52e888deb",
+        "bytes": 1222
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Digital Services DSM",
+       "count": "9 modules · 149 cross-module dependencies · 1 mutual pair (Cart ↔ Promotions)",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: static import scan of the service monorepo + Istio call graph + Kafka topic ownership map"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/ecom/dsm.json",
+        "hash": "27353c954493",
+        "bytes": 822
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Dependency Cycles — digital services",
+       "count": "3 tangles across 6 modules · break plans attached",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SCC analysis of the service dependency graph (Istio call graph + static import scan)"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/ecom/cycles.json",
+        "hash": "bbc99219289a",
+        "bytes": 1497
        }
       }
      }
@@ -1164,10 +1494,40 @@
      "label": "Supply Chain",
      "tech": "96 DCs · 3 WMS generations",
      "views": {
-      "domains": {
+      "context": {
        "kind": "simple",
+       "title": "Supply Chain — System Context",
+       "count": "1 system · 9 neighbors · 12 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CMDB business-service map (ServiceNow), EDI partner registry, ESB/API gateway interface catalog, carrier contract system"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/supply/context.json",
+        "hash": "ce5abb5ce341",
+        "bytes": 3006
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Supply Chain — Containers",
+       "count": "11 containers · 11 channels",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CMDB application instances, middleware interface catalog (MQ/Kafka), vendor license inventory, EKS cluster registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/supply/container.json",
+        "hash": "371df376dcd3",
+        "bytes": 3236
+       }
+      },
+      "domains": {
+       "kind": "buckets",
        "title": "Supply Chain Domains",
-       "count": "8 domains · ≈29,100 elements",
+       "count": "8 domains · 39 members · 8 cross-domain edges",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1175,14 +1535,14 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/supply/domains.json",
-        "hash": "7d262357c265",
-        "bytes": 2116
+        "hash": "51da72ef2904",
+        "bytes": 6585
        }
       },
       "deployment": {
        "kind": "buckets",
        "title": "DC Network Deployment — WMS Generations",
-       "count": "96 DCs · 3 WMS generations · ≈29,100 elements",
+       "count": "5 zones · 22 deployed units · 96 DCs",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1190,14 +1550,44 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/supply/deployment.json",
-        "hash": "3ed07c5fb318",
-        "bytes": 2776
+        "hash": "50389b436e01",
+        "bytes": 3849
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Scenario: PO 850 Release to DC Putaway",
+       "count": "1 scenario · 7 participants · 8 steps",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: EDI translator transaction trail (850/855/856), TMS tender audit log, yard appointment system, WMS receipt + putaway transaction history"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/supply/sequence.json",
+        "hash": "f9a15aa48dd1",
+        "bytes": 2155
+       }
+      },
+      "code": {
+       "kind": "simple",
+       "title": "Nightly Replenishment Batch Chain",
+       "count": "9 jobs · 8 chain edges · nightly batch",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job definitions + run history, Sterling business-process registry, COBOL source library (Endevor), DB2/Oracle batch audit tables"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/supply/code.json",
+        "hash": "e4551ed6cb22",
+        "bytes": 2470
        }
       },
       "dataflow": {
        "kind": "simple",
        "title": "Replenishment Chain — Forecast to Putaway",
-       "count": "8 stages · ≈120K PO lines/day · 96 DCs",
+       "count": "8 stages · 7 hops · ≈120K PO lines/day",
        "dir": "RIGHT",
        "prov": {
         "kind": "simulated",
@@ -1205,8 +1595,98 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/supply/dataflow.json",
-        "hash": "a2b2136f8024",
-        "bytes": 1745
+        "hash": "280f52f470aa",
+        "bytes": 2127
+       }
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Supply Chain Trust Zones",
+       "count": "4 zones · 16 members · 5 cross-zone flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: network segmentation policy (Palo Alto zones), firewall rule export, AS2/VAN certificate store, RACF dataset rules, OT segmentation audit"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/supply/trust.json",
+        "hash": "b607b637e98f",
+        "bytes": 3194
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "Inbound Purchase Order Lifecycle",
+       "count": "10 states · 10 transitions",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: PO status history table (DB2 + Oracle), EDI transaction trail, yard gate events, WMS receipt/putaway audit, AP match results"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/supply/statemachine.json",
+        "hash": "bcc5c9652250",
+        "bytes": 2762
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Inbound Supply Data Model",
+       "count": "10 entities · 10 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: DB2 z/OS catalog (gen1), Oracle RAC data dictionary (gen2), Aurora Postgres schemas (gen3), EDI canonical document model"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/supply/datamodel.json",
+        "hash": "4430b9373fc9",
+        "bytes": 3305
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Supply Chain Glossary",
+       "count": "16 terms",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: logistics standard operating procedures, EDI implementation guides, WMS training curriculum, engineered-labor standards manual"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/supply/glossary.json",
+        "hash": "aa038e3a9ce8",
+        "bytes": 2540
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Supply Chain Technology Portfolio",
+       "count": "12 technologies",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CMDB software inventory, vendor support contracts, EOL bulletins (IBM/Oracle/BMC), architecture review board records"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/supply/techportfolio.json",
+        "hash": "88227372e305",
+        "bytes": 1973
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "Supply Chain SBOM (Key Components)",
+       "count": "16 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Syft/Grype scans of gen3 images, WebLogic deployment manifests, mainframe SMP/E inventory, vendor license records"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/supply/sbom.json",
+        "hash": "0b2f6a5ca9ff",
+        "bytes": 1545
        }
       },
       "dsm": {
@@ -1223,6 +1703,21 @@
         "hash": "84c41305ec00",
         "bytes": 772
        }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Dependency Cycles",
+       "count": "3 cycles · 1 module-level · 2 code-level",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: strongly-connected-component analysis over the module DSM and gen2/EDI static dependency graphs"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/supply/cycles.json",
+        "hash": "88603e249f55",
+        "bytes": 1100
+       }
       }
      }
     },
@@ -1230,10 +1725,40 @@
      "label": "Merchandising",
      "tech": "item master · 1.2M SKUs",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Merchandising — System Context",
+       "count": "1 system · 7 externals · 8 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: MuleSoft API topology + OpenText Trading Grid partner registry + LeanIX integration catalog"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/merch/context.json",
+        "hash": "68932041c847",
+        "bytes": 2324
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Merchandising — Containers",
+       "count": "10 containers · 10 channels",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Oracle Retail install topology (WebLogic config) + AKS deployment manifests + ServiceNow CMDB"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/merch/container.json",
+        "hash": "c82cdfd6e1d0",
+        "bytes": 2815
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Merchandising — Domain Map",
-       "count": "6 domains · 34 subsystems · 1.2M SKUs / 2,300 stores",
+       "count": "6 domains · 25 subsystems · 1.2M SKUs / 2,300 stores",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1241,14 +1766,104 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/merch/domains.json",
-        "hash": "b548d77bc089",
-        "bytes": 3455
+        "hash": "37c83dbbce0b",
+        "bytes": 4670
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Merchandising — Deployment",
+       "count": "4 zones · 15 deployed units · 4 flows",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB (CI relationships) + Azure Resource Graph + Exadata fleet inventory"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/merch/deployment.json",
+        "hash": "1cdb9efe6a5b",
+        "bytes": 2719
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Sequence — cost change to shelf edge",
+       "count": "7 participants · 7 steps",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: MuleSoft API analytics + Control-M job-log correlation + AppDynamics traces"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/merch/sequence.json",
+        "hash": "8eda76577668",
+        "bytes": 1995
+       }
+      },
+      "code": {
+       "kind": "simple",
+       "title": "Batch chain — nightly merch cycle",
+       "count": "6 jobs · 5 links",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job definitions (MRCH/RPM folders) + PL/SQL package inventory"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/merch/code.json",
+        "hash": "33c88275773f",
+        "bytes": 1844
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — supplier to shelf",
+       "count": "13 nodes · 13 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Oracle GoldenGate routes + Kafka topic registry + EDI document-flow logs"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/merch/dataflow.json",
+        "hash": "b68b4cc7017c",
+        "bytes": 3312
+       }
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Trust boundaries — partner to data zone",
+       "count": "4 zones · 13 members · 3 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Palo Alto segmentation policy + Illumio flow map + BigID data classification"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/merch/trust.json",
+        "hash": "d5c59fc4ba1a",
+        "bytes": 2680
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "State machine — item lifecycle",
+       "count": "7 states · 8 transitions",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: RMS ITEM_MASTER status enum + ITEM_STATUS_HIST workflow audit table"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/merch/statemachine.json",
+        "hash": "18c0163c7e86",
+        "bytes": 2022
        }
       },
       "datamodel": {
        "kind": "entity",
        "title": "Item / Price / Promo Core — 11 entities of ≈2,200 tables",
-       "count": "11 core entities · ≈2,200 tables · 1.2M SKUs",
+       "count": "11 core entities · 11 relations · ≈2,200 tables",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1256,8 +1871,8 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/merch/datamodel.json",
-        "hash": "f3e7107ba65f",
-        "bytes": 2779
+        "hash": "57dbae286aec",
+        "bytes": 3829
        }
       },
       "glossary": {
@@ -1273,6 +1888,51 @@
         "path": "retail-enterprise-clean/merch/glossary.json",
         "hash": "6430060e875f",
         "bytes": 2165
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Technology portfolio — merchandising stack",
+       "count": "12 platforms",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: LeanIX technology catalog + Flexera asset scan"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/merch/techportfolio.json",
+        "hash": "9a864746a63c",
+        "bytes": 1047
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — promo & GDSN services",
+       "count": "12 of ≈410 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CycloneDX scans (Syft) of promo/GDSN service images + Maven lockfiles"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/merch/sbom.json",
+        "hash": "cefee945a7b0",
+        "bytes": 991
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "DSM — merch domain coupling",
+       "count": "6 modules · 4 mutual pairs",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Oracle RMS/RPM/ReIM interface dependency scan → N×N matrix"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/merch/dsm.json",
+        "hash": "3da0fb26f2d7",
+        "bytes": 414
        }
       },
       "cycles": {
@@ -1296,10 +1956,40 @@
      "label": "Corporate / Finance & HR",
      "tech": "two ERPs post-acquisition",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "System context — corporate finance & HR",
+       "count": "1 estate · 9 externals · 10 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB business-service map + firewall egress rules + webMethods endpoint registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/corp/context.json",
+        "hash": "c45eaf125037",
+        "bytes": 2798
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Container — finance integration hub",
+       "count": "2 ERPs · 3 runtimes · 6 SaaS partners · 12 of 214 interfaces",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: webMethods interface registry + SAP PI/PO ICO list + CMDB service map"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/corp/container.json",
+        "hash": "3d976a54dacc",
+        "bytes": 3201
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Domain map — corporate finance & HR",
-       "count": "8 domains · ≈310 modules · ≈18,600 elements",
+       "count": "8 domains · 26 of ≈310 modules",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1307,8 +1997,128 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/corp/domains.json",
-        "hash": "5710322140dd",
-        "bytes": 3889
+        "hash": "e8154d6b5993",
+        "bytes": 5361
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment — DCs, mainframe, SaaS, DR",
+       "count": "5 environments · 18 deployed units · 8 cross-env flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB CI topology + VMware vCenter inventory + GDPS / Data Guard runbooks"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/corp/deployment.json",
+        "hash": "cb845fd39623",
+        "bytes": 3825
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Sequence — biweekly payroll run",
+       "count": "7 participants · 7 calls",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job flow + webMethods transaction logs + SAP IDoc monitor (WE02)"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/corp/sequence.json",
+        "hash": "3fc6e3bed645",
+        "bytes": 2147
+       }
+      },
+      "code": {
+       "kind": "entity",
+       "title": "Code — payroll batch chain (JCL)",
+       "count": "6 programs · 5 handoffs",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job definitions + JCL PROC libraries + Endevor package history"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/corp/code.json",
+        "hash": "65e868980b8a",
+        "bytes": 2148
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — hire-to-report & buy-to-pay",
+       "count": "13 nodes · 14 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: webMethods interface registry + Control-M file-transfer jobs + SAP IDoc partner profiles"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/corp/dataflow.json",
+        "hash": "18d8690a6dee",
+        "bytes": 3561
+       }
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Trust boundaries — finance & HR data",
+       "count": "4 zones · 15 members · 4 cross-zone flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Palo Alto firewall policy export + network segments + BigID data-classification scan"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/corp/trust.json",
+        "hash": "a70c839d3e10",
+        "bytes": 3127
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "State machine — supplier invoice",
+       "count": "7 states · 8 transitions",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SAP invoice status field (RBKP) + workflow logs (SWI1) + Ariba invoice events"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/corp/statemachine.json",
+        "hash": "4ab3028fbe45",
+        "bytes": 1986
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Data model — finance spine (SAP)",
+       "count": "7 entities · 7 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SAP DDIC (SE11) + Oracle EBS data dictionary + BigID schema scan"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/corp/datamodel.json",
+        "hash": "ee268b4e0371",
+        "bytes": 2465
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Glossary — finance & HR terms",
+       "count": "10 terms",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: finance close runbook + Workiva definitions + controllership wiki"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/corp/glossary.json",
+        "hash": "54fd3142d01e",
+        "bytes": 1635
        }
       },
       "techportfolio": {
@@ -1341,19 +2151,34 @@
         "bytes": 1105
        }
       },
-      "container": {
-       "kind": "simple",
-       "title": "Container — finance integration hub",
-       "count": "9 containers · 10 of 214 interfaces",
-       "dir": "DOWN",
+      "dsm": {
+       "kind": "matrix",
+       "title": "DSM — finance domain interfaces",
+       "count": "8 modules · 13 dependencies",
+       "dir": null,
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: webMethods interface registry + SAP PI/PO ICO list + CMDB service map"
+        "label": "SIMULATED · would derive from: webMethods interface registry → module×module interface matrix"
        },
        "shard": {
-        "path": "retail-enterprise-clean/corp/container.json",
-        "hash": "bc96523ebc0d",
-        "bytes": 2078
+        "path": "retail-enterprise-clean/corp/dsm.json",
+        "hash": "c1536c9dc66b",
+        "bytes": 518
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Cycle / tangle report — finance",
+       "count": "3 cycles · 6 of 13 edges cyclic",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Tarjan SCC over webMethods interface graph"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/corp/cycles.json",
+        "hash": "b0af07934daf",
+        "bytes": 741
        }
       }
      }
@@ -1362,10 +2187,40 @@
      "label": "Legacy Core (Mainframe)",
      "tech": "z/OS · 4.2M LOC COBOL",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Legacy Core · System Context",
+       "count": "1 mainframe · 8 external partners · 11 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB relationships + MQ channel & Connect:Direct configs + CICS CSD + EDI trading-partner registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/core/context.json",
+        "hash": "5398e7a34863",
+        "bytes": 2698
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Legacy Core · Runtime Containers",
+       "count": "10 runtime units · 18 CICS regions across 3 LPARs",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CICSPlex SM topology + DB2 -DISPLAY GROUP + MQ DIS QMGR + Control-M server definitions"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/core/container.json",
+        "hash": "25732c5272f8",
+        "bytes": 2752
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Legacy Core · Business Domains",
-       "count": "14 domains of 23 · ≈4.2M LOC COBOL · 3,170 programs · ≈3,800 DB2 tables",
+       "count": "5 domains · 18 subsystems · ≈4.2M LOC COBOL · 3,170 programs",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1373,14 +2228,14 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/core/domains.json",
-        "hash": "3d748fc4aafe",
-        "bytes": 2211
+        "hash": "181f7b95fadb",
+        "bytes": 3758
        }
       },
       "deployment": {
        "kind": "buckets",
        "title": "Legacy Core · Sysplex & Region Topology",
-       "count": "4 tiers · 3 LPARs · 18 CICS regions · DB2 DS group (41 TB) · 2 MQ qmgrs",
+       "count": "4 tiers · 16 units · 3 LPARs · 18 CICS regions · 41 TB DB2",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1388,13 +2243,43 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/core/deployment.json",
-        "hash": "8ad9b3553204",
-        "bytes": 2326
+        "hash": "41c317472eb9",
+        "bytes": 2977
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Sequence · Price Change to Store Shelf",
+       "count": "8 steps · 8 participants · merchant keystroke to shelf by 06:00 next day",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CICS auxiliary trace + Control-M job log + MQ accounting (SMF 116) + store delivery-receipt log"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/core/sequence.json",
+        "hash": "671e070b690f",
+        "bytes": 2333
+       }
+      },
+      "code": {
+       "kind": "entity",
+       "title": "Legacy Core · Critical Program Chain",
+       "count": "6 programs of 3,170 · nightly critical path + CICS maintenance",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Endevor source libraries + IBM ADDI parse (paragraph/perform graph) + SMF 30 step-end records"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/core/code.json",
+        "hash": "ebbbaafa0a7d",
+        "bytes": 2958
        }
       },
       "dataflow": {
        "kind": "simple",
-       "title": "Legacy Core · Nightly Batch Chain (Replenishment Critical Path)",
+       "title": "Legacy Core · Nightly Batch Chain",
        "count": "7 stages · ≈2,100 Control-M jobs · window 02:00–06:00",
        "dir": "DOWN",
        "prov": {
@@ -1403,23 +2288,128 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/core/dataflow.json",
-        "hash": "c63cf972a8ad",
-        "bytes": 1692
+        "hash": "cfb9efb9b772",
+        "bytes": 1978
        }
       },
-      "code": {
-       "kind": "entity",
-       "title": "Legacy Core · Key COBOL Programs",
-       "count": "4 programs of 3,170 · ≈4.2M LOC COBOL",
+      "trust": {
+       "kind": "buckets",
+       "title": "Legacy Core · Trust Zones",
+       "count": "4 zones · 14 assets · 5 cross-zone flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: RACF database (DSMON) + zERT network policy + MQ CHLAUTH rules + firewall rulebase + PCI segmentation attestation"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/core/trust.json",
+        "hash": "c919e48ab79f",
+        "bytes": 3051
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "Purchase Order Lifecycle (PUR)",
+       "count": "9 states · 11 transitions · ≈85K PO lines cut nightly",
        "dir": "RIGHT",
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: Endevor source libraries + IBM ADDI parse (paragraph/perform graph)"
+        "label": "SIMULATED · would derive from: PUR domain status-code table (POHDR.STATUS-CD) + EDI 855/856/810 event history + buyer workflow rules"
        },
        "shard": {
-        "path": "retail-enterprise-clean/core/code.json",
-        "hash": "eecb56751cf1",
-        "bytes": 1627
+        "path": "retail-enterprise-clean/core/statemachine.json",
+        "hash": "52a4334ea8bd",
+        "bytes": 2576
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Legacy Core · DB2/VSAM Spine",
+       "count": "8 entities of ≈3,800 DB2 tables + ≈2,900 VSAM files",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: DB2 catalog (SYSIBM.SYSTABLES/SYSCOLUMNS) + VSAM catalog (LISTCAT) + copybook record layouts via ADDI"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/core/datamodel.json",
+        "hash": "d4b0dd2c0a4d",
+        "bytes": 2746
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Legacy Core Glossary — steward-approved terms",
+       "count": "12 terms of ≈220 in the core glossary",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Collibra business glossary · mainframe domain steward council · batch runbook appendix"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/core/glossary.json",
+        "hash": "925afbfc8def",
+        "bytes": 2297
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Technology portfolio — mainframe estate",
+       "count": "13 of ≈45 platforms",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB + SMP/E CSI inventory + IBM EOS bulletins + vendor support contracts"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/core/techportfolio.json",
+        "hash": "a10b26f71132",
+        "bytes": 1418
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — z/OS installed software inventory",
+       "count": "14 of ≈180 installed products",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SMP/E CSI zone query + IBM Z Software Asset Management scan → CycloneDX"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/core/sbom.json",
+        "hash": "ca3ea833def9",
+        "bytes": 1091
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Legacy Core Module DSM",
+       "count": "10 modules · 972 cross-module call/include deps · 1 mutual pair (Item Master ↔ Pricing)",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ADDI static call graph + copybook include cross-reference + DB2 plan/package dependency catalog"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/core/dsm.json",
+        "hash": "2ab07008aa7f",
+        "bytes": 959
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Dependency Cycles — Legacy Core",
+       "count": "3 cycles · largest spans 2 domains · break plan attached",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ADDI call-graph SCC analysis + copybook include cross-reference + Control-M predecessor graph"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/core/cycles.json",
+        "hash": "bddc32df6a5a",
+        "bytes": 1547
        }
       }
      }
@@ -1428,10 +2418,40 @@
      "label": "Data & Analytics",
      "tech": "Teradata + lakehouse",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Data & Analytics — System Context",
+       "count": "1 platform · 9 external systems · 10 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB business-app relations + MuleSoft/IBM MQ interface catalog + EDI trading-partner configs"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/context.json",
+        "hash": "3c2ee9d75cc3",
+        "bytes": 2878
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Data & Analytics — Containers",
+       "count": "12 containers · 13 channels",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB CI relations + Terraform/Ansible inventories + Databricks & Confluent workspace APIs"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/container.json",
+        "hash": "375d3e3b3faf",
+        "bytes": 3381
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Data & Analytics — Domain Map",
-       "count": "5 domains · 23 platforms · ≈49,000 governed elements",
+       "count": "5 domains · 18 platforms · 6 dependencies",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1439,14 +2459,59 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/data/domains.json",
-        "hash": "c34f35e386aa",
-        "bytes": 2855
+        "hash": "c1b5e17bc09b",
+        "bytes": 3623
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Data & Analytics — Deployment",
+       "count": "4 environments · 15 deployed units · 7 cross-env flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB CI topology + Terraform state + VMware vCenter inventory + AWS Config snapshots"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/deployment.json",
+        "hash": "19f4f5491eb7",
+        "bytes": 3065
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Nightly Demand Forecast Refresh",
+       "count": "1 scenario · 7 participants · 9 steps · done by 05:00 ET",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job logs + Airflow DAG runs + Databricks Jobs API run history + Teradata DBQL"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/sequence.json",
+        "hash": "b2310ed26c6d",
+        "bytes": 2285
+       }
+      },
+      "code": {
+       "kind": "simple",
+       "title": "Nightly Batch Critical Path — Jobs",
+       "count": "8 jobs of ≈21,000 scheduled · critical path 4h 10m",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job definitions + DataStage repository export + Databricks Jobs API + dbt Git repo"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/code.json",
+        "hash": "818452a34ca5",
+        "bytes": 2289
        }
       },
       "dataflow": {
        "kind": "simple",
        "title": "CDC Pipeline — OLTP to Activation",
-       "count": "9 stages · ≈21,000 scheduled tasks behind them",
+       "count": "9 stages · 8 labeled hops · ≈21,000 scheduled tasks behind them",
        "dir": "RIGHT",
        "prov": {
         "kind": "simulated",
@@ -1454,29 +2519,14 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/data/dataflow.json",
-        "hash": "51c07322abf3",
-        "bytes": 2047
-       }
-      },
-      "datamodel": {
-       "kind": "entity",
-       "title": "Loyalty & Customer Core Entities",
-       "count": "8 core entities of ≈18,000 EDW tables",
-       "dir": "DOWN",
-       "prov": {
-        "kind": "simulated",
-        "label": "SIMULATED · would derive from: Teradata DBC.TablesV/ColumnsV + erwin model repository + Informatica MDM C360 hub"
-       },
-       "shard": {
-        "path": "retail-enterprise-clean/data/datamodel.json",
-        "hash": "7c934655bc07",
-        "bytes": 2107
+        "hash": "9526fb7d8b67",
+        "bytes": 2453
        }
       },
       "trust": {
        "kind": "buckets",
        "title": "Data Trust Zones — PCI / PII Boundaries",
-       "count": "4 zones · ≈26,000 classified objects",
+       "count": "4 zones · 12 member groups · ≈26,000 classified objects",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1484,8 +2534,113 @@
        },
        "shard": {
         "path": "retail-enterprise-clean/data/trust.json",
-        "hash": "5fcabb713691",
-        "bytes": 2085
+        "hash": "5a57482f5adc",
+        "bytes": 2627
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "Dataset Certification Lifecycle",
+       "count": "7 states · 9 transitions",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Unity Catalog audit log + Collibra workflow history + Great Expectations run store"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/statemachine.json",
+        "hash": "3b24fbcaf823",
+        "bytes": 2078
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Loyalty & Customer Core Entities",
+       "count": "8 core entities of ≈18,000 EDW tables · 7 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Teradata DBC.TablesV/ColumnsV + erwin model repository + Informatica MDM C360 hub"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/datamodel.json",
+        "hash": "e144621f4567",
+        "bytes": 2828
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Data & Analytics — Glossary",
+       "count": "12 terms · 8 owning domains",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Collibra business glossary + Alation article exports + EDW architecture wiki"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/glossary.json",
+        "hash": "b2a6760c6bd7",
+        "bytes": 2226
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Technology Portfolio — Data & Analytics",
+       "count": "14 technologies · 5 flagged ⚠",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB + Flexera license inventory + vendor support-contract register + version scan"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/techportfolio.json",
+        "hash": "8365132074c4",
+        "bytes": 1872
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — Data Platform Components",
+       "count": "14 components · 2 flagged ⚠",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Syft/Grype scans of job images + Databricks runtime release notes + Black Duck scan of ETL codelines"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/sbom.json",
+        "hash": "81cda69e0149",
+        "bytes": 1553
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Data Platform Module DSM",
+       "count": "9 modules · 1,431 cross-module interfaces · 2 mutual pairs",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Alation lineage harvest + Kafka topic ACLs + Teradata DBQL object joins + Control-M dependency export"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/dsm.json",
+        "hash": "8472a94d4d42",
+        "bytes": 834
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Dependency Cycles — Data Platform",
+       "count": "3 cycles · largest spans 3 modules",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SCC analysis over Alation lineage graph + Kafka topic producer/consumer registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-clean/data/cycles.json",
+        "hash": "56fbc18668f1",
+        "bytes": 1436
        }
       }
      }
@@ -1498,12 +2653,42 @@
    "scopes": {
     "stores": {
      "label": "Store Systems",
-     "tech": "~2,300 stores · POS + edge",
+     "tech": "POS + edge · ≈2,300 stores",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Store Systems — System Context",
+       "count": "1 system · 12 external parties · 13 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB business-service map, MuleSoft/EDI integration catalog, payment switch interface registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/stores/context.json",
+        "hash": "b3b997a29b62",
+        "bytes": 3817
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Inside One Store — Containers",
+       "count": "16 containers · 19 channels · 1 store of ≈2,300",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: per-store CMDB CI snapshot, vCenter edge cluster inventory, Workspace ONE device registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/stores/container.json",
+        "hash": "d5e951ae4968",
+        "bytes": 4607
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Store Systems — Domain Map",
-       "count": "6 domains · 33 subsystems · ≈61,000 fleet elements",
+       "count": "6 domains · 26 subsystems · ≈61,000 fleet elements",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1511,23 +2696,53 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/stores/domains.json",
-        "hash": "fd6e8c355eac",
-        "bytes": 3508
+        "hash": "2b2871a75974",
+        "bytes": 4905
        }
       },
-      "container": {
+      "deployment": {
        "kind": "buckets",
-       "title": "Inside One Store — Container Stack",
-       "count": "1 store of ≈2,300 · ~40 containers · ≈85 devices on the floor",
+       "title": "Store Fleet — What Runs Where",
+       "count": "5 zones · 20 deployed units · ≈2,300 stores",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: per-store CMDB CI snapshot, vCenter edge cluster inventory, MDM device registry"
+        "label": "SIMULATED · would derive from: vCenter/vSAN edge inventory, VeloCloud orchestrator, Workspace ONE device registry, ServiceNow CMDB"
        },
        "shard": {
-        "path": "retail-enterprise-faulted/stores/container.json",
-        "hash": "18c4aa415303",
-        "bytes": 2905
+        "path": "retail-enterprise-faulted/stores/deployment.json",
+        "hash": "e988e8645327",
+        "bytes": 3834
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Card Sale During WAN Outage",
+       "count": "9 participants · 9 steps · zero lost tenders",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: payment orchestrator trace logs, POS e-journal, SD-WAN event timeline, acquirer settlement reports"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/stores/sequence.json",
+        "hash": "51554d944dc7",
+        "bytes": 2574
+       }
+      },
+      "code": {
+       "kind": "entity",
+       "title": "Store Close & Upload — Job Chain",
+       "count": "5 jobs · runs nightly in ≈2,300 stores",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: store job scheduler definitions, POS vendor EOD runbooks, Splunk store-close dashboards"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/stores/code.json",
+        "hash": "0ab44e1cffa0",
+        "bytes": 1990
        }
       },
       "dataflow": {
@@ -1541,8 +2756,23 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/stores/dataflow.json",
-        "hash": "54fb4adedb11",
-        "bytes": 1954
+        "hash": "9d6214436209",
+        "bytes": 2333
+       }
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Store Trust Zones — PCI Segmentation",
+       "count": "5 zones · 15 members · 6 cross-zone flows · 0 violations",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: PCI-DSS segmentation attestation, Palo Alto ruleset export, P2PE attestation, Workspace ONE posture data"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/stores/trust.json",
+        "hash": "96d9b19a6e1c",
+        "bytes": 3398
        }
       },
       "statemachine": {
@@ -1556,8 +2786,98 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/stores/statemachine.json",
-        "hash": "6ef8cf225055",
-        "bytes": 2164
+        "hash": "0dcf3f65b271",
+        "bytes": 2552
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Store Replica — Core Entities",
+       "count": "8 entities of ≈210 store-replica tables",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SQL Server store replica schema (sys.tables), POS vendor data dictionary, erwin store data model"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/stores/datamodel.json",
+        "hash": "74c0d0c3cfc4",
+        "bytes": 2786
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Store Systems Glossary — steward-approved terms",
+       "count": "12 terms of ≈180 in the store glossary",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Collibra business glossary · store operations steward council"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/stores/glossary.json",
+        "hash": "a270bbbce32d",
+        "bytes": 2264
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Technology portfolio — store systems",
+       "count": "12 of 31 store platforms",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB + Workspace ONE device registry + vendor support matrices + version scan"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/stores/techportfolio.json",
+        "hash": "37f8b0059117",
+        "bytes": 1376
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — store software stack",
+       "count": "12 of ≈1,400 components",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Black Duck scans of POS builds + vendor CycloneDX SBOMs + PIN-pad firmware manifests"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/stores/sbom.json",
+        "hash": "d9dd0cab8e9d",
+        "bytes": 1152
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Store Stack Module DSM",
+       "count": "8 modules · 131 cross-module dependencies · 2 mutual pairs",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: static dependency scan of POS/store-server codelines, store interface catalog, Kafka topic registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/stores/dsm.json",
+        "hash": "9b7e6fdbd240",
+        "bytes": 764
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Dependency Tangles — store stack",
+       "count": "2 tangles across 8 modules · break plan attached",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: static dependency scan of POS/store-server codelines + store interface catalog"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/stores/cycles.json",
+        "hash": "013c4b42fe67",
+        "bytes": 1203
        }
       }
      }
@@ -1566,6 +2886,36 @@
      "label": "Digital / E-Commerce",
      "tech": "web+app · ≈$8B online",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Digital Commerce in Context",
+       "count": "16 systems · 15 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: LeanIX EA repository + Apigee API registry + vendor contract CMDB"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/ecom/context.json",
+        "hash": "030021024a3a",
+        "bytes": 4001
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Digital Runtime Containers",
+       "count": "12 containers · 13 channels",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Backstage service catalog + EKS deployment manifests + Istio service-mesh telemetry"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/ecom/container.json",
+        "hash": "245349744759",
+        "bytes": 3174
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Digital Domain Map",
@@ -1577,29 +2927,29 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/ecom/domains.json",
-        "hash": "59efd21a5db1",
-        "bytes": 3300
+        "hash": "00735a5a6583",
+        "bytes": 4701
        }
       },
-      "dataflow": {
-       "kind": "simple",
-       "title": "Order Orchestration Flow — cart to fulfillment routing",
-       "count": "9 systems · 1 of ≈140 cross-domain flows",
-       "dir": "RIGHT",
+      "deployment": {
+       "kind": "buckets",
+       "title": "Digital Deployment — edge to on-prem",
+       "count": "5 environments · 23 deployed units · 6 cross-env flows",
+       "dir": "DOWN",
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: Sterling OMS pipeline configs + MuleSoft API Manager + Kafka topic registry"
+        "label": "SIMULATED · would derive from: ServiceNow CMDB + Terraform state + Akamai property configs + EKS cluster inventory"
        },
        "shard": {
-        "path": "retail-enterprise-faulted/ecom/dataflow.json",
-        "hash": "7becd7d2ce28",
-        "bytes": 2362
+        "path": "retail-enterprise-faulted/ecom/deployment.json",
+        "hash": "693e1baf5638",
+        "bytes": 3959
        }
       },
       "sequence": {
        "kind": "simple",
        "title": "BOPIS Happy Path",
-       "count": "8 calls · p95 1.9s order ack · pickup-ready avg 47 min",
+       "count": "9 participants · 8 calls · p95 1.9s order ack",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1607,8 +2957,68 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/ecom/sequence.json",
-        "hash": "345f17ba6273",
-        "bytes": 1912
+        "hash": "c948f9dbea1f",
+        "bytes": 2370
+       }
+      },
+      "code": {
+       "kind": "entity",
+       "title": "Catalog Publish Chain — nightly jobs",
+       "count": "6 jobs of ≈480 scheduled · 5 chain links",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Airflow DAG repo + Control-M job definitions + Stibo STEP export configs"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/ecom/code.json",
+        "hash": "97f46b064925",
+        "bytes": 2254
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Order Orchestration Flow — cart to fulfillment routing",
+       "count": "11 systems · 1 of ≈140 cross-domain flows",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Sterling OMS pipeline configs + MuleSoft API Manager + Kafka topic registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/ecom/dataflow.json",
+        "hash": "4aacb97a8c21",
+        "bytes": 2869
+       }
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Digital Trust Zones — PCI & PII boundaries",
+       "count": "5 zones · 17 members · 5 cross-zone flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: AWS Network Firewall policy + PCI-DSS segmentation attestation + BigID PII scans + Akamai WAF config"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/ecom/trust.json",
+        "hash": "407796973d00",
+        "bytes": 3419
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "Online Order Lifecycle — Sterling order",
+       "count": "11 states · 13 transitions",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Sterling OMS pipeline/status configuration (YFS status graph) + order audit trail"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/ecom/statemachine.json",
+        "hash": "a0711ec0842b",
+        "bytes": 3165
        }
       },
       "datamodel": {
@@ -1622,8 +3032,83 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/ecom/datamodel.json",
-        "hash": "6b341f3cc7f9",
-        "bytes": 2243
+        "hash": "048a74aa11f5",
+        "bytes": 3081
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Digital Glossary — terms of art",
+       "count": "12 terms · 6 owning domains",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Confluence domain glossary + Sterling data dictionary + retail ops training manuals"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/ecom/glossary.json",
+        "hash": "4b195a72f456",
+        "bytes": 1904
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Digital Technology Portfolio",
+       "count": "12 technologies · 4 flagged",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: LeanIX technology catalog + ServiceNow CMDB lifecycle fields + vendor support contracts"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/ecom/techportfolio.json",
+        "hash": "6b9573f8435c",
+        "bytes": 1324
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — digital commerce estate",
+       "count": "12 of ≈3,400 components · 3 flagged",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Snyk + Syft container scans → CycloneDX + Black Duck for vendor packages"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/ecom/sbom.json",
+        "hash": "f3c52e888deb",
+        "bytes": 1222
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Digital Services DSM",
+       "count": "9 modules · 149 cross-module dependencies · 1 mutual pair (Cart ↔ Promotions)",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: static import scan of the service monorepo + Istio call graph + Kafka topic ownership map"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/ecom/dsm.json",
+        "hash": "27353c954493",
+        "bytes": 822
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Dependency Cycles — digital services",
+       "count": "3 tangles across 6 modules · break plans attached",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SCC analysis of the service dependency graph (Istio call graph + static import scan)"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/ecom/cycles.json",
+        "hash": "bbc99219289a",
+        "bytes": 1497
        }
       }
      }
@@ -1632,10 +3117,40 @@
      "label": "Supply Chain",
      "tech": "96 DCs · 3 WMS generations",
      "views": {
-      "domains": {
+      "context": {
        "kind": "simple",
+       "title": "Supply Chain — System Context",
+       "count": "1 system · 9 neighbors · 12 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CMDB business-service map (ServiceNow), EDI partner registry, ESB/API gateway interface catalog, carrier contract system"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/supply/context.json",
+        "hash": "ce5abb5ce341",
+        "bytes": 3006
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Supply Chain — Containers",
+       "count": "11 containers · 11 channels",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CMDB application instances, middleware interface catalog (MQ/Kafka), vendor license inventory, EKS cluster registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/supply/container.json",
+        "hash": "371df376dcd3",
+        "bytes": 3236
+       }
+      },
+      "domains": {
+       "kind": "buckets",
        "title": "Supply Chain Domains",
-       "count": "8 domains · ≈29,100 elements",
+       "count": "8 domains + 1 direct feed · 43 members · 9 edges",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1643,14 +3158,14 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/supply/domains.json",
-        "hash": "983ba3dbad41",
-        "bytes": 2393
+        "hash": "102719f1652d",
+        "bytes": 7249
        }
       },
       "deployment": {
        "kind": "buckets",
        "title": "DC Network Deployment — WMS Generations",
-       "count": "96 DCs · 3 WMS generations · ≈29,100 elements",
+       "count": "5 zones · 22 deployed units · 96 DCs",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1658,14 +3173,44 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/supply/deployment.json",
-        "hash": "9db8149d9987",
-        "bytes": 2922
+        "hash": "a663507af9d5",
+        "bytes": 3972
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Scenario: PO 850 Release to DC Putaway",
+       "count": "1 scenario · 7 participants · 8 steps",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: EDI translator transaction trail (850/855/856), TMS tender audit log, yard appointment system, WMS receipt + putaway transaction history"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/supply/sequence.json",
+        "hash": "f9a15aa48dd1",
+        "bytes": 2155
+       }
+      },
+      "code": {
+       "kind": "simple",
+       "title": "Nightly Replenishment Batch Chain",
+       "count": "9 jobs · 8 chain edges · nightly batch",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job definitions + run history, Sterling business-process registry, COBOL source library (Endevor), DB2/Oracle batch audit tables"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/supply/code.json",
+        "hash": "e4551ed6cb22",
+        "bytes": 2470
        }
       },
       "dataflow": {
        "kind": "simple",
        "title": "Replenishment Chain — Forecast to Putaway",
-       "count": "8 stages · ≈120K PO lines/day · 96 DCs",
+       "count": "8 stages · 7 hops · ≈120K PO lines/day",
        "dir": "RIGHT",
        "prov": {
         "kind": "simulated",
@@ -1673,8 +3218,98 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/supply/dataflow.json",
-        "hash": "a2b2136f8024",
-        "bytes": 1745
+        "hash": "280f52f470aa",
+        "bytes": 2127
+       }
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Supply Chain Trust Zones",
+       "count": "4 zones · 16 members · 5 cross-zone flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: network segmentation policy (Palo Alto zones), firewall rule export, AS2/VAN certificate store, RACF dataset rules, OT segmentation audit"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/supply/trust.json",
+        "hash": "b607b637e98f",
+        "bytes": 3194
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "Inbound Purchase Order Lifecycle",
+       "count": "10 states · 10 transitions",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: PO status history table (DB2 + Oracle), EDI transaction trail, yard gate events, WMS receipt/putaway audit, AP match results"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/supply/statemachine.json",
+        "hash": "bcc5c9652250",
+        "bytes": 2762
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Inbound Supply Data Model",
+       "count": "10 entities · 10 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: DB2 z/OS catalog (gen1), Oracle RAC data dictionary (gen2), Aurora Postgres schemas (gen3), EDI canonical document model"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/supply/datamodel.json",
+        "hash": "4430b9373fc9",
+        "bytes": 3305
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Supply Chain Glossary",
+       "count": "16 terms",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: logistics standard operating procedures, EDI implementation guides, WMS training curriculum, engineered-labor standards manual"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/supply/glossary.json",
+        "hash": "aa038e3a9ce8",
+        "bytes": 2540
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Supply Chain Technology Portfolio",
+       "count": "12 technologies",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CMDB software inventory, vendor support contracts, EOL bulletins (IBM/Oracle/BMC), architecture review board records"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/supply/techportfolio.json",
+        "hash": "88227372e305",
+        "bytes": 1973
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "Supply Chain SBOM (Key Components)",
+       "count": "16 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Syft/Grype scans of gen3 images, WebLogic deployment manifests, mainframe SMP/E inventory, vendor license records"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/supply/sbom.json",
+        "hash": "0b2f6a5ca9ff",
+        "bytes": 1545
        }
       },
       "dsm": {
@@ -1691,6 +3326,21 @@
         "hash": "84c41305ec00",
         "bytes": 772
        }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Dependency Cycles",
+       "count": "3 cycles · 1 module-level · 2 code-level",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: strongly-connected-component analysis over the module DSM and gen2/EDI static dependency graphs"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/supply/cycles.json",
+        "hash": "88603e249f55",
+        "bytes": 1100
+       }
       }
      }
     },
@@ -1698,10 +3348,40 @@
      "label": "Merchandising",
      "tech": "item master · 1.2M SKUs",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Merchandising — System Context",
+       "count": "1 system · 7 externals · 8 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: MuleSoft API topology + OpenText Trading Grid partner registry + LeanIX integration catalog"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/merch/context.json",
+        "hash": "68932041c847",
+        "bytes": 2324
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Merchandising — Containers",
+       "count": "10 containers · 10 channels",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Oracle Retail install topology (WebLogic config) + AKS deployment manifests + ServiceNow CMDB"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/merch/container.json",
+        "hash": "c82cdfd6e1d0",
+        "bytes": 2815
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Merchandising — Domain Map",
-       "count": "6 domains · 34 subsystems · 1.2M SKUs / 2,300 stores",
+       "count": "6 domains · 66 subsystems · 1.2M SKUs / 2,300 stores",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1709,14 +3389,104 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/merch/domains.json",
-        "hash": "ef9f92e1389c",
-        "bytes": 7276
+        "hash": "f5becf106aec",
+        "bytes": 9736
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Merchandising — Deployment",
+       "count": "4 zones · 15 deployed units · 4 flows",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB (CI relationships) + Azure Resource Graph + Exadata fleet inventory"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/merch/deployment.json",
+        "hash": "1cdb9efe6a5b",
+        "bytes": 2719
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Sequence — cost change to shelf edge",
+       "count": "7 participants · 7 steps",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: MuleSoft API analytics + Control-M job-log correlation + AppDynamics traces"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/merch/sequence.json",
+        "hash": "8eda76577668",
+        "bytes": 1995
+       }
+      },
+      "code": {
+       "kind": "simple",
+       "title": "Batch chain — nightly merch cycle",
+       "count": "6 jobs · 5 links",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job definitions (MRCH/RPM folders) + PL/SQL package inventory"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/merch/code.json",
+        "hash": "33c88275773f",
+        "bytes": 1844
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — supplier to shelf",
+       "count": "13 nodes · 13 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Oracle GoldenGate routes + Kafka topic registry + EDI document-flow logs"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/merch/dataflow.json",
+        "hash": "b68b4cc7017c",
+        "bytes": 3312
+       }
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Trust boundaries — partner to data zone",
+       "count": "4 zones · 13 members · 3 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Palo Alto segmentation policy + Illumio flow map + BigID data classification"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/merch/trust.json",
+        "hash": "d5c59fc4ba1a",
+        "bytes": 2680
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "State machine — item lifecycle",
+       "count": "7 states · 8 transitions",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: RMS ITEM_MASTER status enum + ITEM_STATUS_HIST workflow audit table"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/merch/statemachine.json",
+        "hash": "18c0163c7e86",
+        "bytes": 2022
        }
       },
       "datamodel": {
        "kind": "entity",
        "title": "Item / Price / Promo Core — 11 entities of ≈2,200 tables",
-       "count": "11 core entities · ≈2,200 tables · 1.2M SKUs",
+       "count": "11 core entities · 11 relations · ≈2,200 tables",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1724,8 +3494,8 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/merch/datamodel.json",
-        "hash": "f3e7107ba65f",
-        "bytes": 2779
+        "hash": "57dbae286aec",
+        "bytes": 3829
        }
       },
       "glossary": {
@@ -1741,6 +3511,51 @@
         "path": "retail-enterprise-faulted/merch/glossary.json",
         "hash": "6430060e875f",
         "bytes": 2165
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Technology portfolio — merchandising stack",
+       "count": "12 platforms",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: LeanIX technology catalog + Flexera asset scan"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/merch/techportfolio.json",
+        "hash": "9a864746a63c",
+        "bytes": 1047
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — promo & GDSN services",
+       "count": "12 of ≈410 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CycloneDX scans (Syft) of promo/GDSN service images + Maven lockfiles"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/merch/sbom.json",
+        "hash": "cefee945a7b0",
+        "bytes": 991
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "DSM — merch domain coupling",
+       "count": "6 modules · 4 mutual pairs",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Oracle RMS/RPM/ReIM interface dependency scan → N×N matrix"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/merch/dsm.json",
+        "hash": "3da0fb26f2d7",
+        "bytes": 414
        }
       },
       "cycles": {
@@ -1764,10 +3579,40 @@
      "label": "Corporate / Finance & HR",
      "tech": "two ERPs post-acquisition",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "System context — corporate finance & HR",
+       "count": "1 estate · 9 externals · 10 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB business-service map + firewall egress rules + webMethods endpoint registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/corp/context.json",
+        "hash": "c45eaf125037",
+        "bytes": 2798
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Container — finance integration hub",
+       "count": "2 ERPs · 3 runtimes · 6 SaaS partners · 12 of 214 interfaces",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: webMethods interface registry + SAP PI/PO ICO list + CMDB service map"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/corp/container.json",
+        "hash": "3d976a54dacc",
+        "bytes": 3201
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Domain map — corporate finance & HR",
-       "count": "8 domains · ≈310 modules · ≈18,600 elements",
+       "count": "8 domains · 26 of ≈310 modules",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1775,8 +3620,128 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/corp/domains.json",
-        "hash": "5710322140dd",
-        "bytes": 3889
+        "hash": "e8154d6b5993",
+        "bytes": 5361
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment — DCs, mainframe, SaaS, DR",
+       "count": "5 environments · 18 deployed units · 8 cross-env flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB CI topology + VMware vCenter inventory + GDPS / Data Guard runbooks"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/corp/deployment.json",
+        "hash": "cb845fd39623",
+        "bytes": 3825
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Sequence — biweekly payroll run",
+       "count": "7 participants · 7 calls",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job flow + webMethods transaction logs + SAP IDoc monitor (WE02)"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/corp/sequence.json",
+        "hash": "3fc6e3bed645",
+        "bytes": 2147
+       }
+      },
+      "code": {
+       "kind": "entity",
+       "title": "Code — payroll batch chain (JCL)",
+       "count": "6 programs · 5 handoffs",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job definitions + JCL PROC libraries + Endevor package history"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/corp/code.json",
+        "hash": "65e868980b8a",
+        "bytes": 2148
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — hire-to-report & buy-to-pay",
+       "count": "13 nodes · 14 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: webMethods interface registry + Control-M file-transfer jobs + SAP IDoc partner profiles"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/corp/dataflow.json",
+        "hash": "18d8690a6dee",
+        "bytes": 3561
+       }
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Trust boundaries — finance & HR data",
+       "count": "4 zones · 15 members · 4 cross-zone flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Palo Alto firewall policy export + network segments + BigID data-classification scan"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/corp/trust.json",
+        "hash": "a70c839d3e10",
+        "bytes": 3127
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "State machine — supplier invoice",
+       "count": "7 states · 8 transitions",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SAP invoice status field (RBKP) + workflow logs (SWI1) + Ariba invoice events"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/corp/statemachine.json",
+        "hash": "4ab3028fbe45",
+        "bytes": 1986
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Data model — finance spine (SAP)",
+       "count": "7 entities · 7 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SAP DDIC (SE11) + Oracle EBS data dictionary + BigID schema scan"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/corp/datamodel.json",
+        "hash": "ee268b4e0371",
+        "bytes": 2465
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Glossary — finance & HR terms",
+       "count": "10 terms",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: finance close runbook + Workiva definitions + controllership wiki"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/corp/glossary.json",
+        "hash": "54fd3142d01e",
+        "bytes": 1635
        }
       },
       "techportfolio": {
@@ -1809,19 +3774,34 @@
         "bytes": 1105
        }
       },
-      "container": {
-       "kind": "simple",
-       "title": "Container — finance integration hub",
-       "count": "9 containers · 10 of 214 interfaces",
-       "dir": "DOWN",
+      "dsm": {
+       "kind": "matrix",
+       "title": "DSM — finance domain interfaces",
+       "count": "8 modules · 13 dependencies",
+       "dir": null,
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: webMethods interface registry + SAP PI/PO ICO list + CMDB service map"
+        "label": "SIMULATED · would derive from: webMethods interface registry → module×module interface matrix"
        },
        "shard": {
-        "path": "retail-enterprise-faulted/corp/container.json",
-        "hash": "bc96523ebc0d",
-        "bytes": 2078
+        "path": "retail-enterprise-faulted/corp/dsm.json",
+        "hash": "c1536c9dc66b",
+        "bytes": 518
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Cycle / tangle report — finance",
+       "count": "3 cycles · 6 of 13 edges cyclic",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Tarjan SCC over webMethods interface graph"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/corp/cycles.json",
+        "hash": "b0af07934daf",
+        "bytes": 741
        }
       }
      }
@@ -1830,10 +3810,40 @@
      "label": "Legacy Core (Mainframe)",
      "tech": "z/OS · 4.2M LOC COBOL",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Legacy Core · System Context",
+       "count": "1 mainframe · 8 external partners · 11 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB relationships + MQ channel & Connect:Direct configs + CICS CSD + EDI trading-partner registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/core/context.json",
+        "hash": "5398e7a34863",
+        "bytes": 2698
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Legacy Core · Runtime Containers",
+       "count": "10 runtime units · 18 CICS regions across 3 LPARs",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CICSPlex SM topology + DB2 -DISPLAY GROUP + MQ DIS QMGR + Control-M server definitions"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/core/container.json",
+        "hash": "25732c5272f8",
+        "bytes": 2752
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Legacy Core · Business Domains",
-       "count": "14 domains of 23 · ≈4.2M LOC COBOL · 3,170 programs · ≈3,800 DB2 tables",
+       "count": "5 domains · 18 subsystems · ≈4.2M LOC COBOL · 3,170 programs",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1841,14 +3851,14 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/core/domains.json",
-        "hash": "3d748fc4aafe",
-        "bytes": 2211
+        "hash": "181f7b95fadb",
+        "bytes": 3758
        }
       },
       "deployment": {
        "kind": "buckets",
        "title": "Legacy Core · Sysplex & Region Topology",
-       "count": "4 tiers · 3 LPARs · 18 CICS regions · DB2 DS group (41 TB) · 2 MQ qmgrs",
+       "count": "4 tiers · 16 units · 3 LPARs · 18 CICS regions · 41 TB DB2",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1856,13 +3866,43 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/core/deployment.json",
-        "hash": "8ad9b3553204",
-        "bytes": 2326
+        "hash": "41c317472eb9",
+        "bytes": 2977
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Sequence · Price Change to Store Shelf",
+       "count": "8 steps · 8 participants · merchant keystroke to shelf by 06:00 next day",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: CICS auxiliary trace + Control-M job log + MQ accounting (SMF 116) + store delivery-receipt log"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/core/sequence.json",
+        "hash": "671e070b690f",
+        "bytes": 2333
+       }
+      },
+      "code": {
+       "kind": "entity",
+       "title": "Legacy Core · Critical Program Chain",
+       "count": "6 programs of 3,170 · nightly critical path + CICS maintenance",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Endevor source libraries + IBM ADDI parse (paragraph/perform graph) + SMF 30 step-end records"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/core/code.json",
+        "hash": "ebbbaafa0a7d",
+        "bytes": 2958
        }
       },
       "dataflow": {
        "kind": "simple",
-       "title": "Legacy Core · Nightly Batch Chain (Replenishment Critical Path)",
+       "title": "Legacy Core · Nightly Batch Chain",
        "count": "7 stages · ≈2,100 Control-M jobs · window 02:00–06:00",
        "dir": "DOWN",
        "prov": {
@@ -1871,23 +3911,128 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/core/dataflow.json",
-        "hash": "784a1cf2f630",
-        "bytes": 1802
+        "hash": "867b3bb32d4e",
+        "bytes": 2082
        }
       },
-      "code": {
-       "kind": "entity",
-       "title": "Legacy Core · Key COBOL Programs",
-       "count": "4 programs of 3,170 · ≈4.2M LOC COBOL",
+      "trust": {
+       "kind": "buckets",
+       "title": "Legacy Core · Trust Zones",
+       "count": "4 zones · 14 assets · 5 cross-zone flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: RACF database (DSMON) + zERT network policy + MQ CHLAUTH rules + firewall rulebase + PCI segmentation attestation"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/core/trust.json",
+        "hash": "c919e48ab79f",
+        "bytes": 3051
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "Purchase Order Lifecycle (PUR)",
+       "count": "9 states · 11 transitions · ≈85K PO lines cut nightly",
        "dir": "RIGHT",
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: Endevor source libraries + IBM ADDI parse (paragraph/perform graph)"
+        "label": "SIMULATED · would derive from: PUR domain status-code table (POHDR.STATUS-CD) + EDI 855/856/810 event history + buyer workflow rules"
        },
        "shard": {
-        "path": "retail-enterprise-faulted/core/code.json",
-        "hash": "eecb56751cf1",
-        "bytes": 1627
+        "path": "retail-enterprise-faulted/core/statemachine.json",
+        "hash": "52a4334ea8bd",
+        "bytes": 2576
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Legacy Core · DB2/VSAM Spine",
+       "count": "8 entities of ≈3,800 DB2 tables + ≈2,900 VSAM files",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: DB2 catalog (SYSIBM.SYSTABLES/SYSCOLUMNS) + VSAM catalog (LISTCAT) + copybook record layouts via ADDI"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/core/datamodel.json",
+        "hash": "d4b0dd2c0a4d",
+        "bytes": 2746
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Legacy Core Glossary — steward-approved terms",
+       "count": "12 terms of ≈220 in the core glossary",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Collibra business glossary · mainframe domain steward council · batch runbook appendix"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/core/glossary.json",
+        "hash": "925afbfc8def",
+        "bytes": 2297
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Technology portfolio — mainframe estate",
+       "count": "13 of ≈45 platforms",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB + SMP/E CSI inventory + IBM EOS bulletins + vendor support contracts"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/core/techportfolio.json",
+        "hash": "a10b26f71132",
+        "bytes": 1418
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — z/OS installed software inventory",
+       "count": "14 of ≈180 installed products",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SMP/E CSI zone query + IBM Z Software Asset Management scan → CycloneDX"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/core/sbom.json",
+        "hash": "ca3ea833def9",
+        "bytes": 1091
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Legacy Core Module DSM",
+       "count": "10 modules · 972 cross-module call/include deps · 1 mutual pair (Item Master ↔ Pricing)",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ADDI static call graph + copybook include cross-reference + DB2 plan/package dependency catalog"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/core/dsm.json",
+        "hash": "2ab07008aa7f",
+        "bytes": 959
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Dependency Cycles — Legacy Core",
+       "count": "3 cycles · largest spans 2 domains · break plan attached",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ADDI call-graph SCC analysis + copybook include cross-reference + Control-M predecessor graph"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/core/cycles.json",
+        "hash": "bddc32df6a5a",
+        "bytes": 1547
        }
       }
      }
@@ -1896,10 +4041,40 @@
      "label": "Data & Analytics",
      "tech": "Teradata + lakehouse",
      "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Data & Analytics — System Context",
+       "count": "1 platform · 9 external systems · 10 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB business-app relations + MuleSoft/IBM MQ interface catalog + EDI trading-partner configs"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/context.json",
+        "hash": "3c2ee9d75cc3",
+        "bytes": 2878
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Data & Analytics — Containers",
+       "count": "12 containers · 13 channels",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB CI relations + Terraform/Ansible inventories + Databricks & Confluent workspace APIs"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/container.json",
+        "hash": "375d3e3b3faf",
+        "bytes": 3381
+       }
+      },
       "domains": {
        "kind": "buckets",
        "title": "Data & Analytics — Domain Map",
-       "count": "5 domains · 23 platforms · ≈49,000 governed elements",
+       "count": "5 domains · 18 platforms · 6 dependencies",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1907,14 +4082,59 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/data/domains.json",
-        "hash": "c34f35e386aa",
-        "bytes": 2855
+        "hash": "c1b5e17bc09b",
+        "bytes": 3623
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Data & Analytics — Deployment",
+       "count": "4 environments · 15 deployed units · 7 cross-env flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB CI topology + Terraform state + VMware vCenter inventory + AWS Config snapshots"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/deployment.json",
+        "hash": "19f4f5491eb7",
+        "bytes": 3065
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Nightly Demand Forecast Refresh",
+       "count": "1 scenario · 7 participants · 9 steps · done by 05:00 ET",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job logs + Airflow DAG runs + Databricks Jobs API run history + Teradata DBQL"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/sequence.json",
+        "hash": "b2310ed26c6d",
+        "bytes": 2285
+       }
+      },
+      "code": {
+       "kind": "simple",
+       "title": "Nightly Batch Critical Path — Jobs",
+       "count": "8 jobs of ≈21,000 scheduled · critical path 4h 10m",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Control-M job definitions + DataStage repository export + Databricks Jobs API + dbt Git repo"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/code.json",
+        "hash": "818452a34ca5",
+        "bytes": 2289
        }
       },
       "dataflow": {
        "kind": "simple",
        "title": "CDC Pipeline — OLTP to Activation",
-       "count": "9 stages · ≈21,000 scheduled tasks behind them",
+       "count": "9 stages · 8 labeled hops · ≈21,000 scheduled tasks behind them",
        "dir": "RIGHT",
        "prov": {
         "kind": "simulated",
@@ -1922,29 +4142,14 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/data/dataflow.json",
-        "hash": "51c07322abf3",
-        "bytes": 2047
-       }
-      },
-      "datamodel": {
-       "kind": "entity",
-       "title": "Loyalty & Customer Core Entities",
-       "count": "8 core entities of ≈18,000 EDW tables",
-       "dir": "DOWN",
-       "prov": {
-        "kind": "simulated",
-        "label": "SIMULATED · would derive from: Teradata DBC.TablesV/ColumnsV + erwin model repository + Informatica MDM C360 hub"
-       },
-       "shard": {
-        "path": "retail-enterprise-faulted/data/datamodel.json",
-        "hash": "7c934655bc07",
-        "bytes": 2107
+        "hash": "9526fb7d8b67",
+        "bytes": 2453
        }
       },
       "trust": {
        "kind": "buckets",
        "title": "Data Trust Zones — PCI / PII Boundaries",
-       "count": "4 zones · ≈26,000 classified objects",
+       "count": "4 zones · 12 member groups · ≈26,000 classified objects",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
@@ -1952,8 +4157,113 @@
        },
        "shard": {
         "path": "retail-enterprise-faulted/data/trust.json",
-        "hash": "b92314c0409c",
-        "bytes": 2190
+        "hash": "be1dc3af51e7",
+        "bytes": 2732
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "Dataset Certification Lifecycle",
+       "count": "7 states · 9 transitions",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Unity Catalog audit log + Collibra workflow history + Great Expectations run store"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/statemachine.json",
+        "hash": "3b24fbcaf823",
+        "bytes": 2078
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Loyalty & Customer Core Entities",
+       "count": "8 core entities of ≈18,000 EDW tables · 7 relationships",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Teradata DBC.TablesV/ColumnsV + erwin model repository + Informatica MDM C360 hub"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/datamodel.json",
+        "hash": "e144621f4567",
+        "bytes": 2828
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Data & Analytics — Glossary",
+       "count": "12 terms · 8 owning domains",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Collibra business glossary + Alation article exports + EDW architecture wiki"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/glossary.json",
+        "hash": "b2a6760c6bd7",
+        "bytes": 2226
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Technology Portfolio — Data & Analytics",
+       "count": "14 technologies · 5 flagged ⚠",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ServiceNow CMDB + Flexera license inventory + vendor support-contract register + version scan"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/techportfolio.json",
+        "hash": "8365132074c4",
+        "bytes": 1872
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — Data Platform Components",
+       "count": "14 components · 2 flagged ⚠",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Syft/Grype scans of job images + Databricks runtime release notes + Black Duck scan of ETL codelines"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/sbom.json",
+        "hash": "81cda69e0149",
+        "bytes": 1553
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Data Platform Module DSM",
+       "count": "9 modules · 1,431 cross-module interfaces · 2 mutual pairs",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Alation lineage harvest + Kafka topic ACLs + Teradata DBQL object joins + Control-M dependency export"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/dsm.json",
+        "hash": "8472a94d4d42",
+        "bytes": 834
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Dependency Cycles — Data Platform",
+       "count": "3 cycles · largest spans 3 modules",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SCC analysis over Alation lineage graph + Kafka topic producer/consumer registry"
+       },
+       "shard": {
+        "path": "retail-enterprise-faulted/data/cycles.json",
+        "hash": "56fbc18668f1",
+        "bytes": 1436
        }
       }
      }

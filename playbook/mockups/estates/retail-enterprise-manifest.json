@@ -1,44 +1,60 @@
-[
- {
-  "class": "A",
-  "type": "shared-db",
-  "where": "retail-enterprise/ecom/dataflow",
-  "detail": "edge eF1 n10 (Acquired-Banner Storefront) -> n11 (Oracle EBS GL) tagged shared-db — storefront writes GL journal rows directly into the EBS schema over JDBC, no integration layer"
+{
+ "estate": "retail-enterprise",
+ "views": {
+  "per_scope": 15,
+  "scopes": {
+   "stores": 15,
+   "ecom": 15,
+   "supply": 15,
+   "merch": 15,
+   "corp": 15,
+   "core": 15,
+   "data": 15
+  },
+  "total": 105
  },
- {
-  "class": "A",
-  "type": "bypass-api",
-  "where": "retail-enterprise/supply/domains",
-  "detail": "edge eF2 n9 (Top-20 Vendor Direct EDI) -> n1 (Warehouse Management) tagged bypass-api — top-20 vendors land ASN/invoice files straight on the gen2 WMS SFTP, skipping the EDI gateway/integration hub"
- },
- {
-  "class": "A",
-  "type": "cycle",
-  "where": "retail-enterprise/merch/domains",
-  "detail": "b1 (Item Master) -> b3 (Pricing) via e2, b3 -> b4 (Promotions & Markdown) via e4, injected eF3 b4 -> b1 'promo flags written back to item master' closes the cycle"
- },
- {
-  "class": "A",
-  "type": "band-violation",
-  "where": "retail-enterprise/data/trust",
-  "detail": "injected edge eF4 b3 (Governed Analytics Zone, part 1) -> b1 (PCI CDE Tokenization Zone, part 0) 'intraday direct reads of OLTP payment feeds' — analytics reading OLTP during the day, upward edge across trust bands (parts set 0/0/1/2)"
- },
- {
-  "class": "A",
-  "type": "cross-version",
-  "where": "retail-enterprise/supply/deployment",
-  "detail": "edge eF5 b2 (Gen 1 COBOL WMS — 12 DCs) -> b4 (Gen 3 Microservices Pilot — 23 DCs) tagged cross-version — gen1 CICS programs invoke gen3 pilot inventory APIs directly across WMS generations"
- },
- {
-  "class": "B",
-  "type": "budget-overflow",
-  "where": "retail-enterprise/merch/domains",
-  "detail": "b1 (Item Master & Attribution) has 46 members: 5 core subsystems + 41 attribute-domain modules (m1100–m1140, 'Attr domain — Lumber' … 'Attr domain — Storage & Organization')"
- },
- {
-  "class": "B",
-  "type": "dangling-edge",
-  "where": "retail-enterprise/core/dataflow",
-  "detail": "edge eF7 n2 (SLS0100 Sales Posting) -> n_glx0700; target job GLX0700 (legacy GL extract) was decommissioned in 2024 and the node no longer exists — Control-M condition never cleaned up"
- }
-]
+ "faults": [
+  {
+   "class": "A",
+   "type": "shared-db",
+   "where": "retail-enterprise/ecom/dataflow",
+   "detail": "edge eF1 n10 (Acquired-Banner Storefront) -> n11 (Oracle EBS GL) tagged shared-db \u2014 storefront writes GL journal rows directly into the EBS schema over JDBC, no integration layer"
+  },
+  {
+   "class": "A",
+   "type": "bypass-api",
+   "where": "retail-enterprise/supply/domains",
+   "detail": "edge eF2 n9 (Top-20 Vendor Direct EDI) -> n1 (Warehouse Management) tagged bypass-api \u2014 top-20 vendors land ASN/invoice files straight on the gen2 WMS SFTP, skipping the EDI gateway/integration hub"
+  },
+  {
+   "class": "A",
+   "type": "cycle",
+   "where": "retail-enterprise/merch/domains",
+   "detail": "b1 (Item Master) -> b3 (Pricing) via e2, b3 -> b4 (Promotions & Markdown) via e4, injected eF3 b4 -> b1 'promo flags written back to item master' closes the cycle"
+  },
+  {
+   "class": "A",
+   "type": "band-violation",
+   "where": "retail-enterprise/data/trust",
+   "detail": "injected edge eF4 b3 (Governed Analytics Zone, part 1) -> b1 (PCI CDE Tokenization Zone, part 0) 'intraday direct reads of OLTP payment feeds' \u2014 analytics reading OLTP during the day, upward edge across trust bands (parts set 0/0/1/2)"
+  },
+  {
+   "class": "A",
+   "type": "cross-version",
+   "where": "retail-enterprise/supply/deployment",
+   "detail": "edge eF5 b2 (Gen 1 COBOL WMS \u2014 12 DCs) -> b4 (Gen 3 Microservices Pilot \u2014 23 DCs) tagged cross-version \u2014 gen1 CICS programs invoke gen3 pilot inventory APIs directly across WMS generations"
+  },
+  {
+   "class": "B",
+   "type": "budget-overflow",
+   "where": "retail-enterprise/merch/domains",
+   "detail": "b1 (Item Master & Attribution) has 46 members: 5 core subsystems + 41 attribute-domain modules (m1100\u2013m1140, 'Attr domain \u2014 Lumber' \u2026 'Attr domain \u2014 Storage & Organization')"
+  },
+  {
+   "class": "B",
+   "type": "dangling-edge",
+   "where": "retail-enterprise/core/dataflow",
+   "detail": "edge eF7 n2 (SLS0100 Sales Posting) -> n_glx0700; target job GLX0700 (legacy GL extract) was decommissioned in 2024 and the node no longer exists \u2014 Control-M condition never cleaned up"
+  }
+ ]
+}
