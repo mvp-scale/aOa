@@ -1,0 +1,5 @@
+[
+ { "class": "A", "type": "bypass-api", "where": "cloudflare-edge/workers-stack/dataflow", "detail": "edge e8 gateway-worker(f2) -> catalog-d1(f5) tagged bypass-api — gateway queries D1 directly, skipping api-worker" },
+ { "class": "A", "type": "orphan", "where": "cloudflare-edge/workers-stack/component", "detail": "bucket b4 (Observability: tail-worker, logpush-job) has no edges in a 5-bucket view" },
+ { "class": "B", "type": "empty-bucket", "where": "cloudflare-edge/workers-stack/component", "detail": "bucket b5 (Legacy Bindings) has members:[] — kept connected via edge e4 (b1->b5) so it does not double-count as orphan" }
+]

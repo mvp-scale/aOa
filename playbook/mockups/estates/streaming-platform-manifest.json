@@ -1,0 +1,26 @@
+[
+ {
+  "class": "A",
+  "type": "god",
+  "where": "streaming-platform/streamworks/component",
+  "detail": "b-play (Playback) in-degree 4 (b-edge, b-cat via gf1, b-rec via gf2, b-bill via bv1) / out-degree 3 (b-id, b-tel, b-data)"
+ },
+ {
+  "class": "A",
+  "type": "shared-db",
+  "where": "streaming-platform/streamworks/component",
+  "detail": "edge e11 b-bill -> b-data tagged \"shared-db\" (billing writes ledger into shared data plane)"
+ },
+ {
+  "class": "A",
+  "type": "band-violation",
+  "where": "streaming-platform/streamworks/component",
+  "detail": "edge bv1 b-bill (part 2) -> b-play (part 1) \"entitlement push\" goes from higher band to lower band"
+ },
+ {
+  "class": "B",
+  "type": "duplicate-id",
+  "where": "streaming-platform/streamworks/component",
+  "detail": "member id m-cat-3 used by both \"search-indexer\" and \"localization\" in bucket b-cat (Catalog)"
+ }
+]

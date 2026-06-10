@@ -1,0 +1,139 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "generated": { "tool": "estate-campaign", "timestamp": "2026-06-10 campaign" },
+ "estates": {
+  "multi-cloud": {
+   "label": "Multi-Cloud Platform",
+   "sim": true,
+   "scopes": {
+    "cloudgrid": {
+     "label": "CloudGrid Platform",
+     "tech": "Terraform + Go control plane · 3 clouds",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Context view — CloudGrid and its world",
+       "count": "1 system · 5 externals",
+       "dir": "DOWN",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: cloud account inventory (AWS Organizations, GCP Resource Manager, Azure Management Groups)" },
+       "nodes": [
+        { "id": "n1", "type": "ext", "icon": "ext", "label": "Tenant Engineering Teams", "sub": "≈55 teams", "real": false },
+        { "id": "n2", "type": "sys", "icon": "sys", "label": "CloudGrid Platform", "sub": "shared control plane", "real": false },
+        { "id": "n3", "type": "ext", "icon": "ext", "label": "AWS", "sub": "us-east-1", "real": false },
+        { "id": "n4", "type": "ext", "icon": "ext", "label": "GCP", "sub": "europe-west1", "real": false },
+        { "id": "n5", "type": "ext", "icon": "ext", "label": "Azure", "sub": "eastus2", "real": false },
+        { "id": "n6", "type": "ext", "icon": "ext", "label": "PagerDuty", "sub": "on-call escalation", "real": false }
+       ],
+       "edges": [
+        { "id": "e1", "source": "n1", "target": "n2", "label": "deploys workloads via" },
+        { "id": "e2", "source": "n2", "target": "n3", "label": "provisions into" },
+        { "id": "e3", "source": "n2", "target": "n4", "label": "provisions into" },
+        { "id": "e4", "source": "n2", "target": "n5", "label": "provisions into" },
+        { "id": "e5", "source": "n2", "target": "n6", "label": "escalates alerts to" }
+       ]
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment view — 3 clouds + shared control plane",
+       "count": "8 buckets · 28 infra members",
+       "dir": "DOWN",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: Terraform state + provider APIs (EKS/GKE/AKS inventories, Route 53, Azure Resource Graph)" },
+       "buckets": [
+        { "id": "b_edge", "layer": "edge", "label": "Global Edge & DNS", "part": 0, "ico": "infra",
+          "members": [
+           { "id": "edge1", "label": "Anycast DNS (Route 53 + Cloud DNS)", "sub": "≈120 zones" },
+           { "id": "edge2", "label": "Global CDN", "sub": "≈310 PoPs" },
+           { "id": "edge3", "label": "WAF / DDoS Shield", "sub": "≈45 rulesets" }
+          ] },
+        { "id": "b_cicd", "layer": "delivery", "label": "CI/CD & Delivery", "part": 0, "ico": "app",
+          "members": [
+           { "id": "ci1", "label": "GitHub Actions Fleet", "sub": "≈220 workflows" },
+           { "id": "ci2", "label": "Argo CD", "sub": "≈85 apps" },
+           { "id": "ci3", "label": "Artifact Registry", "sub": "≈1,400 images" }
+          ] },
+        { "id": "b_admin", "layer": "ops", "label": "Admin & SRE Console", "part": 0, "ico": "user",
+          "members": [
+           { "id": "adm1", "label": "SRE Console", "sub": "≈35 dashboards" },
+           { "id": "adm2", "label": "Runbook Automation", "sub": "≈60 runbooks" }
+          ] },
+        { "id": "b_cp", "layer": "control", "label": "Shared Control Plane", "part": 1, "ico": "sys",
+          "members": [
+           { "id": "cp1", "label": "Fleet Orchestrator", "sub": "≈55 services" },
+           { "id": "cp2", "label": "Policy Engine (OPA)", "sub": "≈230 policies" },
+           { "id": "cp3", "label": "Config Sync", "sub": "≈1,100 manifests" },
+           { "id": "cp4", "label": "Secrets Broker (Vault)", "sub": "≈480 secrets" }
+          ] },
+        { "id": "b_aws", "layer": "aws", "label": "AWS us-east-1", "part": 2, "ico": "infra",
+          "members": [
+           { "id": "aws1", "label": "EKS Cluster", "sub": "≈140 nodes" },
+           { "id": "aws2", "label": "Aurora Global (writer)", "sub": "≈12 shards" },
+           { "id": "aws3", "label": "S3 Data Lake", "sub": "≈230 buckets" },
+           { "id": "aws4", "label": "ALB Fleet", "sub": "≈18 LBs" }
+          ] },
+        { "id": "b_gcp", "layer": "gcp", "label": "GCP europe-west1", "part": 2, "ico": "infra",
+          "members": [
+           { "id": "gcp1", "label": "GKE Cluster", "sub": "≈95 nodes" },
+           { "id": "gcp2", "label": "Cloud SQL (replica)", "sub": "≈12 shards" },
+           { "id": "gcp3", "label": "GCS Archive", "sub": "≈140 buckets" },
+           { "id": "gcp4", "label": "Cloud Load Balancing", "sub": "≈9 LBs" }
+          ] },
+        { "id": "b_azure", "layer": "azure", "label": "Azure eastus2", "part": 2, "ico": "infra",
+          "members": [
+           { "id": "az1", "label": "AKS Cluster", "sub": "≈80 nodes" },
+           { "id": "az2", "label": "Cosmos DB (replica)", "sub": "≈12 shards" },
+           { "id": "az3", "label": "Blob Storage", "sub": "≈110 containers" },
+           { "id": "az4", "label": "App Gateway", "sub": "≈7 gateways" }
+          ] },
+        { "id": "b_obs", "layer": "telemetry", "label": "Shared Observability", "part": 3, "ico": "store",
+          "members": [
+           { "id": "obs1", "label": "Grafana Mimir", "sub": "≈12 tenants" },
+           { "id": "obs2", "label": "Loki", "sub": "≈3 TB/day" },
+           { "id": "obs3", "label": "Tempo", "sub": "≈900 spans/s" },
+           { "id": "obs4", "label": "Grafana", "sub": "≈75 dashboards" }
+          ] }
+       ],
+       "edges": [
+        { "id": "e1", "source": "b_edge", "target": "b_aws", "count": 55, "label": "routes traffic" },
+        { "id": "e2", "source": "b_edge", "target": "b_gcp", "count": 34, "label": "routes traffic" },
+        { "id": "e3", "source": "b_edge", "target": "b_azure", "count": 21, "label": "routes traffic" },
+        { "id": "e4", "source": "b_cicd", "target": "b_cp", "count": 27, "label": "deploys via" },
+        { "id": "e5", "source": "b_admin", "target": "b_cp", "count": 13, "label": "operates" },
+        { "id": "e6", "source": "b_cp", "target": "b_aws", "count": 18, "label": "provisions" },
+        { "id": "e7", "source": "b_cp", "target": "b_gcp", "count": 14, "label": "provisions" },
+        { "id": "e8", "source": "b_cp", "target": "b_azure", "count": 11, "label": "provisions" },
+        { "id": "e9", "source": "b_aws", "target": "b_obs", "count": 42, "label": "ships telemetry" },
+        { "id": "e10", "source": "b_gcp", "target": "b_obs", "count": 31, "label": "ships telemetry" },
+        { "id": "e11", "source": "b_azure", "target": "b_obs", "count": 24, "label": "ships telemetry" }
+       ],
+       "palette": "dep",
+       "labeled": true
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — cross-cloud replication & failover",
+       "count": "6 nodes · replication + failover paths",
+       "dir": "RIGHT",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: replication topology (Debezium connector configs + Route 53 health checks + Traffic Manager policies)" },
+       "nodes": [
+        { "id": "d1", "type": "proc", "icon": "app", "label": "Global Traffic Manager", "sub": "latency-based routing", "real": false },
+        { "id": "d2", "type": "store", "icon": "store", "label": "Aurora Global (primary)", "sub": "AWS us-east-1", "real": false },
+        { "id": "d3", "type": "proc", "icon": "app", "label": "Cross-Cloud Replication Bus", "sub": "Kafka + Debezium CDC", "real": false },
+        { "id": "d4", "type": "store", "icon": "store", "label": "Cloud SQL (replica)", "sub": "GCP europe-west1", "real": false },
+        { "id": "d5", "type": "store", "icon": "store", "label": "Cosmos DB (replica)", "sub": "Azure eastus2", "real": false },
+        { "id": "d6", "type": "container", "icon": "sys", "label": "Failover Controller", "sub": "RTO ≈ 55s", "real": false }
+       ],
+       "edges": [
+        { "id": "e1", "source": "d1", "target": "d2", "label": "routes writes" },
+        { "id": "e2", "source": "d2", "target": "d3", "label": "emits change stream" },
+        { "id": "e3", "source": "d3", "target": "d4", "label": "replicates to" },
+        { "id": "e4", "source": "d3", "target": "d5", "label": "replicates to" },
+        { "id": "e5", "source": "d6", "target": "d2", "label": "health-checks" },
+        { "id": "e6", "source": "d6", "target": "d1", "label": "triggers failover repoint" }
+       ]
+      }
+     }
+    }
+   }
+  }
+ }
+}

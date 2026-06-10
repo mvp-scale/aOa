@@ -1,0 +1,137 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "generated": {"tool": "estate-campaign", "timestamp": "2026-06-10 campaign"},
+ "estates": {
+  "ml-platform": {
+   "label": "ML Platform",
+   "sim": true,
+   "scopes": {
+    "mlcore": {
+     "label": "ML Platform Core",
+     "tech": "Python/PyTorch · ~210 KLOC",
+     "views": {
+      "component": {
+       "kind": "buckets",
+       "title": "ML Platform — components",
+       "count": "5 buckets · 17 components",
+       "dir": "DOWN",
+       "prov": {"kind": "simulated", "label": "SIMULATED · would derive from: repo module graph + k8s service manifests"},
+       "buckets": [
+        {"id": "fs", "layer": "features", "label": "Feature Store", "part": 0, "ico": "store",
+         "members": [
+          {"id": "fs1", "label": "feast-offline", "sub": "≈4,800 features"},
+          {"id": "fs2", "label": "feast-online", "sub": "redis · ≈1,200 rps"},
+          {"id": "fs3", "label": "feature-pipelines", "sub": "spark · 36 jobs"},
+          {"id": "fs4", "label": "pit-joiner", "sub": "≈2,100 LOC"}
+         ]},
+        {"id": "tr", "layer": "training", "label": "Training", "part": 1, "ico": "app",
+         "members": [
+          {"id": "tr1", "label": "trainer-orchestrator", "sub": "kubeflow · 14 DAGs"},
+          {"id": "tr2", "label": "hp-tuner", "sub": "katib · ≈340 trials/wk"},
+          {"id": "tr3", "label": "distributed-trainer", "sub": "pytorch ddp"}
+         ]},
+        {"id": "rg", "layer": "registry", "label": "Model Registry", "part": 1, "ico": "store",
+         "members": [
+          {"id": "rg1", "label": "mlflow-registry", "sub": "≈220 models"},
+          {"id": "rg2", "label": "model-validator", "sub": "31 checks"},
+          {"id": "rg3", "label": "artifact-signer", "sub": "cosign"}
+         ]},
+        {"id": "inf", "layer": "inference", "label": "Inference", "part": 1, "ico": "app",
+         "members": [
+          {"id": "inf1", "label": "inference-gateway", "sub": "≈9,400 rps"},
+          {"id": "inf2", "label": "triton-server", "sub": "12 model repos"},
+          {"id": "inf3", "label": "feature-fetcher", "sub": "p99 4ms"},
+          {"id": "inf4", "label": "ab-router", "sub": "6 experiments"}
+         ]},
+        {"id": "mon", "layer": "monitoring", "label": "Monitoring", "part": 2, "ico": "infra",
+         "members": [
+          {"id": "mon1", "label": "drift-detector", "sub": "evidently · 48 suites"},
+          {"id": "mon2", "label": "perf-monitor", "sub": "≈1.1M metrics/day"},
+          {"id": "mon3", "label": "alerting", "sub": "22 rules"}
+         ]}
+       ],
+       "edges": [
+        {"id": "ce1", "source": "fs", "target": "tr", "count": 24, "label": "training datasets"},
+        {"id": "ce2", "source": "tr", "target": "rg", "count": 14, "label": "registers candidates"},
+        {"id": "ce3", "source": "rg", "target": "inf", "count": 8, "label": "serves approved"},
+        {"id": "ce4", "source": "inf", "target": "mon", "count": 36, "label": "prediction logs"},
+        {"id": "ce5", "source": "fs", "target": "inf", "count": 19, "label": "online features"},
+        {"id": "ce6", "source": "inf", "target": "tr", "count": 3, "label": "inline retrain calls"}
+       ]
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "ML Platform — pipeline dataflow",
+       "count": "8 stages · features → training → registry → inference → monitoring",
+       "dir": "RIGHT",
+       "prov": {"kind": "simulated", "label": "SIMULATED · would derive from: Kubeflow pipeline DAGs + Kafka topic topology"},
+       "nodes": [
+        {"id": "n1", "type": "ext", "icon": "ext", "label": "Event Streams", "sub": "kafka · 41 topics", "real": false},
+        {"id": "n2", "type": "proc", "icon": "app", "label": "Feature Pipelines", "sub": "spark · 36 jobs", "real": false},
+        {"id": "n3", "type": "store", "icon": "store", "label": "Offline Store", "sub": "parquet · ≈18 TB", "real": false},
+        {"id": "n4", "type": "store", "icon": "store", "label": "Online Store", "sub": "redis · ≈1,200 rps", "real": false},
+        {"id": "n5", "type": "proc", "icon": "app", "label": "Training Job", "sub": "pytorch ddp", "real": false},
+        {"id": "n6", "type": "store", "icon": "store", "label": "Model Registry", "sub": "mlflow · ≈220 models", "real": false},
+        {"id": "n7", "type": "proc", "icon": "app", "label": "Serving Endpoint", "sub": "triton · ≈9,400 rps", "real": false},
+        {"id": "n8", "type": "proc", "icon": "sys", "label": "Drift Monitor", "sub": "evidently · 48 suites", "real": false}
+       ],
+       "edges": [
+        {"id": "de1", "source": "n1", "target": "n2", "label": "ingests"},
+        {"id": "de2", "source": "n2", "target": "n3", "label": "materializes"},
+        {"id": "de3", "source": "n2", "target": "n4", "label": "syncs"},
+        {"id": "de4", "source": "n3", "target": "n5", "label": "batch features"},
+        {"id": "de5", "source": "n5", "target": "n6", "label": "logs model"},
+        {"id": "de6", "source": "n6", "target": "n7", "label": "deploys"},
+        {"id": "de7", "source": "n4", "target": "n7", "label": "online features"},
+        {"id": "de8", "source": "n7", "target": "n8", "label": "prediction logs"},
+        {"id": "de9", "source": "n8", "target": "n99", "label": "retrain trigger"}
+       ]
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "ML Platform — deployment (GPU pool vs serving)",
+       "count": "4 zones · 13 nodes",
+       "dir": "DOWN",
+       "prov": {"kind": "simulated", "label": "SIMULATED · would derive from: Kubernetes cluster inventory (kubectl get nodes/pods) + Terraform state"},
+       "palette": "dep",
+       "labeled": true,
+       "buckets": [
+        {"id": "gpu", "layer": "train-infra", "label": "GPU Training Pool", "part": 0, "ico": "infra",
+         "members": [
+          {"id": "gpu1", "label": "gpu-a100-01", "sub": "8×A100"},
+          {"id": "gpu2", "label": "gpu-a100-02", "sub": "8×A100"},
+          {"id": "gpu3", "label": "gpu-a100-03", "sub": "8×A100"},
+          {"id": "gpu4", "label": "gpu-a100-04", "sub": "8×A100"}
+         ]},
+        {"id": "art", "layer": "artifacts", "label": "Artifact Store", "part": 0, "ico": "store",
+         "members": [
+          {"id": "art1", "label": "s3-model-bucket", "sub": "≈310 GB"},
+          {"id": "art2", "label": "mlflow-tracking", "sub": "postgres"}
+         ]},
+        {"id": "srv", "layer": "serving", "label": "Serving Fleet", "part": 1, "ico": "app",
+         "members": [
+          {"id": "srv1", "label": "triton-pod-1", "sub": "T4 · model v1"},
+          {"id": "srv2", "label": "triton-pod-2", "sub": "T4 · model v1"},
+          {"id": "srv3", "label": "triton-pod-3", "sub": "T4 · model v1"},
+          {"id": "srv4", "label": "inference-router", "sub": "envoy"}
+         ]},
+        {"id": "obs", "layer": "observability", "label": "Monitoring Stack", "part": 1, "ico": "infra",
+         "members": [
+          {"id": "obs1", "label": "prometheus", "sub": "≈1.1M metrics/day"},
+          {"id": "obs2", "label": "grafana", "sub": "17 dashboards"},
+          {"id": "obs3", "label": "evidently-service", "sub": "48 suites"}
+         ]}
+       ],
+       "edges": [
+        {"id": "pe1", "source": "gpu", "target": "art", "count": 18, "label": "pushes checkpoints"},
+        {"id": "pe2", "source": "art", "target": "srv", "count": 6, "label": "pulls model v2 (fleet pinned v1)", "tag": "cross-version"},
+        {"id": "pe3", "source": "srv", "target": "obs", "count": 42, "label": "emits metrics"},
+        {"id": "pe4", "source": "gpu", "target": "obs", "count": 9, "label": "node metrics"}
+       ]
+      }
+     }
+    }
+   }
+  }
+ }
+}

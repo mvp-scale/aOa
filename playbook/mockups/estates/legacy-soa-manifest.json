@@ -1,0 +1,26 @@
+[
+ {
+  "class": "A",
+  "type": "god",
+  "where": "legacy-soa/meridian-core/component",
+  "detail": "bucket b-esb 'WebSphere ESB Hub' has in-degree 3 (ec1 b-portals, ec2 b-b2b, ec7 b-batch) and out-degree 3 (ec3 b-soap, ec4 b-mf, ec8 b-db2)"
+ },
+ {
+  "class": "A",
+  "type": "tag",
+  "where": "legacy-soa/meridian-core/component",
+  "detail": "edge ec6 Batch Jobs(b-batch) -> Enterprise DB2(b-db2) tagged shared-db (batch jobs and SOAP services both write the same DB2 schemas)"
+ },
+ {
+  "class": "A",
+  "type": "orphan",
+  "where": "legacy-soa/meridian-core/component",
+  "detail": "bucket b-uddi 'UDDI Registry (retired)' (part 2, 2 members) has no edges in an 8-bucket view"
+ },
+ {
+  "class": "B",
+  "type": "duplicate-id",
+  "where": "legacy-soa/meridian-core/component",
+  "detail": "member id m-soap-1 appears twice in bucket b-soap 'SOAP Service Layer' (PolicyService and PolicyService (v2 fork))"
+ }
+]

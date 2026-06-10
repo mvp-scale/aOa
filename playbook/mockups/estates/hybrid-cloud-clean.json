@@ -1,0 +1,169 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "generated": {
+  "tool": "estate-campaign",
+  "timestamp": "2026-06-10 campaign"
+ },
+ "estates": {
+  "hybrid-cloud": {
+   "label": "Hybrid / Integrated Cloud",
+   "sim": true,
+   "scopes": {
+    "core-erp": {
+     "label": "Meridian ERP Integration",
+     "tech": "SAP ECC + Kafka/Go · ~1.4M LOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Meridian hybrid estate context",
+       "count": "3 systems · 3 external partners",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SAP SLD landscape registry + vendor contract inventory + EDI partner directory"
+       },
+       "nodes": [
+        {"id": "n_erp", "type": "sys", "icon": "sys", "label": "Meridian ERP", "sub": "SAP ECC 6.0 · on-prem", "real": false},
+        {"id": "n_bus", "type": "sys", "icon": "sys", "label": "Integration Bus", "sub": "Kafka + iPaaS · DMZ", "real": false},
+        {"id": "n_sfdc", "type": "ext", "icon": "ext", "label": "Salesforce CRM", "sub": "SaaS vendor", "real": false},
+        {"id": "n_wday", "type": "ext", "icon": "ext", "label": "Workday HCM", "sub": "SaaS vendor", "real": false},
+        {"id": "n_edi", "type": "ext", "icon": "ext", "label": "B2B EDI Partners", "sub": "≈140 trading partners", "real": false},
+        {"id": "n_lake", "type": "sys", "icon": "sys", "label": "Cloud Analytics", "sub": "AWS · S3 data lake", "real": false}
+       ],
+       "edges": [
+        {"id": "e_ctx1", "source": "n_erp", "target": "n_bus", "label": "publishes IDocs"},
+        {"id": "e_ctx2", "source": "n_bus", "target": "n_sfdc", "label": "syncs accounts"},
+        {"id": "e_ctx3", "source": "n_bus", "target": "n_wday", "label": "syncs workers"},
+        {"id": "e_ctx4", "source": "n_edi", "target": "n_bus", "label": "sends EDI 850/856"},
+        {"id": "e_ctx5", "source": "n_bus", "target": "n_lake", "label": "streams events"}
+       ]
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Runtime containers across on-prem and cloud",
+       "count": "5 containers · 2 stores",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SAP transport directory + docker-compose manifests + Terraform state (AWS)"
+       },
+       "nodes": [
+        {"id": "c_erp", "type": "container", "icon": "container", "label": "ERP Core", "sub": "ABAP · 4 app servers", "real": false},
+        {"id": "c_erpdb", "type": "store", "icon": "store", "label": "ERP DB", "sub": "Oracle 19c · 8 TB", "real": false},
+        {"id": "c_edi", "type": "container", "icon": "container", "label": "EDI Translator", "sub": "Java · ≈90k LOC", "real": false},
+        {"id": "c_gw", "type": "container", "icon": "container", "label": "API Gateway", "sub": "Kong · 62 routes", "real": false},
+        {"id": "c_broker", "type": "proc", "icon": "app", "label": "Event Broker", "sub": "Kafka · 38 topics", "real": false},
+        {"id": "c_sync", "type": "container", "icon": "container", "label": "Cloud Sync Services", "sub": "Go · 7 services", "real": false},
+        {"id": "c_stage", "type": "store", "icon": "store", "label": "Staging DB", "sub": "PostgreSQL · landing zone", "real": false}
+       ],
+       "edges": [
+        {"id": "e_con1", "source": "c_erp", "target": "c_erpdb", "label": "persists"},
+        {"id": "e_con2", "source": "c_erp", "target": "c_broker", "label": "emits IDoc events"},
+        {"id": "e_con3", "source": "c_edi", "target": "c_broker", "label": "publishes EDI orders"},
+        {"id": "e_con4", "source": "c_broker", "target": "c_sync", "label": "streams events"},
+        {"id": "e_con5", "source": "c_sync", "target": "c_stage", "label": "stages payloads"},
+        {"id": "e_con6", "source": "c_gw", "target": "c_erp", "label": "proxies OData"}
+       ]
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component buckets: on-prem · integration · cloud · shared",
+       "count": "4 buckets · 15 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa domain index + ABAP where-used lists + Kafka topic registry"
+       },
+       "palette": "mc",
+       "labeled": true,
+       "buckets": [
+        {
+         "id": "b_onprem",
+         "layer": "on-prem",
+         "label": "On-Prem ERP",
+         "part": 0,
+         "ico": "sys",
+         "members": [
+          {"id": "m_fico", "label": "FI/CO Module", "sub": "≈2,300 programs"},
+          {"id": "m_sd", "label": "SD Sales & Distribution", "sub": "≈1,650 programs"},
+          {"id": "m_mm", "label": "MM Materials", "sub": "≈1,400 programs"},
+          {"id": "m_rfc", "label": "Custom ABAP RFC Layer", "sub": "≈480 function modules"}
+         ]
+        },
+        {
+         "id": "b_intbus",
+         "layer": "integration",
+         "label": "Integration Bus",
+         "part": 1,
+         "ico": "container",
+         "members": [
+          {"id": "m_editrans", "label": "EDI Translator", "sub": "≈210 maps"},
+          {"id": "m_iflow", "label": "iFlow Orchestrator", "sub": "≈96 flows"},
+          {"id": "m_kbridge", "label": "Kafka Bridge", "sub": "38 topics"},
+          {"id": "m_apigw", "label": "API Gateway", "sub": "62 routes"}
+         ]
+        },
+        {
+         "id": "b_cloud",
+         "layer": "cloud-services",
+         "label": "Cloud Services",
+         "part": 1,
+         "ico": "app",
+         "members": [
+          {"id": "m_sfsync", "label": "Salesforce Sync", "sub": "≈12k records/day"},
+          {"id": "m_wdconn", "label": "Workday Connector", "sub": "≈3,800 workers"},
+          {"id": "m_einv", "label": "E-Invoicing Service", "sub": "≈9,500 docs/mo"},
+          {"id": "m_lakefeed", "label": "Analytics Lake Feeder", "sub": "≈1.2M events/day"}
+         ]
+        },
+        {
+         "id": "b_shared",
+         "layer": "shared",
+         "label": "Shared Platform",
+         "part": 1,
+         "ico": "store",
+         "members": [
+          {"id": "m_mdm", "label": "Master Data Hub", "sub": "≈410k records"},
+          {"id": "m_idsync", "label": "Identity Sync (AD)", "sub": "≈6,200 accounts"},
+          {"id": "m_obs", "label": "Observability Stack", "sub": "24 dashboards"}
+         ]
+        }
+       ],
+       "edges": [
+        {"id": "e_cmp1", "source": "b_onprem", "target": "b_intbus", "count": 34, "label": "RFC/IDoc"},
+        {"id": "e_cmp2", "source": "b_intbus", "target": "b_cloud", "count": 21, "label": "REST/events"},
+        {"id": "e_cmp3", "source": "b_intbus", "target": "b_shared", "count": 12, "label": "MDM lookups"},
+        {"id": "e_cmp4", "source": "b_cloud", "target": "b_shared", "count": 6, "label": "logs to"}
+       ]
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Order-to-cash flow (EDI inbound → e-invoice outbound)",
+       "count": "6 stages · 5 hops",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kafka topic lineage + API gateway access logs + EDI VAN traffic reports"
+       },
+       "nodes": [
+        {"id": "d_partner", "type": "ext", "icon": "ext", "label": "Trading Partner", "sub": "EDI 850 inbound", "real": false},
+        {"id": "d_edi", "type": "proc", "icon": "app", "label": "EDI Translator", "sub": "X12 → canonical", "real": false},
+        {"id": "d_bus", "type": "proc", "icon": "container", "label": "Integration Bus", "sub": "orders.v2 topic", "real": false},
+        {"id": "d_erp", "type": "sys", "icon": "sys", "label": "Meridian ERP", "sub": "sales order entry", "real": false},
+        {"id": "d_einv", "type": "proc", "icon": "app", "label": "E-Invoicing Service", "sub": "cloud · AWS", "real": false},
+        {"id": "d_tax", "type": "ext", "icon": "ext", "label": "Tax Authority Portal", "sub": "clearance model", "real": false}
+       ],
+       "edges": [
+        {"id": "e_df1", "source": "d_partner", "target": "d_edi", "label": "sends EDI 850"},
+        {"id": "e_df2", "source": "d_edi", "target": "d_bus", "label": "publishes order event"},
+        {"id": "e_df3", "source": "d_bus", "target": "d_erp", "label": "creates sales order"},
+        {"id": "e_df4", "source": "d_erp", "target": "d_einv", "label": "issues invoice"},
+        {"id": "e_df5", "source": "d_einv", "target": "d_tax", "label": "submits e-invoice"}
+       ]
+      }
+     }
+    }
+   }
+  }
+ }
+}

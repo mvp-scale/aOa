@@ -1,0 +1,20 @@
+[
+ {
+  "class": "A",
+  "type": "god",
+  "where": "event-platform/streamcore/component",
+  "detail": "bucket b4 'Kafka Bus' has in-degree 3 (b1 app producers, b2 CDC connectors, b3 IoT) and out-degree 3 (b5 streams via e5, b6 storage via injected e8 'raw sink connectors', b7 serving via injected e9 'direct consume')"
+ },
+ {
+  "class": "A",
+  "type": "band-violation",
+  "where": "event-platform/streamcore/component",
+  "detail": "injected edge e10 'writes lineage directly' from b5 Stream Processors (part 2) up to b8 Governance (part 1)"
+ },
+ {
+  "class": "B",
+  "type": "budget-overflow",
+  "where": "event-platform/streamcore/component",
+  "detail": "bucket b4 'Kafka Bus' inflated from 5 to 46 topic members (>= 45 triggers auto-collapse badge); topic names seeded from seed 88"
+ }
+]

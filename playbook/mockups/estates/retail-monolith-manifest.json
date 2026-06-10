@@ -1,0 +1,26 @@
+[
+ {
+  "class": "A",
+  "type": "direct-db",
+  "where": "retail-monolith/retailcore/context",
+  "detail": "e_ctx5 n_pos→n_db tagged direct-db (POS queries prices directly against shared Oracle schema, bypassing RetailCore)"
+ },
+ {
+  "class": "A",
+  "type": "cycle",
+  "where": "retail-monolith/retailcore/domains",
+  "detail": "b_order→b_inventory→b_customer→b_order via e_dom1, e_dom6, e_dom7"
+ },
+ {
+  "class": "B",
+  "type": "budget-overflow",
+  "where": "retail-monolith/retailcore/domains",
+  "detail": "b_shared (Shared Kernel) has 46 members: 4 kernel modules + CommonHelper01–42"
+ },
+ {
+  "class": "B",
+  "type": "dangling-edge",
+  "where": "retail-monolith/retailcore/datamodel",
+  "detail": "e_dm7 t_shipments→t_carriers; target table t_carriers does not exist"
+ }
+]

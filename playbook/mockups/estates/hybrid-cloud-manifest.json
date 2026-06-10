@@ -1,0 +1,20 @@
+[
+ {
+  "class": "A",
+  "type": "cycle",
+  "where": "hybrid-cloud/core-erp/component",
+  "detail": "b_intbus->b_cloud->b_shared->b_intbus (edge e_cmp5 'pushes golden records' closes the loop; all three buckets in part 1, so no band violation is incidentally triggered)"
+ },
+ {
+  "class": "A",
+  "type": "cross-version",
+  "where": "hybrid-cloud/core-erp/dataflow",
+  "detail": "edge e_df4 (d_erp -> d_einv, 'issues invoice') tagged cross-version: ERP emits invoice API v1 payloads while E-Invoicing Service expects v2"
+ },
+ {
+  "class": "B",
+  "type": "dangling-edge",
+  "where": "hybrid-cloud/core-erp/container",
+  "detail": "edge e_con7 (c_gw -> c_legacy_mq, 'bridges legacy MQ'): target id c_legacy_mq does not exist in the view's nodes"
+ }
+]

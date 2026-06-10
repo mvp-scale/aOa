@@ -1,0 +1,163 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "generated": { "tool": "estate-campaign", "timestamp": "2026-06-10 campaign" },
+ "estates": {
+  "mobile-bff": {
+   "label": "Mobile + BFF",
+   "sim": true,
+   "scopes": {
+    "atlas-mobile": {
+     "label": "Atlas Mobile Platform",
+     "tech": "Swift/Kotlin + Node BFF + Go sync · ~210 kLOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Context view — Atlas mobile ecosystem",
+       "count": "7 systems · 10 edges",
+       "dir": "DOWN",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: service catalog + API gateway route inventory" },
+       "nodes": [
+        { "id": "c1", "type": "ext", "icon": "ext", "label": "Mobile User", "sub": "iOS & Android · ≈2.4M MAU", "real": false },
+        { "id": "c2", "type": "sys", "icon": "sys", "label": "Atlas iOS App", "sub": "Swift · App Store", "real": false },
+        { "id": "c3", "type": "sys", "icon": "sys", "label": "Atlas Android App", "sub": "Kotlin · Play Store", "real": false },
+        { "id": "c4", "type": "sys", "icon": "sys", "label": "Atlas BFF", "sub": "GraphQL gateway for mobile", "real": false },
+        { "id": "c5", "type": "sys", "icon": "sys", "label": "Core Platform API", "sub": "Java · domain services", "real": false },
+        { "id": "c6", "type": "ext", "icon": "ext", "label": "APNs / FCM", "sub": "push delivery networks", "real": false },
+        { "id": "c7", "type": "sys", "icon": "sys", "label": "Analytics Pipeline", "sub": "event ingest + warehouse", "real": false }
+       ],
+       "edges": [
+        { "id": "e1", "source": "c1", "target": "c2", "label": "uses" },
+        { "id": "e2", "source": "c1", "target": "c3", "label": "uses" },
+        { "id": "e3", "source": "c2", "target": "c4", "label": "queries & syncs" },
+        { "id": "e4", "source": "c3", "target": "c4", "label": "queries & syncs" },
+        { "id": "e5", "source": "c4", "target": "c5", "label": "orchestrates" },
+        { "id": "e6", "source": "c4", "target": "c6", "label": "dispatches push" },
+        { "id": "e7", "source": "c6", "target": "c2", "label": "delivers push" },
+        { "id": "e8", "source": "c6", "target": "c3", "label": "delivers push" },
+        { "id": "e9", "source": "c2", "target": "c7", "label": "emits events" },
+        { "id": "e10", "source": "c3", "target": "c7", "label": "emits events" }
+       ]
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Container view — Atlas runtime",
+       "count": "10 containers · 11 edges",
+       "dir": "DOWN",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: k8s manifests + Fastlane/Gradle build configs" },
+       "nodes": [
+        { "id": "n1", "type": "container", "icon": "app", "label": "atlas-ios", "sub": "Swift · ≈84k LOC", "real": false },
+        { "id": "n2", "type": "container", "icon": "app", "label": "atlas-android", "sub": "Kotlin · ≈91k LOC", "real": false },
+        { "id": "n3", "type": "container", "icon": "container", "label": "bff-graphql", "sub": "Node 20 · Apollo", "real": false },
+        { "id": "n4", "type": "container", "icon": "container", "label": "sync-service", "sub": "Go · gRPC", "real": false },
+        { "id": "n5", "type": "container", "icon": "container", "label": "push-service", "sub": "Node · APNs/FCM senders", "real": false },
+        { "id": "n6", "type": "container", "icon": "container", "label": "analytics-ingest", "sub": "Kafka consumer · Flink", "real": false },
+        { "id": "n7", "type": "sys", "icon": "sys", "label": "core-api", "sub": "Java · internal platform", "real": false },
+        { "id": "n8", "type": "store", "icon": "store", "label": "sync-queue", "sub": "Kafka · 12 partitions", "real": false },
+        { "id": "n9", "type": "store", "icon": "store", "label": "device-registry", "sub": "PostgreSQL 16", "real": false },
+        { "id": "n10", "type": "store", "icon": "store", "label": "event-lake", "sub": "S3 + Athena", "real": false }
+       ],
+       "edges": [
+        { "id": "e1", "source": "n1", "target": "n3", "label": "GraphQL over HTTPS" },
+        { "id": "e2", "source": "n2", "target": "n3", "label": "GraphQL over HTTPS" },
+        { "id": "e3", "source": "n3", "target": "n7", "label": "REST · per-screen aggregation" },
+        { "id": "e4", "source": "n3", "target": "n4", "label": "delegates /sync batches" },
+        { "id": "e5", "source": "n3", "target": "n5", "label": "triggers push" },
+        { "id": "e6", "source": "n4", "target": "n8", "label": "enqueues ops" },
+        { "id": "e7", "source": "n4", "target": "n7", "label": "applies resolved writes" },
+        { "id": "e8", "source": "n5", "target": "n9", "label": "reads device tokens" },
+        { "id": "e9", "source": "n1", "target": "n6", "label": "emits events" },
+        { "id": "e10", "source": "n2", "target": "n6", "label": "emits events" },
+        { "id": "e11", "source": "n6", "target": "n10", "label": "writes parquet" }
+       ]
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — offline sync path",
+       "count": "8 stages · 7 edges",
+       "dir": "RIGHT",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: OTel traces on /sync + Kafka topic lineage" },
+       "nodes": [
+        { "id": "d1", "type": "proc", "icon": "app", "label": "Offline Mutation", "sub": "user edit · no network", "real": false },
+        { "id": "d2", "type": "store", "icon": "store", "label": "Local Op Log", "sub": "SQLite / Room", "real": false },
+        { "id": "d3", "type": "proc", "icon": "app", "label": "Sync Client", "sub": "delta upload on reconnect", "real": false },
+        { "id": "d4", "type": "container", "icon": "container", "label": "BFF /sync", "sub": "batch endpoint", "real": false },
+        { "id": "d5", "type": "proc", "icon": "container", "label": "Conflict Resolver", "sub": "vector clocks · LWW fallback", "real": false },
+        { "id": "d6", "type": "store", "icon": "store", "label": "sync-queue", "sub": "Kafka topic ops.resolved", "real": false },
+        { "id": "d7", "type": "sys", "icon": "sys", "label": "core-api", "sub": "applies canonical writes", "real": false },
+        { "id": "d8", "type": "proc", "icon": "app", "label": "Ack & Rebase", "sub": "client converges", "real": false }
+       ],
+       "edges": [
+        { "id": "e1", "source": "d1", "target": "d2", "label": "appends op" },
+        { "id": "e2", "source": "d2", "target": "d3", "label": "drains on reconnect" },
+        { "id": "e3", "source": "d3", "target": "d4", "label": "uploads batch" },
+        { "id": "e4", "source": "d4", "target": "d5", "label": "resolves conflicts" },
+        { "id": "e5", "source": "d5", "target": "d6", "label": "enqueues resolved ops" },
+        { "id": "e6", "source": "d6", "target": "d7", "label": "applies writes" },
+        { "id": "e7", "source": "d7", "target": "d8", "label": "acks · new server version" }
+       ]
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — BFF + sync internals",
+       "count": "5 buckets · 16 components",
+       "dir": "DOWN",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: aoa index of bff-graphql + sync-service module imports" },
+       "buckets": [
+        {
+         "id": "b1", "layer": "edge", "label": "API Edge", "part": 0, "ico": "container",
+         "members": [
+          { "id": "m1", "label": "graphql_gateway", "sub": "≈2,310" },
+          { "id": "m2", "label": "rest_adapter", "sub": "≈940" },
+          { "id": "m3", "label": "auth_middleware", "sub": "≈610" },
+          { "id": "m4", "label": "rate_limiter", "sub": "≈380" }
+         ]
+        },
+        {
+         "id": "b2", "layer": "sync", "label": "Sync Engine", "part": 1, "ico": "app",
+         "members": [
+          { "id": "m5", "label": "delta_calculator", "sub": "≈1,480" },
+          { "id": "m6", "label": "oplog_writer", "sub": "≈760" },
+          { "id": "m7", "label": "snapshot_builder", "sub": "≈1,120" }
+         ]
+        },
+        {
+         "id": "b3", "layer": "conflict", "label": "Conflict Service", "part": 1, "ico": "app",
+         "members": [
+          { "id": "m8", "label": "merge_resolver", "sub": "≈1,840" },
+          { "id": "m9", "label": "vector_clock", "sub": "≈520" },
+          { "id": "m10", "label": "crdt_reconciler", "sub": "≈970" }
+         ]
+        },
+        {
+         "id": "b4", "layer": "push", "label": "Push Fanout", "part": 1, "ico": "app",
+         "members": [
+          { "id": "m11", "label": "token_resolver", "sub": "≈440" },
+          { "id": "m12", "label": "apns_sender", "sub": "≈690" },
+          { "id": "m13", "label": "fcm_sender", "sub": "≈655" }
+         ]
+        },
+        {
+         "id": "b5", "layer": "data", "label": "Data Layer", "part": 2, "ico": "store",
+         "members": [
+          { "id": "m14", "label": "sync_queue_client", "sub": "≈530" },
+          { "id": "m15", "label": "device_registry_repo", "sub": "≈710" },
+          { "id": "m16", "label": "session_cache", "sub": "≈290" }
+         ]
+        }
+       ],
+       "edges": [
+        { "id": "e1", "source": "b1", "target": "b2", "count": 18, "label": "routes sync batches" },
+        { "id": "e2", "source": "b1", "target": "b4", "count": 7, "label": "triggers notifications" },
+        { "id": "e3", "source": "b2", "target": "b3", "count": 12, "label": "hands off conflicts" },
+        { "id": "e4", "source": "b2", "target": "b5", "count": 22, "label": "persists ops" },
+        { "id": "e5", "source": "b3", "target": "b5", "count": 9, "label": "reads clocks" },
+        { "id": "e6", "source": "b4", "target": "b5", "count": 6, "label": "reads tokens" }
+       ],
+       "labeled": true
+      }
+     }
+    }
+   }
+  }
+ }
+}

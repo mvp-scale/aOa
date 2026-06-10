@@ -1,0 +1,20 @@
+[
+ {
+  "class": "A",
+  "type": "band-violation",
+  "where": "multi-cloud/cloudgrid/deployment",
+  "detail": "edge e13: Azure eastus2 (b_azure, part 2) -> Shared Control Plane (b_cp, part 1) 'failover state write' — upward edge across bands"
+ },
+ {
+  "class": "A",
+  "type": "god",
+  "where": "multi-cloud/cloudgrid/deployment",
+  "detail": "Shared Control Plane (b_cp): in-degree 4 (b_cicd e4, b_admin e5, b_edge e12, b_azure e13) >= 3 AND out-degree 3 (b_aws e6, b_gcp e7, b_azure e8) >= 3; injected edge e12 completes the god"
+ },
+ {
+  "class": "B",
+  "type": "duplicate-id",
+  "where": "multi-cloud/cloudgrid/deployment",
+  "detail": "bucket AWS us-east-1 (b_aws): members 'EKS Cluster' and 'S3 Data Lake' both carry id 'aws1' (S3 Data Lake's id changed from aws3)"
+ }
+]

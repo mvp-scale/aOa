@@ -1,0 +1,135 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "generated": { "tool": "estate-campaign", "timestamp": "2026-06-10 campaign" },
+ "estates": {
+  "legacy-soa": {
+   "label": "Legacy SOA / ESB",
+   "sim": true,
+   "scopes": {
+    "meridian-core": {
+     "label": "Meridian Policy Platform",
+     "tech": "Java EE 6 · WebSphere ESB · DB2 · ~1.4M LOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Context view — Meridian SOA estate",
+       "count": "5 systems · 4 links",
+       "dir": "DOWN",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: enterprise integration catalog + WSDL/UDDI inventory export" },
+       "nodes": [
+        { "id": "n1", "type": "ext", "icon": "ext", "label": "Policyholders", "sub": "≈48,000 users", "real": false },
+        { "id": "n2", "type": "ext", "icon": "ext", "label": "Agent Partners", "sub": "≈310 agencies", "real": false },
+        { "id": "n3", "type": "sys", "icon": "sys", "label": "Meridian SOA Estate", "sub": "ESB + 14 SOAP services", "real": false },
+        { "id": "n4", "type": "sys", "icon": "sys", "label": "z/OS Mainframe", "sub": "CICS · COBOL · VSAM", "real": false },
+        { "id": "n5", "type": "ext", "icon": "ext", "label": "ACORD Regulatory Filing", "sub": "external clearinghouse", "real": false }
+       ],
+       "edges": [
+        { "id": "e1", "source": "n1", "target": "n3", "label": "browses & files claims" },
+        { "id": "e2", "source": "n2", "target": "n3", "label": "quotes & binds" },
+        { "id": "e3", "source": "n3", "target": "n4", "label": "executes CICS txns" },
+        { "id": "e4", "source": "n3", "target": "n5", "label": "submits filings" }
+       ]
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — services through the ESB hub",
+       "count": "7 buckets · 6 flows",
+       "dir": "DOWN",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: WebSphere ESB mediation flow exports + UDDI service registry" },
+       "buckets": [
+        {
+         "id": "b-portals", "layer": "channels", "label": "Channel Portals", "part": 0, "ico": "app",
+         "members": [
+          { "id": "m-por-1", "label": "Customer Portal (JSF)", "sub": "≈420" },
+          { "id": "m-por-2", "label": "Agent Workbench", "sub": "≈610" },
+          { "id": "m-por-3", "label": "IVR Front-End", "sub": "≈180" }
+         ]
+        },
+        {
+         "id": "b-b2b", "layer": "channels", "label": "B2B Gateway", "part": 0, "ico": "ext",
+         "members": [
+          { "id": "m-b2b-1", "label": "Partner SOAP Gateway", "sub": "≈240" },
+          { "id": "m-b2b-2", "label": "EDI Translator", "sub": "≈150" }
+         ]
+        },
+        {
+         "id": "b-batch", "layer": "batch", "label": "Batch Jobs", "part": 0, "ico": "infra",
+         "members": [
+          { "id": "m-bat-1", "label": "Nightly Reconciliation", "sub": "≈320" },
+          { "id": "m-bat-2", "label": "Statement Generator", "sub": "≈280" },
+          { "id": "m-bat-3", "label": "EOD Extract", "sub": "≈190" }
+         ]
+        },
+        {
+         "id": "b-esb", "layer": "hub", "label": "WebSphere ESB Hub", "part": 1, "ico": "sys",
+         "members": [
+          { "id": "m-esb-1", "label": "Message Broker", "sub": "≈540" },
+          { "id": "m-esb-2", "label": "Mediation Flows", "sub": "≈760" },
+          { "id": "m-esb-3", "label": "XSLT Transformations", "sub": "≈430" },
+          { "id": "m-esb-4", "label": "BPEL Orchestrator", "sub": "≈350" }
+         ]
+        },
+        {
+         "id": "b-soap", "layer": "services", "label": "SOAP Service Layer", "part": 2, "ico": "container",
+         "members": [
+          { "id": "m-soap-1", "label": "PolicyService", "sub": "≈1,150" },
+          { "id": "m-soap-2", "label": "ClaimsService", "sub": "≈980" },
+          { "id": "m-soap-3", "label": "BillingService", "sub": "≈740" },
+          { "id": "m-soap-4", "label": "PartyService", "sub": "≈520" }
+         ]
+        },
+        {
+         "id": "b-mf", "layer": "legacy", "label": "Mainframe Adapter", "part": 3, "ico": "sys",
+         "members": [
+          { "id": "m-mf-1", "label": "CICS Bridge", "sub": "≈310" },
+          { "id": "m-mf-2", "label": "Copybook Mapper", "sub": "≈270" }
+         ]
+        },
+        {
+         "id": "b-db2", "layer": "data", "label": "Enterprise DB2", "part": 3, "ico": "store",
+         "members": [
+          { "id": "m-db2-1", "label": "POLICY_DB", "sub": "≈85 tables" },
+          { "id": "m-db2-2", "label": "CLAIMS_DB", "sub": "≈62 tables" }
+         ]
+        }
+       ],
+       "edges": [
+        { "id": "ec1", "source": "b-portals", "target": "b-esb", "count": 18, "label": "SOAP over HTTPS" },
+        { "id": "ec2", "source": "b-b2b", "target": "b-esb", "count": 9, "label": "EDI → SOAP" },
+        { "id": "ec3", "source": "b-esb", "target": "b-soap", "count": 24, "label": "routes" },
+        { "id": "ec4", "source": "b-esb", "target": "b-mf", "count": 7, "label": "bridges" },
+        { "id": "ec5", "source": "b-soap", "target": "b-db2", "count": 31, "label": "JDBC" },
+        { "id": "ec6", "source": "b-batch", "target": "b-db2", "count": 12, "label": "bulk load" }
+       ],
+       "labeled": true
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow view — a policy request through the hub",
+       "count": "7 stations · 6 flows",
+       "dir": "RIGHT",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: ESB message tracer logs + DB2 audit trail" },
+       "nodes": [
+        { "id": "d1", "type": "container", "icon": "app", "label": "Customer Portal", "sub": "JSF · WebSphere AS", "real": false },
+        { "id": "d2", "type": "proc", "icon": "sys", "label": "ESB Hub", "sub": "message broker + mediation", "real": false },
+        { "id": "d3", "type": "container", "icon": "container", "label": "PolicyService", "sub": "SOAP/WSDL · JAX-WS", "real": false },
+        { "id": "d4", "type": "container", "icon": "container", "label": "Mainframe Adapter", "sub": "CICS bridge", "real": false },
+        { "id": "d5", "type": "store", "icon": "store", "label": "Enterprise DB2", "sub": "POLICY_DB · CLAIMS_DB", "real": false },
+        { "id": "d6", "type": "proc", "icon": "infra", "label": "Nightly Batch", "sub": "JCL-style scheduled jobs", "real": false },
+        { "id": "d7", "type": "store", "icon": "store", "label": "CICS / VSAM", "sub": "z/OS datasets", "real": false }
+       ],
+       "edges": [
+        { "id": "f1", "source": "d1", "target": "d2", "label": "SOAP request" },
+        { "id": "f2", "source": "d2", "target": "d3", "label": "route + transform" },
+        { "id": "f3", "source": "d3", "target": "d5", "label": "reads/writes policy rows" },
+        { "id": "f4", "source": "d2", "target": "d4", "label": "bridges legacy calls" },
+        { "id": "f5", "source": "d4", "target": "d7", "label": "CICS transaction" },
+        { "id": "f6", "source": "d6", "target": "d5", "label": "bulk load" }
+       ]
+      }
+     }
+    }
+   }
+  }
+ }
+}

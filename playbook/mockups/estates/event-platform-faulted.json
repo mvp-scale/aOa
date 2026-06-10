@@ -1,0 +1,850 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "generated": {
+  "tool": "estate-campaign",
+  "timestamp": "2026-06-10 campaign"
+ },
+ "estates": {
+  "event-platform": {
+   "label": "Event-Driven Data Platform",
+   "sim": true,
+   "scopes": {
+    "streamcore": {
+     "label": "StreamCore Platform",
+     "tech": "Kafka + Flink + Iceberg · ~140 services",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Context view — StreamCore and its world",
+       "count": "1 system · 4 external actors · 4 edges",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kafka cluster metadata + service registry + CDC connector configs"
+       },
+       "nodes": [
+        {
+         "id": "n1",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Web & Mobile Apps",
+         "sub": "event emitters",
+         "real": false
+        },
+        {
+         "id": "n2",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Operational Databases",
+         "sub": "Postgres · MySQL (CDC)",
+         "real": false
+        },
+        {
+         "id": "n3",
+         "type": "sys",
+         "icon": "sys",
+         "label": "StreamCore Event Platform",
+         "sub": "Kafka backbone · ≈140 services",
+         "real": false
+        },
+        {
+         "id": "n4",
+         "type": "ext",
+         "icon": "ext",
+         "label": "BI & Analytics Tools",
+         "sub": "Looker · ad-hoc SQL",
+         "real": false
+        },
+        {
+         "id": "n5",
+         "type": "ext",
+         "icon": "ext",
+         "label": "ML Platform",
+         "sub": "feature consumers",
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "e1",
+         "source": "n1",
+         "target": "n3",
+         "label": "emits events"
+        },
+        {
+         "id": "e2",
+         "source": "n2",
+         "target": "n3",
+         "label": "streams changes (CDC)"
+        },
+        {
+         "id": "e3",
+         "source": "n3",
+         "target": "n4",
+         "label": "serves marts"
+        },
+        {
+         "id": "e4",
+         "source": "n3",
+         "target": "n5",
+         "label": "feeds features"
+        }
+       ]
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — producers to serving",
+       "count": "10 stages · 10 hops",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kafka topic ACLs + consumer-group offsets + Flink job graph"
+       },
+       "nodes": [
+        {
+         "id": "f1",
+         "type": "proc",
+         "icon": "app",
+         "label": "clickstream-producer",
+         "sub": "≈18k ev/s",
+         "real": false
+        },
+        {
+         "id": "f2",
+         "type": "proc",
+         "icon": "app",
+         "label": "cdc-connector",
+         "sub": "Debezium · 2 DBs",
+         "real": false
+        },
+        {
+         "id": "f3",
+         "type": "store",
+         "icon": "store",
+         "label": "clickstream.raw",
+         "sub": "topic · 24 partitions",
+         "real": false
+        },
+        {
+         "id": "f4",
+         "type": "store",
+         "icon": "store",
+         "label": "orders.cdc.v1",
+         "sub": "topic · 12 partitions",
+         "real": false
+        },
+        {
+         "id": "f5",
+         "type": "proc",
+         "icon": "app",
+         "label": "enrichment-flink",
+         "sub": "Flink · 8 task slots",
+         "real": false
+        },
+        {
+         "id": "f6",
+         "type": "store",
+         "icon": "store",
+         "label": "orders.enriched.v1",
+         "sub": "topic · 12 partitions",
+         "real": false
+        },
+        {
+         "id": "f7",
+         "type": "proc",
+         "icon": "app",
+         "label": "fraud-scorer",
+         "sub": "Flink · model v7",
+         "real": false
+        },
+        {
+         "id": "f8",
+         "type": "store",
+         "icon": "store",
+         "label": "iceberg-lake",
+         "sub": "S3 · ≈42 TB",
+         "real": false
+        },
+        {
+         "id": "f9",
+         "type": "store",
+         "icon": "store",
+         "label": "snowflake-dwh",
+         "sub": "≈310 tables",
+         "real": false
+        },
+        {
+         "id": "f10",
+         "type": "container",
+         "icon": "container",
+         "label": "query-api",
+         "sub": "Go · gRPC+REST",
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "e1",
+         "source": "f1",
+         "target": "f3",
+         "label": "produces"
+        },
+        {
+         "id": "e2",
+         "source": "f2",
+         "target": "f4",
+         "label": "produces"
+        },
+        {
+         "id": "e3",
+         "source": "f3",
+         "target": "f5",
+         "label": "consumes"
+        },
+        {
+         "id": "e4",
+         "source": "f4",
+         "target": "f5",
+         "label": "consumes"
+        },
+        {
+         "id": "e5",
+         "source": "f5",
+         "target": "f6",
+         "label": "publishes"
+        },
+        {
+         "id": "e6",
+         "source": "f6",
+         "target": "f7",
+         "label": "consumes"
+        },
+        {
+         "id": "e7",
+         "source": "f6",
+         "target": "f8",
+         "label": "sinks (connector)"
+        },
+        {
+         "id": "e8",
+         "source": "f7",
+         "target": "f8",
+         "label": "writes scores"
+        },
+        {
+         "id": "e9",
+         "source": "f8",
+         "target": "f9",
+         "label": "loads (dbt)"
+        },
+        {
+         "id": "e10",
+         "source": "f9",
+         "target": "f10",
+         "label": "serves"
+        }
+       ]
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — platform buckets",
+       "count": "8 buckets · 66 components · 10 edges",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa index of service repos + Kafka topic registry + Flink deployment manifests"
+       },
+       "buckets": [
+        {
+         "id": "b1",
+         "layer": "ingest",
+         "label": "Ingest · App Producers",
+         "part": 0,
+         "ico": "app",
+         "members": [
+          {
+           "id": "m1",
+           "label": "clickstream-producer",
+           "sub": "≈1,840"
+          },
+          {
+           "id": "m2",
+           "label": "mobile-events-sdk",
+           "sub": "≈960"
+          },
+          {
+           "id": "m3",
+           "label": "order-service-emitter",
+           "sub": "≈540"
+          }
+         ]
+        },
+        {
+         "id": "b2",
+         "layer": "ingest",
+         "label": "Ingest · CDC Connectors",
+         "part": 0,
+         "ico": "infra",
+         "members": [
+          {
+           "id": "m4",
+           "label": "cdc-connector-postgres",
+           "sub": "≈420"
+          },
+          {
+           "id": "m5",
+           "label": "cdc-connector-mysql",
+           "sub": "≈380"
+          },
+          {
+           "id": "m6",
+           "label": "debezium-ops",
+           "sub": "≈290"
+          }
+         ]
+        },
+        {
+         "id": "b3",
+         "layer": "ingest",
+         "label": "Ingest · IoT",
+         "part": 0,
+         "ico": "ext",
+         "members": [
+          {
+           "id": "m7",
+           "label": "iot-gateway",
+           "sub": "≈1,150"
+          },
+          {
+           "id": "m8",
+           "label": "fleet-telemetry-agent",
+           "sub": "≈470"
+          }
+         ]
+        },
+        {
+         "id": "b8",
+         "layer": "governance",
+         "label": "Governance",
+         "part": 1,
+         "ico": "sys",
+         "members": [
+          {
+           "id": "m9",
+           "label": "schema-registry",
+           "sub": "≈88 subjects"
+          },
+          {
+           "id": "m25",
+           "label": "data-catalog",
+           "sub": "≈730"
+          },
+          {
+           "id": "m26",
+           "label": "lineage-tracker",
+           "sub": "≈610"
+          }
+         ]
+        },
+        {
+         "id": "b4",
+         "layer": "bus",
+         "label": "Kafka Bus",
+         "part": 1,
+         "ico": "store",
+         "members": [
+          {
+           "id": "m10",
+           "label": "clickstream.raw",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m11",
+           "label": "orders.cdc.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m12",
+           "label": "orders.enriched.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m13",
+           "label": "payments.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m14",
+           "label": "inventory.cdc.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m27",
+           "label": "orders.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m28",
+           "label": "orders.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m29",
+           "label": "orders.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m30",
+           "label": "payments.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m31",
+           "label": "payments.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m32",
+           "label": "payments.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m33",
+           "label": "inventory.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m34",
+           "label": "inventory.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m35",
+           "label": "inventory.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m36",
+           "label": "shipping.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m37",
+           "label": "shipping.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m38",
+           "label": "shipping.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m39",
+           "label": "customers.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m40",
+           "label": "customers.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m41",
+           "label": "customers.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m42",
+           "label": "clickstream.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m43",
+           "label": "clickstream.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m44",
+           "label": "clickstream.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m45",
+           "label": "sessions.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m46",
+           "label": "sessions.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m47",
+           "label": "sessions.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m48",
+           "label": "fraud.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m49",
+           "label": "fraud.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m50",
+           "label": "fraud.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m51",
+           "label": "iot.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m52",
+           "label": "iot.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m53",
+           "label": "iot.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m54",
+           "label": "catalog.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m55",
+           "label": "catalog.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m56",
+           "label": "catalog.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m57",
+           "label": "returns.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m58",
+           "label": "returns.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m59",
+           "label": "returns.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m60",
+           "label": "refunds.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m61",
+           "label": "refunds.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m62",
+           "label": "refunds.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m63",
+           "label": "loyalty.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m64",
+           "label": "loyalty.updated.v1",
+           "sub": "24 partitions"
+          },
+          {
+           "id": "m65",
+           "label": "loyalty.expired.v1",
+           "sub": "6 partitions"
+          },
+          {
+           "id": "m66",
+           "label": "notifications.created.v1",
+           "sub": "12 partitions"
+          },
+          {
+           "id": "m67",
+           "label": "notifications.updated.v1",
+           "sub": "24 partitions"
+          }
+         ]
+        },
+        {
+         "id": "b5",
+         "layer": "streams",
+         "label": "Stream Processors",
+         "part": 2,
+         "ico": "app",
+         "members": [
+          {
+           "id": "m15",
+           "label": "enrichment-flink",
+           "sub": "≈2,300"
+          },
+          {
+           "id": "m16",
+           "label": "sessionizer",
+           "sub": "≈1,420"
+          },
+          {
+           "id": "m17",
+           "label": "fraud-scorer",
+           "sub": "≈1,980"
+          },
+          {
+           "id": "m18",
+           "label": "dedupe-stream",
+           "sub": "≈760"
+          }
+         ]
+        },
+        {
+         "id": "b6",
+         "layer": "storage",
+         "label": "Lake & Warehouse",
+         "part": 3,
+         "ico": "store",
+         "members": [
+          {
+           "id": "m19",
+           "label": "iceberg-lake",
+           "sub": "≈42 TB"
+          },
+          {
+           "id": "m20",
+           "label": "snowflake-dwh",
+           "sub": "≈310 tables"
+          },
+          {
+           "id": "m21",
+           "label": "feature-store",
+           "sub": "≈140 features"
+          }
+         ]
+        },
+        {
+         "id": "b7",
+         "layer": "serving",
+         "label": "Serving",
+         "part": 4,
+         "ico": "container",
+         "members": [
+          {
+           "id": "m22",
+           "label": "query-api",
+           "sub": "≈1,640"
+          },
+          {
+           "id": "m23",
+           "label": "metrics-api",
+           "sub": "≈880"
+          },
+          {
+           "id": "m24",
+           "label": "realtime-dashboard",
+           "sub": "≈1,210"
+          }
+         ]
+        }
+       ],
+       "edges": [
+        {
+         "id": "e1",
+         "source": "b1",
+         "target": "b4",
+         "count": 18,
+         "label": "produces"
+        },
+        {
+         "id": "e2",
+         "source": "b2",
+         "target": "b4",
+         "count": 11,
+         "label": "produces"
+        },
+        {
+         "id": "e3",
+         "source": "b3",
+         "target": "b4",
+         "count": 7,
+         "label": "produces"
+        },
+        {
+         "id": "e4",
+         "source": "b1",
+         "target": "b8",
+         "count": 5,
+         "label": "registers schemas"
+        },
+        {
+         "id": "e5",
+         "source": "b4",
+         "target": "b5",
+         "count": 14,
+         "label": "consumed by"
+        },
+        {
+         "id": "e6",
+         "source": "b5",
+         "target": "b6",
+         "count": 9,
+         "label": "sinks"
+        },
+        {
+         "id": "e7",
+         "source": "b6",
+         "target": "b7",
+         "count": 7,
+         "label": "serves"
+        },
+        {
+         "id": "e8",
+         "source": "b4",
+         "target": "b6",
+         "count": 5,
+         "label": "raw sink connectors"
+        },
+        {
+         "id": "e9",
+         "source": "b4",
+         "target": "b7",
+         "count": 4,
+         "label": "direct consume"
+        },
+        {
+         "id": "e10",
+         "source": "b5",
+         "target": "b8",
+         "count": 3,
+         "label": "writes lineage directly"
+        }
+       ],
+       "labeled": true
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Data model — warehouse core schema",
+       "count": "5 tables · 4 relations",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Snowflake information_schema + dbt manifest.json"
+       },
+       "nodes": [
+        {
+         "id": "t1",
+         "type": "entity",
+         "label": "fct_events",
+         "tech": "table",
+         "fields": [
+          "event_id PK",
+          "session_id FK",
+          "event_type",
+          "occurred_at",
+          "payload_json"
+         ],
+         "real": false
+        },
+        {
+         "id": "t2",
+         "type": "entity",
+         "label": "dim_sessions",
+         "tech": "table",
+         "fields": [
+          "session_id PK",
+          "user_id FK",
+          "started_at",
+          "device"
+         ],
+         "real": false
+        },
+        {
+         "id": "t3",
+         "type": "entity",
+         "label": "dim_users",
+         "tech": "table",
+         "fields": [
+          "user_id PK",
+          "account_tier",
+          "created_at"
+         ],
+         "real": false
+        },
+        {
+         "id": "t4",
+         "type": "entity",
+         "label": "fct_orders",
+         "tech": "table",
+         "fields": [
+          "order_id PK",
+          "user_id FK",
+          "total_cents",
+          "status",
+          "ordered_at"
+         ],
+         "real": false
+        },
+        {
+         "id": "t5",
+         "type": "entity",
+         "label": "fraud_scores",
+         "tech": "table",
+         "fields": [
+          "score_id PK",
+          "order_id FK",
+          "score",
+          "model_version",
+          "scored_at"
+         ],
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "e1",
+         "source": "t2",
+         "target": "t1",
+         "label": "1:N"
+        },
+        {
+         "id": "e2",
+         "source": "t3",
+         "target": "t2",
+         "label": "1:N"
+        },
+        {
+         "id": "e3",
+         "source": "t3",
+         "target": "t4",
+         "label": "1:N"
+        },
+        {
+         "id": "e4",
+         "source": "t4",
+         "target": "t5",
+         "label": "1:1"
+        }
+       ]
+      }
+     }
+    }
+   }
+  }
+ }
+}

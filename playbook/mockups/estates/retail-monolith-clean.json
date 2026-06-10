@@ -1,0 +1,142 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "generated": {
+  "tool": "estate-campaign",
+  "timestamp": "2026-06-10 campaign"
+ },
+ "estates": {
+  "retail-monolith": {
+   "label": "Retail Monolith",
+   "sim": true,
+   "scopes": {
+    "retailcore": {
+     "label": "RetailCore ERP",
+     "tech": "Java 8 · Spring · ~480k LOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "RetailCore system context",
+       "count": "1 system · 3 external partners · 1 store",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: integration config (web.xml servlet mappings, ESB routes) + outbound endpoint inventory"
+       },
+       "nodes": [
+        {"id": "n_pos", "type": "ext", "icon": "ext", "label": "POS Terminals", "sub": "1,840 lanes · IBM 4690", "real": false},
+        {"id": "n_core", "type": "sys", "icon": "sys", "label": "RetailCore ERP", "sub": "Java monolith · ~480k LOC", "real": false},
+        {"id": "n_paygw", "type": "ext", "icon": "ext", "label": "Payment Gateway", "sub": "First Data ISO-8583", "real": false},
+        {"id": "n_wms", "type": "ext", "icon": "ext", "label": "WMS", "sub": "Manhattan SCALE", "real": false},
+        {"id": "n_db", "type": "store", "icon": "store", "label": "Oracle 12c", "sub": "single shared schema", "real": false}
+       ],
+       "edges": [
+        {"id": "e_ctx1", "source": "n_pos", "target": "n_core", "label": "submits sales (MQ)"},
+        {"id": "e_ctx2", "source": "n_core", "target": "n_paygw", "label": "authorizes cards"},
+        {"id": "e_ctx3", "source": "n_core", "target": "n_wms", "label": "syncs stock + ASN"},
+        {"id": "e_ctx4", "source": "n_core", "target": "n_db", "label": "reads/writes JDBC"}
+       ]
+      },
+      "domains": {
+       "kind": "buckets",
+       "title": "Domain modules",
+       "count": "4 domains · 14 modules",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa domain index over src/main/java package tree (com.retailcore.*)"
+       },
+       "palette": "retail",
+       "labeled": true,
+       "buckets": [
+        {
+         "id": "b_order",
+         "layer": "order",
+         "label": "Order",
+         "part": 0,
+         "ico": "domain",
+         "members": [
+          {"id": "m_ordersvc", "label": "OrderService", "sub": "≈2,140"},
+          {"id": "m_checkout", "label": "CheckoutFlow", "sub": "≈1,380"},
+          {"id": "m_pricing", "label": "PricingEngine", "sub": "≈1,760"},
+          {"id": "m_returns", "label": "ReturnsProcessor", "sub": "≈940"}
+         ]
+        },
+        {
+         "id": "b_inventory",
+         "layer": "inventory",
+         "label": "Inventory",
+         "part": 0,
+         "ico": "domain",
+         "members": [
+          {"id": "m_stockledger", "label": "StockLedger", "sub": "≈1,620"},
+          {"id": "m_replenish", "label": "ReplenishmentPlanner", "sub": "≈1,180"},
+          {"id": "m_whsync", "label": "WarehouseSync", "sub": "≈860"}
+         ]
+        },
+        {
+         "id": "b_customer",
+         "layer": "customer",
+         "label": "Customer",
+         "part": 0,
+         "ico": "domain",
+         "members": [
+          {"id": "m_profile", "label": "CustomerProfile", "sub": "≈1,240"},
+          {"id": "m_loyalty", "label": "LoyaltyProgram", "sub": "≈980"},
+          {"id": "m_address", "label": "AddressBook", "sub": "≈520"}
+         ]
+        },
+        {
+         "id": "b_shared",
+         "layer": "shared-kernel",
+         "label": "Shared Kernel",
+         "part": 1,
+         "ico": "container",
+         "members": [
+          {"id": "m_money", "label": "MoneyTypes", "sub": "≈430"},
+          {"id": "m_audit", "label": "AuditTrail", "sub": "≈690"},
+          {"id": "m_batch", "label": "BatchScheduler", "sub": "≈1,050"},
+          {"id": "m_persist", "label": "PersistenceCore", "sub": "≈1,310"}
+         ]
+        }
+       ],
+       "edges": [
+        {"id": "e_dom1", "source": "b_order", "target": "b_inventory", "count": 38, "label": "reserves stock"},
+        {"id": "e_dom2", "source": "b_order", "target": "b_customer", "count": 21, "label": "resolves buyer"},
+        {"id": "e_dom3", "source": "b_order", "target": "b_shared", "count": 64, "label": "uses kernel"},
+        {"id": "e_dom4", "source": "b_inventory", "target": "b_shared", "count": 47, "label": "uses kernel"},
+        {"id": "e_dom5", "source": "b_customer", "target": "b_shared", "count": 29, "label": "uses kernel"}
+       ]
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Core schema",
+       "count": "7 tables · Oracle 12c",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Hibernate .hbm.xml mappings + Flyway DDL under db/migration/"
+       },
+       "nodes": [
+        {"id": "t_customers", "type": "entity", "label": "customers", "tech": "table", "fields": ["customer_id PK", "loyalty_no", "email", "created_at"], "real": false},
+        {"id": "t_orders", "type": "entity", "label": "orders", "tech": "table", "fields": ["order_id PK", "customer_id FK", "store_no", "status", "total_cents"], "real": false},
+        {"id": "t_order_lines", "type": "entity", "label": "order_lines", "tech": "table", "fields": ["line_id PK", "order_id FK", "product_id FK", "qty", "unit_price_cents"], "real": false},
+        {"id": "t_products", "type": "entity", "label": "products", "tech": "table", "fields": ["product_id PK", "sku", "title", "dept_code"], "real": false},
+        {"id": "t_inventory", "type": "entity", "label": "inventory_levels", "tech": "table", "fields": ["product_id FK", "location_id PK", "on_hand", "reserved"], "real": false},
+        {"id": "t_payments", "type": "entity", "label": "payments", "tech": "table", "fields": ["payment_id PK", "order_id FK", "auth_code", "amount_cents", "captured_at"], "real": false},
+        {"id": "t_shipments", "type": "entity", "label": "shipments", "tech": "table", "fields": ["shipment_id PK", "order_id FK", "carrier", "asn_ref", "shipped_at"], "real": false}
+       ],
+       "edges": [
+        {"id": "e_dm1", "source": "t_customers", "target": "t_orders", "label": "1:N"},
+        {"id": "e_dm2", "source": "t_orders", "target": "t_order_lines", "label": "1:N"},
+        {"id": "e_dm3", "source": "t_products", "target": "t_order_lines", "label": "1:N"},
+        {"id": "e_dm4", "source": "t_products", "target": "t_inventory", "label": "1:N"},
+        {"id": "e_dm5", "source": "t_orders", "target": "t_payments", "label": "1:N"},
+        {"id": "e_dm6", "source": "t_orders", "target": "t_shipments", "label": "1:N"}
+       ]
+      }
+     }
+    }
+   }
+  }
+ }
+}

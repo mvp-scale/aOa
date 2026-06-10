@@ -1,0 +1,125 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "generated": { "tool": "estate-campaign", "timestamp": "2026-06-10 campaign" },
+ "estates": {
+  "cloudflare-edge": {
+   "label": "Cloudflare Edge Serverless",
+   "sim": true,
+   "scopes": {
+    "workers-stack": {
+     "label": "Workers Edge Stack",
+     "tech": "Cloudflare Workers · TypeScript · 14 scripts",
+     "views": {
+      "container": {
+       "kind": "simple",
+       "title": "Container view — Workers runtime + bindings",
+       "count": "9 containers · 9 edges",
+       "dir": "DOWN",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: wrangler.toml binding sections + Cloudflare API GET /accounts/{id}/workers/services" },
+       "nodes": [
+        { "id": "n1", "type": "ext", "icon": "ext", "label": "client", "sub": "Browser / mobile · anycast POP", "real": false },
+        { "id": "n2", "type": "container", "icon": "container", "label": "gateway-worker", "sub": "Workers · routing + auth", "real": false },
+        { "id": "n3", "type": "container", "icon": "container", "label": "api-worker", "sub": "Workers · Hono REST", "real": false },
+        { "id": "n4", "type": "store", "icon": "store", "label": "sessions-kv", "sub": "Workers KV · ≈48,000 keys", "real": false },
+        { "id": "n5", "type": "store", "icon": "store", "label": "catalog-d1", "sub": "D1 · SQLite · 12 tables", "real": false },
+        { "id": "n6", "type": "store", "icon": "store", "label": "assets-r2", "sub": "R2 · ≈210,000 objects", "real": false },
+        { "id": "n7", "type": "proc", "icon": "sys", "label": "events-queue", "sub": "Queues · ≈9,400 msgs/day", "real": false },
+        { "id": "n8", "type": "container", "icon": "container", "label": "ingest-worker", "sub": "Workers · queue consumer", "real": false },
+        { "id": "n9", "type": "ext", "icon": "ext", "label": "origin-api", "sub": "Legacy origin · eu-west DC", "real": false }
+       ],
+       "edges": [
+        { "id": "e1", "source": "n1", "target": "n2", "label": "HTTPS request" },
+        { "id": "e2", "source": "n2", "target": "n3", "label": "service binding fetch" },
+        { "id": "e3", "source": "n3", "target": "n4", "label": "get/put session" },
+        { "id": "e4", "source": "n3", "target": "n5", "label": "SQL query" },
+        { "id": "e5", "source": "n3", "target": "n6", "label": "read asset" },
+        { "id": "e6", "source": "n3", "target": "n7", "label": "enqueue event" },
+        { "id": "e7", "source": "n7", "target": "n8", "label": "deliver batch" },
+        { "id": "e8", "source": "n8", "target": "n5", "label": "write rollups" },
+        { "id": "e9", "source": "n3", "target": "n9", "label": "fallback fetch on miss" }
+       ]
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — workers + binding layers",
+       "count": "5 layers · 11 components",
+       "dir": "DOWN",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: wrangler.toml [[kv_namespaces]]/[[d1_databases]]/[[r2_buckets]]/[[queues]] + worker source AST (exported handlers)" },
+       "buckets": [
+        {
+         "id": "b1", "layer": "edge", "label": "Edge Workers", "part": 0, "ico": "container",
+         "members": [
+          { "id": "m1", "label": "gateway-worker", "sub": "≈1,850" },
+          { "id": "m2", "label": "api-worker", "sub": "≈3,200" },
+          { "id": "m3", "label": "rate-limiter", "sub": "≈640" }
+         ]
+        },
+        {
+         "id": "b2", "layer": "async", "label": "Async Pipeline", "part": 1, "ico": "app",
+         "members": [
+          { "id": "m4", "label": "events-queue", "sub": "≈9,400/day" },
+          { "id": "m5", "label": "ingest-worker", "sub": "≈1,100" },
+          { "id": "m6", "label": "dlq-handler", "sub": "≈380" }
+         ]
+        },
+        {
+         "id": "b3", "layer": "bindings", "label": "Storage Bindings", "part": 2, "ico": "store",
+         "members": [
+          { "id": "m7", "label": "sessions-kv", "sub": "≈48,000 keys" },
+          { "id": "m8", "label": "catalog-d1", "sub": "12 tables" },
+          { "id": "m9", "label": "assets-r2", "sub": "≈210,000 objects" }
+         ]
+        },
+        {
+         "id": "b4", "layer": "observability", "label": "Observability", "part": 0, "ico": "infra",
+         "members": [
+          { "id": "m10", "label": "tail-worker", "sub": "≈420" },
+          { "id": "m11", "label": "logpush-job", "sub": "≈180" }
+         ]
+        },
+        {
+         "id": "b5", "layer": "legacy", "label": "Legacy Bindings", "part": 2, "ico": "ext",
+         "members": []
+        }
+       ],
+       "edges": [
+        { "id": "e1", "source": "b1", "target": "b2", "count": 6, "label": "enqueues" },
+        { "id": "e2", "source": "b1", "target": "b3", "count": 14, "label": "binds" },
+        { "id": "e3", "source": "b2", "target": "b3", "count": 4, "label": "writes" },
+        { "id": "e4", "source": "b1", "target": "b5", "count": 2, "label": "binds" }
+       ],
+       "labeled": true
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — request through bindings",
+       "count": "8 nodes · 8 hops",
+       "dir": "RIGHT",
+       "prov": { "kind": "simulated", "label": "SIMULATED · would derive from: Workers Trace Events (wrangler tail) + binding invocation spans" },
+       "nodes": [
+        { "id": "f1", "type": "ext", "icon": "ext", "label": "client", "sub": "GET /api/catalog", "real": false },
+        { "id": "f2", "type": "container", "icon": "container", "label": "gateway-worker", "sub": "route + verify JWT", "real": false },
+        { "id": "f3", "type": "container", "icon": "container", "label": "api-worker", "sub": "Hono handler", "real": false },
+        { "id": "f4", "type": "store", "icon": "store", "label": "sessions-kv", "sub": "env.SESSIONS", "real": false },
+        { "id": "f5", "type": "store", "icon": "store", "label": "catalog-d1", "sub": "env.DB", "real": false },
+        { "id": "f6", "type": "store", "icon": "store", "label": "assets-r2", "sub": "env.ASSETS", "real": false },
+        { "id": "f7", "type": "proc", "icon": "sys", "label": "events-queue", "sub": "env.EVENTS", "real": false },
+        { "id": "f8", "type": "ext", "icon": "ext", "label": "origin-api", "sub": "cache-miss fallback", "real": false }
+       ],
+       "edges": [
+        { "id": "e1", "source": "f1", "target": "f2", "label": "HTTPS GET" },
+        { "id": "e2", "source": "f2", "target": "f3", "label": "env.API.fetch()" },
+        { "id": "e3", "source": "f3", "target": "f4", "label": "env.SESSIONS.get()" },
+        { "id": "e4", "source": "f3", "target": "f5", "label": "env.DB.prepare().all()" },
+        { "id": "e5", "source": "f3", "target": "f6", "label": "env.ASSETS.get()" },
+        { "id": "e6", "source": "f3", "target": "f7", "label": "env.EVENTS.send()" },
+        { "id": "e7", "source": "f3", "target": "f8", "label": "fetch(origin) on miss" },
+        { "id": "e8", "source": "f2", "target": "f5", "label": "env.DB direct query", "tag": "bypass-api" }
+       ]
+      }
+     }
+    }
+   }
+  }
+ }
+}

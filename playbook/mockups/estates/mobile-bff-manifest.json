@@ -1,0 +1,20 @@
+[
+ {
+  "class": "A",
+  "type": "bypass-api",
+  "where": "mobile-bff/atlas-mobile/container",
+  "detail": "edge e12 atlas-ios (n1) -> core-api (n7) tagged bypass-api — mobile app calls core platform directly, skipping bff-graphql"
+ },
+ {
+  "class": "A",
+  "type": "cycle",
+  "where": "mobile-bff/atlas-mobile/component",
+  "detail": "Sync Engine -> Conflict Service -> Push Fanout -> Sync Engine (b2->b3 e3, b3->b4 e7, b4->b2 e8); all part 1, no band violation side-effect"
+ },
+ {
+  "class": "B",
+  "type": "empty-bucket",
+  "where": "mobile-bff/atlas-mobile/component",
+  "detail": "Data Layer (b5) has members:[] — 3 members removed (sync_queue_client, device_registry_repo, session_cache); edges into b5 retained"
+ }
+]

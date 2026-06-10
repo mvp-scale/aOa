@@ -1,0 +1,14 @@
+[
+ {
+  "class": "A",
+  "type": "tag",
+  "where": "web-app/shoply/container",
+  "detail": "edge e6 storefront-spa(n1) -> postgres(n3) tagged direct-db (SPA bypasses api, queries postgres directly)"
+ },
+ {
+  "class": "A",
+  "type": "orphan",
+  "where": "web-app/shoply/component",
+  "detail": "bucket b5 'Legacy Helpers' (part 1, 2 members) has no edges in a 5-bucket view"
+ }
+]

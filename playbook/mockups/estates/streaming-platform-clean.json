@@ -1,0 +1,251 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "generated": {
+  "tool": "estate-campaign",
+  "timestamp": "2026-06-10 campaign"
+ },
+ "estates": {
+  "streaming-platform": {
+   "label": "StreamWorks Streaming",
+   "sim": true,
+   "scopes": {
+    "streamworks": {
+     "label": "StreamWorks Platform",
+     "tech": "Java/Go microservices · ~480 svcs",
+     "views": {
+      "component": {
+       "kind": "buckets",
+       "title": "Service groups — hot path to data plane",
+       "count": "8 groups · 32 services",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: service mesh registry (Envoy/Consul) + Spinnaker deploy manifests"
+       },
+       "buckets": [
+        {
+         "id": "b-edge",
+         "layer": "edge-api",
+         "label": "Edge API",
+         "part": 0,
+         "ico": "container",
+         "members": [
+          {"id": "m-edge-1", "label": "zuul-gateway", "sub": "≈4,200"},
+          {"id": "m-edge-2", "label": "api-aggregator", "sub": "≈2,800"},
+          {"id": "m-edge-3", "label": "device-profile", "sub": "≈1,100"},
+          {"id": "m-edge-4", "label": "session-router", "sub": "≈950"}
+         ]
+        },
+        {
+         "id": "b-play",
+         "layer": "playback",
+         "label": "Playback",
+         "part": 1,
+         "ico": "app",
+         "members": [
+          {"id": "m-play-1", "label": "playback-orchestrator", "sub": "≈3,600"},
+          {"id": "m-play-2", "label": "manifest-composer", "sub": "≈1,900"},
+          {"id": "m-play-3", "label": "drm-license", "sub": "≈1,400"},
+          {"id": "m-play-4", "label": "abr-steering", "sub": "≈800"},
+          {"id": "m-play-5", "label": "stream-heartbeat", "sub": "≈600"}
+         ]
+        },
+        {
+         "id": "b-cat",
+         "layer": "catalog",
+         "label": "Catalog",
+         "part": 1,
+         "ico": "app",
+         "members": [
+          {"id": "m-cat-1", "label": "title-metadata", "sub": "≈2,400"},
+          {"id": "m-cat-2", "label": "artwork-service", "sub": "≈1,200"},
+          {"id": "m-cat-3", "label": "search-indexer", "sub": "≈1,500"},
+          {"id": "m-cat-4", "label": "localization", "sub": "≈700"}
+         ]
+        },
+        {
+         "id": "b-rec",
+         "layer": "recommendations",
+         "label": "Recommendations",
+         "part": 1,
+         "ico": "app",
+         "members": [
+          {"id": "m-rec-1", "label": "ranker", "sub": "≈2,100"},
+          {"id": "m-rec-2", "label": "feature-store-api", "sub": "≈1,300"},
+          {"id": "m-rec-3", "label": "ab-allocator", "sub": "≈900"},
+          {"id": "m-rec-4", "label": "trending-now", "sub": "≈650"}
+         ]
+        },
+        {
+         "id": "b-bill",
+         "layer": "billing",
+         "label": "Billing",
+         "part": 2,
+         "ico": "app",
+         "members": [
+          {"id": "m-bill-1", "label": "subscription-mgr", "sub": "≈1,800"},
+          {"id": "m-bill-2", "label": "payment-gateway", "sub": "≈1,100"},
+          {"id": "m-bill-3", "label": "invoice-engine", "sub": "≈750"},
+          {"id": "m-bill-4", "label": "dunning-service", "sub": "≈500"}
+         ]
+        },
+        {
+         "id": "b-id",
+         "layer": "identity",
+         "label": "Identity",
+         "part": 2,
+         "ico": "user",
+         "members": [
+          {"id": "m-id-1", "label": "auth-service", "sub": "≈1,600"},
+          {"id": "m-id-2", "label": "profile-service", "sub": "≈1,000"},
+          {"id": "m-id-3", "label": "device-registry", "sub": "≈850"},
+          {"id": "m-id-4", "label": "token-minter", "sub": "≈450"}
+         ]
+        },
+        {
+         "id": "b-tel",
+         "layer": "telemetry",
+         "label": "Telemetry",
+         "part": 3,
+         "ico": "infra",
+         "members": [
+          {"id": "m-tel-1", "label": "event-ingest", "sub": "≈2,900"},
+          {"id": "m-tel-2", "label": "qoe-aggregator", "sub": "≈1,200"},
+          {"id": "m-tel-3", "label": "alerting", "sub": "≈700"}
+         ]
+        },
+        {
+         "id": "b-data",
+         "layer": "data",
+         "label": "Data Plane",
+         "part": 4,
+         "ico": "store",
+         "members": [
+          {"id": "m-data-1", "label": "cassandra-fleet", "sub": "≈5,400"},
+          {"id": "m-data-2", "label": "evcache", "sub": "≈2,300"},
+          {"id": "m-data-3", "label": "kafka-pipelines", "sub": "≈3,100"},
+          {"id": "m-data-4", "label": "s3-datalake", "sub": "≈1,800"}
+         ]
+        }
+       ],
+       "edges": [
+        {"id": "e1", "source": "b-edge", "target": "b-play", "count": 48, "label": "start stream"},
+        {"id": "e2", "source": "b-edge", "target": "b-cat", "count": 36, "label": "browse"},
+        {"id": "e3", "source": "b-edge", "target": "b-rec", "count": 29, "label": "rank rows"},
+        {"id": "e4", "source": "b-edge", "target": "b-id", "count": 41, "label": "authn"},
+        {"id": "e5", "source": "b-edge", "target": "b-bill", "count": 12, "label": "plan check"},
+        {"id": "e6", "source": "b-play", "target": "b-id", "count": 18, "label": "entitle"},
+        {"id": "e7", "source": "b-play", "target": "b-tel", "count": 33, "label": "qoe events"},
+        {"id": "e8", "source": "b-rec", "target": "b-tel", "count": 9, "label": "impressions"},
+        {"id": "e9", "source": "b-cat", "target": "b-data", "count": 27, "label": "read titles"},
+        {"id": "e10", "source": "b-rec", "target": "b-data", "count": 22, "label": "features"},
+        {"id": "e11", "source": "b-bill", "target": "b-data", "count": 14, "label": "ledger"},
+        {"id": "e12", "source": "b-id", "target": "b-data", "count": 19, "label": "profiles"},
+        {"id": "e13", "source": "b-tel", "target": "b-data", "count": 31, "label": "sink"},
+        {"id": "e14", "source": "b-play", "target": "b-data", "count": 25, "label": "bookmarks"}
+       ],
+       "labeled": true
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Play-start request path",
+       "count": "6 hops · browser to first frame",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: edge gateway access logs + Zipkin trace spans (play-start sampled 1%)"
+       },
+       "nodes": [
+        {"id": "n1", "type": "ext", "icon": "ext", "label": "Client", "sub": "Smart TV / web / mobile", "real": false},
+        {"id": "n2", "type": "sys", "icon": "sys", "label": "Open Connect CDN", "sub": "edge caches · 3 regions", "real": false},
+        {"id": "n3", "type": "container", "icon": "container", "label": "Edge API Gateway", "sub": "zuul-gateway", "real": false},
+        {"id": "n4", "type": "container", "icon": "container", "label": "Playback Service", "sub": "playback-orchestrator", "real": false},
+        {"id": "n5", "type": "container", "icon": "container", "label": "DRM License Service", "sub": "drm-license · Widevine/FairPlay", "real": false},
+        {"id": "n6", "type": "store", "icon": "store", "label": "Segment Origin", "sub": "S3 origin store", "real": false}
+       ],
+       "edges": [
+        {"id": "e1", "source": "n1", "target": "n3", "label": "request playback"},
+        {"id": "e2", "source": "n3", "target": "n4", "label": "resolve stream"},
+        {"id": "e3", "source": "n4", "target": "n5", "label": "issue license"},
+        {"id": "e4", "source": "n4", "target": "n2", "label": "steer to cache"},
+        {"id": "e5", "source": "n1", "target": "n2", "label": "fetch segments"},
+        {"id": "e6", "source": "n2", "target": "n6", "label": "fill on miss"}
+       ]
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Cells — global control plane + 3 regional cells",
+       "count": "4 zones · 16 workloads",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Spinnaker pipelines + AWS account/ASG inventory"
+       },
+       "palette": "dep",
+       "labeled": true,
+       "buckets": [
+        {
+         "id": "b-gcp",
+         "layer": "control",
+         "label": "Global Control Plane",
+         "part": 0,
+         "ico": "infra",
+         "members": [
+          {"id": "m-gcp-1", "label": "fleet-orchestrator", "sub": "≈220"},
+          {"id": "m-gcp-2", "label": "config-service", "sub": "≈140"},
+          {"id": "m-gcp-3", "label": "global-traffic-director", "sub": "≈90"},
+          {"id": "m-gcp-4", "label": "control-api", "sub": "≈110"}
+         ]
+        },
+        {
+         "id": "b-use1",
+         "layer": "cell",
+         "label": "Cell us-east-1",
+         "part": 1,
+         "ico": "infra",
+         "members": [
+          {"id": "m-use1-1", "label": "edge-pop-fleet", "sub": "≈340 nodes"},
+          {"id": "m-use1-2", "label": "playback-pods", "sub": "≈520 pods"},
+          {"id": "m-use1-3", "label": "catalog-cache", "sub": "≈180 nodes"},
+          {"id": "m-use1-4", "label": "telemetry-collector", "sub": "≈120 pods"}
+         ]
+        },
+        {
+         "id": "b-euw1",
+         "layer": "cell",
+         "label": "Cell eu-west-1",
+         "part": 1,
+         "ico": "infra",
+         "members": [
+          {"id": "m-euw1-1", "label": "edge-pop-fleet", "sub": "≈260 nodes"},
+          {"id": "m-euw1-2", "label": "playback-pods", "sub": "≈410 pods"},
+          {"id": "m-euw1-3", "label": "catalog-cache", "sub": "≈150 nodes"},
+          {"id": "m-euw1-4", "label": "telemetry-collector", "sub": "≈95 pods"}
+         ]
+        },
+        {
+         "id": "b-apse1",
+         "layer": "cell",
+         "label": "Cell ap-southeast-1",
+         "part": 1,
+         "ico": "infra",
+         "members": [
+          {"id": "m-apse1-1", "label": "edge-pop-fleet", "sub": "≈190 nodes"},
+          {"id": "m-apse1-2", "label": "playback-pods", "sub": "≈300 pods"},
+          {"id": "m-apse1-3", "label": "catalog-cache", "sub": "≈110 nodes"},
+          {"id": "m-apse1-4", "label": "telemetry-collector", "sub": "≈70 pods"}
+         ]
+        }
+       ],
+       "edges": [
+        {"id": "d1", "source": "b-gcp", "target": "b-use1", "count": 22, "label": "deploy + config"},
+        {"id": "d2", "source": "b-gcp", "target": "b-euw1", "count": 18, "label": "deploy + config"},
+        {"id": "d3", "source": "b-gcp", "target": "b-apse1", "count": 16, "label": "deploy + config"}
+       ]
+      }
+     }
+    }
+   }
+  }
+ }
+}

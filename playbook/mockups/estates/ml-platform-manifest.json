@@ -1,0 +1,20 @@
+[
+ {
+  "class": "A",
+  "type": "cross-version",
+  "where": "ml-platform/mlcore/deployment",
+  "detail": "edge pe2 art→srv tagged cross-version: Artifact Store pushes model v2 while Serving Fleet pods are pinned to model v1"
+ },
+ {
+  "class": "A",
+  "type": "cycle",
+  "where": "ml-platform/mlcore/component",
+  "detail": "tr→rg→inf→tr (Training→Model Registry→Inference→Training) via injected edge ce6 inf→tr; all part 1, no band violation"
+ },
+ {
+  "class": "B",
+  "type": "dangling-edge",
+  "where": "ml-platform/mlcore/dataflow",
+  "detail": "edge de9 n8→n99 (Drift Monitor → nonexistent node n99, 'retrain trigger')"
+ }
+]
