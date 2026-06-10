@@ -330,6 +330,24 @@ MODEL={
               "count":"2 clouds + shared control plane",
               "prov":sim("topology","terraform state + cloud APIs"),
               "buckets":mc_dep_buckets,"edges":mc_dep_edges,"palette":"mc","labeled":True}}}}}}}
+# ---- fold campaign estate fixtures into the main model (dropdown access) ----
+# the 3 hand-coded sims are superseded by the richer campaign versions
+for k in ["monolith","cloudflare","multicloud"]: MODEL["estates"].pop(k,None)
+for base in sorted({os.path.basename(f)[:-5].rsplit("-",1)[0]
+                    for f in glob.glob("playbook/mockups/estates/*-clean.json")
+                    if not os.path.basename(f).startswith("smoke")}):
+    for variant in ("clean","faulted"):
+        f=f"playbook/mockups/estates/{base}-{variant}.json"
+        if not os.path.exists(f): continue
+        try: data=json.load(open(f))
+        except Exception as ex:
+            print(f"skip {f}: {ex}"); continue
+        for eid,ev in (data.get("estates") or {}).items():
+            ev=dict(ev); ev["sim"]=True
+            ev["label"]=ev.get("label",eid)+(" ⚠ faulted" if variant=="faulted" else " · clean")
+            MODEL["estates"][f"{base}-{variant}"]=ev
+print(f"estates in dropdown: {len(MODEL['estates'])}")
+
 # ---- decomposed contract: tiny manifest + one shard per architectural document ----
 import hashlib, shutil
 OUT="playbook/mockups/archmodel"

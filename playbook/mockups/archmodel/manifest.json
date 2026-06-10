@@ -3,7 +3,7 @@
  "sharded": true,
  "generated": {
   "tool": "build_c4_mockup.py",
-  "timestamp": "2026-06-10 16:04 UTC",
+  "timestamp": "2026-06-10 18:27 UTC",
   "inputs": [
    "go list",
    "repo/graphify/*.py imports",
@@ -136,111 +136,1230 @@
     }
    }
   },
-  "monolith": {
-   "label": "Retail Monolith",
+  "cloudflare-edge-clean": {
+   "label": "Cloudflare Edge Serverless · clean",
    "sim": true,
    "scopes": {
-    "mono": {
-     "label": "Retail Monolith",
-     "tech": "Java · ≈480k LOC",
+    "workers-stack": {
+     "label": "Workers Edge Stack",
+     "tech": "Cloudflare Workers · TypeScript · 14 scripts",
+     "views": {
+      "container": {
+       "kind": "simple",
+       "title": "Container view — Workers runtime + bindings",
+       "count": "9 containers · 9 edges",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: wrangler.toml binding sections + Cloudflare API GET /accounts/{id}/workers/services"
+       },
+       "shard": {
+        "path": "cloudflare-edge-clean/workers-stack/container.json",
+        "hash": "87af4672a541",
+        "bytes": 1897
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — workers + binding layers",
+       "count": "3 layers · 9 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: wrangler.toml [[kv_namespaces]]/[[d1_databases]]/[[r2_buckets]]/[[queues]] + worker source AST (exported handlers)"
+       },
+       "shard": {
+        "path": "cloudflare-edge-clean/workers-stack/component.json",
+        "hash": "5aa623f0bb24",
+        "bytes": 1292
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — request through bindings",
+       "count": "8 nodes · 7 hops",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Workers Trace Events (wrangler tail) + binding invocation spans"
+       },
+       "shard": {
+        "path": "cloudflare-edge-clean/workers-stack/dataflow.json",
+        "hash": "eff68b501417",
+        "bytes": 1526
+       }
+      }
+     }
+    }
+   }
+  },
+  "cloudflare-edge-faulted": {
+   "label": "Cloudflare Edge Serverless ⚠ faulted",
+   "sim": true,
+   "scopes": {
+    "workers-stack": {
+     "label": "Workers Edge Stack",
+     "tech": "Cloudflare Workers · TypeScript · 14 scripts",
+     "views": {
+      "container": {
+       "kind": "simple",
+       "title": "Container view — Workers runtime + bindings",
+       "count": "9 containers · 9 edges",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: wrangler.toml binding sections + Cloudflare API GET /accounts/{id}/workers/services"
+       },
+       "shard": {
+        "path": "cloudflare-edge-faulted/workers-stack/container.json",
+        "hash": "87af4672a541",
+        "bytes": 1897
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — workers + binding layers",
+       "count": "5 layers · 11 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: wrangler.toml [[kv_namespaces]]/[[d1_databases]]/[[r2_buckets]]/[[queues]] + worker source AST (exported handlers)"
+       },
+       "shard": {
+        "path": "cloudflare-edge-faulted/workers-stack/component.json",
+        "hash": "e96ed2824914",
+        "bytes": 1643
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — request through bindings",
+       "count": "8 nodes · 8 hops",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Workers Trace Events (wrangler tail) + binding invocation spans"
+       },
+       "shard": {
+        "path": "cloudflare-edge-faulted/workers-stack/dataflow.json",
+        "hash": "48ba861d4438",
+        "bytes": 1615
+       }
+      }
+     }
+    }
+   }
+  },
+  "event-platform-clean": {
+   "label": "Event-Driven Data Platform · clean",
+   "sim": true,
+   "scopes": {
+    "streamcore": {
+     "label": "StreamCore Platform",
+     "tech": "Kafka + Flink + Iceberg · ~140 services",
      "views": {
       "context": {
        "kind": "simple",
-       "title": "System Context",
-       "count": "4 elements",
+       "title": "Context view — StreamCore and its world",
+       "count": "1 system · 4 external actors · 4 edges",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: EDI/API configs + reflexion"
+        "label": "SIMULATED · would derive from: Kafka cluster metadata + service registry + CDC connector configs"
        },
        "shard": {
-        "path": "monolith/mono/context.json",
-        "hash": "da766d64a231",
-        "bytes": 781
+        "path": "event-platform-clean/streamcore/context.json",
+        "hash": "3a4c3c9da7a2",
+        "bytes": 1108
        }
       },
-      "domains": {
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — producers to serving",
+       "count": "10 stages · 10 hops",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kafka topic ACLs + consumer-group offsets + Flink job graph"
+       },
+       "shard": {
+        "path": "event-platform-clean/streamcore/dataflow.json",
+        "hash": "4e40ff8f7444",
+        "bytes": 1926
+       }
+      },
+      "component": {
        "kind": "buckets",
-       "title": "Domain map",
-       "count": "≈14,800 elements · 3 domains + shared kernel",
+       "title": "Component view — platform buckets",
+       "count": "8 buckets · 25 components · 7 edges",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: package roots + reflexion mapping"
+        "label": "SIMULATED · would derive from: aoa index of service repos + Kafka topic registry + Flink deployment manifests"
        },
        "shard": {
-        "path": "monolith/mono/domains.json",
-        "hash": "8710d32be6c6",
-        "bytes": 1632
+        "path": "event-platform-clean/streamcore/component.json",
+        "hash": "b1be52f40fba",
+        "bytes": 2988
        }
       },
       "datamodel": {
        "kind": "entity",
-       "title": "Data Model — core tables",
-       "count": "4 of ≈310 tables",
+       "title": "Data model — warehouse core schema",
+       "count": "5 tables · 4 relations",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: DB migrations / DDL"
+        "label": "SIMULATED · would derive from: Snowflake information_schema + dbt manifest.json"
        },
        "shard": {
-        "path": "monolith/mono/datamodel.json",
-        "hash": "238c0721ecca",
-        "bytes": 887
+        "path": "event-platform-clean/streamcore/datamodel.json",
+        "hash": "bca5b6c39b11",
+        "bytes": 1200
        }
       }
      }
     }
    }
   },
-  "cloudflare": {
-   "label": "Cloudflare Edge",
+  "event-platform-faulted": {
+   "label": "Event-Driven Data Platform ⚠ faulted",
    "sim": true,
    "scopes": {
-    "edge": {
-     "label": "Edge",
-     "tech": "Workers · TypeScript",
+    "streamcore": {
+     "label": "StreamCore Platform",
+     "tech": "Kafka + Flink + Iceberg · ~140 services",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Context view — StreamCore and its world",
+       "count": "1 system · 4 external actors · 4 edges",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kafka cluster metadata + service registry + CDC connector configs"
+       },
+       "shard": {
+        "path": "event-platform-faulted/streamcore/context.json",
+        "hash": "3a4c3c9da7a2",
+        "bytes": 1108
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — producers to serving",
+       "count": "10 stages · 10 hops",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kafka topic ACLs + consumer-group offsets + Flink job graph"
+       },
+       "shard": {
+        "path": "event-platform-faulted/streamcore/dataflow.json",
+        "hash": "4e40ff8f7444",
+        "bytes": 1926
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — platform buckets",
+       "count": "8 buckets · 66 components · 10 edges",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa index of service repos + Kafka topic registry + Flink deployment manifests"
+       },
+       "shard": {
+        "path": "event-platform-faulted/streamcore/component.json",
+        "hash": "c1b528e1d37b",
+        "bytes": 5864
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Data model — warehouse core schema",
+       "count": "5 tables · 4 relations",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Snowflake information_schema + dbt manifest.json"
+       },
+       "shard": {
+        "path": "event-platform-faulted/streamcore/datamodel.json",
+        "hash": "bca5b6c39b11",
+        "bytes": 1200
+       }
+      }
+     }
+    }
+   }
+  },
+  "hybrid-cloud-clean": {
+   "label": "Hybrid / Integrated Cloud · clean",
+   "sim": true,
+   "scopes": {
+    "core-erp": {
+     "label": "Meridian ERP Integration",
+     "tech": "SAP ECC + Kafka/Go · ~1.4M LOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Meridian hybrid estate context",
+       "count": "3 systems · 3 external partners",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SAP SLD landscape registry + vendor contract inventory + EDI partner directory"
+       },
+       "shard": {
+        "path": "hybrid-cloud-clean/core-erp/context.json",
+        "hash": "09654e5fdbce",
+        "bytes": 1300
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Runtime containers across on-prem and cloud",
+       "count": "5 containers · 2 stores",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SAP transport directory + docker-compose manifests + Terraform state (AWS)"
+       },
+       "shard": {
+        "path": "hybrid-cloud-clean/core-erp/container.json",
+        "hash": "c7038841def1",
+        "bytes": 1547
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component buckets: on-prem · integration · cloud · shared",
+       "count": "4 buckets · 15 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa domain index + ABAP where-used lists + Kafka topic registry"
+       },
+       "shard": {
+        "path": "hybrid-cloud-clean/core-erp/component.json",
+        "hash": "3c922e3e2061",
+        "bytes": 2089
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Order-to-cash flow (EDI inbound → e-invoice outbound)",
+       "count": "6 stages · 5 hops",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kafka topic lineage + API gateway access logs + EDI VAN traffic reports"
+       },
+       "shard": {
+        "path": "hybrid-cloud-clean/core-erp/dataflow.json",
+        "hash": "9f50fb945e0a",
+        "bytes": 1322
+       }
+      }
+     }
+    }
+   }
+  },
+  "hybrid-cloud-faulted": {
+   "label": "Hybrid / Integrated Cloud ⚠ faulted",
+   "sim": true,
+   "scopes": {
+    "core-erp": {
+     "label": "Meridian ERP Integration",
+     "tech": "SAP ECC + Kafka/Go · ~1.4M LOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Meridian hybrid estate context",
+       "count": "3 systems · 3 external partners",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SAP SLD landscape registry + vendor contract inventory + EDI partner directory"
+       },
+       "shard": {
+        "path": "hybrid-cloud-faulted/core-erp/context.json",
+        "hash": "09654e5fdbce",
+        "bytes": 1300
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Runtime containers across on-prem and cloud",
+       "count": "5 containers · 2 stores",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: SAP transport directory + docker-compose manifests + Terraform state (AWS)"
+       },
+       "shard": {
+        "path": "hybrid-cloud-faulted/core-erp/container.json",
+        "hash": "fab06151561c",
+        "bytes": 1630
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component buckets: on-prem · integration · cloud · shared",
+       "count": "4 buckets · 15 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa domain index + ABAP where-used lists + Kafka topic registry"
+       },
+       "shard": {
+        "path": "hybrid-cloud-faulted/core-erp/component.json",
+        "hash": "76240026cfeb",
+        "bytes": 2187
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Order-to-cash flow (EDI inbound → e-invoice outbound)",
+       "count": "6 stages · 5 hops",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kafka topic lineage + API gateway access logs + EDI VAN traffic reports"
+       },
+       "shard": {
+        "path": "hybrid-cloud-faulted/core-erp/dataflow.json",
+        "hash": "270d554fd2a1",
+        "bytes": 1344
+       }
+      }
+     }
+    }
+   }
+  },
+  "legacy-soa-clean": {
+   "label": "Legacy SOA / ESB · clean",
+   "sim": true,
+   "scopes": {
+    "meridian-core": {
+     "label": "Meridian Policy Platform",
+     "tech": "Java EE 6 · WebSphere ESB · DB2 · ~1.4M LOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Context view — Meridian SOA estate",
+       "count": "5 systems · 4 links",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: enterprise integration catalog + WSDL/UDDI inventory export"
+       },
+       "shard": {
+        "path": "legacy-soa-clean/meridian-core/context.json",
+        "hash": "3aaa85b0abc9",
+        "bytes": 1064
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — services through the ESB hub",
+       "count": "7 buckets · 6 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: WebSphere ESB mediation flow exports + UDDI service registry"
+       },
+       "shard": {
+        "path": "legacy-soa-clean/meridian-core/component.json",
+        "hash": "aa903684222f",
+        "bytes": 2583
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow view — a policy request through the hub",
+       "count": "7 stations · 6 flows",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ESB message tracer logs + DB2 audit trail"
+       },
+       "shard": {
+        "path": "legacy-soa-clean/meridian-core/dataflow.json",
+        "hash": "011c6b207673",
+        "bytes": 1423
+       }
+      }
+     }
+    }
+   }
+  },
+  "legacy-soa-faulted": {
+   "label": "Legacy SOA / ESB ⚠ faulted",
+   "sim": true,
+   "scopes": {
+    "meridian-core": {
+     "label": "Meridian Policy Platform",
+     "tech": "Java EE 6 · WebSphere ESB · DB2 · ~1.4M LOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Context view — Meridian SOA estate",
+       "count": "5 systems · 4 links",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: enterprise integration catalog + WSDL/UDDI inventory export"
+       },
+       "shard": {
+        "path": "legacy-soa-faulted/meridian-core/context.json",
+        "hash": "3aaa85b0abc9",
+        "bytes": 1064
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — services through the ESB hub",
+       "count": "8 buckets · 8 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: WebSphere ESB mediation flow exports + UDDI service registry"
+       },
+       "shard": {
+        "path": "legacy-soa-faulted/meridian-core/component.json",
+        "hash": "409b6b012fec",
+        "bytes": 3064
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow view — a policy request through the hub",
+       "count": "7 stations · 6 flows",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: ESB message tracer logs + DB2 audit trail"
+       },
+       "shard": {
+        "path": "legacy-soa-faulted/meridian-core/dataflow.json",
+        "hash": "011c6b207673",
+        "bytes": 1423
+       }
+      }
+     }
+    }
+   }
+  },
+  "ml-platform-clean": {
+   "label": "ML Platform · clean",
+   "sim": true,
+   "scopes": {
+    "mlcore": {
+     "label": "ML Platform Core",
+     "tech": "Python/PyTorch · ~210 KLOC",
+     "views": {
+      "component": {
+       "kind": "buckets",
+       "title": "ML Platform — components",
+       "count": "5 buckets · 17 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: repo module graph + k8s service manifests"
+       },
+       "shard": {
+        "path": "ml-platform-clean/mlcore/component.json",
+        "hash": "9b1cfebd42d5",
+        "bytes": 2123
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "ML Platform — pipeline dataflow",
+       "count": "8 stages · features → training → registry → inference → monitoring",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kubeflow pipeline DAGs + Kafka topic topology"
+       },
+       "shard": {
+        "path": "ml-platform-clean/mlcore/dataflow.json",
+        "hash": "86b0296f0047",
+        "bytes": 1644
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "ML Platform — deployment (GPU pool vs serving)",
+       "count": "4 zones · 13 nodes",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kubernetes cluster inventory (kubectl get nodes/pods) + Terraform state"
+       },
+       "shard": {
+        "path": "ml-platform-clean/mlcore/deployment.json",
+        "hash": "d5e05ba5866f",
+        "bytes": 1743
+       }
+      }
+     }
+    }
+   }
+  },
+  "ml-platform-faulted": {
+   "label": "ML Platform ⚠ faulted",
+   "sim": true,
+   "scopes": {
+    "mlcore": {
+     "label": "ML Platform Core",
+     "tech": "Python/PyTorch · ~210 KLOC",
+     "views": {
+      "component": {
+       "kind": "buckets",
+       "title": "ML Platform — components",
+       "count": "5 buckets · 17 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: repo module graph + k8s service manifests"
+       },
+       "shard": {
+        "path": "ml-platform-faulted/mlcore/component.json",
+        "hash": "409d1a568daf",
+        "bytes": 2206
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "ML Platform — pipeline dataflow",
+       "count": "8 stages · features → training → registry → inference → monitoring",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kubeflow pipeline DAGs + Kafka topic topology"
+       },
+       "shard": {
+        "path": "ml-platform-faulted/mlcore/dataflow.json",
+        "hash": "a3e64ccdd443",
+        "bytes": 1712
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "ML Platform — deployment (GPU pool vs serving)",
+       "count": "4 zones · 13 nodes",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Kubernetes cluster inventory (kubectl get nodes/pods) + Terraform state"
+       },
+       "shard": {
+        "path": "ml-platform-faulted/mlcore/deployment.json",
+        "hash": "43c1780183d9",
+        "bytes": 1783
+       }
+      }
+     }
+    }
+   }
+  },
+  "mobile-bff-clean": {
+   "label": "Mobile + BFF · clean",
+   "sim": true,
+   "scopes": {
+    "atlas-mobile": {
+     "label": "Atlas Mobile Platform",
+     "tech": "Swift/Kotlin + Node BFF + Go sync · ~210 kLOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Context view — Atlas mobile ecosystem",
+       "count": "7 systems · 10 edges",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: service catalog + API gateway route inventory"
+       },
+       "shard": {
+        "path": "mobile-bff-clean/atlas-mobile/context.json",
+        "hash": "e221c9c66458",
+        "bytes": 1627
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Container view — Atlas runtime",
+       "count": "10 containers · 11 edges",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: k8s manifests + Fastlane/Gradle build configs"
+       },
+       "shard": {
+        "path": "mobile-bff-clean/atlas-mobile/container.json",
+        "hash": "d9945c4a869d",
+        "bytes": 2086
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — offline sync path",
+       "count": "8 stages · 7 edges",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: OTel traces on /sync + Kafka topic lineage"
+       },
+       "shard": {
+        "path": "mobile-bff-clean/atlas-mobile/dataflow.json",
+        "hash": "bc50bcc8bafb",
+        "bytes": 1574
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — BFF + sync internals",
+       "count": "5 buckets · 16 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa index of bff-graphql + sync-service module imports"
+       },
+       "shard": {
+        "path": "mobile-bff-clean/atlas-mobile/component.json",
+        "hash": "f5bad3352d9d",
+        "bytes": 2015
+       }
+      }
+     }
+    }
+   }
+  },
+  "mobile-bff-faulted": {
+   "label": "Mobile + BFF ⚠ faulted",
+   "sim": true,
+   "scopes": {
+    "atlas-mobile": {
+     "label": "Atlas Mobile Platform",
+     "tech": "Swift/Kotlin + Node BFF + Go sync · ~210 kLOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Context view — Atlas mobile ecosystem",
+       "count": "7 systems · 10 edges",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: service catalog + API gateway route inventory"
+       },
+       "shard": {
+        "path": "mobile-bff-faulted/atlas-mobile/context.json",
+        "hash": "e221c9c66458",
+        "bytes": 1627
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Container view — Atlas runtime",
+       "count": "10 containers · 12 edges",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: k8s manifests + Fastlane/Gradle build configs"
+       },
+       "shard": {
+        "path": "mobile-bff-faulted/atlas-mobile/container.json",
+        "hash": "d50a2a0f97e6",
+        "bytes": 2176
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — offline sync path",
+       "count": "8 stages · 7 edges",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: OTel traces on /sync + Kafka topic lineage"
+       },
+       "shard": {
+        "path": "mobile-bff-faulted/atlas-mobile/dataflow.json",
+        "hash": "bc50bcc8bafb",
+        "bytes": 1574
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — BFF + sync internals",
+       "count": "5 buckets · 13 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa index of bff-graphql + sync-service module imports"
+       },
+       "shard": {
+        "path": "mobile-bff-faulted/atlas-mobile/component.json",
+        "hash": "03442355749c",
+        "bytes": 2008
+       }
+      }
+     }
+    }
+   }
+  },
+  "multi-cloud-clean": {
+   "label": "Multi-Cloud Platform · clean",
+   "sim": true,
+   "scopes": {
+    "cloudgrid": {
+     "label": "CloudGrid Platform",
+     "tech": "Terraform + Go control plane · 3 clouds",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Context view — CloudGrid and its world",
+       "count": "1 system · 5 externals",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: cloud account inventory (AWS Organizations, GCP Resource Manager, Azure Management Groups)"
+       },
+       "shard": {
+        "path": "multi-cloud-clean/cloudgrid/context.json",
+        "hash": "479a72883598",
+        "bytes": 1201
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment view — 3 clouds + shared control plane",
+       "count": "8 buckets · 28 infra members",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Terraform state + provider APIs (EKS/GKE/AKS inventories, Route 53, Azure Resource Graph)"
+       },
+       "shard": {
+        "path": "multi-cloud-clean/cloudgrid/deployment.json",
+        "hash": "e174d117f94d",
+        "bytes": 3704
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — cross-cloud replication & failover",
+       "count": "6 nodes · replication + failover paths",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: replication topology (Debezium connector configs + Route 53 health checks + Traffic Manager policies)"
+       },
+       "shard": {
+        "path": "multi-cloud-clean/cloudgrid/dataflow.json",
+        "hash": "159f09e82807",
+        "bytes": 1402
+       }
+      }
+     }
+    }
+   }
+  },
+  "multi-cloud-faulted": {
+   "label": "Multi-Cloud Platform ⚠ faulted",
+   "sim": true,
+   "scopes": {
+    "cloudgrid": {
+     "label": "CloudGrid Platform",
+     "tech": "Terraform + Go control plane · 3 clouds",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "Context view — CloudGrid and its world",
+       "count": "1 system · 5 externals",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: cloud account inventory (AWS Organizations, GCP Resource Manager, Azure Management Groups)"
+       },
+       "shard": {
+        "path": "multi-cloud-faulted/cloudgrid/context.json",
+        "hash": "479a72883598",
+        "bytes": 1201
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment view — 3 clouds + shared control plane",
+       "count": "8 buckets · 28 infra members",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Terraform state + provider APIs (EKS/GKE/AKS inventories, Route 53, Azure Resource Graph)"
+       },
+       "shard": {
+        "path": "multi-cloud-faulted/cloudgrid/deployment.json",
+        "hash": "ee79905ec083",
+        "bytes": 3874
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Dataflow — cross-cloud replication & failover",
+       "count": "6 nodes · replication + failover paths",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: replication topology (Debezium connector configs + Route 53 health checks + Traffic Manager policies)"
+       },
+       "shard": {
+        "path": "multi-cloud-faulted/cloudgrid/dataflow.json",
+        "hash": "159f09e82807",
+        "bytes": 1402
+       }
+      }
+     }
+    }
+   }
+  },
+  "retail-monolith-clean": {
+   "label": "Retail Monolith · clean",
+   "sim": true,
+   "scopes": {
+    "retailcore": {
+     "label": "RetailCore ERP",
+     "tech": "Java 8 · Spring · ~480k LOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "RetailCore system context",
+       "count": "1 system · 3 external partners · 1 store",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: integration config (web.xml servlet mappings, ESB routes) + outbound endpoint inventory"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/context.json",
+        "hash": "108f1a6bbb07",
+        "bytes": 1148
+       }
+      },
+      "domains": {
+       "kind": "buckets",
+       "title": "Domain modules",
+       "count": "4 domains · 14 modules",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa domain index over src/main/java package tree (com.retailcore.*)"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/domains.json",
+        "hash": "9dc40b7d4cb3",
+        "bytes": 1956
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Core schema",
+       "count": "7 tables · Oracle 12c",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Hibernate .hbm.xml mappings + Flyway DDL under db/migration/"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/datamodel.json",
+        "hash": "a78a7622bb47",
+        "bytes": 1763
+       }
+      }
+     }
+    }
+   }
+  },
+  "retail-monolith-faulted": {
+   "label": "Retail Monolith ⚠ faulted",
+   "sim": true,
+   "scopes": {
+    "retailcore": {
+     "label": "RetailCore ERP",
+     "tech": "Java 8 · Spring · ~480k LOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "RetailCore system context",
+       "count": "1 system · 3 external partners · 1 store",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: integration config (web.xml servlet mappings, ESB routes) + outbound endpoint inventory"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/context.json",
+        "hash": "7a9ef91a196b",
+        "bytes": 1249
+       }
+      },
+      "domains": {
+       "kind": "buckets",
+       "title": "Domain modules",
+       "count": "4 domains · 56 modules",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa domain index over src/main/java package tree (com.retailcore.*)"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/domains.json",
+        "hash": "c655fc7b4365",
+        "bytes": 4676
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Core schema",
+       "count": "7 tables · Oracle 12c",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Hibernate .hbm.xml mappings + Flyway DDL under db/migration/"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/datamodel.json",
+        "hash": "4b57d26342c3",
+        "bytes": 1837
+       }
+      }
+     }
+    }
+   }
+  },
+  "streaming-platform-clean": {
+   "label": "StreamWorks Streaming · clean",
+   "sim": true,
+   "scopes": {
+    "streamworks": {
+     "label": "StreamWorks Platform",
+     "tech": "Java/Go microservices · ~480 svcs",
+     "views": {
+      "component": {
+       "kind": "buckets",
+       "title": "Service groups — hot path to data plane",
+       "count": "8 groups · 32 services",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: service mesh registry (Envoy/Consul) + Spinnaker deploy manifests"
+       },
+       "shard": {
+        "path": "streaming-platform-clean/streamworks/component.json",
+        "hash": "c88dc0868d3d",
+        "bytes": 3948
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Play-start request path",
+       "count": "6 hops · browser to first frame",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: edge gateway access logs + Zipkin trace spans (play-start sampled 1%)"
+       },
+       "shard": {
+        "path": "streaming-platform-clean/streamworks/dataflow.json",
+        "hash": "4671fe153ce4",
+        "bytes": 1337
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Cells — global control plane + 3 regional cells",
+       "count": "4 zones · 16 workloads",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Spinnaker pipelines + AWS account/ASG inventory"
+       },
+       "shard": {
+        "path": "streaming-platform-clean/streamworks/deployment.json",
+        "hash": "1ca73ed2f7be",
+        "bytes": 1937
+       }
+      }
+     }
+    }
+   }
+  },
+  "streaming-platform-faulted": {
+   "label": "StreamWorks Streaming ⚠ faulted",
+   "sim": true,
+   "scopes": {
+    "streamworks": {
+     "label": "StreamWorks Platform",
+     "tech": "Java/Go microservices · ~480 svcs",
+     "views": {
+      "component": {
+       "kind": "buckets",
+       "title": "Service groups — hot path to data plane",
+       "count": "8 groups · 32 services",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: service mesh registry (Envoy/Consul) + Spinnaker deploy manifests"
+       },
+       "shard": {
+        "path": "streaming-platform-faulted/streamworks/component.json",
+        "hash": "043c009369e4",
+        "bytes": 4220
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Play-start request path",
+       "count": "6 hops · browser to first frame",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: edge gateway access logs + Zipkin trace spans (play-start sampled 1%)"
+       },
+       "shard": {
+        "path": "streaming-platform-faulted/streamworks/dataflow.json",
+        "hash": "4671fe153ce4",
+        "bytes": 1337
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Cells — global control plane + 3 regional cells",
+       "count": "4 zones · 16 workloads",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Spinnaker pipelines + AWS account/ASG inventory"
+       },
+       "shard": {
+        "path": "streaming-platform-faulted/streamworks/deployment.json",
+        "hash": "1ca73ed2f7be",
+        "bytes": 1937
+       }
+      }
+     }
+    }
+   }
+  },
+  "web-app-clean": {
+   "label": "Standard Web App · clean",
+   "sim": true,
+   "scopes": {
+    "shoply": {
+     "label": "Shoply Storefront",
+     "tech": "React + Go + Postgres · ~120 kLOC",
      "views": {
       "container": {
        "kind": "simple",
-       "title": "Container diagram",
-       "count": "7 elements",
+       "title": "Container view — Shoply runtime",
+       "count": "5 containers · 5 edges",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: wrangler.toml + service bindings"
+        "label": "SIMULATED · would derive from: docker-compose.yml + deploy/k8s manifests"
        },
        "shard": {
-        "path": "cloudflare/edge/container.json",
-        "hash": "8615989c2734",
-        "bytes": 1257
+        "path": "web-app-clean/shoply/container.json",
+        "hash": "2117160da02d",
+        "bytes": 1099
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — api internals",
+       "count": "4 buckets · 14 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa index of Go package imports under cmd/api + internal/"
+       },
+       "shard": {
+        "path": "web-app-clean/shoply/component.json",
+        "hash": "d5ef858f69fb",
+        "bytes": 1597
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Data model — core commerce schema",
+       "count": "5 tables · 4 relations",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: migrations/*.sql + pg_dump --schema-only"
+       },
+       "shard": {
+        "path": "web-app-clean/shoply/datamodel.json",
+        "hash": "f2070700cf90",
+        "bytes": 1134
        }
       }
      }
     }
    }
   },
-  "multicloud": {
-   "label": "Multi-Cloud",
+  "web-app-faulted": {
+   "label": "Standard Web App ⚠ faulted",
    "sim": true,
    "scopes": {
-    "platform": {
-     "label": "Platform",
-     "tech": "AWS + GCP",
+    "shoply": {
+     "label": "Shoply Storefront",
+     "tech": "React + Go + Postgres · ~120 kLOC",
      "views": {
-      "deployment": {
-       "kind": "buckets",
-       "title": "Deployment topology",
-       "count": "2 clouds + shared control plane",
+      "container": {
+       "kind": "simple",
+       "title": "Container view — Shoply runtime",
+       "count": "5 containers · 6 edges",
        "dir": "DOWN",
        "prov": {
         "kind": "simulated",
-        "label": "SIMULATED · would derive from: terraform state + cloud APIs"
+        "label": "SIMULATED · would derive from: docker-compose.yml + deploy/k8s manifests"
        },
        "shard": {
-        "path": "multicloud/platform/deployment.json",
-        "hash": "2b1c4b19e334",
-        "bytes": 1201
+        "path": "web-app-faulted/shoply/container.json",
+        "hash": "bcca02815f96",
+        "bytes": 1190
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component view — api internals",
+       "count": "5 buckets · 16 components",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: aoa index of Go package imports under cmd/api + internal/"
+       },
+       "shard": {
+        "path": "web-app-faulted/shoply/component.json",
+        "hash": "b11ff70e79b7",
+        "bytes": 1791
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Data model — core commerce schema",
+       "count": "5 tables · 4 relations",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: migrations/*.sql + pg_dump --schema-only"
+       },
+       "shard": {
+        "path": "web-app-faulted/shoply/datamodel.json",
+        "hash": "f2070700cf90",
+        "bytes": 1134
        }
       }
      }
