@@ -14,8 +14,11 @@ Related research: `.context/details/2026-06-10-reference-architecture-rendering-
 playbook/
   mockups/        ← open these in a browser
     architecture-c4.html    the main viewer (React Flow + elkjs)
-    archmodel.json          the contract it renders (estates → scopes → views)
-    estates/                synthetic estate fixtures (clean + faulted + manifest)
+    archmodel/              the DECOMPOSED contract: manifest.json (tree + summaries
+                            + shard hashes) + one shard per architectural document
+                            (<estate>/<scope>/<view>.json), lazy-loaded + validated
+    estates/                single-file fixtures (clean + faulted + manifest) — legacy
+                            load path, used for fault-injection tests
     architecture.html       generated arc42/C4 document (Mermaid)
     blueprint-viewer.html   doc-construction blueprint viewer
   generators/     ← scripts that build the mockups (edit these, not the HTML)
@@ -50,7 +53,7 @@ chromium-browser --headless=new --no-sandbox --screenshot=playbook/screenshots/o
 ## Viewer URL params
 
 `?estate=` `?scope=` `?level=` `?dir=DOWN|RIGHT` `?density=compact|comfort`
-`?ov=concerns,changed` (overlays) · `?model=<file>` (alternate contract, e.g. `estates/smoke.json`)
+`?ov=concerns,changed` (overlays) · `?model=<file>` (alternate contract: sharded manifest or legacy single-file, e.g. `estates/smoke.json`)
 `?auto=<view>:<ms>` (test hook: simulates a user click — verifies the click path, not URL load)
 
 ## Status / provenance language

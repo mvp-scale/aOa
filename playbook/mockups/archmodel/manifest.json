@@ -1,0 +1,251 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "sharded": true,
+ "generated": {
+  "tool": "build_c4_mockup.py",
+  "timestamp": "2026-06-10 16:04 UTC",
+  "inputs": [
+   "go list",
+   "repo/graphify/*.py imports",
+   "store.go",
+   "arch_proxy.jsonl",
+   "git log"
+  ]
+ },
+ "estates": {
+  "local": {
+   "label": "Local · this workspace",
+   "sim": false,
+   "scopes": {
+    "aoa": {
+     "label": "aOa",
+     "tech": "Go · single binary",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "System Context",
+       "count": "4 elements",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "mixed",
+        "label": "MIXED · system real · externals inferred"
+       },
+       "shard": {
+        "path": "local/aoa/context.json",
+        "hash": "6ea641a854c8",
+        "bytes": 813
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Container diagram",
+       "count": "4 containers",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "mixed",
+        "label": "MIXED · system real · externals inferred"
+       },
+       "shard": {
+        "path": "local/aoa/container.json",
+        "hash": "80a8e9306433",
+        "bytes": 802
+       }
+      },
+      "component": {
+       "kind": "buckets",
+       "title": "Component diagram",
+       "count": "25 packages · 42 dependencies",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "derived",
+        "label": "REAL · derived from code"
+       },
+       "shard": {
+        "path": "local/aoa/component.json",
+        "hash": "2f391bde023b",
+        "bytes": 4048
+       }
+      },
+      "dataflow": {
+       "kind": "simple",
+       "title": "Data Flow — signal pipeline",
+       "count": "10 elements",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "derived",
+        "label": "REAL · derived from code"
+       },
+       "shard": {
+        "path": "local/aoa/dataflow.json",
+        "hash": "04a806e9ddce",
+        "bytes": 1885
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Data Model — aoa.db (bbolt)",
+       "count": "6 buckets · from store.go",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "derived",
+        "label": "REAL · derived from code"
+       },
+       "shard": {
+        "path": "local/aoa/datamodel.json",
+        "hash": "721cd47c83dd",
+        "bytes": 1399
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment — build → release → install",
+       "count": "4 environments",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · sourceable, not yet extracted"
+       },
+       "shard": {
+        "path": "local/aoa/deployment.json",
+        "hash": "f11c2afc6cb2",
+        "bytes": 1409
+       }
+      }
+     }
+    },
+    "graphify": {
+     "label": "graphify",
+     "tech": "Python · CLI",
+     "views": {
+      "component": {
+       "kind": "buckets",
+       "title": "Component diagram",
+       "count": "35 modules · 76 imports",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "derived",
+        "label": "REAL · imports parsed · grouping inferred"
+       },
+       "shard": {
+        "path": "local/graphify/component.json",
+        "hash": "db927e5fb541",
+        "bytes": 3644
+       }
+      }
+     }
+    }
+   }
+  },
+  "monolith": {
+   "label": "Retail Monolith",
+   "sim": true,
+   "scopes": {
+    "mono": {
+     "label": "Retail Monolith",
+     "tech": "Java · ≈480k LOC",
+     "views": {
+      "context": {
+       "kind": "simple",
+       "title": "System Context",
+       "count": "4 elements",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: EDI/API configs + reflexion"
+       },
+       "shard": {
+        "path": "monolith/mono/context.json",
+        "hash": "da766d64a231",
+        "bytes": 781
+       }
+      },
+      "domains": {
+       "kind": "buckets",
+       "title": "Domain map",
+       "count": "≈14,800 elements · 3 domains + shared kernel",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: package roots + reflexion mapping"
+       },
+       "shard": {
+        "path": "monolith/mono/domains.json",
+        "hash": "8710d32be6c6",
+        "bytes": 1632
+       }
+      },
+      "datamodel": {
+       "kind": "entity",
+       "title": "Data Model — core tables",
+       "count": "4 of ≈310 tables",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: DB migrations / DDL"
+       },
+       "shard": {
+        "path": "monolith/mono/datamodel.json",
+        "hash": "238c0721ecca",
+        "bytes": 887
+       }
+      }
+     }
+    }
+   }
+  },
+  "cloudflare": {
+   "label": "Cloudflare Edge",
+   "sim": true,
+   "scopes": {
+    "edge": {
+     "label": "Edge",
+     "tech": "Workers · TypeScript",
+     "views": {
+      "container": {
+       "kind": "simple",
+       "title": "Container diagram",
+       "count": "7 elements",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: wrangler.toml + service bindings"
+       },
+       "shard": {
+        "path": "cloudflare/edge/container.json",
+        "hash": "8615989c2734",
+        "bytes": 1257
+       }
+      }
+     }
+    }
+   }
+  },
+  "multicloud": {
+   "label": "Multi-Cloud",
+   "sim": true,
+   "scopes": {
+    "platform": {
+     "label": "Platform",
+     "tech": "AWS + GCP",
+     "views": {
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment topology",
+       "count": "2 clouds + shared control plane",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: terraform state + cloud APIs"
+       },
+       "shard": {
+        "path": "multicloud/platform/deployment.json",
+        "hash": "2b1c4b19e334",
+        "bytes": 1201
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

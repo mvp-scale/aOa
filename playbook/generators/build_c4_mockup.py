@@ -330,8 +330,33 @@ MODEL={
               "count":"2 clouds + shared control plane",
               "prov":sim("topology","terraform state + cloud APIs"),
               "buckets":mc_dep_buckets,"edges":mc_dep_edges,"palette":"mc","labeled":True}}}}}}}
-json.dump(MODEL,open("playbook/mockups/archmodel.json","w"),indent=1)
-print(f"aoa: buckets={len(aoa_buckets)} edges={len(aoa_edges)}  views=7  -> archmodel.json")
+# ---- decomposed contract: tiny manifest + one shard per architectural document ----
+import hashlib, shutil
+OUT="playbook/mockups/archmodel"
+shutil.rmtree(OUT,ignore_errors=True)
+manifest={"schema":"aoa.archmodel/v1-mock","sharded":True,
+          "generated":MODEL["generated"],"estates":{}}
+n_shards=0; biggest=(0,"")
+for eid,ev in MODEL["estates"].items():
+    me={"label":ev["label"],"sim":ev["sim"],"scopes":{}}
+    for sid,sv in ev["scopes"].items():
+        ms={"label":sv["label"],"tech":sv["tech"],"views":{}}
+        for vid,v in sv["views"].items():
+            payload=json.dumps(v,separators=(",",":"),ensure_ascii=False).encode()
+            h=hashlib.sha256(payload).hexdigest()[:12]
+            rel=f"{eid}/{sid}/{vid}.json"
+            os.makedirs(f"{OUT}/{eid}/{sid}",exist_ok=True)
+            open(f"{OUT}/{rel}","wb").write(payload)
+            n_shards+=1
+            if len(payload)>biggest[0]: biggest=(len(payload),rel)
+            # manifest carries only the summary the sidebar/catalog needs + the shard ref
+            ms["views"][vid]={"kind":v["kind"],"title":v["title"],"count":v["count"],
+                "dir":v.get("dir"),"prov":v.get("prov"),
+                "shard":{"path":rel,"hash":h,"bytes":len(payload)}}
+        me["scopes"][sid]=ms
+    manifest["estates"][eid]=me
+mbytes=open(f"{OUT}/manifest.json","w").write(json.dumps(manifest,indent=1,ensure_ascii=False))
+print(f"contract: manifest {mbytes/1024:.1f}KB + {n_shards} shards (largest {biggest[0]/1024:.1f}KB {biggest[1]})")
 
 JS=r"""
 import React,{useState,useEffect,useCallback,memo} from "https://esm.sh/react@18.3.1";
@@ -348,26 +373,30 @@ function showFatal(msg){let d=document.getElementById("fatal");if(!d){d=document
   document.body.appendChild(d);}if(!d._set){d._set=true;d.textContent="RENDER FAILURE · "+msg;}}
 window.addEventListener("error",ev=>showFatal(ev.message));
 window.addEventListener("unhandledrejection",ev=>showFatal(String(ev.reason&&ev.reason.message||ev.reason)));
+const MODEL_PATH=MQ.get("model")||"archmodel/manifest.json";
+const BASE=MODEL_PATH.includes("/")?MODEL_PATH.slice(0,MODEL_PATH.lastIndexOf("/")+1):"";
 let MODEL;
-try{MODEL=await fetch(MQ.get("model")||"archmodel.json").then(r=>{
-  if(!r.ok)throw new Error("HTTP "+r.status+" loading "+(MQ.get("model")||"archmodel.json"));
+try{MODEL=await fetch(MODEL_PATH).then(r=>{
+  if(!r.ok)throw new Error("HTTP "+r.status+" loading "+MODEL_PATH);
   return r.json();});}
 catch(err){showFatal("MODEL LOAD FAILED · "+(err&&err.message||err));throw err;}
 const ISSUES=[];
-for(const[eid,ev]of Object.entries(MODEL.estates||{})){
- for(const[sid,sv]of Object.entries(ev.scopes||{})){
-  for(const[vid,v]of Object.entries(sv.views||{})){
-   const path=eid+"/"+sid+"/"+vid,nodeIds=new Set(),memIds=new Set();
-   if(v.kind==="buckets"){(v.buckets||[]).forEach(b=>{
-     if(nodeIds.has(b.id))ISSUES.push(path+": duplicate bucket id "+b.id);nodeIds.add(b.id);
-     if(!(b.members||[]).length)ISSUES.push(path+": empty bucket "+b.id);
-     (b.members||[]).forEach(m=>{if(memIds.has(m.id))ISSUES.push(path+": duplicate member id "+m.id);memIds.add(m.id);});
-     if((b.members||[]).length>40)ISSUES.push(path+": bucket "+b.id+" exceeds view budget ("+b.members.length+") — auto-collapsed");});}
-   else{(v.nodes||[]).forEach(n=>{if(nodeIds.has(n.id))ISSUES.push(path+": duplicate node id "+n.id);nodeIds.add(n.id);});}
-   v.edges=(v.edges||[]).filter(e=>{const ok=nodeIds.has(e.source)&&nodeIds.has(e.target);
-     if(!ok)ISSUES.push(path+": edge "+(e.id||"?")+" → missing node ("+e.source+" → "+e.target+") — quarantined");
-     return ok;});
-}}}
+function validateView(path,v){
+  const nodeIds=new Set(),memIds=new Set();
+  if(v.kind==="buckets"){(v.buckets||[]).forEach(b=>{
+    if(nodeIds.has(b.id))ISSUES.push(path+": duplicate bucket id "+b.id);nodeIds.add(b.id);
+    if(!(b.members||[]).length)ISSUES.push(path+": empty bucket "+b.id);
+    (b.members||[]).forEach(m=>{if(memIds.has(m.id))ISSUES.push(path+": duplicate member id "+m.id);memIds.add(m.id);});
+    if((b.members||[]).length>40)ISSUES.push(path+": bucket "+b.id+" exceeds view budget ("+b.members.length+") — auto-collapsed");});}
+  else{(v.nodes||[]).forEach(n=>{if(nodeIds.has(n.id))ISSUES.push(path+": duplicate node id "+n.id);nodeIds.add(n.id);});}
+  v.edges=(v.edges||[]).filter(e=>{const ok=nodeIds.has(e.source)&&nodeIds.has(e.target);
+    if(!ok)ISSUES.push(path+": edge "+(e.id||"?")+" → missing node ("+e.source+" → "+e.target+") — quarantined");
+    return ok;});}
+// legacy single-file contracts validate everything at boot; sharded manifests validate per shard on fetch
+if(!MODEL.sharded){
+ for(const[eid,ev]of Object.entries(MODEL.estates||{}))
+  for(const[sid,sv]of Object.entries(ev.scopes||{}))
+   for(const[vid,v]of Object.entries(sv.views||{}))validateView(eid+"/"+sid+"/"+vid,v);}
 const T={bg:"#0c0c0e",card:"#161618",cardH:"#1c1c1f",band:"#121215",border:"#252528",text:"#e8e8ec",
  dim:"#8b8b96",mute:"#55555f",green:"#34d399",blue:"#60a5fa",purple:"#c084fc",cyan:"#22d3ee",
  yellow:"#fbbf24",red:"#f87171",arch:"#fb923c",neutral:"#94a3b8"};
@@ -636,20 +665,20 @@ function Footer({view,ov}){
   const pal=PALETTES[view.palette||"aoa"];
   const groups=[];
   if(view.kind==="buckets"){
-    groups.push({label:"LAYERS",items:view.buckets.map(b=>({txt:b.layer,c:pal[b.layer]||T.neutral,ico:b.ico||b.layer}))});
+    groups.push({label:"LAYERS",items:(view.buckets||[]).map(b=>({txt:b.layer,c:pal[b.layer]||T.neutral,ico:b.ico||b.layer}))});
     const ed=[{txt:"dependency · color = source layer",glyph:"━"},{txt:"bundled count",glyph:"×N"}];
-    if(view.buckets.some(b=>b.layer==="supporting"))ed.push({txt:"supporting / inferred",glyph:"┄"});
+    if((view.buckets||[]).some(b=>b.layer==="supporting"))ed.push({txt:"supporting / inferred",glyph:"┄"});
     groups.push({label:"EDGES",items:ed});
   } else if(view.kind==="entity"){
     groups.push({label:"ELEMENTS",items:[{txt:"bucket table",c:T.green,ico:"store"}]});
     groups.push({label:"EDGES",items:[{txt:"contains",glyph:"━"}]});
   } else {
-    const seen={};view.nodes.forEach(n=>{if(!seen[n.type])seen[n.type]=n.icon;});
+    const seen={};(view.nodes||[]).forEach(n=>{if(!seen[n.type])seen[n.type]=n.icon;});
     const NAME={sys:"system",ext:"external",container:"container",store:"store",proc:"process"};
     const COLR={sys:T.blue,ext:T.dim,container:T.arch,store:T.green,proc:T.blue};
     groups.push({label:"ELEMENTS",items:Object.keys(seen).map(t=>({txt:NAME[t]||t,c:COLR[t]||T.dim,ico:seen[t]}))});
     const ed=[{txt:"labeled flow",glyph:"━"}];
-    if(view.nodes.some(n=>n.real===false))ed.push({txt:"inferred · sourceable",glyph:"┄"});
+    if((view.nodes||[]).some(n=>n.real===false))ed.push({txt:"inferred · sourceable",glyph:"┄"});
     groups.push({label:"EDGES",items:ed});
   }
   if(ov&&(ov.concerns||ov.changed)&&view.kind==="buckets"&&(view.palette||"aoa")==="aoa"){
@@ -808,11 +837,18 @@ function Flow(){
       const w=Math.max(...xe)-Math.min(...xs),h=Math.max(...ye)-Math.min(...ys);
       const aw=Math.max(window.innerWidth-300,400),ah=Math.max(window.innerHeight-130,300);
       return Math.min(aw/Math.max(w,1),ah/Math.max(h,1));};
-    const p=dirOv
-      ?run(dirOv).then(e=>({e,dd:dirOv}))
-      :run("DOWN").then(a=>run("RIGHT").then(b=>
-          fitScale(a)>=fitScale(b)?{e:a,dd:"DOWN"}:{e:b,dd:"RIGHT"}));
-    p.then(({e,dd})=>{if(on){setEls(e);setAutoDir(dd);setLast(l=>({...l,[estate+":"+scope+":"+level]:Date.now()}));}});
+    (async()=>{try{
+      if(view.shard&&!view._loaded){               // lazy shard fetch — manifest stays tiny
+        const r=await fetch(BASE+view.shard.path+"?v="+view.shard.hash);
+        if(!r.ok)throw new Error("HTTP "+r.status+" loading shard "+view.shard.path);
+        Object.assign(view,await r.json());view._loaded=true;
+        validateView(estate+"/"+scope+"/"+level,view);}
+      let e,dd;
+      if(dirOv){e=await run(dirOv);dd=dirOv;}
+      else{const a=await run("DOWN"),b=await run("RIGHT");
+        if(fitScale(a)>=fitScale(b)){e=a;dd="DOWN";}else{e=b;dd="RIGHT";}}
+      if(on){setEls(e);setAutoDir(dd);setLast(l=>({...l,[estate+":"+scope+":"+level]:Date.now()}));}
+    }catch(err){showFatal("VIEW LOAD FAILED · "+(err&&err.message||err));}})();
     return()=>{on=false;};},[estate,scope,level,dirOv,den,ov]);
   // test hook: ?auto=<view>:<ms> simulates a user click after ms (verifies the CLICK path, not URL load)
   useEffect(()=>{const auto=q.get("auto");
@@ -879,7 +915,7 @@ function Flow(){
             <${Controls} position="bottom-right"/>
           <//>`:null}
         </div>
-        <${Footer} view=${view} ov=${ov}/>
+        ${els&&(view._loaded||!view.shard)?html`<${Footer} view=${view} ov=${ov}/>`:null}
       </div>
     </div></div>`;}
 createRoot(document.getElementById("root")).render(html`<${ReactFlowProvider}><${Flow}/><//>`);
