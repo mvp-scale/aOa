@@ -130,5 +130,5 @@ HTML = """<!doctype html><html><head><meta charset="utf-8">
 </body></html>"""
 
 out = HTML.replace("__JS__", JS.replace("__BLUEPRINT__", DATA))
-open("playbook/blueprint-viewer.html", "w").write(out)
-print("wrote playbook/blueprint-viewer.html (%d KB)" % (len(out) // 1024))
+open("playbook/mockups/blueprint-viewer.html", "w").write(out)
+print("wrote playbook/mockups/blueprint-viewer.html (%d KB)" % (len(out) // 1024))

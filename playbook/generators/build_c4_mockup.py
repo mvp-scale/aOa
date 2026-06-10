@@ -42,7 +42,7 @@ def short(p):
 # proxy); changed = packages touched in the last 15 commits (git history) ----
 concerns={}
 try:
-    with open(ROOT+"/playbook/arch_proxy.jsonl") as f:
+    with open(ROOT+"/playbook/data/arch_proxy.jsonl") as f:
         for line in f:
             d=json.loads(line); p=d.get("path","")
             if not p.endswith(".go"): continue
@@ -330,7 +330,7 @@ MODEL={
               "count":"2 clouds + shared control plane",
               "prov":sim("topology","terraform state + cloud APIs"),
               "buckets":mc_dep_buckets,"edges":mc_dep_edges,"palette":"mc","labeled":True}}}}}}}
-json.dump(MODEL,open("playbook/archmodel.json","w"),indent=1)
+json.dump(MODEL,open("playbook/mockups/archmodel.json","w"),indent=1)
 print(f"aoa: buckets={len(aoa_buckets)} edges={len(aoa_edges)}  views=7  -> archmodel.json")
 
 JS=r"""
@@ -889,5 +889,5 @@ HTML="""<!doctype html><html><head><meta charset="utf-8"><title>aOa — Architec
 <style>html,body,#root{margin:0;height:100%;background:#0c0c0e}
 .react-flow__controls-button{background:#161618!important;border-color:#252528!important;fill:#8b8b96!important}</style>
 </head><body><div id="root"></div><script type="module">__JS__</script></body></html>"""
-open("playbook/architecture-c4.html","w").write(HTML.replace("__JS__",JS))
-print("wrote playbook/architecture-c4.html")
+open("playbook/mockups/architecture-c4.html","w").write(HTML.replace("__JS__",JS))
+print("wrote playbook/mockups/architecture-c4.html")

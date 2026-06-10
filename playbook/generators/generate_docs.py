@@ -110,7 +110,7 @@ sbom = {
                  "component": {"type": "application", "name": "aoa", "bom-ref": MOD}},
     "components": components,
 }
-json.dump(sbom, open("playbook/sbom.cdx.json", "w"), indent=2)
+json.dump(sbom, open("playbook/data/sbom.cdx.json", "w"), indent=2)
 
 # ---- 3. architecture.md (the actual document) ----
 langs = run(["bash", "-c", "ls cmd internal atlas >/dev/null 2>&1; echo go"]).strip()
@@ -164,7 +164,7 @@ Intended dependency direction (hexagonal): `cmd → app → adapters → domain 
 
 Every element above is derived from the codebase: package nodes and edges from `go list`, layer assignment from path, third-party inventory (see `sbom.cdx.json`, CycloneDX 1.6) from the module graph. No hand-authoring; regenerate on commit.
 """
-open("playbook/architecture.md", "w").write(doc)
+open("playbook/data/architecture.md", "w").write(doc)
 
 # ---- architecture.html (renders the md + mermaid) ----
 viewer = """<!doctype html><html><head><meta charset="utf-8">
@@ -199,7 +199,7 @@ for (const [id,src] of diagrams){
 }
 </script>
 </head><body><div id="doc">rendering…</div></body></html>"""
-open("playbook/architecture.html", "w").write(viewer.replace("__MD__", json.dumps(doc)))
+open("playbook/mockups/architecture.html", "w").write(viewer.replace("__MD__", json.dumps(doc)))
 
 print(f"packages={total_pkg} edges={total_edge} violations={len(violations)} sbom_components={len(components)}")
-print("wrote: playbook/architecture.md  sbom.cdx.json  architecture.html")
+print("wrote: playbook/data/architecture.md  sbom.cdx.json  architecture.html")
