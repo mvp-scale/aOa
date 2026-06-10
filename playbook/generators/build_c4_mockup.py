@@ -346,6 +346,9 @@ for base in sorted({os.path.basename(f)[:-5].rsplit("-",1)[0]
             ev=dict(ev); ev["sim"]=True
             ev["label"]=ev.get("label",eid)+(" ⚠ faulted" if variant=="faulted" else " · clean")
             MODEL["estates"][f"{base}-{variant}"]=ev
+# toy retail-monolith is superseded by the Hartwell enterprise estate;
+# fixture files stay on disk as test fixtures but leave the dropdown
+for variant in ("clean","faulted"): MODEL["estates"].pop(f"retail-monolith-{variant}",None)
 print(f"estates in dropdown: {len(MODEL['estates'])}")
 
 # ---- decomposed contract: tiny manifest + one shard per architectural document ----
