@@ -12,12 +12,16 @@ import htm from "https://esm.sh/htm@3.1.1";
 const html=htm.bind(React.createElement); const elk=new ELK();
 // the contract file IS the data source — anything that emits a valid archmodel gets every view
 const MQ=new URLSearchParams(location.search);
-const MODEL=await fetch(MQ.get("model")||"archmodel.json").then(r=>r.json());
 function showFatal(msg){let d=document.getElementById("fatal");if(!d){d=document.createElement("div");d.id="fatal";
   d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:9999;background:#7f1d1d;color:#fff;font:600 12px ui-monospace,monospace;padding:8px 14px;border-bottom:2px solid #f87171";
-  document.body.appendChild(d);}d.textContent="RENDER FAILURE · "+msg;}
+  document.body.appendChild(d);}if(!d._set){d._set=true;d.textContent="RENDER FAILURE · "+msg;}}
 window.addEventListener("error",ev=>showFatal(ev.message));
 window.addEventListener("unhandledrejection",ev=>showFatal(String(ev.reason&&ev.reason.message||ev.reason)));
+let MODEL;
+try{MODEL=await fetch(MQ.get("model")||"archmodel.json").then(r=>{
+  if(!r.ok)throw new Error("HTTP "+r.status+" loading "+(MQ.get("model")||"archmodel.json"));
+  return r.json();});}
+catch(err){showFatal("MODEL LOAD FAILED · "+(err&&err.message||err));throw err;}
 const ISSUES=[];
 for(const[eid,ev]of Object.entries(MODEL.estates||{})){
  for(const[sid,sv]of Object.entries(ev.scopes||{})){

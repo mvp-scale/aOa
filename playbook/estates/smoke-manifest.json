@@ -1,0 +1,62 @@
+[
+ {
+  "class": "A",
+  "type": "cycle",
+  "where": "patterns",
+  "detail": "A\u2192B\u2192C\u2192A"
+ },
+ {
+  "class": "A",
+  "type": "god",
+  "where": "patterns",
+  "detail": "hub D in3/out3"
+ },
+ {
+  "class": "A",
+  "type": "orphan",
+  "where": "patterns",
+  "detail": "island E"
+ },
+ {
+  "class": "A",
+  "type": "band-violation",
+  "where": "patterns",
+  "detail": "C(p1)\u2192A(p0) via cycle backedge; F(p3)\u2192B(p1)"
+ },
+ {
+  "class": "A",
+  "type": "direct-db",
+  "where": "patterns",
+  "detail": "D\u2192G tagged"
+ },
+ {
+  "class": "B",
+  "type": "dangling-edge",
+  "where": "patterns",
+  "detail": "e12 A\u2192GHOST"
+ },
+ {
+  "class": "B",
+  "type": "duplicate-member-id",
+  "where": "patterns",
+  "detail": "g1 twice"
+ },
+ {
+  "class": "B",
+  "type": "budget-overflow",
+  "where": "patterns",
+  "detail": "F=45 members"
+ },
+ {
+  "class": "B",
+  "type": "empty-bucket",
+  "where": "broken",
+  "detail": "Y"
+ },
+ {
+  "class": "B",
+  "type": "invalid-json",
+  "where": "smoke-broken.json",
+  "detail": "truncated"
+ }
+]

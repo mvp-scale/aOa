@@ -1,0 +1,485 @@
+{
+ "schema": "aoa.archmodel/v1-mock",
+ "generated": {
+  "tool": "smoke",
+  "timestamp": "2026-06-10 smoke"
+ },
+ "estates": {
+  "smoke": {
+   "label": "Smoke Test",
+   "sim": true,
+   "scopes": {
+    "sys": {
+     "label": "FaultySystem",
+     "tech": "synthetic",
+     "views": {
+      "patterns": {
+       "kind": "buckets",
+       "title": "Pattern-problem smoke",
+       "dir": "DOWN",
+       "count": "every Class A fault",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED \u00b7 fault-injection smoke"
+       },
+       "buckets": [
+        {
+         "id": "A",
+         "layer": "alpha",
+         "label": "alpha",
+         "part": 0,
+         "members": [
+          {
+           "id": "ma1",
+           "label": "moda1",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "ma2",
+           "label": "moda2",
+           "sub": "\u2248100"
+          }
+         ]
+        },
+        {
+         "id": "B",
+         "layer": "beta",
+         "label": "beta",
+         "part": 1,
+         "members": [
+          {
+           "id": "mb1",
+           "label": "modb1",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mb2",
+           "label": "modb2",
+           "sub": "\u2248100"
+          }
+         ]
+        },
+        {
+         "id": "C",
+         "layer": "gamma",
+         "label": "gamma",
+         "part": 1,
+         "members": [
+          {
+           "id": "mc1",
+           "label": "modc1",
+           "sub": "\u2248100"
+          }
+         ]
+        },
+        {
+         "id": "D",
+         "layer": "hub",
+         "label": "hub",
+         "part": 2,
+         "members": [
+          {
+           "id": "md1",
+           "label": "modd1",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "md2",
+           "label": "modd2",
+           "sub": "\u2248100"
+          }
+         ]
+        },
+        {
+         "id": "E",
+         "layer": "orphan",
+         "label": "island",
+         "part": 2,
+         "members": [
+          {
+           "id": "me1",
+           "label": "mode1",
+           "sub": "\u2248100"
+          }
+         ]
+        },
+        {
+         "id": "F",
+         "layer": "big",
+         "label": "bigbucket",
+         "part": 3,
+         "members": [
+          {
+           "id": "mbig0",
+           "label": "modbig0",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig1",
+           "label": "modbig1",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig2",
+           "label": "modbig2",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig3",
+           "label": "modbig3",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig4",
+           "label": "modbig4",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig5",
+           "label": "modbig5",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig6",
+           "label": "modbig6",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig7",
+           "label": "modbig7",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig8",
+           "label": "modbig8",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig9",
+           "label": "modbig9",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig10",
+           "label": "modbig10",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig11",
+           "label": "modbig11",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig12",
+           "label": "modbig12",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig13",
+           "label": "modbig13",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig14",
+           "label": "modbig14",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig15",
+           "label": "modbig15",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig16",
+           "label": "modbig16",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig17",
+           "label": "modbig17",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig18",
+           "label": "modbig18",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig19",
+           "label": "modbig19",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig20",
+           "label": "modbig20",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig21",
+           "label": "modbig21",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig22",
+           "label": "modbig22",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig23",
+           "label": "modbig23",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig24",
+           "label": "modbig24",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig25",
+           "label": "modbig25",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig26",
+           "label": "modbig26",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig27",
+           "label": "modbig27",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig28",
+           "label": "modbig28",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig29",
+           "label": "modbig29",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig30",
+           "label": "modbig30",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig31",
+           "label": "modbig31",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig32",
+           "label": "modbig32",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig33",
+           "label": "modbig33",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig34",
+           "label": "modbig34",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig35",
+           "label": "modbig35",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig36",
+           "label": "modbig36",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig37",
+           "label": "modbig37",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig38",
+           "label": "modbig38",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig39",
+           "label": "modbig39",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig40",
+           "label": "modbig40",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig41",
+           "label": "modbig41",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig42",
+           "label": "modbig42",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig43",
+           "label": "modbig43",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mbig44",
+           "label": "modbig44",
+           "sub": "\u2248100"
+          }
+         ]
+        },
+        {
+         "id": "G",
+         "layer": "db",
+         "label": "database",
+         "part": 4,
+         "members": [
+          {
+           "id": "mg1",
+           "label": "tables",
+           "sub": "\u2248100"
+          },
+          {
+           "id": "mg1",
+           "label": "dupe-id",
+           "sub": "\u2248100"
+          }
+         ]
+        }
+       ],
+       "edges": [
+        {
+         "id": "e1",
+         "source": "A",
+         "target": "B",
+         "count": 4
+        },
+        {
+         "id": "e2",
+         "source": "B",
+         "target": "C",
+         "count": 2
+        },
+        {
+         "id": "e3",
+         "source": "C",
+         "target": "A",
+         "count": 1
+        },
+        {
+         "id": "e4",
+         "source": "D",
+         "target": "A",
+         "count": 1
+        },
+        {
+         "id": "e5",
+         "source": "D",
+         "target": "B",
+         "count": 1
+        },
+        {
+         "id": "e6",
+         "source": "D",
+         "target": "F",
+         "count": 1
+        },
+        {
+         "id": "e7",
+         "source": "A",
+         "target": "D",
+         "count": 1
+        },
+        {
+         "id": "e8",
+         "source": "B",
+         "target": "D",
+         "count": 1
+        },
+        {
+         "id": "e9",
+         "source": "C",
+         "target": "D",
+         "count": 1
+        },
+        {
+         "id": "e10",
+         "source": "D",
+         "target": "G",
+         "count": 7,
+         "tag": "direct-db"
+        },
+        {
+         "id": "e11",
+         "source": "F",
+         "target": "B",
+         "count": 3
+        },
+        {
+         "id": "e12",
+         "source": "A",
+         "target": "GHOST",
+         "count": 9
+        },
+        {
+         "id": "e13",
+         "source": "F",
+         "target": "G",
+         "count": 2
+        }
+       ]
+      },
+      "broken": {
+       "kind": "buckets",
+       "title": "Structural stress \u2014 empty bucket",
+       "dir": "DOWN",
+       "count": "Class B stress",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED \u00b7 structural fault"
+       },
+       "buckets": [
+        {
+         "id": "X",
+         "layer": "x",
+         "label": "works",
+         "part": 0,
+         "members": [
+          {
+           "id": "mx1",
+           "label": "modx1",
+           "sub": "\u2248100"
+          }
+         ]
+        },
+        {
+         "id": "Y",
+         "layer": "y",
+         "label": "empty",
+         "part": 1,
+         "members": []
+        }
+       ],
+       "edges": [
+        {
+         "id": "bx",
+         "source": "X",
+         "target": "Y",
+         "count": 1
+        }
+       ]
+      }
+     }
+    }
+   }
+  }
+ }
+}
