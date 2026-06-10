@@ -58,11 +58,37 @@ const VIEWFAM={context:["C4 Model","System Context"],container:["C4 Model","Cont
  component:["C4 Model","Component"],domains:["C4 Model","Domain map"],
  deployment:["Technology & Ops","Deployment"],dataflow:["Flows & Behavior","Data Flow (DFD)"],
  datamodel:["Data","Data Model / ER"]};
-function dynamicCatalog(sv){const groups={};
-  Object.entries(sv.views).forEach(([id,v])=>{const fam=VIEWFAM[id]||["Views",v.title];
-    (groups[fam[0]]=groups[fam[0]]||[]).push({id,label:fam[1],
-      status:v.prov&&v.prov.kind==="simulated"?"sim":"live"});});
-  return Object.entries(groups).map(([grp,items])=>({grp,items}));}
+// THE STANDARD CATALOG (from the canonical-documents research) — shown IN FULL for
+// every system; items the system has render live/sim, the rest stay listed as planned.
+const STD_CATALOG=[
+ {grp:"C4 Model",tag:"modern",items:[
+   {vid:["context"],label:"System Context"},
+   {vid:["container"],label:"Container"},
+   {vid:["component","domains"],label:"Component"},
+   {vid:["deployment"],label:"Deployment"},
+   {label:"Dynamic (sequence)",note:"needs call-edge resolution"},
+   {label:"Code (L4)",note:"symbol table · not drawn by design"}]},
+ {grp:"Flows & Behavior",items:[
+   {vid:["dataflow"],label:"Data Flow (DFD)"},
+   {label:"Trust Boundaries (STRIDE)",note:"DFD overlay · rule-pack"},
+   {label:"State Machine",note:"needs state extraction"}]},
+ {grp:"Data",items:[
+   {vid:["datamodel"],label:"Data Model / ER"},
+   {label:"Glossary",note:"atlas seed + writer"}]},
+ {grp:"Technology & Ops",items:[
+   {label:"Technology Portfolio",note:"config scan"},
+   {label:"SBOM (CycloneDX)",note:"document · manifests"}]},
+ {grp:"Classical structure",items:[
+   {vid:["component","domains"],label:"Layered Architecture",alias:true},
+   {label:"Dependency Matrix (DSM)",note:"matrix renderer"},
+   {label:"Cycle / Tangle Report",note:"SCC pass"}]}];
+function dynamicCatalog(sv){
+  return STD_CATALOG.map(g=>({grp:g.grp,tag:g.tag,items:g.items.map(it=>{
+    const hit=(it.vid||[]).find(v=>sv.views&&sv.views[v]);
+    if(hit){const v=sv.views[hit];
+      return {id:hit,label:it.label,alias:it.alias,
+        status:(v.prov&&v.prov.kind==="simulated")?"sim":"live"};}
+    return {label:it.label,status:"planned",note:it.note||"not yet derived for this system"};})}));}
 const snap=v=>Math.round(v/8)*8;
 const IP={
  cmd:'<polyline points="3,4 7,7 3,10" fill="none"/><line x1="7" y1="10" x2="11" y2="10"/>',
