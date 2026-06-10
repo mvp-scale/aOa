@@ -1,7 +1,13 @@
 <!doctype html><html><head><meta charset="utf-8"><title>aOa — Architecture</title>
 <link rel="stylesheet" href="https://esm.sh/@xyflow/react@12.3.5/dist/style.css">
 <style>html,body,#root{margin:0;height:100%;background:#0c0c0e}
-.react-flow__controls-button{background:#161618!important;border-color:#252528!important;fill:#8b8b96!important}</style>
+.react-flow__controls-button{background:#161618!important;border-color:#252528!important;fill:#8b8b96!important}
+.react-flow__node:hover{z-index:1200!important}
+.hv{position:relative}
+.hv .hovercard{display:none;position:absolute;left:0;top:calc(100% + 7px);min-width:200px;max-width:300px;
+ background:#1c1c1f;border:1px solid #3a3a40;border-radius:8px;padding:9px 12px;z-index:1300;
+ box-shadow:0 10px 28px #000c;pointer-events:none;white-space:normal;text-transform:none;letter-spacing:0}
+.hv:hover .hovercard,.hv.force .hovercard{display:block}</style>
 </head><body><div id="root"></div><script type="module">
 import React,{useState,useEffect,useCallback,memo} from "https://esm.sh/react@18.3.1";
 import {createRoot} from "https://esm.sh/react-dom@18.3.1/client";
@@ -89,11 +95,20 @@ buckets: {...same header...,"buckets":[{"id","layer","label","part":0,"boundary"
 entity:  {...,"nodes":[{"id","type":"entity","label","tech","fields":["..."],"real":false}],"edges":[{"id","source","target","label"}]}
 table:   {...,"columns":["..."],"rows":[["...","..."]]}
 matrix:  {...,"items":["a","b"],"matrix":[[null,3],[1,null]]}`;
+// per-view intent from playbook/standards/view-standards.json (injected at build time):
+// the question each view answers, what is canvas-vital, what stays hover-tier
+const VIEW_INTENT={"context": {"question": "Who and what does this system talk to, and why?", "vital": ["system identity", "external actors/systems", "labeled relationships (verb)"], "hover": ["actor tech/ownership", "relationship protocol/volume"]}, "container": {"question": "What are the deployable/runnable pieces and how do they communicate?", "vital": ["container identity", "communication edges (verb)"], "hover": ["container tech stack", "channel protocol/port"]}, "component": {"question": "How is this container organized internally, and what depends on what?", "vital": ["module identity", "group/layer membership", "dependency edges"], "hover": ["module size/owner", "dependency counts"]}, "domains": {"question": "What are the business domains, what lives in each, and which domains depend on which?", "vital": ["domain identity", "member identity (full name)", "cross-domain edges with counts"], "hover": ["member detail (scale/tech)", "domain totals"]}, "deployment": {"question": "What runs where, and what crosses environment boundaries?", "vital": ["environment identity", "deployed unit identity", "cross-environment edges (verb)"], "hover": ["instance counts/versions", "infra detail (region, runtime)"]}, "sequence": {"question": "In what order do the parts interact to complete this one scenario?", "vital": ["participant identity", "ordered steps (verb)", "the scenario name"], "hover": ["step payload/protocol", "timing/SLA detail"]}, "code": {"question": "What are the key symbols/jobs at the lowest level and how do they chain?", "vital": ["unit identity", "chain edges"], "hover": ["unit size/language/last-touched", "schedule detail"]}, "dataflow": {"question": "Where does data come from, where does it go, and what transforms it on the way?", "vital": ["process/store identity", "every edge labeled with a verb", "flow direction"], "hover": ["process tech/vendor", "store volumes", "edge payload detail"]}, "trust": {"question": "What crosses a security boundary, and is that crossing legitimate?", "vital": ["zone identity + classification", "member identity (full name)", "cross-zone edges (verb)", "violation highlight"], "hover": ["member scale/controls (table counts, masking, tokenization detail)", "edge volumes"]}, "statemachine": {"question": "What states can this entity be in, and what causes each transition?", "vital": ["state identity", "transition edges labeled with trigger"], "hover": ["state dwell-time/volume", "transition guard detail"]}, "datamodel": {"question": "What are the core entities, their key fields, and how do they relate?", "vital": ["entity identity", "key fields", "relationship edges (verb)"], "hover": ["entity store/tech", "row counts", "field detail beyond keys"]}, "glossary": {"question": "What does each term of art mean here, precisely?", "vital": ["term", "definition", "owning domain"], "hover": []}, "techportfolio": {"question": "What technologies are we standing on, and where is the risk?", "vital": ["technology", "lifecycle/risk status", "where used"], "hover": []}, "sbom": {"question": "What components are inside, at what version, from where?", "vital": ["component", "version", "supplier/source"], "hover": []}, "dsm": {"question": "Where are the mutual dependencies?", "vital": ["module order", "dependency cells", "mutual (red) cells"], "hover": ["cell dependency detail"]}, "cycles": {"question": "Which dependency cycles exist and how big are they?", "vital": ["cycle membership", "cycle path"], "hover": ["edge weights (which dependency is cheapest to break)"]}};
 function genPrompt(estateId,scopeLabel,vid,label){
+ const VI=VIEW_INTENT[vid];
  return "Generate an architecture view for the aOa playbook viewer.\n"+
  "Target: estate \""+estateId+"\" · system \""+scopeLabel+"\" · view id \""+vid+"\" ("+label+").\n"+
- "Author realistic content consistent with that system. Mark provenance SIMULATED with the real-world source it would derive from.\n\n"+
- PROMPT_SCHEMA+"\n\n"+
+ "Author realistic content consistent with that system. Mark provenance SIMULATED with the real-world source it would derive from.\n"+
+ (VI?"\nIntent — the standard this view must honor (one design, one perspective):\n"+
+ "- question it answers: "+VI.question+"\n"+
+ "- canvas-vital (must be present and readable): "+VI.vital.join("; ")+"\n"+
+ (VI.hover.length?"- hover-tier (put in 'sub'/detail fields, NEVER in labels): "+VI.hover.join("; ")+"\n":"")+
+ "- labels: nodes ≤30 chars, members ≤26, edge labels ≤48 — names stay clean, metadata goes to the hover tier\n":"")+
+ "\n"+PROMPT_SCHEMA+"\n\n"+
  "Output: merge the view object into playbook/mockups/estates/"+estateId+".json under estates.*.scopes.*.views."+vid+
  ", then run python3 playbook/generators/build_c4_mockup.py and refresh the viewer.";}
 function dynamicCatalog(sv){
@@ -147,35 +162,50 @@ const ElkEdge=memo(function ElkEdge({id,data,style,markerEnd}){
     <//>`:null}
   <//>`;});
 
+// Tier rules (playbook/standards/view-standards.json): canvas = identity + the view's
+// one signal; supporting metadata lives HERE, shown on hover. ?hover=<id> forces one
+// card open so the screenshot loop can verify the hover tier.
+const HQ=MQ.get("hover");
+function HoverCard({title,rows}){
+  const rs=(rows||[]).filter(r=>r[1]!==undefined&&r[1]!==null&&r[1]!=="");
+  return html`<div class="hovercard">
+    <div style=${{fontSize:11.5,fontWeight:700,color:T.text,marginBottom:rs.length?5:0}}>${title}</div>
+    ${rs.map((r,i)=>html`<div key=${i} style=${{fontSize:10.5,color:T.dim,lineHeight:1.55}}>
+      <span style=${{color:T.mute,fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginRight:6}}>${r[0]}</span>${r[1]}</div>`)}
+  </div>`;}
+const hvc=id=>"hv"+(id===HQ?" force":"");
 function BoxNode({data}){
   const t=data.type,col=t==="sys"?T.blue:t==="container"?T.arch:t==="store"?T.green:t==="proc"?T.blue:t==="ext"?T.dim:T.dim;
   const mock=data.real===false,drill=!!data.drillTo;
-  return html`<div style=${{background:T.card,border:`1.5px ${mock?"dashed":"solid"} ${col}`,
+  const NAME={sys:"system",ext:"external",container:"container",store:"store",proc:"process"};
+  return html`<div class=${hvc(data.id)} style=${{background:T.card,border:`1.5px ${mock?"dashed":"solid"} ${col}`,
     borderRadius:t==="store"?18:t==="proc"?12:8,padding:"9px 13px",width:data.w-2,height:data.h-2,boxSizing:"border-box",
-    color:T.text,opacity:mock?0.88:1,cursor:drill?"pointer":"default"}}>
+    color:T.text,cursor:drill?"pointer":"default"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
-    <div style=${{display:"flex",alignItems:"center",gap:8}}>
+    <div style=${{display:"flex",alignItems:"center",gap:8,height:"100%",opacity:mock?0.88:1}}>
       <${Ico} k=${data.icon} c=${col} s=${17}/>
-      <span style=${{fontSize:13.5,fontWeight:600}}>${data.label}</span>
+      <span style=${{fontSize:13.5,fontWeight:600,whiteSpace:"nowrap"}}>${data.label}</span>
       ${drill?html`<span style=${{marginLeft:"auto",fontSize:10,color:col,border:`1px solid ${col}`,borderRadius:5,padding:"0 5px"}}>open ▸</span>`:null}
     </div>
-    ${data.sub?html`<div style=${{fontSize:10.5,color:T.dim,marginTop:2,marginLeft:25}}>${data.sub}</div>`:null}
+    <${HoverCard} title=${data.label} rows=${[["type",NAME[t]||t],["detail",data.sub],[mock?"status":"",mock?"inferred · sourceable":""]]}/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function EntityNode({data}){
   const c=T.green;
-  return html`<div style=${{background:T.card,border:`1.5px solid ${c}`,borderRadius:6,
-    width:data.w-2,boxSizing:"border-box",color:T.text,overflow:"hidden"}}>
-    <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
-    <div style=${{padding:"7px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:7,background:T.band}}>
-      <${Ico} k="store" c=${c} s=${14}/>
-      <span style=${{fontSize:13,fontWeight:700}}>${data.label}</span>
-      <span style=${{marginLeft:"auto",fontSize:9.5,color:T.dim}}>${data.tech}</span>
+  return html`<div class=${hvc(data.id)} style=${{width:data.w-2}}>
+    <div style=${{background:T.card,border:`1.5px solid ${c}`,borderRadius:6,
+      boxSizing:"border-box",color:T.text,overflow:"hidden"}}>
+      <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
+      <div style=${{padding:"7px 12px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:7,background:T.band}}>
+        <${Ico} k="store" c=${c} s=${14}/>
+        <span style=${{fontSize:13,fontWeight:700,whiteSpace:"nowrap"}}>${data.label}</span>
+      </div>
+      ${data.fields.map((f,i)=>html`<div key=${i} style=${{padding:"3px 12px",fontSize:10.5,
+        fontFamily:"ui-monospace,monospace",color:f.startsWith(" ")?T.dim:T.text,
+        borderBottom:i<data.fields.length-1?`1px solid ${T.border}22`:"none"}}>${f}</div>`)}
+      <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
     </div>
-    ${data.fields.map((f,i)=>html`<div key=${i} style=${{padding:"3px 12px",fontSize:10.5,
-      fontFamily:"ui-monospace,monospace",color:f.startsWith(" ")?T.dim:T.text,
-      borderBottom:i<data.fields.length-1?`1px solid ${T.border}22`:"none"}}>${f}</div>`)}
-    <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
+    <${HoverCard} title=${data.label} rows=${[["store",data.tech]]}/>
   </div>`;}
 function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting"||data.boundary;
   return html`<div style=${{width:"100%",height:"100%",background:T.band,
@@ -194,31 +224,34 @@ function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function SoloNode({data}){const c=data.col;const dash=data.layer==="supporting";
-  return html`<div style=${{background:T.band,border:`1.5px ${dash?"dashed":"solid"} ${c}`,
+  return html`<div class=${hvc(data.member.id)} style=${{background:T.band,border:`1.5px ${dash?"dashed":"solid"} ${c}`,
     borderRadius:4,padding:"8px 12px",width:data.w-2,height:data.h-2,boxSizing:"border-box",color:T.text}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
     <div style=${{display:"flex",alignItems:"center",gap:7}}>
       <${Ico} k=${data.ico||data.layer} c=${c} s=${14}/>
-      <span style=${{fontSize:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:1.1}}>${data.label}</span>
-      <span style=${{fontSize:12.5,fontWeight:600,marginLeft:6}}>${data.member.label}</span>
-      <span style=${{marginLeft:"auto",fontSize:10,color:T.dim}}>${data.member.sub}</span>
+      <span style=${{fontSize:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:1.1,whiteSpace:"nowrap"}}>${data.label}</span>
+      <span style=${{fontSize:12.5,fontWeight:600,marginLeft:6,whiteSpace:"nowrap"}}>${data.member.label}</span>
     </div>
+    <${HoverCard} title=${data.member.label} rows=${[["layer",data.label],["detail",data.member.sub]]}/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function MemberNode({data}){const c=data.col;
-  return html`<div style=${{background:T.card,border:`1px solid ${T.border}`,borderLeft:`3px solid ${c}`,
-    borderRadius:6,padding:"5px 10px",width:data.w,height:data.h,boxSizing:"border-box",color:T.text}}>
-    <div style=${{display:"flex",alignItems:"center",gap:6}}>
+  return html`<div class=${hvc(data.id)} style=${{background:T.card,border:`1px solid ${T.border}`,borderLeft:`3px solid ${c}`,
+    borderRadius:6,padding:data.wrap?"4px 10px":"5px 10px",width:data.w,height:data.h,boxSizing:"border-box",color:T.text,
+    display:"flex",alignItems:"center"}}>
+    <div style=${{display:"flex",alignItems:"center",gap:6,width:"100%"}}>
       <${Ico} k=${data.lay} c=${c} s=${12}/>
-      <span style=${{fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>${data.label}</span>
-      ${(data.showC||data.showH)?html`<span title=${(data.concerns?data.concerns+" recon findings · ":"")+(data.changed?"touched in last 15 commits · ":"")+data.sub}
-        style=${{marginLeft:"auto",display:"flex",gap:3,flexShrink:0}}>
+      <span style=${{fontSize:data.wrap?10.5:11.5,fontWeight:600,whiteSpace:data.wrap?"normal":"nowrap",lineHeight:1.25}}>${data.label}</span>
+      ${(data.showC||data.showH)?html`<span style=${{marginLeft:"auto",display:"flex",gap:3,flexShrink:0}}>
         ${data.showC?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,
           borderRadius:7,padding:"0 4px",lineHeight:"12px"}}>⚠${data.concerns>99?"99+":data.concerns}</span>`:null}
         ${data.showH?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,
           borderRadius:7,padding:"0 4px",lineHeight:"12px"}}>Δ</span>`:null}
-      </span>`:html`<span style=${{marginLeft:"auto",fontSize:9,color:T.dim}}>${data.sub}</span>`}
+      </span>`:null}
     </div>
+    <${HoverCard} title=${data.label} rows=${[["detail",data.sub],
+      [data.concerns?"findings":"",data.concerns?data.concerns+" recon findings":""],
+      [data.changed?"recent":"",data.changed?"touched in last 15 commits":""]]}/>
   </div>`;}
 function TableView({view}){
   return html`<div style=${{position:"absolute",inset:0,overflow:"auto",padding:"56px 40px 40px"}}>
@@ -251,7 +284,16 @@ function MatrixView({view}){
       </tr>`)}</tbody></table>
     <div style=${{marginTop:14,fontSize:10.5,color:T.dim}}>cell = dependencies row → column · <span style=${{color:T.red}}>red = mutual (cycle)</span></div>
   </div>`;}
-const nodeTypes={box:BoxNode,bucket:BucketNode,solo:SoloNode,member:MemberNode,entity:EntityNode};
+// invisible nodes covering edge-label extents so fitView never clips a label
+// (React Flow fits to NODE bounds only; detour-routed edge labels can fall outside)
+function SpacerNode(){return html`<div style=${{pointerEvents:"none"}}></div>`;}
+function labelSpacers(laidById){const sp=[];let i=0;
+  Object.values(laidById).forEach(le=>{(le.labels||[]).forEach(l=>{
+    if(l.x===undefined)return;
+    sp.push({id:"_lsp"+(i++),type:"spacer",position:{x:l.x,y:l.y},
+      width:l.width||40,height:l.height||16,draggable:false,selectable:false,data:{}});});});
+  return sp;}
+const nodeTypes={box:BoxNode,bucket:BucketNode,solo:SoloNode,member:MemberNode,entity:EntityNode,spacer:SpacerNode};
 const edgeTypes={elk:ElkEdge};
 
 const SP={
@@ -284,8 +326,10 @@ async function layoutSimple(view,dir,d){
   const ent=view.kind==="entity";
   const sizes={};
   view.nodes.forEach(n=>{
-    if(ent){sizes[n.id]={w:264,h:34+n.fields.length*21+2};}
-    else {sizes[n.id]={w:n.type==="sys"?248:208,h:n.sub?60:44};}});
+    if(ent){sizes[n.id]={w:Math.min(400,Math.max(264,snap((n.label||"").length*7.6+62))),h:34+n.fields.length*21+2};}
+    else {const base=n.type==="sys"?248:208;
+      // canvas carries identity only (sub moved to hover) — width follows the label, never ellipsis
+      sizes[n.id]={w:Math.min(360,Math.max(base,snap((n.label||"").length*7.8+(n.drillTo?118:66)))),h:44};}});
   const g={id:"root",layoutOptions:EOPT(dir,d),
     children:view.nodes.map(n=>({id:n.id,width:sizes[n.id].w,height:sizes[n.id].h})),
     edges:view.edges.map(e=>({id:e.id,sources:[e.source],targets:[e.target],
@@ -298,7 +342,7 @@ async function layoutSimple(view,dir,d){
     problems.push(e.tag+": "+((nById[e.source]||{}).label)+" → "+((nById[e.target]||{}).label));}});
   return {nodes:view.nodes.map(n=>({id:n.id,type:ent?"entity":"box",position:pos[n.id],
       width:sizes[n.id].w,height:sizes[n.id].h,
-      data:{...n,w:sizes[n.id].w,h:sizes[n.id].h}})),
+      data:{...n,w:sizes[n.id].w,h:sizes[n.id].h}})).concat(labelSpacers(laidById)),
     edges:view.edges.map(e=>{const r=rfEdge(e,laidById,()=>T.dim);
       if(e._viol){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3"};
         r.markerEnd={...r.markerEnd,color:T.red};
@@ -333,12 +377,17 @@ async function layoutBuckets(view,dir,d,ov){
     b.members=b.members.slice(0,23).concat([{id:b.id+"_more",label:"+"+(b._over-23)+" more…",sub:"over budget"}]);}});
   B.forEach(b=>{const n=b.members.length;
     b.solo=(n===1);
-    if(b.solo){b.w=d.solo[0];b.h=d.solo[1];return;}
+    if(b.solo){b.w=Math.max(d.solo[0],snap((b.members[0].label||"").length*7.2+(b.label||"").length*7+96));b.h=d.solo[1];return;}
+    // member cell width follows the longest label (sub moved to hover); very long labels wrap to 2 lines
+    const need=snap(Math.max(...b.members.map(m=>(m.label||"").length))*6.7+44);
+    b.wrap=need>240;
+    b.iw=b.wrap?240:Math.max(d.iw,need);
+    b.ih=b.wrap?d.ih+13:d.ih;
     const cols=n<=4?n:Math.min(5,Math.ceil(n/2));
     const rows=Math.ceil(n/cols);
     b.cols=cols;
-    b.w=d.px*2+cols*d.iw+(cols-1)*d.gx;
-    b.h=d.head+d.py+rows*d.ih+(rows-1)*d.gy+d.py;});
+    b.w=d.px*2+cols*b.iw+(cols-1)*d.gx;
+    b.h=d.head+d.py+rows*b.ih+(rows-1)*d.gy+d.py;});
   const g={id:"root",
     layoutOptions:{...EOPT(dir,d),"elk.partitioning.activate":"true"},
     children:B.map(b=>({id:b.id,width:b.w,height:b.h,
@@ -362,9 +411,9 @@ async function layoutBuckets(view,dir,d,ov){
       data:{...b,head:d.head,col}});
     b.members.forEach((m,i)=>{const c2=i%b.cols,row=Math.floor(i/b.cols);
       nodes.push({id:m.id,type:"member",draggable:false,selectable:false,zIndex:10,
-        width:d.iw,height:d.ih,
-        position:{x:bp.x+d.px+c2*(d.iw+d.gx),y:bp.y+d.head+d.py+row*(d.ih+d.gy)},
-        data:{...m,lay:b.layer,col,w:d.iw,h:d.ih,
+        width:b.iw,height:b.ih,
+        position:{x:bp.x+d.px+c2*(b.iw+d.gx),y:bp.y+d.head+d.py+row*(b.ih+d.gy)},
+        data:{...m,lay:b.layer,col,w:b.iw,h:b.ih,wrap:b.wrap,
           showC:!!(ov.concerns&&m.concerns>0),showH:!!(ov.changed&&m.changed)}});});});
   const bcol={};B.forEach(b=>bcol[b.id]=colOf(b.layer));
   const edges2=view.edges.map(e=>{const r=rfEdge(e,laidById,ee=>bcol[ee.source]||T.dim);
@@ -372,7 +421,7 @@ async function layoutBuckets(view,dir,d,ov){
       r.markerEnd={...r.markerEnd,color:T.red};
       if(r.data.label)r.data.label.text="⚠ "+r.data.label.text;}
     return r;});
-  return {nodes,edges:edges2,problems};}
+  return {nodes:nodes.concat(labelSpacers(laidById)),edges:edges2,problems};}
 
 // Docked footer: ONE derived legend — shows only what the current view actually renders —
 // plus the provenance stamp anchored right.
@@ -602,7 +651,7 @@ function Flow(){
       <div style=${{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:8,overflow:"hidden"}}>
         <span style=${{fontSize:12.5,color:T.blue,fontWeight:650,whiteSpace:"nowrap"}}>${sys.label}</span>
         <span style=${{color:T.mute}}>▸</span>
-        <span style=${{fontSize:12.5,color:T.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${view.title}</span>
+        <span title=${view.title} style=${{fontSize:12.5,color:T.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${view.title}</span>
         ${view.prov?html`<span title=${view.prov.label} style=${(pk=>({fontSize:9,fontWeight:700,letterSpacing:.5,whiteSpace:"nowrap",cursor:"help",flexShrink:0,
           color:pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan,
           border:`1px solid ${pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan}`,
