@@ -461,9 +461,10 @@ const STD_CATALOG=[
    {vid:["cycles"],label:"Cycle / Tangle Report",note:"SCC pass"}]}];
 // AI-generation prompt for planned rows: copy, hand to any agent, get a loadable shard
 const PROMPT_SCHEMA=`View JSON shapes (pick ONE matching the view type):
-simple:  {"kind":"simple","title","count","dir":"DOWN|RIGHT","prov":{"kind":"simulated","label":"SIMULATED · would derive from: <source>"},"nodes":[{"id","type":"sys|ext|container|store|proc","icon":"sys|ext|container|store|app|domain","label","sub","real":false}],"edges":[{"id","source","target","label"}]}
-buckets: {...same header...,"buckets":[{"id","layer","label","part":0,"boundary":true(optional, dashed zone),"members":[{"id","label","sub"}]}],"edges":[{"id","source","target","count","label"?,"tag"?}]}
-entity:  {...,"nodes":[{"id","type":"entity","label","tech","fields":["..."],"real":false}],"edges":[{"id","source","target","label"}]}
+simple:  {"kind":"simple","title","count","dir":"DOWN|RIGHT","prov":{"kind":"simulated","label":"SIMULATED · would derive from: <source>"},"nodes":[{"id","type":"sys|ext|container|store|proc","icon":"sys|ext|container|store|app|domain","label","sub","stats":{"<named stat>":"<value>"}?,"real":false}],"edges":[{"id","source","target","label"}]}
+buckets: {...same header...,"buckets":[{"id","layer (prefer: core|channel|integration|data|external|supporting)","label","part":0,"boundary":true(optional, dashed zone),"members":[{"id","label","sub"?,"stats":{"<named stat>":"<value>"}?}]}],"edges":[{"id","source","target","count","label"?,"tag"?}]}
+entity:  {...,"nodes":[{"id","type":"entity","label","tech","fields":["..."],"stats":{...}?,"real":false}],"edges":[{"id","source","target","label"}]}
+stats = 3-4 named, reader-meaningful figures for the hover card (e.g. "stores":"≈2,300", "throughput":"14M txns/day") — NEVER packed into the label.
 table:   {...,"columns":["..."],"rows":[["...","..."]]}
 matrix:  {...,"items":["a","b"],"matrix":[[null,3],[1,null]]}`;
 // per-view intent from playbook/standards/view-standards.json (injected at build time):
@@ -558,7 +559,7 @@ function BoxNode({data}){
       <span style=${{fontSize:13.5,fontWeight:600,whiteSpace:"nowrap"}}>${data.label}</span>
       ${drill?html`<span style=${{marginLeft:"auto",fontSize:10,color:col,border:`1px solid ${col}`,borderRadius:5,padding:"0 5px"}}>open ▸</span>`:null}
     </div>
-    <${HoverCard} title=${data.label} rows=${[["type",NAME[t]||t],["detail",data.sub],[mock?"status":"",mock?"inferred · sourceable":""]]}/>
+    <${HoverCard} title=${data.label} rows=${(data.stats?Object.entries(data.stats):[["type",NAME[t]||t],["detail",data.sub]]).concat(mock?[["status","inferred · sourceable"]]:[])}/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function EntityNode({data}){
@@ -576,7 +577,7 @@ function EntityNode({data}){
         borderBottom:i<data.fields.length-1?`1px solid ${T.border}22`:"none"}}>${f}</div>`)}
       <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
     </div>
-    <${HoverCard} title=${data.label} rows=${[["store",data.tech]]}/>
+    <${HoverCard} title=${data.label} rows=${data.stats?Object.entries(data.stats):[["store",data.tech]]}/>
   </div>`;}
 function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting"||data.boundary;
   return html`<div style=${{width:"100%",height:"100%",background:T.band,
@@ -603,7 +604,7 @@ function SoloNode({data}){const c=data.col;const dash=data.layer==="supporting";
       <span style=${{fontSize:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:1.1,whiteSpace:"nowrap"}}>${data.label}</span>
       <span style=${{fontSize:12.5,fontWeight:600,marginLeft:6,whiteSpace:"nowrap"}}>${data.member.label}</span>
     </div>
-    <${HoverCard} title=${data.member.label} rows=${[["layer",data.label],["detail",data.member.sub]]}/>
+    <${HoverCard} title=${data.member.label} rows=${data.member.stats?Object.entries(data.member.stats):[["layer",data.label],["detail",data.member.sub]]}/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function MemberNode({data}){const c=data.col;
@@ -620,9 +621,9 @@ function MemberNode({data}){const c=data.col;
           borderRadius:7,padding:"0 4px",lineHeight:"12px"}}>Δ</span>`:null}
       </span>`:null}
     </div>
-    <${HoverCard} title=${data.label} rows=${[["detail",data.sub],
+    <${HoverCard} title=${data.label} rows=${(data.stats?Object.entries(data.stats):[["detail",data.sub]]).concat([
       [data.concerns?"findings":"",data.concerns?data.concerns+" recon findings":""],
-      [data.changed?"recent":"",data.changed?"touched in last 15 commits":""]]}/>
+      [data.changed?"recent":"",data.changed?"touched in last 15 commits":""]])}/>
   </div>`;}
 function TableView({view}){
   return html`<div style=${{position:"absolute",inset:0,overflow:"auto",padding:"56px 40px 40px"}}>
@@ -720,12 +721,29 @@ async function layoutSimple(view,dir,d){
         if(r.data.label)r.data.label.text="⚠ "+r.data.label.text;}
       return r;}),problems};}
 
-const CYCLE=[T.arch,T.cyan,T.purple,T.green,T.yellow,T.blue,T.red,T.neutral];
+// Color is meaning: same layer name => same color, app-wide. Resolution order:
+// view palette -> canonical layer pin -> stable name hash. Red/yellow are RESERVED
+// (violations / warnings) and never appear in the rotation.
+const CYCLE=[T.arch,T.cyan,T.purple,T.green,T.blue,T.neutral];
+const LAYER_PIN={core:T.blue,channel:T.purple,integration:T.arch,data:T.green,
+  external:T.dim,supporting:T.neutral,platform:T.cyan,edge:T.cyan};
+const lhash=s=>{let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h;};
+// Per-view color map: palette/pinned names are absolute; hashed names probe to a free
+// color on collision so one view never shows two layers in the same color.
+const viewLayerColors=view=>{const pal=PALETTES[view.palette||"aoa"]||{};
+  const used=new Set(),map={};
+  const layers=[...new Set((view.buckets||[]).map(b=>b.layer))];
+  layers.forEach(l=>{const c=pal[l]||LAYER_PIN[l];if(c){map[l]=c;used.add(c);}});
+  layers.forEach(l=>{if(map[l])return;
+    let i=lhash(l||"")%CYCLE.length,n=0;
+    while(n<CYCLE.length&&used.has(CYCLE[i])){i=(i+1)%CYCLE.length;n++;}
+    map[l]=CYCLE[i];used.add(CYCLE[i]);});
+  return map;};
+const layerColor=(view,l)=>viewLayerColors(view)[l]||LAYER_PIN[l]||CYCLE[lhash(l||"")%CYCLE.length];
 async function layoutBuckets(view,dir,d,ov){
   ov=ov||{};
   const B=view.buckets;
-  const pal=PALETTES[view.palette||"aoa"]||{};
-  const auto={};const colOf=l=>pal[l]||auto[l]||(auto[l]=CYCLE[Object.keys(auto).length%CYCLE.length]);
+  const colOf=l=>layerColor(view,l);
   const problems=[];const deg={};B.forEach(b=>deg[b.id]={i:0,o:0});
   const bById={};B.forEach(b=>bById[b.id]=b);
   view.edges.forEach(e=>{deg[e.source].o++;deg[e.target].i++;
@@ -796,11 +814,32 @@ async function layoutBuckets(view,dir,d,ov){
 
 // Docked footer: ONE derived legend — shows only what the current view actually renders —
 // plus the provenance stamp anchored right.
+const ETYPE_NAME={sys:"system",ext:"external",container:"container",store:"store",proc:"process"};
+const ETYPE_COLR={sys:T.blue,ext:T.dim,container:T.arch,store:T.green,proc:T.blue};
+// In-context legend: pinned to the canvas corner so color meaning sits where you look.
+// Derived from what is actually on screen — same resolution the nodes use, by construction.
+function CanvasLegend({view}){
+  let items=[];
+  if(view.kind==="buckets"){
+    const seen=new Set();
+    (view.buckets||[]).forEach(b=>{if(!seen.has(b.layer)){seen.add(b.layer);
+      items.push({txt:b.layer,c:layerColor(view,b.layer)});}});}
+  else if(view.kind==="simple"){
+    const seen=new Set();
+    (view.nodes||[]).forEach(n=>{if(!seen.has(n.type)){seen.add(n.type);
+      items.push({txt:ETYPE_NAME[n.type]||n.type,c:ETYPE_COLR[n.type]||T.dim});}});}
+  if(items.length<2)return null;
+  return html`<div style=${{position:"absolute",top:10,right:14,zIndex:6,background:"#0c0c0ef0",
+    border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 11px",
+    display:"flex",flexDirection:"column",gap:4}}>
+    ${items.map((it,i)=>html`<div key=${i} style=${{display:"flex",alignItems:"center",gap:7,fontSize:10.5,color:T.dim}}>
+      <span style=${{width:10,height:10,borderRadius:3,background:it.c+"30",border:`1.5px solid ${it.c}`,flexShrink:0}}></span>
+      ${it.txt}</div>`)}
+  </div>`;}
 function Footer({view,ov}){
-  const pal=PALETTES[view.palette||"aoa"];
   const groups=[];
   if(view.kind==="buckets"){
-    groups.push({label:"LAYERS",items:(view.buckets||[]).map(b=>({txt:b.layer,c:pal[b.layer]||T.neutral,ico:b.ico||b.layer}))});
+    groups.push({label:"LAYERS",items:(view.buckets||[]).map(b=>({txt:b.layer,c:layerColor(view,b.layer),ico:b.ico||b.layer}))});
     const ed=[{txt:"dependency · color = source layer",glyph:"━"},{txt:"bundled count",glyph:"×N"}];
     if((view.buckets||[]).some(b=>b.layer==="supporting"))ed.push({txt:"supporting / inferred",glyph:"┄"});
     groups.push({label:"EDGES",items:ed});
@@ -811,9 +850,7 @@ function Footer({view,ov}){
     groups.push({label:"EDGES",items:[{txt:"contains",glyph:"━"}]});
   } else {
     const seen={};(view.nodes||[]).forEach(n=>{if(!seen[n.type])seen[n.type]=n.icon;});
-    const NAME={sys:"system",ext:"external",container:"container",store:"store",proc:"process"};
-    const COLR={sys:T.blue,ext:T.dim,container:T.arch,store:T.green,proc:T.blue};
-    groups.push({label:"ELEMENTS",items:Object.keys(seen).map(t=>({txt:NAME[t]||t,c:COLR[t]||T.dim,ico:seen[t]}))});
+    groups.push({label:"ELEMENTS",items:Object.keys(seen).map(t=>({txt:ETYPE_NAME[t]||t,c:ETYPE_COLR[t]||T.dim,ico:seen[t]}))});
     const ed=[{txt:"labeled flow",glyph:"━"}];
     if((view.nodes||[]).some(n=>n.real===false))ed.push({txt:"inferred · sourceable",glyph:"┄"});
     groups.push({label:"EDGES",items:ed});
@@ -883,7 +920,7 @@ const STATUS={live:{dot:"●",col:T.green,lbl:"derived live"},
               planned:{dot:"○",col:T.mute,lbl:"planned · extractor gated"}};
 
 const ago=t=>{const s=(Date.now()-t)/1000;return s<5?"now":s<60?Math.floor(s)+"s ago":Math.floor(s/60)+"m ago";};
-function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,collapsed,setCollapsed,last}){
+function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,collapsed,setCollapsed,last,sel,setSel,probs}){
   const[copied,setCopied]=useState(null);
   const CATALOG=(estate==="local"&&CATALOGS[scope])?CATALOGS[scope]:dynamicCatalog(scopes[scope]||{views:{}});
   if(collapsed) return html`<div style=${{width:44,borderRight:`1px solid ${T.border}`,
@@ -892,7 +929,7 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
       style=${{background:"transparent",border:`1px solid ${T.border}`,color:T.dim,
       borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:13}}>›</button>
   </div>`;
-  return html`<div style=${{width:252,borderRight:`1px solid ${T.border}`,overflowY:"auto",
+  return html`<div style=${{width:300,borderRight:`1px solid ${T.border}`,overflowY:"auto",
     flexShrink:0,display:"flex",flexDirection:"column"}}>
     <div style=${{padding:"11px 14px",display:"flex",alignItems:"center",borderBottom:`1px solid ${T.border}`}}>
       <span style=${{fontSize:11,fontWeight:700,letterSpacing:1.2,color:T.dim}}>SYSTEMS</span>
@@ -903,13 +940,33 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
         style=${{marginLeft:"auto",background:"transparent",border:"none",color:T.mute,cursor:"pointer",fontSize:14}}>‹</button>
     </div>
     ${Object.entries(scopes).map(([sid,sv])=>html`<div key=${sid} onClick=${()=>goScope(sid)}
-      style=${{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",cursor:"pointer",
+      style=${{display:"flex",alignItems:"flex-start",gap:8,padding:"7px 14px",cursor:"pointer",
         background:sid===scope?T.cardH:"transparent",
         borderLeft:sid===scope?`2px solid ${T.blue}`:"2px solid transparent"}}>
       <${Ico} k="sys" c=${sid===scope?T.blue:T.dim} s=${13}/>
-      <span style=${{fontSize:12.5,fontWeight:sid===scope?700:500,color:sid===scope?T.text:T.dim}}>${sv.label}</span>
-      <span style=${{marginLeft:"auto",fontSize:9,color:T.mute}}>${sv.tech}</span>
+      <div style=${{minWidth:0}}>
+        <div style=${{fontSize:12.5,fontWeight:sid===scope?700:500,color:sid===scope?T.text:T.dim}}>${sv.label}</div>
+        <div style=${{fontSize:9.5,color:T.mute,marginTop:1}}>${sv.tech}</div>
+      </div>
     </div>`)}
+    ${sel?html`<div style=${{borderTop:`1px solid ${T.border}`,background:T.band,padding:"10px 14px"}}>
+      <div style=${{display:"flex",alignItems:"center"}}>
+        <span style=${{fontSize:10,fontWeight:700,letterSpacing:1.2,color:T.blue}}>DETAIL</span>
+        <button onClick=${()=>setSel(null)} title="Close"
+          style=${{marginLeft:"auto",background:"transparent",border:"none",color:T.mute,cursor:"pointer",fontSize:13}}>×</button>
+      </div>
+      <div style=${{fontSize:13,fontWeight:700,color:T.text,marginTop:3,lineHeight:1.3}}>${sel.label}</div>
+      ${(sel.rows||[]).map((r,i)=>html`<div key=${i} style=${{display:"flex",gap:8,marginTop:5,fontSize:11,lineHeight:1.45}}>
+        <span style=${{color:T.mute,fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",
+          flexShrink:0,width:64,paddingTop:1}}>${r[0]}</span>
+        <span style=${{color:T.dim,minWidth:0}}>${r[1]}</span>
+      </div>`)}
+    </div>`:null}
+    ${probs&&probs.length?html`<div style=${{borderTop:`1px solid ${T.border}`,padding:"10px 14px"}}>
+      <span style=${{fontSize:10,fontWeight:700,letterSpacing:1.2,color:T.red}}>CONCERNS · THIS VIEW</span>
+      ${probs.map((p,i)=>html`<div key=${i} style=${{fontSize:10.5,color:T.dim,lineHeight:1.5,marginTop:6,
+        borderLeft:`2px solid ${T.red}`,paddingLeft:8}}>${p}</div>`)}
+    </div>`:null}
     <div style=${{padding:"10px 14px 4px",borderTop:`1px solid ${T.border}`,marginTop:4}}>
       <span style=${{fontSize:11,fontWeight:700,letterSpacing:1.2,color:T.dim}}>MODELS</span>
       <span style=${{fontSize:9,color:T.mute,marginLeft:6}}>· ${(scopes[scope]||{}).label} only</span>
@@ -972,7 +1029,7 @@ function Flow(){
   const[autoDir,setAutoDir]=useState(null);
   const dir=dirOv||autoDir||"DOWN";
   useEffect(()=>{let on=true;const d=SP[den];
-    setEls(null);   // unmount canvas NOW; remount only with the new layout so initial fitView sees the right nodes
+    setEls(null);setSel(null);   // unmount canvas NOW; remount only with the new layout so initial fitView sees the right nodes
     const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov):layoutSimple(view,dd,d);
     // Auto direction: lay out BOTH ways, keep whichever fits the viewport at the larger scale
     const fitScale=r=>{const xs=r.nodes.map(n=>n.position.x),ys=r.nodes.map(n=>n.position.y),
@@ -1001,7 +1058,22 @@ function Flow(){
   useEffect(()=>{const auto=q.get("auto");
     if(auto){const[lv,ms]=auto.split(":");const t=setTimeout(()=>setLevel(lv),parseInt(ms||"800",10));
       return()=>clearTimeout(t);}},[]);
-  const onNodeClick=useCallback((_,n)=>{if(n.data&&n.data.drillTo){setLevel(n.data.drillTo);setDirOv(null);}},[]);
+  // click = drill tier: drillTo navigates; anything else opens its record in the sidebar detail panel
+  const[sel,setSel]=useState(null);
+  const onNodeClick=useCallback((_,n)=>{if(!n.data)return;
+    if(n.data.drillTo){setLevel(n.data.drillTo);setDirOv(null);return;}
+    if(n.type==="spacer")return;
+    const d=n.data,m=(n.type==="solo"?d.member:d)||{};
+    const rows=(m.stats?Object.entries(m.stats):[]).concat(m.sub?[["detail",m.sub]]:[]);
+    if(n.type==="bucket")rows.unshift(["members",String((d.members||[]).length)]);
+    if(d.layer||d.lay)rows.unshift(["layer",d.layer||d.lay]);
+    if(d.tech)rows.push(["tech",d.tech]);
+    if(m.concerns)rows.push(["findings",m.concerns+" recon findings"]);
+    if(m.changed)rows.push(["recent","touched in last 15 commits"]);
+    setSel({label:m.label||d.label,rows});},[]);
+  // test hook: ?sel=<nodeId> opens the detail panel for screenshot verification
+  useEffect(()=>{const sid=q.get("sel");if(!sid||!els||!els.nodes)return;
+    const n=els.nodes.find(x=>x.id===sid);if(n)onNodeClick(null,n);},[els]);
   const[open,setOpen]=useState({});
   const[collapsed,setCollapsed]=useState(false);
   const go=useCallback(id=>{setLevel(id);setDirOv(null);},[]);
@@ -1056,7 +1128,8 @@ function Flow(){
     <div style=${{flex:1,display:"flex",minHeight:0}}>
       <${Sidebar} estate=${estate} scopes=${SC} simEstate=${ESTATES[estate].sim}
         scope=${scope} goScope=${goScope} level=${level} go=${go} open=${open} setOpen=${setOpen}
-        collapsed=${collapsed} setCollapsed=${setCollapsed} last=${last}/>
+        collapsed=${collapsed} setCollapsed=${setCollapsed} last=${last}
+        sel=${sel} setSel=${setSel} probs=${els&&els.problems||[]}/>
       <div style=${{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
         <div style=${{flex:1,position:"relative",minHeight:0}}>
           ${els&&els.htmlView?html`<${view.kind==="table"?TableView:MatrixView} view=${view}/>`:null}
@@ -1067,6 +1140,7 @@ function Flow(){
             <${Background} color=${T.border} gap=${24} size=${1}/>
             <${Controls} position="bottom-right"/>
           <//>`:null}
+          ${els&&!els.htmlView&&(view._loaded||!view.shard)?html`<${CanvasLegend} view=${view}/>`:null}
         </div>
         ${els&&(view._loaded||!view.shard)?html`<${Footer} view=${view} ov=${ov}/>`:null}
       </div>
@@ -1077,7 +1151,9 @@ HTML="""<!doctype html><html><head><meta charset="utf-8"><title>aOa — Architec
 <link rel="stylesheet" href="https://esm.sh/@xyflow/react@12.3.5/dist/style.css">
 <style>html,body,#root{margin:0;height:100%;background:#0c0c0e}
 .react-flow__controls-button{background:#161618!important;border-color:#252528!important;fill:#8b8b96!important}
-.react-flow__node:hover{z-index:1200!important}
+/* raise hovered LEAF nodes only — a raised bucket would paint over its own members */
+.react-flow__node-member:hover,.react-flow__node-box:hover,
+.react-flow__node-solo:hover,.react-flow__node-entity:hover{z-index:1200!important}
 .hv{position:relative}
 .hv .hovercard{display:none;position:absolute;left:0;top:calc(100% + 7px);min-width:200px;max-width:300px;
  background:#1c1c1f;border:1px solid #3a3a40;border-radius:8px;padding:9px 12px;z-index:1300;

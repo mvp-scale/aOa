@@ -21,7 +21,21 @@
       "bucket_members_max": 40,
       "simple_view_nodes_max": 30
     },
-    "hover_test": "the same question-test applies to the hover tier: supporting means it enhances the view's answer. Anything that does not belongs in drill or nowhere."
+    "hover_test": "the same question-test applies to the hover tier: supporting means it enhances the view's answer. Anything that does not belongs in drill or nowhere.",
+    "hover_stats": "hover content is 3-4 NAMED stats per element ({\"stats\":{\"stores\":\"≈2,300\"}}), names a reader recognizes — never schema-speak like type/detail/status. Plain 'sub' is the legacy fallback.",
+    "palette": {
+      "rule": "color is meaning: the same layer name gets the same color everywhere in the app. Resolution: view palette -> canonical pin -> stable name hash. Never assigned per-view by order of appearance.",
+      "canonical_layers": {
+        "core": "blue", "channel": "purple", "integration": "orange",
+        "data": "green", "external": "grey", "supporting": "neutral", "platform": "cyan", "edge": "cyan"
+      },
+      "reserved": {
+        "red": "violations and faults ONLY — never decoration, never in the rotation",
+        "yellow": "warnings, quarantine, and SIMULATED provenance ONLY"
+      },
+      "legend": "every diagram carries an in-context legend (canvas corner) mapping the colors actually on screen; the footer legend stays for edges and provenance"
+    },
+    "drill": "click an element to open its full record in the sidebar detail panel; click a drillable node to navigate. The sidebar also lists this view's detected concerns in plain language."
   },
   "views": {
     "context": {
