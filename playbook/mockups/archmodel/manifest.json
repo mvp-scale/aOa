@@ -3,7 +3,7 @@
  "sharded": true,
  "generated": {
   "tool": "build_c4_mockup.py",
-  "timestamp": "2026-06-10 18:27 UTC",
+  "timestamp": "2026-06-10 18:44 UTC",
   "inputs": [
    "go list",
    "repo/graphify/*.py imports",
@@ -62,8 +62,8 @@
        },
        "shard": {
         "path": "local/aoa/component.json",
-        "hash": "2f391bde023b",
-        "bytes": 4048
+        "hash": "528d2a0e54a3",
+        "bytes": 4052
        }
       },
       "dataflow": {
@@ -1076,6 +1076,171 @@
         "hash": "a78a7622bb47",
         "bytes": 1763
        }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Container view",
+       "count": "6 containers",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: deploy descriptors (EAR/WAR) + JVM topology"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/container.json",
+        "hash": "89d8cb90620f",
+        "bytes": 1117
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment — DC + DR",
+       "count": "2 sites · 9 nodes",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: F5 pools + WebSphere cell topology + Veritas DR runbook"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/deployment.json",
+        "hash": "05cbed93ee6d",
+        "bytes": 823
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Dynamic — submit order (happy path)",
+       "count": "6 participants · 7 calls",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: call-edge resolution (P4) — until then: APM traces"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/sequence.json",
+        "hash": "505b811920a1",
+        "bytes": 1230
+       }
+      },
+      "code": {
+       "kind": "entity",
+       "title": "Code (L4) — order checkout classes",
+       "count": "4 classes",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: symbol index (SymbolMeta) — class/method table"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/code.json",
+        "hash": "b33709755edb",
+        "bytes": 1049
+       }
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Trust boundaries (STRIDE)",
+       "count": "4 zones · 7 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: boundary rule-pack over call edges + network segments"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/trust.json",
+        "hash": "8833c8341895",
+        "bytes": 1263
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "State machine — Order lifecycle",
+       "count": "6 states · 8 transitions",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: state-field extraction (OrderStatus enum + transitions)"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/statemachine.json",
+        "hash": "0cb5d63ed135",
+        "bytes": 1188
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Glossary — ubiquitous language",
+       "count": "8 terms",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: atlas identifier mining + human definitions"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/glossary.json",
+        "hash": "b051a64b9959",
+        "bytes": 784
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Technology portfolio",
+       "count": "8 platforms",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: manifests + CMDB + version scan"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/techportfolio.json",
+        "hash": "2b9bf6696982",
+        "bytes": 611
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — top components",
+       "count": "10 of ≈340 components",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: lockfiles/poms → CycloneDX (Syft-style scan)"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/sbom.json",
+        "hash": "9d5b3d92588d",
+        "bytes": 753
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Dependency Structure Matrix",
+       "count": "5 modules",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: import graph → N×N matrix"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/dsm.json",
+        "hash": "8b1fe8aa5e79",
+        "bytes": 329
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Cycle / tangle report",
+       "count": "2 cycles · tangle 14%",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Tarjan SCC over import graph"
+       },
+       "shard": {
+        "path": "retail-monolith-clean/retailcore/cycles.json",
+        "hash": "55a15ece748c",
+        "bytes": 489
+       }
       }
      }
     }
@@ -1132,6 +1297,171 @@
         "path": "retail-monolith-faulted/retailcore/datamodel.json",
         "hash": "4b57d26342c3",
         "bytes": 1837
+       }
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Container view",
+       "count": "6 containers",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: deploy descriptors (EAR/WAR) + JVM topology"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/container.json",
+        "hash": "89d8cb90620f",
+        "bytes": 1117
+       }
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment — DC + DR",
+       "count": "2 sites · 9 nodes",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: F5 pools + WebSphere cell topology + Veritas DR runbook"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/deployment.json",
+        "hash": "05cbed93ee6d",
+        "bytes": 823
+       }
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Dynamic — submit order (happy path)",
+       "count": "6 participants · 7 calls",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: call-edge resolution (P4) — until then: APM traces"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/sequence.json",
+        "hash": "505b811920a1",
+        "bytes": 1230
+       }
+      },
+      "code": {
+       "kind": "entity",
+       "title": "Code (L4) — order checkout classes",
+       "count": "4 classes",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: symbol index (SymbolMeta) — class/method table"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/code.json",
+        "hash": "b33709755edb",
+        "bytes": 1049
+       }
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Trust boundaries (STRIDE)",
+       "count": "4 zones · 8 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: boundary rule-pack over call edges + network segments"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/trust.json",
+        "hash": "e5bb51d5ed15",
+        "bytes": 1369
+       }
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "State machine — Order lifecycle",
+       "count": "6 states · 8 transitions",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: state-field extraction (OrderStatus enum + transitions)"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/statemachine.json",
+        "hash": "0cb5d63ed135",
+        "bytes": 1188
+       }
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Glossary — ubiquitous language",
+       "count": "8 terms",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: atlas identifier mining + human definitions"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/glossary.json",
+        "hash": "b051a64b9959",
+        "bytes": 784
+       }
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Technology portfolio",
+       "count": "8 platforms",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: manifests + CMDB + version scan"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/techportfolio.json",
+        "hash": "2b9bf6696982",
+        "bytes": 611
+       }
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — top components",
+       "count": "10 of ≈340 components",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: lockfiles/poms → CycloneDX (Syft-style scan)"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/sbom.json",
+        "hash": "9d5b3d92588d",
+        "bytes": 753
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Dependency Structure Matrix",
+       "count": "5 modules",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: import graph → N×N matrix"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/dsm.json",
+        "hash": "8b1fe8aa5e79",
+        "bytes": 329
+       }
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Cycle / tangle report",
+       "count": "2 cycles · tangle 14%",
+       "dir": null,
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Tarjan SCC over import graph"
+       },
+       "shard": {
+        "path": "retail-monolith-faulted/retailcore/cycles.json",
+        "hash": "55a15ece748c",
+        "bytes": 489
        }
       }
      }

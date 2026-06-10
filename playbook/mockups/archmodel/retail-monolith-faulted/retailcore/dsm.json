@@ -1,0 +1,1 @@
+{"kind":"matrix","title":"Dependency Structure Matrix","count":"5 modules","prov":{"kind":"simulated","label":"SIMULATED · would derive from: import graph → N×N matrix"},"items":["order","inventory","customer","shared","batch"],"matrix":[[null,38,21,212,0],[9,null,9,167,0],[0,0,null,143,0],[0,0,0,null,0],[24,31,0,88,null]]}

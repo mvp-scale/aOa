@@ -23,18 +23,79 @@
         "label": "SIMULATED · would derive from: integration config (web.xml servlet mappings, ESB routes) + outbound endpoint inventory"
        },
        "nodes": [
-        {"id": "n_pos", "type": "ext", "icon": "ext", "label": "POS Terminals", "sub": "1,840 lanes · IBM 4690", "real": false},
-        {"id": "n_core", "type": "sys", "icon": "sys", "label": "RetailCore ERP", "sub": "Java monolith · ~480k LOC", "real": false},
-        {"id": "n_paygw", "type": "ext", "icon": "ext", "label": "Payment Gateway", "sub": "First Data ISO-8583", "real": false},
-        {"id": "n_wms", "type": "ext", "icon": "ext", "label": "WMS", "sub": "Manhattan SCALE", "real": false},
-        {"id": "n_db", "type": "store", "icon": "store", "label": "Oracle 12c", "sub": "single shared schema", "real": false}
+        {
+         "id": "n_pos",
+         "type": "ext",
+         "icon": "ext",
+         "label": "POS Terminals",
+         "sub": "1,840 lanes · IBM 4690",
+         "real": false
+        },
+        {
+         "id": "n_core",
+         "type": "sys",
+         "icon": "sys",
+         "label": "RetailCore ERP",
+         "sub": "Java monolith · ~480k LOC",
+         "real": false
+        },
+        {
+         "id": "n_paygw",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Payment Gateway",
+         "sub": "First Data ISO-8583",
+         "real": false
+        },
+        {
+         "id": "n_wms",
+         "type": "ext",
+         "icon": "ext",
+         "label": "WMS",
+         "sub": "Manhattan SCALE",
+         "real": false
+        },
+        {
+         "id": "n_db",
+         "type": "store",
+         "icon": "store",
+         "label": "Oracle 12c",
+         "sub": "single shared schema",
+         "real": false
+        }
        ],
        "edges": [
-        {"id": "e_ctx1", "source": "n_pos", "target": "n_core", "label": "submits sales (MQ)"},
-        {"id": "e_ctx2", "source": "n_core", "target": "n_paygw", "label": "authorizes cards"},
-        {"id": "e_ctx3", "source": "n_core", "target": "n_wms", "label": "syncs stock + ASN"},
-        {"id": "e_ctx4", "source": "n_core", "target": "n_db", "label": "reads/writes JDBC"},
-        {"id": "e_ctx5", "source": "n_pos", "target": "n_db", "label": "queries prices directly", "tag": "direct-db"}
+        {
+         "id": "e_ctx1",
+         "source": "n_pos",
+         "target": "n_core",
+         "label": "submits sales (MQ)"
+        },
+        {
+         "id": "e_ctx2",
+         "source": "n_core",
+         "target": "n_paygw",
+         "label": "authorizes cards"
+        },
+        {
+         "id": "e_ctx3",
+         "source": "n_core",
+         "target": "n_wms",
+         "label": "syncs stock + ASN"
+        },
+        {
+         "id": "e_ctx4",
+         "source": "n_core",
+         "target": "n_db",
+         "label": "reads/writes JDBC"
+        },
+        {
+         "id": "e_ctx5",
+         "source": "n_pos",
+         "target": "n_db",
+         "label": "queries prices directly",
+         "tag": "direct-db"
+        }
        ]
       },
       "domains": {
@@ -56,10 +117,26 @@
          "part": 0,
          "ico": "domain",
          "members": [
-          {"id": "m_ordersvc", "label": "OrderService", "sub": "≈2,140"},
-          {"id": "m_checkout", "label": "CheckoutFlow", "sub": "≈1,380"},
-          {"id": "m_pricing", "label": "PricingEngine", "sub": "≈1,760"},
-          {"id": "m_returns", "label": "ReturnsProcessor", "sub": "≈940"}
+          {
+           "id": "m_ordersvc",
+           "label": "OrderService",
+           "sub": "≈2,140"
+          },
+          {
+           "id": "m_checkout",
+           "label": "CheckoutFlow",
+           "sub": "≈1,380"
+          },
+          {
+           "id": "m_pricing",
+           "label": "PricingEngine",
+           "sub": "≈1,760"
+          },
+          {
+           "id": "m_returns",
+           "label": "ReturnsProcessor",
+           "sub": "≈940"
+          }
          ]
         },
         {
@@ -69,9 +146,21 @@
          "part": 0,
          "ico": "domain",
          "members": [
-          {"id": "m_stockledger", "label": "StockLedger", "sub": "≈1,620"},
-          {"id": "m_replenish", "label": "ReplenishmentPlanner", "sub": "≈1,180"},
-          {"id": "m_whsync", "label": "WarehouseSync", "sub": "≈860"}
+          {
+           "id": "m_stockledger",
+           "label": "StockLedger",
+           "sub": "≈1,620"
+          },
+          {
+           "id": "m_replenish",
+           "label": "ReplenishmentPlanner",
+           "sub": "≈1,180"
+          },
+          {
+           "id": "m_whsync",
+           "label": "WarehouseSync",
+           "sub": "≈860"
+          }
          ]
         },
         {
@@ -81,9 +170,21 @@
          "part": 0,
          "ico": "domain",
          "members": [
-          {"id": "m_profile", "label": "CustomerProfile", "sub": "≈1,240"},
-          {"id": "m_loyalty", "label": "LoyaltyProgram", "sub": "≈980"},
-          {"id": "m_address", "label": "AddressBook", "sub": "≈520"}
+          {
+           "id": "m_profile",
+           "label": "CustomerProfile",
+           "sub": "≈1,240"
+          },
+          {
+           "id": "m_loyalty",
+           "label": "LoyaltyProgram",
+           "sub": "≈980"
+          },
+          {
+           "id": "m_address",
+           "label": "AddressBook",
+           "sub": "≈520"
+          }
          ]
         },
         {
@@ -93,63 +194,289 @@
          "part": 1,
          "ico": "container",
          "members": [
-          {"id": "m_money", "label": "MoneyTypes", "sub": "≈430"},
-          {"id": "m_audit", "label": "AuditTrail", "sub": "≈690"},
-          {"id": "m_batch", "label": "BatchScheduler", "sub": "≈1,050"},
-          {"id": "m_persist", "label": "PersistenceCore", "sub": "≈1,310"},
-          {"id": "m_helper01", "label": "CommonHelper01", "sub": "≈110"},
-          {"id": "m_helper02", "label": "CommonHelper02", "sub": "≈110"},
-          {"id": "m_helper03", "label": "CommonHelper03", "sub": "≈110"},
-          {"id": "m_helper04", "label": "CommonHelper04", "sub": "≈110"},
-          {"id": "m_helper05", "label": "CommonHelper05", "sub": "≈110"},
-          {"id": "m_helper06", "label": "CommonHelper06", "sub": "≈110"},
-          {"id": "m_helper07", "label": "CommonHelper07", "sub": "≈110"},
-          {"id": "m_helper08", "label": "CommonHelper08", "sub": "≈110"},
-          {"id": "m_helper09", "label": "CommonHelper09", "sub": "≈110"},
-          {"id": "m_helper10", "label": "CommonHelper10", "sub": "≈110"},
-          {"id": "m_helper11", "label": "CommonHelper11", "sub": "≈110"},
-          {"id": "m_helper12", "label": "CommonHelper12", "sub": "≈110"},
-          {"id": "m_helper13", "label": "CommonHelper13", "sub": "≈110"},
-          {"id": "m_helper14", "label": "CommonHelper14", "sub": "≈110"},
-          {"id": "m_helper15", "label": "CommonHelper15", "sub": "≈110"},
-          {"id": "m_helper16", "label": "CommonHelper16", "sub": "≈110"},
-          {"id": "m_helper17", "label": "CommonHelper17", "sub": "≈110"},
-          {"id": "m_helper18", "label": "CommonHelper18", "sub": "≈110"},
-          {"id": "m_helper19", "label": "CommonHelper19", "sub": "≈110"},
-          {"id": "m_helper20", "label": "CommonHelper20", "sub": "≈110"},
-          {"id": "m_helper21", "label": "CommonHelper21", "sub": "≈110"},
-          {"id": "m_helper22", "label": "CommonHelper22", "sub": "≈110"},
-          {"id": "m_helper23", "label": "CommonHelper23", "sub": "≈110"},
-          {"id": "m_helper24", "label": "CommonHelper24", "sub": "≈110"},
-          {"id": "m_helper25", "label": "CommonHelper25", "sub": "≈110"},
-          {"id": "m_helper26", "label": "CommonHelper26", "sub": "≈110"},
-          {"id": "m_helper27", "label": "CommonHelper27", "sub": "≈110"},
-          {"id": "m_helper28", "label": "CommonHelper28", "sub": "≈110"},
-          {"id": "m_helper29", "label": "CommonHelper29", "sub": "≈110"},
-          {"id": "m_helper30", "label": "CommonHelper30", "sub": "≈110"},
-          {"id": "m_helper31", "label": "CommonHelper31", "sub": "≈110"},
-          {"id": "m_helper32", "label": "CommonHelper32", "sub": "≈110"},
-          {"id": "m_helper33", "label": "CommonHelper33", "sub": "≈110"},
-          {"id": "m_helper34", "label": "CommonHelper34", "sub": "≈110"},
-          {"id": "m_helper35", "label": "CommonHelper35", "sub": "≈110"},
-          {"id": "m_helper36", "label": "CommonHelper36", "sub": "≈110"},
-          {"id": "m_helper37", "label": "CommonHelper37", "sub": "≈110"},
-          {"id": "m_helper38", "label": "CommonHelper38", "sub": "≈110"},
-          {"id": "m_helper39", "label": "CommonHelper39", "sub": "≈110"},
-          {"id": "m_helper40", "label": "CommonHelper40", "sub": "≈110"},
-          {"id": "m_helper41", "label": "CommonHelper41", "sub": "≈110"},
-          {"id": "m_helper42", "label": "CommonHelper42", "sub": "≈110"}
+          {
+           "id": "m_money",
+           "label": "MoneyTypes",
+           "sub": "≈430"
+          },
+          {
+           "id": "m_audit",
+           "label": "AuditTrail",
+           "sub": "≈690"
+          },
+          {
+           "id": "m_batch",
+           "label": "BatchScheduler",
+           "sub": "≈1,050"
+          },
+          {
+           "id": "m_persist",
+           "label": "PersistenceCore",
+           "sub": "≈1,310"
+          },
+          {
+           "id": "m_helper01",
+           "label": "CommonHelper01",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper02",
+           "label": "CommonHelper02",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper03",
+           "label": "CommonHelper03",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper04",
+           "label": "CommonHelper04",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper05",
+           "label": "CommonHelper05",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper06",
+           "label": "CommonHelper06",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper07",
+           "label": "CommonHelper07",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper08",
+           "label": "CommonHelper08",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper09",
+           "label": "CommonHelper09",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper10",
+           "label": "CommonHelper10",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper11",
+           "label": "CommonHelper11",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper12",
+           "label": "CommonHelper12",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper13",
+           "label": "CommonHelper13",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper14",
+           "label": "CommonHelper14",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper15",
+           "label": "CommonHelper15",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper16",
+           "label": "CommonHelper16",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper17",
+           "label": "CommonHelper17",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper18",
+           "label": "CommonHelper18",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper19",
+           "label": "CommonHelper19",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper20",
+           "label": "CommonHelper20",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper21",
+           "label": "CommonHelper21",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper22",
+           "label": "CommonHelper22",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper23",
+           "label": "CommonHelper23",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper24",
+           "label": "CommonHelper24",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper25",
+           "label": "CommonHelper25",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper26",
+           "label": "CommonHelper26",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper27",
+           "label": "CommonHelper27",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper28",
+           "label": "CommonHelper28",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper29",
+           "label": "CommonHelper29",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper30",
+           "label": "CommonHelper30",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper31",
+           "label": "CommonHelper31",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper32",
+           "label": "CommonHelper32",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper33",
+           "label": "CommonHelper33",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper34",
+           "label": "CommonHelper34",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper35",
+           "label": "CommonHelper35",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper36",
+           "label": "CommonHelper36",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper37",
+           "label": "CommonHelper37",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper38",
+           "label": "CommonHelper38",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper39",
+           "label": "CommonHelper39",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper40",
+           "label": "CommonHelper40",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper41",
+           "label": "CommonHelper41",
+           "sub": "≈110"
+          },
+          {
+           "id": "m_helper42",
+           "label": "CommonHelper42",
+           "sub": "≈110"
+          }
          ]
         }
        ],
        "edges": [
-        {"id": "e_dom1", "source": "b_order", "target": "b_inventory", "count": 38, "label": "reserves stock"},
-        {"id": "e_dom2", "source": "b_order", "target": "b_customer", "count": 21, "label": "resolves buyer"},
-        {"id": "e_dom3", "source": "b_order", "target": "b_shared", "count": 64, "label": "uses kernel"},
-        {"id": "e_dom4", "source": "b_inventory", "target": "b_shared", "count": 47, "label": "uses kernel"},
-        {"id": "e_dom5", "source": "b_customer", "target": "b_shared", "count": 29, "label": "uses kernel"},
-        {"id": "e_dom6", "source": "b_inventory", "target": "b_customer", "count": 9, "label": "notifies backorder"},
-        {"id": "e_dom7", "source": "b_customer", "target": "b_order", "count": 13, "label": "rewrites order status"}
+        {
+         "id": "e_dom1",
+         "source": "b_order",
+         "target": "b_inventory",
+         "count": 38,
+         "label": "reserves stock"
+        },
+        {
+         "id": "e_dom2",
+         "source": "b_order",
+         "target": "b_customer",
+         "count": 21,
+         "label": "resolves buyer"
+        },
+        {
+         "id": "e_dom3",
+         "source": "b_order",
+         "target": "b_shared",
+         "count": 64,
+         "label": "uses kernel"
+        },
+        {
+         "id": "e_dom4",
+         "source": "b_inventory",
+         "target": "b_shared",
+         "count": 47,
+         "label": "uses kernel"
+        },
+        {
+         "id": "e_dom5",
+         "source": "b_customer",
+         "target": "b_shared",
+         "count": 29,
+         "label": "uses kernel"
+        },
+        {
+         "id": "e_dom6",
+         "source": "b_inventory",
+         "target": "b_customer",
+         "count": 9,
+         "label": "notifies backorder"
+        },
+        {
+         "id": "e_dom7",
+         "source": "b_customer",
+         "target": "b_order",
+         "count": 13,
+         "label": "rewrites order status"
+        }
        ]
       },
       "datamodel": {
@@ -162,22 +489,1011 @@
         "label": "SIMULATED · would derive from: Hibernate .hbm.xml mappings + Flyway DDL under db/migration/"
        },
        "nodes": [
-        {"id": "t_customers", "type": "entity", "label": "customers", "tech": "table", "fields": ["customer_id PK", "loyalty_no", "email", "created_at"], "real": false},
-        {"id": "t_orders", "type": "entity", "label": "orders", "tech": "table", "fields": ["order_id PK", "customer_id FK", "store_no", "status", "total_cents"], "real": false},
-        {"id": "t_order_lines", "type": "entity", "label": "order_lines", "tech": "table", "fields": ["line_id PK", "order_id FK", "product_id FK", "qty", "unit_price_cents"], "real": false},
-        {"id": "t_products", "type": "entity", "label": "products", "tech": "table", "fields": ["product_id PK", "sku", "title", "dept_code"], "real": false},
-        {"id": "t_inventory", "type": "entity", "label": "inventory_levels", "tech": "table", "fields": ["product_id FK", "location_id PK", "on_hand", "reserved"], "real": false},
-        {"id": "t_payments", "type": "entity", "label": "payments", "tech": "table", "fields": ["payment_id PK", "order_id FK", "auth_code", "amount_cents", "captured_at"], "real": false},
-        {"id": "t_shipments", "type": "entity", "label": "shipments", "tech": "table", "fields": ["shipment_id PK", "order_id FK", "carrier", "asn_ref", "shipped_at"], "real": false}
+        {
+         "id": "t_customers",
+         "type": "entity",
+         "label": "customers",
+         "tech": "table",
+         "fields": [
+          "customer_id PK",
+          "loyalty_no",
+          "email",
+          "created_at"
+         ],
+         "real": false
+        },
+        {
+         "id": "t_orders",
+         "type": "entity",
+         "label": "orders",
+         "tech": "table",
+         "fields": [
+          "order_id PK",
+          "customer_id FK",
+          "store_no",
+          "status",
+          "total_cents"
+         ],
+         "real": false
+        },
+        {
+         "id": "t_order_lines",
+         "type": "entity",
+         "label": "order_lines",
+         "tech": "table",
+         "fields": [
+          "line_id PK",
+          "order_id FK",
+          "product_id FK",
+          "qty",
+          "unit_price_cents"
+         ],
+         "real": false
+        },
+        {
+         "id": "t_products",
+         "type": "entity",
+         "label": "products",
+         "tech": "table",
+         "fields": [
+          "product_id PK",
+          "sku",
+          "title",
+          "dept_code"
+         ],
+         "real": false
+        },
+        {
+         "id": "t_inventory",
+         "type": "entity",
+         "label": "inventory_levels",
+         "tech": "table",
+         "fields": [
+          "product_id FK",
+          "location_id PK",
+          "on_hand",
+          "reserved"
+         ],
+         "real": false
+        },
+        {
+         "id": "t_payments",
+         "type": "entity",
+         "label": "payments",
+         "tech": "table",
+         "fields": [
+          "payment_id PK",
+          "order_id FK",
+          "auth_code",
+          "amount_cents",
+          "captured_at"
+         ],
+         "real": false
+        },
+        {
+         "id": "t_shipments",
+         "type": "entity",
+         "label": "shipments",
+         "tech": "table",
+         "fields": [
+          "shipment_id PK",
+          "order_id FK",
+          "carrier",
+          "asn_ref",
+          "shipped_at"
+         ],
+         "real": false
+        }
        ],
        "edges": [
-        {"id": "e_dm1", "source": "t_customers", "target": "t_orders", "label": "1:N"},
-        {"id": "e_dm2", "source": "t_orders", "target": "t_order_lines", "label": "1:N"},
-        {"id": "e_dm3", "source": "t_products", "target": "t_order_lines", "label": "1:N"},
-        {"id": "e_dm4", "source": "t_products", "target": "t_inventory", "label": "1:N"},
-        {"id": "e_dm5", "source": "t_orders", "target": "t_payments", "label": "1:N"},
-        {"id": "e_dm6", "source": "t_orders", "target": "t_shipments", "label": "1:N"},
-        {"id": "e_dm7", "source": "t_shipments", "target": "t_carriers", "label": "N:1"}
+        {
+         "id": "e_dm1",
+         "source": "t_customers",
+         "target": "t_orders",
+         "label": "1:N"
+        },
+        {
+         "id": "e_dm2",
+         "source": "t_orders",
+         "target": "t_order_lines",
+         "label": "1:N"
+        },
+        {
+         "id": "e_dm3",
+         "source": "t_products",
+         "target": "t_order_lines",
+         "label": "1:N"
+        },
+        {
+         "id": "e_dm4",
+         "source": "t_products",
+         "target": "t_inventory",
+         "label": "1:N"
+        },
+        {
+         "id": "e_dm5",
+         "source": "t_orders",
+         "target": "t_payments",
+         "label": "1:N"
+        },
+        {
+         "id": "e_dm6",
+         "source": "t_orders",
+         "target": "t_shipments",
+         "label": "1:N"
+        },
+        {
+         "id": "e_dm7",
+         "source": "t_shipments",
+         "target": "t_carriers",
+         "label": "N:1"
+        }
+       ]
+      },
+      "container": {
+       "kind": "simple",
+       "title": "Container view",
+       "count": "6 containers",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: deploy descriptors (EAR/WAR) + JVM topology"
+       },
+       "nodes": [
+        {
+         "id": "was",
+         "type": "container",
+         "icon": "container",
+         "label": "WebSphere EAR",
+         "sub": "[Java 8 · 480k LOC]",
+         "real": false
+        },
+        {
+         "id": "web",
+         "type": "container",
+         "icon": "container",
+         "label": "Storefront",
+         "sub": "[AngularJS 1.x]",
+         "real": false
+        },
+        {
+         "id": "db",
+         "type": "store",
+         "icon": "store",
+         "label": "Oracle 12c",
+         "sub": "[≈310 tables]",
+         "real": false
+        },
+        {
+         "id": "mq",
+         "type": "store",
+         "icon": "store",
+         "label": "IBM MQ",
+         "sub": "[orders · inventory]",
+         "real": false
+        },
+        {
+         "id": "batch",
+         "type": "container",
+         "icon": "container",
+         "label": "Batch JCL",
+         "sub": "[nightly]",
+         "real": false
+        },
+        {
+         "id": "cdn",
+         "type": "ext",
+         "icon": "ext",
+         "label": "Akamai",
+         "sub": "[static]",
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "c1",
+         "source": "web",
+         "target": "was",
+         "label": "REST"
+        },
+        {
+         "id": "c2",
+         "source": "was",
+         "target": "db",
+         "label": "JDBC"
+        },
+        {
+         "id": "c3",
+         "source": "was",
+         "target": "mq",
+         "label": "JMS"
+        },
+        {
+         "id": "c4",
+         "source": "batch",
+         "target": "db",
+         "label": "sqlldr"
+        },
+        {
+         "id": "c5",
+         "source": "cdn",
+         "target": "web",
+         "label": "serves"
+        }
+       ]
+      },
+      "deployment": {
+       "kind": "buckets",
+       "title": "Deployment — DC + DR",
+       "count": "2 sites · 9 nodes",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: F5 pools + WebSphere cell topology + Veritas DR runbook"
+       },
+       "buckets": [
+        {
+         "id": "dc",
+         "layer": "dc",
+         "label": "primary DC",
+         "part": 0,
+         "ico": "sys",
+         "members": [
+          {
+           "id": "d1",
+           "label": "was-cell-1",
+           "sub": "4 JVMs"
+          },
+          {
+           "id": "d2",
+           "label": "was-cell-2",
+           "sub": "4 JVMs"
+          },
+          {
+           "id": "d3",
+           "label": "oracle-rac",
+           "sub": "2 nodes"
+          },
+          {
+           "id": "d4",
+           "label": "mq-pair",
+           "sub": "active"
+          }
+         ]
+        },
+        {
+         "id": "dr",
+         "layer": "dr",
+         "label": "DR site",
+         "part": 1,
+         "ico": "infra",
+         "members": [
+          {
+           "id": "d5",
+           "label": "was-standby",
+           "sub": "cold"
+          },
+          {
+           "id": "d6",
+           "label": "oracle-dg",
+           "sub": "DataGuard"
+          },
+          {
+           "id": "d7",
+           "label": "mq-standby",
+           "sub": "passive"
+          }
+         ]
+        }
+       ],
+       "edges": [
+        {
+         "id": "dp1",
+         "source": "dc",
+         "target": "dr",
+         "count": 3,
+         "label": "replication"
+        }
+       ],
+       "labeled": true
+      },
+      "sequence": {
+       "kind": "simple",
+       "title": "Dynamic — submit order (happy path)",
+       "count": "6 participants · 7 calls",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: call-edge resolution (P4) — until then: APM traces"
+       },
+       "nodes": [
+        {
+         "id": "s0",
+         "type": "ext",
+         "icon": "ext",
+         "label": "POS",
+         "sub": "terminal",
+         "real": false
+        },
+        {
+         "id": "s1",
+         "type": "proc",
+         "icon": "app",
+         "label": "api-gateway",
+         "sub": "",
+         "real": false
+        },
+        {
+         "id": "s2",
+         "type": "proc",
+         "icon": "app",
+         "label": "OrderService",
+         "sub": "",
+         "real": false
+        },
+        {
+         "id": "s3",
+         "type": "proc",
+         "icon": "app",
+         "label": "InventoryService",
+         "sub": "",
+         "real": false
+        },
+        {
+         "id": "s4",
+         "type": "proc",
+         "icon": "app",
+         "label": "PaymentFacade",
+         "sub": "",
+         "real": false
+        },
+        {
+         "id": "s5",
+         "type": "store",
+         "icon": "store",
+         "label": "Oracle",
+         "sub": "",
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "q1",
+         "source": "s0",
+         "target": "s1",
+         "label": "1 · submitOrder"
+        },
+        {
+         "id": "q2",
+         "source": "s1",
+         "target": "s2",
+         "label": "2 · createOrder"
+        },
+        {
+         "id": "q3",
+         "source": "s2",
+         "target": "s3",
+         "label": "3 · reserveStock"
+        },
+        {
+         "id": "q4",
+         "source": "s2",
+         "target": "s4",
+         "label": "4 · authorize"
+        },
+        {
+         "id": "q5",
+         "source": "s2",
+         "target": "s5",
+         "label": "5 · INSERT order"
+        },
+        {
+         "id": "q6",
+         "source": "s4",
+         "target": "s5",
+         "label": "6 · INSERT auth"
+        },
+        {
+         "id": "q7",
+         "source": "s2",
+         "target": "s1",
+         "label": "7 · 201 Created"
+        }
+       ]
+      },
+      "code": {
+       "kind": "entity",
+       "title": "Code (L4) — order checkout classes",
+       "count": "4 classes",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: symbol index (SymbolMeta) — class/method table"
+       },
+       "nodes": [
+        {
+         "id": "k1",
+         "type": "entity",
+         "label": "OrderService",
+         "tech": "class · 2,140 loc",
+         "fields": [
+          "+ createOrder(cart): Order",
+          "+ cancel(id)",
+          "- validate(cart)",
+          "- priceOf(sku)"
+         ],
+         "real": false
+        },
+        {
+         "id": "k2",
+         "type": "entity",
+         "label": "OrderRepository",
+         "tech": "class · 890 loc",
+         "fields": [
+          "+ save(Order)",
+          "+ findById(id)",
+          "+ findByCustomer(cid)"
+         ],
+         "real": false
+        },
+        {
+         "id": "k3",
+         "type": "entity",
+         "label": "Order",
+         "tech": "entity",
+         "fields": [
+          "id: long",
+          "items: List<Line>",
+          "status: OrderStatus",
+          "total: Money"
+         ],
+         "real": false
+        },
+        {
+         "id": "k4",
+         "type": "entity",
+         "label": "InventoryClient",
+         "tech": "class · 410 loc",
+         "fields": [
+          "+ reserve(sku, qty)",
+          "+ release(token)"
+         ],
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "kc1",
+         "source": "k1",
+         "target": "k2",
+         "label": "uses"
+        },
+        {
+         "id": "kc2",
+         "source": "k1",
+         "target": "k4",
+         "label": "uses"
+        },
+        {
+         "id": "kc3",
+         "source": "k2",
+         "target": "k3",
+         "label": "persists"
+        }
+       ]
+      },
+      "trust": {
+       "kind": "buckets",
+       "title": "Trust boundaries (STRIDE)",
+       "count": "4 zones · 8 flows",
+       "dir": "DOWN",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: boundary rule-pack over call edges + network segments"
+       },
+       "buckets": [
+        {
+         "id": "z1",
+         "layer": "internet",
+         "label": "untrusted · internet",
+         "part": 0,
+         "boundary": true,
+         "ico": "ext",
+         "members": [
+          {
+           "id": "t1",
+           "label": "POS clients",
+           "sub": "2,400 sites"
+          },
+          {
+           "id": "t2",
+           "label": "partner EDI",
+           "sub": "3PL"
+          }
+         ]
+        },
+        {
+         "id": "z2",
+         "layer": "dmz",
+         "label": "DMZ",
+         "part": 1,
+         "boundary": true,
+         "ico": "infra",
+         "members": [
+          {
+           "id": "t3",
+           "label": "WAF",
+           "sub": "F5"
+          },
+          {
+           "id": "t4",
+           "label": "api-gateway",
+           "sub": "authn"
+          }
+         ]
+        },
+        {
+         "id": "z3",
+         "layer": "internal",
+         "label": "internal · app zone",
+         "part": 2,
+         "boundary": true,
+         "ico": "app",
+         "members": [
+          {
+           "id": "t5",
+           "label": "order-services",
+           "sub": "EAR"
+          },
+          {
+           "id": "t6",
+           "label": "batch",
+           "sub": "JCL"
+          }
+         ]
+        },
+        {
+         "id": "z4",
+         "layer": "data",
+         "label": "restricted · data zone",
+         "part": 3,
+         "boundary": true,
+         "ico": "store",
+         "members": [
+          {
+           "id": "t7",
+           "label": "oracle",
+           "sub": "PII"
+          },
+          {
+           "id": "t8",
+           "label": "pci vault",
+           "sub": "tokens"
+          }
+         ]
+        }
+       ],
+       "edges": [
+        {
+         "id": "z_1",
+         "source": "z1",
+         "target": "z2",
+         "count": 2,
+         "label": "TLS"
+        },
+        {
+         "id": "z_2",
+         "source": "z2",
+         "target": "z3",
+         "count": 2,
+         "label": "authz ticket"
+        },
+        {
+         "id": "z_3",
+         "source": "z3",
+         "target": "z4",
+         "count": 3,
+         "label": "JDBC · vault API"
+        },
+        {
+         "id": "z_bad",
+         "source": "z1",
+         "target": "z4",
+         "count": 1,
+         "label": "legacy report pull",
+         "tag": "boundary-bypass"
+        }
+       ],
+       "labeled": true
+      },
+      "statemachine": {
+       "kind": "simple",
+       "title": "State machine — Order lifecycle",
+       "count": "6 states · 8 transitions",
+       "dir": "RIGHT",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: state-field extraction (OrderStatus enum + transitions)"
+       },
+       "nodes": [
+        {
+         "id": "st1",
+         "type": "proc",
+         "icon": "domain",
+         "label": "Created",
+         "sub": "",
+         "real": false
+        },
+        {
+         "id": "st2",
+         "type": "proc",
+         "icon": "domain",
+         "label": "Authorized",
+         "sub": "",
+         "real": false
+        },
+        {
+         "id": "st3",
+         "type": "proc",
+         "icon": "domain",
+         "label": "Picking",
+         "sub": "",
+         "real": false
+        },
+        {
+         "id": "st4",
+         "type": "proc",
+         "icon": "domain",
+         "label": "Shipped",
+         "sub": "",
+         "real": false
+        },
+        {
+         "id": "st5",
+         "type": "proc",
+         "icon": "domain",
+         "label": "Delivered",
+         "sub": "",
+         "real": false
+        },
+        {
+         "id": "st6",
+         "type": "proc",
+         "icon": "ext",
+         "label": "Cancelled",
+         "sub": "terminal",
+         "real": false
+        }
+       ],
+       "edges": [
+        {
+         "id": "m1",
+         "source": "st1",
+         "target": "st2",
+         "label": "payment ok"
+        },
+        {
+         "id": "m2",
+         "source": "st2",
+         "target": "st3",
+         "label": "stock reserved"
+        },
+        {
+         "id": "m3",
+         "source": "st3",
+         "target": "st4",
+         "label": "manifest"
+        },
+        {
+         "id": "m4",
+         "source": "st4",
+         "target": "st5",
+         "label": "POD"
+        },
+        {
+         "id": "m5",
+         "source": "st1",
+         "target": "st6",
+         "label": "timeout"
+        },
+        {
+         "id": "m6",
+         "source": "st2",
+         "target": "st6",
+         "label": "fraud"
+        },
+        {
+         "id": "m7",
+         "source": "st3",
+         "target": "st6",
+         "label": "oos"
+        }
+       ]
+      },
+      "glossary": {
+       "kind": "table",
+       "title": "Glossary — ubiquitous language",
+       "count": "8 terms",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: atlas identifier mining + human definitions"
+       },
+       "columns": [
+        "Term",
+        "Definition",
+        "Owning domain"
+       ],
+       "rows": [
+        [
+         "SKU",
+         "Stock-keeping unit — sellable item identity",
+         "inventory"
+        ],
+        [
+         "ATP",
+         "Available-to-promise — sellable qty after reservations",
+         "inventory"
+        ],
+        [
+         "Basket",
+         "Pre-checkout cart, POS-side state",
+         "order"
+        ],
+        [
+         "Authorization",
+         "Payment hold prior to capture",
+         "order"
+        ],
+        [
+         "Replenishment",
+         "Warehouse → store stock movement",
+         "inventory"
+        ],
+        [
+         "Loyalty tier",
+         "Customer discount band (bronze…platinum)",
+         "customer"
+        ],
+        [
+         "POD",
+         "Proof of delivery — closes the order lifecycle",
+         "order"
+        ],
+        [
+         "Golden record",
+         "Deduplicated master customer identity",
+         "customer"
+        ]
+       ]
+      },
+      "techportfolio": {
+       "kind": "table",
+       "title": "Technology portfolio",
+       "count": "8 platforms",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: manifests + CMDB + version scan"
+       },
+       "columns": [
+        "Platform",
+        "Version",
+        "Category",
+        "Status"
+       ],
+       "rows": [
+        [
+         "Java",
+         "8 (EOL)",
+         "runtime",
+         "⚠ migrate"
+        ],
+        [
+         "WebSphere ND",
+         "8.5.5",
+         "app server",
+         "⚠ extended support"
+        ],
+        [
+         "Oracle DB",
+         "12c",
+         "database",
+         "⚠ upgrade to 19c"
+        ],
+        [
+         "AngularJS",
+         "1.6 (EOL)",
+         "frontend",
+         "⚠ replace"
+        ],
+        [
+         "IBM MQ",
+         "9.0",
+         "messaging",
+         "supported"
+        ],
+        [
+         "Spring",
+         "4.3",
+         "framework",
+         "⚠ CVE backlog"
+        ],
+        [
+         "Akamai",
+         "—",
+         "CDN",
+         "supported"
+        ],
+        [
+         "Control-M",
+         "9",
+         "batch scheduler",
+         "supported"
+        ]
+       ]
+      },
+      "sbom": {
+       "kind": "table",
+       "title": "SBOM — top components",
+       "count": "10 of ≈340 components",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: lockfiles/poms → CycloneDX (Syft-style scan)"
+       },
+       "columns": [
+        "Component",
+        "Version",
+        "License",
+        "Risk"
+       ],
+       "rows": [
+        [
+         "log4j",
+         "1.2.17",
+         "Apache-2.0",
+         "⚠ EOL · CVE-2019-17571"
+        ],
+        [
+         "spring-core",
+         "4.3.30",
+         "Apache-2.0",
+         "⚠ 3 CVEs"
+        ],
+        [
+         "commons-collections",
+         "3.2.1",
+         "Apache-2.0",
+         "⚠ deserialization"
+        ],
+        [
+         "struts (legacy module)",
+         "2.3.x",
+         "Apache-2.0",
+         "⚠ critical"
+        ],
+        [
+         "hibernate",
+         "5.2",
+         "LGPL-2.1",
+         "ok"
+        ],
+        [
+         "jackson-databind",
+         "2.9",
+         "Apache-2.0",
+         "⚠ 2 CVEs"
+        ],
+        [
+         "guava",
+         "20.0",
+         "Apache-2.0",
+         "ok"
+        ],
+        [
+         "angularjs",
+         "1.6.9",
+         "MIT",
+         "⚠ EOL"
+        ],
+        [
+         "ojdbc8",
+         "12.2",
+         "Oracle FUTC",
+         "review license"
+        ],
+        [
+         "ibm-mq-client",
+         "9.0",
+         "IBM ILAN",
+         "ok"
+        ]
+       ]
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Dependency Structure Matrix",
+       "count": "5 modules",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: import graph → N×N matrix"
+       },
+       "items": [
+        "order",
+        "inventory",
+        "customer",
+        "shared",
+        "batch"
+       ],
+       "matrix": [
+        [
+         null,
+         38,
+         21,
+         212,
+         0
+        ],
+        [
+         9,
+         null,
+         9,
+         167,
+         0
+        ],
+        [
+         0,
+         0,
+         null,
+         143,
+         0
+        ],
+        [
+         0,
+         0,
+         0,
+         null,
+         0
+        ],
+        [
+         24,
+         31,
+         0,
+         88,
+         null
+        ]
+       ]
+      },
+      "cycles": {
+       "kind": "table",
+       "title": "Cycle / tangle report",
+       "count": "2 cycles · tangle 14%",
+       "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Tarjan SCC over import graph"
+       },
+       "columns": [
+        "Cycle",
+        "Path",
+        "Edges",
+        "Verdict"
+       ],
+       "rows": [
+        [
+         "#1",
+         "order → inventory → order",
+         "38 ⇄ 9",
+         "⚠ break via order-events topic"
+        ],
+        [
+         "#2",
+         "batch ↔ shared (config feedback)",
+         "88 ⇄ 12",
+         "⚠ extract batch-config"
+        ],
+        [
+         "tangle",
+         "4 of 5 modules in one SCC neighborhood",
+         "—",
+         "⚠ 14% of edges in cycles"
+        ]
        ]
       }
      }

@@ -440,29 +440,43 @@ const STD_CATALOG=[
    {vid:["container"],label:"Container"},
    {vid:["component","domains"],label:"Component"},
    {vid:["deployment"],label:"Deployment"},
-   {label:"Dynamic (sequence)",note:"needs call-edge resolution"},
-   {label:"Code (L4)",note:"symbol table · not drawn by design"}]},
+   {vid:["sequence"],label:"Dynamic (sequence)",note:"needs call-edge resolution"},
+   {vid:["code"],label:"Code (L4)",note:"symbol table"}]},
  {grp:"Flows & Behavior",items:[
    {vid:["dataflow"],label:"Data Flow (DFD)"},
-   {label:"Trust Boundaries (STRIDE)",note:"DFD overlay · rule-pack"},
-   {label:"State Machine",note:"needs state extraction"}]},
+   {vid:["trust"],label:"Trust Boundaries (STRIDE)",note:"DFD overlay · rule-pack"},
+   {vid:["statemachine"],label:"State Machine",note:"needs state extraction"}]},
  {grp:"Data",items:[
    {vid:["datamodel"],label:"Data Model / ER"},
-   {label:"Glossary",note:"atlas seed + writer"}]},
+   {vid:["glossary"],label:"Glossary",note:"atlas seed + writer"}]},
  {grp:"Technology & Ops",items:[
-   {label:"Technology Portfolio",note:"config scan"},
-   {label:"SBOM (CycloneDX)",note:"document · manifests"}]},
+   {vid:["techportfolio"],label:"Technology Portfolio",note:"config scan"},
+   {vid:["sbom"],label:"SBOM (CycloneDX)",note:"document · manifests"}]},
  {grp:"Classical structure",items:[
    {vid:["component","domains"],label:"Layered Architecture",alias:true},
-   {label:"Dependency Matrix (DSM)",note:"matrix renderer"},
-   {label:"Cycle / Tangle Report",note:"SCC pass"}]}];
+   {vid:["dsm"],label:"Dependency Matrix (DSM)",note:"matrix renderer"},
+   {vid:["cycles"],label:"Cycle / Tangle Report",note:"SCC pass"}]}];
+// AI-generation prompt for planned rows: copy, hand to any agent, get a loadable shard
+const PROMPT_SCHEMA=`View JSON shapes (pick ONE matching the view type):
+simple:  {"kind":"simple","title","count","dir":"DOWN|RIGHT","prov":{"kind":"simulated","label":"SIMULATED · would derive from: <source>"},"nodes":[{"id","type":"sys|ext|container|store|proc","icon":"sys|ext|container|store|app|domain","label","sub","real":false}],"edges":[{"id","source","target","label"}]}
+buckets: {...same header...,"buckets":[{"id","layer","label","part":0,"boundary":true(optional, dashed zone),"members":[{"id","label","sub"}]}],"edges":[{"id","source","target","count","label"?,"tag"?}]}
+entity:  {...,"nodes":[{"id","type":"entity","label","tech","fields":["..."],"real":false}],"edges":[{"id","source","target","label"}]}
+table:   {...,"columns":["..."],"rows":[["...","..."]]}
+matrix:  {...,"items":["a","b"],"matrix":[[null,3],[1,null]]}`;
+function genPrompt(estateId,scopeLabel,vid,label){
+ return "Generate an architecture view for the aOa playbook viewer.\n"+
+ "Target: estate \""+estateId+"\" · system \""+scopeLabel+"\" · view id \""+vid+"\" ("+label+").\n"+
+ "Author realistic content consistent with that system. Mark provenance SIMULATED with the real-world source it would derive from.\n\n"+
+ PROMPT_SCHEMA+"\n\n"+
+ "Output: merge the view object into playbook/mockups/estates/"+estateId+".json under estates.*.scopes.*.views."+vid+
+ ", then run python3 playbook/generators/build_c4_mockup.py and refresh the viewer.";}
 function dynamicCatalog(sv){
   return STD_CATALOG.map(g=>({grp:g.grp,tag:g.tag,items:g.items.map(it=>{
     const hit=(it.vid||[]).find(v=>sv.views&&sv.views[v]);
     if(hit){const v=sv.views[hit];
       return {id:hit,label:it.label,alias:it.alias,
         status:(v.prov&&v.prov.kind==="simulated")?"sim":"live"};}
-    return {label:it.label,status:"planned",note:it.note||"not yet derived for this system"};})}));}
+    return {label:it.label,status:"planned",note:it.note||"not yet derived for this system",vid0:(it.vid||[])[0]};})}));}
 const snap=v=>Math.round(v/8)*8;
 const IP={
  cmd:'<polyline points="3,4 7,7 3,10" fill="none"/><line x1="7" y1="10" x2="11" y2="10"/>',
@@ -537,7 +551,7 @@ function EntityNode({data}){
       borderBottom:i<data.fields.length-1?`1px solid ${T.border}22`:"none"}}>${f}</div>`)}
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
-function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting";
+function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting"||data.boundary;
   return html`<div style=${{width:"100%",height:"100%",background:T.band,
     border:`1.5px ${dash?"dashed":"solid"} ${data._god?T.red:c}`,borderRadius:4,boxSizing:"border-box",
     opacity:data._dead?0.45:1,
@@ -579,6 +593,37 @@ function MemberNode({data}){const c=data.col;
           borderRadius:7,padding:"0 4px",lineHeight:"12px"}}>Δ</span>`:null}
       </span>`:html`<span style=${{marginLeft:"auto",fontSize:9,color:T.dim}}>${data.sub}</span>`}
     </div>
+  </div>`;}
+function TableView({view}){
+  return html`<div style=${{position:"absolute",inset:0,overflow:"auto",padding:"56px 40px 40px"}}>
+    <table style=${{borderCollapse:"collapse",minWidth:560,fontSize:12.5,color:T.text}}>
+      <thead><tr>${(view.columns||[]).map((c,i)=>html`<th key=${i} style=${{textAlign:"left",
+        padding:"8px 16px",borderBottom:`2px solid ${T.border}`,color:T.dim,fontSize:10.5,
+        textTransform:"uppercase",letterSpacing:1}}>${c}</th>`)}</tr></thead>
+      <tbody>${(view.rows||[]).map((r,ri)=>html`<tr key=${ri}>
+        ${r.map((cell,ci)=>html`<td key=${ci} style=${{padding:"7px 16px",
+          borderBottom:`1px solid ${T.border}55`,
+          color:String(cell).startsWith("⚠")?T.red:ci===0?T.text:T.dim,
+          fontWeight:ci===0?600:400,fontFamily:ci===0?"inherit":"ui-monospace,monospace",
+          fontSize:ci===0?12.5:11.5}}>${cell}</td>`)}</tr>`)}</tbody>
+    </table></div>`;}
+function MatrixView({view}){
+  const items=view.items||[],M=view.matrix||[];
+  return html`<div style=${{position:"absolute",inset:0,overflow:"auto",padding:"56px 40px 40px"}}>
+    <table style=${{borderCollapse:"collapse",fontSize:11,color:T.text}}>
+      <thead><tr><th style=${{padding:"6px 10px"}}></th>
+        ${items.map((it,i)=>html`<th key=${i} style=${{padding:"6px 10px",color:T.dim,fontSize:10,
+          textTransform:"uppercase",letterSpacing:.5}}>${it}</th>`)}</tr></thead>
+      <tbody>${items.map((row,i)=>html`<tr key=${i}>
+        <th style=${{padding:"6px 12px",textAlign:"right",color:T.dim,fontSize:10,
+          textTransform:"uppercase",letterSpacing:.5}}>${row}</th>
+        ${items.map((_,j)=>{const v=(M[i]||[])[j];const cyc=v&&(M[j]||[])[i];
+          return html`<td key=${j} style=${{width:44,height:32,textAlign:"center",
+            border:`1px solid ${T.border}55`,
+            background:i===j?T.cardH:v?(cyc?T.red+"33":T.blue+"22"):"transparent",
+            color:cyc?T.red:v?T.text:T.mute,fontWeight:v?700:400}}>${i===j?"·":(v||"")}</td>`;})}
+      </tr>`)}</tbody></table>
+    <div style=${{marginTop:14,fontSize:10.5,color:T.dim}}>cell = dependencies row → column · <span style=${{color:T.red}}>red = mutual (cycle)</span></div>
   </div>`;}
 const nodeTypes={box:BoxNode,bucket:BucketNode,solo:SoloNode,member:MemberNode,entity:EntityNode};
 const edgeTypes={elk:ElkEdge};
@@ -713,6 +758,8 @@ function Footer({view,ov}){
     const ed=[{txt:"dependency · color = source layer",glyph:"━"},{txt:"bundled count",glyph:"×N"}];
     if((view.buckets||[]).some(b=>b.layer==="supporting"))ed.push({txt:"supporting / inferred",glyph:"┄"});
     groups.push({label:"EDGES",items:ed});
+  } else if(view.kind==="table"||view.kind==="matrix"){
+    groups.push({label:"DOCUMENT",items:[{txt:(view.rows?view.rows.length+" rows":((view.items||[]).length+"×"+(view.items||[]).length+" matrix")),glyph:"≣"}]});
   } else if(view.kind==="entity"){
     groups.push({label:"ELEMENTS",items:[{txt:"bucket table",c:T.green,ico:"store"}]});
     groups.push({label:"EDGES",items:[{txt:"contains",glyph:"━"}]});
@@ -791,6 +838,7 @@ const STATUS={live:{dot:"●",col:T.green,lbl:"derived live"},
 
 const ago=t=>{const s=(Date.now()-t)/1000;return s<5?"now":s<60?Math.floor(s)+"s ago":Math.floor(s/60)+"m ago";};
 function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,collapsed,setCollapsed,last}){
+  const[copied,setCopied]=useState(null);
   const CATALOG=(estate==="local"&&CATALOGS[scope])?CATALOGS[scope]:dynamicCatalog(scopes[scope]||{views:{}});
   if(collapsed) return html`<div style=${{width:44,borderRight:`1px solid ${T.border}`,
     display:"flex",flexDirection:"column",alignItems:"center",paddingTop:10,flexShrink:0}}>
@@ -845,6 +893,11 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
               ${it.note?html`<div style=${{fontSize:9.5,color:T.mute}}>${it.note}</div>`:null}
             </div>
             ${it.id&&last&&last[estate+":"+scope+":"+it.id]?html`<span style=${{fontSize:8.5,color:T.mute,lineHeight:"17px",flexShrink:0}}>${ago(last[estate+":"+scope+":"+it.id])}</span>`:null}
+            ${it.status==="planned"&&estate!=="local"&&it.vid0?html`<span title="Copy AI-generation prompt for this view"
+              onClick=${ev=>{ev.stopPropagation();
+                navigator.clipboard.writeText(genPrompt(estate,(scopes[scope]||{}).label||scope,it.vid0,it.label));
+                setCopied(it.label);setTimeout(()=>setCopied(null),1400);}}
+              style=${{fontSize:10,color:copied===it.label?T.green:T.mute,cursor:"pointer",flexShrink:0,lineHeight:"17px"}}>${copied===it.label?"✓":"⧉"}</span>`:null}
           </div>`;}):null}
       </div>`;})}
     </div>
@@ -887,6 +940,10 @@ function Flow(){
         if(!r.ok)throw new Error("HTTP "+r.status+" loading shard "+view.shard.path);
         Object.assign(view,await r.json());view._loaded=true;
         validateView(estate+"/"+scope+"/"+level,view);}
+      if(view.kind==="table"||view.kind==="matrix"){
+        if(on){setEls({htmlView:true,problems:[]});setAutoDir(null);
+          setLast(l=>({...l,[estate+":"+scope+":"+level]:Date.now()}));}
+        return;}
       let e,dd;
       if(dirOv){e=await run(dirOv);dd=dirOv;}
       else{const a=await run("DOWN"),b=await run("RIGHT");
@@ -956,7 +1013,8 @@ function Flow(){
         collapsed=${collapsed} setCollapsed=${setCollapsed} last=${last}/>
       <div style=${{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
         <div style=${{flex:1,position:"relative",minHeight:0}}>
-          ${els?html`<${ReactFlow} key=${estate+"|"+scope+"|"+level+"|"+dir+"|"+den}
+          ${els&&els.htmlView?html`<${view.kind==="table"?TableView:MatrixView} view=${view}/>`:null}
+          ${els&&!els.htmlView?html`<${ReactFlow} key=${estate+"|"+scope+"|"+level+"|"+dir+"|"+den}
             nodes=${els.nodes} edges=${els.edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
             onNodeClick=${onNodeClick} fitView fitViewOptions=${{padding:0.12}}
             minZoom=${0.1} proOptions=${{hideAttribution:true}}>
