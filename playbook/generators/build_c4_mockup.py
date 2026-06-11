@@ -351,6 +351,22 @@ for base in sorted({os.path.basename(f)[:-5].rsplit("-",1)[0]
 for variant in ("clean","faulted"): MODEL["estates"].pop(f"retail-monolith-{variant}",None)
 print(f"estates in dropdown: {len(MODEL['estates'])}")
 
+# ---- journeys: estate-level flow artifacts (sidecar per estate base name) ----
+# a journey is a stepped walkthrough across existing views; step anchors reference
+# ids that exist in BOTH variants. This contract is the TARGET the future facts
+# substrate backs into — authored/AI-generated today, derived tomorrow.
+for jf in glob.glob("playbook/mockups/estates/journeys/*.json"):
+    jbase=os.path.basename(jf)[:-5]
+    try: jdata=json.load(open(jf))
+    except Exception as ex:
+        print(f"skip journeys {jf}: {ex}"); continue
+    for variant in ("clean","faulted"):
+        jeid=f"{jbase}-{variant}"
+        if jeid in MODEL["estates"]:
+            MODEL["estates"][jeid]["journeys"]=jdata.get("journeys",[])
+_nj=sum(len(ev.get("journeys",[])) for ev in MODEL["estates"].values())
+if _nj: print(f"journeys folded: {_nj}")
+
 # ---- decomposed contract: tiny manifest + one shard per architectural document ----
 import hashlib, shutil
 OUT="playbook/mockups/archmodel"
@@ -375,6 +391,16 @@ for eid,ev in MODEL["estates"].items():
                 "dir":v.get("dir"),"prov":v.get("prov"),
                 "shard":{"path":rel,"hash":h,"bytes":len(payload)}}
         me["scopes"][sid]=ms
+    if ev.get("journeys"):
+        me["journeys"]=[]
+        for j in ev["journeys"]:
+            payload=json.dumps(j,separators=(",",":"),ensure_ascii=False).encode()
+            rel=f"{eid}/journeys/{j['id']}.json"
+            os.makedirs(f"{OUT}/{eid}/journeys",exist_ok=True)
+            open(f"{OUT}/{rel}","wb").write(payload)
+            n_shards+=1
+            me["journeys"].append({"id":j["id"],"label":j["label"],"kind":j.get("kind"),
+                "steps":len(j.get("steps",[])),"prov":j.get("prov"),"shard":{"path":rel}})
     manifest["estates"][eid]=me
 mbytes=open(f"{OUT}/manifest.json","w").write(json.dumps(manifest,indent=1,ensure_ascii=False))
 print(f"contract: manifest {mbytes/1024:.1f}KB + {n_shards} shards (largest {biggest[0]/1024:.1f}KB {biggest[1]})")
@@ -1080,7 +1106,7 @@ const STATUS={live:{dot:"●",col:T.green,lbl:"derived live"},
               planned:{dot:"○",col:T.mute,lbl:"planned · extractor gated"}};
 
 const ago=t=>{const s=(Date.now()-t)/1000;return s<5?"now":s<60?Math.floor(s)+"s ago":Math.floor(s/60)+"m ago";};
-function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,collapsed,setCollapsed,last}){
+function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,collapsed,setCollapsed,last,journeys,startJourney}){
   const[copied,setCopied]=useState(null);
   const CATALOG=(estate==="local"&&CATALOGS[scope])?CATALOGS[scope]:dynamicCatalog(scopes[scope]||{views:{}});
   if(collapsed) return html`<div style=${{width:44,borderRight:`1px solid ${T.border}`,background:T.chrome,
@@ -1109,6 +1135,21 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
         <div style=${{fontSize:9.5,color:T.mute,marginTop:1}}>${sv.tech}</div>
       </div>
     </div>`)}
+    ${journeys&&journeys.length?html`<${React.Fragment}>
+      <div style=${{padding:"10px 14px 4px",borderTop:`1px solid ${T.border}`,marginTop:4}}>
+        <span style=${{fontSize:11,fontWeight:700,letterSpacing:1.2,color:T.dim}}>JOURNEYS</span>
+        <span style=${{fontSize:9,color:T.mute,marginLeft:6}}>· flows across the estate</span>
+      </div>
+      ${journeys.map(j=>html`<div key=${j.id} onClick=${()=>startJourney(j,0)}
+        style=${{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 14px",cursor:"pointer",
+          borderLeft:"2px solid transparent"}}>
+        <span style=${{color:T.purple,fontSize:10,lineHeight:"16px"}}>▶</span>
+        <div style=${{minWidth:0}}>
+          <div style=${{fontSize:12,fontWeight:500,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${j.label}</div>
+          <div style=${{fontSize:9.5,color:T.mute,marginTop:1}}>${j.kind} · ${j.steps} steps${j.prov&&j.prov.kind==="simulated"?" · ◌ simulated":""}</div>
+        </div>
+      </div>`)}
+    <//>`:null}
     <div style=${{padding:"10px 14px 4px",borderTop:`1px solid ${T.border}`,marginTop:4}}>
       <span style=${{fontSize:11,fontWeight:700,letterSpacing:1.2,color:T.dim}}>VIEWS</span>
       <span style=${{fontSize:9,color:T.mute,marginLeft:6}}>· ${(scopes[scope]||{}).label} only</span>
@@ -1250,16 +1291,42 @@ function Flow(){
     if(rev)rows.push(["mutual",mt.t+" → "+mt.s+(rev.count?" ×"+rev.count:"")+" — cycle"]);
     select({label:mt.s+" → "+mt.t,chip:mt.tag?"violation":"relation",rows,relations:[]},ed.id);},[select,view]);
   const onPaneClick=useCallback(()=>clearSel(),[clearSel]);
-  useEffect(()=>{const h=ev=>{if(ev.key==="Escape"){if(sel)clearSel();else setExpanded(false);}};
-    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[sel,clearSel]);
-  // test hook: ?sel=<nodeId> selects for screenshot verification (mark() is idempotent — no loop)
-  useEffect(()=>{const sid=q.get("sel");if(!sid||!els||!els.nodes)return;
-    const n=els.nodes.find(x=>x.id===sid);if(n&&selId!==sid)onNodeClick(null,n);},[els]);
+  // pending selection: applied once the target view's elements are on screen
+  // (seeded by ?sel= for screenshots; driven by journey steps at runtime)
+  const[pendingSel,setPendingSel]=useState(q.get("sel"));
+  useEffect(()=>{if(!pendingSel||!els||!els.nodes)return;
+    const n=els.nodes.find(x=>x.id===pendingSel);
+    if(n)onNodeClick(null,n);
+    setPendingSel(null);},[els,pendingSel]);
+  // ---- journeys: stepped walkthroughs across views (estate-level flow artifacts) ----
+  const[jr,setJr]=useState(null);   // {def, idx}
+  const jumpStep=useCallback((def,i)=>{if(!def||i<0||i>=def.steps.length)return;
+    const st=def.steps[i];
+    setJr({def,idx:i});
+    setScope(st.scope);setLevel(st.view);setDirOv(null);
+    if(st.sel)setPendingSel(st.sel);
+    setExpanded(true);},[]);
+  const startJourney=useCallback(async(meta,idx)=>{try{
+      const r=await fetch(BASE+meta.shard.path);
+      if(!r.ok)throw new Error("HTTP "+r.status+" loading journey "+meta.id);
+      const def=await r.json();jumpStep(def,idx||0);
+    }catch(e){showFatal("JOURNEY LOAD FAILED · "+(e&&e.message||e));}},[jumpStep]);
+  const exitJourney=useCallback(()=>setJr(null),[]);
+  // test hook: ?journey=<id>&jstep=<n> starts a journey for screenshot verification
+  useEffect(()=>{const jid=q.get("journey");if(!jid)return;
+    const meta=((ESTATES[estate]||{}).journeys||[]).find(j=>j.id===jid);
+    if(meta)startJourney(meta,parseInt(q.get("jstep")||"0",10));},[]);
+  useEffect(()=>{const h=ev=>{
+      if(ev.key==="Escape"){if(jr)exitJourney();else if(sel)clearSel();else setExpanded(false);}
+      if(jr&&ev.key==="ArrowRight")jumpStep(jr.def,jr.idx+1);
+      if(jr&&ev.key==="ArrowLeft")jumpStep(jr.def,jr.idx-1);};
+    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[sel,clearSel,jr,jumpStep,exitJourney]);
   const[open,setOpen]=useState({});
   const[collapsed,setCollapsed]=useState(false);
-  const go=useCallback(id=>{setLevel(id);setDirOv(null);},[]);
-  const goScope=useCallback(sid=>{setScope(sid);setLevel(firstView(estate,sid));setDirOv(null);},[estate]);
-  const goEstate=useCallback(eid=>{setEstate(eid);const sc=firstScope(eid);
+  // manual navigation leaves journey mode — the journey owns scope/view only while followed
+  const go=useCallback(id=>{setJr(null);setLevel(id);setDirOv(null);},[]);
+  const goScope=useCallback(sid=>{setJr(null);setScope(sid);setLevel(firstView(estate,sid));setDirOv(null);},[estate]);
+  const goEstate=useCallback(eid=>{setJr(null);setEstate(eid);const sc=firstScope(eid);
     setScope(sc);setLevel(firstView(eid,sc));setDirOv(null);},[]);
   const btn=a=>({background:a?T.cardH:"transparent",border:`1px solid ${a?T.blue:T.border}`,
     color:a?T.text:T.dim,borderRadius:7,padding:"5px 11px",fontSize:12,cursor:"pointer",fontWeight:550});
@@ -1310,10 +1377,29 @@ function Flow(){
         <button style=${btn(dirOv==="RIGHT")} onClick=${()=>setDirOv("RIGHT")} title="Left–Right">→</button>
       </div>
     </div>
+    ${jr&&jr.idx>=0?(st=>html`<div style=${{padding:"6px 18px",borderBottom:`1px solid ${T.border}`,
+      background:T.raise,display:"flex",alignItems:"center",gap:10}}>
+      <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.purple,
+        border:`1px solid ${T.purple}`,borderRadius:4,padding:"1px 6px",flexShrink:0}}>JOURNEY</span>
+      <span style=${{fontSize:12.5,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>${jr.def.label}</span>
+      <button onClick=${()=>jumpStep(jr.def,jr.idx-1)} disabled=${jr.idx===0}
+        style=${{background:"transparent",border:`1px solid ${T.border}`,color:jr.idx===0?T.mute:T.text,
+        borderRadius:6,padding:"1px 9px",cursor:jr.idx===0?"default":"pointer",fontSize:12,flexShrink:0}}>‹</button>
+      <span style=${{fontSize:10.5,color:T.dim,flexShrink:0}}>${jr.idx+1} / ${jr.def.steps.length}</span>
+      <button onClick=${()=>jumpStep(jr.def,jr.idx+1)} disabled=${jr.idx===jr.def.steps.length-1}
+        style=${{background:"transparent",border:`1px solid ${T.border}`,color:jr.idx===jr.def.steps.length-1?T.mute:T.text,
+        borderRadius:6,padding:"1px 9px",cursor:jr.idx===jr.def.steps.length-1?"default":"pointer",fontSize:12,flexShrink:0}}>›</button>
+      <span style=${{fontSize:11.5,fontWeight:650,whiteSpace:"nowrap",flexShrink:0}}>${st.label}</span>
+      <span title=${st.narrative} style=${{fontSize:11,color:T.dim,minWidth:0,flex:1,
+        whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${st.narrative}</span>
+      <button onClick=${exitJourney} title="Exit journey (Esc)"
+        style=${{background:"transparent",border:"none",color:T.mute,cursor:"pointer",fontSize:13,flexShrink:0}}>✕</button>
+    </div>`)(jr.def.steps[jr.idx]):null}
     <div style=${{flex:1,display:"flex",minHeight:0}}>
       <${Sidebar} estate=${estate} scopes=${SC} simEstate=${ESTATES[estate].sim}
         scope=${scope} goScope=${goScope} level=${level} go=${go} open=${open} setOpen=${setOpen}
-        collapsed=${collapsed} setCollapsed=${setCollapsed} last=${last}/>
+        collapsed=${collapsed} setCollapsed=${setCollapsed} last=${last}
+        journeys=${ESTATES[estate].journeys||[]} startJourney=${startJourney}/>
       <div style=${{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
         <div style=${{flex:1,position:"relative",minHeight:0}}>
           ${els&&els.htmlView?html`<${view.kind==="table"?TableView:MatrixView} view=${view} onSel=${select} selId=${selId}/>`:null}

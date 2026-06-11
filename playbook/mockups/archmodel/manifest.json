@@ -3,7 +3,7 @@
  "sharded": true,
  "generated": {
   "tool": "build_c4_mockup.py",
-  "timestamp": "2026-06-11 04:01 UTC",
+  "timestamp": "2026-06-11 06:04 UTC",
   "inputs": [
    "go list",
    "repo/graphify/*.py imports",
@@ -2645,7 +2645,48 @@
       }
      }
     }
-   }
+   },
+   "journeys": [
+    {
+     "id": "bopis-click-to-curbside",
+     "label": "BOPIS Order — Click to Curbside",
+     "kind": "customer",
+     "steps": 8,
+     "prov": {
+      "kind": "simulated",
+      "label": "SIMULATED · would derive from: Akamai mPulse clickstream + Sterling order audit trail + store task-management telemetry"
+     },
+     "shard": {
+      "path": "retail-enterprise-clean/journeys/bopis-click-to-curbside.json"
+     }
+    },
+    {
+     "id": "price-change-to-shelf-edge",
+     "label": "Price Change — Merch Decision to Shelf Edge",
+     "kind": "change",
+     "steps": 7,
+     "prov": {
+      "kind": "simulated",
+      "label": "SIMULATED · would derive from: RPM price-event audit + Control-M job logs + MQ channel metrics + store POS price-file audits"
+     },
+     "shard": {
+      "path": "retail-enterprise-clean/journeys/price-change-to-shelf-edge.json"
+     }
+    },
+    {
+     "id": "vendor-onboarding-edi-to-first-po",
+     "label": "New Vendor Onboarding — EDI to First PO",
+     "kind": "dev",
+     "steps": 6,
+     "prov": {
+      "kind": "simulated",
+      "label": "SIMULATED · would derive from: Ariba supplier-master records + Sterling B2B onboarding tickets + EDI 850/997 transaction logs"
+     },
+     "shard": {
+      "path": "retail-enterprise-clean/journeys/vendor-onboarding-edi-to-first-po.json"
+     }
+    }
+   ]
   },
   "retail-enterprise-faulted": {
    "label": "Hartwell Home Improvement ⚠ faulted",
@@ -4268,7 +4309,48 @@
       }
      }
     }
-   }
+   },
+   "journeys": [
+    {
+     "id": "bopis-click-to-curbside",
+     "label": "BOPIS Order — Click to Curbside",
+     "kind": "customer",
+     "steps": 8,
+     "prov": {
+      "kind": "simulated",
+      "label": "SIMULATED · would derive from: Akamai mPulse clickstream + Sterling order audit trail + store task-management telemetry"
+     },
+     "shard": {
+      "path": "retail-enterprise-faulted/journeys/bopis-click-to-curbside.json"
+     }
+    },
+    {
+     "id": "price-change-to-shelf-edge",
+     "label": "Price Change — Merch Decision to Shelf Edge",
+     "kind": "change",
+     "steps": 7,
+     "prov": {
+      "kind": "simulated",
+      "label": "SIMULATED · would derive from: RPM price-event audit + Control-M job logs + MQ channel metrics + store POS price-file audits"
+     },
+     "shard": {
+      "path": "retail-enterprise-faulted/journeys/price-change-to-shelf-edge.json"
+     }
+    },
+    {
+     "id": "vendor-onboarding-edi-to-first-po",
+     "label": "New Vendor Onboarding — EDI to First PO",
+     "kind": "dev",
+     "steps": 6,
+     "prov": {
+      "kind": "simulated",
+      "label": "SIMULATED · would derive from: Ariba supplier-master records + Sterling B2B onboarding tickets + EDI 850/997 transaction logs"
+     },
+     "shard": {
+      "path": "retail-enterprise-faulted/journeys/vendor-onboarding-edi-to-first-po.json"
+     }
+    }
+   ]
   },
   "streaming-platform-clean": {
    "label": "StreamWorks Streaming · clean",

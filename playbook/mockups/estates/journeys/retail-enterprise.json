@@ -1,0 +1,187 @@
+{
+  "journeys": [
+    {
+      "id": "bopis-click-to-curbside",
+      "label": "BOPIS Order — Click to Curbside",
+      "kind": "customer",
+      "question": "What does a buy-online-pickup-in-store order actually touch between checkout submit and a refilled shelf?",
+      "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Akamai mPulse clickstream + Sterling order audit trail + store task-management telemetry"
+      },
+      "steps": [
+        {
+          "label": "Checkout submitted from the app",
+          "narrative": "The journey opens at the top of the BOPIS happy-path sequence: a customer on the Mobile App (28M MAU) submits checkout, the first of eight calls that must complete inside a 1.9s p95 order ack.",
+          "scope": "ecom",
+          "view": "sequence",
+          "sel": "s1"
+        },
+        {
+          "label": "Payment authorized in the CDE",
+          "narrative": "The flow detours into the PCI cardholder-data environment — the Payment Gateway authorizes via CyberSource network tokens before any order record exists, so a decline here ends the journey with zero downstream cleanup.",
+          "scope": "ecom",
+          "view": "sequence",
+          "sel": "s4"
+        },
+        {
+          "label": "Sterling OMS takes ownership",
+          "narrative": "On the order-orchestration flow, OMS — IBM Sterling becomes the system of record, running the BOPIS pipeline among roughly 310k orders/day at peak on on-prem WebSphere.",
+          "scope": "ecom",
+          "view": "dataflow",
+          "sel": "n3"
+        },
+        {
+          "label": "ATP sources the order to a store",
+          "narrative": "The ATP & Sourcing Engine evaluates 2,300 stores and 18 DCs and commits a sourcing decision in under two seconds — this node is where a BOPIS order becomes one specific store's work.",
+          "scope": "ecom",
+          "view": "dataflow",
+          "sel": "n4"
+        },
+        {
+          "label": "Associate picks via RF handheld",
+          "narrative": "Inside Store Inventory Ops on the store domain map, the RF Handheld Suite delivers the pick task to an associate, who pulls the item from the sales floor and stages it for pickup.",
+          "scope": "stores",
+          "view": "domains",
+          "sel": "m18"
+        },
+        {
+          "label": "Customer notified — curbside ready",
+          "narrative": "Back on the orchestration flow, Customer Notify fires the ready-for-pickup message once staging completes — average pickup-ready time is 47 minutes from checkout, and the customer collects at curbside.",
+          "scope": "ecom",
+          "view": "dataflow",
+          "sel": "n9"
+        },
+        {
+          "label": "Pick decrements perpetual inventory",
+          "narrative": "The staged pick posts through Perpetual Inventory Sync, decrementing store on-hand — the same balance the ATP engine read in step four, which is why sync latency here directly governs sourcing accuracy.",
+          "scope": "stores",
+          "view": "domains",
+          "sel": "m19"
+        },
+        {
+          "label": "Replenishment refills the shelf",
+          "narrative": "The journey closes on the replenishment chain: the Replenishment Engine nets the decremented on-hand into requirements and raises store orders, so the next BOPIS customer finds inventory waiting.",
+          "scope": "supply",
+          "view": "dataflow",
+          "sel": "n2"
+        }
+      ]
+    },
+    {
+      "id": "price-change-to-shelf-edge",
+      "label": "Price Change — Merch Decision to Shelf Edge",
+      "kind": "change",
+      "question": "How long is the path — and how many systems deep — between a pricing decision and the retail a register actually rings?",
+      "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: RPM price-event audit + Control-M job logs + MQ channel metrics + store POS price-file audits"
+      },
+      "steps": [
+        {
+          "label": "Price change approved in merch",
+          "narrative": "The change is born in the Pricing domain: Price change orchestration captures the analyst's zone-level retail decision and locks the effective date that every downstream system must honor.",
+          "scope": "merch",
+          "view": "domains",
+          "sel": "m11"
+        },
+        {
+          "label": "RPM computes effective retails",
+          "narrative": "On the merchandising container view, the RPM Pricing Engine explodes the zone change into item-store effective retails — one decision becomes thousands of price rows.",
+          "scope": "merch",
+          "view": "container",
+          "sel": "c2"
+        },
+        {
+          "label": "Published to the price bus",
+          "narrative": "The cost-to-shelf sequence shows the handoff: the Price Publish Bus broadcasts the repriced rows to every consumer, including the legacy core that still owns store distribution.",
+          "scope": "merch",
+          "view": "sequence",
+          "sel": "s5"
+        },
+        {
+          "label": "Nightly batch builds the download",
+          "narrative": "Inside the mainframe's nightly batch chain, STC0800 Download Build packages the price deltas into per-store download files — the change now waits on the Control-M schedule, not on any human.",
+          "scope": "core",
+          "view": "dataflow",
+          "sel": "n6"
+        },
+        {
+          "label": "Delta lands on store MQ queues",
+          "narrative": "The core price-change sequence shows MQ Store Queues fanning the download out to 2,300 stores — this hop is where a single change becomes 2,300 independent deliveries that can individually fail.",
+          "scope": "core",
+          "view": "sequence",
+          "sel": "s6"
+        },
+        {
+          "label": "PRC-050 applies the delta in-store",
+          "narrative": "In the store job chain, PRC-050 Price Delta Apply ingests the download during the overnight window and stages the new retails for the effective date.",
+          "scope": "stores",
+          "view": "code",
+          "sel": "k5"
+        },
+        {
+          "label": "Lane rings the new price",
+          "narrative": "The journey ends at the Item / Price Cache on the store container view — the lookup every register, kiosk, and handheld hits on scan — where the merchant's decision finally becomes the price the customer pays.",
+          "scope": "stores",
+          "view": "container",
+          "sel": "c9"
+        }
+      ]
+    },
+    {
+      "id": "vendor-onboarding-edi-to-first-po",
+      "label": "New Vendor Onboarding — EDI to First PO",
+      "kind": "dev",
+      "question": "What does it take to stand up a new trading partner, from supplier-master record to a reconciled first purchase order?",
+      "prov": {
+        "kind": "simulated",
+        "label": "SIMULATED · would derive from: Ariba supplier-master records + Sterling B2B onboarding tickets + EDI 850/997 transaction logs"
+      },
+      "steps": [
+        {
+          "label": "Supplier master record created",
+          "narrative": "Onboarding starts in corporate procurement: the Supplier master inside Indirect Procurement establishes the vendor's legal entity, banking, and compliance record — nothing downstream can reference the vendor until this exists.",
+          "scope": "corp",
+          "view": "domains",
+          "sel": "m_vm"
+        },
+        {
+          "label": "Partner onboarding in Vendor EDI",
+          "narrative": "Work shifts to the Vendor EDI domain, where Partner Onboarding captures the trading-partner profile — document set, envelope IDs, and acknowledgment expectations for the new relationship.",
+          "scope": "supply",
+          "view": "domains",
+          "sel": "n7m2"
+        },
+        {
+          "label": "Connectivity proven over VAN / AS2",
+          "narrative": "The VAN & AS2 Connectors carry the connectivity test: certificates exchanged, endpoints verified, and test envelopes round-tripped before any production document moves.",
+          "scope": "supply",
+          "view": "domains",
+          "sel": "n7m6"
+        },
+        {
+          "label": "Maps deployed to the EDI Gateway",
+          "narrative": "On the supply-chain container view, the EDI Gateway receives the vendor's outbound 850/860 and inbound 856/810 maps — the translation layer that turns internal PO records into the partner's wire format.",
+          "scope": "supply",
+          "view": "container",
+          "sel": "c1"
+        },
+        {
+          "label": "First 850 reaches the vendor",
+          "narrative": "The PO-release sequence shows the production milestone: the first EDI 850 purchase order lands at the Vendor, who responds with an 856 ASN as goods ship toward the DC.",
+          "scope": "supply",
+          "view": "sequence",
+          "sel": "p3"
+        },
+        {
+          "label": "997 reconciled — vendor is live",
+          "narrative": "The journey closes at 997 Reconciliation, where the functional acknowledgment matches the outbound 850 — the loop is proven end to end and the vendor moves from onboarding to steady-state trading.",
+          "scope": "supply",
+          "view": "domains",
+          "sel": "n7m5"
+        }
+      ]
+    }
+  ]
+}
