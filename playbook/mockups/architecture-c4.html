@@ -445,6 +445,34 @@ async function layoutBuckets(view,dir,d,ov){
 
 // Docked footer: ONE derived legend — shows only what the current view actually renders —
 // plus the provenance stamp anchored right.
+// Bottom dock: the drill tier lives BELOW the canvas, not in the nav rail — clicking an
+// element expands this panel upward; the sidebar never reflows. Segments sit side by side.
+function BottomDock({sel,setSel,probs,concernsOpen,setConcernsOpen}){
+  const showProbs=probs&&probs.length>0&&(concernsOpen||!!sel);
+  if(!sel&&!showProbs)return null;
+  const Seg=({title,col,children,grow})=>html`<div style=${{flex:grow?2:1,minWidth:0,padding:"10px 16px",
+    borderRight:`1px solid ${T.border}`,overflowY:"auto"}}>
+    <div style=${{fontSize:9.5,fontWeight:700,letterSpacing:1.2,color:col,marginBottom:7}}>${title}</div>
+    ${children}</div>`;
+  return html`<div style=${{borderTop:`1px solid ${T.border}`,background:T.band,height:172,
+    display:"flex",flexShrink:0,position:"relative"}}>
+    ${sel?html`<${Seg} title="DETAIL" col=${T.blue} grow=${true}>
+      <div style=${{fontSize:13.5,fontWeight:700,color:T.text,marginBottom:8}}>${sel.label}</div>
+      <div style=${{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:"7px 18px"}}>
+        ${(sel.rows||[]).map((r,i)=>html`<div key=${i} style=${{minWidth:0}}>
+          <div style=${{fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:T.mute}}>${r[0]}</div>
+          <div style=${{fontSize:11.5,color:T.text,lineHeight:1.4,marginTop:1}}>${r[1]}</div>
+        </div>`)}
+      </div>
+    <//>`:null}
+    ${showProbs?html`<${Seg} title=${"CONCERNS · THIS VIEW · "+probs.length} col=${T.red} grow=${!sel}>
+      ${probs.map((p,i)=>html`<div key=${i} style=${{fontSize:11,color:T.dim,lineHeight:1.5,marginBottom:6,
+        borderLeft:`2px solid ${T.red}`,paddingLeft:9}}>${p}</div>`)}
+    <//>`:null}
+    <button onClick=${()=>{setSel(null);setConcernsOpen(false);}} title="Close"
+      style=${{position:"absolute",top:7,right:10,background:"transparent",border:"none",
+      color:T.mute,cursor:"pointer",fontSize:15}}>×</button>
+  </div>`;}
 const ETYPE_NAME={sys:"system",ext:"external",container:"container",store:"store",proc:"process"};
 const ETYPE_COLR={sys:T.blue,ext:T.dim,container:T.arch,store:T.green,proc:T.blue};
 // In-context legend: pinned to the canvas corner so color meaning sits where you look.
@@ -551,7 +579,7 @@ const STATUS={live:{dot:"●",col:T.green,lbl:"derived live"},
               planned:{dot:"○",col:T.mute,lbl:"planned · extractor gated"}};
 
 const ago=t=>{const s=(Date.now()-t)/1000;return s<5?"now":s<60?Math.floor(s)+"s ago":Math.floor(s/60)+"m ago";};
-function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,collapsed,setCollapsed,last,sel,setSel,probs}){
+function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,collapsed,setCollapsed,last}){
   const[copied,setCopied]=useState(null);
   const CATALOG=(estate==="local"&&CATALOGS[scope])?CATALOGS[scope]:dynamicCatalog(scopes[scope]||{views:{}});
   if(collapsed) return html`<div style=${{width:44,borderRight:`1px solid ${T.border}`,
@@ -580,24 +608,6 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
         <div style=${{fontSize:9.5,color:T.mute,marginTop:1}}>${sv.tech}</div>
       </div>
     </div>`)}
-    ${sel?html`<div style=${{borderTop:`1px solid ${T.border}`,background:T.band,padding:"10px 14px"}}>
-      <div style=${{display:"flex",alignItems:"center"}}>
-        <span style=${{fontSize:10,fontWeight:700,letterSpacing:1.2,color:T.blue}}>DETAIL</span>
-        <button onClick=${()=>setSel(null)} title="Close"
-          style=${{marginLeft:"auto",background:"transparent",border:"none",color:T.mute,cursor:"pointer",fontSize:13}}>×</button>
-      </div>
-      <div style=${{fontSize:13,fontWeight:700,color:T.text,marginTop:3,lineHeight:1.3}}>${sel.label}</div>
-      ${(sel.rows||[]).map((r,i)=>html`<div key=${i} style=${{display:"flex",gap:8,marginTop:5,fontSize:11,lineHeight:1.45}}>
-        <span style=${{color:T.mute,fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",
-          flexShrink:0,width:64,paddingTop:1}}>${r[0]}</span>
-        <span style=${{color:T.dim,minWidth:0}}>${r[1]}</span>
-      </div>`)}
-    </div>`:null}
-    ${probs&&probs.length?html`<div style=${{borderTop:`1px solid ${T.border}`,padding:"10px 14px"}}>
-      <span style=${{fontSize:10,fontWeight:700,letterSpacing:1.2,color:T.red}}>CONCERNS · THIS VIEW</span>
-      ${probs.map((p,i)=>html`<div key=${i} style=${{fontSize:10.5,color:T.dim,lineHeight:1.5,marginTop:6,
-        borderLeft:`2px solid ${T.red}`,paddingLeft:8}}>${p}</div>`)}
-    </div>`:null}
     <div style=${{padding:"10px 14px 4px",borderTop:`1px solid ${T.border}`,marginTop:4}}>
       <span style=${{fontSize:11,fontWeight:700,letterSpacing:1.2,color:T.dim}}>MODELS</span>
       <span style=${{fontSize:9,color:T.mute,marginLeft:6}}>· ${(scopes[scope]||{}).label} only</span>
@@ -660,7 +670,7 @@ function Flow(){
   const[autoDir,setAutoDir]=useState(null);
   const dir=dirOv||autoDir||"DOWN";
   useEffect(()=>{let on=true;const d=SP[den];
-    setEls(null);setSel(null);   // unmount canvas NOW; remount only with the new layout so initial fitView sees the right nodes
+    setEls(null);setSel(null);setConcernsOpen(false);   // unmount canvas NOW; remount only with the new layout so initial fitView sees the right nodes
     const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov):layoutSimple(view,dd,d);
     // Auto direction: lay out BOTH ways, keep whichever fits the viewport at the larger scale
     const fitScale=r=>{const xs=r.nodes.map(n=>n.position.x),ys=r.nodes.map(n=>n.position.y),
@@ -689,8 +699,9 @@ function Flow(){
   useEffect(()=>{const auto=q.get("auto");
     if(auto){const[lv,ms]=auto.split(":");const t=setTimeout(()=>setLevel(lv),parseInt(ms||"800",10));
       return()=>clearTimeout(t);}},[]);
-  // click = drill tier: drillTo navigates; anything else opens its record in the sidebar detail panel
+  // click = drill tier: drillTo navigates; anything else opens its record in the bottom dock
   const[sel,setSel]=useState(null);
+  const[concernsOpen,setConcernsOpen]=useState(false);
   const onNodeClick=useCallback((_,n)=>{if(!n.data)return;
     if(n.data.drillTo){setLevel(n.data.drillTo);setDirOv(null);return;}
     if(n.type==="spacer")return;
@@ -730,9 +741,10 @@ function Flow(){
           color:pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan,
           border:`1px solid ${pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan}`,
           borderRadius:5,padding:"1px 7px"}))(view.prov.kind)}>${view.prov.kind==="derived"?"REAL":view.prov.kind==="simulated"?"SIMULATED":"MIXED"}</span>`:null}
-        ${els&&els.problems&&els.problems.length?html`<span title=${els.problems.join("\n")}
+        ${els&&els.problems&&els.problems.length?html`<span title="Show concerns"
+          onClick=${()=>setConcernsOpen(o=>!o)}
           style=${{fontSize:9.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:5,
-          padding:"1px 7px",whiteSpace:"nowrap",cursor:"help",flexShrink:0}}>⚠ ${els.problems.length}</span>`:null}
+          padding:"1px 7px",whiteSpace:"nowrap",cursor:"pointer",flexShrink:0}}>⚠ ${els.problems.length}</span>`:null}
         ${ISSUES.length?html`<span title=${ISSUES.join("\n")}
           style=${{fontSize:9.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:5,
           padding:"1px 7px",whiteSpace:"nowrap",cursor:"help",flexShrink:0}}>◌ ${ISSUES.length}</span>`:null}
@@ -759,8 +771,7 @@ function Flow(){
     <div style=${{flex:1,display:"flex",minHeight:0}}>
       <${Sidebar} estate=${estate} scopes=${SC} simEstate=${ESTATES[estate].sim}
         scope=${scope} goScope=${goScope} level=${level} go=${go} open=${open} setOpen=${setOpen}
-        collapsed=${collapsed} setCollapsed=${setCollapsed} last=${last}
-        sel=${sel} setSel=${setSel} probs=${els&&els.problems||[]}/>
+        collapsed=${collapsed} setCollapsed=${setCollapsed} last=${last}/>
       <div style=${{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
         <div style=${{flex:1,position:"relative",minHeight:0}}>
           ${els&&els.htmlView?html`<${view.kind==="table"?TableView:MatrixView} view=${view}/>`:null}
@@ -773,6 +784,8 @@ function Flow(){
           <//>`:null}
           ${els&&!els.htmlView&&(view._loaded||!view.shard)?html`<${CanvasLegend} view=${view}/>`:null}
         </div>
+        <${BottomDock} sel=${sel} setSel=${setSel} probs=${els&&els.problems||[]}
+          concernsOpen=${concernsOpen} setConcernsOpen=${setConcernsOpen}/>
         ${els&&(view._loaded||!view.shard)?html`<${Footer} view=${view} ov=${ov}/>`:null}
       </div>
     </div></div>`;}

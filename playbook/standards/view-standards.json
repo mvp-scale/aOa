@@ -35,7 +35,7 @@
       },
       "legend": "every diagram carries an in-context legend (canvas corner) mapping the colors actually on screen; the footer legend stays for edges and provenance"
     },
-    "drill": "click an element to open its full record in the sidebar detail panel; click a drillable node to navigate. The sidebar also lists this view's detected concerns in plain language."
+    "drill": "click an element to open its full record in the bottom dock (expands above the footer; segmented: DETAIL | CONCERNS); click a drillable node to navigate; click the header ⚠ chip to open concerns alone. The nav rail is navigation ONLY and never reflows."
   },
   "views": {
     "context": {
