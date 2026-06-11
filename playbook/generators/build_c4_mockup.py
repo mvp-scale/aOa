@@ -418,7 +418,11 @@ if(!MODEL.sharded){
  for(const[eid,ev]of Object.entries(MODEL.estates||{}))
   for(const[sid,sv]of Object.entries(ev.scopes||{}))
    for(const[vid,v]of Object.entries(sv.views||{}))validateView(eid+"/"+sid+"/"+vid,v);}
-const T={bg:"#0c0c0e",card:"#161618",cardH:"#1c1c1f",band:"#121215",border:"#252528",text:"#e8e8ec",
+// Elevation scale — lightness stages importance, hue stays reserved for meaning:
+// L0 well (canvas, darkest) -> L1 chrome (header/sidebar/footer/bar) -> L2 raised
+// (expanded dock, hover card, legend) -> L3 interactive (hover/selected fills).
+const T={bg:"#0a0a0c",chrome:"#121215",raise:"#18181b",card:"#161618",cardH:"#202024",
+ band:"#101013",border:"#252528",borderR:"#34343a",text:"#e8e8ec",
  dim:"#8b8b96",mute:"#55555f",green:"#34d399",blue:"#60a5fa",purple:"#c084fc",cyan:"#22d3ee",
  yellow:"#fbbf24",red:"#f87171",arch:"#fb923c",neutral:"#94a3b8"};
 const PALETTES={
@@ -866,47 +870,72 @@ function DockTable({cols,rows}){
       style=${{...DK.td,color:r._viol?T.red:ci===0?T.dim:T.text,
         fontFamily:ci>0&&String(cell).match(/^[≈×~\\d]/)?"ui-monospace,monospace":"inherit"}}>${cell}</td>`)}</tr>`)}
   </tbody></table>`;}
+// The caption: the view ANSWERS its own question, derived at render time from data
+// already on screen — counts, heaviest edge, mutual pairs, flagged rows, findings.
+function caption(view,probs){
+  const fin=probs&&probs.length?` · ⚠ ${probs.length} finding${probs.length>1?"s":""}`:"";
+  if(view.kind==="buckets"){
+    const B=view.buckets||[],members=B.reduce((a,b)=>a+(b.members||[]).length,0);
+    const he=(view.edges||[]).reduce((m,e)=>((e.count||0)>(m.count||0)?e:m),{});
+    const bn=id=>{const b=B.find(x=>x.id===id);return b?b.label:id;};
+    return `${B.length} groups · ${members} members`+
+      (he.id?` — heaviest: ${bn(he.source)} → ${bn(he.target)} ×${he.count}`:"")+fin;}
+  if(view.kind==="matrix"){
+    const it=view.items||[],M=view.matrix||[];let sum=0;const mut=[];
+    for(let i=0;i<it.length;i++)for(let j=0;j<it.length;j++){sum+=(M[i]||[])[j]||0;
+      if(i<j&&(M[i]||[])[j]&&(M[j]||[])[i])mut.push(`${it[i]} ↔ ${it[j]} (${M[i][j]}/${M[j][i]})`);}
+    return `${sum} dependencies · ${it.length} modules · ${mut.length} mutual pair${mut.length===1?"":"s"}`+
+      (mut.length?`: ${mut[0]}`:"");}
+  if(view.kind==="table"){
+    const rows=view.rows||[];const fl=rows.filter(r=>r.some(c=>String(c).trim().startsWith("⚠")));
+    return `${rows.length} rows`+(fl.length?` · ⚠ ${fl.length} flagged — first: ${fl[0][0]}`:" · none flagged");}
+  if(view.kind==="entity"){
+    const deg={};(view.edges||[]).forEach(e=>{deg[e.source]=(deg[e.source]||0)+1;deg[e.target]=(deg[e.target]||0)+1;});
+    const top=Object.entries(deg).sort((a,b)=>b[1]-a[1])[0];
+    const nm=id=>{const n=(view.nodes||[]).find(x=>x.id===id);return n?n.label:id;};
+    return `${(view.nodes||[]).length} entities · ${(view.edges||[]).length} relationships`+
+      (top?` — spine: ${nm(top[0])} (${top[1]} relations)`:"")+fin;}
+  const tag=(view.edges||[]).find(e=>e.tag);
+  return `${(view.nodes||[]).length} elements · ${(view.edges||[]).length} labeled flows`+
+    (tag?` · ⚠ ${tag.tag}: ${(tag.label||"").slice(0,48)}`:fin);}
 function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded}){
   const VI=VIEW_INTENT[vid]||null;
-  const counts=view.kind==="buckets"
-    ?`${(view.buckets||[]).length} groups · ${(view.buckets||[]).reduce((a,b)=>a+(b.members||[]).length,0)} members · ${(view.edges||[]).length} edges`
-    :view.kind==="table"?`${(view.rows||[]).length} rows`
-    :view.kind==="matrix"?`${(view.items||[]).length}×${(view.items||[]).length} matrix`
-    :`${(view.nodes||[]).length} elements · ${(view.edges||[]).length} edges`;
+  const cap=caption(view,probs);
   const hl=p=>sel&&sel.label&&String(p).includes(String(sel.label).slice(0,24));
   const sortedProbs=sel?[...probs].sort((a,b)=>(hl(b)?1:0)-(hl(a)?1:0)):probs;
-  const Seg=({title,col,flex,children})=>html`<div style=${{flex,minWidth:0,padding:"9px 16px",
-    borderRight:`1px solid ${T.border}`,overflowY:"auto",position:"relative"}}>
+  const Seg=({title,col,flex,wash,children})=>html`<div style=${{flex,minWidth:0,padding:"9px 16px",
+    borderRight:`1px solid ${T.border}`,overflowY:"auto",position:"relative",background:wash||"transparent"}}>
     <div style=${{fontSize:9.5,fontWeight:700,letterSpacing:1.2,color:col,marginBottom:7,
-      position:"sticky",top:0,background:T.band,paddingBottom:3}}>${title}</div>
+      position:"sticky",top:0,background:T.raise,paddingBottom:3}}>${title}</div>
     ${children}</div>`;
   if(!expanded)return html`<div onClick=${()=>setExpanded(true)}
-    style=${{borderTop:`1px solid ${T.border}`,background:T.band,height:26,display:"flex",
+    style=${{borderTop:`1px solid ${T.border}`,background:T.chrome,height:26,display:"flex",
     alignItems:"center",gap:0,flexShrink:0,cursor:"pointer",userSelect:"none"}}>
     <div style=${{flex:1.4,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",overflow:"hidden"}}>
       <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.blue,flexShrink:0}}>VIEW</span>
-      <span style=${{fontSize:10.5,color:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${VI?VI.question:view.title}</span>
+      <span style=${{fontSize:10.5,color:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${cap}</span>
     </div>
     <div style=${{flex:1,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,overflow:"hidden"}}>
       <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.text,flexShrink:0}}>SELECTION</span>
       <span style=${{fontSize:10.5,color:sel?T.text:T.mute,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${sel?sel.label:"none — click an element or edge"}</span>
     </div>
-    <div style=${{flex:.6,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`}}>
-      <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:probs.length?T.red:T.mute}}>CONCERNS</span>
+    <div style=${{flex:.6,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,
+      background:probs.length?"#f8717110":"transparent"}}>
+      <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:probs.length?T.red:T.mute}}>FINDINGS</span>
       <span style=${{fontSize:10.5,color:probs.length?T.red:T.green}}>${probs.length||"✓"}</span>
     </div>
     <span style=${{padding:"0 12px",color:T.mute,fontSize:11}}>⌃</span>
   </div>`;
-  return html`<div style=${{borderTop:`1px solid ${T.border}`,background:T.band,height:208,
-    display:"flex",flexShrink:0,position:"relative"}}>
+  return html`<div style=${{borderTop:`1px solid ${T.border}`,background:T.raise,height:208,
+    display:"flex",flexShrink:0,position:"relative",boxShadow:"0 -6px 16px #0009"}}>
     <${Seg} title="VIEW" col=${T.blue} flex=${1}>
-      <div style=${{fontSize:12,fontWeight:650,color:T.text,lineHeight:1.45}}>${VI?VI.question:view.title}</div>
+      <div style=${{fontSize:12,fontWeight:650,color:T.text,lineHeight:1.45}}>${cap}</div>
+      ${VI?html`<div style=${{fontSize:10.5,color:T.dim,lineHeight:1.5,marginTop:6}}>
+        <span style=${{color:T.mute,fontSize:8.5,fontWeight:700,letterSpacing:.8}}>QUESTION </span>${VI.question}</div>`:null}
       ${VI&&VI.pass?html`<div style=${{fontSize:10.5,color:T.dim,lineHeight:1.5,marginTop:6}}>
         <span style=${{color:T.mute,fontSize:8.5,fontWeight:700,letterSpacing:.8}}>PASS </span>${VI.pass}</div>`:null}
       ${view.prov?html`<div style=${{fontSize:10.5,color:T.dim,lineHeight:1.5,marginTop:6}}>
         <span style=${{color:T.mute,fontSize:8.5,fontWeight:700,letterSpacing:.8}}>SOURCE </span>${view.prov.label}</div>`:null}
-      <div style=${{fontSize:10.5,color:T.dim,marginTop:6}}>
-        <span style=${{color:T.mute,fontSize:8.5,fontWeight:700,letterSpacing:.8}}>ON SCREEN </span>${counts}</div>
     <//>
     <${Seg} title="SELECTION" col=${T.text} flex=${1.6}>
       ${sel?html`<${React.Fragment}>
@@ -934,11 +963,12 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded}){
         </div>
       <//>`:html`<div style=${{color:T.mute,fontSize:11,marginTop:28,textAlign:"center"}}>none — click an element or edge</div>`}
     <//>
-    <${Seg} title=${"CONCERNS · "+probs.length} col=${probs.length?T.red:T.mute} flex=${1}>
+    <${Seg} title=${"FINDINGS · "+probs.length} col=${probs.length?T.red:T.mute} flex=${1}
+      wash=${probs.length?"#f8717108":null}>
       ${probs.length?sortedProbs.map((p,i)=>html`<div key=${i} style=${{fontSize:10.5,lineHeight:1.5,marginBottom:6,
         color:hl(p)?T.text:T.dim,borderLeft:`2px solid ${T.red}`,paddingLeft:9,
         background:hl(p)?T.cardH:"transparent"}}>${p}</div>`)
-      :html`<div style=${{color:T.green,fontSize:11}}>✓ no concerns detected in this view</div>`}
+      :html`<div style=${{color:T.green,fontSize:11}}>✓ no findings in this view</div>`}
     <//>
     <button onClick=${()=>setExpanded(false)} title="Collapse"
       style=${{position:"absolute",top:5,right:8,background:"transparent",border:"none",
@@ -959,8 +989,8 @@ function CanvasLegend({view}){
     (view.nodes||[]).forEach(n=>{if(!seen.has(n.type)){seen.add(n.type);
       items.push({txt:ETYPE_NAME[n.type]||n.type,c:ETYPE_COLR[n.type]||T.dim});}});}
   if(items.length<2)return null;
-  return html`<div style=${{position:"absolute",top:10,right:14,zIndex:6,background:"#0c0c0ef0",
-    border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 11px",
+  return html`<div style=${{position:"absolute",top:10,right:14,zIndex:6,background:"#18181bf0",
+    border:`1px solid ${T.borderR}`,borderRadius:8,padding:"7px 11px",
     display:"flex",flexDirection:"column",gap:4}}>
     ${items.map((it,i)=>html`<div key=${i} style=${{display:"flex",alignItems:"center",gap:7,fontSize:10.5,color:T.dim}}>
       <span style=${{width:10,height:10,borderRadius:3,background:it.c+"30",border:`1.5px solid ${it.c}`,flexShrink:0}}></span>
@@ -969,7 +999,7 @@ function CanvasLegend({view}){
 function Footer({view,ov}){
   const groups=[];
   if(view.kind==="buckets"){
-    groups.push({label:"LAYERS",items:(view.buckets||[]).map(b=>({txt:b.layer,c:layerColor(view,b.layer),ico:b.ico||b.layer}))});
+    // layer colors live in the canvas legend (where the eye is) — footer owns edge grammar only
     const ed=[{txt:"dependency · color = source layer",glyph:"━"},{txt:"bundled count",glyph:"×N"}];
     if((view.buckets||[]).some(b=>b.layer==="supporting"))ed.push({txt:"supporting / inferred",glyph:"┄"});
     groups.push({label:"EDGES",items:ed});
@@ -991,7 +1021,7 @@ function Footer({view,ov}){
     if(ov.changed)o.push({txt:"touched · last 15 commits",glyph:"Δ",c:T.yellow});
     groups.push({label:"OVERLAYS",items:o});}
   return html`<div style=${{borderTop:`1px solid ${T.border}`,display:"flex",alignItems:"center",
-    gap:14,padding:"7px 16px",fontSize:10.5,color:T.dim,flexWrap:"wrap",background:T.bg}}>
+    gap:14,padding:"7px 16px",fontSize:10.5,color:T.dim,flexWrap:"wrap",background:T.chrome}}>
     ${groups.map((g,gi)=>html`<${React.Fragment} key=${g.label}>
       ${gi>0?html`<span style=${{color:T.border}}>│</span>`:null}
       <span style=${{fontSize:9,fontWeight:700,letterSpacing:1,color:T.mute}}>${g.label}</span>
@@ -1053,16 +1083,16 @@ const ago=t=>{const s=(Date.now()-t)/1000;return s<5?"now":s<60?Math.floor(s)+"s
 function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,collapsed,setCollapsed,last}){
   const[copied,setCopied]=useState(null);
   const CATALOG=(estate==="local"&&CATALOGS[scope])?CATALOGS[scope]:dynamicCatalog(scopes[scope]||{views:{}});
-  if(collapsed) return html`<div style=${{width:44,borderRight:`1px solid ${T.border}`,
+  if(collapsed) return html`<div style=${{width:44,borderRight:`1px solid ${T.border}`,background:T.chrome,
     display:"flex",flexDirection:"column",alignItems:"center",paddingTop:10,flexShrink:0}}>
-    <button onClick=${()=>setCollapsed(false)} title="Show models"
+    <button onClick=${()=>setCollapsed(false)} title="Show views"
       style=${{background:"transparent",border:`1px solid ${T.border}`,color:T.dim,
       borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:13}}>›</button>
   </div>`;
-  return html`<div style=${{width:300,borderRight:`1px solid ${T.border}`,overflowY:"auto",
+  return html`<div style=${{width:300,borderRight:`1px solid ${T.border}`,overflowY:"auto",background:T.chrome,
     flexShrink:0,display:"flex",flexDirection:"column"}}>
     <div style=${{padding:"11px 14px",display:"flex",alignItems:"center",borderBottom:`1px solid ${T.border}`}}>
-      <span style=${{fontSize:11,fontWeight:700,letterSpacing:1.2,color:T.dim}}>SYSTEMS</span>
+      <span style=${{fontSize:11,fontWeight:700,letterSpacing:1.2,color:T.dim}}>CAPABILITIES</span>
       <span style=${{fontSize:8.5,fontWeight:700,marginLeft:7,letterSpacing:.6,
         color:simEstate?T.yellow:T.green,border:`1px solid ${simEstate?T.yellow:T.green}`,
         borderRadius:4,padding:"0 5px"}}>${simEstate?"SIMULATED":"LOCAL"}</span>
@@ -1071,7 +1101,7 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
     </div>
     ${Object.entries(scopes).map(([sid,sv])=>html`<div key=${sid} onClick=${()=>goScope(sid)}
       style=${{display:"flex",alignItems:"flex-start",gap:8,padding:"7px 14px",cursor:"pointer",
-        background:sid===scope?T.cardH:"transparent",
+        background:sid===scope?"#60a5fa14":"transparent",
         borderLeft:sid===scope?`2px solid ${T.blue}`:"2px solid transparent"}}>
       <${Ico} k="sys" c=${sid===scope?T.blue:T.dim} s=${13}/>
       <div style=${{minWidth:0}}>
@@ -1080,7 +1110,7 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
       </div>
     </div>`)}
     <div style=${{padding:"10px 14px 4px",borderTop:`1px solid ${T.border}`,marginTop:4}}>
-      <span style=${{fontSize:11,fontWeight:700,letterSpacing:1.2,color:T.dim}}>MODELS</span>
+      <span style=${{fontSize:11,fontWeight:700,letterSpacing:1.2,color:T.dim}}>VIEWS</span>
       <span style=${{fontSize:9,color:T.mute,marginLeft:6}}>· ${(scopes[scope]||{}).label} only</span>
     </div>
     <div style=${{flex:1,padding:"6px 0"}}>
@@ -1096,10 +1126,10 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
         ${isOpen?g.items.map((it,ix)=>{const st=STATUS[it.status];const active=it.id&&it.id===level&&!it.alias;
           const aliasActive=it.id&&it.id===level&&it.alias;
           const clickable=!!it.id;
-          return html`<div key=${ix} onClick=${clickable?()=>go(it.id):null}
+          return html`<div key=${ix} class="vrow" onClick=${clickable?()=>go(it.id):null}
             style=${{display:"flex",alignItems:"flex-start",gap:8,padding:"5px 14px 5px 29px",
               cursor:clickable?"pointer":"default",
-              background:(active||aliasActive)?T.cardH:"transparent",
+              background:(active||aliasActive)?"#60a5fa14":"transparent",
               borderLeft:(active||aliasActive)?`2px solid ${T.blue}`:"2px solid transparent"}}>
             <span style=${{color:st.col,fontSize:10,lineHeight:"17px"}}>${st.dot}</span>
             <div style=${{minWidth:0,flex:1}}>
@@ -1107,7 +1137,7 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
                 color:clickable?T.text:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${it.label}</div>
               ${it.note?html`<div style=${{fontSize:9.5,color:T.mute}}>${it.note}</div>`:null}
             </div>
-            ${it.id&&last&&last[estate+":"+scope+":"+it.id]?html`<span style=${{fontSize:8.5,color:T.mute,lineHeight:"17px",flexShrink:0}}>${ago(last[estate+":"+scope+":"+it.id])}</span>`:null}
+            ${it.id&&last&&last[estate+":"+scope+":"+it.id]?html`<span class="ago" style=${{fontSize:8.5,color:T.mute,lineHeight:"17px",flexShrink:0}}>${ago(last[estate+":"+scope+":"+it.id])}</span>`:null}
             ${it.status==="planned"&&estate!=="local"&&it.vid0?html`<span title="Copy AI-generation prompt for this view"
               onClick=${ev=>{ev.stopPropagation();
                 navigator.clipboard.writeText(genPrompt(estate,(scopes[scope]||{}).label||scope,it.vid0,it.label));
@@ -1235,7 +1265,7 @@ function Flow(){
     color:a?T.text:T.dim,borderRadius:7,padding:"5px 11px",fontSize:12,cursor:"pointer",fontWeight:550});
   return html`<div style=${{height:"100vh",display:"flex",flexDirection:"column",background:T.bg,
     font:"13px -apple-system,Segoe UI,Inter,Roboto,sans-serif",color:T.text}}>
-    <div style=${{padding:"9px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10}}>
+    <div style=${{padding:"9px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10,background:T.chrome}}>
       <div style=${{fontWeight:750,fontSize:15,flexShrink:0}}>aOa <span style=${{color:T.dim,fontWeight:400}}>· architecture</span></div>
       <select value=${estate} onChange=${e=>goEstate(e.target.value)}
         style=${{background:T.card,color:ESTATES[estate].sim?T.yellow:T.green,border:`1px solid ${T.border}`,
@@ -1250,7 +1280,7 @@ function Flow(){
           color:pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan,
           border:`1px solid ${pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan}`,
           borderRadius:5,padding:"1px 7px"}))(view.prov.kind)}>${view.prov.kind==="derived"?"REAL":view.prov.kind==="simulated"?"SIMULATED":"MIXED"}</span>`:null}
-        ${els&&els.problems&&els.problems.length?html`<span title="Show concerns"
+        ${els&&els.problems&&els.problems.length?html`<span title="Show findings"
           onClick=${()=>setExpanded(true)}
           style=${{fontSize:9.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:5,
           padding:"1px 7px",whiteSpace:"nowrap",cursor:"pointer",flexShrink:0}}>⚠ ${els.problems.length}</span>`:null}
@@ -1258,24 +1288,27 @@ function Flow(){
           style=${{fontSize:9.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:5,
           padding:"1px 7px",whiteSpace:"nowrap",cursor:"help",flexShrink:0}}>◌ ${ISSUES.length}</span>`:null}
       </div>
-      <div style=${{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+      </div>
+    <div style=${{padding:"3px 18px",borderBottom:`1px solid ${T.border}`,fontSize:10.5,color:T.dim,
+      display:"flex",alignItems:"center",gap:10,background:T.chrome}}>
+      <span style=${{minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}
+        title=${view.count+(view.prov?" · "+view.prov.label:"")}>
+        ${view.count}${view.prov?html`<span style=${{color:T.mute}}> · ${view.prov.label}</span>`:null}
+      </span>
+      <div style=${{marginLeft:"auto",display:"flex",gap:7,alignItems:"center",flexShrink:0}}>
         <button style=${btn(ov.concerns)} onClick=${()=>setOv({...ov,concerns:!ov.concerns})}
-          title="Recon findings per package (bitmask)">⚠ Concerns</button>
+          title="Recon findings per package (bitmask)">⚠ Findings</button>
         <button style=${btn(ov.changed)} onClick=${()=>setOv({...ov,changed:!ov.changed})}
           title="Touched in last 15 commits (git)">Δ Changed</button>
-        <span style=${{width:8}}></span>
+        <span style=${{width:6}}></span>
         <button style=${btn(den==="compact")} onClick=${()=>setDen("compact")}>Compact</button>
         <button style=${btn(den==="comfort")} onClick=${()=>setDen("comfort")}>Comfort</button>
-        <span style=${{width:8}}></span>
+        <span style=${{width:6}}></span>
         <button style=${btn(!dirOv)} onClick=${()=>setDirOv(null)}
           title="Pick the direction that best fits the viewport">Auto${!dirOv&&autoDir?(autoDir==="DOWN"?" ↓":" →"):""}</button>
         <button style=${btn(dirOv==="DOWN")} onClick=${()=>setDirOv("DOWN")} title="Top–Bottom">↓</button>
         <button style=${btn(dirOv==="RIGHT")} onClick=${()=>setDirOv("RIGHT")} title="Left–Right">→</button>
-      </div></div>
-    <div style=${{padding:"3px 18px",borderBottom:`1px solid ${T.border}`,fontSize:10.5,color:T.dim,
-      whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}
-      title=${view.count+(view.prov?" · "+view.prov.label:"")}>
-      ${view.count}${view.prov?html`<span style=${{color:T.mute}}> · ${view.prov.label}</span>`:null}
+      </div>
     </div>
     <div style=${{flex:1,display:"flex",minHeight:0}}>
       <${Sidebar} estate=${estate} scopes=${SC} simEstate=${ESTATES[estate].sim}
@@ -1303,14 +1336,15 @@ createRoot(document.getElementById("root")).render(html`<${ReactFlowProvider}><$
 """
 HTML="""<!doctype html><html><head><meta charset="utf-8"><title>aOa — Architecture</title>
 <link rel="stylesheet" href="https://esm.sh/@xyflow/react@12.3.5/dist/style.css">
-<style>html,body,#root{margin:0;height:100%;background:#0c0c0e}
+<style>html,body,#root{margin:0;height:100%;background:#0a0a0c}
+.vrow .ago{display:none}.vrow:hover .ago{display:inline}
 .react-flow__controls-button{background:#161618!important;border-color:#252528!important;fill:#8b8b96!important}
 /* raise hovered LEAF nodes only — a raised bucket would paint over its own members */
 .react-flow__node-member:hover,.react-flow__node-box:hover,
 .react-flow__node-solo:hover,.react-flow__node-entity:hover{z-index:1200!important}
 .hv{position:relative}
 .hv .hovercard{visibility:hidden;transition:visibility 0s linear 0s;position:absolute;left:0;top:calc(100% + 7px);
- min-width:200px;max-width:300px;background:#1c1c1f;border:1px solid #3a3a40;border-radius:8px;padding:9px 12px;
+ min-width:200px;max-width:300px;background:#18181b;border:1px solid #34343a;border-radius:8px;padding:9px 12px;
  z-index:1300;box-shadow:0 10px 28px #000c;pointer-events:none;white-space:normal;text-transform:none;letter-spacing:0}
 .hv:hover .hovercard{visibility:visible;transition-delay:.15s}  /* hover-intent: delayed open, instant dismiss */
 .hv.force .hovercard{visibility:visible;transition-delay:0s}

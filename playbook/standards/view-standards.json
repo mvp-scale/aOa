@@ -26,8 +26,14 @@
     "palette": {
       "rule": "color is meaning: the same layer name gets the same color everywhere in the app. Resolution: view palette -> canonical pin -> stable name hash. Never assigned per-view by order of appearance.",
       "canonical_layers": {
-        "core": "blue", "channel": "purple", "integration": "orange",
-        "data": "green", "external": "grey", "supporting": "neutral", "platform": "cyan", "edge": "cyan"
+        "core": "blue",
+        "channel": "purple",
+        "integration": "orange",
+        "data": "green",
+        "external": "grey",
+        "supporting": "neutral",
+        "platform": "cyan",
+        "edge": "cyan"
       },
       "reserved": {
         "red": "violations and faults ONLY — never decoration, never in the rotation",
@@ -35,120 +41,227 @@
       },
       "legend": "every diagram carries an in-context legend (canvas corner) mapping the colors actually on screen; the footer legend stays for edges and provenance"
     },
-    "drill": "the bottom dock — three FIXED segments, always present: VIEW (the view's record: question · pass · sources · counts) | SELECTION (the clicked element/edge: stat table + relations table, violations first) | CONCERNS (diagnostics; selection-related rows highlight). Persistent: 26px collapsed bar <-> 208px expanded, never unmounts; view change clears selection but keeps expansion. The nav rail is navigation ONLY and never reflows.",
-    "grammar": "hover PEEKS (150ms intent delay, instant dismiss, never blocks clicks, ends with a click-hint line); click SELECTS (canvas ring + dock; edges, table rows, and matrix cells are all selectable); the open ▸ chip DRILLS (navigates — chip = navigates, no chip = selects); Esc unwinds (clear selection, then collapse); empty-canvas click deselects."
+    "drill": "the bottom dock — three FIXED segments, always present: VIEW (the view's record: derived caption — the answer to its question — plus question · pass · source) | SELECTION (the clicked element/edge: stat table + relations table, violations first) | FINDINGS (diagnostics; selection-related rows highlight). Persistent: 26px collapsed bar <-> 208px expanded, never unmounts; view change clears selection but keeps expansion. The nav rail is navigation ONLY and never reflows.",
+    "grammar": "hover PEEKS (150ms intent delay, instant dismiss, never blocks clicks, ends with a click-hint line); click SELECTS (canvas ring + dock; edges, table rows, and matrix cells are all selectable); the open ▸ chip DRILLS (navigates — chip = navigates, no chip = selects); Esc unwinds (clear selection, then collapse); empty-canvas click deselects.",
+    "vocabulary": {
+      "capability": "the grouping of systems under a business area (sidebar CAPABILITIES) — TOGAF/ServiceNow/LeanIX-native, adopted by both generations",
+      "view": "a rendered diagram instance; the catalog lists views (ISO 42010: viewpoint = the convention, view = the artifact)",
+      "finding": "a detected defect (cycle, violation, flagged row) — IIA/audit-native; NEVER “concern”, which in ISO 42010 means what a stakeholder cares about",
+      "caption": "the one-line derived answer a view gives to its own question, computed from on-screen data — shown on the dock resting bar and as the VIEW segment headline",
+      "estate": "the whole holding being documented (dropdown level)"
+    }
   },
   "views": {
     "context": {
       "question": "Who and what does this system talk to, and why?",
       "reader_leaves_knowing": "the system's place in the world: every external actor/system and the purpose of each relationship",
-      "vital": ["system identity", "external actors/systems", "labeled relationships (verb)"],
-      "hover": ["actor tech/ownership", "relationship protocol/volume"],
+      "vital": [
+        "system identity",
+        "external actors/systems",
+        "labeled relationships (verb)"
+      ],
+      "hover": [
+        "actor tech/ownership",
+        "relationship protocol/volume"
+      ],
       "pass": "a reader can name every external dependency and state why it exists"
     },
     "container": {
       "question": "What are the deployable/runnable pieces and how do they communicate?",
       "reader_leaves_knowing": "each container, its responsibility, and every inter-container channel",
-      "vital": ["container identity", "communication edges (verb)"],
-      "hover": ["container tech stack", "channel protocol/port"],
+      "vital": [
+        "container identity",
+        "communication edges (verb)"
+      ],
+      "hover": [
+        "container tech stack",
+        "channel protocol/port"
+      ],
       "pass": "a reader can list the runnable units and trace any request path between them"
     },
     "component": {
       "question": "How is this container organized internally, and what depends on what?",
       "reader_leaves_knowing": "the internal modules, their grouping, and the dependency direction between groups",
-      "vital": ["module identity", "group/layer membership", "dependency edges"],
-      "hover": ["module size/owner", "dependency counts"],
+      "vital": [
+        "module identity",
+        "group/layer membership",
+        "dependency edges"
+      ],
+      "hover": [
+        "module size/owner",
+        "dependency counts"
+      ],
       "pass": "a reader can identify the layering and spot any module in the wrong layer"
     },
     "domains": {
       "question": "What are the business domains, what lives in each, and which domains depend on which?",
       "reader_leaves_knowing": "the domain decomposition and the cross-domain coupling that matters",
-      "vital": ["domain identity", "member identity (full name)", "cross-domain edges with counts"],
-      "hover": ["member detail (scale/tech)", "domain totals"],
+      "vital": [
+        "domain identity",
+        "member identity (full name)",
+        "cross-domain edges with counts"
+      ],
+      "hover": [
+        "member detail (scale/tech)",
+        "domain totals"
+      ],
       "pass": "a reader can name the domains, their members, and the heaviest cross-domain dependency"
     },
     "deployment": {
       "question": "What runs where, and what crosses environment boundaries?",
       "reader_leaves_knowing": "every environment/zone, what is deployed in it, and the cross-environment flows",
-      "vital": ["environment identity", "deployed unit identity", "cross-environment edges (verb)"],
-      "hover": ["instance counts/versions", "infra detail (region, runtime)"],
+      "vital": [
+        "environment identity",
+        "deployed unit identity",
+        "cross-environment edges (verb)"
+      ],
+      "hover": [
+        "instance counts/versions",
+        "infra detail (region, runtime)"
+      ],
       "pass": "a reader can say what runs in each environment and what would break if one vanished"
     },
     "sequence": {
       "question": "In what order do the parts interact to complete this one scenario?",
       "reader_leaves_knowing": "the participants and the ordered steps of a single named flow",
-      "vital": ["participant identity", "ordered steps (verb)", "the scenario name"],
-      "hover": ["step payload/protocol", "timing/SLA detail"],
+      "vital": [
+        "participant identity",
+        "ordered steps (verb)",
+        "the scenario name"
+      ],
+      "hover": [
+        "step payload/protocol",
+        "timing/SLA detail"
+      ],
       "pass": "a reader can retell the scenario start to finish without ambiguity"
     },
     "code": {
       "question": "What are the key symbols/jobs at the lowest level and how do they chain?",
       "reader_leaves_knowing": "the concrete units (classes, jobs, programs) on the critical path and their order",
-      "vital": ["unit identity", "chain edges"],
-      "hover": ["unit size/language/last-touched", "schedule detail"],
+      "vital": [
+        "unit identity",
+        "chain edges"
+      ],
+      "hover": [
+        "unit size/language/last-touched",
+        "schedule detail"
+      ],
       "pass": "a reader can follow the chain and name the unit at each step"
     },
     "dataflow": {
       "question": "Where does data come from, where does it go, and what transforms it on the way?",
       "reader_leaves_knowing": "every source, process, store, and sink in the flow, with the verb on every hop",
-      "vital": ["process/store identity", "every edge labeled with a verb", "flow direction"],
-      "hover": ["process tech/vendor", "store volumes", "edge payload detail"],
+      "vital": [
+        "process/store identity",
+        "every edge labeled with a verb",
+        "flow direction"
+      ],
+      "hover": [
+        "process tech/vendor",
+        "store volumes",
+        "edge payload detail"
+      ],
       "pass": "a reader can trace any datum end-to-end and name what touches it"
     },
     "trust": {
       "question": "What crosses a security boundary, and is that crossing legitimate?",
       "reader_leaves_knowing": "the zones, what lives in them, every cross-zone flow, and which flows violate policy",
-      "vital": ["zone identity + classification", "member identity (full name)", "cross-zone edges (verb)", "violation highlight"],
-      "hover": ["member scale/controls (table counts, masking, tokenization detail)", "edge volumes"],
+      "vital": [
+        "zone identity + classification",
+        "member identity (full name)",
+        "cross-zone edges (verb)",
+        "violation highlight"
+      ],
+      "hover": [
+        "member scale/controls (table counts, masking, tokenization detail)",
+        "edge volumes"
+      ],
       "pass": "a reader can name the violating flow within seconds and say which boundary it breaks"
     },
     "statemachine": {
       "question": "What states can this entity be in, and what causes each transition?",
       "reader_leaves_knowing": "the complete state set and the trigger on every transition",
-      "vital": ["state identity", "transition edges labeled with trigger"],
-      "hover": ["state dwell-time/volume", "transition guard detail"],
+      "vital": [
+        "state identity",
+        "transition edges labeled with trigger"
+      ],
+      "hover": [
+        "state dwell-time/volume",
+        "transition guard detail"
+      ],
       "pass": "a reader can say how the entity gets from any state to any other, or that it cannot"
     },
     "datamodel": {
       "question": "What are the core entities, their key fields, and how do they relate?",
       "reader_leaves_knowing": "each entity, its identifying fields, and the relationships with cardinality sense",
-      "vital": ["entity identity", "key fields", "relationship edges (verb)"],
-      "hover": ["entity store/tech", "row counts", "field detail beyond keys"],
+      "vital": [
+        "entity identity",
+        "key fields",
+        "relationship edges (verb)"
+      ],
+      "hover": [
+        "entity store/tech",
+        "row counts",
+        "field detail beyond keys"
+      ],
       "pass": "a reader can sketch the schema's spine from the diagram alone"
     },
     "glossary": {
       "question": "What does each term of art mean here, precisely?",
       "reader_leaves_knowing": "the canonical definition and owner of every term that has caused or could cause confusion",
-      "vital": ["term", "definition", "owning domain"],
+      "vital": [
+        "term",
+        "definition",
+        "owning domain"
+      ],
       "hover": [],
       "pass": "a reader can resolve a disputed term without asking anyone"
     },
     "techportfolio": {
       "question": "What technologies are we standing on, and where is the risk?",
       "reader_leaves_knowing": "the technology inventory with lifecycle status and where each is used",
-      "vital": ["technology", "lifecycle/risk status", "where used"],
+      "vital": [
+        "technology",
+        "lifecycle/risk status",
+        "where used"
+      ],
       "hover": [],
       "pass": "a reader can name the riskiest technology and what depends on it"
     },
     "sbom": {
       "question": "What components are inside, at what version, from where?",
       "reader_leaves_knowing": "the component inventory with versions and provenance",
-      "vital": ["component", "version", "supplier/source"],
+      "vital": [
+        "component",
+        "version",
+        "supplier/source"
+      ],
       "hover": [],
       "pass": "a reader can answer 'are we exposed to X@version' from the table alone"
     },
     "dsm": {
       "question": "Where are the mutual dependencies?",
       "reader_leaves_knowing": "the dependency density and every cycle-forming (red) cell",
-      "vital": ["module order", "dependency cells", "mutual (red) cells"],
-      "hover": ["cell dependency detail"],
+      "vital": [
+        "module order",
+        "dependency cells",
+        "mutual (red) cells"
+      ],
+      "hover": [
+        "cell dependency detail"
+      ],
       "pass": "a reader can point at every red cell and name the two modules in tension"
     },
     "cycles": {
       "question": "Which dependency cycles exist and how big are they?",
       "reader_leaves_knowing": "each strongly-connected component, its members, and the edge to cut",
-      "vital": ["cycle membership", "cycle path"],
-      "hover": ["edge weights (which dependency is cheapest to break)"],
+      "vital": [
+        "cycle membership",
+        "cycle path"
+      ],
+      "hover": [
+        "edge weights (which dependency is cheapest to break)"
+      ],
       "pass": "a reader can pick the cycle to attack first and say where to cut it"
     }
   }
