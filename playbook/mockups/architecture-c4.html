@@ -6,10 +6,13 @@
 .react-flow__node-member:hover,.react-flow__node-box:hover,
 .react-flow__node-solo:hover,.react-flow__node-entity:hover{z-index:1200!important}
 .hv{position:relative}
-.hv .hovercard{display:none;position:absolute;left:0;top:calc(100% + 7px);min-width:200px;max-width:300px;
- background:#1c1c1f;border:1px solid #3a3a40;border-radius:8px;padding:9px 12px;z-index:1300;
- box-shadow:0 10px 28px #000c;pointer-events:none;white-space:normal;text-transform:none;letter-spacing:0}
-.hv:hover .hovercard,.hv.force .hovercard{display:block}</style>
+.hv .hovercard{visibility:hidden;transition:visibility 0s linear 0s;position:absolute;left:0;top:calc(100% + 7px);
+ min-width:200px;max-width:300px;background:#1c1c1f;border:1px solid #3a3a40;border-radius:8px;padding:9px 12px;
+ z-index:1300;box-shadow:0 10px 28px #000c;pointer-events:none;white-space:normal;text-transform:none;letter-spacing:0}
+.hv:hover .hovercard{visibility:visible;transition-delay:.15s}  /* hover-intent: delayed open, instant dismiss */
+.hv.force .hovercard{visibility:visible;transition-delay:0s}
+.react-flow__edge{cursor:pointer}
+.react-flow__edge:hover .react-flow__edge-path{stroke-width:3!important;opacity:1!important}</style>
 </head><body><div id="root"></div><script type="module">
 import React,{useState,useEffect,useCallback,memo} from "https://esm.sh/react@18.3.1";
 import {createRoot} from "https://esm.sh/react-dom@18.3.1/client";
@@ -100,7 +103,7 @@ table:   {...,"columns":["..."],"rows":[["...","..."]]}
 matrix:  {...,"items":["a","b"],"matrix":[[null,3],[1,null]]}`;
 // per-view intent from playbook/standards/view-standards.json (injected at build time):
 // the question each view answers, what is canvas-vital, what stays hover-tier
-const VIEW_INTENT={"context": {"question": "Who and what does this system talk to, and why?", "vital": ["system identity", "external actors/systems", "labeled relationships (verb)"], "hover": ["actor tech/ownership", "relationship protocol/volume"]}, "container": {"question": "What are the deployable/runnable pieces and how do they communicate?", "vital": ["container identity", "communication edges (verb)"], "hover": ["container tech stack", "channel protocol/port"]}, "component": {"question": "How is this container organized internally, and what depends on what?", "vital": ["module identity", "group/layer membership", "dependency edges"], "hover": ["module size/owner", "dependency counts"]}, "domains": {"question": "What are the business domains, what lives in each, and which domains depend on which?", "vital": ["domain identity", "member identity (full name)", "cross-domain edges with counts"], "hover": ["member detail (scale/tech)", "domain totals"]}, "deployment": {"question": "What runs where, and what crosses environment boundaries?", "vital": ["environment identity", "deployed unit identity", "cross-environment edges (verb)"], "hover": ["instance counts/versions", "infra detail (region, runtime)"]}, "sequence": {"question": "In what order do the parts interact to complete this one scenario?", "vital": ["participant identity", "ordered steps (verb)", "the scenario name"], "hover": ["step payload/protocol", "timing/SLA detail"]}, "code": {"question": "What are the key symbols/jobs at the lowest level and how do they chain?", "vital": ["unit identity", "chain edges"], "hover": ["unit size/language/last-touched", "schedule detail"]}, "dataflow": {"question": "Where does data come from, where does it go, and what transforms it on the way?", "vital": ["process/store identity", "every edge labeled with a verb", "flow direction"], "hover": ["process tech/vendor", "store volumes", "edge payload detail"]}, "trust": {"question": "What crosses a security boundary, and is that crossing legitimate?", "vital": ["zone identity + classification", "member identity (full name)", "cross-zone edges (verb)", "violation highlight"], "hover": ["member scale/controls (table counts, masking, tokenization detail)", "edge volumes"]}, "statemachine": {"question": "What states can this entity be in, and what causes each transition?", "vital": ["state identity", "transition edges labeled with trigger"], "hover": ["state dwell-time/volume", "transition guard detail"]}, "datamodel": {"question": "What are the core entities, their key fields, and how do they relate?", "vital": ["entity identity", "key fields", "relationship edges (verb)"], "hover": ["entity store/tech", "row counts", "field detail beyond keys"]}, "glossary": {"question": "What does each term of art mean here, precisely?", "vital": ["term", "definition", "owning domain"], "hover": []}, "techportfolio": {"question": "What technologies are we standing on, and where is the risk?", "vital": ["technology", "lifecycle/risk status", "where used"], "hover": []}, "sbom": {"question": "What components are inside, at what version, from where?", "vital": ["component", "version", "supplier/source"], "hover": []}, "dsm": {"question": "Where are the mutual dependencies?", "vital": ["module order", "dependency cells", "mutual (red) cells"], "hover": ["cell dependency detail"]}, "cycles": {"question": "Which dependency cycles exist and how big are they?", "vital": ["cycle membership", "cycle path"], "hover": ["edge weights (which dependency is cheapest to break)"]}};
+const VIEW_INTENT={"context": {"question": "Who and what does this system talk to, and why?", "vital": ["system identity", "external actors/systems", "labeled relationships (verb)"], "hover": ["actor tech/ownership", "relationship protocol/volume"], "pass": "a reader can name every external dependency and state why it exists"}, "container": {"question": "What are the deployable/runnable pieces and how do they communicate?", "vital": ["container identity", "communication edges (verb)"], "hover": ["container tech stack", "channel protocol/port"], "pass": "a reader can list the runnable units and trace any request path between them"}, "component": {"question": "How is this container organized internally, and what depends on what?", "vital": ["module identity", "group/layer membership", "dependency edges"], "hover": ["module size/owner", "dependency counts"], "pass": "a reader can identify the layering and spot any module in the wrong layer"}, "domains": {"question": "What are the business domains, what lives in each, and which domains depend on which?", "vital": ["domain identity", "member identity (full name)", "cross-domain edges with counts"], "hover": ["member detail (scale/tech)", "domain totals"], "pass": "a reader can name the domains, their members, and the heaviest cross-domain dependency"}, "deployment": {"question": "What runs where, and what crosses environment boundaries?", "vital": ["environment identity", "deployed unit identity", "cross-environment edges (verb)"], "hover": ["instance counts/versions", "infra detail (region, runtime)"], "pass": "a reader can say what runs in each environment and what would break if one vanished"}, "sequence": {"question": "In what order do the parts interact to complete this one scenario?", "vital": ["participant identity", "ordered steps (verb)", "the scenario name"], "hover": ["step payload/protocol", "timing/SLA detail"], "pass": "a reader can retell the scenario start to finish without ambiguity"}, "code": {"question": "What are the key symbols/jobs at the lowest level and how do they chain?", "vital": ["unit identity", "chain edges"], "hover": ["unit size/language/last-touched", "schedule detail"], "pass": "a reader can follow the chain and name the unit at each step"}, "dataflow": {"question": "Where does data come from, where does it go, and what transforms it on the way?", "vital": ["process/store identity", "every edge labeled with a verb", "flow direction"], "hover": ["process tech/vendor", "store volumes", "edge payload detail"], "pass": "a reader can trace any datum end-to-end and name what touches it"}, "trust": {"question": "What crosses a security boundary, and is that crossing legitimate?", "vital": ["zone identity + classification", "member identity (full name)", "cross-zone edges (verb)", "violation highlight"], "hover": ["member scale/controls (table counts, masking, tokenization detail)", "edge volumes"], "pass": "a reader can name the violating flow within seconds and say which boundary it breaks"}, "statemachine": {"question": "What states can this entity be in, and what causes each transition?", "vital": ["state identity", "transition edges labeled with trigger"], "hover": ["state dwell-time/volume", "transition guard detail"], "pass": "a reader can say how the entity gets from any state to any other, or that it cannot"}, "datamodel": {"question": "What are the core entities, their key fields, and how do they relate?", "vital": ["entity identity", "key fields", "relationship edges (verb)"], "hover": ["entity store/tech", "row counts", "field detail beyond keys"], "pass": "a reader can sketch the schema's spine from the diagram alone"}, "glossary": {"question": "What does each term of art mean here, precisely?", "vital": ["term", "definition", "owning domain"], "hover": [], "pass": "a reader can resolve a disputed term without asking anyone"}, "techportfolio": {"question": "What technologies are we standing on, and where is the risk?", "vital": ["technology", "lifecycle/risk status", "where used"], "hover": [], "pass": "a reader can name the riskiest technology and what depends on it"}, "sbom": {"question": "What components are inside, at what version, from where?", "vital": ["component", "version", "supplier/source"], "hover": [], "pass": "a reader can answer 'are we exposed to X@version' from the table alone"}, "dsm": {"question": "Where are the mutual dependencies?", "vital": ["module order", "dependency cells", "mutual (red) cells"], "hover": ["cell dependency detail"], "pass": "a reader can point at every red cell and name the two modules in tension"}, "cycles": {"question": "Which dependency cycles exist and how big are they?", "vital": ["cycle membership", "cycle path"], "hover": ["edge weights (which dependency is cheapest to break)"], "pass": "a reader can pick the cycle to attack first and say where to cut it"}};
 function genPrompt(estateId,scopeLabel,vid,label){
  const VI=VIEW_INTENT[vid];
  return "Generate an architecture view for the aOa playbook viewer.\n"+
@@ -154,14 +157,20 @@ const ElkEdge=memo(function ElkEdge({id,data,style,markerEnd}){
   const s=data.section;
   const pts=[s.startPoint,...(s.bendPoints||[]),s.endPoint];
   const d=pts.map((p,i)=>(i===0?"M ":"L ")+p.x+" "+p.y).join(" ");
+  const m=data.meta;
   return html`<${React.Fragment}>
-    <${BaseEdge} id=${id} path=${d} markerEnd=${markerEnd} style=${style}/>
+    <${BaseEdge} id=${id} path=${d} markerEnd=${markerEnd}
+      style=${data._sel?{...style,strokeWidth:3,opacity:1}:style}/>
     ${data.label?html`<${EdgeLabelRenderer}>
-      <div className="nodrag nopan" style=${{position:"absolute",
+      <div className=${"nodrag nopan"+(m?" hv":"")} style=${{position:"absolute",
         transform:`translate(${data.label.x}px,${data.label.y}px)`,
-        background:T.bg,border:`1px solid ${T.border}`,borderRadius:5,
+        background:T.bg,border:`1px solid ${data._sel?T.blue:T.border}`,borderRadius:5,
         padding:"0 5px",height:16,lineHeight:"15px",fontSize:10.5,fontWeight:600,
-        color:T.text,pointerEvents:"all",zIndex:5}}>${data.label.text}</div>
+        color:T.text,pointerEvents:"all",zIndex:5,cursor:"pointer"}}>${data.label.text}
+        ${m?html`<${HoverCard} title=${m.s+" → "+m.t}
+          rows=${[["flow",m.verb],["volume",m.count?"×"+m.count:""],[m.tag?"violation":"",m.tag||""]]}
+          hint="click → relation detail"/>`:null}
+      </div>
     <//>`:null}
   <//>`;});
 
@@ -169,12 +178,13 @@ const ElkEdge=memo(function ElkEdge({id,data,style,markerEnd}){
 // one signal; supporting metadata lives HERE, shown on hover. ?hover=<id> forces one
 // card open so the screenshot loop can verify the hover tier.
 const HQ=MQ.get("hover");
-function HoverCard({title,rows}){
+function HoverCard({title,rows,hint}){
   const rs=(rows||[]).filter(r=>r[1]!==undefined&&r[1]!==null&&r[1]!=="");
   return html`<div class="hovercard">
     <div style=${{fontSize:11.5,fontWeight:700,color:T.text,marginBottom:rs.length?5:0}}>${title}</div>
     ${rs.map((r,i)=>html`<div key=${i} style=${{fontSize:10.5,color:T.dim,lineHeight:1.55}}>
       <span style=${{color:T.mute,fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginRight:6}}>${r[0]}</span>${r[1]}</div>`)}
+    ${hint?html`<div style=${{fontSize:9,color:T.mute,marginTop:6,letterSpacing:.4}}>${hint}</div>`:null}
   </div>`;}
 const hvc=id=>"hv"+(id===HQ?" force":"");
 function BoxNode({data}){
@@ -183,19 +193,21 @@ function BoxNode({data}){
   const NAME={sys:"system",ext:"external",container:"container",store:"store",proc:"process"};
   return html`<div class=${hvc(data.id)} style=${{background:T.card,border:`1.5px ${mock?"dashed":"solid"} ${col}`,
     borderRadius:t==="store"?18:t==="proc"?12:8,padding:"9px 13px",width:data.w-2,height:data.h-2,boxSizing:"border-box",
-    color:T.text,cursor:drill?"pointer":"default"}}>
+    color:T.text,cursor:"pointer",boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
     <div style=${{display:"flex",alignItems:"center",gap:8,height:"100%",opacity:mock?0.88:1}}>
       <${Ico} k=${data.icon} c=${col} s=${17}/>
       <span style=${{fontSize:13.5,fontWeight:600,whiteSpace:"nowrap"}}>${data.label}</span>
       ${drill?html`<span style=${{marginLeft:"auto",fontSize:10,color:col,border:`1px solid ${col}`,borderRadius:5,padding:"0 5px"}}>open ▸</span>`:null}
     </div>
-    <${HoverCard} title=${data.label} rows=${(data.stats?Object.entries(data.stats):[["type",NAME[t]||t],["detail",data.sub]]).concat(mock?[["status","inferred · sourceable"]]:[])}/>
+    <${HoverCard} title=${data.label} rows=${(data.stats?Object.entries(data.stats):[["type",NAME[t]||t],["detail",data.sub]]).concat(mock?[["status","inferred · sourceable"]]:[])}
+      hint=${drill?"click → opens "+data.drillTo+" view":"click → details"}/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function EntityNode({data}){
   const c=T.green;
-  return html`<div class=${hvc(data.id)} style=${{width:data.w-2}}>
+  return html`<div class=${hvc(data.id)} style=${{width:data.w-2,cursor:"pointer",
+    boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none",borderRadius:6}}>
     <div style=${{background:T.card,border:`1.5px solid ${c}`,borderRadius:6,
       boxSizing:"border-box",color:T.text,overflow:"hidden"}}>
       <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
@@ -208,13 +220,13 @@ function EntityNode({data}){
         borderBottom:i<data.fields.length-1?`1px solid ${T.border}22`:"none"}}>${f}</div>`)}
       <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
     </div>
-    <${HoverCard} title=${data.label} rows=${data.stats?Object.entries(data.stats):[["store",data.tech]]}/>
+    <${HoverCard} title=${data.label} rows=${data.stats?Object.entries(data.stats):[["store",data.tech]]} hint="click → details"/>
   </div>`;}
 function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting"||data.boundary;
   return html`<div style=${{width:"100%",height:"100%",background:T.band,
     border:`1.5px ${dash?"dashed":"solid"} ${data._god?T.red:c}`,borderRadius:4,boxSizing:"border-box",
-    opacity:data._dead?0.45:1,
-    boxShadow:data._god?`0 0 0 2px ${T.red}55, 0 0 22px ${T.red}44`:"none"}}>
+    opacity:data._dead?0.45:1,cursor:"pointer",
+    boxShadow:data._sel?`0 0 0 2px ${T.blue}`:data._god?`0 0 0 2px ${T.red}55, 0 0 22px ${T.red}44`:"none"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
     <div style=${{display:"flex",alignItems:"center",gap:7,padding:"7px 12px",height:data.head,boxSizing:"border-box"}}>
       <${Ico} k=${data.ico||data.layer} c=${c} s=${14}/>
@@ -228,20 +240,21 @@ function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting
   </div>`;}
 function SoloNode({data}){const c=data.col;const dash=data.layer==="supporting";
   return html`<div class=${hvc(data.member.id)} style=${{background:T.band,border:`1.5px ${dash?"dashed":"solid"} ${c}`,
-    borderRadius:4,padding:"8px 12px",width:data.w-2,height:data.h-2,boxSizing:"border-box",color:T.text}}>
+    borderRadius:4,padding:"8px 12px",width:data.w-2,height:data.h-2,boxSizing:"border-box",color:T.text,
+    cursor:"pointer",boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
     <div style=${{display:"flex",alignItems:"center",gap:7}}>
       <${Ico} k=${data.ico||data.layer} c=${c} s=${14}/>
       <span style=${{fontSize:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:1.1,whiteSpace:"nowrap"}}>${data.label}</span>
       <span style=${{fontSize:12.5,fontWeight:600,marginLeft:6,whiteSpace:"nowrap"}}>${data.member.label}</span>
     </div>
-    <${HoverCard} title=${data.member.label} rows=${data.member.stats?Object.entries(data.member.stats):[["layer",data.label],["detail",data.member.sub]]}/>
+    <${HoverCard} title=${data.member.label} rows=${data.member.stats?Object.entries(data.member.stats):[["layer",data.label],["detail",data.member.sub]]} hint="click → details"/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function MemberNode({data}){const c=data.col;
   return html`<div class=${hvc(data.id)} style=${{background:T.card,border:`1px solid ${T.border}`,borderLeft:`3px solid ${c}`,
     borderRadius:6,padding:data.wrap?"4px 10px":"5px 10px",width:data.w,height:data.h,boxSizing:"border-box",color:T.text,
-    display:"flex",alignItems:"center"}}>
+    display:"flex",alignItems:"center",cursor:"pointer",boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none"}}>
     <div style=${{display:"flex",alignItems:"center",gap:6,width:"100%"}}>
       <${Ico} k=${data.lay} c=${c} s=${12}/>
       <span style=${{fontSize:data.wrap?10.5:11.5,fontWeight:600,whiteSpace:data.wrap?"normal":"nowrap",lineHeight:1.25}}>${data.label}</span>
@@ -254,34 +267,58 @@ function MemberNode({data}){const c=data.col;
     </div>
     <${HoverCard} title=${data.label} rows=${(data.stats?Object.entries(data.stats):[["detail",data.sub]]).concat([
       [data.concerns?"findings":"",data.concerns?data.concerns+" recon findings":""],
-      [data.changed?"recent":"",data.changed?"touched in last 15 commits":""]])}/>
+      [data.changed?"recent":"",data.changed?"touched in last 15 commits":""]])} hint="click → details"/>
   </div>`;}
-function TableView({view}){
+function TableView({view,onSel,selId}){
+  // row click = select: the dock shows the full record (long prose cells live there untruncated)
+  const pick=(r,ri)=>onSel&&onSel({label:String(r[0]),chip:"record",
+    rows:(view.columns||[]).map((c,ci)=>[c,r[ci]]),relations:[]},"row:"+ri);
   return html`<div style=${{position:"absolute",inset:0,overflow:"auto",padding:"56px 40px 40px"}}>
     <table style=${{borderCollapse:"collapse",minWidth:560,fontSize:12.5,color:T.text}}>
       <thead><tr>${(view.columns||[]).map((c,i)=>html`<th key=${i} style=${{textAlign:"left",
         padding:"8px 16px",borderBottom:`2px solid ${T.border}`,color:T.dim,fontSize:10.5,
         textTransform:"uppercase",letterSpacing:1}}>${c}</th>`)}</tr></thead>
-      <tbody>${(view.rows||[]).map((r,ri)=>html`<tr key=${ri}>
+      <tbody>${(view.rows||[]).map((r,ri)=>html`<tr key=${ri} onClick=${()=>pick(r,ri)}
+        style=${{cursor:"pointer",background:selId==="row:"+ri?T.cardH:"transparent"}}>
         ${r.map((cell,ci)=>html`<td key=${ci} style=${{padding:"7px 16px",
           borderBottom:`1px solid ${T.border}55`,
           color:String(cell).startsWith("⚠")?T.red:ci===0?T.text:T.dim,
           fontWeight:ci===0?600:400,fontFamily:ci===0?"inherit":"ui-monospace,monospace",
           fontSize:ci===0?12.5:11.5}}>${cell}</td>`)}</tr>`)}</tbody>
     </table></div>`;}
-function MatrixView({view}){
+function MatrixView({view,onSel,selId}){
   const items=view.items||[],M=view.matrix||[];
+  // cell click = the pair record (both directions, MUTUAL flagged); header click = the module's fan profile
+  const pickCell=(i,j)=>{const v=(M[i]||[])[j];if(i===j||!v||!onSel)return;
+    const rv=(M[j]||[])[i];
+    onSel({label:items[i]+" → "+items[j],chip:rv?"mutual":"dependency",
+      rows:[["row → col",items[i]+" → "+items[j]+" · "+v]]
+        .concat(rv?[["col → row",items[j]+" → "+items[i]+" · "+rv],["status","MUTUAL — cycle"]]:[]),
+      relations:[]},"mx:"+i+","+j);};
+  const pickMod=i=>{if(!onSel)return;
+    const outs=(M[i]||[]).reduce((a,v)=>a+(v||0),0);
+    const ins=items.reduce((a,_,r)=>a+((M[r]||[])[i]||0),0);
+    onSel({label:items[i],chip:"module",
+      rows:[["fan-out",outs+" dependencies"],["fan-in",ins+" dependents"]],
+      relations:items.map((it,j)=>({dir:"out",peer:it,verb:"",count:(M[i]||[])[j],
+        viol:!!((M[i]||[])[j]&&(M[j]||[])[i])})).filter(r=>r.count)
+       .concat(items.map((it,j)=>({dir:"in",peer:it,verb:"",count:(M[j]||[])[i],
+        viol:!!((M[i]||[])[j]&&(M[j]||[])[i])})).filter(r=>r.count&&r.peer!==items[i]))
+       .sort((a,b)=>(b.viol?1:0)-(a.viol?1:0))},"mx:"+i);};
   return html`<div style=${{position:"absolute",inset:0,overflow:"auto",padding:"56px 40px 40px"}}>
     <table style=${{borderCollapse:"collapse",fontSize:11,color:T.text}}>
       <thead><tr><th style=${{padding:"6px 10px"}}></th>
-        ${items.map((it,i)=>html`<th key=${i} style=${{padding:"6px 10px",color:T.dim,fontSize:10,
-          textTransform:"uppercase",letterSpacing:.5}}>${it}</th>`)}</tr></thead>
+        ${items.map((it,i)=>html`<th key=${i} onClick=${()=>pickMod(i)} style=${{padding:"6px 10px",color:T.dim,fontSize:10,
+          textTransform:"uppercase",letterSpacing:.5,cursor:"pointer",
+          background:selId==="mx:"+i?T.cardH:"transparent"}}>${it}</th>`)}</tr></thead>
       <tbody>${items.map((row,i)=>html`<tr key=${i}>
-        <th style=${{padding:"6px 12px",textAlign:"right",color:T.dim,fontSize:10,
-          textTransform:"uppercase",letterSpacing:.5}}>${row}</th>
+        <th onClick=${()=>pickMod(i)} style=${{padding:"6px 12px",textAlign:"right",color:T.dim,fontSize:10,
+          textTransform:"uppercase",letterSpacing:.5,cursor:"pointer",
+          background:selId==="mx:"+i?T.cardH:"transparent"}}>${row}</th>
         ${items.map((_,j)=>{const v=(M[i]||[])[j];const cyc=v&&(M[j]||[])[i];
-          return html`<td key=${j} style=${{width:44,height:32,textAlign:"center",
-            border:`1px solid ${T.border}55`,
+          return html`<td key=${j} onClick=${()=>pickCell(i,j)} style=${{width:44,height:32,textAlign:"center",
+            border:`1px solid ${selId==="mx:"+i+","+j?T.blue:T.border+"55"}`,
+            cursor:i!==j&&v?"pointer":"default",
             background:i===j?T.cardH:v?(cyc?T.red+"33":T.blue+"22"):"transparent",
             color:cyc?T.red:v?T.text:T.mute,fontWeight:v?700:400}}>${i===j?"·":(v||"")}</td>`;})}
       </tr>`)}</tbody></table>
@@ -316,12 +353,14 @@ const EOPT=(dir,d)=>({"elk.algorithm":"layered","elk.direction":dir,"elk.edgeRou
  "elk.edgeLabels.placement":"CENTER","elk.edgeLabels.inline":"true"});
 const lblW=t=>snap(t.length*7+14);
 
-function rfEdge(e,laidById,col){
+function rfEdge(e,laidById,col,nameOf){
   const le=laidById[e.id]||{};
   const section=(le.sections&&le.sections[0])||null;
   const lab=(le.labels&&le.labels[0])||null;
-  return {id:e.id,source:e.source,target:e.target,type:"elk",
-    data:{section,label:lab?{x:lab.x,y:lab.y,text:lab.text}:null},
+  return {id:e.id,source:e.source,target:e.target,type:"elk",interactionWidth:20,
+    data:{section,label:lab?{x:lab.x,y:lab.y,text:lab.text}:null,
+      meta:{sid:e.source,tid:e.target,s:nameOf?nameOf(e.source):e.source,t:nameOf?nameOf(e.target):e.target,
+        verb:e.label||"",count:e.count,tag:e.tag,stats:e.stats}},
     markerEnd:{type:"arrowclosed",color:col(e),width:13,height:13},
     style:{stroke:col(e),strokeWidth:2,opacity:.85}};}
 
@@ -346,7 +385,7 @@ async function layoutSimple(view,dir,d){
   return {nodes:view.nodes.map(n=>({id:n.id,type:ent?"entity":"box",position:pos[n.id],
       width:sizes[n.id].w,height:sizes[n.id].h,
       data:{...n,w:sizes[n.id].w,h:sizes[n.id].h}})).concat(labelSpacers(laidById)),
-    edges:view.edges.map(e=>{const r=rfEdge(e,laidById,()=>T.dim);
+    edges:view.edges.map(e=>{const r=rfEdge(e,laidById,()=>T.dim,id2=>(nById[id2]||{}).label||id2);
       if(e._viol){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3"};
         r.markerEnd={...r.markerEnd,color:T.red};
         if(r.data.label)r.data.label.text="⚠ "+r.data.label.text;}
@@ -436,7 +475,7 @@ async function layoutBuckets(view,dir,d,ov){
         data:{...m,lay:b.layer,col,w:b.iw,h:b.ih,wrap:b.wrap,
           showC:!!(ov.concerns&&m.concerns>0),showH:!!(ov.changed&&m.changed)}});});});
   const bcol={};B.forEach(b=>bcol[b.id]=colOf(b.layer));
-  const edges2=view.edges.map(e=>{const r=rfEdge(e,laidById,ee=>bcol[ee.source]||T.dim);
+  const edges2=view.edges.map(e=>{const r=rfEdge(e,laidById,ee=>bcol[ee.source]||T.dim,id2=>(bById[id2]||{}).label||id2);
     if(e._viol){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3",opacity:.95};
       r.markerEnd={...r.markerEnd,color:T.red};
       if(r.data.label)r.data.label.text="⚠ "+r.data.label.text;}
@@ -445,33 +484,99 @@ async function layoutBuckets(view,dir,d,ov){
 
 // Docked footer: ONE derived legend — shows only what the current view actually renders —
 // plus the provenance stamp anchored right.
-// Bottom dock: the drill tier lives BELOW the canvas, not in the nav rail — clicking an
-// element expands this panel upward; the sidebar never reflows. Segments sit side by side.
-function BottomDock({sel,setSel,probs,concernsOpen,setConcernsOpen}){
-  const showProbs=probs&&probs.length>0&&(concernsOpen||!!sel);
-  if(!sel&&!showProbs)return null;
-  const Seg=({title,col,children,grow})=>html`<div style=${{flex:grow?2:1,minWidth:0,padding:"10px 16px",
-    borderRight:`1px solid ${T.border}`,overflowY:"auto"}}>
-    <div style=${{fontSize:9.5,fontWeight:700,letterSpacing:1.2,color:col,marginBottom:7}}>${title}</div>
+// Bottom dock — the drill tier. THREE FIXED SEGMENTS, always present, content changes:
+//   VIEW (this view's record: question · pass · sources · counts)
+//   SELECTION (the clicked element/edge: stat table + relations table, violations first)
+//   CONCERNS (this view's diagnostics; rows touching the selection highlight)
+// Persistent: 26px collapsed bar <-> 208px expanded. Never unmounts; the nav rail never reflows.
+const DK={th:{fontSize:8.5,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:T.mute,
+    textAlign:"left",padding:"2px 10px 4px 0",borderBottom:`1px solid ${T.border}`},
+  td:{fontSize:11,color:T.text,padding:"3px 10px 3px 0",borderBottom:`1px solid ${T.border}55`,
+    verticalAlign:"top",lineHeight:1.45}};
+function DockTable({cols,rows}){
+  return html`<table style=${{borderCollapse:"collapse",width:"100%"}}>
+    <thead><tr>${cols.map((c,i)=>html`<th key=${i} style=${DK.th}>${c}</th>`)}</tr></thead>
+    <tbody>${rows.map((r,ri)=>html`<tr key=${ri}>${r.map((cell,ci)=>html`<td key=${ci}
+      style=${{...DK.td,color:r._viol?T.red:ci===0?T.dim:T.text,
+        fontFamily:ci>0&&String(cell).match(/^[≈×~\\d]/)?"ui-monospace,monospace":"inherit"}}>${cell}</td>`)}</tr>`)}
+  </tbody></table>`;}
+function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded}){
+  const VI=VIEW_INTENT[vid]||null;
+  const counts=view.kind==="buckets"
+    ?`${(view.buckets||[]).length} groups · ${(view.buckets||[]).reduce((a,b)=>a+(b.members||[]).length,0)} members · ${(view.edges||[]).length} edges`
+    :view.kind==="table"?`${(view.rows||[]).length} rows`
+    :view.kind==="matrix"?`${(view.items||[]).length}×${(view.items||[]).length} matrix`
+    :`${(view.nodes||[]).length} elements · ${(view.edges||[]).length} edges`;
+  const hl=p=>sel&&sel.label&&String(p).includes(String(sel.label).slice(0,24));
+  const sortedProbs=sel?[...probs].sort((a,b)=>(hl(b)?1:0)-(hl(a)?1:0)):probs;
+  const Seg=({title,col,flex,children})=>html`<div style=${{flex,minWidth:0,padding:"9px 16px",
+    borderRight:`1px solid ${T.border}`,overflowY:"auto",position:"relative"}}>
+    <div style=${{fontSize:9.5,fontWeight:700,letterSpacing:1.2,color:col,marginBottom:7,
+      position:"sticky",top:0,background:T.band,paddingBottom:3}}>${title}</div>
     ${children}</div>`;
-  return html`<div style=${{borderTop:`1px solid ${T.border}`,background:T.band,height:172,
+  if(!expanded)return html`<div onClick=${()=>setExpanded(true)}
+    style=${{borderTop:`1px solid ${T.border}`,background:T.band,height:26,display:"flex",
+    alignItems:"center",gap:0,flexShrink:0,cursor:"pointer",userSelect:"none"}}>
+    <div style=${{flex:1.4,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",overflow:"hidden"}}>
+      <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.blue,flexShrink:0}}>VIEW</span>
+      <span style=${{fontSize:10.5,color:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${VI?VI.question:view.title}</span>
+    </div>
+    <div style=${{flex:1,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,overflow:"hidden"}}>
+      <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.text,flexShrink:0}}>SELECTION</span>
+      <span style=${{fontSize:10.5,color:sel?T.text:T.mute,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${sel?sel.label:"none — click an element or edge"}</span>
+    </div>
+    <div style=${{flex:.6,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`}}>
+      <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:probs.length?T.red:T.mute}}>CONCERNS</span>
+      <span style=${{fontSize:10.5,color:probs.length?T.red:T.green}}>${probs.length||"✓"}</span>
+    </div>
+    <span style=${{padding:"0 12px",color:T.mute,fontSize:11}}>⌃</span>
+  </div>`;
+  return html`<div style=${{borderTop:`1px solid ${T.border}`,background:T.band,height:208,
     display:"flex",flexShrink:0,position:"relative"}}>
-    ${sel?html`<${Seg} title="DETAIL" col=${T.blue} grow=${true}>
-      <div style=${{fontSize:13.5,fontWeight:700,color:T.text,marginBottom:8}}>${sel.label}</div>
-      <div style=${{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:"7px 18px"}}>
-        ${(sel.rows||[]).map((r,i)=>html`<div key=${i} style=${{minWidth:0}}>
-          <div style=${{fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:T.mute}}>${r[0]}</div>
-          <div style=${{fontSize:11.5,color:T.text,lineHeight:1.4,marginTop:1}}>${r[1]}</div>
-        </div>`)}
-      </div>
-    <//>`:null}
-    ${showProbs?html`<${Seg} title=${"CONCERNS · THIS VIEW · "+probs.length} col=${T.red} grow=${!sel}>
-      ${probs.map((p,i)=>html`<div key=${i} style=${{fontSize:11,color:T.dim,lineHeight:1.5,marginBottom:6,
-        borderLeft:`2px solid ${T.red}`,paddingLeft:9}}>${p}</div>`)}
-    <//>`:null}
-    <button onClick=${()=>{setSel(null);setConcernsOpen(false);}} title="Close"
-      style=${{position:"absolute",top:7,right:10,background:"transparent",border:"none",
-      color:T.mute,cursor:"pointer",fontSize:15}}>×</button>
+    <${Seg} title="VIEW" col=${T.blue} flex=${1}>
+      <div style=${{fontSize:12,fontWeight:650,color:T.text,lineHeight:1.45}}>${VI?VI.question:view.title}</div>
+      ${VI&&VI.pass?html`<div style=${{fontSize:10.5,color:T.dim,lineHeight:1.5,marginTop:6}}>
+        <span style=${{color:T.mute,fontSize:8.5,fontWeight:700,letterSpacing:.8}}>PASS </span>${VI.pass}</div>`:null}
+      ${view.prov?html`<div style=${{fontSize:10.5,color:T.dim,lineHeight:1.5,marginTop:6}}>
+        <span style=${{color:T.mute,fontSize:8.5,fontWeight:700,letterSpacing:.8}}>SOURCE </span>${view.prov.label}</div>`:null}
+      <div style=${{fontSize:10.5,color:T.dim,marginTop:6}}>
+        <span style=${{color:T.mute,fontSize:8.5,fontWeight:700,letterSpacing:.8}}>ON SCREEN </span>${counts}</div>
+    <//>
+    <${Seg} title="SELECTION" col=${T.text} flex=${1.6}>
+      ${sel?html`<${React.Fragment}>
+        <div style=${{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+          <span style=${{fontSize:13,fontWeight:700,color:T.text}}>${sel.label}</span>
+          ${sel.chip?html`<span style=${{fontSize:8.5,fontWeight:700,letterSpacing:.6,color:T.dim,
+            border:`1px solid ${T.border}`,borderRadius:4,padding:"0 5px",textTransform:"uppercase"}}>${sel.chip}</span>`:null}
+          <button onClick=${clearSel} title="Clear selection"
+            style=${{marginLeft:"auto",background:"transparent",border:"none",color:T.mute,cursor:"pointer",fontSize:13}}>×</button>
+        </div>
+        <div style=${{display:"flex",gap:24,alignItems:"flex-start"}}>
+          <div style=${{flex:1,minWidth:0}}>
+            <${DockTable} cols=${["stat","value"]} rows=${sel.rows||[]}/>
+          </div>
+          ${(sel.relations&&sel.relations.length)?html`<div style=${{flex:1.2,minWidth:0}}>
+            <${DockTable} cols=${["dir","peer","flow"]}
+              rows=${sel.relations.map(r=>Object.assign([r.dir==="out"?"→":"←",r.peer,
+                (r.viol?"⚠ ":"")+(r.verb||"")+(r.count?" ×"+r.count:"")],{_viol:r.viol}))}/>
+          </div>`:null}
+          ${(sel.members&&sel.members.length)?html`<div style=${{flex:1.2,minWidth:0}}>
+            <${DockTable} cols=${["member ("+sel.members.length+")","detail"]}
+              rows=${sel.members.slice(0,24).map(m=>[m.label,
+                m.stats?Object.values(m.stats)[0]:(m.sub||"")])}/>
+          </div>`:null}
+        </div>
+      <//>`:html`<div style=${{color:T.mute,fontSize:11,marginTop:28,textAlign:"center"}}>none — click an element or edge</div>`}
+    <//>
+    <${Seg} title=${"CONCERNS · "+probs.length} col=${probs.length?T.red:T.mute} flex=${1}>
+      ${probs.length?sortedProbs.map((p,i)=>html`<div key=${i} style=${{fontSize:10.5,lineHeight:1.5,marginBottom:6,
+        color:hl(p)?T.text:T.dim,borderLeft:`2px solid ${T.red}`,paddingLeft:9,
+        background:hl(p)?T.cardH:"transparent"}}>${p}</div>`)
+      :html`<div style=${{color:T.green,fontSize:11}}>✓ no concerns detected in this view</div>`}
+    <//>
+    <button onClick=${()=>setExpanded(false)} title="Collapse"
+      style=${{position:"absolute",top:5,right:8,background:"transparent",border:"none",
+      color:T.mute,cursor:"pointer",fontSize:13}}>⌄</button>
   </div>`;}
 const ETYPE_NAME={sys:"system",ext:"external",container:"container",store:"store",proc:"process"};
 const ETYPE_COLR={sys:T.blue,ext:T.dim,container:T.arch,store:T.green,proc:T.blue};
@@ -670,7 +775,7 @@ function Flow(){
   const[autoDir,setAutoDir]=useState(null);
   const dir=dirOv||autoDir||"DOWN";
   useEffect(()=>{let on=true;const d=SP[den];
-    setEls(null);setSel(null);setConcernsOpen(false);   // unmount canvas NOW; remount only with the new layout so initial fitView sees the right nodes
+    setEls(null);setSelRaw(null);setSelId(null);   // view change clears selection but PRESERVES dock expansion; remount canvas with the new layout
     const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov):layoutSimple(view,dd,d);
     // Auto direction: lay out BOTH ways, keep whichever fits the viewport at the larger scale
     const fitScale=r=>{const xs=r.nodes.map(n=>n.position.x),ys=r.nodes.map(n=>n.position.y),
@@ -685,7 +790,16 @@ function Flow(){
         Object.assign(view,await r.json());view._loaded=true;
         validateView(estate+"/"+scope+"/"+level,view);}
       if(view.kind==="table"||view.kind==="matrix"){
-        if(on){setEls({htmlView:true,problems:[]});setAutoDir(null);
+        // tables/matrices surface their own concerns: ⚠ rows and mutual (cycle) pairs
+        const probs=[];
+        if(view.kind==="table")(view.rows||[]).forEach(r=>{
+          const w=r.find(c=>String(c).trim().startsWith("⚠"));
+          if(w)probs.push("⚠ "+r[0]+": "+String(w).replace(/^\s*⚠\s*/,""));});
+        else{const it=view.items||[],M=view.matrix||[];
+          for(let i=0;i<it.length;i++)for(let j=i+1;j<it.length;j++)
+            if((M[i]||[])[j]&&(M[j]||[])[i])
+              probs.push("mutual dependency (cycle): "+it[i]+" ↔ "+it[j]+" ("+M[i][j]+" / "+M[j][i]+")");}
+        if(on){setEls({htmlView:true,problems:probs});setAutoDir(null);
           setLast(l=>({...l,[estate+":"+scope+":"+level]:Date.now()}));}
         return;}
       let e,dd;
@@ -699,23 +813,52 @@ function Flow(){
   useEffect(()=>{const auto=q.get("auto");
     if(auto){const[lv,ms]=auto.split(":");const t=setTimeout(()=>setLevel(lv),parseInt(ms||"800",10));
       return()=>clearTimeout(t);}},[]);
-  // click = drill tier: drillTo navigates; anything else opens its record in the bottom dock
-  const[sel,setSel]=useState(null);
-  const[concernsOpen,setConcernsOpen]=useState(false);
+  // The grammar: hover peeks, click SELECTS (ring + dock), the open ▸ chip drills, Esc unwinds.
+  const[sel,setSelRaw]=useState(null);
+  const[selId,setSelId]=useState(null);
+  const[expanded,setExpanded]=useState(false);
+  const mark=id=>setEls(e=>{if(!e||!e.nodes)return e;let ch=false;
+    const nodes=e.nodes.map(n=>{const want=n.id===id;
+      if(!!n.data._sel===want)return n;ch=true;return {...n,data:{...n.data,_sel:want}};});
+    const edges=(e.edges||[]).map(ed=>{const want=ed.id===id;
+      if(!!(ed.data&&ed.data._sel)===want)return ed;ch=true;return {...ed,data:{...ed.data,_sel:want}};});
+    return ch?{...e,nodes,edges}:e;});
+  const select=useCallback((rec,id)=>{setSelRaw(rec);setSelId(rec?id:null);
+    if(rec)setExpanded(true);mark(rec?id:null);},[]);
+  const clearSel=useCallback(()=>select(null,null),[select]);
+  const nameOf=useCallback(id2=>{if(view.kind==="buckets"){const b=(view.buckets||[]).find(x=>x.id===id2);if(b)return b.label;}
+    const n2=(view.nodes||[]).find(x=>x.id===id2);return n2?n2.label:id2;},[view]);
+  const relationsFor=useCallback(id2=>((view.edges||[]).filter(e=>e.source===id2||e.target===id2)
+    .map(e=>({dir:e.source===id2?"out":"in",peer:nameOf(e.source===id2?e.target:e.source),
+      verb:e.label||"",count:e.count,viol:!!(e.tag||e._viol)}))
+    .sort((a,b)=>(b.viol?1:0)-(a.viol?1:0))),[view,nameOf]);
   const onNodeClick=useCallback((_,n)=>{if(!n.data)return;
     if(n.data.drillTo){setLevel(n.data.drillTo);setDirOv(null);return;}
     if(n.type==="spacer")return;
     const d=n.data,m=(n.type==="solo"?d.member:d)||{};
     const rows=(m.stats?Object.entries(m.stats):[]).concat(m.sub?[["detail",m.sub]]:[]);
-    if(n.type==="bucket")rows.unshift(["members",String((d.members||[]).length)]);
     if(d.layer||d.lay)rows.unshift(["layer",d.layer||d.lay]);
     if(d.tech)rows.push(["tech",d.tech]);
     if(m.concerns)rows.push(["findings",m.concerns+" recon findings"]);
     if(m.changed)rows.push(["recent","touched in last 15 commits"]);
-    setSel({label:m.label||d.label,rows});},[]);
-  // test hook: ?sel=<nodeId> opens the detail panel for screenshot verification
+    const chip=n.type==="bucket"?"group":n.type==="entity"?"entity":n.type==="member"?"member":(ETYPE_NAME[d.type]||"element");
+    select({label:m.label||d.label,chip,rows,relations:relationsFor(n.id),
+      members:n.type==="bucket"?(d.members||[]):null},n.id);},[select,relationsFor]);
+  const onEdgeClick=useCallback((_,ed)=>{const mt=ed.data&&ed.data.meta;if(!mt)return;
+    const rows=[["from",mt.s],["to",mt.t]];
+    if(mt.verb)rows.push(["flow",mt.verb]);
+    if(mt.count)rows.push(["volume","×"+mt.count]);
+    if(mt.tag)rows.push(["violation",mt.tag]);
+    if(mt.stats)Object.entries(mt.stats).forEach(r=>rows.push(r));
+    const rev=(view.edges||[]).find(e2=>e2.source===mt.tid&&e2.target===mt.sid);
+    if(rev)rows.push(["mutual",mt.t+" → "+mt.s+(rev.count?" ×"+rev.count:"")+" — cycle"]);
+    select({label:mt.s+" → "+mt.t,chip:mt.tag?"violation":"relation",rows,relations:[]},ed.id);},[select,view]);
+  const onPaneClick=useCallback(()=>clearSel(),[clearSel]);
+  useEffect(()=>{const h=ev=>{if(ev.key==="Escape"){if(sel)clearSel();else setExpanded(false);}};
+    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[sel,clearSel]);
+  // test hook: ?sel=<nodeId> selects for screenshot verification (mark() is idempotent — no loop)
   useEffect(()=>{const sid=q.get("sel");if(!sid||!els||!els.nodes)return;
-    const n=els.nodes.find(x=>x.id===sid);if(n)onNodeClick(null,n);},[els]);
+    const n=els.nodes.find(x=>x.id===sid);if(n&&selId!==sid)onNodeClick(null,n);},[els]);
   const[open,setOpen]=useState({});
   const[collapsed,setCollapsed]=useState(false);
   const go=useCallback(id=>{setLevel(id);setDirOv(null);},[]);
@@ -742,7 +885,7 @@ function Flow(){
           border:`1px solid ${pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan}`,
           borderRadius:5,padding:"1px 7px"}))(view.prov.kind)}>${view.prov.kind==="derived"?"REAL":view.prov.kind==="simulated"?"SIMULATED":"MIXED"}</span>`:null}
         ${els&&els.problems&&els.problems.length?html`<span title="Show concerns"
-          onClick=${()=>setConcernsOpen(o=>!o)}
+          onClick=${()=>setExpanded(true)}
           style=${{fontSize:9.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:5,
           padding:"1px 7px",whiteSpace:"nowrap",cursor:"pointer",flexShrink:0}}>⚠ ${els.problems.length}</span>`:null}
         ${ISSUES.length?html`<span title=${ISSUES.join("\n")}
@@ -774,18 +917,19 @@ function Flow(){
         collapsed=${collapsed} setCollapsed=${setCollapsed} last=${last}/>
       <div style=${{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
         <div style=${{flex:1,position:"relative",minHeight:0}}>
-          ${els&&els.htmlView?html`<${view.kind==="table"?TableView:MatrixView} view=${view}/>`:null}
+          ${els&&els.htmlView?html`<${view.kind==="table"?TableView:MatrixView} view=${view} onSel=${select} selId=${selId}/>`:null}
           ${els&&!els.htmlView?html`<${ReactFlow} key=${estate+"|"+scope+"|"+level+"|"+dir+"|"+den}
             nodes=${els.nodes} edges=${els.edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
-            onNodeClick=${onNodeClick} fitView fitViewOptions=${{padding:0.12}}
+            onNodeClick=${onNodeClick} onEdgeClick=${onEdgeClick} onPaneClick=${onPaneClick}
+            fitView fitViewOptions=${{padding:0.12}}
             minZoom=${0.1} proOptions=${{hideAttribution:true}}>
             <${Background} color=${T.border} gap=${24} size=${1}/>
             <${Controls} position="bottom-right"/>
           <//>`:null}
           ${els&&!els.htmlView&&(view._loaded||!view.shard)?html`<${CanvasLegend} view=${view}/>`:null}
         </div>
-        <${BottomDock} sel=${sel} setSel=${setSel} probs=${els&&els.problems||[]}
-          concernsOpen=${concernsOpen} setConcernsOpen=${setConcernsOpen}/>
+        <${BottomDock} vid=${level} view=${view} sel=${sel} clearSel=${clearSel}
+          probs=${els&&els.problems||[]} expanded=${expanded} setExpanded=${setExpanded}/>
         ${els&&(view._loaded||!view.shard)?html`<${Footer} view=${view} ov=${ov}/>`:null}
       </div>
     </div></div>`;}

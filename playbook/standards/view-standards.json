@@ -35,7 +35,8 @@
       },
       "legend": "every diagram carries an in-context legend (canvas corner) mapping the colors actually on screen; the footer legend stays for edges and provenance"
     },
-    "drill": "click an element to open its full record in the bottom dock (expands above the footer; segmented: DETAIL | CONCERNS); click a drillable node to navigate; click the header ⚠ chip to open concerns alone. The nav rail is navigation ONLY and never reflows."
+    "drill": "the bottom dock — three FIXED segments, always present: VIEW (the view's record: question · pass · sources · counts) | SELECTION (the clicked element/edge: stat table + relations table, violations first) | CONCERNS (diagnostics; selection-related rows highlight). Persistent: 26px collapsed bar <-> 208px expanded, never unmounts; view change clears selection but keeps expansion. The nav rail is navigation ONLY and never reflows.",
+    "grammar": "hover PEEKS (150ms intent delay, instant dismiss, never blocks clicks, ends with a click-hint line); click SELECTS (canvas ring + dock; edges, table rows, and matrix cells are all selectable); the open ▸ chip DRILLS (navigates — chip = navigates, no chip = selects); Esc unwinds (clear selection, then collapse); empty-canvas click deselects."
   },
   "views": {
     "context": {
