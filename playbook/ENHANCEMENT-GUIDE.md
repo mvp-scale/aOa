@@ -4,6 +4,17 @@
 phase is green-lit. **Scope law:** `.context/decisions/2026-06-11-core-competence-and-scope-line.md`.
 **Rendering law:** `playbook/standards/view-standards.json`.
 
+**Implementation-grade specs** (solutions-architecture detail per plane):
+- `integration/01-facts-substrate.md` — data plane: fact model, ports, keystone
+  import-edge extraction per language, bbolt layout, incremental/deltas,
+  performance gates, graphify parity+ (17 rows), 11 tasks
+- `integration/02-arch-service.md` — service plane: `aoa arch` family,
+  rendition engine (byte-compatible with the viewer's shard contract),
+  detectors, conformance + baseline, derive A→B, agent guidance, 14 tasks
+- `integration/03-visualization.md` — presentation plane: viewer extraction to
+  web adapter (fork-guard), daemon data feed, vendored bundle, governance
+  surfaces, evidence-pack export, graphify keep/improve/drop, 13 tasks
+
 The playbook proved the presentation layer: 16 standard views, provenance
 stamps, findings, journeys, quality gates. This guide maps every view, pattern,
 and capability onto **aOa as it stands** — the most performant, realistic
