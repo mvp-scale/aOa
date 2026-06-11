@@ -36,10 +36,10 @@ graphify-plus. Detail: specs 01–03 · pre-build review: 04 · plan: ../ENHANCE
                                                          ┌───────────────────────────────┐
                                                          │  THE VIEWER (already built &   │
                                                          │  judged in playbook/): 16 view │
-                                                         │  types · provenance pills ·    │
-                                                         │  findings dock · captions ·    │
-                                                         │  journeys — consumes the same  │
-                                                         │  shard contract unchanged      │
+                                                         │  types · findings dock ·       │
+                                                         │  captions · journeys —         │
+                                                         │  consumes the same shard       │
+                                                         │  contract unchanged            │
                                                          └───────────────────────────────┘
 ```
 
@@ -57,9 +57,13 @@ graphify-plus. Detail: specs 01–03 · pre-build review: 04 · plan: ../ENHANCE
 | Conformance (arch.yaml), evidence packs, MCP adapter | domain/arch + web | ④ |
 
 **First slice exit gate (= checkpoint #4 proof, upgraded):** clone a stranger's
-repo → `aoa init` → component/DSM/cycles/domains render in the viewer with REAL
-provenance → edit one package → only the affected shards change. Three honest
-weeks.
+repo → `aoa init` → component/DSM/cycles/domains render in the viewer → edit
+one package → only the affected shards change. Three honest weeks.
+
+> Note: the REAL/MIXED/SIMULATED provenance stamps were playbook REQUIREMENTS
+> scaffolding — used to pin the format, structure, and limits for rendering any
+> model — not a product deliverable. The derive/infer discipline stays as
+> internal engineering law; the pills do not ship as a headline UI.
 
 ## The story: everything graphify gives us, plus
 
@@ -78,7 +82,6 @@ removes the ceiling:
 | Views | 1 import graph (+tree, callflow) | 16 standard types architects already trust |
 | Freshness | manual script run | rides the index — regenerates as you type |
 | Evidence | none | every edge carries file:line:commit (`aoa arch facts`) |
-| Honesty | LLM edges presented as fact | REAL / MIXED / SIMULATED stamped per view |
 | Quality bar | eyeball | lint + blind-judge gate (a model must answer each view's question from the image alone) |
 | Findings | cycles list | cycles · god · orphan · dead-candidates · band violations → findings dock, baseline/--new |
 | For AI agents | none | CLI-first (`aoa arch`), sub-ms daemon reads, zero standing token cost |
@@ -87,10 +90,9 @@ removes the ceiling:
 The deeper difference: graphify renders *a* graph; aOa maintains *the
 substrate* — symbols, edges, domains, churn, findings with sources — and the
 views, journeys, conformance checks, and (later) evidence packs are all
-renditions of it. That's the same moat the market leaders charge $10K–$800K
+renditions of it. That's the same capability the market leaders charge $10K–$800K
 per app for (CAST), require production agents for (vFunction), or cap at five
-languages for (Sonar) — none of them with provenance honesty, none of them
-free at the point of `aoa init`.
+languages for (Sonar) — and none of them are free at the point of `aoa init`.
 
 ## Guardrails (what keeps this from stuffing aOa)
 
