@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "claude_code_version": "2.1.172",
+  "captured_at": "2026-06-11",
+  "captured_from": "~/.claude/projects/-home-corey-aOa-go/ (live session 404204ee, supplemented by adjacent v2.1.170 sessions)",
+  "sample": {
+    "files_inspected": 1,
+    "total_events": 217,
+    "event_counts_by_type": {
+      "assistant": 100,
+      "user": 52,
+      "permission-mode": 12,
+      "mode": 12,
+      "ai-title": 12,
+      "last-prompt": 11,
+      "attachment": 10,
+      "queue-operation": 6,
+      "system": 2
+    },
+    "note": "system events in this sample are all subtype=local_command; turn_duration / away_summary subtypes and Edit toolUseResult shape carry forward from v2.1.126/v2.1.170 (not triggered in this capture)."
+  },
+  "topology": {
+    "session_dir": "~/.claude/projects/{encoded-project-path}/",
+    "encoded_project_path_rule": "absolute path with / replaced by -",
+    "main_session_file": "{session-uuid}.jsonl (top level)",
+    "session_artifacts_dir": "{session-uuid}/ (sibling of main JSONL)",
+    "subagent_files": "{session-uuid}/subagents/agent-{shortid}.jsonl",
+    "subagent_meta_files": "{session-uuid}/subagents/agent-{shortid}.meta.json (NEW at v2.1.170+)",
+    "persisted_tool_results": "{session-uuid}/tool-results/{tool_use_id}.txt"
+  },
+  "top_level_envelope_fields": {
+    "ai-title": ["aiTitle", "sessionId", "type"],
+    "assistant": [
+      "cwd", "entrypoint", "gitBranch", "isSidechain", "message",
+      "parentUuid", "requestId", "sessionId", "slug", "timestamp", "type",
+      "userType", "uuid", "version"
+    ],
+    "attachment": [
+      "attachment", "cwd", "entrypoint", "gitBranch", "isSidechain",
+      "parentUuid", "sessionId", "slug", "timestamp", "type", "userType",
+      "uuid", "version"
+    ],
+    "last-prompt": ["lastPrompt", "leafUuid", "sessionId", "type"],
+    "mode": ["mode", "sessionId", "type"],
+    "permission-mode": ["permissionMode", "sessionId", "type"],
+    "queue-operation": ["content", "operation", "sessionId", "timestamp", "type"],
+    "system": [
+      "content", "cwd", "entrypoint", "gitBranch", "isMeta",
+      "isSidechain", "level", "parentUuid", "sessionId",
+      "subtype", "timestamp", "type", "userType", "uuid", "version"
+    ],
+    "user": [
+      "cwd", "entrypoint", "gitBranch", "isMeta", "isSidechain",
+      "message", "parentUuid", "permissionMode", "promptId",
+      "promptSource", "sessionId", "slug", "sourceToolAssistantUUID",
+      "timestamp", "toolUseResult", "type", "userType", "uuid", "version"
+    ]
+  },
+  "new_since_v2_1_126": {
+    "event_types": {
+      "mode": {
+        "shape": ["type", "mode", "sessionId"],
+        "values": {"mode": ["normal"]},
+        "notes": "Control-plane event, sibling of permission-mode. Carries the editor/interaction mode (e.g. 'normal'). No uuid/timestamp. Currently falls into UnknownTypes."
+      },
+      "queue-operation": {
+        "shape_enqueue": ["type", "operation", "content", "timestamp", "sessionId"],
+        "shape_dequeue_remove": ["type", "operation", "timestamp", "sessionId"],
+        "values": {"operation": ["enqueue", "dequeue", "remove"]},
+        "notes": "Message-queue lifecycle. enqueue carries `content` = the queued user input (often a slash command like /model). Was listed as known-unhandled-unconfirmed at v2.1.126; now confirmed present with concrete shape. Still IGNORED."
+      }
+    },
+    "envelope_fields": {
+      "user.promptSource": {"values": ["typed", null], "notes": "How the prompt entered the turn (typed vs queued/slash/etc). DROPPED."},
+      "system.level": {"values": ["info"], "notes": "Severity level for system events. DROPPED."},
+      "slug": {"types": ["user", "assistant", "attachment"], "values": ["staged-floating-candy"], "notes": "Human-readable session slug; appears mid-session once assigned. DROPPED."}
+    },
+    "system_subtypes": {
+      "local_command": {"reads": ["content", "level"], "notes": "Emitted for local slash-command echoes. Carries `content` (command text) + new `level`. Parser does not branch on subtype; content lands in SystemContent but is only surfaced for away_summary."}
+    },
+    "usage_semantics": {
+      "iterations": {"change": "empty [] at v2.1.126 -> POPULATED at v2.1.172", "element_shape": ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "cache_creation", "type"], "notes": "Per-inference-iteration token breakdown. Parser captures it into MessageUsage.Iterations but does not use it. HIGH value for L18 token attribution."},
+      "inference_geo": {"change": "\"\" at v2.1.126 -> \"not_available\" at v2.1.172", "notes": "Cosmetic value change; still consumed as string."}
+    },
+    "tool_use_result_shapes": {
+      "ToolSearch": ["matches", "query", "total_deferred_tools"],
+      "TaskCreate": ["task"],
+      "TaskUpdate": ["statusChange", "success", "taskId", "updatedFields"],
+      "notes": "New per-tool envelope result shapes. None match the parser's Bash/Edit/Agent signature keys, so all collapse to SourceTool=\"other\" (Raw preserved, typed fields empty). Non-breaking."
+    }
+  },
+  "message_fields_by_role": {
+    "user": ["content", "role"],
+    "assistant": [
+      "content", "id", "model", "role", "stop_details",
+      "stop_reason", "stop_sequence", "type", "usage"
+    ]
+  },
+  "content_block_types": {
+    "text": 11,
+    "thinking": 13,
+    "tool_use": 21,
+    "tool_result": 21
+  },
+  "tool_input_fields_by_name": {
+    "Agent": ["description", "prompt", "subagent_type"],
+    "Bash": ["command", "description"],
+    "Read": ["file_path"],
+    "TaskCreate": ["activeForm", "description", "subject"],
+    "TaskUpdate": ["status", "taskId"],
+    "ToolSearch": ["max_results", "query"]
+  },
+  "usage_fields": [
+    "cache_creation",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "inference_geo",
+    "input_tokens",
+    "iterations",
+    "output_tokens",
+    "server_tool_use",
+    "service_tier",
+    "speed"
+  ],
+  "usage_field_shapes": {
+    "cache_creation": {"type": "object", "fields": ["ephemeral_1h_input_tokens", "ephemeral_5m_input_tokens"], "notes": "TTL-bucket breakdown; flat cache_creation_input_tokens is the sum"},
+    "server_tool_use": {"type": "object", "fields": ["web_search_requests", "web_fetch_requests"]},
+    "iterations": {"type": "array", "notes": "POPULATED at v2.1.172 (was empty at v2.1.126); per-iteration token breakdown"},
+    "speed": {"type": "string", "examples": ["standard"]},
+    "inference_geo": {"type": "string", "examples": ["not_available"]}
+  },
+  "tool_use_result_shapes": {
+    "Bash": ["interrupted", "isImage", "noOutputExpected", "stderr", "stdout"],
+    "Edit": ["filePath", "newString", "oldString", "originalFile", "replaceAll", "structuredPatch", "userModified"],
+    "Agent": ["agentId", "agentType", "content", "prompt", "status", "toolStats", "totalDurationMs", "totalTokens", "totalToolUseCount", "usage"],
+    "ToolSearch": ["matches", "query", "total_deferred_tools"],
+    "TaskCreate": ["task"],
+    "TaskUpdate": ["statusChange", "success", "taskId", "updatedFields"],
+    "other": ["file", "type"]
+  },
+  "system_subtypes": ["turn_duration", "away_summary", "local_command"],
+  "system_subtype_payloads": {
+    "turn_duration": {"reads": ["durationMs"]},
+    "away_summary": {"reads": ["content"]},
+    "local_command": {"reads": ["content", "level"], "notes": "new at v2.1.172"}
+  }
+}

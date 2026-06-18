@@ -45,8 +45,9 @@ var recognizedTypes = map[string]bool{
 // To raise the bar (treat unhandled as drift), remove from this set.
 var knownUnhandledTypes = map[string]bool{
 	"progress":              true, // mentioned in reader.go but not actively consumed
-	"queue-operation":       true, // mentioned in reader.go but not actively consumed
+	"queue-operation":       true, // CONFIRMED v2.1.172 — message-queue lifecycle; enqueue.content carries queued input. Acknowledge-drop (L20.1).
 	"file-history-snapshot": true, // mentioned in reader.go but not actively consumed
+	"mode":                  true, // NEW v2.1.172 — interaction-mode control-plane event, sibling of permission-mode. Acknowledge-drop (L20.1).
 }
 
 // Top-level envelope fields the parser consumes. New fields beyond this set
@@ -89,16 +90,24 @@ var consumedEnvelopeFields = map[string]bool{
 	"content":    true, // system events with subtype=away_summary carry resume text here
 }
 
-// Known-but-unconsumed envelope fields — currently empty. All observed
-// fields at v2.1.126 are consumed. New fields would land here pending a
-// processing decision.
-var knownUnconsumedEnvelopeFields = map[string]bool{}
+// Known-but-unconsumed envelope fields — signal Claude emits that the parser
+// sees but does not read. New fields land here pending a processing decision.
+var knownUnconsumedEnvelopeFields = map[string]bool{
+	"promptSource": true, // NEW v2.1.172 (user) — how the prompt entered the turn ("typed" / queued / ...). Acknowledge-drop (L20.1).
+	"level":        true, // NEW v2.1.172 (system) — severity level ("info"). Acknowledge-drop (L20.1).
+	"slug":         true, // NEW v2.1.172 (user/assistant/attachment) — human-readable session slug (e.g. "staged-floating-candy"). Acknowledge-drop (L20.1).
+	"agentId":             true, // NEW v2.1.178 (user/assistant/attachment) — links a top-level event to a spawned subagent; value = subagent file shortid. Acknowledge-drop; HIGH-value L18 attribution link.
+	"attributionAgent":    true, // NEW v2.1.178 (assistant) — subagent TYPE that produced the event ("general-purpose"). Pairs with agentId. Acknowledge-drop (L20.1).
+	"pendingWorkflowCount": true, // NEW v2.1.173 (system) — per-session pending-workflow counter. Acknowledge-drop (L20.1).
+	"messageCount":        true, // NEW v2.1.173 (system) — per-session message counter. Acknowledge-drop (L20.1).
+}
 
 // Known-but-unhandled system subtypes — observed but not branched on.
 // system events with these subtypes are passed through with subtype only.
 var knownUnhandledSystemSubtypes = map[string]bool{
 	"turn_duration": true, // handled (we read durationMs)
 	"away_summary":  true, // observed v2.1.126 — carries `content` field with resume summary
+	"local_command": true, // NEW v2.1.172 — local slash-command echo; carries `content` + `level`. content captured into SystemContent but only surfaced for away_summary. Acknowledge-drop (L20.1).
 }
 
 // Recognized message-content block types.
@@ -167,6 +176,13 @@ var consumedToolUseResultShapes = map[string]bool{
 	"Edit":  true,
 	"Agent": true,
 	"other": true,
+	// NEW v2.1.172 — these shapes do not match the Bash/Edit/Agent signature
+	// keys, so the parser absorbs them via the "other" catch-all (Raw preserved,
+	// no crash/drop). Counted consumed on the same basis as "other". If a typed
+	// branch is ever added, move the relevant fields into the contract.
+	"ToolSearch": true,
+	"TaskCreate": true,
+	"TaskUpdate": true,
 }
 
 // Required fields per recognized type. These MUST be present; absence is FAIL.

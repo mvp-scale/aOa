@@ -1,0 +1,68 @@
+{
+  "_comment": "Generative conformance scenarios. Each one drives `claude -p` to emit a controlled session, then the harness validates the resulting JSONL against the contract. `trigger`=auto runs headless; `trigger`=manual must be produced by a human (documented in README). `cost`=high scenarios are skipped unless --all is passed. `checks` drive run.sh: schema (Go Pass0+Pass3 drift), usage_match (result-block usage == in-file usage), surface (named event/block types must appear), agent_tokens (subagent-sum vs totalTokens vs chars/4), iterations_populated (usage.iterations non-empty).",
+  "scenarios": [
+    {
+      "id": "minimal",
+      "surface": "user, assistant, message.usage, ai-title, attachment, queue-operation, last-prompt",
+      "trigger": "auto",
+      "cost": "low",
+      "permission_mode": "plan",
+      "prompt": "Reply with exactly the word: PONG",
+      "checks": ["schema", "usage_match", "surface:user,assistant"]
+    },
+    {
+      "id": "bash-tool",
+      "surface": "tool_use, tool_result content blocks, Bash toolUseResult shape",
+      "trigger": "auto",
+      "cost": "low",
+      "permission_mode": "bypassPermissions",
+      "prompt": "Run this exact command with the Bash tool and report nothing else: echo conformance-probe",
+      "checks": ["schema", "block:tool_use,tool_result", "toolresult:Bash"]
+    },
+    {
+      "id": "edit-tool",
+      "surface": "Edit toolUseResult shape (filePath,newString,oldString,structuredPatch,userModified)",
+      "trigger": "auto",
+      "cost": "low",
+      "permission_mode": "bypassPermissions",
+      "prompt": "Create a file named probe.txt containing the line 'alpha' using the Write tool, then use the Edit tool to change 'alpha' to 'beta'. Report nothing else.",
+      "checks": ["schema", "toolresult:Edit"]
+    },
+    {
+      "id": "iterations",
+      "surface": "usage.iterations POPULATED (multi-inference turn)",
+      "trigger": "auto",
+      "cost": "low",
+      "permission_mode": "bypassPermissions",
+      "prompt": "Use the Bash tool to run `echo one`, then use the Bash tool again to run `echo two`, then report DONE.",
+      "checks": ["schema", "iterations_populated"]
+    },
+    {
+      "id": "agent",
+      "surface": "Agent toolUseResult (agentId,totalTokens,usage) + subagents/agent-*.jsonl",
+      "trigger": "auto",
+      "cost": "high",
+      "permission_mode": "bypassPermissions",
+      "prompt": "Use the Agent tool with subagent_type general-purpose to perform this task: 'Run the Bash command `echo from-subagent`, then write a 3-sentence summary of what you observed.' Then relay the subagent's summary.",
+      "checks": ["schema", "block:tool_use", "agent_tokens"]
+    },
+    {
+      "id": "away-summary",
+      "surface": "system.subtype=away_summary (resume-summary on reattach)",
+      "trigger": "manual",
+      "cost": "n/a",
+      "permission_mode": "default",
+      "prompt": "MANUAL: start an interactive `claude` session in the scratch dir, send one prompt, detach/pause, then resume it. The reattach emits system/away_summary. See README.",
+      "checks": ["schema", "subtype:away_summary"]
+    },
+    {
+      "id": "mode-transitions",
+      "surface": "permission-mode and mode events on live transitions",
+      "trigger": "manual",
+      "cost": "n/a",
+      "permission_mode": "default",
+      "prompt": "MANUAL: in an interactive `claude` session, toggle permission mode (shift-tab) and any output/fast mode. Each toggle emits a permission-mode and/or mode event. See README.",
+      "checks": ["schema", "surface:permission-mode,mode"]
+    }
+  ]
+}

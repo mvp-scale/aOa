@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "claude_code_version": "2.1.178",
+  "captured_at": "2026-06-18",
+  "captured_from": "compliance/conformance harness — 5 generated `claude -p` sessions under ~/.claude/projects/-tmp-aoa-conf-* (minimal, bash-tool, edit-tool, iterations, agent) + 1 subagent stream (agent-a6afa089dd2c6736a.jsonl), supplemented by the live v2.1.173 repo session for surfaces the headless harness cannot drive (system / permission-mode / mode).",
+  "sample": {
+    "files_inspected": 6,
+    "total_events": 49,
+    "event_counts_by_type": {
+      "assistant": "present (all version=2.1.178)",
+      "user": "present",
+      "attachment": "present",
+      "ai-title": "present",
+      "last-prompt": "present",
+      "queue-operation": "present"
+    },
+    "note": "Counts are intentionally not enumerated by type here: the harness generates small controlled sessions per surface rather than one large organic session, so per-type totals are not comparable to the 217-event v2.1.172 organic sample. system / permission-mode / mode / progress / file-history-snapshot were NOT triggered by the headless harness (manual surfaces); their shapes carry forward from v2.1.172/v2.1.173 and are marked inferred-unverified-at-178 below."
+  },
+  "topology": {
+    "session_dir": "~/.claude/projects/{encoded-project-path}/",
+    "encoded_project_path_rule": "absolute path with / replaced by -",
+    "main_session_file": "{session-uuid}.jsonl (top level)",
+    "session_artifacts_dir": "{session-uuid}/ (sibling of main JSONL)",
+    "subagent_files": "{session-uuid}/subagents/agent-{shortid}.jsonl",
+    "subagent_meta_files": "{session-uuid}/subagents/agent-{shortid}.meta.json (carried from v2.1.170+)",
+    "persisted_tool_results": "{session-uuid}/tool-results/{tool_use_id}.txt"
+  },
+  "top_level_envelope_fields": {
+    "ai-title": ["aiTitle", "sessionId", "type"],
+    "assistant": [
+      "agentId", "attributionAgent", "cwd", "entrypoint", "gitBranch",
+      "isSidechain", "message", "parentUuid", "requestId", "sessionId",
+      "slug", "timestamp", "type", "userType", "uuid", "version"
+    ],
+    "attachment": [
+      "agentId", "attachment", "cwd", "entrypoint", "gitBranch", "isSidechain",
+      "parentUuid", "sessionId", "slug", "timestamp", "type", "userType",
+      "uuid", "version"
+    ],
+    "last-prompt": ["lastPrompt", "leafUuid", "sessionId", "type"],
+    "mode": ["mode", "sessionId", "type"],
+    "permission-mode": ["permissionMode", "sessionId", "type"],
+    "queue-operation": ["content", "operation", "sessionId", "timestamp", "type"],
+    "system": [
+      "content", "cwd", "entrypoint", "gitBranch", "isMeta",
+      "isSidechain", "messageCount", "parentUuid", "pendingWorkflowCount",
+      "sessionId", "subtype", "timestamp", "type", "userType", "uuid", "version"
+    ],
+    "user": [
+      "agentId", "cwd", "entrypoint", "gitBranch", "isMeta", "isSidechain",
+      "message", "parentUuid", "permissionMode", "promptId", "promptSource",
+      "sessionId", "slug", "sourceToolAssistantUUID", "timestamp",
+      "toolUseResult", "type", "userType", "uuid", "version"
+    ]
+  },
+  "new_since_v2_1_172": {
+    "event_types": {
+      "notes": "No new top-level event types at v2.1.178. The set enumerated across the harness (assistant, user, attachment, ai-title, last-prompt, queue-operation) is a subset of the v2.1.172 set; nothing was removed or renamed. system / permission-mode / mode were simply not triggered by the headless harness."
+    },
+    "envelope_fields": {
+      "agentId": {
+        "types": ["user", "assistant", "attachment"],
+        "values": ["a6afa089dd2c6736a"],
+        "disposition": "DROPPED",
+        "notes": "Links a top-level event to a spawned subagent — the value matches the subagent file shortid (agent-a6afa089dd2c6736a.jsonl) and the .meta.json. Falls through as an unconsumed envelope field (not in any probe path in parser.go). HIGH signal for L18 token attribution: it is the missing link that would tie a main-session Agent row to the real subagent usage instead of the char/4 estimate. Acknowledge-and-drop; candidate for L18 wiring."
+      },
+      "attributionAgent": {
+        "types": ["assistant"],
+        "values": ["general-purpose"],
+        "disposition": "DROPPED",
+        "notes": "Names the subagent TYPE that produced the event (e.g. general-purpose). Pairs with agentId. DROPPED — no probe path reads it."
+      },
+      "system.pendingWorkflowCount": {
+        "types": ["system"],
+        "values": ["0"],
+        "disposition": "DROPPED",
+        "notes": "Carried forward from the live v2.1.173 session — the v2.1.178 headless harness produced no system events, so this field is inferred-unverified at true 178. Per-session pending-workflow counter; cheap analytics. DROPPED."
+      }
+    },
+    "system_subtypes": {
+      "notes": "No new system subtypes observed. system events were not triggered by the headless harness; turn_duration / away_summary / local_command carry forward from v2.1.172 (inferred-unverified at 178)."
+    },
+    "usage_semantics": {
+      "iterations": {
+        "change": "REGRESSION vs the v2.1.172 manifest: iterations was recorded as POPULATED at v2.1.172, but is EMPTY [] across ALL v2.1.178 harness assistant events AND the live v2.1.173 session.",
+        "notes": "Likely now emitted only under specific session conditions (e.g. genuine multi-inference turns); the harness's single-inference turns never populate it. [DROPPED] in the contract, so non-breaking — but the 172 manifest's 'POPULATED' claim no longer holds at 173/178. The field is still captured into MessageUsage.Iterations and still unread. Narrative-only correction; HIGH-value-for-L18 status downgraded to conditionally-populated."
+      }
+    },
+    "tool_use_result_shapes": {
+      "Agent.resolvedModel": {
+        "change": "NEW key on the Agent toolUseResult shape (10 keys at v2.1.172 -> 11 at v2.1.178).",
+        "value_example": "claude-opus-4-8[1m]",
+        "disposition": "DROPPED",
+        "notes": "parser.go matches the Agent branch on agentId/agentType, so the extra key is harmlessly unread. The Agent token totals are still present and correct (toolUseResult.totalTokens=8145, full usage breakdown), so the KNOWN SOFT SPOT is unchanged: AgentTotalTokens IS parsed (reader.go:306) and forwarded to ports, but app code attributes subagent tokens via len(summary)/4 instead — the ~10x understatement reproduces at 178 (measured 414x under on the agent scenario). Attribution leak, not schema drift."
+      },
+      "Edit_create": {
+        "change": "NEW Edit/Write toolUseResult shape for file-creation results.",
+        "keys": ["content", "filePath", "originalFile", "structuredPatch", "type", "userModified"],
+        "type_value": "create",
+        "disposition": "CONSUMED (as Edit; new fields unread)",
+        "notes": "A Write / file-creation result. Lacks newString/oldString. Still classifies as SourceTool=Edit via the structuredPatch/userModified/originalFile signature; EditNewString reads empty (genuinely absent), the new `content` and `type=create` keys are unread. Non-breaking."
+      }
+    },
+    "on_disk": {
+      "notes": "No new on-disk artifacts vs v2.1.172. Subagent agent-{shortid}.meta.json sidecars persist; the agent scenario confirms one beside agent-a6afa089dd2c6736a.jsonl."
+    }
+  },
+  "message_fields_by_role": {
+    "user": ["content", "role"],
+    "assistant": [
+      "content", "id", "model", "role", "stop_details",
+      "stop_reason", "stop_sequence", "type", "usage"
+    ]
+  },
+  "content_block_types": {
+    "text": "present",
+    "thinking": "present",
+    "tool_use": "present",
+    "tool_result": "present"
+  },
+  "tool_input_fields_by_name": {
+    "Agent": ["description", "prompt", "subagent_type"],
+    "Bash": ["command", "description"],
+    "Read": ["file_path"]
+  },
+  "usage_fields": [
+    "cache_creation",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "inference_geo",
+    "input_tokens",
+    "iterations",
+    "output_tokens",
+    "server_tool_use",
+    "service_tier",
+    "speed"
+  ],
+  "usage_field_shapes": {
+    "cache_creation": {"type": "object", "fields": ["ephemeral_1h_input_tokens", "ephemeral_5m_input_tokens"], "notes": "TTL-bucket breakdown; flat cache_creation_input_tokens is the sum"},
+    "server_tool_use": {"type": "object", "fields": ["web_search_requests", "web_fetch_requests"]},
+    "iterations": {"type": "array", "notes": "EMPTY [] at v2.1.178 and live v2.1.173 (was recorded POPULATED at v2.1.172) — see new_since_v2_1_172.usage_semantics.iterations. Conditionally populated; non-breaking ([DROPPED])."},
+    "speed": {"type": "string", "examples": ["standard"]},
+    "inference_geo": {"type": "string", "examples": ["not_available"]}
+  },
+  "tool_use_result_shapes": {
+    "Bash": ["interrupted", "isImage", "noOutputExpected", "stderr", "stdout"],
+    "Edit": ["filePath", "newString", "oldString", "originalFile", "replaceAll", "structuredPatch", "userModified"],
+    "Edit(create/Write)": ["content", "filePath", "originalFile", "structuredPatch", "type", "userModified"],
+    "Agent": ["agentId", "agentType", "content", "prompt", "resolvedModel", "status", "toolStats", "totalDurationMs", "totalTokens", "totalToolUseCount", "usage"],
+    "ToolSearch": ["matches", "query", "total_deferred_tools"],
+    "TaskCreate": ["task"],
+    "TaskUpdate": ["statusChange", "success", "taskId", "updatedFields"],
+    "other": ["file", "type"]
+  },
+  "tool_use_result_shapes_note": "Bash, Edit, Edit(create/Write), and Agent observed live at v2.1.178. ToolSearch / TaskCreate / TaskUpdate / other carry forward from v2.1.172 (not triggered by the headless harness) — inferred-unverified at 178.",
+  "system_subtypes": ["turn_duration", "away_summary", "local_command"],
+  "system_subtypes_note": "Not triggered by the v2.1.178 headless harness; carried forward from v2.1.172, inferred-unverified at 178.",
+  "system_subtype_payloads": {
+    "turn_duration": {"reads": ["durationMs"]},
+    "away_summary": {"reads": ["content"]},
+    "local_command": {"reads": ["content", "level"]}
+  }
+}

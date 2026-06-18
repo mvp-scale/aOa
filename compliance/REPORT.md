@@ -7,35 +7,45 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 ---
 
 <!-- BEGIN claude-session -->
-## Claude Code Session JSONL — v2.1.126
+## Claude Code Session JSONL — v2.1.178
 
-*Last regenerated: 2026-05-03 02:55 UTC*
+*Last regenerated: 2026-06-18 06:11 UTC*
 
 ### Coverage
 
 | Surface area                | Consumed | Total | Coverage |
 |-----------------------------|----------|-------|----------|
-| Event types                 | 7        | 7     | 100%       |
+| Event types                 | 5        | 6     | 83%       |
 | Envelope fields (ai-title ) | 3        | 3    | 100%      |
-| Envelope fields (assistant) | 13        | 13    | 100%      |
-| Envelope fields (attachment) | 12        | 12    | 100%      |
+| Envelope fields (assistant) | 13        | 16    | 81%      |
+| Envelope fields (attachment) | 12        | 14    | 85%      |
 | Envelope fields (last-prompt) | 4        | 4    | 100%      |
 | Envelope fields (permission-mode) | 3        | 3    | 100%      |
-| Envelope fields (system   ) | 15        | 15    | 100%      |
-| Envelope fields (user     ) | 17        | 17    | 100%      |
+| Envelope fields (system   ) | 15        | 16    | 93%      |
+| Envelope fields (user     ) | 17        | 20    | 85%      |
 | Usage fields                | 10        | 10    | 100%      |
 | Message fields (assistant)  | 9        | 9     | 100%      |
-| System subtypes             | 2        | 2     | 100%      |
-| toolUseResult shapes        | 4        | 4     | 100%       |
+| System subtypes             | 2        | 3     | 66%      |
+| toolUseResult shapes        | 7        | 8     | 87%       |
 
 ### Gaps
 
-**Fully integrated.** No DROPPED fields remain at this baseline.
+**[Critical] toolUseResult shapes — 7/8 consumed**
+- tools dropped: [Edit(create/Write)]
 
-Intentionally skipped (documented [SKIP] decisions):
-- message-level: [type] — pure API echo, no value on canonical event
+**[High] Unhandled event types — 1 ignored**
+- types: [queue-operation]
 
-See `versions/v2.1.126-observed/observations.md` for the version-specific narrative.
+**[Medium] Envelope context fields dropped**
+- `assistant`: [agentId attributionAgent slug]
+- `attachment`: [agentId slug]
+- `system`: [pendingWorkflowCount]
+- `user`: [agentId promptSource slug]
+
+**[Low] System subtypes not branched on — 1/3**
+- subtypes: [local_command]
+
+See `versions/v2.1.178-observed/observations.md` for the version-specific narrative.
 <!-- END claude-session -->
 
 ---
@@ -43,7 +53,7 @@ See `versions/v2.1.126-observed/observations.md` for the version-specific narrat
 <!-- BEGIN claude-statusline -->
 ## Claude Code Status Line — v2.1.126
 
-*Last regenerated: 2026-05-03 02:55 UTC*
+*Last regenerated: 2026-06-11 18:27 UTC*
 
 ### Coverage
 
