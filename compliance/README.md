@@ -10,6 +10,10 @@ This folder formalizes those contracts. Each subfolder covers one
 integration surface, follows the same structure, and ships a runnable
 compliance test.
 
+> **Are we aligned?** Start at [`ALIGNMENT.md`](ALIGNMENT.md) — the one-page
+> certificate (six-check scorecard per surface against the installed version).
+> [`REPORT.md`](REPORT.md) has the auto-generated per-field coverage detail.
+
 ## Integration surfaces
 
 | # | Surface | Direction | Folder | Status |
