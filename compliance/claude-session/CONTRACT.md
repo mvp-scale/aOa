@@ -126,6 +126,10 @@ Fields observed at v2.1.126 across recognized types (`user`, `assistant`, `syste
 | `promptSource`            | [DROPPED]   | —                                        | (v2.1.172) how the prompt entered the turn ("typed" / queued / ...) — user only |
 | `level`                   | [DROPPED]   | —                                        | (v2.1.172) severity level for system events ("info") — system only |
 | `slug`                    | [DROPPED]   | —                                        | (v2.1.172) human-readable session slug — user/assistant/attachment |
+| `agentId`                 | [DROPPED]   | —                                        | (v2.1.178) links a top-level event to a spawned subagent; value = subagent file shortid — user/assistant/attachment. HIGH-value L18 attribution link |
+| `attributionAgent`        | [DROPPED]   | —                                        | (v2.1.178) subagent TYPE that produced the event ("general-purpose") — assistant only |
+| `pendingWorkflowCount`    | [DROPPED]   | —                                        | (v2.1.173) per-session pending-workflow counter — system only |
+| `interruptedMessageId`    | [DROPPED]   | —                                        | (v2.1.173) id of the assistant message interrupted by the user; present only on interrupt — user only |
 
 **Source for [CONSUMED] paths:** `parser.go:128-138`.
 

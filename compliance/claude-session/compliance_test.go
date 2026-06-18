@@ -100,6 +100,7 @@ var knownUnconsumedEnvelopeFields = map[string]bool{
 	"attributionAgent":    true, // NEW v2.1.178 (assistant) — subagent TYPE that produced the event ("general-purpose"). Pairs with agentId. Acknowledge-drop (L20.1).
 	"pendingWorkflowCount": true, // NEW v2.1.173 (system) — per-session pending-workflow counter. Acknowledge-drop (L20.1).
 	"messageCount":        true, // NEW v2.1.173 (system) — per-session message counter. Acknowledge-drop (L20.1).
+	"interruptedMessageId": true, // NEW v2.1.173 (user) — id of the assistant message interrupted by the user (present only on interrupt). Acknowledge-drop (L20.1).
 }
 
 // Known-but-unhandled system subtypes — observed but not branched on.

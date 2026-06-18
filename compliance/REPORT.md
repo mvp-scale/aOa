@@ -9,7 +9,7 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 <!-- BEGIN claude-session -->
 ## Claude Code Session JSONL — v2.1.178
 
-*Last regenerated: 2026-06-18 06:11 UTC*
+*Last regenerated: 2026-06-18 19:40 UTC*
 
 ### Coverage
 
@@ -53,7 +53,7 @@ See `versions/v2.1.178-observed/observations.md` for the version-specific narrat
 <!-- BEGIN claude-statusline -->
 ## Claude Code Status Line — v2.1.126
 
-*Last regenerated: 2026-06-11 18:27 UTC*
+*Last regenerated: 2026-06-18 19:06 UTC*
 
 ### Coverage
 
