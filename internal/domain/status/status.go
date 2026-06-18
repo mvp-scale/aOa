@@ -71,6 +71,10 @@ type StatusData struct {
 	LifetimeSessions    int   `json:"lifetime_sessions"`
 
 	Autotune *Tune `json:"autotune,omitempty"`
+
+	// L20 drift sentinel: present only when the session adapter detects format
+	// drift or extraction degrades; absent (nil) when healthy.
+	Drift *Drift `json:"drift,omitempty"`
 }
 
 // Tune holds the most recent autotune results.
@@ -79,6 +83,19 @@ type Tune struct {
 	Demoted  int `json:"demoted"`
 	Decayed  int `json:"decayed"`
 	Pruned   int `json:"pruned"`
+}
+
+// Drift is the in-band Claude-contract drift signal (L20). It exists so silent
+// format drift becomes visible on the status line instead of degrading quietly.
+//   - State "format-changes": new/unknown event type or a version shift — numbers
+//     still broadly trustworthy; an early warning to re-certify.
+//   - State "degraded": extraction actually collapsed — token/cost metrics are
+//     suspect and the hook should mute/mark them (the degrade-on-drift gate).
+type Drift struct {
+	State           string   `json:"state"`
+	ObservedVersion string   `json:"observed_version,omitempty"`
+	UnknownTypes    []string `json:"unknown_types,omitempty"`
+	Suspect         bool     `json:"suspect,omitempty"`
 }
 
 // Metrics holds runtime values passed from the app layer into Generate.
