@@ -39,11 +39,11 @@ jobs:
       GOARCH: ${{ matrix.goarch }}
       CGO_ENABLED: ${{ matrix.cgo || '1' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -59,7 +59,7 @@ jobs:
           file aoa-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aoa-${{ matrix.os }}-${{ matrix.arch }}
           path: aoa-${{ matrix.os }}-${{ matrix.arch }}
@@ -69,10 +69,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/
 
@@ -88,7 +88,7 @@ jobs:
           cat checksums.txt
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             release/aoa-*
@@ -105,9 +105,9 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -119,7 +119,7 @@ jobs:
         run: npm install -g npm@11.5.1 && npm --version
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/
 
