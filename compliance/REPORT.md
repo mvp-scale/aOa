@@ -9,7 +9,7 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 <!-- BEGIN claude-session -->
 ## Claude Code Session JSONL — v2.1.181
 
-*Last regenerated: 2026-06-19 01:40 UTC*
+*Last regenerated: 2026-06-19 02:06 UTC*
 
 ### Coverage
 
