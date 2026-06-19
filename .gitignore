@@ -38,3 +38,6 @@ temp_gauntlet_sonnet.md
 temp_results_haiku.md
 temp_results_opus.md
 temp_results_sonnet.md
+
+# Graphopy investigation — research-only nested repo, never part of the aoa build/main path
+repo/
