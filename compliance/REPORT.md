@@ -7,9 +7,9 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 ---
 
 <!-- BEGIN claude-session -->
-## Claude Code Session JSONL — v2.1.178
+## Claude Code Session JSONL — v2.1.181
 
-*Last regenerated: 2026-06-18 06:11 UTC*
+*Last regenerated: 2026-06-19 01:40 UTC*
 
 ### Coverage
 
@@ -22,7 +22,7 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 | Envelope fields (last-prompt) | 4        | 4    | 100%      |
 | Envelope fields (permission-mode) | 3        | 3    | 100%      |
 | Envelope fields (system   ) | 15        | 16    | 93%      |
-| Envelope fields (user     ) | 17        | 20    | 85%      |
+| Envelope fields (user     ) | 17        | 21    | 80%      |
 | Usage fields                | 10        | 10    | 100%      |
 | Message fields (assistant)  | 9        | 9     | 100%      |
 | System subtypes             | 2        | 3     | 66%      |
@@ -40,12 +40,12 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 - `assistant`: [agentId attributionAgent slug]
 - `attachment`: [agentId slug]
 - `system`: [pendingWorkflowCount]
-- `user`: [agentId promptSource slug]
+- `user`: [agentId interruptedMessageId promptSource slug]
 
 **[Low] System subtypes not branched on — 1/3**
 - subtypes: [local_command]
 
-See `versions/v2.1.178-observed/observations.md` for the version-specific narrative.
+See `versions/v2.1.181-observed/observations.md` for the version-specific narrative.
 <!-- END claude-session -->
 
 ---

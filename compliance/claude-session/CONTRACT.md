@@ -1,7 +1,7 @@
 # Claude Code Session Integration Contract
 
 **Status:** active
-**Current observed version:** 2.1.178
+**Current observed version:** 2.1.181
 **Last validated:** 2026-06-18
 
 This document is the integration contract between aOa and Claude Code's
