@@ -475,7 +475,7 @@ model
 #   Session (from Claude Code)
 #     session_time         12m35s           Wall-clock session duration
 #     api_time             2m10s            Time waiting for API
-#     session_tokens       50kin 12kout     Cumulative in/out tokens
+#     session_tokens       50kin 12kout     Context-window in/out (latest response)
 #
 #   Rate Limits (from Claude Code — Pro/Max only)
 #     rate_5h              2h15m            5-hour countdown to reset

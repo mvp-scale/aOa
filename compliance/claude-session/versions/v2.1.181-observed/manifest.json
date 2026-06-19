@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "claude_code_version": "2.1.181",
+  "captured_at": "2026-06-18",
+  "captured_from": "compliance/conformance harness — 5 generated `claude -p` sessions under ~/.claude/projects/-tmp-aoa-conf-* (minimal, bash-tool, edit-tool, iterations, agent), all version=2.1.181. system / permission-mode / mode were not triggered by the headless harness; their shapes carry forward from v2.1.178 (inferred-unverified at 181).",
+  "sample": {
+    "files_inspected": 5,
+    "total_events": "controlled per-surface sessions (not a single organic capture)",
+    "event_counts_by_type": {
+      "assistant": "present (all version=2.1.181)",
+      "user": "present",
+      "attachment": "present",
+      "ai-title": "present",
+      "last-prompt": "present",
+      "queue-operation": "present"
+    },
+    "note": "Generated controlled sessions per surface. system / permission-mode / mode / progress / file-history-snapshot were NOT triggered by the headless harness; their shapes carry forward from v2.1.178 and are marked inferred-unverified-at-181 below."
+  },
+  "topology": {
+    "session_dir": "~/.claude/projects/{encoded-project-path}/",
+    "encoded_project_path_rule": "absolute path with / replaced by -",
+    "main_session_file": "{session-uuid}.jsonl (top level)",
+    "session_artifacts_dir": "{session-uuid}/ (sibling of main JSONL)",
+    "subagent_files": "{session-uuid}/subagents/agent-{shortid}.jsonl",
+    "subagent_meta_files": "{session-uuid}/subagents/agent-{shortid}.meta.json (carried from v2.1.170+)",
+    "persisted_tool_results": "{session-uuid}/tool-results/{tool_use_id}.txt"
+  },
+  "top_level_envelope_fields": {
+    "ai-title": ["aiTitle", "sessionId", "type"],
+    "assistant": [
+      "agentId", "attributionAgent", "cwd", "entrypoint", "gitBranch",
+      "isSidechain", "message", "parentUuid", "requestId", "sessionId",
+      "slug", "timestamp", "type", "userType", "uuid", "version"
+    ],
+    "attachment": [
+      "agentId", "attachment", "cwd", "entrypoint", "gitBranch", "isSidechain",
+      "parentUuid", "sessionId", "slug", "timestamp", "type", "userType",
+      "uuid", "version"
+    ],
+    "last-prompt": ["lastPrompt", "leafUuid", "sessionId", "type"],
+    "mode": ["mode", "sessionId", "type"],
+    "permission-mode": ["permissionMode", "sessionId", "type"],
+    "queue-operation": ["content", "operation", "sessionId", "timestamp", "type"],
+    "system": [
+      "content", "cwd", "entrypoint", "gitBranch", "isMeta",
+      "isSidechain", "messageCount", "parentUuid", "pendingWorkflowCount",
+      "sessionId", "subtype", "timestamp", "type", "userType", "uuid", "version"
+    ],
+    "user": [
+      "agentId", "cwd", "entrypoint", "gitBranch", "interruptedMessageId", "isMeta",
+      "isSidechain", "message", "parentUuid", "permissionMode", "promptId", "promptSource",
+      "sessionId", "slug", "sourceToolAssistantUUID", "timestamp",
+      "toolUseResult", "type", "userType", "uuid", "version"
+    ]
+  },
+  "new_since_v2_1_178": {
+    "summary": "NO SCHEMA CHANGE. v2.1.178 -> v2.1.181 is a pure version bump for the session surface. Across 5 freshly generated v2.1.181 sessions: no new event type, no new/removed/renamed envelope field, no new usage field, no new content block, no new toolUseResult shape. Every CONSUMED field is present and correctly typed. breaking = false; additive = false. The enumerated sets below are carried verbatim from v2.1.178-observed and re-confirmed live at 2.1.181 (except the manual surfaces noted as inferred).",
+    "event_types": { "notes": "Identical to v2.1.178. Enumerated live: assistant, user, attachment, ai-title, last-prompt, queue-operation. system / permission-mode / mode not triggered by the headless harness." },
+    "envelope_fields": { "notes": "No new fields. `slug` (v2.1.172), `promptSource` (v2.1.172), `agentId`/`attributionAgent` (v2.1.178), `interruptedMessageId` (v2.1.173, on interrupt), `pendingWorkflowCount`/`messageCount` (system) all present and already catalogued — see CONTRACT.md §3.1." },
+    "usage_semantics": { "iterations": { "notes": "Still conditionally-populated (empty in single-inference harness turns), unchanged from v2.1.178. [DROPPED]." } },
+    "tool_use_result_shapes": { "notes": "Bash / Edit / Edit(create) / Agent (with resolvedModel) all present and unchanged from v2.1.178." }
+  },
+  "message_fields_by_role": {
+    "user": ["content", "role"],
+    "assistant": [
+      "content", "id", "model", "role", "stop_details",
+      "stop_reason", "stop_sequence", "type", "usage"
+    ]
+  },
+  "content_block_types": {
+    "text": "present",
+    "thinking": "present",
+    "tool_use": "present",
+    "tool_result": "present"
+  },
+  "tool_input_fields_by_name": {
+    "Agent": ["description", "prompt", "subagent_type"],
+    "Bash": ["command", "description"],
+    "Read": ["file_path"]
+  },
+  "usage_fields": [
+    "cache_creation",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "inference_geo",
+    "input_tokens",
+    "iterations",
+    "output_tokens",
+    "server_tool_use",
+    "service_tier",
+    "speed"
+  ],
+  "usage_field_shapes": {
+    "cache_creation": {"type": "object", "fields": ["ephemeral_1h_input_tokens", "ephemeral_5m_input_tokens"], "notes": "TTL-bucket breakdown; flat cache_creation_input_tokens is the sum"},
+    "server_tool_use": {"type": "object", "fields": ["web_search_requests", "web_fetch_requests"]},
+    "iterations": {"type": "array", "notes": "EMPTY [] in single-inference harness turns at v2.1.181 (unchanged from v2.1.178). Conditionally populated; non-breaking ([DROPPED])."},
+    "speed": {"type": "string", "examples": ["standard"]},
+    "inference_geo": {"type": "string", "examples": ["not_available"]}
+  },
+  "tool_use_result_shapes": {
+    "Bash": ["interrupted", "isImage", "noOutputExpected", "stderr", "stdout"],
+    "Edit": ["filePath", "newString", "oldString", "originalFile", "replaceAll", "structuredPatch", "userModified"],
+    "Edit(create/Write)": ["content", "filePath", "originalFile", "structuredPatch", "type", "userModified"],
+    "Agent": ["agentId", "agentType", "content", "prompt", "resolvedModel", "status", "toolStats", "totalDurationMs", "totalTokens", "totalToolUseCount", "usage"],
+    "ToolSearch": ["matches", "query", "total_deferred_tools"],
+    "TaskCreate": ["task"],
+    "TaskUpdate": ["statusChange", "success", "taskId", "updatedFields"],
+    "other": ["file", "type"]
+  },
+  "tool_use_result_shapes_note": "Bash, Edit, Edit(create/Write), and Agent observed live at v2.1.181. ToolSearch / TaskCreate / TaskUpdate / other carry forward from v2.1.178 (not triggered by the headless harness) — inferred-unverified at 181.",
+  "system_subtypes": ["turn_duration", "away_summary", "local_command"],
+  "system_subtypes_note": "Not triggered by the v2.1.181 headless harness; carried forward from v2.1.178, inferred-unverified at 181.",
+  "system_subtype_payloads": {
+    "turn_duration": {"reads": ["durationMs"]},
+    "away_summary": {"reads": ["content"]},
+    "local_command": {"reads": ["content", "level"]}
+  }
+}

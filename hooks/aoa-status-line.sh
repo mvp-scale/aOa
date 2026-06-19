@@ -41,6 +41,18 @@ SEP="${DIM}│${RESET}"
 # === READ INPUT FROM CLAUDE CODE ===
 input=$(cat)
 
+# L20 recert capture — OFF unless armed; zero cost otherwise (one file test).
+# Arm:  echo "<version>" > .aoa/.capture-statusline   (empty file = any version)
+# The newest matching render lands in .aoa/statusline-capture.json. Used by
+# compliance/conformance/capture-statusline.sh to refresh the status-line sample.
+if [ -f "$PROJECT_DIR/.aoa/.capture-statusline" ]; then
+    _cap_want=$(cat "$PROJECT_DIR/.aoa/.capture-statusline" 2>/dev/null)
+    _cap_got=$(printf '%s' "$input" | jq -r '.version // ""' 2>/dev/null)
+    if [ -z "$_cap_want" ] || [ "$_cap_want" = "$_cap_got" ]; then
+        printf '%s' "$input" > "$PROJECT_DIR/.aoa/statusline-capture.json"
+    fi
+fi
+
 # === PARSE CLAUDE CODE DATA ===
 CURRENT_USAGE=$(echo "$input" | jq '.context_window.current_usage' 2>/dev/null)
 CONTEXT_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 200000' 2>/dev/null)
@@ -83,9 +95,15 @@ RUNWAY_MIN=0; DELTA_MIN=0; CACHE_HIT=0; SHADOW_SAVED=0
 DOMAINS=0; AUTOTUNE_PROGRESS=0
 MASTERED=0; OBSERVED=0; VOCABULARY=0; CONCEPTS=0; PATTERNS=0; EVIDENCE=0
 INPUT_TOKENS=0; OUTPUT_TOKENS=0; FLOW=0
+DRIFT_STATE=""; DRIFT_VER=""; DRIFT_SUSPECT="false"; DRIFT_UNKNOWN=""
 
 if [ -f "$STATUS_FILE" ]; then
     DAEMON_ONLINE=true
+    # L20 drift sentinel: Claude-contract drift the daemon detected (absent when healthy)
+    DRIFT_STATE=$(jq -r '.drift.state // ""' "$STATUS_FILE" 2>/dev/null)
+    DRIFT_VER=$(jq -r '.drift.observed_version // ""' "$STATUS_FILE" 2>/dev/null)
+    DRIFT_SUSPECT=$(jq -r '.drift.suspect // false' "$STATUS_FILE" 2>/dev/null)
+    DRIFT_UNKNOWN=$(jq -r '(.drift.unknown_types // []) | join(",")' "$STATUS_FILE" 2>/dev/null)
     # Live
     INPUTS=$(jq -r '.intents // 0' "$STATUS_FILE" 2>/dev/null)
     TOKENS_SAVED=$(jq -r '.tokens_saved // 0' "$STATUS_FILE" 2>/dev/null)
@@ -605,6 +623,21 @@ if [ -d "$PROJECT_DIR/.aoa" ]; then
     fi
 fi
 
+# L20 drift sentinel segment — always shown when present (a safety signal, not
+# an opt-in metric). "degraded" = extraction broke, numbers suspect (the
+# degrade-on-drift gate); "format-changes" = new/unknown surface — re-certify.
+render_drift() {
+    [ -z "$DRIFT_STATE" ] && return
+    case "$DRIFT_STATE" in
+        degraded)
+            printf "%b" "${RED}⚠ contract drift — metrics suspect${RESET}" ;;
+        format-changes)
+            local note="contract ${DRIFT_VER:-changed}"
+            [ -n "$DRIFT_UNKNOWN" ] && note="${note} +${DRIFT_UNKNOWN}"
+            printf "%b" "${YELLOW}⚠ ${note}${RESET}" ;;
+    esac
+}
+
 # === BUILD LINE 2 ===
 if [ "$DAEMON_ONLINE" = "false" ]; then
     LINE2="$(aoa_header) ${DIM}offline${RESET}"
@@ -628,6 +661,7 @@ if [ "$DAEMON_ONLINE" = "false" ]; then
     done
 else
     LINE2="$(aoa_header)"
+    DRIFT_SEG=$(render_drift); [ -n "$DRIFT_SEG" ] && LINE2="${LINE2} ${SEP} ${DRIFT_SEG}"
     for seg in "${SEGMENTS[@]}"; do
         result=""
         case "$seg" in
