@@ -1,6 +1,6 @@
 module github.com/corey/aoa
 
-go 1.26.2
+go 1.26.4
 
 require (
 	github.com/ebitengine/purego v0.9.1
