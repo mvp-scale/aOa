@@ -739,6 +739,123 @@ func TestDaemon_StartStopStart(t *testing.T) {
 	}
 }
 
+func TestDaemon_HardKill_Recovers(t *testing.T) {
+	// Whole-process death (SIGKILL — no graceful stop, no lock release) must not
+	// leave a stale lock that wedges the next start. The watchdog only shuts the
+	// daemon down and nothing respawns it, so the recoverability guarantee we pin
+	// is: the user can start again and the daemon comes back healthy. SafeGo
+	// covers goroutine panics, not abrupt whole-process death — this is the gap.
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+	startDaemon(t, dir)
+
+	// Read the live PID and SIGKILL it directly.
+	pidFile := filepath.Join(dir, ".aoa", "run", "daemon.pid")
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatalf("read pid file: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatalf("parse pid %q: %v", data, err)
+	}
+	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+		t.Fatalf("SIGKILL daemon: %v", err)
+	}
+
+	// Wait for the process to actually die.
+	deadline := time.Now().Add(5 * time.Second)
+	for processAliveTest(pid) && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if processAliveTest(pid) {
+		t.Fatal("daemon still alive after SIGKILL")
+	}
+
+	// The next start must succeed despite the abrupt death — no wedged lock.
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	stdout, _, exit := runAOA(t, dir, "health")
+	if exit != 0 {
+		t.Fatalf("health after hard-kill recovery exit %d", exit)
+	}
+	if !strings.Contains(stdout, "Files:") {
+		t.Errorf("daemon should be serving after hard-kill recovery:\n%s", stdout)
+	}
+}
+
+func TestDaemon_CorruptDB_RecoversAndReindexes(t *testing.T) {
+	// End-to-end user journey "my DB got corrupted and aoa just works", run in an
+	// isolated temp project (setupProject uses t.TempDir — the real ~/.aoa/aoa.db
+	// is NEVER touched; everything here is throwaway and auto-cleaned).
+	//
+	// Persistence boundary demonstrated: the INDEX is derived from project files,
+	// so it rebuilds itself and search recovers. The corrupt file is QUARANTINED
+	// (preserved, not deleted), so anything that was NOT derived (accumulated
+	// learner state) survives only in that sidelined file — it does not carry into
+	// the rebuilt DB. That is what can vs cannot be safely persisted across a
+	// corruption event.
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	// Bring the daemon up and confirm it serves the index before we break anything.
+	startDaemon(t, dir)
+	stdout, _, exit := runAOA(t, dir, "grep", "multiply")
+	if exit != 0 || !strings.Contains(strings.ToLower(stdout), "multiply") {
+		t.Fatalf("baseline grep before corruption failed: exit %d\n%s", exit, stdout)
+	}
+
+	// Stop the daemon so the DB file is unlocked, then corrupt it on disk by
+	// zeroing both meta pages (the first 0x2000 bytes) — a genuinely unopenable file.
+	runAOA(t, dir, "daemon", "stop")
+	time.Sleep(500 * time.Millisecond)
+
+	dbPath := filepath.Join(dir, ".aoa", "aoa.db")
+	f, err := os.OpenFile(dbPath, os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatalf("open temp db to corrupt: %v", err)
+	}
+	if _, err := f.WriteAt(make([]byte, 0x2000), 0); err != nil {
+		t.Fatalf("corrupt temp db: %v", err)
+	}
+	f.Close()
+
+	// Restart: recovery must be transparent — the daemon comes up despite the
+	// corrupt file, with no manual intervention.
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// Proof the index rebuilt itself from project files: multiple symbols become
+	// searchable again. Poll to absorb the background reindex.
+	for _, sym := range []string{"multiply", "hello", "add"} {
+		found := false
+		for i := 0; i < 40; i++ {
+			out, _, ex := runAOA(t, dir, "grep", sym)
+			if ex == 0 && strings.Contains(strings.ToLower(out), strings.ToLower(sym)) {
+				found = true
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if !found {
+			t.Fatalf("after recovery, %q must be searchable — index should rebuild from project files", sym)
+		}
+	}
+
+	// The corrupt file must be quarantined aside (preserved), not silently deleted.
+	quarantined, _ := filepath.Glob(dbPath + ".corrupt-*")
+	if len(quarantined) == 0 {
+		t.Error("corrupt DB should be quarantined to a .corrupt-* sibling, not deleted")
+	}
+
+	// And the daemon reports healthy after self-recovery.
+	hout, _, hexit := runAOA(t, dir, "health")
+	if hexit != 0 || !strings.Contains(hout, "Files:") {
+		t.Errorf("health should work after corrupt-DB recovery:\n%s", hout)
+	}
+}
+
 func TestDaemon_StartLockedDB(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")

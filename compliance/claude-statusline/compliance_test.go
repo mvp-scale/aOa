@@ -106,6 +106,12 @@ func loadBaseline(t *testing.T) (version, dir string, manifest map[string]any) {
 	dir = filepath.Join("versions", bestName)
 	data, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
+		// A captured sample with no manifest is a half-authored baseline: the
+		// highest-version dir would silently skip every pass, reading green while
+		// validating nothing. Fail loudly so the gap can't ship unnoticed.
+		if _, sErr := os.Stat(filepath.Join(dir, "sample.json")); sErr == nil {
+			t.Fatalf("FAIL: %s has sample.json but no manifest.json — baseline is half-authored and would silently skip validation; author the manifest", dir)
+		}
 		t.Skipf("cannot read %s/manifest.json: %v", dir, err)
 	}
 	if err := json.Unmarshal(data, &manifest); err != nil {

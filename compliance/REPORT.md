@@ -9,7 +9,7 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 <!-- BEGIN claude-session -->
 ## Claude Code Session JSONL — v2.1.181
 
-*Last regenerated: 2026-06-19 02:06 UTC*
+*Last regenerated: 2026-06-19 04:03 UTC*
 
 ### Coverage
 
@@ -51,24 +51,22 @@ See `versions/v2.1.181-observed/observations.md` for the version-specific narrat
 ---
 
 <!-- BEGIN claude-statusline -->
-## Claude Code Status Line — v2.1.126
+## Claude Code Status Line — v2.1.181
 
-*Last regenerated: 2026-06-11 18:27 UTC*
+*Last regenerated: 2026-06-19 04:03 UTC*
 
 ### Coverage
 
 | Surface area      | Consumed | Total | Coverage |
 |-------------------|----------|-------|----------|
-| Stdin JSON paths  | 22       | 22    | 100%  (consumed-only baseline; live capture pending)    |
+| Stdin JSON paths  | 22       | 33    | 66%    |
 | Settings keys     | 3        | 3     | 100%     |
 | Env vars          | 1        | 1     | 100%     |
 
 ### Top gaps
 
-**[Unknown] Stdin coverage cannot be computed — no live sample**
-- what we know: all 22 consumed paths are populated at v2.1.126 (Pass 3 confirmed)
-- what we don't know: how many fields Claude Code emits that we silently drop
-- action: capture `sample.json` (see `README.md` "Capturing live stdin")
+**[Drift] Stdin fields emitted but not consumed — 11**
+- fields: [context_window.current_usage.output_tokens effort.level exceeds_200k_tokens fast_mode output_style.name session_name thinking.enabled transcript_path workspace.added_dirs workspace.current_dir workspace.project_dir]
 
 **[None] Settings shape — 3/3 keys consumed, none dropped**
 

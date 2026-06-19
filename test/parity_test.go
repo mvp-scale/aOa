@@ -74,10 +74,19 @@ func TestSearchParity(t *testing.T) {
 			// Check expected hits.
 			// When the fixture expects 0 hits but the trigram fallback returns
 			// approximate matches, that's acceptable — the fallback exists to
-			// prevent zero-result abandonment. Only assert count when > 0.
+			// prevent zero-result abandonment. The exact hit set is therefore not
+			// pinned, but these invariants always hold and catch real regressions:
 			if len(fixture.Expected) == 0 {
-				// Zero-hit fixture: trigram fallback may produce approximate
-				// matches — skip count assertion (the important thing is no crash).
+				require.NotNil(t, result, "search must never return nil")
+				// AND-mode is an intersection: it can never return more hits than
+				// the OR-mode union of the same query over the same index.
+				if fixture.Flags.AndMode {
+					orOpts := opts
+					orOpts.AndMode = false
+					orResult := engine.Search(fixture.Query, orOpts)
+					assert.LessOrEqual(t, len(result.Hits), len(orResult.Hits),
+						"AND results must be a subset of the OR union for %q", fixture.Query)
+				}
 				return
 			}
 			require.Equal(t, len(fixture.Expected), len(result.Hits),
@@ -136,7 +145,13 @@ func TestWordBoundary_MultiTokenCamelCase_NoFalsePositives(t *testing.T) {
 		WordBoundary: true,
 		MaxCount:     50,
 	})
-	// Trigram fallback may return approximate matches — verify no fragment-only hits
+	// Pin the documented invariant: the fallback must actually fire AND rank
+	// toCanonicalForm highest (it shares the most character trigrams). Asserting
+	// only the negative below would pass even if Search returned zero hits.
+	require.NotEmpty(t, result.Hits, "-w with trigram fallback must return hits, not abandon")
+	assert.Equal(t, "toCanonicalForm()", result.Hits[0].Symbol,
+		"-w trigram fallback should rank toCanonicalForm highest")
+	// And no fragment-only match (e.g. copyFileTo via just "to") should appear.
 	for _, h := range result.Hits {
 		assert.NotEqual(t, "copyFileTo()", h.Symbol,
 			"-w should not return fragment-only match 'copyFileTo'")

@@ -6,7 +6,12 @@ package bbolt
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,16 +43,103 @@ var (
 
 // Store implements ports.Storage backed by bbolt.
 type Store struct {
-	db *bolt.DB
+	db        *bolt.DB
+	recovered bool // true if the DB was corrupt on open and auto-rebuilt this session
 }
 
 // NewStore opens (or creates) a bbolt database at the given path.
+//
+// If the existing file is corrupt (bolt.Open fails for any reason other than a
+// lock timeout or a missing/empty file), it is quarantined aside and a fresh
+// database is created. The index is derived from project files, so the caller's
+// existing BuildIndex path repopulates it — no data is lost that can't be rebuilt.
+// Recovery is bounded to a single attempt to avoid a crash-loop on a bad disk.
 func NewStore(path string) (*Store, error) {
-	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, recovered, err := openRecover(path, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("bbolt open: %w", err)
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, recovered: recovered}, nil
+}
+
+// Recovered reports whether the database was found corrupt on open and rebuilt
+// from scratch during this session. Surfaced via the health check so a recovered
+// (degraded-but-functional) daemon is observable.
+func (s *Store) Recovered() bool { return s.recovered }
+
+// Healthy reports whether the database currently answers a read transaction.
+// Used by the daemon health check to derive a real status instead of a literal.
+func (s *Store) Healthy() bool {
+	if s.db == nil {
+		return false
+	}
+	return s.db.View(func(*bolt.Tx) error { return nil }) == nil
+}
+
+// openRecover opens a bbolt database, auto-recovering from a corrupt file.
+// Returns (db, recovered, err): recovered is true when a corrupt file was
+// quarantined and a fresh database created in its place.
+//
+// A lock timeout or a missing/empty file is NEVER treated as corruption — a live
+// lock holder must not have its database destroyed, and there is nothing to
+// quarantine when the file does not yet exist.
+func openRecover(path string, opts *bolt.Options) (*bolt.DB, bool, error) {
+	db, err := safeOpen(path, opts)
+	if err == nil {
+		return db, false, nil
+	}
+
+	// Lock contention: another process holds the write lock. Leave the file alone.
+	if errors.Is(err, bolt.ErrTimeout) || strings.Contains(err.Error(), "timeout") {
+		return nil, false, err
+	}
+
+	// Nothing to quarantine if the file is missing or empty — surface the
+	// original error (e.g. a missing parent directory or a permission problem).
+	info, statErr := os.Stat(path)
+	if statErr != nil || info.Size() == 0 {
+		return nil, false, err
+	}
+
+	// Treat as corruption: quarantine the bad file and rebuild from scratch.
+	quarantine := path + ".corrupt-" + time.Now().UTC().Format("20060102T150405Z")
+	if renameErr := os.Rename(path, quarantine); renameErr != nil {
+		return nil, false, fmt.Errorf("database corrupt and quarantine failed: %v (open: %w)", renameErr, err)
+	}
+	pruneOldQuarantines(path)
+
+	// Bounded to ONE retry. The path is now free, so a fresh DB is created. If
+	// this also fails it is the filesystem/disk, not the file — return loudly.
+	db, reopenErr := safeOpen(path, opts)
+	if reopenErr != nil {
+		return nil, false, fmt.Errorf("reopen after quarantine failed: %w", reopenErr)
+	}
+	return db, true, nil
+}
+
+// safeOpen wraps bolt.Open, converting a panic (a malformed file can panic
+// during mmap/meta-page validation) into a normal error so recovery can proceed.
+func safeOpen(path string, opts *bolt.Options) (db *bolt.DB, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			db = nil
+			err = fmt.Errorf("bbolt open panicked (corrupt): %v", r)
+		}
+	}()
+	return bolt.Open(path, 0600, opts)
+}
+
+// pruneOldQuarantines keeps only the most recent corrupt-file sibling so
+// quarantine artifacts cannot accumulate across repeated recoveries. Best-effort.
+func pruneOldQuarantines(path string) {
+	matches, err := filepath.Glob(path + ".corrupt-*")
+	if err != nil || len(matches) <= 1 {
+		return
+	}
+	sort.Strings(matches) // timestamp suffix sorts chronologically
+	for _, old := range matches[:len(matches)-1] {
+		_ = os.Remove(old)
+	}
 }
 
 // NewReadOnlyStore opens a bbolt database in read-only mode.

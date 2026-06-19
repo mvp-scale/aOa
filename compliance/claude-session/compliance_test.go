@@ -101,6 +101,12 @@ var knownUnconsumedEnvelopeFields = map[string]bool{
 	"pendingWorkflowCount": true, // NEW v2.1.173 (system) — per-session pending-workflow counter. Acknowledge-drop (L20.1).
 	"messageCount":        true, // NEW v2.1.173 (system) — per-session message counter. Acknowledge-drop (L20.1).
 	"interruptedMessageId": true, // NEW v2.1.173 (user) — id of the assistant message interrupted by the user (present only on interrupt). Acknowledge-drop (L20.1).
+	// Error-envelope fields — present on assistant events ONLY when an API error/retry
+	// occurred mid-turn (overload, interrupt-during-stream). aOa's parser reads assistant
+	// content blocks, not transport-error metadata, so all three are acknowledge-drop.
+	"apiErrorStatus":     true, // observed v2.1.181 (assistant) — HTTP-ish status of the failed API call.
+	"error":              true, // observed v2.1.181 (assistant) — error payload/message for the failed turn.
+	"isApiErrorMessage":  true, // observed v2.1.181 (assistant) — marks the event as an API-error placeholder.
 }
 
 // Known-but-unhandled system subtypes — observed but not branched on.

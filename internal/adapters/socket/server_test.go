@@ -119,10 +119,37 @@ func TestServer_Health(t *testing.T) {
 
 	health, err := client.Health()
 	require.NoError(t, err)
-	assert.Equal(t, "ok", health.Status)
+	assert.Equal(t, "ok", health.Status, "no health source wired => default ok")
 	assert.Equal(t, 3, health.FileCount)
 	assert.Equal(t, 3, health.TokenCount)
 	assert.NotEmpty(t, health.Uptime)
+}
+
+func TestServer_Health_DerivesFromSource(t *testing.T) {
+	// The status must reflect real store state, not a hardcoded literal: when the
+	// health source reports a degraded condition, the health response carries it.
+	// This is what makes the in-scope HEALTHY invariant (DB recovered/unhealthy)
+	// observable to the daemon watchdog and dashboard.
+	engine, idx := testFixtures()
+	sockPath := testSocketPath(t)
+
+	srv := NewServer(index.NewSearchAdapter(engine), idx, sockPath, nil)
+	status := "recovered"
+	srv.SetHealthFn(func() string { return status })
+	require.NoError(t, srv.Start())
+	defer srv.Stop()
+
+	client := NewClient(sockPath)
+
+	health, err := client.Health()
+	require.NoError(t, err)
+	assert.Equal(t, "recovered", health.Status, "status must flow from the health source")
+
+	// Flip the source and confirm the next response reflects it (not cached/literal).
+	status = "unhealthy"
+	health, err = client.Health()
+	require.NoError(t, err)
+	assert.Equal(t, "unhealthy", health.Status)
 }
 
 func TestServer_Shutdown(t *testing.T) {

@@ -60,6 +60,15 @@ type Server struct {
 	shutdownOnce sync.Once
 	stopOnce     sync.Once
 	wg           sync.WaitGroup
+
+	healthFn func() string // optional real status source; nil => "ok"
+}
+
+// SetHealthFn supplies a status provider for the health check so the daemon can
+// report a real status (e.g. "recovered", "unhealthy") derived from store state
+// instead of a hardcoded literal. Pass nil to keep the default "ok".
+func (s *Server) SetHealthFn(fn func() string) {
+	s.healthFn = fn
 }
 
 // NewServer creates a daemon server backed by the given searcher.
@@ -281,10 +290,15 @@ func (s *Server) handleHealth(req Request) Response {
 		tokenCount = len(s.idx.Tokens)
 	}
 
+	status := "ok"
+	if s.healthFn != nil {
+		status = s.healthFn()
+	}
+
 	return Response{
 		ID: req.ID,
 		Result: HealthResult{
-			Status:     "ok",
+			Status:     status,
 			FileCount:  fileCount,
 			TokenCount: tokenCount,
 			Uptime:     time.Since(s.started).Round(time.Second).String(),

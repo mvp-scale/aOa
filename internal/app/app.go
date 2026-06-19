@@ -383,6 +383,11 @@ func New(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open store: %w", err)
 	}
+	if store.Recovered() {
+		// The DB was corrupt and rebuilt from scratch. The empty index triggers
+		// the BuildIndex path in WarmCaches, repopulating from project files.
+		fmt.Fprintf(os.Stderr, "aoa: database was corrupt — quarantined and rebuilding index from project files\n")
+	}
 
 	watcher, err := fsw.NewWatcher()
 	if err != nil {
@@ -467,6 +472,18 @@ func New(cfg Config) (*App, error) {
 	// Create server with App as query provider (for domains, stats, etc.)
 	sockPath := socket.SocketPath(cfg.ProjectRoot)
 	a.Server = socket.NewServer(searcher, idx, sockPath, a)
+
+	// Derive health status from real store state: "unhealthy" if the DB stops
+	// answering, "recovered" if it was corrupt on open and rebuilt this session.
+	a.Server.SetHealthFn(func() string {
+		if a.Store == nil || !a.Store.Healthy() {
+			return "unhealthy"
+		}
+		if a.Store.Recovered() {
+			return "recovered"
+		}
+		return "ok"
+	})
 
 	// Create HTTP server for web dashboard (pass file cache for source line serving)
 	a.WebServer = web.NewServer(a, idx, cache, paths.PortFile)
