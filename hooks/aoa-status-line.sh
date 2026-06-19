@@ -41,6 +41,18 @@ SEP="${DIM}│${RESET}"
 # === READ INPUT FROM CLAUDE CODE ===
 input=$(cat)
 
+# L20 recert capture — OFF unless armed; zero cost otherwise (one file test).
+# Arm:  echo "<version>" > .aoa/.capture-statusline   (empty file = any version)
+# The newest matching render lands in .aoa/statusline-capture.json. Used by
+# compliance/conformance/capture-statusline.sh to refresh the status-line sample.
+if [ -f "$PROJECT_DIR/.aoa/.capture-statusline" ]; then
+    _cap_want=$(cat "$PROJECT_DIR/.aoa/.capture-statusline" 2>/dev/null)
+    _cap_got=$(printf '%s' "$input" | jq -r '.version // ""' 2>/dev/null)
+    if [ -z "$_cap_want" ] || [ "$_cap_want" = "$_cap_got" ]; then
+        printf '%s' "$input" > "$PROJECT_DIR/.aoa/statusline-capture.json"
+    fi
+fi
+
 # === PARSE CLAUDE CODE DATA ===
 CURRENT_USAGE=$(echo "$input" | jq '.context_window.current_usage' 2>/dev/null)
 CONTEXT_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 200000' 2>/dev/null)
