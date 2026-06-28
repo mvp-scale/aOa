@@ -10,7 +10,7 @@ Special thanks to [**@alexaandru**](https://github.com/alexaandru) for creating 
 
 ---
 
-**Generated**: 2026-06-21 10:00 UTC | **Grammars**: 509 | **All platforms pass**: 507/509 | **Contributors**: 346 | **Source**: [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)
+**Generated**: 2026-06-28 09:01 UTC | **Grammars**: 509 | **All platforms pass**: 507/509 | **Contributors**: 346 | **Source**: [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)
 
 ## Platform Summary
 
