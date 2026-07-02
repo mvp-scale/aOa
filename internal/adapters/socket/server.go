@@ -61,7 +61,8 @@ type Server struct {
 	stopOnce     sync.Once
 	wg           sync.WaitGroup
 
-	healthFn func() string // optional real status source; nil => "ok"
+	healthFn func() string       // optional real status source; nil => "ok"
+	probesFn func() (bool, bool) // optional (dbOK, webOK) probe source; nil => derive from status
 }
 
 // SetHealthFn supplies a status provider for the health check so the daemon can
@@ -69,6 +70,14 @@ type Server struct {
 // instead of a hardcoded literal. Pass nil to keep the default "ok".
 func (s *Server) SetHealthFn(fn func() string) {
 	s.healthFn = fn
+}
+
+// SetProbesFn supplies the (dbOK, webOK) probe source for tri-state health
+// (L21.2). Same closure-injection pattern as SetHealthFn: the app wires real
+// probes; the socket server never holds a store or HTTP handle (G4). Pass nil
+// to derive both from the status string.
+func (s *Server) SetProbesFn(fn func() (bool, bool)) {
+	s.probesFn = fn
 }
 
 // NewServer creates a daemon server backed by the given searcher.
@@ -295,6 +304,13 @@ func (s *Server) handleHealth(req Request) Response {
 		status = s.healthFn()
 	}
 
+	// Tri-state probes (L21.2). No probe source wired => derive from status so
+	// a healthy daemon never misreports "down" as zero-values (version skew).
+	dbOK, webOK := status == "ok" || status == "recovered", status == "ok" || status == "recovered"
+	if s.probesFn != nil {
+		dbOK, webOK = s.probesFn()
+	}
+
 	return Response{
 		ID: req.ID,
 		Result: HealthResult{
@@ -302,6 +318,9 @@ func (s *Server) handleHealth(req Request) Response {
 			FileCount:  fileCount,
 			TokenCount: tokenCount,
 			Uptime:     time.Since(s.started).Round(time.Second).String(),
+			DaemonOK:   true, // a served response proves the daemon
+			DBOK:       dbOK,
+			WebOK:      webOK,
 		},
 	}
 }

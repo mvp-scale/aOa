@@ -25,6 +25,10 @@ func runPeek(cmd *cobra.Command, args []string) error {
 	client := socket.NewClient(sockPath)
 
 	result, err := client.Peek(args)
+	if err != nil && isConnectError(err) && reviveDaemon(root, sockPath) {
+		// L21.1: lazy-start — revive once, retry once (D-U2a).
+		result, err = client.Peek(args)
+	}
 	if err != nil {
 		if isConnectError(err) {
 			fmt.Fprintln(os.Stderr, "peek: daemon not running — peek codes require a running daemon.")

@@ -21,6 +21,13 @@ set -uo pipefail
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 STATUS_FILE="$PROJECT_DIR/.aoa/status.json"
+
+# L21.1 (D-U1a): fire-and-forget daemon revive. `aoa daemon ensure` exits
+# instantly when the daemon is alive and is flock-guarded when it is not, so
+# backgrounding it here can never block the status line or double-spawn.
+if command -v aoa >/dev/null 2>&1 && [ -d "$PROJECT_DIR/.aoa" ]; then
+  (cd "$PROJECT_DIR" && aoa daemon ensure >/dev/null 2>&1 &)
+fi
 CONF_FILE="$PROJECT_DIR/.aoa/status-line.conf"
 
 # ANSI colors

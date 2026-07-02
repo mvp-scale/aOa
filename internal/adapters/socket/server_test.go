@@ -241,3 +241,52 @@ func TestServer_StaleSocket(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ok", health.Status)
 }
+
+func TestServer_Health_TriState(t *testing.T) {
+	// L21.2: health carries independent daemon/db/web probes. The daemon flag is
+	// implicit (a response proves the daemon), db/web flow from the injected
+	// probe source — same closure-injection pattern as SetHealthFn (G4: the
+	// socket server never sees a bbolt or http handle).
+	engine, idx := testFixtures()
+	sockPath := testSocketPath(t)
+
+	srv := NewServer(index.NewSearchAdapter(engine), idx, sockPath, nil)
+	srv.SetHealthFn(func() string { return "ok" })
+	dbOK, webOK := true, false
+	srv.SetProbesFn(func() (bool, bool) { return dbOK, webOK })
+	require.NoError(t, srv.Start())
+	defer srv.Stop()
+
+	client := NewClient(sockPath)
+
+	health, err := client.Health()
+	require.NoError(t, err)
+	assert.True(t, health.DaemonOK, "a served response proves the daemon")
+	assert.True(t, health.DBOK)
+	assert.False(t, health.WebOK, "web probe result must flow through")
+
+	// Flip the probe source; next response reflects it (not cached).
+	dbOK = false
+	health, err = client.Health()
+	require.NoError(t, err)
+	assert.False(t, health.DBOK)
+}
+
+func TestServer_Health_TriState_DefaultsFromStatus(t *testing.T) {
+	// Version-skew guard: with no probe fn wired (older wiring), db/web derive
+	// from Status so a healthy daemon never misreports "down" as zero-values.
+	engine, idx := testFixtures()
+	sockPath := testSocketPath(t)
+
+	srv := NewServer(index.NewSearchAdapter(engine), idx, sockPath, nil)
+	srv.SetHealthFn(func() string { return "recovered" })
+	require.NoError(t, srv.Start())
+	defer srv.Stop()
+
+	client := NewClient(sockPath)
+	health, err := client.Health()
+	require.NoError(t, err)
+	assert.True(t, health.DaemonOK)
+	assert.True(t, health.DBOK, "recovered => db answering, derive true")
+	assert.True(t, health.WebOK, "no probe fn => derive from status, not zero-value false")
+}

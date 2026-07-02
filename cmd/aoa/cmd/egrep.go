@@ -165,6 +165,10 @@ func runEgrepIndex(pattern string, useColor bool) error {
 	client := socket.NewClient(sockPath)
 
 	result, err := client.Search(pattern, opts)
+	if err != nil && isConnectError(err) && reviveDaemon(root, sockPath) {
+		// L21.1: lazy-start — revive once, retry once (D-U2a bounded stall).
+		result, err = client.Search(pattern, opts)
+	}
 	if err != nil {
 		if isConnectError(err) {
 			if isShimMode() {

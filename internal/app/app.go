@@ -489,6 +489,15 @@ func New(cfg Config) (*App, error) {
 	a.WebServer = web.NewServer(a, idx, cache, paths.PortFile)
 	a.WebServer.SetRevisionSource(a.Revision)
 
+	// Tri-state health probes (L21.2): db = read-only store probe (C1-clean —
+	// db.View, no App.mu, no write tx); web = the dashboard listener answered
+	// startup and holds a port. Evaluated lazily per health request.
+	a.Server.SetProbesFn(func() (bool, bool) {
+		dbOK := a.Store != nil && a.Store.Healthy()
+		webOK := a.WebServer != nil && a.WebServer.Port() > 0
+		return dbOK, webOK
+	})
+
 	// Wire search observer: search results → learning signals
 	engine.SetObserver(a.searchObserver)
 
