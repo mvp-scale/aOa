@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><title>aOa — Architecture</title>
+<link rel="stylesheet" href="https://esm.sh/@xyflow/react@12.3.5/dist/style.css">
+<link rel="stylesheet" href="viewer.css">
+<script>
+// When served from /arch/ (daemon), default MODEL_PATH to the daemon API.
+// ?model= query param always takes precedence (same as viewer.js line 1).
+if (location.pathname.startsWith('/arch') && !new URLSearchParams(location.search).has('model')) {
+  var u = new URL(location.href);
+  u.searchParams.set('model', '/api/arch/manifest');
+  history.replaceState(null, '', u);
+}
+</script>
+</head><body><div id="root"></div><script type="module" src="viewer.js"></script></body></html>
