@@ -273,12 +273,15 @@ func TestT17_NoSaveIndexUnderMu(t *testing.T) {
 	})
 }
 
-// TestT17_EdgeStoreNotUnderMu verifies C1 for the L19.10 EdgeStore write paths:
-// SaveEdgesForFile and DeleteEdgesForFile are never called while App.mu is held.
+// TestT17_EdgeStoreNotUnderMu verifies C1 for the L19.12 EdgeStore batch write path:
+// SaveEdgesBatch (called from doFlushEdgeBatch) is never called while App.mu is held.
+// onFileChanged enqueues into edgePendingBatch under a.mu; the timer fires
+// doFlushEdgeBatch which snapshots-under-lock, releases, then calls SaveEdgesBatch.
 func TestT17_EdgeStoreNotUnderMu(t *testing.T) {
 	t.Run("watcher_edge_save_path", func(t *testing.T) {
-		// onFileChanged (arch-enabled) extracts edges, then SaveEdgesForFile
-		// must be called outside a.mu via the LIFO-defer pattern.
+		// onFileChanged (arch-enabled) enqueues edges into edgePendingBatch under mu,
+		// then doFlushEdgeBatch dispatches SaveEdgesBatch outside mu — C1 compliant.
+		// lockGuardStore.SaveEdgesBatch will Fatalf if App.mu is held.
 		tmpDir := t.TempDir()
 		a := newLockGuardApp(t, tmpDir)
 		a.ArchEnabled = true // enable C4 so the edge path fires
@@ -287,12 +290,14 @@ func TestT17_EdgeStoreNotUnderMu(t *testing.T) {
 		require.NoError(t, os.WriteFile(goFile,
 			[]byte("package main\nimport \"fmt\"\nfunc main() { fmt.Println(\"hi\") }"), 0644))
 
-		// lockGuardStore.SaveEdgesForFile will Fatalf if App.mu is held.
-		a.onFileChanged(goFile)
+		a.onFileChanged(goFile)            // populates edgePendingBatch
+		a.doFlushEdgeBatch()               // triggers SaveEdgesBatch — C1 guard fires here
 	})
 
 	t.Run("watcher_edge_delete_path", func(t *testing.T) {
-		// onFileChanged for a deleted file must call DeleteEdgesForFile outside mu.
+		// onFileChanged for a deleted file enqueues a nil delete entry into
+		// edgePendingBatch; doFlushEdgeBatch dispatches SaveEdgesBatch outside mu.
+		// lockGuardStore.SaveEdgesBatch will Fatalf if App.mu is held.
 		tmpDir := t.TempDir()
 		a := newLockGuardApp(t, tmpDir)
 		a.ArchEnabled = true
@@ -301,12 +306,31 @@ func TestT17_EdgeStoreNotUnderMu(t *testing.T) {
 		require.NoError(t, os.WriteFile(goFile,
 			[]byte("package main\nimport \"os\"\nfunc bye() { os.Exit(0) }"), 0644))
 
-		// Seed the file into the index.
+		// Seed the file into the index and flush its edges.
 		a.onFileChanged(goFile)
+		a.doFlushEdgeBatch()
 
-		// Now delete it — DeleteEdgesForFile must fire outside mu.
+		// Now delete it — enqueues nil into edgePendingBatch.
 		require.NoError(t, os.Remove(goFile))
-		a.onFileChanged(goFile) // lockGuardStore.DeleteEdgesForFile Fatalfed if under mu
+		a.onFileChanged(goFile)
+		a.doFlushEdgeBatch() // lockGuardStore.SaveEdgesBatch Fatalfed if under mu
+	})
+
+	t.Run("watcher_edge_batch_flush_path", func(t *testing.T) {
+		// Focused C1 assertion for the doFlushEdgeBatch dispatch path (L19.12):
+		//   1. onFileChanged populates edgePendingBatch (under a.mu)
+		//   2. doFlushEdgeBatch snapshots under lock, releases, then calls SaveEdgesBatch
+		//   3. lockGuardStore.assertUnlocked("SaveEdgesBatch") Fatalfes if mu is held
+		tmpDir := t.TempDir()
+		a := newLockGuardApp(t, tmpDir)
+		a.ArchEnabled = true
+
+		goFile := filepath.Join(tmpDir, "batch.go")
+		require.NoError(t, os.WriteFile(goFile,
+			[]byte("package main\nimport \"fmt\"\nfunc Batch() { fmt.Println() }"), 0644))
+
+		a.onFileChanged(goFile) // step 1: accumulate
+		a.doFlushEdgeBatch()    // step 2+3: flush — C1 check fires inside SaveEdgesBatch
 	})
 }
 

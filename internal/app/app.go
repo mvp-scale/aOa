@@ -1026,6 +1026,19 @@ func (a *App) Stop() error {
 		idxSnap = a.Index.Clone()
 		a.indexDirty = false
 	}
+	// Cancel edgeBatchTimer and snapshot pending batch (C1+C2, L19.12).
+	// Mirror the indexSaveTimer pattern: stop the timer, snapshot under lock,
+	// flush outside the lock before Close — prevents use-after-close on bbolt.
+	if a.edgeBatchTimer != nil {
+		a.edgeBatchTimer.Stop()
+		a.edgeBatchTimer = nil
+	}
+	var edgeBatchSnap map[uint32][]ports.ImportEdge
+	if len(a.edgePendingBatch) > 0 {
+		edgeBatchSnap = a.edgePendingBatch
+		a.edgePendingBatch = nil
+	}
+	edgeProjIDSnap := a.edgePendingProjID
 	learnerState := a.Learner.State()
 	a.mu.Unlock()
 
@@ -1037,6 +1050,13 @@ func (a *App) Stop() error {
 		}
 	}
 	_ = a.Store.SaveLearnerState(a.ProjectID, learnerState)
+	// Flush any edge batch pending in the debounce window (C1+C2, L19.12).
+	// Must happen before Store.Close() to avoid SaveEdgesBatch on a closed DB.
+	if edgeBatchSnap != nil {
+		if err := a.Store.SaveEdgesBatch(edgeProjIDSnap, edgeBatchSnap); err != nil {
+			a.debugf("Stop: SaveEdgesBatch error: %v", err)
+		}
+	}
 	a.Store.Close()
 	return nil
 }

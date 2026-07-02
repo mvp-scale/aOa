@@ -341,34 +341,46 @@ func TestEdgeStore_SaveEdgesBatch_SaveAndLoad(t *testing.T) {
 		require.NoError(t, err, "LoadEdgesForFile(%d)", fileID)
 		require.Len(t, got, len(want), "fileID=%d edge count", fileID)
 		for i, e := range want {
-			assert.Equal(t, e.ImportPath, got[i].ImportPath, "fileID=%d edge[%d]", fileID, i)
+			assert.Equal(t, e.ImportPath, got[i].ImportPath, "fileID=%d edge[%d] ImportPath", fileID, i)
+			assert.Equal(t, e.FromFile, got[i].FromFile, "fileID=%d edge[%d] FromFile (G7 provenance)", fileID, i)
+			assert.Equal(t, e.StartLine, got[i].StartLine, "fileID=%d edge[%d] StartLine (G7 provenance)", fileID, i)
 		}
 	}
 }
 
 func TestEdgeStore_SaveEdgesBatch_DeleteViaEmptySlice(t *testing.T) {
-	// An empty-slice entry in the batch signals "delete" — the key must be absent after flush.
+	// Both empty-slice and nil-slice entries signal "delete" — the key must be
+	// absent after flush. nil is what markEdgeBatchDirty enqueues for deleted files;
+	// []ImportEdge{} is the other valid zero-length form. Both must be exercised.
 	store, _ := newTestStore(t)
 
-	// Seed file 10 with real edges.
+	// Seed files 10 and 12 with real edges.
 	require.NoError(t, store.SaveEdgesForFile("proj-1", 10, makeTestEdges("pkg/foo.go")))
+	require.NoError(t, store.SaveEdgesForFile("proj-1", 12, makeTestEdges("pkg/baz.go")))
 
-	// Batch: file 10 → empty (delete), file 11 → new edges (save).
+	// Batch: file 10 → empty slice (delete), file 11 → new edges (save),
+	//        file 12 → nil (delete, mirrors markEdgeBatchDirty delete path).
 	batch := map[uint32][]ImportEdge{
-		10: {},                                    // delete
+		10: {},                                    // delete via empty slice
 		11: makeTestEdges("pkg/bar.go"),            // save
+		12: nil,                                   // delete via nil (production delete value)
 	}
 	require.NoError(t, store.SaveEdgesBatch("proj-1", batch))
 
-	// File 10 must be gone.
+	// File 10 must be gone (empty-slice delete).
 	del, err := store.LoadEdgesForFile("proj-1", 10)
 	require.NoError(t, err)
-	assert.Len(t, del, 0, "file 10 must have 0 edges after batch-delete")
+	assert.Len(t, del, 0, "file 10 must have 0 edges after batch-delete via empty slice")
 
 	// File 11 must be present.
 	saved, err := store.LoadEdgesForFile("proj-1", 11)
 	require.NoError(t, err)
 	assert.Len(t, saved, len(batch[11]), "file 11 must have edges after batch-save")
+
+	// File 12 must be gone (nil-slice delete — production delete value).
+	nilDel, err := store.LoadEdgesForFile("proj-1", 12)
+	require.NoError(t, err)
+	assert.Len(t, nilDel, 0, "file 12 must have 0 edges after batch-delete via nil")
 }
 
 func TestEdgeStore_SaveEdgesBatch_Atomic(t *testing.T) {
