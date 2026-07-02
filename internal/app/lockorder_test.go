@@ -2,16 +2,16 @@
 
 // Package app — T17 lock-order assertion harness (L19.8).
 //
-// C1 invariant: Store.SaveIndex (which calls db.Update internally) must NEVER
-// be called while App.mu is held. Violating this creates a priority-inversion
-// risk and mirrors the exact antipattern the arch write path (L19.10 EdgeStore)
-// must never copy.
+// C1 invariant: Store.SaveIndex, Store.SaveLearnerState, and
+// Store.SaveSessionWithTelemetry (all db.Update callers) must NEVER be called
+// while App.mu is held. Violating this creates a priority-inversion risk and
+// mirrors the exact antipattern the arch write path (L19.10 EdgeStore) must
+// never copy.
 //
 // T17 works by wrapping the store with a lockGuardStore that calls
-// App.mu.TryLock() on every SaveIndex invocation. If TryLock fails, the
-// mutex is currently held by someone else — that means db.Update would be
-// entered under the lock, which is the C1 violation. TryLock success means
-// the lock is free; we immediately release it and forward to the inner store.
+// App.mu.TryLock() on every db.Update method. If TryLock fails, the mutex is
+// currently held by someone else — C1 violation. TryLock success means the
+// lock is free; we immediately release it and forward to the inner store.
 package app
 
 import (
@@ -19,7 +19,9 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/require"
 )
@@ -65,7 +67,7 @@ func (n *noopStore) LoadAllDimensions(_ string) (map[string]*ports.FileAnalysis,
 // ── lockGuardStore ─────────────────────────────────────────────────────────
 //
 // lockGuardStore wraps a storeBackend and asserts the C1 invariant on every
-// SaveIndex call: App.mu must NOT be held when db.Update fires.
+// db.Update method: App.mu must NOT be held when db.Update fires.
 //
 // Mechanism: mu.TryLock() succeeds iff the mutex is currently free.
 //   - TryLock succeeds → mutex was NOT held → invariant upheld ✓
@@ -75,22 +77,35 @@ func (n *noopStore) LoadAllDimensions(_ string) (map[string]*ports.FileAnalysis,
 // liveness check) then forward to the inner store.
 
 type lockGuardStore struct {
-	storeBackend        // embed to inherit all non-overridden methods
-	mu    *sync.Mutex  // pointer to App.mu — NOT a copy
-	t     testing.TB
+	storeBackend       // embed to inherit all non-overridden methods
+	mu   *sync.Mutex  // pointer to App.mu — NOT a copy
+	t    testing.TB
 }
 
-// SaveIndex is the only method that triggers db.Update; all other write
-// methods (SaveLearnerState, etc.) are out of scope for T17.
-func (s *lockGuardStore) SaveIndex(projectID string, idx *ports.Index) error {
+func (s *lockGuardStore) assertUnlocked(method string, projectID string) {
 	if !s.mu.TryLock() {
-		// TryLock failed → App.mu is currently held → C1 violation.
-		s.t.Fatalf("T17 C1 violation: Store.SaveIndex called while App.mu is held "+
-			"(project=%q)", projectID)
-		return nil
+		s.t.Fatalf("T17 C1 violation: Store.%s called while App.mu is held (project=%q)",
+			method, projectID)
 	}
 	s.mu.Unlock() // release; we only needed the liveness check
+}
+
+// SaveIndex triggers db.Update on the index bucket.
+func (s *lockGuardStore) SaveIndex(projectID string, idx *ports.Index) error {
+	s.assertUnlocked("SaveIndex", projectID)
 	return s.storeBackend.SaveIndex(projectID, idx)
+}
+
+// SaveLearnerState triggers db.Update on the learner bucket.
+func (s *lockGuardStore) SaveLearnerState(projectID string, st *ports.LearnerState) error {
+	s.assertUnlocked("SaveLearnerState", projectID)
+	return s.storeBackend.SaveLearnerState(projectID, st)
+}
+
+// SaveSessionWithTelemetry triggers db.Update on the session + telemetry buckets.
+func (s *lockGuardStore) SaveSessionWithTelemetry(projectID string, sum *ports.SessionSummary, delta *ports.ProjectTelemetry) error {
+	s.assertUnlocked("SaveSessionWithTelemetry", projectID)
+	return s.storeBackend.SaveSessionWithTelemetry(projectID, sum, delta)
 }
 
 // ── helper ─────────────────────────────────────────────────────────────────
@@ -184,6 +199,46 @@ func TestT17_NoSaveIndexUnderMu(t *testing.T) {
 		_, err := a.Reindex()
 		require.NoError(t, err)
 		// lockGuardStore.SaveIndex would have Fatalfed if App.mu was held.
+	})
+
+	t.Run("autotune_path", func(t *testing.T) {
+		// searchObserver after 50 prompts triggers autotune → SaveLearnerState.
+		// lockGuardStore.SaveLearnerState will Fatalf if App.mu is held.
+		tmpDir := t.TempDir()
+		a := newLockGuardApp(t, tmpDir)
+
+		// Prime the learner: set promptN = 49 so the next increment inside
+		// searchObserver reaches 50 and triggers ObserveAndMaybeTune → autotune.
+		a.mu.Lock()
+		a.promptN = 49
+		a.mu.Unlock()
+
+		// Drive searchObserver with a non-empty query so it doesn't early-return.
+		result := &index.SearchResult{}
+		a.searchObserver("hello", ports.SearchOptions{}, result, time.Millisecond)
+		// If SaveLearnerState was called under a.mu, lockGuardStore would have Fatalfed.
+	})
+
+	t.Run("session_flush_path", func(t *testing.T) {
+		// onSessionEvent with a new SessionID triggers handleSessionBoundary →
+		// buildSessionFlushPayload → doSessionFlush → SaveSessionWithTelemetry.
+		// lockGuardStore.SaveSessionWithTelemetry will Fatalf if App.mu is held.
+		tmpDir := t.TempDir()
+		a := newLockGuardApp(t, tmpDir)
+
+		// First event: establish session A.
+		a.onSessionEvent(ports.SessionEvent{
+			Kind:      ports.EventSystemMeta,
+			SessionID: "session-A",
+		})
+
+		// Second event: switch to session B — triggers flush of session A.
+		// doSessionFlush must be called outside a.mu for SaveSessionWithTelemetry.
+		a.onSessionEvent(ports.SessionEvent{
+			Kind:      ports.EventSystemMeta,
+			SessionID: "session-B",
+		})
+		// If SaveSessionWithTelemetry was called under a.mu, lockGuardStore would have Fatalfed.
 	})
 }
 

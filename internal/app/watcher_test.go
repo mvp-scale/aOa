@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/corey/aoa/atlas"
 	"github.com/corey/aoa/internal/adapters/treesitter"
@@ -39,14 +40,16 @@ func newWatcherTestApp(t *testing.T, root string) *App {
 	parser := treesitter.NewParser()
 
 	return &App{
-		ProjectRoot: root,
-		ProjectID:   "test",
-		Paths:       NewPaths(root),
-		Enricher:    enr,
-		Engine:      engine,
-		Learner:     learner.New(),
-		Parser:      parser,
-		Index:       idx,
+		ProjectRoot:         root,
+		ProjectID:           "test",
+		Paths:               NewPaths(root),
+		Enricher:            enr,
+		Engine:              engine,
+		Learner:             learner.New(),
+		Parser:              parser,
+		Index:               idx,
+		burnRate:            NewBurnRateTracker(5 * time.Minute),
+		burnRateCounterfact: NewBurnRateTracker(5 * time.Minute),
 		toolMetrics: ToolMetrics{
 			FileReads:    make(map[string]int),
 			BashCommands: make(map[string]int),

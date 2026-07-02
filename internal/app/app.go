@@ -605,13 +605,13 @@ func (sc *signalCollector) addTermDomain(term, domain string) {
 func (a *App) searchObserver(query string, opts ports.SearchOptions, result *index.SearchResult, elapsed time.Duration) {
 	a.debugf("search query=%q hits=%d elapsed=%v", query, len(result.Hits), elapsed)
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	defer a.bumpRevision() // L17.6: invalidate ETag cache
+	defer a.bumpRevision() // L17.6: invalidate ETag cache — atomic, safe after unlock
 
 	a.promptN++
 
 	tokens := index.Tokenize(query)
 	if len(tokens) == 0 {
+		a.mu.Unlock()
 		return
 	}
 
@@ -654,8 +654,10 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 	}
 
 	tuneResult := a.Learner.ObserveAndMaybeTune(event)
+	// Snapshot learner state under lock for IO outside — C1: no db.Update under a.mu.
+	var pendingLearnerState *ports.LearnerState
 	if tuneResult != nil {
-		_ = a.Store.SaveLearnerState(a.ProjectID, a.Learner.State())
+		pendingLearnerState = a.Learner.State() // snapshot under lock
 		a.writeStatus(tuneResult)
 		// L0.7: Autotune activity event
 		a.pushActivity(ActivityEntry{
@@ -707,6 +709,13 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 		entry.Learned = a.nextLearnWord()
 	}
 	a.pushActivity(entry)
+
+	a.mu.Unlock() // explicit unlock — IO follows
+
+	// SaveLearnerState outside lock — db.Update never called while a.mu is held (C1).
+	if pendingLearnerState != nil {
+		_ = a.Store.SaveLearnerState(a.ProjectID, pendingLearnerState)
+	}
 }
 
 // Start begins the daemon (socket server + HTTP server + session reader).
@@ -927,7 +936,8 @@ func (a *App) Stop() error {
 	// Snapshot persistent state under the lock, then write outside — C1 compliant
 	// (db.Update must never be called while a.mu is held).
 	a.mu.Lock()
-	a.flushSessionSummary()
+	// Build session flush payload (in-memory only; IO happens after unlock).
+	pendingSum, pendingDelta := a.buildSessionFlushPayload()
 	// Cancel any pending debounce timer and snapshot the index if dirty.
 	if a.indexSaveTimer != nil {
 		a.indexSaveTimer.Stop()
@@ -942,6 +952,7 @@ func (a *App) Stop() error {
 	a.mu.Unlock()
 
 	// Writes outside the lock — db.Update never called while a.mu is held (C1).
+	a.doSessionFlush(pendingSum, pendingDelta)
 	if idxSnap != nil {
 		if err := a.Store.SaveIndex(a.ProjectID, idxSnap); err != nil {
 			a.debugf("Stop: SaveIndex error: %v", err)
@@ -958,16 +969,16 @@ func (a *App) Stop() error {
 func (a *App) onSessionEvent(ev ports.SessionEvent) {
 	a.debugf("session-event kind=%d", ev.Kind)
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	defer a.bumpRevision() // L17.6: invalidate ETag cache
+	defer a.bumpRevision() // L17.6: invalidate ETag cache — atomic, safe after unlock
 
 	// Track current model from every event
 	if ev.Model != "" {
 		a.currentModel = ev.Model
 	}
 
-	// Session boundary detection (L0.5)
-	a.handleSessionBoundary(ev)
+	// Session boundary detection (L0.5).
+	// Returns a pending flush for the old session; IO happens outside the lock (C1).
+	pendingSum, pendingDelta := a.handleSessionBoundary(ev)
 
 	ts := ev.Timestamp.Unix()
 	if ts == 0 {
@@ -1469,6 +1480,11 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			tb.DurationMs = ev.DurationMs
 		}
 	}
+
+	a.mu.Unlock() // explicit unlock — IO follows
+
+	// Session flush outside lock — db.Update never called while a.mu is held (C1).
+	a.doSessionFlush(pendingSum, pendingDelta)
 }
 
 // writeStatus generates and writes status JSON to the project-local file.
@@ -2446,14 +2462,17 @@ func (a *App) flushStaleTurns(activeTurnID string) {
 }
 
 // handleSessionBoundary detects Claude session changes and flushes/loads session summaries.
-// Must be called with a.mu held.
-func (a *App) handleSessionBoundary(ev ports.SessionEvent) {
+// Must be called with a.mu held. Returns a pending session flush payload when an old session
+// is being closed; the caller must write it outside the lock via doSessionFlush (C1).
+func (a *App) handleSessionBoundary(ev ports.SessionEvent) (*ports.SessionSummary, *ports.ProjectTelemetry) {
 	if ev.SessionID == "" || ev.SessionID == a.currentSessionID {
-		return
+		return nil, nil
 	}
-	// Flush old session if we had one
+	// Build flush payload for old session (in-memory only — IO happens outside the lock).
+	var pendingSum *ports.SessionSummary
+	var pendingDelta *ports.ProjectTelemetry
 	if a.currentSessionID != "" {
-		a.flushSessionSummary()
+		pendingSum, pendingDelta = a.buildSessionFlushPayload()
 	}
 	// Check if revisiting an existing session
 	if a.Store != nil {
@@ -2504,14 +2523,16 @@ func (a *App) handleSessionBoundary(ev ports.SessionEvent) {
 	a.currentSessionID = ev.SessionID
 	// L9.1: Reset content meter on session boundary
 	a.meter.Reset()
+	return pendingSum, pendingDelta
 }
 
-// flushSessionSummary builds a SessionSummary from current counters and persists it
-// atomically with a telemetry delta increment (L17.2).
-// Must be called with a.mu held.
-func (a *App) flushSessionSummary() {
+// buildSessionFlushPayload builds a SessionSummary and telemetry delta from
+// current counters and advances the lastFlushed* accounting fields.
+// Must be called with a.mu held. Does NO IO — callers must write outside the lock.
+// Returns (nil, nil) when there is nothing to flush.
+func (a *App) buildSessionFlushPayload() (*ports.SessionSummary, *ports.ProjectTelemetry) {
 	if a.currentSessionID == "" || a.Store == nil {
-		return
+		return nil, nil
 	}
 	var guidedRatio float64
 	if a.sessionReadCount > 0 {
@@ -2552,9 +2573,7 @@ func (a *App) flushSessionSummary() {
 		a.sessionIsNew = false
 	}
 
-	_ = a.Store.SaveSessionWithTelemetry(a.ProjectID, summary, delta)
-
-	// Update lastFlushed to current values
+	// Advance lastFlushed accounting (in-memory only — no IO here).
 	a.lastFlushedTokensSaved = a.counterfactTokensSaved
 	a.lastFlushedTimeSavedMs = a.sessionTimeSavedMs
 	a.lastFlushedReads = a.sessionReadCount
@@ -2563,6 +2582,17 @@ func (a *App) flushSessionSummary() {
 	a.lastFlushedInputTokens = a.sessionMetrics.InputTokens
 	a.lastFlushedOutputTokens = a.sessionMetrics.OutputTokens
 	a.lastFlushedCacheReadTokens = a.sessionMetrics.CacheReadTokens
+
+	return summary, delta
+}
+
+// doSessionFlush writes a session summary + telemetry delta to the store.
+// Must be called outside a.mu — db.Update must never be called while a.mu is held (C1).
+func (a *App) doSessionFlush(summary *ports.SessionSummary, delta *ports.ProjectTelemetry) {
+	if summary == nil {
+		return
+	}
+	_ = a.Store.SaveSessionWithTelemetry(a.ProjectID, summary, delta)
 }
 
 // turnFromBuilder converts a turnBuilder into a ConversationTurn.
