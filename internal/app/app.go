@@ -32,6 +32,25 @@ import (
 	"github.com/corey/aoa/internal/ports"
 )
 
+// storeBackend is the full storage contract required by App.
+// It extends ports.Storage with lifecycle and extended-analysis methods.
+// Using an interface here (rather than the concrete *bbolt.Store) satisfies G4
+// (ports-first) and allows test doubles to be injected without embedding real bbolt.
+type storeBackend interface {
+	ports.Storage
+	// Healthy reports whether the backend is operational.
+	Healthy() bool
+	// Recovered reports whether the backend rebuilt itself from a corrupt state
+	// during the current session.
+	Recovered() bool
+	// Close releases all resources held by the storage backend.
+	Close() error
+	// SaveAllDimensions persists dimensional-analysis results for all files.
+	SaveAllDimensions(projectID string, analyses map[string]*ports.FileAnalysis) error
+	// LoadAllDimensions retrieves all persisted dimensional-analysis results.
+	LoadAllDimensions(projectID string) (map[string]*ports.FileAnalysis, error)
+}
+
 // SessionMetrics holds aggregated token and turn counters from session events.
 type SessionMetrics struct {
 	InputTokens      int
@@ -203,7 +222,7 @@ type App struct {
 	ProjectID   string
 	Paths       *Paths // resolved .aoa/ directory paths
 
-	Store     *bbolt.Store
+	Store     storeBackend
 	Watcher   *fsw.Watcher
 	Enricher  *enricher.Enricher
 	Engine    *index.SearchEngine
@@ -861,30 +880,28 @@ func (a *App) markIndexDirty() {
 	if a.indexSaveTimer != nil {
 		a.indexSaveTimer.Stop()
 	}
-	a.indexSaveTimer = time.AfterFunc(indexSaveDebounce, func() {
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		if a.indexDirty {
-			if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
-				a.debugf("SaveIndex error: %v", err)
-			}
-			a.indexDirty = false
-		}
-	})
+	a.indexSaveTimer = time.AfterFunc(indexSaveDebounce, a.doSaveIndexDebounced)
 }
 
-// flushIndex saves the index to bbolt immediately if dirty.
-// Must be called with a.mu held.
-func (a *App) flushIndex() {
-	if a.indexSaveTimer != nil {
-		a.indexSaveTimer.Stop()
-		a.indexSaveTimer = nil
+// doSaveIndexDebounced is the time.AfterFunc callback for markIndexDirty.
+// Snapshots the index under a.mu, releases the lock, then writes to bbolt.
+// C1 compliant: db.Update is never called while a.mu is held.
+// Called from: markIndexDirty timer; also callable directly in tests to avoid
+// the 2 s debounce delay.
+func (a *App) doSaveIndexDebounced() {
+	a.mu.Lock()
+	if !a.indexDirty {
+		a.mu.Unlock()
+		return
 	}
-	if a.indexDirty {
-		if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
-			a.debugf("flushIndex error: %v", err)
-		}
-		a.indexDirty = false
+	snap := a.Index.Clone() // snapshot under lock (fast, CPU-only)
+	a.indexDirty = false
+	projectID := a.ProjectID
+	a.mu.Unlock() // release before IO
+
+	// db.Update happens here, outside a.mu — C1 compliant.
+	if err := a.Store.SaveIndex(projectID, snap); err != nil {
+		a.debugf("SaveIndex error: %v", err)
 	}
 }
 
@@ -907,12 +924,30 @@ func (a *App) Stop() error {
 	// Wait for all safeGo goroutines (shadow searches, WarmCaches, dim scan).
 	a.bgWg.Wait()
 
-	// Persist final state — all goroutines are stopped, no races.
+	// Snapshot persistent state under the lock, then write outside — C1 compliant
+	// (db.Update must never be called while a.mu is held).
 	a.mu.Lock()
 	a.flushSessionSummary()
-	a.flushIndex()
-	_ = a.Store.SaveLearnerState(a.ProjectID, a.Learner.State())
+	// Cancel any pending debounce timer and snapshot the index if dirty.
+	if a.indexSaveTimer != nil {
+		a.indexSaveTimer.Stop()
+		a.indexSaveTimer = nil
+	}
+	var idxSnap *ports.Index
+	if a.indexDirty {
+		idxSnap = a.Index.Clone()
+		a.indexDirty = false
+	}
+	learnerState := a.Learner.State()
 	a.mu.Unlock()
+
+	// Writes outside the lock — db.Update never called while a.mu is held (C1).
+	if idxSnap != nil {
+		if err := a.Store.SaveIndex(a.ProjectID, idxSnap); err != nil {
+			a.debugf("Stop: SaveIndex error: %v", err)
+		}
+	}
+	_ = a.Store.SaveLearnerState(a.ProjectID, learnerState)
 	a.Store.Close()
 	return nil
 }
@@ -2895,18 +2930,22 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 	}
 
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	defer a.bumpRevision() // L19.11: invalidate ETag cache after index swap
-
 	// Swap index maps in-place (engine/server hold pointer to a.Index struct)
 	a.Index.Tokens = idx.Tokens
 	a.Index.Metadata = idx.Metadata
 	a.Index.Files = idx.Files
-
 	a.Engine.Rebuild()
-
+	a.bumpRevision() // L19.11: invalidate ETag cache after index swap
+	// Snapshot for C1-compliant persistence: clone under lock, write outside.
+	var idxSnap *ports.Index
 	if a.Store != nil {
-		if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
+		idxSnap = a.Index.Clone()
+	}
+	a.mu.Unlock()
+
+	// db.Update happens here, outside a.mu — C1 compliant.
+	if idxSnap != nil {
+		if err := a.Store.SaveIndex(a.ProjectID, idxSnap); err != nil {
 			return socket.ReindexResult{}, fmt.Errorf("save index: %w", err)
 		}
 	}

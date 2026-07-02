@@ -62,6 +62,36 @@ type Index struct {
 	Files    map[uint32]*FileMeta      // file_id -> file info
 }
 
+// Clone returns a deep copy of the Index.
+// All map entries are duplicated so the clone is safe to read and pass to
+// Store.SaveIndex after releasing a.mu. Each TokenRef slice and SymbolMeta
+// pointer is individually copied; no live references remain to the original maps.
+func (idx *Index) Clone() *Index {
+	c := &Index{
+		Tokens:   make(map[string][]TokenRef, len(idx.Tokens)),
+		Metadata: make(map[TokenRef]*SymbolMeta, len(idx.Metadata)),
+		Files:    make(map[uint32]*FileMeta, len(idx.Files)),
+	}
+	for k, refs := range idx.Tokens {
+		cp := make([]TokenRef, len(refs))
+		copy(cp, refs)
+		c.Tokens[k] = cp
+	}
+	for k, sym := range idx.Metadata {
+		s := *sym // SymbolMeta fields are all value types except Tags ([]string)
+		if len(sym.Tags) > 0 {
+			s.Tags = make([]string, len(sym.Tags))
+			copy(s.Tags, sym.Tags)
+		}
+		c.Metadata[k] = &s
+	}
+	for k, fm := range idx.Files {
+		f := *fm // FileMeta is all value types (strings, int64)
+		c.Files[k] = &f
+	}
+	return c
+}
+
 // TokenRef is a compact reference to a code location
 type TokenRef struct {
 	FileID uint32
