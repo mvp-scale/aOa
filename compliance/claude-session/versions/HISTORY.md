@@ -10,6 +10,63 @@ Confidence is implied by phrasing: "added", "shipped" = high; "appears to",
 
 ---
 
+## v2.1.172-observed → v2.1.178-observed
+
+**Observed 2026-06-18** via the generative conformance harness
+(`conformance/run.sh --all`) over installed version 2.1.178 — 5 controlled
+`claude -p` sessions + 1 subagent stream (49 events, all `version="2.1.178"`),
+supplemented by the live v2.1.173 session for headless-undriveable surfaces.
+Closes the 6-version gap. **Additive only** — no field removed, renamed, or
+retyped (`breaking = false`). The parser still works unchanged; the two material
+items are numeric, not structural, and both route to L18.
+
+### New envelope fields
+
+- **`agentId`** (added) — on `user`/`assistant`/`attachment`. Links a top-level
+  event to a spawned subagent; value matches the subagent file shortid
+  (`agent-{shortid}.jsonl`) and `.meta.json`. DROPPED. **The missing attribution
+  link** the subagent-token leak needs — flagged for L18.
+- **`attributionAgent`** (added) — on `assistant`. The subagent type that
+  produced the event (`"general-purpose"`). Pairs with `agentId`. DROPPED.
+- **`system.pendingWorkflowCount`** (v2.1.173) — per-session pending-workflow
+  counter (`0`). Seen live at 173, not triggered by the 178 harness
+  (inferred-unverified). DROPPED.
+
+### New toolUseResult shapes (non-breaking)
+
+- **`Agent.resolvedModel`** (added) — the concrete model the subagent ran on
+  (`"claude-opus-4-8[1m]"`). 10-key Agent shape → 11. The Agent branch matches on
+  `agentId`/`agentType`, so the extra key is harmlessly unread.
+- **`Edit` `type="create"` shape** (added) — `{content, filePath, originalFile,
+  structuredPatch, type, userModified}` for file creation; lacks
+  `newString`/`oldString`. Still classifies as Edit; `content`/`type` unread.
+
+### Usage semantics (route to L18)
+
+- **`usage.iterations`** — **regression vs the v2.1.172 claim**. Recorded
+  POPULATED at 172; EMPTY `[]` across all 178 harness events and the live 173
+  session. Now conditionally-populated (multi-inference turns only). `[DROPPED]`,
+  non-breaking — but the 172 "POPULATED" narrative is corrected.
+- **Subagent token attribution leak** — the known soft spot reproduces at 178,
+  ~414x under (est=56 vs `totalTokens`=8145 vs summed subagent usage=23177). The
+  exact in-band `AgentTotalTokens` is parsed and forwarded but never read; the
+  surfaced cost falls back to `char/4`. Attribution leak, not schema break. The
+  new `agentId`/`attributionAgent` fields are the in-band link to fix it.
+
+### Not observed at 178 (carried forward, inferred-unverified)
+
+- `system` + subtypes (`turn_duration`/`away_summary`/`local_command`),
+  `permission-mode`, `mode`, `queue-operation` `enqueue.content`,
+  `ToolSearch`/`TaskCreate`/`TaskUpdate` shapes — not driveable headless. Add a
+  slash-command + turn-boundary scenario to observe them at 178.
+
+### Stable (no drift)
+
+- Topology, file format, `user`/`assistant`/`system` structure, content block
+  types, tool-input field names, usage field SET (10), message field set (9).
+  Main-session 4-field token usage verified EXACT closed-loop
+  (`{i:4083, o:5, cr:14111, cc:1767}`).
+
 ## v2.1.70-inferred → v2.1.126-observed
 
 **Gap of unknown size.** The "v2.1.70" label is a placeholder — we don't have
@@ -117,6 +174,74 @@ passes through verbatim:
 - Content block types: `text`, `thinking`, `tool_use`, `tool_result`
 - Tool input field names: `file_path`, `command`, `pattern`, etc.
 - `system.subtype = turn_duration` (still emitted alongside the new `away_summary`)
+
+---
+
+## v2.1.126-observed → v2.1.172-observed
+
+**Observed 2026-06-11** from live session `404204ee` (217 events) plus adjacent
+v2.1.170 sessions. Closes the 46-version gap L20 exists to catch. **Purely
+additive** — no field removed, renamed, or retyped. The parser still works
+unchanged; it sees less than it could. Every item below is acknowledged in the
+contract and deferred to a sub-ID; the only one with material value
+(`usage.iterations`) is routed to L18.
+
+### New top-level event types
+
+- **`mode`** (added) — `{type, mode, sessionId}`. Interaction-mode control-plane
+  event, sibling of `permission-mode`, emitted alongside it on transitions.
+  Observed value `"normal"`. No `uuid`/`timestamp`. Falls into `UnknownTypes`.
+- **`queue-operation`** (confirmed) — was a known-unhandled-unconfirmed comment
+  at v2.1.126; now confirmed with shape `{type, operation, content?, timestamp,
+  sessionId}`. `operation ∈ {enqueue, dequeue, remove}`; `enqueue` carries
+  `content` = the queued user input (e.g. a `/model` slash command typed while
+  Claude was working). Still IGNORED.
+
+### New envelope fields (on recognized types)
+
+- **`user.promptSource`** (string, e.g. `"typed"`) — how the prompt entered the
+  turn. DROPPED.
+- **`system.level`** (string, `"info"`) — severity level for system events.
+  DROPPED.
+- **`slug`** (string, e.g. `"staged-floating-candy"`) — human-readable session
+  slug on `user`/`assistant`/`attachment`; appears mid-session once assigned.
+  DROPPED. (Caught live: this field first appeared partway through the capture
+  session itself.)
+
+### New system subtype
+
+- **`local_command`** (added) — local slash-command echo. Carries `content`
+  (command text) + the new `level`. Parser does not branch on subtype; `content`
+  is read into `SystemContent` but only surfaced for `away_summary`, so the
+  command text is captured-but-unused. `turn_duration` / `away_summary` persist.
+
+### Usage semantics change (HIGH value — feeds L18)
+
+- **`usage.iterations`** — was `[]` at v2.1.126, now **populated** with a
+  per-inference-iteration token breakdown (`{input_tokens, output_tokens,
+  cache_read_input_tokens, cache_creation_input_tokens, cache_creation, type}`).
+  The parser already captures it into `MessageUsage.Iterations` but nothing reads
+  it. This is the cleanest in-band source for L18's token-economics fix.
+- **`inference_geo`** — value `""` → `"not_available"`. Cosmetic; still consumed.
+
+### New toolUseResult shapes (non-breaking)
+
+- **`ToolSearch`** `{matches, query, total_deferred_tools}`,
+  **`TaskCreate`** `{task}`,
+  **`TaskUpdate`** `{statusChange, success, taskId, updatedFields}`.
+  None match the Bash/Edit/Agent signature keys, so all collapse to the parser's
+  `"other"` catch-all (Raw preserved, no drop/crash).
+
+### New on-disk artifact (topology, non-breaking)
+
+- Subagent dirs now carry `agent-{shortid}.meta.json` sidecars beside each
+  `agent-{shortid}.jsonl`. aOa globs `.jsonl`, so sidecars are ignored harmlessly.
+  Relevant to L20.3 historical mining.
+
+### Stable (no drift)
+
+- Topology, file format, `user`/`assistant`/`system` structure, content block
+  types, tool-input field names, usage field SET (10), message field set (9).
 
 ---
 

@@ -208,10 +208,11 @@ func TestStore_SaveLoadLearnerState_Roundtrip(t *testing.T) {
 	}
 }
 
-func TestStore_CrashRecovery(t *testing.T) {
-	// S-03, G6: Write data, simulate crash (close without fsync),
-	// reopen database. Data from last committed transaction is intact.
-	// bbolt's transactional writes guarantee this.
+func TestStore_CommittedDataSurvivesReopen(t *testing.T) {
+	// S-03, G6: Write data, close (orderly fsync-on-commit), reopen.
+	// Data from the last committed transaction is intact — bbolt's
+	// transactional writes guarantee this. (Durability across reopen;
+	// genuine corrupt-file recovery is covered by TestStore_AutoRecoverCorruptDB.)
 	dir := t.TempDir()
 	path := filepath.Join(dir, "crash.db")
 
@@ -230,6 +231,7 @@ func TestStore_CrashRecovery(t *testing.T) {
 	store2, err := NewStore(path)
 	require.NoError(t, err)
 	defer store2.Close()
+	assert.False(t, store2.Recovered(), "an orderly close must not trigger recovery")
 
 	loaded, err := store2.LoadIndex("proj-1")
 	require.NoError(t, err)
@@ -237,6 +239,141 @@ func TestStore_CrashRecovery(t *testing.T) {
 	assert.Equal(t, len(idx.Tokens), len(loaded.Tokens))
 	assert.Equal(t, len(idx.Metadata), len(loaded.Metadata))
 	assert.Equal(t, len(idx.Files), len(loaded.Files))
+}
+
+// rawOpenErr attempts a plain bbolt open, converting a panic (a malformed file
+// can panic during meta-page validation) into an error. Used to prove a fixture
+// is genuinely corrupt before asserting that NewStore recovers from it.
+func rawOpenErr(path string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: time.Second})
+	if err == nil {
+		db.Close()
+	}
+	return err
+}
+
+func TestStore_AutoRecoverCorruptDB(t *testing.T) {
+	// HEALTHY (in-scope): a corrupt DB file must self-recover — quarantine the
+	// bad file, rebuild a fresh one, no user intervention. The index is derived,
+	// so losing it is recoverable; a corrupt file that hard-fails open is not.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "corrupt.db")
+
+	store, err := NewStore(path)
+	require.NoError(t, err)
+	require.NoError(t, store.SaveIndex("proj-1", makeTestIndex()))
+	require.NoError(t, store.Close())
+
+	// Corrupt the file by zeroing the first 0x2000 bytes — both meta pages at the
+	// 4K default page size — so the checksum/validation fails on open.
+	f, err := os.OpenFile(path, os.O_RDWR, 0600)
+	require.NoError(t, err)
+	_, err = f.WriteAt(make([]byte, 0x2000), 0)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	// Prove the corruption is real: a plain open must fail (not a timeout).
+	rawErr := rawOpenErr(path)
+	require.Error(t, rawErr, "fixture should be genuinely corrupt")
+	require.NotContains(t, rawErr.Error(), "timeout")
+
+	// NewStore must transparently recover.
+	recovered, err := NewStore(path)
+	require.NoError(t, err, "NewStore must recover from a corrupt file, not fail")
+	defer recovered.Close()
+	assert.True(t, recovered.Recovered(), "Recovered() must report the rebuild")
+	assert.True(t, recovered.Healthy(), "rebuilt DB must answer a read txn")
+
+	// The bad file must be quarantined aside, not deleted silently.
+	quarantined, _ := filepath.Glob(path + ".corrupt-*")
+	assert.Len(t, quarantined, 1, "exactly one quarantine sibling should exist")
+
+	// The fresh DB is empty but fully functional — a roundtrip must work so the
+	// caller's BuildIndex path can repopulate it.
+	idx2 := makeTestIndex()
+	require.NoError(t, recovered.SaveIndex("proj-1", idx2))
+	loaded, err := recovered.LoadIndex("proj-1")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.Equal(t, len(idx2.Files), len(loaded.Files))
+}
+
+func TestStore_LockTimeoutNotTreatedAsCorrupt(t *testing.T) {
+	// Anti-data-loss: a live lock holder must NEVER have its database quarantined.
+	// A second open that times out on the lock returns the timeout error and
+	// leaves the original file byte-identical.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "locked.db")
+
+	holder, err := NewStore(path)
+	require.NoError(t, err)
+	require.NoError(t, holder.SaveIndex("proj-1", makeTestIndex()))
+	defer holder.Close()
+
+	before, err := os.Stat(path)
+	require.NoError(t, err)
+
+	// Second open contends for the write lock and must fail with a timeout.
+	second, err := NewStore(path)
+	if second != nil {
+		second.Close()
+	}
+	require.Error(t, err, "second writer must not acquire the lock")
+	assert.Contains(t, err.Error(), "timeout")
+
+	// No quarantine, and the original file is untouched.
+	quarantined, _ := filepath.Glob(path + ".corrupt-*")
+	assert.Empty(t, quarantined, "a lock timeout must not quarantine the live DB")
+	after, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, before.Size(), after.Size(), "live DB must be byte-untouched")
+}
+
+func TestStore_RecoveryBounded_NoCrashLoop(t *testing.T) {
+	// Recovery is bounded to a single attempt: if the quarantine/reopen cannot
+	// succeed (here, a read-only parent dir), NewStore returns an error promptly
+	// rather than looping or hanging.
+	if os.Geteuid() == 0 {
+		t.Skip("read-only dir is not enforced for root")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "corrupt.db")
+
+	store, err := NewStore(path)
+	require.NoError(t, err)
+	require.NoError(t, store.SaveIndex("proj-1", makeTestIndex()))
+	require.NoError(t, store.Close())
+
+	f, err := os.OpenFile(path, os.O_RDWR, 0600)
+	require.NoError(t, err)
+	_, err = f.WriteAt(make([]byte, 0x2000), 0)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	// Make the parent dir read-only so the quarantine rename fails.
+	require.NoError(t, os.Chmod(dir, 0500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
+
+	done := make(chan error, 1)
+	go func() {
+		s, e := NewStore(path)
+		if s != nil {
+			s.Close()
+		}
+		done <- e
+	}()
+
+	select {
+	case e := <-done:
+		require.Error(t, e, "recovery must fail loudly when quarantine is impossible")
+	case <-time.After(10 * time.Second):
+		t.Fatal("NewStore hung — recovery is not bounded")
+	}
 }
 
 func TestStore_ProjectScoped(t *testing.T) {

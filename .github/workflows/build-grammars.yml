@@ -53,7 +53,7 @@ jobs:
             cflags: "-fPIC -shared"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install cross-compiler (linux-arm64)
         if: matrix.os == 'linux' && matrix.arch == 'arm64'
@@ -187,7 +187,7 @@ jobs:
           ls -lh *.tar.gz 2>/dev/null || echo "No tarballs"
 
       - name: Upload grammar artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: grammars-${{ matrix.os }}-${{ matrix.arch }}
           path: |

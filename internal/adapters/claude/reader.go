@@ -91,6 +91,28 @@ func (r *Reader) Health() ports.ExtractionHealth {
 	return h
 }
 
+// PeekHealth returns a snapshot of extraction health WITHOUT resetting the
+// window (unlike Health). Used by the in-band drift sentinel (App.writeStatus)
+// so surfacing drift never disturbs the Health() accounting window. Maps are
+// copied so the caller can read them safely outside the reader lock. L20.
+func (r *Reader) PeekHealth() ports.ExtractionHealth {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	h := r.health
+	h.WindowEnd = time.Now()
+	uc := make(map[string]int, len(r.health.UnknownTypes))
+	for k, v := range r.health.UnknownTypes {
+		uc[k] = v
+	}
+	h.UnknownTypes = uc
+	ec := make(map[ports.EventKind]int, len(r.health.EventCounts))
+	for k, v := range r.health.EventCounts {
+		ec[k] = v
+	}
+	h.EventCounts = ec
+	return h
+}
+
 // Started returns a channel that closes after the underlying tailer
 // completes initial file discovery. Useful for synchronization in tests.
 func (r *Reader) Started() <-chan struct{} {

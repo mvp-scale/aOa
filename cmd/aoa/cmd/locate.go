@@ -21,6 +21,10 @@ func runLocate(cmd *cobra.Command, args []string) error {
 	client := socket.NewClient(sockPath)
 
 	result, err := client.Files("", args[0])
+	if err != nil && isConnectError(err) && reviveDaemon(root, sockPath) {
+		// L21.1: lazy-start — revive once, retry once (D-U2a).
+		result, err = client.Files("", args[0])
+	}
 	if err != nil {
 		if !isConnectError(err) {
 			return err

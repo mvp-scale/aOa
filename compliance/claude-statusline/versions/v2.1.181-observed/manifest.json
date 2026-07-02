@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "claude_code_version": "2.1.181",
+  "captured_at": "2026-06-18",
+  "capture_method": "raw — full status-line stdin captured live via compliance/conformance/capture-statusline.sh (see sample.json). Supersedes the v2.1.126 partial/derived capture.",
+  "stdin_paths_consumed": [
+    "cwd",
+    "session_id",
+    "version",
+    "model.id",
+    "model.display_name",
+    "cost.total_cost_usd",
+    "cost.total_lines_added",
+    "cost.total_lines_removed",
+    "cost.total_duration_ms",
+    "cost.total_api_duration_ms",
+    "context_window.context_window_size",
+    "context_window.used_percentage",
+    "context_window.remaining_percentage",
+    "context_window.total_input_tokens",
+    "context_window.total_output_tokens",
+    "context_window.current_usage.input_tokens",
+    "context_window.current_usage.cache_creation_input_tokens",
+    "context_window.current_usage.cache_read_input_tokens",
+    "rate_limits.five_hour.used_percentage",
+    "rate_limits.five_hour.resets_at",
+    "rate_limits.seven_day.used_percentage",
+    "rate_limits.seven_day.resets_at"
+  ],
+  "stdin_paths_additive": [
+    "transcript_path",
+    "effort.level",
+    "session_name",
+    "workspace.current_dir",
+    "workspace.project_dir",
+    "workspace.added_dirs",
+    "output_style.name",
+    "exceeds_200k_tokens",
+    "fast_mode",
+    "thinking.enabled",
+    "context_window.current_usage.output_tokens"
+  ],
+  "stdin_paths_dropped": [],
+  "settings_json_shape": {
+    "statusLine.type":    "command",
+    "statusLine.command": "bash \"$CLAUDE_PROJECT_DIR/.aoa/hooks/aoa-status-line.sh\""
+  },
+  "env_vars_required": ["CLAUDE_PROJECT_DIR"],
+  "drift_summary": {
+    "vs_v2.1.126": "no breaking changes — all 22 consumed paths still populated. 11 additive fields now present in raw stdin (transcript_path, effort.level, session_name, workspace.current_dir/project_dir/added_dirs, output_style.name, exceeds_200k_tokens, fast_mode, thinking.enabled, context_window.current_usage.output_tokens); none consumed by the hook, so additive-only — no schema break.",
+    "additive_unknown": "raw stdin now fully enumerated — no remaining unknown fields"
+  }
+}

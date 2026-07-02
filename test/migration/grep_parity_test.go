@@ -629,11 +629,14 @@ func TestGrep_Edge_ShortToken(t *testing.T) {
 }
 
 func TestGrep_Edge_TwoCharToken(t *testing.T) {
-	// Two-char token should work
+	// The boundary under test: a 2-char token survives the min-length filter
+	// (unlike single-char "a", which is dropped). "db" is not in the fixture, so
+	// it yields no hits — but the point is that it is *searched*, not filtered.
 	engine := loadTestIndex(t)
+	assert.Equal(t, []string{"db"}, index.Tokenize("db"),
+		"2-char token must survive tokenization (min length is 2, not 3)")
 	result := engine.Search("db", ports.SearchOptions{MaxCount: 50})
-	// May or may not have hits — just verify no crash
-	assert.NotNil(t, result)
+	assert.Empty(t, result.Hits, "'db' is absent from the fixture index")
 }
 
 func TestGrep_Edge_Unicode(t *testing.T) {
@@ -668,34 +671,35 @@ func TestGrep_Edge_HyphenatedTokenization(t *testing.T) {
 }
 
 func TestGrep_Edge_MaxCount_Zero(t *testing.T) {
-	// MaxCount=0 → engine default behavior
+	// MaxCount=0 means "no caller limit" — the engine returns all matches rather
+	// than truncating to zero. Pin that it equals an explicit high cap.
 	engine := loadTestIndex(t)
-	result := engine.Search("test", ports.SearchOptions{MaxCount: 0})
-	assert.NotNil(t, result)
+	got0 := engine.Search("test", ports.SearchOptions{MaxCount: 0})
+	gotHigh := engine.Search("test", ports.SearchOptions{MaxCount: 50})
+	assert.Greater(t, len(got0.Hits), 0, "'test' should match in the fixture")
+	assert.Equal(t, len(gotHigh.Hits), len(got0.Hits),
+		"MaxCount=0 must mean unlimited (return all), not truncate to 0")
 }
 
 func TestEgrep_Edge_InvalidRegex(t *testing.T) {
-	// Invalid regex should not panic
+	// An invalid regex must yield no false matches (and not panic).
 	engine := loadTestIndex(t)
 	result := engine.Search("[invalid", ports.SearchOptions{
 		Mode:     "regex",
 		MaxCount: 50,
 	})
-	// Should return empty or error, not panic
-	assert.NotNil(t, result)
+	assert.Empty(t, result.Hits, "invalid regex must return no matches, not garbage")
 }
 
 // =============================================================================
 // No-op Flags (verify they're accepted without changing behavior)
 // =============================================================================
 
-func TestGrep_Noop_r_AlwaysRecursive(t *testing.T) {
-	// -r is a no-op: aoa always searches all files.
-	// We verify by confirming results match regardless.
-	engine := loadTestIndex(t)
-	result := engine.Search("login", ports.SearchOptions{MaxCount: 50})
-	assert.Equal(t, 5, len(result.Hits), "search should work (always recursive)")
-}
+// Note: a former TestGrep_Noop_r_AlwaysRecursive was removed — it re-ran an
+// unrelated "login" search and asserted the same 5-hit count as
+// TestGrep_Literal_SingleToken, pinning nothing about the -r flag (which is a
+// CLI-level no-op). The line-number / filename shape checks below assert a real
+// output invariant and are kept.
 
 func TestGrep_Noop_n_AlwaysLineNumbers(t *testing.T) {
 	// -n is a no-op: aoa always returns line numbers.
@@ -900,32 +904,11 @@ func TestGrep_Flag_L_NoResults(t *testing.T) {
 	assert.Equal(t, 13, len(result.Hits), "-L: all 13 files when nothing matches")
 }
 
-// =============================================================================
-// L3.12: --no-filename (output only — tested via formatSearchResult)
-// =============================================================================
-
-func TestGrep_Flag_noFilename(t *testing.T) {
-	// --no-filename suppresses file prefix in output.
-	// Test at engine level: verify results still come through (output formatting is CLI-level).
-	engine := loadTestIndex(t)
-	result := engine.Search("login", ports.SearchOptions{MaxCount: 50})
-	assert.Equal(t, 5, len(result.Hits),
-		"--no-filename: search results unaffected by output flag")
-	// The actual filename suppression is in cmd/aoa/cmd/output.go
-}
-
-// =============================================================================
-// L3.13: --no-color (output only — tested via formatSearchResult)
-// =============================================================================
-
-func TestGrep_Flag_noColor(t *testing.T) {
-	// --no-color strips ANSI codes from output.
-	// Test at engine level: verify results still come through.
-	engine := loadTestIndex(t)
-	result := engine.Search("login", ports.SearchOptions{MaxCount: 50})
-	assert.Equal(t, 5, len(result.Hits),
-		"--no-color: search results unaffected by output flag")
-}
+// Note: TestGrep_Flag_noFilename and TestGrep_Flag_noColor were removed. Both
+// re-ran the same "login" search and asserted the identical 5-hit count while
+// admitting the behavior they name lives in cmd/aoa/cmd/output.go — they tested
+// the engine for a CLI output flag and pinned nothing. The real prefix/ANSI
+// stripping belongs in a cmd-level formatter test (see test/integration).
 
 // =============================================================================
 // L3.7: -A/-B/-C Context Lines (Medium feature)

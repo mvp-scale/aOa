@@ -1,8 +1,8 @@
 # Claude Code Status Line Integration Contract
 
 **Status:** active
-**Current observed version:** 2.1.126
-**Last validated:** 2026-05-02
+**Current observed version:** 2.1.181
+**Last validated:** 2026-06-18
 
 This document specifies aOa's three-part integration with Claude Code's
 status line system. The contract is undocumented by Anthropic and may
@@ -74,7 +74,27 @@ following paths via `jq`. Any other top-level fields are unread.
 | `rate_limits.seven_day.used_percentage`       | number | [CONSUMED] | 0       | rate_7d segment |
 | `rate_limits.seven_day.resets_at`             | int    | [CONSUMED] | 0       | epoch seconds for countdown |
 
-### 1.6 Defensive coding
+### 1.6 Additive fields (observed at 2.1.181, not consumed)
+
+Raw stdin capture at 2.1.181 surfaced 11 fields the hook does **not** read.
+They are additive — no break to the consumed contract — but recorded so a
+future *removal* of one we start consuming would register as drift.
+
+| Path                                          | Status    | Notes |
+|-----------------------------------------------|-----------|-------|
+| `transcript_path`                             | [DROPPED] | path to session JSONL |
+| `effort.level`                                | [DROPPED] | reasoning effort (e.g. "high") |
+| `session_name`                                | [DROPPED] | human-readable session label |
+| `workspace.current_dir`                       | [DROPPED] | overlaps `cwd` |
+| `workspace.project_dir`                       | [DROPPED] | project root |
+| `workspace.added_dirs`                        | [DROPPED] | extra workspace dirs |
+| `output_style.name`                           | [DROPPED] | active output style |
+| `exceeds_200k_tokens`                         | [DROPPED] | bool context-size flag |
+| `fast_mode`                                   | [DROPPED] | bool fast-mode flag |
+| `thinking.enabled`                            | [DROPPED] | bool thinking flag |
+| `context_window.current_usage.output_tokens` | [DROPPED] | per-turn output tokens |
+
+### 1.7 Defensive coding
 
 All `jq` reads use `// <default>` fallbacks (`hooks/aoa-status-line.sh:45-76`).
 A missing field renders as zero rather than crashing the hook. This means

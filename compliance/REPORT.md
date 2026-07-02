@@ -7,58 +7,66 @@ This report quantifies where aOa's parser is non-compliant relative to the contr
 ---
 
 <!-- BEGIN claude-session -->
-## Claude Code Session JSONL — v2.1.126
+## Claude Code Session JSONL — v2.1.181
 
-*Last regenerated: 2026-05-03 02:55 UTC*
+*Last regenerated: 2026-06-19 04:03 UTC*
 
 ### Coverage
 
 | Surface area                | Consumed | Total | Coverage |
 |-----------------------------|----------|-------|----------|
-| Event types                 | 7        | 7     | 100%       |
+| Event types                 | 5        | 6     | 83%       |
 | Envelope fields (ai-title ) | 3        | 3    | 100%      |
-| Envelope fields (assistant) | 13        | 13    | 100%      |
-| Envelope fields (attachment) | 12        | 12    | 100%      |
+| Envelope fields (assistant) | 13        | 16    | 81%      |
+| Envelope fields (attachment) | 12        | 14    | 85%      |
 | Envelope fields (last-prompt) | 4        | 4    | 100%      |
 | Envelope fields (permission-mode) | 3        | 3    | 100%      |
-| Envelope fields (system   ) | 15        | 15    | 100%      |
-| Envelope fields (user     ) | 17        | 17    | 100%      |
+| Envelope fields (system   ) | 15        | 16    | 93%      |
+| Envelope fields (user     ) | 17        | 21    | 80%      |
 | Usage fields                | 10        | 10    | 100%      |
 | Message fields (assistant)  | 9        | 9     | 100%      |
-| System subtypes             | 2        | 2     | 100%      |
-| toolUseResult shapes        | 4        | 4     | 100%       |
+| System subtypes             | 2        | 3     | 66%      |
+| toolUseResult shapes        | 7        | 8     | 87%       |
 
 ### Gaps
 
-**Fully integrated.** No DROPPED fields remain at this baseline.
+**[Critical] toolUseResult shapes — 7/8 consumed**
+- tools dropped: [Edit(create/Write)]
 
-Intentionally skipped (documented [SKIP] decisions):
-- message-level: [type] — pure API echo, no value on canonical event
+**[High] Unhandled event types — 1 ignored**
+- types: [queue-operation]
 
-See `versions/v2.1.126-observed/observations.md` for the version-specific narrative.
+**[Medium] Envelope context fields dropped**
+- `assistant`: [agentId attributionAgent slug]
+- `attachment`: [agentId slug]
+- `system`: [pendingWorkflowCount]
+- `user`: [agentId interruptedMessageId promptSource slug]
+
+**[Low] System subtypes not branched on — 1/3**
+- subtypes: [local_command]
+
+See `versions/v2.1.181-observed/observations.md` for the version-specific narrative.
 <!-- END claude-session -->
 
 ---
 
 <!-- BEGIN claude-statusline -->
-## Claude Code Status Line — v2.1.126
+## Claude Code Status Line — v2.1.181
 
-*Last regenerated: 2026-05-03 02:55 UTC*
+*Last regenerated: 2026-06-19 04:03 UTC*
 
 ### Coverage
 
 | Surface area      | Consumed | Total | Coverage |
 |-------------------|----------|-------|----------|
-| Stdin JSON paths  | 22       | 22    | 100%  (consumed-only baseline; live capture pending)    |
+| Stdin JSON paths  | 22       | 33    | 66%    |
 | Settings keys     | 3        | 3     | 100%     |
 | Env vars          | 1        | 1     | 100%     |
 
 ### Top gaps
 
-**[Unknown] Stdin coverage cannot be computed — no live sample**
-- what we know: all 22 consumed paths are populated at v2.1.126 (Pass 3 confirmed)
-- what we don't know: how many fields Claude Code emits that we silently drop
-- action: capture `sample.json` (see `README.md` "Capturing live stdin")
+**[Drift] Stdin fields emitted but not consumed — 11**
+- fields: [context_window.current_usage.output_tokens effort.level exceeds_200k_tokens fast_mode output_style.name session_name thinking.enabled transcript_path workspace.added_dirs workspace.current_dir workspace.project_dir]
 
 **[None] Settings shape — 3/3 keys consumed, none dropped**
 

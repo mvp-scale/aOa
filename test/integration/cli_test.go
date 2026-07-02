@@ -607,10 +607,10 @@ func TestDaemon_StartStop(t *testing.T) {
 		t.Error("socket file should be removed after stop")
 	}
 
-	// Health should say not running.
+	// Health reports the dead daemon truthfully (L21.2 contract: "Daemon: down").
 	stdout, _, _ = runAOA(t, dir, "health")
-	if !strings.Contains(stdout, "not running") {
-		t.Errorf("health should say 'not running' after stop:\n%s", stdout)
+	if !strings.Contains(stdout, "Daemon:") || !strings.Contains(stdout, "down") {
+		t.Errorf("health should report 'Daemon: down' after stop:\n%s", stdout)
 	}
 }
 
@@ -739,6 +739,123 @@ func TestDaemon_StartStopStart(t *testing.T) {
 	}
 }
 
+func TestDaemon_HardKill_Recovers(t *testing.T) {
+	// Whole-process death (SIGKILL — no graceful stop, no lock release) must not
+	// leave a stale lock that wedges the next start. The watchdog only shuts the
+	// daemon down and nothing respawns it, so the recoverability guarantee we pin
+	// is: the user can start again and the daemon comes back healthy. SafeGo
+	// covers goroutine panics, not abrupt whole-process death — this is the gap.
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+	startDaemon(t, dir)
+
+	// Read the live PID and SIGKILL it directly.
+	pidFile := filepath.Join(dir, ".aoa", "run", "daemon.pid")
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatalf("read pid file: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatalf("parse pid %q: %v", data, err)
+	}
+	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+		t.Fatalf("SIGKILL daemon: %v", err)
+	}
+
+	// Wait for the process to actually die.
+	deadline := time.Now().Add(5 * time.Second)
+	for processAliveTest(pid) && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if processAliveTest(pid) {
+		t.Fatal("daemon still alive after SIGKILL")
+	}
+
+	// The next start must succeed despite the abrupt death — no wedged lock.
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	stdout, _, exit := runAOA(t, dir, "health")
+	if exit != 0 {
+		t.Fatalf("health after hard-kill recovery exit %d", exit)
+	}
+	if !strings.Contains(stdout, "Files:") {
+		t.Errorf("daemon should be serving after hard-kill recovery:\n%s", stdout)
+	}
+}
+
+func TestDaemon_CorruptDB_RecoversAndReindexes(t *testing.T) {
+	// End-to-end user journey "my DB got corrupted and aoa just works", run in an
+	// isolated temp project (setupProject uses t.TempDir — the real ~/.aoa/aoa.db
+	// is NEVER touched; everything here is throwaway and auto-cleaned).
+	//
+	// Persistence boundary demonstrated: the INDEX is derived from project files,
+	// so it rebuilds itself and search recovers. The corrupt file is QUARANTINED
+	// (preserved, not deleted), so anything that was NOT derived (accumulated
+	// learner state) survives only in that sidelined file — it does not carry into
+	// the rebuilt DB. That is what can vs cannot be safely persisted across a
+	// corruption event.
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+
+	// Bring the daemon up and confirm it serves the index before we break anything.
+	startDaemon(t, dir)
+	stdout, _, exit := runAOA(t, dir, "grep", "multiply")
+	if exit != 0 || !strings.Contains(strings.ToLower(stdout), "multiply") {
+		t.Fatalf("baseline grep before corruption failed: exit %d\n%s", exit, stdout)
+	}
+
+	// Stop the daemon so the DB file is unlocked, then corrupt it on disk by
+	// zeroing both meta pages (the first 0x2000 bytes) — a genuinely unopenable file.
+	runAOA(t, dir, "daemon", "stop")
+	time.Sleep(500 * time.Millisecond)
+
+	dbPath := filepath.Join(dir, ".aoa", "aoa.db")
+	f, err := os.OpenFile(dbPath, os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatalf("open temp db to corrupt: %v", err)
+	}
+	if _, err := f.WriteAt(make([]byte, 0x2000), 0); err != nil {
+		t.Fatalf("corrupt temp db: %v", err)
+	}
+	f.Close()
+
+	// Restart: recovery must be transparent — the daemon comes up despite the
+	// corrupt file, with no manual intervention.
+	cleanup := startDaemon(t, dir)
+	defer cleanup()
+
+	// Proof the index rebuilt itself from project files: multiple symbols become
+	// searchable again. Poll to absorb the background reindex.
+	for _, sym := range []string{"multiply", "hello", "add"} {
+		found := false
+		for i := 0; i < 40; i++ {
+			out, _, ex := runAOA(t, dir, "grep", sym)
+			if ex == 0 && strings.Contains(strings.ToLower(out), strings.ToLower(sym)) {
+				found = true
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if !found {
+			t.Fatalf("after recovery, %q must be searchable — index should rebuild from project files", sym)
+		}
+	}
+
+	// The corrupt file must be quarantined aside (preserved), not silently deleted.
+	quarantined, _ := filepath.Glob(dbPath + ".corrupt-*")
+	if len(quarantined) == 0 {
+		t.Error("corrupt DB should be quarantined to a .corrupt-* sibling, not deleted")
+	}
+
+	// And the daemon reports healthy after self-recovery.
+	hout, _, hexit := runAOA(t, dir, "health")
+	if hexit != 0 || !strings.Contains(hout, "Files:") {
+		t.Errorf("health should work after corrupt-DB recovery:\n%s", hout)
+	}
+}
+
 func TestDaemon_StartLockedDB(t *testing.T) {
 	dir := setupProject(t)
 	runAOA(t, dir, "init")
@@ -861,12 +978,13 @@ func TestHealth_Running(t *testing.T) {
 func TestHealth_NotRunning(t *testing.T) {
 	dir := setupProject(t)
 	stdout, _, exit := runAOA(t, dir, "health")
-	// health exits 0 even when not running.
-	if exit != 0 {
-		t.Fatalf("health (no daemon) should exit 0, got %d", exit)
+	// L21.2 contract change: health exits NON-zero when the daemon is down
+	// (deliberate fix of the old exit-0-on-dead bug, board L21.2 AC).
+	if exit == 0 {
+		t.Fatalf("health (no daemon) must exit non-zero, got 0:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "not running") {
-		t.Errorf("should say 'not running':\n%s", stdout)
+	if !strings.Contains(stdout, "Daemon:") || !strings.Contains(stdout, "down") {
+		t.Errorf("should report 'Daemon: down':\n%s", stdout)
 	}
 }
 
@@ -1779,5 +1897,165 @@ func TestTree_NoDaemon(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "pkg") {
 		t.Error("expected pkg/ in tree output")
+	}
+}
+
+// =============================================================================
+// L21.2: tri-state health — truthful dead-daemon reporting (gates E-5, E-6)
+// =============================================================================
+
+func TestHealth_NoDaemon_TriState(t *testing.T) {
+	// Dead daemon: health reports daemon/db/web independently, exits non-zero
+	// (deliberate contract change from the old exit-0), and NEVER revives.
+	dir := setupProject(t)
+	stdout, _, exitCode := runAOA(t, dir, "health")
+
+	if exitCode == 0 {
+		t.Errorf("health must exit non-zero when the daemon is down, got 0:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Daemon:") || !strings.Contains(stdout, "down") {
+		t.Errorf("should report Daemon: down independently:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "DB:") {
+		t.Errorf("should report DB state independently:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Web:") {
+		t.Errorf("should report Web state independently:\n%s", stdout)
+	}
+
+	// Never-revive: no daemon may have been spawned by the health call.
+	if _, _, code := runAOA(t, dir, "health"); code == 0 {
+		t.Error("second health call exits 0 — health revived the daemon (must never)")
+	}
+}
+
+func TestHealth_StaleStatusJSON_Flagged(t *testing.T) {
+	// The 2026-06-21 silent-outage tell: daemon dead + old status.json must be
+	// flagged so stale metrics are never mistaken for a live daemon.
+	dir := setupProject(t)
+	aoaDir := filepath.Join(dir, ".aoa")
+	if err := os.MkdirAll(aoaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	statusPath := filepath.Join(aoaDir, "status.json")
+	if err := os.WriteFile(statusPath, []byte(`{"intents":1}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-3 * time.Hour)
+	if err := os.Chtimes(statusPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, _, exitCode := runAOA(t, dir, "health")
+	if exitCode == 0 {
+		t.Errorf("expected non-zero exit with daemon down:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "stale") {
+		t.Errorf("stale status.json (3h old, daemon down) must be flagged:\n%s", stdout)
+	}
+}
+
+// =============================================================================
+// L21.1: lazy-start — revive at point of use (gates E-1, E-2, E-3)
+// =============================================================================
+
+// initProject sets up a project AND initializes .aoa (the revive precondition:
+// lazy-start only revives initialized projects, never bare directories).
+func initProject(t *testing.T) string {
+	t.Helper()
+	dir := setupProject(t)
+	runAOA(t, dir, "init")
+	// init auto-starts the daemon; kill it so each test exercises the DEAD state.
+	runAOA(t, dir, "daemon", "stop")
+	if _, _, healthExit := runAOA(t, dir, "health"); healthExit == 0 {
+		t.Fatal("precondition failed: daemon still up after stop")
+	}
+	return dir
+}
+
+func TestGrep_DeadDaemon_Revives(t *testing.T) {
+	// E-1: with an initialized project and a dead daemon, grep revives the
+	// daemon within the same invocation and returns a semantic answer — never
+	// "daemon not running" (D-U2a: one bounded stall, then a real result).
+	dir := initProject(t)
+	defer runAOA(t, dir, "daemon", "stop")
+
+	stdout, stderr, _ := runAOA(t, dir, "grep", "hello")
+	if strings.Contains(stderr, "daemon not running") {
+		t.Errorf("grep must revive, not error:\nstderr: %s\nstdout: %s", stderr, stdout)
+	}
+	// P3: the revived call must return a SEMANTIC result (D-U2a), not emptiness.
+	// The index may still be warming on slow machines; allow a short settle.
+	if !strings.Contains(stdout, "hello") {
+		for i := 0; i < 10 && !strings.Contains(stdout, "hello"); i++ {
+			time.Sleep(300 * time.Millisecond)
+			stdout, _, _ = runAOA(t, dir, "grep", "hello")
+		}
+	}
+	if !strings.Contains(stdout, "hello") {
+		t.Errorf("revived grep should return semantic hits for 'hello':\n%s", stdout)
+	}
+
+	// The revive must stick: health now reports the daemon up.
+	_, _, healthExit := runAOA(t, dir, "health")
+	if healthExit != 0 {
+		t.Error("daemon should be up after grep-triggered revive")
+	}
+}
+
+func TestGrep_NoProject_NoRevive(t *testing.T) {
+	// Guard: a bare directory (no .aoa) must NOT spawn a daemon.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "x.go"), "package x\n")
+	runAOA(t, dir, "grep", "x")
+	if _, _, healthExit := runAOA(t, dir, "health"); healthExit == 0 {
+		t.Error("grep in an un-initialized dir must not spawn a daemon")
+	}
+}
+
+func TestDaemonEnsure_RevivesOnce(t *testing.T) {
+	// E-2: `daemon ensure` revives a dead daemon; concurrent ensures spawn
+	// exactly one daemon (flock dedup); ensure on a live daemon is a no-op.
+	dir := initProject(t)
+	defer runAOA(t, dir, "daemon", "stop")
+
+	// Snapshot spawn count before: each daemon start logs exactly one
+	// "daemon starting" line, so the log is the spawn ledger (E-2 lock).
+	logPath := filepath.Join(dir, ".aoa", "log", "daemon.log")
+	countSpawns := func() int {
+		data, _ := os.ReadFile(logPath)
+		return strings.Count(string(data), "daemon starting")
+	}
+	before := countSpawns()
+
+	// Two concurrent ensures against a dead daemon. No t.* calls inside the
+	// goroutines — results collected on the channel, asserted on the main
+	// goroutine only.
+	done := make(chan int, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			stdout, stderr, code := runAOA(t, dir, "daemon", "ensure")
+			if strings.Contains(stdout+stderr, "Usage:") {
+				code = 127 // unknown subcommand fell through to help — not implemented
+			}
+			done <- code
+		}()
+	}
+	c1, c2 := <-done, <-done
+	if c1 != 0 || c2 != 0 {
+		t.Fatalf("both ensures should succeed, got %d, %d", c1, c2)
+	}
+
+	// E-2: the flock admitted exactly ONE spawn across both concurrent ensures.
+	if got := countSpawns() - before; got != 1 {
+		t.Errorf("expected exactly 1 daemon spawn under concurrent ensure, got %d", got)
+	}
+	if _, _, healthExit := runAOA(t, dir, "health"); healthExit != 0 {
+		t.Error("daemon should be up after ensure")
+	}
+
+	// Ensure on a live daemon: instant no-op, still healthy.
+	if _, _, code := runAOA(t, dir, "daemon", "ensure"); code != 0 {
+		t.Error("ensure on a live daemon must exit 0")
 	}
 }

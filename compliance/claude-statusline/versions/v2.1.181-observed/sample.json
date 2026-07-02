@@ -1,0 +1,57 @@
+{
+  "session_id": "50550497-6dc8-4e5b-ad47-d6626e3cc0fa",
+  "transcript_path": "/home/corey/.claude/projects/-home-corey-aOa-go/50550497-6dc8-4e5b-ad47-d6626e3cc0fa.jsonl",
+  "cwd": "/home/corey/aOa-go",
+  "effort": {
+    "level": "high"
+  },
+  "session_name": "User acknowledgment request",
+  "model": {
+    "id": "claude-opus-4-8[1m]",
+    "display_name": "Opus 4.8 (1M context)"
+  },
+  "workspace": {
+    "current_dir": "/home/corey/aOa-go",
+    "project_dir": "/home/corey/aOa-go",
+    "added_dirs": []
+  },
+  "version": "2.1.181",
+  "output_style": {
+    "name": "default"
+  },
+  "cost": {
+    "total_cost_usd": 0.0960075,
+    "total_duration_ms": 3132,
+    "total_api_duration_ms": 3066,
+    "total_lines_added": 0,
+    "total_lines_removed": 0
+  },
+  "context_window": {
+    "total_input_tokens": 24598,
+    "total_output_tokens": 4,
+    "context_window_size": 1000000,
+    "current_usage": {
+      "input_tokens": 2910,
+      "output_tokens": 4,
+      "cache_creation_input_tokens": 7363,
+      "cache_read_input_tokens": 14325
+    },
+    "used_percentage": 2,
+    "remaining_percentage": 98
+  },
+  "exceeds_200k_tokens": false,
+  "fast_mode": false,
+  "thinking": {
+    "enabled": true
+  },
+  "rate_limits": {
+    "five_hour": {
+      "used_percentage": 5,
+      "resets_at": 1781844600
+    },
+    "seven_day": {
+      "used_percentage": 52,
+      "resets_at": 1781881200
+    }
+  }
+}

@@ -97,6 +97,14 @@ type HealthResult struct {
 	FileCount  int    `json:"file_count"`
 	TokenCount int    `json:"token_count"`
 	Uptime     string `json:"uptime"`
+
+	// L21.2 tri-state: independent daemon/db/web health. DaemonOK is implicit
+	// (a served response proves the daemon); DBOK/WebOK flow from the app's
+	// probe source. Additive — older daemons omit them (clients must derive
+	// from Status, never trust zero-value false).
+	DaemonOK bool `json:"daemon_ok,omitempty"`
+	DBOK     bool `json:"db_ok,omitempty"`
+	WebOK    bool `json:"web_ok,omitempty"`
 }
 
 // FilesParams is the params for a files request.

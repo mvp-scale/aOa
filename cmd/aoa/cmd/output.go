@@ -16,6 +16,7 @@ const (
 	colorMagenta = "\033[35m"
 	colorGreen   = "\033[32m"
 	colorYellow  = "\033[33m"
+	colorRed     = "\033[31m"
 	colorGray    = "\033[90m"
 )
 
@@ -336,7 +337,14 @@ func writeGrepCompatLine(sb *strings.Builder, file string, line int, content str
 func formatHealth(h *socket.HealthResult) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("%s⚡ aOa daemon%s\n", colorBold, colorReset))
-	sb.WriteString(fmt.Sprintf("  Status:  %s%s%s\n", colorGreen, h.Status, colorReset))
+	statusColor := colorGreen
+	if h.Status != "ok" {
+		statusColor = colorYellow
+	}
+	sb.WriteString(fmt.Sprintf("  Status:  %s%s%s\n", statusColor, h.Status, colorReset))
+	sb.WriteString(fmt.Sprintf("  Daemon:  %s\n", triState(h.DaemonOK)))
+	sb.WriteString(fmt.Sprintf("  DB:      %s\n", triState(h.DBOK)))
+	sb.WriteString(fmt.Sprintf("  Web:     %s\n", triState(h.WebOK)))
 	sb.WriteString(fmt.Sprintf("  Files:   %d\n", h.FileCount))
 	sb.WriteString(fmt.Sprintf("  Tokens:  %d\n", h.TokenCount))
 	sb.WriteString(fmt.Sprintf("  Uptime:  %s\n", h.Uptime))
@@ -355,4 +363,12 @@ func formatFiles(result *socket.FilesResult) string {
 		sb.WriteString("\n")
 	}
 	return sb.String()
+}
+
+// triState renders an up/down health flag for the tri-state health lines.
+func triState(ok bool) string {
+	if ok {
+		return colorGreen + "up" + colorReset
+	}
+	return colorRed + "down" + colorReset
 }

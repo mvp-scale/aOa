@@ -24,7 +24,8 @@ func runOpen(cmd *cobra.Command, args []string) error {
 	sockPath := socket.SocketPath(root)
 	client := socket.NewClient(sockPath)
 
-	if !client.Ping() {
+	if !client.Ping() && !reviveDaemon(root, sockPath) {
+		// L21.1: lazy-start attempted; only an un-revivable daemon errors.
 		return fmt.Errorf("daemon not running. Start with: aoa daemon start")
 	}
 

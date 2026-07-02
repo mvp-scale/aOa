@@ -1,8 +1,8 @@
 # Claude Code Session Integration Contract
 
 **Status:** active
-**Current observed version:** 2.1.126
-**Last validated:** 2026-05-02
+**Current observed version:** 2.1.181
+**Last validated:** 2026-06-18
 
 This document is the integration contract between aOa and Claude Code's
 on-disk session format. It documents the **full observed schema** at the
@@ -123,6 +123,13 @@ Fields observed at v2.1.126 across recognized types (`user`, `assistant`, `syste
 | `toolUseResult`           | [DROPPED]   | —                                        | structured per-tool result; see §3.7 |
 | `messageCount`            | [DROPPED]   | —                                        | per-session message count (system only) |
 | `permissionMode`          | [DROPPED]   | —                                        | per-message permission mode (user only) |
+| `promptSource`            | [DROPPED]   | —                                        | (v2.1.172) how the prompt entered the turn ("typed" / queued / ...) — user only |
+| `level`                   | [DROPPED]   | —                                        | (v2.1.172) severity level for system events ("info") — system only |
+| `slug`                    | [DROPPED]   | —                                        | (v2.1.172) human-readable session slug — user/assistant/attachment |
+| `agentId`                 | [DROPPED]   | —                                        | (v2.1.178) links a top-level event to a spawned subagent; value = subagent file shortid — user/assistant/attachment. HIGH-value L18 attribution link |
+| `attributionAgent`        | [DROPPED]   | —                                        | (v2.1.178) subagent TYPE that produced the event ("general-purpose") — assistant only |
+| `pendingWorkflowCount`    | [DROPPED]   | —                                        | (v2.1.173) per-session pending-workflow counter — system only |
+| `interruptedMessageId`    | [DROPPED]   | —                                        | (v2.1.173) id of the assistant message interrupted by the user; present only on interrupt — user only |
 
 **Source for [CONSUMED] paths:** `parser.go:128-138`.
 
@@ -133,12 +140,13 @@ Fields observed at v2.1.126 across recognized types (`user`, `assistant`, `syste
 | `user`            | [CONSUMED]  | `translateUser` (reader.go:198)    | emits `EventUserInput` + `EventToolResult` |
 | `assistant`       | [CONSUMED]  | `translateAssistant` (reader.go:248)| emits `EventAIThinking`, `EventAIResponse`, `EventToolInvocation`/tool_use |
 | `system`          | [CONSUMED]  | `translateSystem` (reader.go:330)  | emits `EventSystemMeta` |
-| `permission-mode` | [IGNORED]   | —                                  | permission-mode transition (control-plane) |
-| `attachment`      | [IGNORED]   | —                                  | file/image attachment with full envelope |
-| `ai-title`        | [IGNORED]   | —                                  | AI-generated session title (UX-only) |
-| `last-prompt`     | [IGNORED]   | —                                  | resume/checkpoint pointer |
+| `permission-mode` | [CONSUMED]  | `translatePermissionMode`          | permission-mode transition (control-plane) |
+| `attachment`      | [CONSUMED]  | `translateAttachment`              | file/image attachment with full envelope |
+| `ai-title`        | [CONSUMED]  | `translateAITitle`                 | AI-generated session title (UX-only) |
+| `last-prompt`     | [CONSUMED]  | `translateLastPrompt`              | resume/checkpoint pointer |
+| `mode`            | [IGNORED]   | —                                  | (v2.1.172) interaction-mode control-plane event, sibling of `permission-mode`; `{type, mode, sessionId}` |
+| `queue-operation` | [IGNORED]   | —                                  | (v2.1.172 confirmed) message-queue lifecycle; `enqueue.content` carries queued input |
 | `progress`        | [IGNORED]   | —                                  | mentioned in reader.go comment; status unconfirmed |
-| `queue-operation` | [IGNORED]   | —                                  | mentioned in reader.go comment; status unconfirmed |
 | `file-history-snapshot` | [IGNORED] | —                                | mentioned in reader.go comment; status unconfirmed |
 
 Any other value falls through to `UnknownTypes` (`reader.go:179-184`).
@@ -185,7 +193,7 @@ Full observed shape at v2.1.126:
 | `cache_creation`               | [DROPPED]   | —                                | nested: `{ephemeral_1h_input_tokens, ephemeral_5m_input_tokens}` |
 | `inference_geo`                | [DROPPED]   | —                                | inference region (empty in local sessions) |
 | `server_tool_use`              | [DROPPED]   | —                                | nested: `{web_search_requests, web_fetch_requests}` |
-| `iterations`                   | [DROPPED]   | —                                | array (empty in observed sessions) |
+| `iterations`                   | [DROPPED]   | —                                | array — **populated at v2.1.172** (was empty at v2.1.126); per-inference-iteration token breakdown. Captured into `MessageUsage.Iterations`, unused. High value for L18. |
 | `speed`                        | [DROPPED]   | —                                | enum string (e.g., `"standard"`) |
 
 **Source for [CONSUMED] paths:** `parser.go:148-156`.
@@ -199,7 +207,8 @@ parser does NOT branch on subtype value — it only reads `subtype` and
 | Subtype          | Status      | Subtype-specific payload                | Notes |
 |------------------|-------------|------------------------------------------|-------|
 | `turn_duration`  | [CONSUMED]  | `durationMs`                             | turn timing |
-| `away_summary`   | [DROPPED]   | `content` (string)                       | resume-summary text emitted on session reattach |
+| `away_summary`   | [CONSUMED]  | `content` (string)                       | resume-summary text emitted on session reattach (read into `AwaySummary`) |
+| `local_command`  | [DROPPED]   | `content`, `level`                       | (v2.1.172) local slash-command echo; `content` captured into `SystemContent` but only surfaced for `away_summary` |
 
 The `content` field on `system` events is currently dropped. Other
 subtypes are tolerated.
@@ -229,7 +238,15 @@ envelope level — separate from inline `tool_result` content blocks.
 | `Bash`            | `{stdout, stderr, interrupted, isImage, noOutputExpected}`                                             |
 | `Edit`            | `{filePath, newString, oldString, originalFile, replaceAll, structuredPatch, userModified}`            |
 | Agent (subagent)  | `{agentId, agentType, content, prompt, status, toolStats, totalDurationMs, totalTokens, totalToolUseCount, usage}` |
+| `ToolSearch` (v2.1.172) | `{matches, query, total_deferred_tools}` — collapses to `other` branch              |
+| `TaskCreate` (v2.1.172) | `{task}` — collapses to `other` branch                                              |
+| `TaskUpdate` (v2.1.172) | `{statusChange, success, taskId, updatedFields}` — collapses to `other` branch      |
 | other (Read/etc.) | `{file, type}`                                                                                          |
+
+> **Note on `Agent.totalTokens`:** parsed into `ToolUseResultDetail.AgentTotalTokens`
+> and copied to `ports.SessionEvent`, but **never read** by app code — the Agent
+> activity row attributes tokens via `len(final_summary)/4` instead. This is the
+> root of the L18 understatement (see `.context/details/2026-06-11-L20-numeric-conformance.md`).
 
 This is the most signal-rich envelope-level field we don't read. See
 `versions/v2.1.126-observed/observations.md` §7 for the recommended

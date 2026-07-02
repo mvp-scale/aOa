@@ -1,0 +1,44 @@
+{
+  "_comment": "On-hand field inventory for the SESSION JSONL surface — the session-surface analog of the status-line sample.json. Every field aOa can see, typed, flagged consumed/dropped. Schema-only (no conversation payload persisted). Validated at v2.1.178; enumerated live from a 2.1.173 session (all envelope types) + a 2.1.178 harness session (tools/usage/Agent). Session schema is additive-stable across 2.1.170–2.1.181.",
+  "version_validated": "2.1.178",
+  "installed_at_capture": "2.1.181",
+  "legend": { "consumed": "parser reads it", "dropped": "present but unread", "captured-unused": "parsed into a struct field but no downstream reader" },
+
+  "envelope_fields_by_type": {
+    "user": {
+      "consumed": ["type","uuid","timestamp","version","sessionId","parentUuid","message","cwd","entrypoint","gitBranch","isSidechain","userType","origin","promptId","sourceToolAssistantUUID","toolUseResult","permissionMode"],
+      "dropped":  ["promptSource","interruptedMessageId","slug"]
+    },
+    "assistant": {
+      "consumed": ["type","uuid","timestamp","version","sessionId","parentUuid","message","cwd","entrypoint","gitBranch","isSidechain","userType","requestId"],
+      "dropped":  ["slug","agentId","attributionAgent"]
+    },
+    "system": {
+      "consumed": ["type","uuid","timestamp","version","sessionId","parentUuid","subtype","durationMs","content","isMeta","cwd","entrypoint","gitBranch","isSidechain","userType","messageCount"],
+      "dropped":  ["pendingWorkflowCount","level"]
+    },
+    "permission-mode": { "consumed": ["type","sessionId","permissionMode"], "dropped": [] },
+    "attachment":      { "consumed": ["type","uuid","timestamp","version","sessionId","parentUuid","attachment","cwd","entrypoint","gitBranch","isSidechain","userType"], "dropped": ["agentId","slug"] },
+    "ai-title":        { "consumed": ["type","sessionId","aiTitle"], "dropped": [] },
+    "last-prompt":     { "consumed": ["type","sessionId","lastPrompt","leafUuid"], "dropped": [] }
+  },
+
+  "unhandled_event_types": ["mode","queue-operation","progress","file-history-snapshot"],
+
+  "usage_fields_NUMBERS": {
+    "_note": "message.usage — the token/cost data elements",
+    "consumed": ["input_tokens","output_tokens","cache_read_input_tokens","cache_creation_input_tokens","cache_creation","server_tool_use","service_tier","inference_geo","speed"],
+    "captured_unused": ["iterations"]
+  },
+
+  "content_block_types": { "consumed": ["text","thinking","tool_use","tool_result"], "dropped": ["image"] },
+
+  "tool_use_result_shapes": {
+    "consumed_typed": {
+      "Bash":  ["interrupted","isImage","noOutputExpected","stderr","stdout"],
+      "Edit":  ["filePath","newString","oldString","originalFile","replaceAll","structuredPatch","userModified"],
+      "Agent": ["agentId","agentType","content","prompt","resolvedModel","status","toolStats","totalDurationMs","totalTokens","totalToolUseCount","usage"]
+    },
+    "absorbed_as_other": ["ToolSearch","TaskCreate","TaskUpdate"]
+  }
+}

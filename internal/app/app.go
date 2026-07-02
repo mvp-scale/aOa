@@ -383,6 +383,11 @@ func New(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open store: %w", err)
 	}
+	if store.Recovered() {
+		// The DB was corrupt and rebuilt from scratch. The empty index triggers
+		// the BuildIndex path in WarmCaches, repopulating from project files.
+		fmt.Fprintf(os.Stderr, "aoa: database was corrupt — quarantined and rebuilding index from project files\n")
+	}
 
 	watcher, err := fsw.NewWatcher()
 	if err != nil {
@@ -468,9 +473,30 @@ func New(cfg Config) (*App, error) {
 	sockPath := socket.SocketPath(cfg.ProjectRoot)
 	a.Server = socket.NewServer(searcher, idx, sockPath, a)
 
+	// Derive health status from real store state: "unhealthy" if the DB stops
+	// answering, "recovered" if it was corrupt on open and rebuilt this session.
+	a.Server.SetHealthFn(func() string {
+		if a.Store == nil || !a.Store.Healthy() {
+			return "unhealthy"
+		}
+		if a.Store.Recovered() {
+			return "recovered"
+		}
+		return "ok"
+	})
+
 	// Create HTTP server for web dashboard (pass file cache for source line serving)
 	a.WebServer = web.NewServer(a, idx, cache, paths.PortFile)
 	a.WebServer.SetRevisionSource(a.Revision)
+
+	// Tri-state health probes (L21.2): db = read-only store probe (C1-clean —
+	// db.View, no App.mu, no write tx); web = the dashboard listener answered
+	// startup and holds a port. Evaluated lazily per health request.
+	a.Server.SetProbesFn(func() (bool, bool) {
+		dbOK := a.Store != nil && a.Store.Healthy()
+		webOK := a.WebServer != nil && a.WebServer.Port() > 0
+		return dbOK, webOK
+	})
 
 	// Wire search observer: search results → learning signals
 	engine.SetObserver(a.searchObserver)
@@ -1352,7 +1378,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 						}
 						// Parse Agent tool_result text for usage stats
 						if act.Tool == "Agent" {
-							a.enrichAgentAction(act, ev.ToolResultTexts)
+							a.enrichAgentAction(act, ev.ToolResultTexts, ev.ToolResult)
 						}
 					}
 				}
@@ -1368,7 +1394,7 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 						}
 						// Parse Agent tool_result text for usage stats
 						if act.Tool == "Agent" {
-							a.enrichAgentAction(act, ev.ToolResultTexts)
+							a.enrichAgentAction(act, ev.ToolResultTexts, ev.ToolResult)
 						}
 					}
 				}
@@ -1514,7 +1540,33 @@ func (a *App) writeStatus(autotune *ports.AutotuneResult) {
 	}
 
 	data := status.Generate(a.Learner.State(), a.lastAutotune, m)
+	// L20 drift sentinel: surface the (previously dark) extraction-health
+	// signal in-band so silent Claude-format drift becomes visible. PeekHealth
+	// does not reset the Health() accounting window.
+	if a.Reader != nil {
+		data.Drift = driftFromHealth(a.Reader.PeekHealth())
+	}
 	_ = status.WriteJSON(a.statusLinePath, data)
+}
+
+// driftFromHealth maps the session reader's extraction health onto the
+// status-line drift signal. Returns nil when extraction looks healthy so the
+// status line shows nothing in the common case. L20.
+func driftFromHealth(h ports.ExtractionHealth) *status.Drift {
+	switch h.Summary() {
+	case "healthy", "no data":
+		return nil
+	case "degraded":
+		// Extraction actually broke — downstream token/cost numbers are suspect.
+		return &status.Drift{State: "degraded", ObservedVersion: h.AgentVersion, Suspect: true}
+	default: // "ok (format changes detected)"
+		d := &status.Drift{State: "format-changes", ObservedVersion: h.AgentVersion}
+		for t := range h.UnknownTypes {
+			d.UnknownTypes = append(d.UnknownTypes, t)
+		}
+		sort.Strings(d.UnknownTypes)
+		return d
+	}
 }
 
 // pushActivity adds an entry to the activity ring buffer.
@@ -2070,12 +2122,31 @@ func (a *App) ConversationTurns() socket.ConversationFeedResult {
 
 // enrichAgentAction enriches an Agent TurnAction with usage stats and children
 // from subagent tool calls. Must be called with a.mu held.
-func (a *App) enrichAgentAction(act *TurnAction, resultTexts map[string]string) {
+func (a *App) enrichAgentAction(act *TurnAction, resultTexts map[string]string, detail *ports.ToolResultDetail) {
 	text, ok := resultTexts[act.ToolID]
 	if !ok {
 		return
 	}
-	act.SubagentTokens, act.SubagentToolUses, act.SubagentDurationMs = parseSubagentUsage(text)
+	// Prefer Claude's structured rollup (the explicit contract) over the
+	// regex-on-prose fallback. The regex rarely matches the v2.1.17x Agent
+	// result text (free prose, no "total_tokens:" literal), which silently
+	// collapsed subagent attribution toward zero (L20: measured ~414x under at
+	// v2.1.178). AgentTotalTokens is Claude's own per-agent rollup; the full
+	// multi-turn reconciliation (summing every subagent inference incl. cache)
+	// remains L18.
+	tokens, toolUses, durationMs := parseSubagentUsage(text)
+	if detail != nil && detail.SourceTool == "Agent" {
+		if detail.AgentTotalTokens > 0 {
+			tokens = detail.AgentTotalTokens
+		}
+		if detail.AgentTotalToolUseCount > 0 {
+			toolUses = detail.AgentTotalToolUseCount
+		}
+		if detail.AgentTotalDurationMs > 0 {
+			durationMs = int64(detail.AgentTotalDurationMs)
+		}
+	}
+	act.SubagentTokens, act.SubagentToolUses, act.SubagentDurationMs = tokens, toolUses, durationMs
 	if act.Attrib != "" && act.Attrib != "-" {
 		act.SubagentType = act.Attrib
 	}

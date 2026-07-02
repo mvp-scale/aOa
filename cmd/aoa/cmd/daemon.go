@@ -47,6 +47,7 @@ func init() {
 	daemonCmd.AddCommand(daemonStartCmd)
 	daemonCmd.AddCommand(daemonStopCmd)
 	daemonCmd.AddCommand(daemonRestartCmd)
+	daemonCmd.AddCommand(daemonEnsureCmd)
 }
 
 func runDaemonStart(cmd *cobra.Command, args []string) error {
