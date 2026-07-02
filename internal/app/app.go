@@ -2189,6 +2189,9 @@ func (a *App) actionToResult(act TurnAction) socket.TurnActionResult {
 		SubagentToolUses:   act.SubagentToolUses,
 		SubagentDurationMs: act.SubagentDurationMs,
 		SubagentType:       act.SubagentType,
+		// L18.4: mark Agent rows so the UI renders '—' not the known-wrong estimate.
+		// SubagentTokens is preserved for future L18.3 per-call attribution.
+		AgentTokensPending: act.Tool == "Agent",
 	}
 	// Convert children recursively
 	if len(act.Children) > 0 {

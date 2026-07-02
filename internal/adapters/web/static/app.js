@@ -1214,7 +1214,7 @@ function renderDebrief() {
         }
         var childCount = act.children ? act.children.length : 0;
         var toolCount = act.subagent_tool_uses > 0 ? act.subagent_tool_uses : childCount;
-        var tokCount = act.subagent_tokens > 0 ? fmtK(act.subagent_tokens) + ' tok' : '';
+        var tokCount = ''; // L18.4: pending real attribution — do not show estimate
         var parts = [];
         if (toolCount > 0) parts.push(toolCount + ' tools');
         if (tokCount) parts.push(tokCount);
@@ -1253,17 +1253,17 @@ function renderActionRow(act, isChild) {
       saveVal += (saveVal ? ' ' : '') + '<span class="text-cyan" title="Shadow: ' + fmtK(act.shadow_chars + act.shadow_saved) + ' \u2192 ' + fmtK(act.shadow_chars) + '">\u2193' + pct + '%</span>';
     }
   }
-  // Tokens cell — Agent rows show subagent_tokens; children/others estimate from result_chars
+  // Tokens cell — L18.4: Agent rows render '—' pending real attribution; others estimate from result_chars.
   var tokVal = '';
-  var displayTokens;
-  if (act.tool === 'Agent' && act.subagent_tokens > 0) {
-    displayTokens = act.subagent_tokens;
+  if (act.agent_tokens_pending) {
+    // Agent token estimates are 68×–1022× understated (L18.4 honesty guard).
+    tokVal = '<span class="text-dim" title="pending real usage attribution">—</span>';
   } else {
-    displayTokens = act.tokens > 0 ? act.tokens : (act.result_chars > 0 ? Math.round(act.result_chars / 4) : 0);
-  }
-  if (displayTokens > 0) {
-    var tokCls = act.attrib === 'aOa guided' ? 'text-green' : (act.attrib === 'unguided' ? 'text-red' : 'text-dim');
-    tokVal = '<span class="' + tokCls + '">' + fmtK(displayTokens) + '</span>';
+    var displayTokens = act.tokens > 0 ? act.tokens : (act.result_chars > 0 ? Math.round(act.result_chars / 4) : 0);
+    if (displayTokens > 0) {
+      var tokCls = act.attrib === 'aOa guided' ? 'text-green' : (act.attrib === 'unguided' ? 'text-red' : 'text-dim');
+      tokVal = '<span class="' + tokCls + '">' + fmtK(displayTokens) + '</span>';
+    }
   }
   var pathStyle = act.attrib === 'unguided' ? ' style="color:var(--red)"' : '';
   var fullTooltip = targetStr;
