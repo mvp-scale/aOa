@@ -168,10 +168,6 @@ func DetectCycles(scope string, units []UnitFact, deps []DepFact) ([]Finding, []
 		minCount := -1
 		var minSrc, minDst string
 		var sources []SourceRef
-		sccSet := make(map[string]struct{}, len(scc))
-		for _, m := range scc {
-			sccSet[m] = struct{}{}
-		}
 		for _, from := range scc {
 			for _, to := range scc {
 				if from == to {
@@ -201,9 +197,6 @@ func DetectCycles(scope string, units []UnitFact, deps []DepFact) ([]Finding, []
 			}
 			return sources[i].Line < sources[j].Line
 		})
-		_ = minSrc
-		_ = minDst
-
 		f := Finding{
 			Rule:     "cycle",
 			Severity: "error",
@@ -213,6 +206,9 @@ func DetectCycles(scope string, units []UnitFact, deps []DepFact) ([]Finding, []
 			Sources:  sources,
 		}
 		f.ID = findingID(f.Rule, f.Scope, f.Subjects)
+		if minCount >= 0 {
+			f.CheapestCut = fmt.Sprintf("%s → %s (×%d)", minSrc, minDst, minCount)
+		}
 		findings = append(findings, f)
 	}
 	return findings, sccs

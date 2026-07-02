@@ -306,6 +306,7 @@ func TestDetectors_AllFire_Fixture(t *testing.T) {
 	require.Len(t, godFindings, 1, "fixture must produce exactly one god finding")
 	assert.Equal(t, []string{"m_app"}, godFindings[0].Subjects)
 	assert.Contains(t, godFindings[0].Message, "in 3")
+	assert.Contains(t, godFindings[0].Message, "out 5")
 
 	// Orphan: expect exactly one (m_util_orphan).
 	require.Len(t, orphanFindings, 1, "fixture must produce exactly one orphan finding")

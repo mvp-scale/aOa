@@ -14,15 +14,6 @@ import (
 //
 // Determinism: SCCs are pre-sorted by TarjanSCC; rows order mirrors SCC order.
 func RenderCycles(in RenderInput) (*Shard, error) {
-	// Build dep count lookup for cheapest-edge computation.
-	edgeCount := make(map[string]map[string]int)
-	for _, d := range in.Deps {
-		if edgeCount[d.FromUnit] == nil {
-			edgeCount[d.FromUnit] = make(map[string]int)
-		}
-		edgeCount[d.FromUnit][d.ToUnit] += d.Count
-	}
-
 	// Build unit label lookup.
 	labelOf := make(map[string]string, len(in.Units))
 	for _, u := range in.Units {
@@ -56,28 +47,23 @@ func RenderCycles(in RenderInput) (*Shard, error) {
 		sort.Strings(memberLabels)
 		membersStr := strings.Join(memberLabels, ", ")
 
-		// Find cheapest edge (min count) within the SCC.
-		sccSet := make(map[string]struct{}, len(scc))
-		for _, m := range scc {
-			sccSet[m] = struct{}{}
-		}
-		minCount := -1
-		cheapestEdge := ""
-		for _, from := range scc {
-			for _, to := range scc {
-				if from == to {
-					continue
-				}
-				if c, ok := edgeCount[from][to]; ok {
-					if minCount < 0 || c < minCount {
-						minCount = c
-						cheapestEdge = fmt.Sprintf("%s → %s (×%d)", from, to, c)
-					}
+		// Reuse cheapest edge from the pre-computed cycle finding (set by DetectCycles).
+		cheapestEdge := "unknown"
+		for _, finding := range in.Findings {
+			if finding.Rule != "cycle" || len(finding.Subjects) != len(scc) || finding.CheapestCut == "" {
+				continue
+			}
+			matched := true
+			for i, s := range finding.Subjects {
+				if s != scc[i] {
+					matched = false
+					break
 				}
 			}
-		}
-		if cheapestEdge == "" {
-			cheapestEdge = "unknown"
+			if matched {
+				cheapestEdge = finding.CheapestCut
+				break
+			}
 		}
 
 		rows = append(rows, []string{
