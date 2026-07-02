@@ -607,10 +607,10 @@ func TestDaemon_StartStop(t *testing.T) {
 		t.Error("socket file should be removed after stop")
 	}
 
-	// Health should say not running.
+	// Health reports the dead daemon truthfully (L21.2 contract: "Daemon: down").
 	stdout, _, _ = runAOA(t, dir, "health")
-	if !strings.Contains(stdout, "not running") {
-		t.Errorf("health should say 'not running' after stop:\n%s", stdout)
+	if !strings.Contains(stdout, "Daemon:") || !strings.Contains(stdout, "down") {
+		t.Errorf("health should report 'Daemon: down' after stop:\n%s", stdout)
 	}
 }
 
@@ -978,12 +978,13 @@ func TestHealth_Running(t *testing.T) {
 func TestHealth_NotRunning(t *testing.T) {
 	dir := setupProject(t)
 	stdout, _, exit := runAOA(t, dir, "health")
-	// health exits 0 even when not running.
-	if exit != 0 {
-		t.Fatalf("health (no daemon) should exit 0, got %d", exit)
+	// L21.2 contract change: health exits NON-zero when the daemon is down
+	// (deliberate fix of the old exit-0-on-dead bug, board L21.2 AC).
+	if exit == 0 {
+		t.Fatalf("health (no daemon) must exit non-zero, got 0:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "not running") {
-		t.Errorf("should say 'not running':\n%s", stdout)
+	if !strings.Contains(stdout, "Daemon:") || !strings.Contains(stdout, "down") {
+		t.Errorf("should report 'Daemon: down':\n%s", stdout)
 	}
 }
 
@@ -1983,6 +1984,17 @@ func TestGrep_DeadDaemon_Revives(t *testing.T) {
 	if strings.Contains(stderr, "daemon not running") {
 		t.Errorf("grep must revive, not error:\nstderr: %s\nstdout: %s", stderr, stdout)
 	}
+	// P3: the revived call must return a SEMANTIC result (D-U2a), not emptiness.
+	// The index may still be warming on slow machines; allow a short settle.
+	if !strings.Contains(stdout, "hello") {
+		for i := 0; i < 10 && !strings.Contains(stdout, "hello"); i++ {
+			time.Sleep(300 * time.Millisecond)
+			stdout, _, _ = runAOA(t, dir, "grep", "hello")
+		}
+	}
+	if !strings.Contains(stdout, "hello") {
+		t.Errorf("revived grep should return semantic hits for 'hello':\n%s", stdout)
+	}
 
 	// The revive must stick: health now reports the daemon up.
 	_, _, healthExit := runAOA(t, dir, "health")
@@ -2007,7 +2019,18 @@ func TestDaemonEnsure_RevivesOnce(t *testing.T) {
 	dir := initProject(t)
 	defer runAOA(t, dir, "daemon", "stop")
 
-	// Two concurrent ensures against a dead daemon.
+	// Snapshot spawn count before: each daemon start logs exactly one
+	// "daemon starting" line, so the log is the spawn ledger (E-2 lock).
+	logPath := filepath.Join(dir, ".aoa", "log", "daemon.log")
+	countSpawns := func() int {
+		data, _ := os.ReadFile(logPath)
+		return strings.Count(string(data), "daemon starting")
+	}
+	before := countSpawns()
+
+	// Two concurrent ensures against a dead daemon. No t.* calls inside the
+	// goroutines — results collected on the channel, asserted on the main
+	// goroutine only.
 	done := make(chan int, 2)
 	for i := 0; i < 2; i++ {
 		go func() {
@@ -2023,12 +2046,12 @@ func TestDaemonEnsure_RevivesOnce(t *testing.T) {
 		t.Fatalf("both ensures should succeed, got %d, %d", c1, c2)
 	}
 
-	// Exactly one daemon process for this project dir.
-	out, _ := exec.Command("pgrep", "-fc", dir+"/").Output()
-	// pgrep counts any process whose cmdline carries this dir; the daemon child
-	// is the only long-lived one. Assert via health instead if count is flaky:
+	// E-2: the flock admitted exactly ONE spawn across both concurrent ensures.
+	if got := countSpawns() - before; got != 1 {
+		t.Errorf("expected exactly 1 daemon spawn under concurrent ensure, got %d", got)
+	}
 	if _, _, healthExit := runAOA(t, dir, "health"); healthExit != 0 {
-		t.Errorf("daemon should be up after ensure (pgrep saw: %s)", strings.TrimSpace(string(out)))
+		t.Error("daemon should be up after ensure")
 	}
 
 	// Ensure on a live daemon: instant no-op, still healthy.
