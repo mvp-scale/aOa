@@ -64,6 +64,16 @@ func (n *noopStore) LoadAllDimensions(_ string) (map[string]*ports.FileAnalysis,
 	return nil, nil
 }
 
+// EdgeStore no-ops (L19.10) — C1: these must never be called while App.mu is held.
+func (n *noopStore) SaveEdgesForFile(_ string, _ uint32, _ []ports.ImportEdge) error {
+	return nil
+}
+func (n *noopStore) LoadEdgesForFile(_ string, _ uint32) ([]ports.ImportEdge, error) {
+	return nil, nil
+}
+func (n *noopStore) DeleteEdgesForFile(_ string, _ uint32) error { return nil }
+func (n *noopStore) LoadAllEdges(_ string) ([]ports.ImportEdge, error) { return nil, nil }
+
 // ── lockGuardStore ─────────────────────────────────────────────────────────
 //
 // lockGuardStore wraps a storeBackend and asserts the C1 invariant on every
@@ -106,6 +116,18 @@ func (s *lockGuardStore) SaveLearnerState(projectID string, st *ports.LearnerSta
 func (s *lockGuardStore) SaveSessionWithTelemetry(projectID string, sum *ports.SessionSummary, delta *ports.ProjectTelemetry) error {
 	s.assertUnlocked("SaveSessionWithTelemetry", projectID)
 	return s.storeBackend.SaveSessionWithTelemetry(projectID, sum, delta)
+}
+
+// SaveEdgesForFile triggers db.Update on the edges bucket (L19.10 C1 check).
+func (s *lockGuardStore) SaveEdgesForFile(projectID string, fileID uint32, edges []ports.ImportEdge) error {
+	s.assertUnlocked("SaveEdgesForFile", projectID)
+	return s.storeBackend.SaveEdgesForFile(projectID, fileID, edges)
+}
+
+// DeleteEdgesForFile triggers db.Update on the edges bucket (L19.10 C1 check).
+func (s *lockGuardStore) DeleteEdgesForFile(projectID string, fileID uint32) error {
+	s.assertUnlocked("DeleteEdgesForFile", projectID)
+	return s.storeBackend.DeleteEdgesForFile(projectID, fileID)
 }
 
 // ── helper ─────────────────────────────────────────────────────────────────
@@ -239,6 +261,43 @@ func TestT17_NoSaveIndexUnderMu(t *testing.T) {
 			SessionID: "session-B",
 		})
 		// If SaveSessionWithTelemetry was called under a.mu, lockGuardStore would have Fatalfed.
+	})
+}
+
+// TestT17_EdgeStoreNotUnderMu verifies C1 for the L19.10 EdgeStore write paths:
+// SaveEdgesForFile and DeleteEdgesForFile are never called while App.mu is held.
+func TestT17_EdgeStoreNotUnderMu(t *testing.T) {
+	t.Run("watcher_edge_save_path", func(t *testing.T) {
+		// onFileChanged (arch-enabled) extracts edges, then SaveEdgesForFile
+		// must be called outside a.mu via the LIFO-defer pattern.
+		tmpDir := t.TempDir()
+		a := newLockGuardApp(t, tmpDir)
+		a.ArchEnabled = true // enable C4 so the edge path fires
+
+		goFile := filepath.Join(tmpDir, "main.go")
+		require.NoError(t, os.WriteFile(goFile,
+			[]byte("package main\nimport \"fmt\"\nfunc main() { fmt.Println(\"hi\") }"), 0644))
+
+		// lockGuardStore.SaveEdgesForFile will Fatalf if App.mu is held.
+		a.onFileChanged(goFile)
+	})
+
+	t.Run("watcher_edge_delete_path", func(t *testing.T) {
+		// onFileChanged for a deleted file must call DeleteEdgesForFile outside mu.
+		tmpDir := t.TempDir()
+		a := newLockGuardApp(t, tmpDir)
+		a.ArchEnabled = true
+
+		goFile := filepath.Join(tmpDir, "bye.go")
+		require.NoError(t, os.WriteFile(goFile,
+			[]byte("package main\nimport \"os\"\nfunc bye() { os.Exit(0) }"), 0644))
+
+		// Seed the file into the index.
+		a.onFileChanged(goFile)
+
+		// Now delete it — DeleteEdgesForFile must fire outside mu.
+		require.NoError(t, os.Remove(goFile))
+		a.onFileChanged(goFile) // lockGuardStore.DeleteEdgesForFile Fatalfed if under mu
 	})
 }
 

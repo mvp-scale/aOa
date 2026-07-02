@@ -30,15 +30,18 @@ var keyVersion = []byte("_version")
 
 // Bucket keys
 var (
-	bucketIndex      = []byte("index")
-	bucketLearner    = []byte("learner")
-	bucketSessions   = []byte("sessions")
-	bucketDimensions = []byte("dimensions")
-	bucketTelemetry  = []byte("telemetry")
-	keyTokens        = []byte("tokens")
-	keyMetadata      = []byte("metadata")
-	keyFiles         = []byte("files")
-	keyState         = []byte("state")
+	bucketIndex           = []byte("index")
+	bucketLearner         = []byte("learner")
+	bucketSessions        = []byte("sessions")
+	bucketDimensions      = []byte("dimensions")
+	bucketTelemetry       = []byte("telemetry")
+	bucketEdges           = []byte("edges")           // L19.10: import-edge store (C3 versioned)
+	bucketArchShards      = []byte("arch_shards")     // L19.10: arch shard cache (C3 versioned)
+	bucketFactsUnresolved = []byte("facts_unresolved") // L19.10: unresolved import specs (C3 versioned)
+	keyTokens             = []byte("tokens")
+	keyMetadata           = []byte("metadata")
+	keyFiles              = []byte("files")
+	keyState              = []byte("state")
 )
 
 // Store implements ports.Storage backed by bbolt.

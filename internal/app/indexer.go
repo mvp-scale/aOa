@@ -239,6 +239,34 @@ func buildIndexCore(root string, parser ports.Parser, archEnabled bool) (*ports.
 	return idx, result, allEdges, nil
 }
 
+// groupEdgesByFile maps a flat []ports.ImportEdge slice into a map from fileID
+// to the edges belonging to that file. It derives fileID from idx.Files by
+// matching the edge's FromFile (relative path) against FileMeta.Path.
+//
+// Only edges whose FromFile resolves to a known fileID are included — phantom
+// edges (files absent from the index) are silently dropped (no phantom nodes).
+// Returns nil when edges is empty or idx has no files.
+func groupEdgesByFile(idx *ports.Index, edges []ports.ImportEdge) map[uint32][]ports.ImportEdge {
+	if len(edges) == 0 || idx == nil || len(idx.Files) == 0 {
+		return nil
+	}
+	// Build path→fileID lookup from the index.
+	pathToID := make(map[string]uint32, len(idx.Files))
+	for id, fm := range idx.Files {
+		pathToID[fm.Path] = id
+	}
+	byFile := make(map[uint32][]ports.ImportEdge, len(idx.Files))
+	for _, e := range edges {
+		if id, ok := pathToID[e.FromFile]; ok {
+			byFile[id] = append(byFile[id], e)
+		}
+	}
+	if len(byFile) == 0 {
+		return nil
+	}
+	return byFile
+}
+
 // gitTrackedFiles uses "git ls-files" to enumerate files that are tracked
 // (or untracked but not ignored), respecting .gitignore, .git/info/exclude,
 // and nested gitignore files. Returns absolute paths filtered by parser support.

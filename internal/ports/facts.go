@@ -15,6 +15,37 @@ type ImportEdge struct {
 	StartLine  uint32 // 1-based line number in FromFile (G7)
 }
 
+// EdgeStore persists and retrieves import edges keyed by file.
+// All methods are project-scoped (projectID). Implementations must be C1-compliant:
+// no db.Update while App.mu is held — callers must write outside the mutex.
+//
+// C3 bucket contract (standing rule — applies to every new bucket):
+//   - `_version` byte is written on bucket creation and checked on open.
+//   - New binary opening a DB without an edges bucket: CreateBucketIfNotExists
+//     succeeds silently (no error surfaced to the caller).
+//   - New binary opening a DB with a wrong-version edges bucket: drop + re-create
+//     (edges are pure cache, always re-derivable from a full Reindex).
+//   - An old binary (no EdgeStore code) opening a DB with an edges bucket: the
+//     bucket is simply ignored — the old binary has no code to read it.
+type EdgeStore interface {
+	// SaveEdgesForFile replaces all edges for a single file.
+	// Overwrites any prior edges for fileID. Thread-safe via bbolt transactions.
+	SaveEdgesForFile(projectID string, fileID uint32, edges []ImportEdge) error
+
+	// LoadEdgesForFile returns all edges for a single file.
+	// Returns nil, nil if no edges exist for that file or bucket.
+	LoadEdgesForFile(projectID string, fileID uint32) ([]ImportEdge, error)
+
+	// DeleteEdgesForFile removes all edges for a single file.
+	// O(edges-for-file) — one bucket.Delete call per fileID.
+	// Idempotent: deleting a nonexistent file's edges is not an error.
+	DeleteEdgesForFile(projectID string, fileID uint32) error
+
+	// LoadAllEdges returns every edge stored for the project.
+	// Returns nil, nil if no edges exist.
+	LoadAllEdges(projectID string) ([]ImportEdge, error)
+}
+
 // FactParser is the extended parser interface that extracts both symbols and
 // import edges from a source file in a single tree-sitter parse pass (G0:
 // one traversal per file). Adapters that implement this interface register

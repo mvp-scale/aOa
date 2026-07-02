@@ -33,11 +33,14 @@ import (
 )
 
 // storeBackend is the full storage contract required by App.
-// It extends ports.Storage with lifecycle and extended-analysis methods.
+// It extends ports.Storage and ports.EdgeStore with lifecycle and extended-analysis methods.
 // Using an interface here (rather than the concrete *bbolt.Store) satisfies G4
 // (ports-first) and allows test doubles to be injected without embedding real bbolt.
 type storeBackend interface {
 	ports.Storage
+	// EdgeStore (L19.10): per-file import-edge persistence.
+	// All methods are C1-compliant — must never be called while App.mu is held.
+	ports.EdgeStore
 	// Healthy reports whether the backend is operational.
 	Healthy() bool
 	// Recovered reports whether the backend rebuilt itself from a corrupt state
@@ -835,12 +838,15 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 		logFn("no persisted index, building from project files...")
 		buildStart := time.Now()
 		// C4: use BuildIndexWithFacts when arch extraction is enabled.
-		freshIdx, stats, _, buildErr := BuildIndexWithFacts(a.ProjectRoot, a.Parser, a.ArchEnabled)
+		freshIdx, stats, edges, buildErr := BuildIndexWithFacts(a.ProjectRoot, a.Parser, a.ArchEnabled)
 		if buildErr != nil {
 			logFn(fmt.Sprintf("warning: failed to build index: %v", buildErr))
 			r.TotalTime = time.Since(totalStart).Seconds()
 			return r
 		}
+		// L19.10: compute path→fileID grouping before the lock swap (freshIdx is local).
+		edgesByFile := groupEdgesByFile(freshIdx, edges)
+
 		a.mu.Lock()
 		a.Index.Tokens = freshIdx.Tokens
 		a.Index.Metadata = freshIdx.Metadata
@@ -853,10 +859,18 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 			stats.FileCount, stats.SymbolCount, stats.TokenCount, time.Since(buildStart).Seconds()))
 		r.IndexTime += time.Since(buildStart).Seconds()
 
-		// Persist so next startup is instant.
+		// Persist index — outside the lock (C1).
 		if a.Store != nil {
 			if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
 				logFn(fmt.Sprintf("warning: failed to persist index: %v", err))
+			}
+			// L19.10: persist edges per file outside the lock (C1 compliant).
+			if a.ArchEnabled {
+				for fileID, fileEdges := range edgesByFile {
+					if err := a.Store.SaveEdgesForFile(a.ProjectID, fileID, fileEdges); err != nil {
+						a.debugf("WarmCaches: SaveEdgesForFile(%d): %v", fileID, err)
+					}
+				}
 			}
 		}
 	}
@@ -2962,10 +2976,15 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 
 	// Build new index outside the mutex (IO-heavy).
 	// C4: use BuildIndexWithFacts when arch extraction is enabled.
-	idx, stats, _, err := BuildIndexWithFacts(a.ProjectRoot, a.Parser, a.ArchEnabled)
+	idx, stats, edges, err := BuildIndexWithFacts(a.ProjectRoot, a.Parser, a.ArchEnabled)
 	if err != nil {
 		return socket.ReindexResult{}, fmt.Errorf("build index: %w", err)
 	}
+
+	// L19.10: build path→fileID map from the fresh index (no lock needed —
+	// idx is local, not shared). Group edges by fileID for batch persistence.
+	// Computed before the swap so the mapping is consistent with what we write.
+	edgesByFile := groupEdgesByFile(idx, edges)
 
 	a.mu.Lock()
 	// Swap index maps in-place (engine/server hold pointer to a.Index struct)
@@ -2979,12 +2998,22 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 	if a.Store != nil {
 		idxSnap = a.Index.Clone()
 	}
+	projectID := a.ProjectID
 	a.mu.Unlock()
 
 	// db.Update happens here, outside a.mu — C1 compliant.
 	if idxSnap != nil {
-		if err := a.Store.SaveIndex(a.ProjectID, idxSnap); err != nil {
+		if err := a.Store.SaveIndex(projectID, idxSnap); err != nil {
 			return socket.ReindexResult{}, fmt.Errorf("save index: %w", err)
+		}
+	}
+
+	// L19.10: persist edges per file outside the lock (C1 compliant).
+	if a.Store != nil && a.ArchEnabled {
+		for fileID, fileEdges := range edgesByFile {
+			if err := a.Store.SaveEdgesForFile(projectID, fileID, fileEdges); err != nil {
+				a.debugf("Reindex: SaveEdgesForFile(%d): %v", fileID, err)
+			}
 		}
 	}
 

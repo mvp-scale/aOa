@@ -17,6 +17,11 @@ import (
 
 // onFileChanged handles a file create/modify/delete event from the watcher.
 // It updates the index in-place and rebuilds the search engine.
+//
+// C1 compliance for EdgeStore writes (L19.10): edge persistence must NEVER
+// happen while a.mu is held. We use a first-registered defer (runs last, per
+// LIFO order) to flush edges AFTER defer a.mu.Unlock() has already run.
+// The defer captures a local edgePlan set inside the locked section.
 func (a *App) onFileChanged(absPath string) {
 	a.debugf("file-changed %s", absPath)
 
@@ -39,6 +44,34 @@ func (a *App) onFileChanged(absPath string) {
 		}
 		return
 	}
+
+	// C1-compliant EdgeStore plan (L19.10).
+	// Set inside the locked section; written by the first-registered defer,
+	// which runs LAST (after a.mu.Unlock) per LIFO semantics.
+	type edgePlan struct {
+		projectID  string
+		delFileID  uint32            // fileID to delete (0 = skip)
+		saveFileID uint32            // fileID to save (0 = skip)
+		edges      []ports.ImportEdge // nil = no save
+	}
+	var plan edgePlan
+
+	// Registered FIRST → runs LAST (after mu.Unlock). C1 guarantee.
+	defer func() {
+		if a.Store == nil || !a.ArchEnabled {
+			return
+		}
+		if plan.delFileID > 0 {
+			if err := a.Store.DeleteEdgesForFile(plan.projectID, plan.delFileID); err != nil {
+				a.debugf("DeleteEdgesForFile(%d): %v", plan.delFileID, err)
+			}
+		}
+		if plan.saveFileID > 0 {
+			if err := a.Store.SaveEdgesForFile(plan.projectID, plan.saveFileID, plan.edges); err != nil {
+				a.debugf("SaveEdgesForFile(%d): %v", plan.saveFileID, err)
+			}
+		}
+	}()
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -81,6 +114,9 @@ func (a *App) onFileChanged(absPath string) {
 			if a.Store != nil {
 				a.markIndexDirty()
 			}
+			// L19.10: schedule edge delete outside the lock (C1-compliant via defer).
+			plan.projectID = a.ProjectID
+			plan.delFileID = existingID
 			// Update recon cache: remove deleted file's contribution
 			a.updateReconOrDimForFile(existingID, relPath)
 			a.clearFileInvestigated(relPath)
@@ -137,8 +173,14 @@ func (a *App) onFileChanged(absPath string) {
 				m, edges, parseErr := fp.ParseFileToMetaAndFacts(absPath, source)
 				if parseErr == nil {
 					metas = m
-					// edges collected here; EdgeStore persistence wired in L19.10
-					_ = edges
+					// L19.10: schedule edge save outside the lock (C1-compliant via defer).
+					// On a file modify, also delete stale edges for the old entry.
+					plan.projectID = a.ProjectID
+					if existingID > 0 {
+						plan.delFileID = fileID // same ID on modify (reused)
+					}
+					plan.saveFileID = fileID
+					plan.edges = edges
 					parsed = true
 				}
 			}
