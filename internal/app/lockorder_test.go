@@ -64,8 +64,11 @@ func (n *noopStore) LoadAllDimensions(_ string) (map[string]*ports.FileAnalysis,
 	return nil, nil
 }
 
-// EdgeStore no-ops (L19.10) — C1: these must never be called while App.mu is held.
+// EdgeStore no-ops (L19.10/L19.12) — C1: these must never be called while App.mu is held.
 func (n *noopStore) SaveEdgesForFile(_ string, _ uint32, _ []ports.ImportEdge) error {
+	return nil
+}
+func (n *noopStore) SaveEdgesBatch(_ string, _ map[uint32][]ports.ImportEdge) error {
 	return nil
 }
 func (n *noopStore) LoadEdgesForFile(_ string, _ uint32) ([]ports.ImportEdge, error) {
@@ -122,6 +125,12 @@ func (s *lockGuardStore) SaveSessionWithTelemetry(projectID string, sum *ports.S
 func (s *lockGuardStore) SaveEdgesForFile(projectID string, fileID uint32, edges []ports.ImportEdge) error {
 	s.assertUnlocked("SaveEdgesForFile", projectID)
 	return s.storeBackend.SaveEdgesForFile(projectID, fileID, edges)
+}
+
+// SaveEdgesBatch triggers a single db.Update for the entire batch (L19.12 C1+C2 check).
+func (s *lockGuardStore) SaveEdgesBatch(projectID string, batch map[uint32][]ports.ImportEdge) error {
+	s.assertUnlocked("SaveEdgesBatch", projectID)
+	return s.storeBackend.SaveEdgesBatch(projectID, batch)
 }
 
 // DeleteEdgesForFile triggers db.Update on the edges bucket (L19.10 C1 check).

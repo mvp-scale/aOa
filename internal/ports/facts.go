@@ -32,6 +32,15 @@ type EdgeStore interface {
 	// Overwrites any prior edges for fileID. Thread-safe via bbolt transactions.
 	SaveEdgesForFile(projectID string, fileID uint32, edges []ImportEdge) error
 
+	// SaveEdgesBatch writes all accumulated file-edge deltas in a single bbolt
+	// write transaction (C2 burst coalescing, L19.12). Each entry in fileEdges
+	// is processed atomically inside one tx:
+	//   - len(edges) > 0  → bucket.Put (overwrite / save)
+	//   - len(edges) == 0 → bucket.Delete (remove stale entry for deleted file)
+	// All-or-nothing: the tx is rolled back on any error.
+	// C1: caller must NOT hold App.mu.
+	SaveEdgesBatch(projectID string, fileEdges map[uint32][]ImportEdge) error
+
 	// LoadEdgesForFile returns all edges for a single file.
 	// Returns nil, nil if no edges exist for that file or bucket.
 	LoadEdgesForFile(projectID string, fileID uint32) ([]ImportEdge, error)

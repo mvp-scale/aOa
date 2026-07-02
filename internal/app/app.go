@@ -345,6 +345,15 @@ type App struct {
 	indexDirty     bool
 	indexSaveTimer *time.Timer
 
+	// C2: debounced edge-batch accumulator (L19.12).
+	// Per-file edge deltas are accumulated here (under a.mu) and flushed in a
+	// single SaveEdgesBatch call when the timer fires — one write tx per window.
+	// len(edges) == 0 signals "delete this file's edges" (file was removed).
+	// All protected by a.mu; the timer callback reads and clears outside the lock.
+	edgePendingBatch  map[uint32][]ports.ImportEdge // nil = no pending batch
+	edgePendingProjID string
+	edgeBatchTimer    *time.Timer
+
 	// Cached learner snapshot (L11.8) — avoids serializing under mu on every HTTP request.
 	// Multiple dashboard handlers in the same poll cycle share one snapshot.
 	cachedSnapshot     *ports.LearnerState
@@ -932,6 +941,54 @@ func (a *App) doSaveIndexDebounced() {
 	// db.Update happens here, outside a.mu — C1 compliant.
 	if err := a.Store.SaveIndex(projectID, snap); err != nil {
 		a.debugf("SaveIndex error: %v", err)
+	}
+}
+
+// edgeBatchDebounce is the delay after the last file event before the
+// accumulated edge batch is flushed to bbolt in a single write tx (C2, L19.12).
+// Shorter than indexSaveDebounce: edges are small and the batch is pure cache.
+const edgeBatchDebounce = 200 * time.Millisecond
+
+// markEdgeBatchDirty queues a fileID delta into the pending edge batch and
+// (re-)arms the flush timer. Must be called with a.mu held.
+//
+// edges == nil or len(edges) == 0 signals "delete" (file was removed).
+// Non-nil non-empty edges signal "save" (file created or modified).
+//
+// Later events for the same fileID within the same debounce window overwrite
+// earlier ones — last-write-wins, which is correct: a remove followed by a
+// recreate within the window results in a save.
+func (a *App) markEdgeBatchDirty(fileID uint32, edges []ports.ImportEdge) {
+	if a.edgePendingBatch == nil {
+		a.edgePendingBatch = make(map[uint32][]ports.ImportEdge)
+	}
+	a.edgePendingProjID = a.ProjectID
+	a.edgePendingBatch[fileID] = edges // nil/empty = delete; non-empty = save
+
+	if a.edgeBatchTimer != nil {
+		a.edgeBatchTimer.Stop()
+	}
+	a.edgeBatchTimer = time.AfterFunc(edgeBatchDebounce, a.doFlushEdgeBatch)
+}
+
+// doFlushEdgeBatch is the edgeBatchTimer callback (C2, L19.12).
+// Snapshots and clears the pending batch under a.mu, then calls SaveEdgesBatch
+// outside the lock — C1 compliant: no db.Update while a.mu is held.
+// Callable directly from tests to bypass the 200ms timer.
+func (a *App) doFlushEdgeBatch() {
+	a.mu.Lock()
+	if len(a.edgePendingBatch) == 0 {
+		a.mu.Unlock()
+		return
+	}
+	batch := a.edgePendingBatch
+	projectID := a.edgePendingProjID
+	a.edgePendingBatch = nil // reset; next window starts fresh
+	a.mu.Unlock()            // release before IO (C1)
+
+	// db.Update happens here, outside a.mu — C1 compliant.
+	if err := a.Store.SaveEdgesBatch(projectID, batch); err != nil {
+		a.debugf("SaveEdgesBatch: %v", err)
 	}
 }
 

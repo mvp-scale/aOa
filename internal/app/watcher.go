@@ -18,10 +18,12 @@ import (
 // onFileChanged handles a file create/modify/delete event from the watcher.
 // It updates the index in-place and rebuilds the search engine.
 //
-// C1 compliance for EdgeStore writes (L19.10): edge persistence must NEVER
-// happen while a.mu is held. We use a first-registered defer (runs last, per
-// LIFO order) to flush edges AFTER defer a.mu.Unlock() has already run.
-// The defer captures a local edgePlan set inside the locked section.
+// C1 + C2 compliance for EdgeStore writes (L19.12):
+//   - Edges are NEVER written while a.mu is held.
+//   - Per-event edges are accumulated into edgePendingBatch (under a.mu).
+//   - markEdgeBatchDirty arms/resets a 200ms timer that fires doFlushEdgeBatch,
+//     which snapshots the batch outside the lock and calls SaveEdgesBatch once
+//     per debounce window (one write tx, not one per file — C2).
 func (a *App) onFileChanged(absPath string) {
 	a.debugf("file-changed %s", absPath)
 
@@ -44,34 +46,6 @@ func (a *App) onFileChanged(absPath string) {
 		}
 		return
 	}
-
-	// C1-compliant EdgeStore plan (L19.10).
-	// Set inside the locked section; written by the first-registered defer,
-	// which runs LAST (after a.mu.Unlock) per LIFO semantics.
-	type edgePlan struct {
-		projectID  string
-		delFileID  uint32            // fileID to delete (0 = skip)
-		saveFileID uint32            // fileID to save (0 = skip)
-		edges      []ports.ImportEdge // nil = no save
-	}
-	var plan edgePlan
-
-	// Registered FIRST → runs LAST (after mu.Unlock). C1 guarantee.
-	defer func() {
-		if a.Store == nil || !a.ArchEnabled {
-			return
-		}
-		if plan.delFileID > 0 {
-			if err := a.Store.DeleteEdgesForFile(plan.projectID, plan.delFileID); err != nil {
-				a.debugf("DeleteEdgesForFile(%d): %v", plan.delFileID, err)
-			}
-		}
-		if plan.saveFileID > 0 {
-			if err := a.Store.SaveEdgesForFile(plan.projectID, plan.saveFileID, plan.edges); err != nil {
-				a.debugf("SaveEdgesForFile(%d): %v", plan.saveFileID, err)
-			}
-		}
-	}()
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -114,9 +88,11 @@ func (a *App) onFileChanged(absPath string) {
 			if a.Store != nil {
 				a.markIndexDirty()
 			}
-			// L19.10: schedule edge delete outside the lock (C1-compliant via defer).
-			plan.projectID = a.ProjectID
-			plan.delFileID = existingID
+			// C2 (L19.12): queue edge delete into the batch accumulator (under mu).
+			// doFlushEdgeBatch fires outside the lock — C1 compliant.
+			if a.Store != nil && a.ArchEnabled {
+				a.markEdgeBatchDirty(existingID, nil) // nil = delete
+			}
 			// Update recon cache: remove deleted file's contribution
 			a.updateReconOrDimForFile(existingID, relPath)
 			a.clearFileInvestigated(relPath)
@@ -173,14 +149,13 @@ func (a *App) onFileChanged(absPath string) {
 				m, edges, parseErr := fp.ParseFileToMetaAndFacts(absPath, source)
 				if parseErr == nil {
 					metas = m
-					// L19.10: schedule edge save outside the lock (C1-compliant via defer).
-					// On a file modify, also delete stale edges for the old entry.
-					plan.projectID = a.ProjectID
-					if existingID > 0 {
-						plan.delFileID = fileID // same ID on modify (reused)
+					// C2 (L19.12): queue edge save into the batch accumulator (under mu).
+					// A Put with non-empty edges overwrites any stale data for fileID,
+					// so no prior Delete is needed for the modify case.
+					// doFlushEdgeBatch fires outside the lock — C1 compliant.
+					if a.Store != nil {
+						a.markEdgeBatchDirty(fileID, edges)
 					}
-					plan.saveFileID = fileID
-					plan.edges = edges
 					parsed = true
 				}
 			}

@@ -73,6 +73,49 @@ func ensureEdgesBucket(proj *bolt.Bucket) (*bolt.Bucket, error) {
 	return eb, nil
 }
 
+// SaveEdgesBatch writes all accumulated per-file edge deltas in a single bbolt
+// write transaction — C2 burst coalescing (L19.12).
+//
+// For each entry in fileEdges:
+//   - len(edges) > 0  → bucket.Put  (save / overwrite)
+//   - len(edges) == 0 → bucket.Delete (remove stale entry for a deleted file)
+//
+// The entire map is written atomically: any error aborts the whole tx.
+// Implements ports.EdgeStore. C1: caller must NOT hold App.mu.
+func (s *Store) SaveEdgesBatch(projectID string, fileEdges map[uint32][]ImportEdge) error {
+	if len(fileEdges) == 0 {
+		return nil
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		proj, err := tx.CreateBucketIfNotExists([]byte(projectID))
+		if err != nil {
+			return err
+		}
+		eb, err := ensureEdgesBucket(proj)
+		if err != nil {
+			return err
+		}
+		for fileID, edges := range fileEdges {
+			key := fileIDKey(fileID)
+			if len(edges) == 0 {
+				// Empty slice signals "delete this file's edges".
+				if err := eb.Delete(key); err != nil {
+					return fmt.Errorf("batch delete fileID %d: %w", fileID, err)
+				}
+			} else {
+				data, err := json.Marshal(edges)
+				if err != nil {
+					return fmt.Errorf("batch marshal fileID %d: %w", fileID, err)
+				}
+				if err := eb.Put(key, data); err != nil {
+					return fmt.Errorf("batch put fileID %d: %w", fileID, err)
+				}
+			}
+		}
+		return nil
+	})
+}
+
 // SaveEdgesForFile replaces all edges for a single file.
 // Implements ports.EdgeStore. C1: caller must NOT hold App.mu.
 func (s *Store) SaveEdgesForFile(projectID string, fileID uint32, edges []ImportEdge) error {

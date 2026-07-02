@@ -320,3 +320,77 @@ func TestEdgeStore_EmptyEdgeSlice(t *testing.T) {
 	// Empty slice round-trips — may return nil or empty slice.
 	assert.True(t, len(got) == 0, "empty edge slice must round-trip as empty")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// L19.12 SaveEdgesBatch — C2 burst coalescing
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestEdgeStore_SaveEdgesBatch_SaveAndLoad(t *testing.T) {
+	// Batch saves three files in a single write tx; each must be loadable afterwards.
+	store, _ := newTestStore(t)
+
+	batch := map[uint32][]ImportEdge{
+		1: makeTestEdges("internal/app/app.go"),
+		2: makeTestEdges("internal/ports/facts.go"),
+		3: makeTestEdges("cmd/aoa/main.go"),
+	}
+	require.NoError(t, store.SaveEdgesBatch("proj-1", batch))
+
+	for fileID, want := range batch {
+		got, err := store.LoadEdgesForFile("proj-1", fileID)
+		require.NoError(t, err, "LoadEdgesForFile(%d)", fileID)
+		require.Len(t, got, len(want), "fileID=%d edge count", fileID)
+		for i, e := range want {
+			assert.Equal(t, e.ImportPath, got[i].ImportPath, "fileID=%d edge[%d]", fileID, i)
+		}
+	}
+}
+
+func TestEdgeStore_SaveEdgesBatch_DeleteViaEmptySlice(t *testing.T) {
+	// An empty-slice entry in the batch signals "delete" — the key must be absent after flush.
+	store, _ := newTestStore(t)
+
+	// Seed file 10 with real edges.
+	require.NoError(t, store.SaveEdgesForFile("proj-1", 10, makeTestEdges("pkg/foo.go")))
+
+	// Batch: file 10 → empty (delete), file 11 → new edges (save).
+	batch := map[uint32][]ImportEdge{
+		10: {},                                    // delete
+		11: makeTestEdges("pkg/bar.go"),            // save
+	}
+	require.NoError(t, store.SaveEdgesBatch("proj-1", batch))
+
+	// File 10 must be gone.
+	del, err := store.LoadEdgesForFile("proj-1", 10)
+	require.NoError(t, err)
+	assert.Len(t, del, 0, "file 10 must have 0 edges after batch-delete")
+
+	// File 11 must be present.
+	saved, err := store.LoadEdgesForFile("proj-1", 11)
+	require.NoError(t, err)
+	assert.Len(t, saved, len(batch[11]), "file 11 must have edges after batch-save")
+}
+
+func TestEdgeStore_SaveEdgesBatch_Atomic(t *testing.T) {
+	// SaveEdgesBatch is all-or-nothing: an error during the tx rolls back all writes.
+	// We verify the positive case (no error → all written atomically).
+	store, _ := newTestStore(t)
+
+	batch := map[uint32][]ImportEdge{
+		20: makeTestEdges("pkg/a.go"),
+		21: makeTestEdges("pkg/b.go"),
+		22: makeTestEdges("pkg/c.go"),
+	}
+	require.NoError(t, store.SaveEdgesBatch("proj-1", batch))
+
+	all, err := store.LoadAllEdges("proj-1")
+	require.NoError(t, err)
+	assert.Len(t, all, 3*len(makeTestEdges("")), "all 3 files × 3 edges = 9 total edges")
+}
+
+func TestEdgeStore_SaveEdgesBatch_Empty(t *testing.T) {
+	// SaveEdgesBatch with an empty map is a no-op — no error, no writes.
+	store, _ := newTestStore(t)
+	assert.NoError(t, store.SaveEdgesBatch("proj-1", nil))
+	assert.NoError(t, store.SaveEdgesBatch("proj-1", map[uint32][]ImportEdge{}))
+}
