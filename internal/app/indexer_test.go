@@ -88,6 +88,39 @@ func TestBuildIndex_SkipsIgnoredDirs(t *testing.T) {
 	assert.Equal(t, 1, result.SymbolCount)
 }
 
+// TestBuildIndexWithFacts_VarOnlyFileHasEdges is a regression test for the bug
+// where `if parseErr == nil && len(metas) > 0` gated edge collection on non-empty
+// metas. Go files with only var/const declarations produce 0 metas (extractGo
+// handles only func/method/type), but they may still have import edges.
+// Correct behaviour: edges are emitted regardless of metas length.
+func TestBuildIndexWithFacts_VarOnlyFileHasEdges(t *testing.T) {
+	tmpDir := t.TempDir()
+	parser := treesitter.NewParser()
+
+	// var-only Go file — no functions or types, so metas will be empty.
+	// Two imports → expects 2 import edges.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmpDir, "consts.go"),
+		[]byte("package main\n\nimport (\n\t\"os\"\n\t\"fmt\"\n)\n\nvar Debug = os.Getenv(\"DEBUG\") != \"\"\nvar Prefix = fmt.Sprintf(\"[app]\")\n"),
+		0644,
+	))
+
+	_, result, edges, err := BuildIndexWithFacts(tmpDir, parser, true)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, result.FileCount)
+	assert.Equal(t, 0, result.SymbolCount, "var-only file produces no symbol metas")
+	assert.Equal(t, 2, result.EdgeCount, "import edges must be collected even when metas is empty")
+	require.Len(t, edges, 2, "edges slice must match EdgeCount")
+
+	paths := make([]string, len(edges))
+	for i, e := range edges {
+		paths[i] = e.ImportPath
+	}
+	assert.Contains(t, paths, "os")
+	assert.Contains(t, paths, "fmt")
+}
+
 // TestBuildIndex_NilParser_TokenizationOnly verifies that BuildIndex works
 // without a parser (tokenization-only mode). Files are discovered via
 // defaultCodeExtensions, and content is tokenized for file-level search.

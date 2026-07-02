@@ -132,6 +132,10 @@ func TestExtractImportsPython_Relative(t *testing.T) {
 	require.GreaterOrEqual(t, len(edges), 1, "expected at least one relative import edge")
 	assert.Equal(t, "pkg/sub.py", edges[0].FromFile)
 	assert.Greater(t, edges[0].StartLine, uint32(0))
+	// Pin the relative-import contract: the tree-sitter relative_import node text
+	// for "from . import module" is "." — the resolver (L19.10) distinguishes
+	// relative imports from absolute ones using this value.
+	assert.Equal(t, ".", edges[0].ImportPath, "relative import must capture the dot prefix, not the imported name")
 }
 
 // TestExtractImportsJS verifies JS import extraction for named, default,

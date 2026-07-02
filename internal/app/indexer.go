@@ -167,7 +167,7 @@ func buildIndexCore(root string, parser ports.Parser, archEnabled bool) (*ports.
 		// extract symbols AND edges in a single parse pass (G0: one traversal).
 		if fp != nil {
 			metas, edges, parseErr := fp.ParseFileToMetaAndFacts(path, source)
-			if parseErr == nil && len(metas) > 0 {
+			if parseErr == nil {
 				for _, meta := range metas {
 					ref := ports.TokenRef{FileID: fileID, Line: meta.StartLine}
 					idx.Metadata[ref] = meta
@@ -183,7 +183,9 @@ func buildIndexCore(root string, parser ports.Parser, archEnabled bool) (*ports.
 						idx.Tokens[lower] = append(idx.Tokens[lower], ref)
 					}
 				}
-				// Emit edges with relative FromFile path (G7: provenance stamps)
+				// Emit edges with relative FromFile path (G7: provenance stamps).
+				// Decoupled from the metas gate: var/const-only files produce 0 metas
+				// but may still have import edges (e.g. Go files with only declarations).
 				for _, e := range edges {
 					e.FromFile = relPath
 					allEdges = append(allEdges, e)
