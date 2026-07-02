@@ -48,7 +48,7 @@ the cost structure of these four.
 
 | # | Surface | Today | Net-new for arch | Latency floor |
 |---|---|---|---|---|
-| 1 | **Daemon-socket method** | flat JSON method switch, `socket/server.go:206-231` | one `case MethodArchReach:` arm + handler — a one-liner that inherits the existing sub-ms read path | **sub-ms** (unix socket, no handshake) |
+| 1 | **Daemon-socket method** | flat JSON method switch, `socket/server.go:224-249` | one `case MethodArchDerive:` arm + handler — a one-liner that inherits the existing sub-ms read path (reach/blast = CLI aliases, ADR 2026-07-02) | **sub-ms** (unix socket, no handshake) |
 | 2 | **`aoa arch` CLI** | cobra parent/child precedent, `cmd/aoa/cmd/root.go`; `grammar` parent/child | `archCmd` + children, thin delegate to the daemon/App | sub-ms (warm daemon) / ~ms (cold process-exec) |
 | 3 | **Web / viewer feed** | localhost dashboard + `withETag` + `//go:embed`, `web/server.go:77-113` (`/api/recon*` precedent) | `GET /api/arch/*` reusing `withETag`; embed the viewer at `GET /arch` | ETag-polled (recompute-on-compact, not streaming) |
 | 4 | **MCP adapter** | none | one more adapter beside socket/web, wrapping the same `ArchQuerier` 1:1 | **JSON-RPC over stdio + handshake/session** — structurally *above* surface 1 |
@@ -79,7 +79,7 @@ The daemon answers over a unix socket through a flat method dispatch with **no
 handshake, no session, no JSON-RPC envelope**: `handleRequest` is a bare
 `switch req.Method` (`socket/server.go:207`) whose arms (`MethodSearch`,
 `MethodPeek`, … `socket/server.go:208-227`, switch closes `:230`) each delegate
-to a handler and return. Adding `case MethodArchReach:` is a **one-line
+to a handler and return. Adding a `case MethodArchDerive:` (the spec method behind the `reach` CLI alias) is a **one-line
 addition** that inherits the sub-ms read path G0 (`GOALS.md:7`) mandates.
 
 MCP's stdio + JSON-RPC handshake/session overhead sits **above** that floor by
@@ -199,8 +199,8 @@ index and one freshness signal.
 
 **Practical consequence for the access surface:** the socket keeps
 `MethodSearch`/`MethodPeek` as first-class, always-on methods. The arch methods
-(`MethodArchReach`, `MethodArchBlast`, …) are *added beside* them in the same
-switch (`server.go:207-230`) — never *instead of* them. An agent's default verb
+(the six spec `MethodArch*` — reach/blast ride `arch.derive`/`arch.findings` as CLI aliases, ADR 2026-07-02) are *added beside* them in the same
+switch (`server.go:225-248`) — never *instead of* them. An agent's default verb
 remains the shim; the graph verbs are reached only when the question is
 transitive/topological.
 
@@ -217,8 +217,8 @@ actually be."
 
 | Surfaced as | Query class | Why grep structurally can't do it | graphify evidence |
 |---|---|---|---|
-| `aoa arch reach A B` / `MethodArchReach` | **Reachability / shortest_path** | Transitive-closure question; answer length unbounded a priori. An agent fakes it only by recursively grepping each callee N hops deep — and **cannot prove "no path exists."** | `nx.shortest_path serve.py:822`, hop chain `:828-847`, "No path found" `:823-824` |
-| `aoa arch blast <ref\|PR>` / `MethodArchBlast` | **Affected-set / reverse-deps / PR blast-radius** — *graphify's single best idea* | grep finds *forward* literal occurrences; reverse transitive dependency and set-intersection across changesets are edge-closure ops grep has no notion of. **Cheap and never stale** — the PR file-list is a git feature. | `get_pr_impact`/`triage_prs serve.py:862-932`, blast-radius rank `:919-926` |
+| `aoa arch reach A B` (CLI alias → `arch.derive`) | **Reachability / shortest_path** | Transitive-closure question; answer length unbounded a priori. An agent fakes it only by recursively grepping each callee N hops deep — and **cannot prove "no path exists."** | `nx.shortest_path serve.py:822`, hop chain `:828-847`, "No path found" `:823-824` |
+| `aoa arch blast <ref\|PR>` (CLI alias → `arch.findings`) | **Affected-set / reverse-deps / PR blast-radius** — *graphify's single best idea* | grep finds *forward* literal occurrences; reverse transitive dependency and set-intersection across changesets are edge-closure ops grep has no notion of. **Cheap and never stale** — the PR file-list is a git feature. | `get_pr_impact`/`triage_prs serve.py:862-932`, blast-radius rank `:919-926` |
 | `aoa arch views` (orientation) | **Architecture orientation — god_nodes** | Degree-centrality is a global graph property; grep counts textual occurrences, not structural in/out-degree. | `god_nodes serve.py:775-780`, `graph_stats :782-792` |
 
 Plus two **aOa-native** topological classes graphify does *not* even expose
@@ -289,7 +289,7 @@ with ENHANCEMENT-GUIDE §10):
 
 | Phase | Access-surface deliverable | Why here |
 |---|---|---|
-| **②** (keystone) | `MethodArchReach`/`MethodArchBlast` + handlers on the existing socket switch; `aoa arch view component/dsm/cycles`, `aoa arch facts` | The socket is the latency floor and a one-line addition (`server.go:207-230`); it must land *with* the keystone edges so the three edge-derived views are reachable sub-ms. |
+| **②** (keystone) | the six spec `MethodArch*` handlers on the existing socket switch (reach/blast = CLI aliases, ADR 2026-07-02); `aoa arch view component/dsm/cycles`, `aoa arch facts` | The socket is the latency floor and a one-line addition (`server.go:225-248`); it must land *with* the keystone edges so the three edge-derived views are reachable sub-ms. |
 | **③** (live estate) | web/viewer feed via `GET /api/arch/*` (reuse `withETag`, `web/server.go:77-113`); `aoa arch blast` elevated | The human face rides the same ETag-polled read path as `/api/recon*`; blast-radius elevated once the dep set is live. |
 | **④** (governance) | **MCP adapter — thin, reachability/affected-set/orientation only, reach not speed** | Built last by design: it cannot beat the socket, so it ships only after the native surface is proven, scoped to the reach role and never a `query_graph` replacement. |
 
@@ -305,7 +305,7 @@ sentence.
 
 | Claim | Anchor |
 |---|---|
-| Flat socket method switch (MCP/arch rides alongside as a one-line `case`) | `internal/adapters/socket/server.go:206-231` (switch `:207`, cases `:208-227`, default `:230`); method consts in `socket/protocol.go` |
+| Flat socket method switch (MCP/arch rides alongside as a one-line `case`) | `internal/adapters/socket/server.go:224-249` (switch `:225`, cases `:226-245`, default `:246`); method consts in `socket/protocol.go` |
 | G3 agent-first / drop-in grep shim is binding precedent | `.context/GOALS.md:10` (G3) |
 | G0 sub-ms read path the socket arm inherits | `.context/GOALS.md:7` (G0) |
 | G2 two-binary split (why MCP must not pull recon onto the hot path) | `.context/GOALS.md:11` (G2) |

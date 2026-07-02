@@ -36,9 +36,12 @@ This is binding and non-negotiable: **the load-bearing graph surface does not ex
 yet.** Verified absent against live source:
 
 - **No `aoa arch` command** — `ls cmd/aoa/cmd/arch.go` → *No such file* (verified).
-- **No import-edge keystone** — the always-on `extractSymbols` pass
-  (`internal/adapters/treesitter/parser.go`) visits but never *emits/persists* edges
-  (prior research §Q1). This is the foundation every moat below rides.
+- **No import-edge keystone** — the recon dimension walker (`countImportSpecs`,
+  `internal/adapters/treesitter/walker.go:568`) already traverses import nodes for
+  the import-bloat rule, but that walk runs only in the parked recon path
+  (`WalkForDimensions`, `walker.go:21`, invoked at `:483`); the always-on `extractGo`
+  pass (`internal/adapters/treesitter/parser.go:347`) does not visit import nodes at
+  all (prior research §Q1). This is the foundation every moat below rides.
 - **No overlay loader, no `MethodArch*` socket methods, no arch-shard web
   endpoint, no AG-UI** (verified absent).
 - **The file-save→ETag tick does NOT exist.** `bumpRevision()`
@@ -482,7 +485,8 @@ attack record). **Prior verdict:** `.context/details/2026-06-19-graphify-plus-mc
 wiring absent); `internal/adapters/web/recon.go:555,577` (click-fires-annotation
 precedent — never the substrate); `cmd/aoa/cmd/` (NO `arch.go`); `internal/` (NO
 overlay loader, NO `MethodArch*`, NO AG-UI); `internal/adapters/treesitter/parser.go`
-(`extractSymbols` visits but never emits import edges).
+(the always-on `extractSymbols` pass never visits import nodes; only the parked
+recon walker's `countImportSpecs`, `walker.go:568`, traverses them).
 **External (all cited inline):** graphify [#653](https://github.com/safishamsi/graphify/issues/653)/[#341](https://github.com/safishamsi/graphify/issues/341);
 [Potpie $2.2M](https://www.finsmes.com/2026/02/potpie-ai-raises-2-2m-in-pre-seed-funding.html)/[TFN](https://techfundingnews.com/the-startup-building-a-knowledge-graph-for-code-raises-2-2m-to-make-ai-agents-actually-useful/);
 [CodeGraph 45 tools](https://github.com/codegraph-ai/CodeGraph);

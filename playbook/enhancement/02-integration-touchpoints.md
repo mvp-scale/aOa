@@ -178,12 +178,12 @@ stop a careful reader landing on a false contradiction.)
 ## 2. Seam 1 — the socket method switch (the agent's hot path)
 
 **What exists.** The daemon answers over a unix socket with a **flat JSON method
-switch** — `handleRequest` (`socket/server.go:206`) dispatches `MethodSearch`,
+switch** — `handleRequest` (`socket/server.go:224`) dispatches `MethodSearch`,
 `MethodPeek`, etc. with no handshake, no session, no JSON-RPC envelope (cases
-`:208-227`, switch closes `:230`; method constants `protocol.go:39-48`). The
-default arm returns `unknown method` (`server.go:229`).
+`:226-245`, switch closes `:248`; method constants `protocol.go:39-48`). The
+default arm returns `unknown method` (`server.go:246`).
 
-**Net-new.** Add `case MethodArchReach:` / `MethodArchBlast:` / `MethodArchView:`
+**Net-new.** Add the six spec `MethodArch*` `case` arms (`MethodArchViews/View/Findings/Journey/Derive/Facts` — `02-arch-service.md:126-131`; reach/blast are CLI-only aliases per the 2026-07-02 ADR, never protocol methods)
 arms that delegate to `arch.*` handlers, exactly as `handleSearch`/`handlePeek`
 already delegate. Each new arm is a one-line addition that inherits the sub-ms read
 path G0 mandates — you cannot make any surface faster than this socket, so it is
@@ -229,7 +229,7 @@ the blind-judge gate forbid invented nodes/edges, `03-visualization.md:343`).
 
 **What exists.** Per-project top-level buckets, each with JSON-serialized
 sub-buckets: `index`, `learner`, `sessions`, `dimensions`, `telemetry`
-(`bbolt/store.go:28-32`). A `_version` key (`store.go:24`) lets old DBs
+(`bbolt/store.go:32-37`). A `_version` key (`store.go:29`) lets old DBs
 self-recover. `SaveIndex`/`LoadIndex` (`store.go:98`/`:154`) own the index bucket;
 `SaveAllDimensions`/`LoadAllDimensions` (`store.go:461`/`:488`) use a
 **delete-then-recreate replace-all** lifecycle (`store.go:468-469`).
@@ -362,9 +362,9 @@ second time.
 | Keystone site (b) = recon-gated dimensions walk, counts+discards names (NOT chosen) | `walker.go:568-583` (`countImportSpecs` returns `int`), reached only via `walkContext.walk` `walker.go:54` → `dim_engine.go:200` (`SaveAllDimensions`) |
 | Hot-path write cost → store must be keyed-by-file, not flat `[]Edge` | `onFileChanged` two full-map scans: find-ID `watcher.go:65`, alloc-ID `watcher.go:110`; per-file delete must be O(edges-for-file) |
 | Edge is index data, rides `App.mu` like every symbol (not a derived "arch write") | `onFileChanged` holds lock `watcher.go:43`; `ParseFileToMeta` inside `watcher.go:132`; reconciles with locking law `00-OVERVIEW.md:101` |
-| Flat socket method switch, no JSON-RPC envelope (MCP rides alongside) | `socket/server.go:206-230` (cases `:208-227`, default `:229`); constants `protocol.go:39-48` |
+| Flat socket method switch, no JSON-RPC envelope (MCP rides alongside) | `socket/server.go:224-249` (cases `:226-245`, default `:246`); constants `protocol.go:39-48` |
 | Web ETag + embed precedent (`/api/recon*`) | `web/server.go:92-113` (recon `:107-110`, `withETag` `:159`, root embed `:87`) |
-| bbolt buckets + `_version` self-recover; `dimensions` replace-all template | `bbolt/store.go:24,28-32`; `SaveIndex`/`LoadIndex` `:98`/`:154`; `SaveAllDimensions`/`LoadAllDimensions` `:461`/`:488` (delete-recreate `:468-469`) |
+| bbolt buckets + `_version` self-recover; `dimensions` replace-all template | `bbolt/store.go:29,32-37`; `SaveIndex`/`LoadIndex` `:98`/`:154`; `SaveAllDimensions`/`LoadAllDimensions` `:461`/`:488` (delete-recreate `:468-469`) |
 | Off-interface caveat (compounds site (b)) | `SaveAllDimensions`/`LoadAllDimensions` concrete-only `bbolt/store.go:461`/`:488`; absent from `Storage` interface `storage.go:12-56` |
 | fsnotify → reindex, wired; freshness free *iff site (a)* | `onFileChanged` `watcher.go:20` (lock `:43`, scans `:65`/`:110`, `ParseFileToMeta` `:132`, `removeFileFromIndex` `:558`); wired `app.go:698` |
 | cobra parent/child precedent | `cmd/aoa/cmd/root.go:36-52`; `grammar_cgo.go:16` (children `:57-60`) |

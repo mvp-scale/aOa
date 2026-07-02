@@ -43,7 +43,7 @@ the keystone + arch surface.
 
 **What ships today (verified against live source):**
 - The `withETag`/304 **transport** — `withETag` returns 304 when `If-None-Match`
-  matches the current revision string (`internal/adapters/web/server.go:157-167`),
+  matches the current revision string (`internal/adapters/web/server.go:159-173`),
   fed by a `revisionFn` revision source (`server.go:34`, set via
   `SetRevisionSource` `:49-52`). The recon/dashboard endpoints already ride it
   (`/api/recon*`, `server.go:107-110`).
@@ -121,7 +121,7 @@ arrives in Phase 2, gated on the keystone, the overlay loader, and the one absen
 The "live diagram" is the easiest claim to overstate. Here is exactly what's there
 and what isn't.
 
-**Ships today: the 304 transport.** `withETag` (`server.go:157-167`) computes an
+**Ships today: the 304 transport.** `withETag` (`server.go:159-173`) computes an
 ETag from `revisionFn()` and returns `304 Not Modified` when the client's
 `If-None-Match` matches — the auto-refreshing canvas polls and gets an empty-body
 304 until the revision changes. This is real and reusable; the arch endpoint would
@@ -381,9 +381,9 @@ boundary. **§C never claims aOa invented the loop** (`STRATEGIC-POSITION.md` §
 
 | Claim | Anchor |
 |---|---|
-| 304 transport ships (`withETag` returns 304 on `If-None-Match` match) | `internal/adapters/web/server.go:157-167`; `revisionFn` `:34`, `SetRevisionSource` `:49-52`; recon endpoints ride it `:107-110` |
+| 304 transport ships (`withETag` returns 304 on `If-None-Match` match) | `internal/adapters/web/server.go:159-173`; `revisionFn` `:34`, `SetRevisionSource` `:49-52`; recon endpoints ride it `:107-110` |
 | Click-fires-an-action precedent mutates annotation, never substrate | `internal/adapters/web/recon.go:555` (`POST /api/recon-investigate`), `:577` (`SetFileInvestigated`) |
-| File-save→ETag tick is ABSENT — `bumpRevision` not on the file-change path | `internal/app/app.go:350` (`bumpRevision`); callers `:564/:901/:2896/:2905`; NOT `watcher.go:20` (`onFileChanged`) or `app.go:2816` (`Reindex`) |
+| File-save→ETag tick is ABSENT — `bumpRevision` not on the file-change path | `internal/app/app.go:350` (`bumpRevision`); callers `:590/:927/:2967/:2976` (playbook @ L21 merge); NOT `watcher.go:20` (`onFileChanged`) or `app.go:2887` (`Reindex`) |
 | Viewer is a build-time generator, not a live endpoint | `playbook/generators/build_blueprint_viewer.py`, `build_c4_mockup.py` |
 | Blind-judge gate (the falsifiable visual acceptance test) | `playbook/standards/MODEL-STANDARD.md`; `playbook/standards/view-standards.json` |
 | Leash: agent may name/group, NEVER add a node (→ "/edge" corollary) | ADR `2026-06-11-core-competence-and-scope-line.md:24-30` ("never add a node"); "/edge" is the §2.1 corollary, carried by `integration/03-visualization.md:343` |

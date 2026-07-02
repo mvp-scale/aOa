@@ -249,7 +249,7 @@ stale graph scan.
   socket with a flat JSON method switch — `socket/server.go:207 handleRequest`
   dispatches `MethodSearch`/`MethodPeek`/etc. with no handshake, no session, no
   JSON-RPC envelope (cases at `:208-227`, switch closes `:230`). Adding
-  `case MethodArchReach:` is a
+  `case MethodArchDerive:` (spec method; `reach` is its CLI alias, ADR 2026-07-02) is a
   one-line addition that inherits the sub-ms read path G0 mandates. **MCP's stdio
   + JSON-RPC handshake/session overhead sits structurally *above* that** — you
   cannot make MCP faster than the socket it would wrap. The socket is the floor,
@@ -531,10 +531,10 @@ explicit and stop a careful reader from landing on a false contradiction.)
 
 | # | Seam | File:line | Net-new | Build/hex constraint |
 |---|------|-----------|---------|----------------------|
-| 1 | Socket method switch | `socket/server.go:207-230`; `protocol.go:39-48` | `MethodArchReach`/`MethodArchBlast`/… `case` arms + handlers; MCP rides as a sibling `case`/server calling the same handlers | Additive dispatch; delegate, don't reach into domain |
+| 1 | Socket method switch | `socket/server.go:225-248`; `protocol.go:39-48` | the six spec `MethodArch*` `case` arms + handlers (reach/blast = CLI-only aliases, ADR 2026-07-02); MCP rides as a sibling `case`/server calling the same handlers | Additive dispatch; delegate, don't reach into domain |
 | 2 | Web route table | `web/server.go:77-113` | `GET /api/arch/*` (reuse `withETag`) + embed viewer at `GET /arch` (reuse `//go:embed`) | Localhost-only; build-neutral static bytes; `/api/recon*` is the precedent |
 | 3 | **Index parse pass (KEYSTONE)** | `parser.go:104-108, 235-245, 347` (`extractSymbols`/`extractGo`); `indexer.go:138-159`; *(site b, NOT chosen: `walker.go:567-583`)* | **Emit edges from the import nodes in the always-on `extractSymbols` pass (site a)**; thread `[]Edge` through `ParseFileToMeta`; persist beside `Metadata`/`Tokens` **keyed for per-file deletion** | **Only build-cost seam**; site (a) is in-pass → ≤+3% G0 *and* G2-clean (no recon); **precondition: define `ports.EdgeStore` (or extend `Storage`) first**, and its layout must be keyed-by-file (not flat `[]Edge`) so seam 6's delete is O(edges-for-that-file) — adapter implements the port, never the reverse |
-| 4 | bbolt buckets | `store.go:28-32, 98-177` | `keyEdges` in the existing `index` bucket (rides `SaveIndex`/`LoadIndex` — cheapest) **or** sibling `bucketArch` (mirrors `dimensions` replace-all lifecycle) | Additive key; `_version` byte → old DBs self-recover (recompute on next index); behind `ports.Store` |
+| 4 | bbolt buckets | `store.go:32-37, 98-177` | `keyEdges` in the existing `index` bucket (rides `SaveIndex`/`LoadIndex` — cheapest) **or** sibling `bucketArch` (mirrors `dimensions` replace-all lifecycle) | Additive key; `_version` byte → old DBs self-recover (recompute on next index); behind `ports.Store` |
 | 5 | cobra surface | `root.go:32-52`; pattern `grammar_cgo.go:16-60` | `archCmd` + children (`reach`/`blast`/`view`/`facts`), structurally identical to the `grammar` parent/child | Thin delegate to daemon/App; mirror `_cgo`/`_nocgo` tags so `--light` degrades gracefully |
 | 6 | fsnotify reindex | reindex callback `internal/app/watcher.go:20 onFileChanged` (serialized at `watcher.go:43 a.mu.Lock`; two full-map `a.Index.Files` scans at `:65` and `:110`; `ParseFileToMeta` runs inside at `:132`); wired at `app.go:698` | Per-file edge upsert/delete (mirror `removeFileFromIndex`) — **"nothing structural" only if the edge store is keyed-by-file** so the per-file delete is O(edges-for-that-file), not O(all edges) | The **edge FACT** rides `a.mu` exactly as the symbol write already does (it is index data, not a derived "arch write" — see §5.1 reconciliation); only **derived** renditions/detectors stay off `a.mu` per the locking law (`00-OVERVIEW.md:101`). Edges inherit freshness for free **because `onFileChanged` re-runs `ParseFileToMeta` — i.e. only if the keystone landed at site (a)**; the per-file invalidation must not add a full edge-set scan to this already-linear callback |
 
@@ -600,7 +600,7 @@ engine** — add a question that fits an existing shape and it renders for free.
 | techportfolio | manifests + `Language` per FileMeta | exists + lockfile parse (NEW, small) | table rendition; EOL/CVE joins external feeds later | parse-at-index-time | REAL | S | **③** |
 | sbom | lockfiles | lockfile parser (NEW, syft-pattern) | table rendition; CycloneDX export | parse-at-index-time | REAL (unpinned → flagged) | M | **③** |
 | datamodel | `schema` facts | ORM/DDL/migration tree-sitter queries (NEW per stack) | entity rendition; verbs inferred by agent | per-stack extractors, lazy | REAL fields / MIXED verbs | M | ③ |
-| container | `deploy` facts | compose/k8s/Dockerfile parsers (NEW, config not code) | buckets rendition | config parse trivial | REAL if IaC in repo, else MIXED | M | ③ |
+| container | `deploy` facts | compose/k8s/Dockerfile parsers (NEW, config not code) | simple rendition | config parse trivial | REAL if IaC in repo, else MIXED | M | ③ |
 | context | `dep` on external SDKs + env/config | SDK-dependency heuristics + agent naming | simple rendition; ALWAYS stamped MIXED | cheap | MIXED | M | ③ |
 | domains | `unit` + atlas Domain per file | **enricher exists** | buckets rendition; agent names buckets, never adds | O(files) | MIXED (honest strength) | S | **②b** |
 | dataflow | `route` + store/queue clients | source/sink tree-sitter queries + agent verbs | simple rendition | per-stack queries | MIXED | M | ③ |
@@ -769,8 +769,8 @@ to understand the position.
 | Keystone site (b) = recon-gated dimensions walk, counts+discards (NOT chosen) | `walker.go:567-583 countImportSpecs`, reached only via `walkContext.walk` `walker.go:54` → `dim_engine.go:200 SaveAllDimensions` |
 | Edge emission rides the always-on index pass (site a) | `internal/app/indexer.go:138-159` |
 | Hot-path write cost the edge upsert inherits → store must be keyed-by-file (not flat `[]Edge`) | `onFileChanged` already does two full-map scans of `a.Index.Files` per edit: find-ID `internal/app/watcher.go:65`, alloc-ID `:110`; per-file edge delete must be O(edges-for-file), not O(all edges) |
-| Flat socket method switch (MCP rides alongside) | `internal/adapters/socket/server.go:207-230` (cases `:208-227`); `protocol.go:39-48` |
-| `dimensions/` bucket precedent + off-interface caveat (site-b compounder) | `internal/adapters/bbolt/store.go:28-32, 461 SaveAllDimensions / :488 LoadAllDimensions`; interface `storage.go:12-56` (neither declared) |
+| Flat socket method switch (MCP rides alongside) | `internal/adapters/socket/server.go:224-249` (cases `:226-245`); `protocol.go:39-48` |
+| `dimensions/` bucket precedent + off-interface caveat (site-b compounder) | `internal/adapters/bbolt/store.go:32-37, 461 SaveAllDimensions / :488 LoadAllDimensions`; interface `storage.go:12-56` (neither declared) |
 | Web ETag + embed precedent (`/api/recon*`) | `internal/adapters/web/server.go:77-113` |
 | fsnotify → reindex (freshness for free, *iff site a*) | reindex callback `internal/app/watcher.go:20 onFileChanged` (serialized `:43-44 a.mu.Lock`, two full-map scans `:65`/`:110`, `ParseFileToMeta` inside at `:132`); wired `app.go:698` |
 | Locking law governs DERIVED writes, not the in-pass index fact | `00-OVERVIEW.md:101` ("no arch/facts write holds App.mu") reconciled in §5.1: import edge is index data (rides `SaveIndex` under `a.mu`, like every symbol); only laid-out shards / DSM / cycles / conformance stay off `a.mu` |

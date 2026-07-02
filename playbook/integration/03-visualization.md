@@ -127,7 +127,7 @@ fetches by hash. The Go renderer reproduces this contract verbatim.
 
 Per ENHANCEMENT-GUIDE §2, renditions are computed from the facts substrate at
 substrate-compact time (not per-request) and cached in bbolt
-(`arch_renditions` bucket: key = `estate/scope/view`, value = shard bytes + hash).
+(`arch_shards` bucket: key = `estate/scope/view`, value = shard bytes + hash).
 The HTTP handler is a bucket read — O(1), consistent with G0. Re-derivation triggers:
 index rebuild completes, or declarations file (`{root}/.aoa/arch.yaml`) changes.
 

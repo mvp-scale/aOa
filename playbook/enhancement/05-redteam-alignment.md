@@ -46,7 +46,7 @@ document earns trust precisely by showing which of its own claims got cut.
   `import_declaration` (`parser.go:347`); `countImportSpecs` returns an `int` and
   discards names (`walker.go:568-583`), reached **only** via `walkContext.walk`
   (`walker.go:54`) — the dimensions engine, not the index pass.
-- The socket is a flat method switch where `case MethodArchReach:` is genuinely a
+- The socket is a flat method switch where an arch method `case` (e.g. `MethodArchDerive:`; reach/blast are CLI aliases per ADR 2026-07-02) is genuinely a
   one-liner (`socket/server.go:207`), with no JSON-RPC envelope — so the
   native-first / MCP-last latency argument is grounded, not asserted.
 - The graphify anchors all verify (`serve.py:822` shortest_path, `:775-780`
