@@ -16,6 +16,7 @@ type IndexResult struct {
 	FileCount   int
 	SymbolCount int
 	TokenCount  int
+	EdgeCount   int // import edges extracted (non-zero only when archEnabled=true)
 }
 
 // skipDirs lists directories to skip during indexing (matches fsnotify watcher).
@@ -80,10 +81,29 @@ var defaultCodeExtensions = map[string]bool{
 // and builds a fresh search index. When parser is nil, it operates in
 // tokenization-only mode: discovers files by extension, tokenizes content,
 // but produces no symbol metadata.
+//
+// This is the backward-compatible entry point. For import-edge extraction,
+// use BuildIndexWithFacts (called by App when ArchEnabled=true).
 func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, error) {
+	idx, result, _, err := buildIndexCore(root, parser, false)
+	return idx, result, err
+}
+
+// BuildIndexWithFacts is identical to BuildIndex but additionally extracts
+// import edges from P1 languages (Go/Python/JS/TS) when archEnabled=true and
+// the parser implements ports.FactParser.
+//
+// When archEnabled=false, the returned edge slice is always nil (C4 kill switch).
+// Used by App.WarmCaches and App.Reindex instead of BuildIndex.
+func BuildIndexWithFacts(root string, parser ports.Parser, archEnabled bool) (*ports.Index, *IndexResult, []ports.ImportEdge, error) {
+	return buildIndexCore(root, parser, archEnabled)
+}
+
+// buildIndexCore is the shared implementation for BuildIndex and BuildIndexWithFacts.
+func buildIndexCore(root string, parser ports.Parser, archEnabled bool) (*ports.Index, *IndexResult, []ports.ImportEdge, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Prefer git ls-files to respect .gitignore. Falls back to filepath.Walk
@@ -93,7 +113,7 @@ func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, e
 		// Fallback: walk with hardcoded skipDirs (non-git projects)
 		files, err = walkFiles(absRoot, parser)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
@@ -105,7 +125,15 @@ func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, e
 		Files:    make(map[uint32]*ports.FileMeta),
 	}
 
+	// Type-assert once; fp is nil when parser does not implement FactParser
+	// or when arch extraction is disabled (C4). Zero cost on hot path.
+	var fp ports.FactParser
+	if archEnabled && parser != nil {
+		fp, _ = parser.(ports.FactParser)
+	}
+
 	var totalSymbols int
+	var allEdges []ports.ImportEdge
 	var fileID uint32
 
 	for _, path := range files {
@@ -135,7 +163,37 @@ func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, e
 			Size:         info.Size(),
 		}
 
-		// When parser is available, extract symbols; otherwise tokenize file content.
+		// When FactParser is available (C4 on + parser implements FactParser),
+		// extract symbols AND edges in a single parse pass (G0: one traversal).
+		if fp != nil {
+			metas, edges, parseErr := fp.ParseFileToMetaAndFacts(path, source)
+			if parseErr == nil && len(metas) > 0 {
+				for _, meta := range metas {
+					ref := ports.TokenRef{FileID: fileID, Line: meta.StartLine}
+					idx.Metadata[ref] = meta
+					totalSymbols++
+
+					tokens := index.Tokenize(meta.Name)
+					for _, tok := range tokens {
+						idx.Tokens[tok] = append(idx.Tokens[tok], ref)
+					}
+
+					lower := strings.ToLower(meta.Name)
+					if lower != "" {
+						idx.Tokens[lower] = append(idx.Tokens[lower], ref)
+					}
+				}
+				// Emit edges with relative FromFile path (G7: provenance stamps)
+				for _, e := range edges {
+					e.FromFile = relPath
+					allEdges = append(allEdges, e)
+				}
+				continue
+			}
+		}
+
+		// When parser is available (but not FactParser or edges not needed),
+		// extract symbols only.
 		if parser != nil {
 			metas, parseErr := parser.ParseFileToMeta(path, source)
 			if parseErr == nil && len(metas) > 0 {
@@ -173,9 +231,10 @@ func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, e
 		FileCount:   len(idx.Files),
 		SymbolCount: totalSymbols,
 		TokenCount:  len(idx.Tokens),
+		EdgeCount:   len(allEdges),
 	}
 
-	return idx, result, nil
+	return idx, result, allEdges, nil
 }
 
 // gitTrackedFiles uses "git ls-files" to enumerate files that are tracked

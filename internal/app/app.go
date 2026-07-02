@@ -332,6 +332,11 @@ type App struct {
 	// Usage quota (from pasted /usage output via .aoa/usage.txt)
 	usageQuota *UsageQuota
 
+	// C4: AOA_ARCH kill switch (construction-time, default ON).
+	// When false: no import edges extracted, no arch subcommands registered,
+	// no /api/arch/* routes mounted. Zero hot-path cost (boolean on struct).
+	ArchEnabled bool
+
 	// Debounced index persistence — in-memory index is always current,
 	// only the bbolt write is delayed to avoid 306MB rewrites on every file change.
 	indexDirty     bool
@@ -462,6 +467,7 @@ func New(cfg Config) (*App, error) {
 		Enricher:       enr,
 		hintGen:        hg,
 		debug:          cfg.Debug || os.Getenv("AOA_DEBUG") == "1",
+		ArchEnabled:    readArchFlag(paths.Root), // C4: evaluated once at construction
 		Engine:         engine,
 		Learner:        lrn,
 		Parser:         cfg.Parser, // nil = tokenization-only mode
@@ -828,7 +834,8 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 		// No persisted index — build from project files (git ls-files / walk).
 		logFn("no persisted index, building from project files...")
 		buildStart := time.Now()
-		freshIdx, stats, buildErr := BuildIndex(a.ProjectRoot, a.Parser)
+		// C4: use BuildIndexWithFacts when arch extraction is enabled.
+		freshIdx, stats, _, buildErr := BuildIndexWithFacts(a.ProjectRoot, a.Parser, a.ArchEnabled)
 		if buildErr != nil {
 			logFn(fmt.Sprintf("warning: failed to build index: %v", buildErr))
 			r.TotalTime = time.Since(totalStart).Seconds()
@@ -2953,8 +2960,9 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 	a.debugf("reindex starting")
 	start := time.Now()
 
-	// Build new index outside the mutex (IO-heavy)
-	idx, stats, err := BuildIndex(a.ProjectRoot, a.Parser)
+	// Build new index outside the mutex (IO-heavy).
+	// C4: use BuildIndexWithFacts when arch extraction is enabled.
+	idx, stats, _, err := BuildIndexWithFacts(a.ProjectRoot, a.Parser, a.ArchEnabled)
 	if err != nil {
 		return socket.ReindexResult{}, fmt.Errorf("build index: %w", err)
 	}
@@ -3165,4 +3173,41 @@ func (a *App) WipeProject() error {
 	a.reconMu.Unlock()
 
 	return nil
+}
+
+// readArchFlag evaluates the C4 AOA_ARCH kill switch at construction time.
+// Default: ON (arch extraction enabled).
+//
+// Resolution order:
+//  1. AOA_ARCH env var: "off", "0", or "false" → disabled; "on", "1", or "true" → enabled.
+//  2. .aoa/config file: line containing "AOA_ARCH=off" or "arch=off" (case-insensitive) → disabled.
+//  3. Default: enabled.
+//
+// The result is stored once on App and never re-read — zero hot-path cost.
+func readArchFlag(dotAOA string) bool {
+	// Env var takes priority
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("AOA_ARCH"))) {
+	case "off", "0", "false":
+		return false
+	case "on", "1", "true":
+		return true
+	}
+
+	// Check .aoa/config for a simple key=value line
+	configPath := filepath.Join(dotAOA, "config")
+	data, err := os.ReadFile(configPath)
+	if err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "#") {
+				continue // skip comments
+			}
+			lower := strings.ToLower(line)
+			if lower == "aoa_arch=off" || lower == "arch=off" {
+				return false
+			}
+		}
+	}
+
+	return true // default ON
 }

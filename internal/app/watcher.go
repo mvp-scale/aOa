@@ -126,13 +126,29 @@ func (a *App) onFileChanged(absPath string) {
 		Size:         info.Size(),
 	}
 
-	// When parser is available, extract symbols; otherwise tokenize file content only.
+	// When parser is available, extract symbols (and import edges when arch-enabled).
+	// C4: use ParseFileToMetaAndFacts when ArchEnabled and parser implements FactParser;
+	//     otherwise fall back to ParseFileToMeta (zero regression for existing callers).
 	var metas []*ports.SymbolMeta
 	if a.Parser != nil {
-		var parseErr error
-		metas, parseErr = a.Parser.ParseFileToMeta(absPath, source)
-		if parseErr != nil {
-			metas = nil
+		parsed := false
+		if a.ArchEnabled {
+			if fp, ok := a.Parser.(ports.FactParser); ok {
+				m, edges, parseErr := fp.ParseFileToMetaAndFacts(absPath, source)
+				if parseErr == nil {
+					metas = m
+					// edges collected here; EdgeStore persistence wired in L19.10
+					_ = edges
+					parsed = true
+				}
+			}
+		}
+		if !parsed {
+			var parseErr error
+			metas, parseErr = a.Parser.ParseFileToMeta(absPath, source)
+			if parseErr != nil {
+				metas = nil
+			}
 		}
 	}
 

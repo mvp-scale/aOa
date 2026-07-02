@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/corey/aoa/internal/version"
 	"github.com/spf13/cobra"
@@ -51,4 +52,23 @@ func init() {
 		rootCmd.AddCommand(configCmd)
 		rootCmd.AddCommand(grammarCmd)
 	}
+
+	// C4: arch subcommands registered only when AOA_ARCH is on (default ON).
+	// When AOA_ARCH=off, the binary stays fully dark — no "arch" in help output,
+	// no edge emission, no /api/arch/* routes.
+	if archFlagEnabled() {
+		RegisterArchCommands(rootCmd)
+	}
+}
+
+// archFlagEnabled checks the AOA_ARCH env var at binary startup.
+// The .aoa/config check requires a project root and is performed at App.New;
+// here we only check the env var since Cobra registration happens before any
+// command runs. Default: true (ON).
+func archFlagEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("AOA_ARCH"))) {
+	case "off", "0", "false":
+		return false
+	}
+	return true
 }
