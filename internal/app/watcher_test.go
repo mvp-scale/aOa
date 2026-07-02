@@ -146,3 +146,53 @@ func TestOnFileChanged_UnsupportedExt(t *testing.T) {
 	assert.Equal(t, 0, len(a.Index.Files))
 	assert.Equal(t, 0, len(a.Index.Metadata))
 }
+
+// TestOnFileChanged_BumpsRevision verifies that L19.11 (E3 freshness wiring):
+// every mutation path through onFileChanged increments the global revision counter
+// so ETag-based caching is invalidated on the same tick the index updates.
+func TestOnFileChanged_BumpsRevision(t *testing.T) {
+	t.Run("symbol path bumps revision", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		a := newWatcherTestApp(t, tmpDir)
+
+		goFile := filepath.Join(tmpDir, "foo.go")
+		require.NoError(t, os.WriteFile(goFile,
+			[]byte("package main\n\nfunc Foo() {}\n"), 0644))
+
+		before := a.Revision()
+		a.onFileChanged(goFile)
+		assert.Greater(t, a.Revision(), before, "revision must increase after symbol-producing file change")
+	})
+
+	t.Run("zero-symbol file bumps revision", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		a := newWatcherTestApp(t, tmpDir)
+
+		// A Go file with only a package declaration — parser yields 0 symbols,
+		// so the tokenise-only path runs. Revision must still bump.
+		goFile := filepath.Join(tmpDir, "empty.go")
+		require.NoError(t, os.WriteFile(goFile,
+			[]byte("package main\n"), 0644))
+
+		before := a.Revision()
+		a.onFileChanged(goFile)
+		assert.Greater(t, a.Revision(), before, "revision must increase even when file yields zero symbols")
+	})
+
+	t.Run("delete path bumps revision", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		a := newWatcherTestApp(t, tmpDir)
+
+		// First add a file so there is an existing index entry to remove.
+		goFile := filepath.Join(tmpDir, "todelete2.go")
+		require.NoError(t, os.WriteFile(goFile,
+			[]byte("package main\n\nfunc Bar() {}\n"), 0644))
+		a.onFileChanged(goFile)
+
+		require.NoError(t, os.Remove(goFile))
+
+		before := a.Revision()
+		a.onFileChanged(goFile) // file is gone — delete path
+		assert.Greater(t, a.Revision(), before, "revision must increase after file deletion")
+	})
+}

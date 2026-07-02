@@ -2896,6 +2896,7 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.bumpRevision() // L19.11: invalidate ETag cache after index swap
 
 	// Swap index maps in-place (engine/server hold pointer to a.Index struct)
 	a.Index.Tokens = idx.Tokens

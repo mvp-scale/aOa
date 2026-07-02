@@ -42,6 +42,7 @@ func (a *App) onFileChanged(absPath string) {
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.bumpRevision() // L19.11: invalidate ETag cache on every mutation path
 
 	ext := strings.ToLower(filepath.Ext(absPath))
 	if ext == "" {
