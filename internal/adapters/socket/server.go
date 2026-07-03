@@ -248,6 +248,19 @@ func (s *Server) handleRequest(req Request) Response {
 		return s.handleReindex(req)
 	case MethodPeek:
 		return s.handlePeek(req)
+	// L19.16: six arch dispatch arms (before default — each nil-checks Arch() for C4).
+	case MethodArchViews:
+		return s.handleArchViews(req)
+	case MethodArchView:
+		return s.handleArchView(req)
+	case MethodArchFindings:
+		return s.handleArchFindings(req)
+	case MethodArchJourney:
+		return s.handleArchJourney(req)
+	case MethodArchDerive:
+		return s.handleArchDerive(req)
+	case MethodArchFacts:
+		return s.handleArchFacts(req)
 	default:
 		return Response{ID: req.ID, Error: fmt.Sprintf("unknown method: %s", req.Method)}
 	}
@@ -565,6 +578,208 @@ func (s *Server) handleWipe(req Request) Response {
 		return Response{ID: req.ID, Error: err.Error()}
 	}
 	return Response{ID: req.ID, Result: struct{}{}}
+}
+
+// ── L19.16 arch handlers ─────────────────────────────────────────────────────
+// Each handler nil-checks s.queries.Arch() first (C4: when arch is off, Arch()
+// returns nil and we return a clear error — the default arm is NOT hit).
+
+// archQuerier returns the arch querier or nil with a ready error Response.
+func (s *Server) archQuerier(id string) (ports.ArchQuerier, *Response) {
+	if s.queries == nil {
+		r := Response{ID: id, Error: "arch not available: no queries"}
+		return nil, &r
+	}
+	q := s.queries.Arch()
+	if q == nil {
+		r := Response{ID: id, Error: "arch not available (C4: arch flag off or no substrate)"}
+		return nil, &r
+	}
+	return q, nil
+}
+
+func (s *Server) handleArchViews(req Request) Response {
+	q, errResp := s.archQuerier(req.ID)
+	if errResp != nil {
+		return *errResp
+	}
+
+	paramsJSON, err := json.Marshal(req.Params)
+	if err != nil {
+		return Response{ID: req.ID, Error: "invalid arch.views params"}
+	}
+	var params ArchViewsParams
+	if err := json.Unmarshal(paramsJSON, &params); err != nil {
+		return Response{ID: req.ID, Error: "invalid arch.views params"}
+	}
+	scope := params.Scope
+	if scope == "" {
+		scope = "local"
+	}
+
+	m, err := q.Manifest(scope)
+	if err != nil {
+		return Response{ID: req.ID, Error: fmt.Sprintf("arch.views: %v", err)}
+	}
+	if m == nil {
+		return Response{ID: req.ID, Result: ArchViewsResult{HasData: false}}
+	}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return Response{ID: req.ID, Error: fmt.Sprintf("arch.views: marshal: %v", err)}
+	}
+	return Response{ID: req.ID, Result: ArchViewsResult{Raw: raw, HasData: true}}
+}
+
+func (s *Server) handleArchView(req Request) Response {
+	q, errResp := s.archQuerier(req.ID)
+	if errResp != nil {
+		return *errResp
+	}
+
+	paramsJSON, err := json.Marshal(req.Params)
+	if err != nil {
+		return Response{ID: req.ID, Error: "invalid arch.view params"}
+	}
+	var params ArchViewParams
+	if err := json.Unmarshal(paramsJSON, &params); err != nil {
+		return Response{ID: req.ID, Error: "invalid arch.view params"}
+	}
+	if params.View == "" {
+		return Response{ID: req.ID, Error: "arch.view: 'view' param required"}
+	}
+	scope := params.Scope
+	if scope == "" {
+		scope = "local"
+	}
+
+	data, err := q.View(scope, params.View)
+	if err != nil {
+		return Response{ID: req.ID, Error: fmt.Sprintf("arch.view: %v", err)}
+	}
+	if data == nil {
+		return Response{ID: req.ID, Result: ArchViewResult{Found: false}}
+	}
+	return Response{ID: req.ID, Result: ArchViewResult{Raw: json.RawMessage(data), Found: true}}
+}
+
+func (s *Server) handleArchFindings(req Request) Response {
+	q, errResp := s.archQuerier(req.ID)
+	if errResp != nil {
+		return *errResp
+	}
+
+	paramsJSON, err := json.Marshal(req.Params)
+	if err != nil {
+		return Response{ID: req.ID, Error: "invalid arch.findings params"}
+	}
+	var params ArchFindingsParams
+	if err := json.Unmarshal(paramsJSON, &params); err != nil {
+		return Response{ID: req.ID, Error: "invalid arch.findings params"}
+	}
+	scope := params.Scope
+	if scope == "" {
+		scope = "local"
+	}
+
+	data, err := q.Findings(scope)
+	if err != nil {
+		return Response{ID: req.ID, Error: fmt.Sprintf("arch.findings: %v", err)}
+	}
+	hasNew := len(data) > 2 // non-empty JSON array
+	if data == nil {
+		data = []byte("[]")
+	}
+	return Response{ID: req.ID, Result: ArchFindingsResult{
+		Raw:    json.RawMessage(data),
+		HasNew: hasNew,
+	}}
+}
+
+func (s *Server) handleArchJourney(req Request) Response {
+	// MethodArchJourney exists as a protocol slot; full journey semantics land
+	// in a future task. Return a clear "not yet" rather than "unknown method".
+	if s.queries != nil && s.queries.Arch() == nil {
+		return Response{ID: req.ID, Error: "arch not available (C4: arch flag off or no substrate)"}
+	}
+	return Response{ID: req.ID, Error: "arch.journey: not yet implemented in this release"}
+}
+
+func (s *Server) handleArchDerive(req Request) Response {
+	q, errResp := s.archQuerier(req.ID)
+	if errResp != nil {
+		return *errResp
+	}
+
+	paramsJSON, err := json.Marshal(req.Params)
+	if err != nil {
+		return Response{ID: req.ID, Error: "invalid arch.derive params"}
+	}
+	var params ArchDeriveParams
+	if err := json.Unmarshal(paramsJSON, &params); err != nil {
+		return Response{ID: req.ID, Error: "invalid arch.derive params"}
+	}
+	if params.From == "" || params.To == "" {
+		return Response{ID: req.ID, Error: "arch.derive: 'from' and 'to' params required"}
+	}
+	scope := params.Scope
+	if scope == "" {
+		scope = "local"
+	}
+	k := params.K
+	if k <= 0 {
+		k = 10 // default hop budget
+	}
+
+	path, err := q.Derive(scope, params.From, params.To, k)
+	if err != nil {
+		return Response{ID: req.ID, Error: fmt.Sprintf("arch.derive: %v", err)}
+	}
+	if path == nil {
+		return Response{ID: req.ID, Result: ArchDeriveResult{Found: false}}
+	}
+	return Response{ID: req.ID, Result: ArchDeriveResult{Path: path, Found: true}}
+}
+
+func (s *Server) handleArchFacts(req Request) Response {
+	q, errResp := s.archQuerier(req.ID)
+	if errResp != nil {
+		return *errResp
+	}
+
+	paramsJSON, err := json.Marshal(req.Params)
+	if err != nil {
+		return Response{ID: req.ID, Error: "invalid arch.facts params"}
+	}
+	var params ArchFactsParams
+	if err := json.Unmarshal(paramsJSON, &params); err != nil {
+		return Response{ID: req.ID, Error: "invalid arch.facts params"}
+	}
+	if params.Subject == "" {
+		return Response{ID: req.ID, Error: "arch.facts: 'subject' param required"}
+	}
+	scope := params.Scope
+	if scope == "" {
+		scope = "local"
+	}
+
+	data, err := q.Facts(scope, params.Subject, params.Limit)
+	if err != nil {
+		return Response{ID: req.ID, Error: fmt.Sprintf("arch.facts: %v", err)}
+	}
+
+	// Count entries from raw JSON array.
+	var entries []json.RawMessage
+	if data != nil {
+		_ = json.Unmarshal(data, &entries) // count-only; ignore error
+	}
+	if data == nil {
+		data = []byte("[]")
+	}
+	return Response{ID: req.ID, Result: ArchFactsResult{
+		Facts: json.RawMessage(data),
+		Count: len(entries),
+	}}
 }
 
 func (s *Server) writeResponse(conn net.Conn, resp Response) {

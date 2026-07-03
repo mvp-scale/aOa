@@ -93,4 +93,10 @@ type ArchQuerier interface {
 	// Derive returns the shortest dep-path from "from" to "to" (unit IDs),
 	// limited to k hops. Returns nil if no path exists within the hop budget.
 	Derive(scope, from, to string, k int) ([]string, error)
+
+	// Facts returns the JSON-encoded import-edge provenance trail for a subject.
+	// Subject is matched as a substring against both FromFile and ImportPath.
+	// Returns nil, nil when no edges match or no edge store is available.
+	// limit ≤ 0 means unlimited.
+	Facts(scope, subject string, limit int) ([]byte, error)
 }

@@ -204,6 +204,124 @@ func (c *Client) Wipe() error {
 	return err
 }
 
+// ── L19.16 arch client methods ────────────────────────────────────────────────
+
+// ArchViews sends an arch.views request and returns the manifest result.
+func (c *Client) ArchViews(scope string) (*ArchViewsResult, error) {
+	resp, err := c.call(Request{
+		ID:     "1",
+		Method: MethodArchViews,
+		Params: ArchViewsParams{Scope: scope},
+	})
+	if err != nil {
+		return nil, err
+	}
+	resultJSON, err := json.Marshal(resp.Result)
+	if err != nil {
+		return nil, fmt.Errorf("marshal arch.views result: %w", err)
+	}
+	var result ArchViewsResult
+	if err := json.Unmarshal(resultJSON, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal arch.views result: %w", err)
+	}
+	return &result, nil
+}
+
+// ArchView sends an arch.view request and returns the shard result.
+func (c *Client) ArchView(scope, view string) (*ArchViewResult, error) {
+	resp, err := c.call(Request{
+		ID:     "1",
+		Method: MethodArchView,
+		Params: ArchViewParams{Scope: scope, View: view},
+	})
+	if err != nil {
+		return nil, err
+	}
+	resultJSON, err := json.Marshal(resp.Result)
+	if err != nil {
+		return nil, fmt.Errorf("marshal arch.view result: %w", err)
+	}
+	var result ArchViewResult
+	if err := json.Unmarshal(resultJSON, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal arch.view result: %w", err)
+	}
+	return &result, nil
+}
+
+// ArchFindings sends an arch.findings request.
+func (c *Client) ArchFindings(scope string) (*ArchFindingsResult, error) {
+	resp, err := c.call(Request{
+		ID:     "1",
+		Method: MethodArchFindings,
+		Params: ArchFindingsParams{Scope: scope},
+	})
+	if err != nil {
+		return nil, err
+	}
+	resultJSON, err := json.Marshal(resp.Result)
+	if err != nil {
+		return nil, fmt.Errorf("marshal arch.findings result: %w", err)
+	}
+	var result ArchFindingsResult
+	if err := json.Unmarshal(resultJSON, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal arch.findings result: %w", err)
+	}
+	return &result, nil
+}
+
+// ArchJourney sends an arch.journey request (stub — not yet implemented).
+func (c *Client) ArchJourney(id string, list bool) error {
+	_, err := c.call(Request{
+		ID:     "1",
+		Method: MethodArchJourney,
+		Params: ArchJourneyParams{ID: id, List: list},
+	})
+	return err
+}
+
+// ArchDerive sends an arch.derive request and returns the path result.
+// from/to are unit IDs (e.g. "u_internal_app").
+func (c *Client) ArchDerive(scope, from, to string, k int) (*ArchDeriveResult, error) {
+	resp, err := c.call(Request{
+		ID:     "1",
+		Method: MethodArchDerive,
+		Params: ArchDeriveParams{Scope: scope, From: from, To: to, K: k},
+	})
+	if err != nil {
+		return nil, err
+	}
+	resultJSON, err := json.Marshal(resp.Result)
+	if err != nil {
+		return nil, fmt.Errorf("marshal arch.derive result: %w", err)
+	}
+	var result ArchDeriveResult
+	if err := json.Unmarshal(resultJSON, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal arch.derive result: %w", err)
+	}
+	return &result, nil
+}
+
+// ArchFacts sends an arch.facts request and returns the facts result.
+func (c *Client) ArchFacts(scope, subject string, limit int) (*ArchFactsResult, error) {
+	resp, err := c.call(Request{
+		ID:     "1",
+		Method: MethodArchFacts,
+		Params: ArchFactsParams{Scope: scope, Subject: subject, Limit: limit},
+	})
+	if err != nil {
+		return nil, err
+	}
+	resultJSON, err := json.Marshal(resp.Result)
+	if err != nil {
+		return nil, fmt.Errorf("marshal arch.facts result: %w", err)
+	}
+	var result ArchFactsResult
+	if err := json.Unmarshal(resultJSON, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal arch.facts result: %w", err)
+	}
+	return &result, nil
+}
+
 // Ping checks if the daemon is alive via an application-level health round-trip.
 // Returns true only if the daemon responds to a health request within 1 second.
 // Detects zombie daemons where the socket accepts connections but the accept loop is dead.

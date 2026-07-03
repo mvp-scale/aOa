@@ -406,6 +406,38 @@ func (q *archQuerier) Findings(scope string) ([]byte, error) {
 	return json.Marshal(findings)
 }
 
+// Facts returns the JSON-encoded import-edge provenance trail for a subject.
+// Subject is matched as a substring against both FromFile and ImportPath.
+// L19.16: backs the socket MethodArchFacts handler and `aoa arch facts` CLI.
+func (q *archQuerier) Facts(_ string, subject string, limit int) ([]byte, error) {
+	edges, err := q.app.Store.LoadAllEdges(q.app.ProjectID)
+	if err != nil || len(edges) == 0 {
+		return nil, err
+	}
+	type factEntry struct {
+		FromFile   string `json:"from_file"`
+		ImportPath string `json:"import_path"`
+		StartLine  uint32 `json:"start_line"`
+	}
+	var result []factEntry
+	for _, e := range edges {
+		if strings.Contains(e.FromFile, subject) || strings.Contains(e.ImportPath, subject) {
+			result = append(result, factEntry{
+				FromFile:   e.FromFile,
+				ImportPath: e.ImportPath,
+				StartLine:  e.StartLine,
+			})
+		}
+		if limit > 0 && len(result) >= limit {
+			break
+		}
+	}
+	if result == nil {
+		result = []factEntry{} // never null in JSON output
+	}
+	return json.Marshal(result)
+}
+
 // Derive returns the shortest dep-path (unit IDs) from `from` to `to`,
 // limited to k hops.  Returns nil if no path exists within the hop budget.
 // Loads all edges and computes BFS at the unit-directory grain.
