@@ -26,12 +26,12 @@ function showFatal(msg){let d=document.getElementById("fatal");if(!d){d=document
   document.body.appendChild(d);}if(!d._set){d._set=true;d.textContent="RENDER FAILURE · "+msg;}}
 window.addEventListener("error",ev=>showFatal(ev.message));
 window.addEventListener("unhandledrejection",ev=>showFatal(String(ev.reason&&ev.reason.message||ev.reason)));
-const MODEL_PATH=MQ.get("model")||"archmodel/manifest.json";
+const MODEL_PATH=MQ.get("model")||"/api/arch/manifest"; // L19.20: default is served API; ?model= overrides for dev
 const BASE=MODEL_PATH.includes("/")?MODEL_PATH.slice(0,MODEL_PATH.lastIndexOf("/")+1):"";
-let MODEL;
-try{MODEL=await fetch(MODEL_PATH).then(r=>{
-  if(!r.ok)throw new Error("HTTP "+r.status+" loading "+MODEL_PATH);
-  return r.json();});}
+let MODEL; let _eTag=""; // L19.20: boot ETag captured so first poll uses If-None-Match
+try{const _r0=await fetch(MODEL_PATH);
+  if(!_r0.ok)throw new Error("HTTP "+_r0.status+" loading "+MODEL_PATH);
+  _eTag=_r0.headers.get("ETag")||""; MODEL=await _r0.json();}
 catch(err){showFatal("MODEL LOAD FAILED · "+(err&&err.message||err));throw err;}
 const ISSUES=[];
 function validateView(path,v){
@@ -63,7 +63,7 @@ let PALETTES={
  dep:{dev:T.blue,ci:T.purple,registry:T.arch,user:T.green},
  retail:{order:T.arch,inventory:T.cyan,customer:T.purple,shared:T.neutral},
  mc:{aws:T.yellow,gcp:T.blue,shared:T.neutral}};
-const ESTATES=MODEL.estates;
+let ESTATES=MODEL.estates; // L19.20: let — poll updates on 200 before re-render
 const firstScope=e=>Object.keys(ESTATES[e].scopes)[0];
 const firstView=(e,sc)=>Object.keys(ESTATES[e].scopes[sc].views)[0];
 // generic catalog for simulated scopes: derived from the views the scope actually has
@@ -1034,5 +1034,21 @@ function Flow(){
         ${els&&(view._loaded||!view.shard)?html`<${Footer} view=${view} ov=${ov}/>`:null}
       </div>
     </div></div>`;}
-createRoot(document.getElementById("root")).render(html`<${ReactFlowProvider}><${Flow}/><//>`);
+// L19.20: refresh-on-save — keep a root ref so poll can re-render on 200.
+const _root=createRoot(document.getElementById("root"));
+_root.render(html`<${ReactFlowProvider}><${Flow}/><//>`)
+// Poll every 12s with If-None-Match (ETag = m.Rev set at boot and updated on each 200).
+// 304 → no-op (arch unchanged — correct, even for zero-symbol file changes).
+// 200 → update MODEL + ESTATES and re-render; React preserves hook state (selected
+//       view, density, layout direction) across the re-render.
+setInterval(async()=>{try{
+  const h=_eTag?{"If-None-Match":_eTag}:{};
+  const r=await fetch(MODEL_PATH,{headers:h});
+  if(r.status===304)return;  // unchanged — no-op
+  if(!r.ok)return;           // transient error — skip silently, retry next interval
+  _eTag=r.headers.get("ETag")||"";
+  MODEL=await r.json();
+  ESTATES=MODEL.estates;
+  _root.render(html`<${ReactFlowProvider}><${Flow}/><//>`)
+}catch(e){}},12000);
 </script></body></html>
