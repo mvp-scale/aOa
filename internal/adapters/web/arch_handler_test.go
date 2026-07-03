@@ -321,22 +321,40 @@ func TestArchVendorBundle_ServedWithGzipEncoding(t *testing.T) {
 	ts := setupArchServer(t, q)
 	defer ts.Close()
 
-	// Request without auto-decompression to verify raw headers
+	// Raw transport (no auto-decompression) so headers/body are exactly as served.
 	client := &http.Client{
 		Transport: &http.Transport{DisableCompression: true},
 	}
-	resp, err := client.Get(ts.URL + "/arch/vendor/bundle.js")
+
+	// Client advertising gzip → pre-compressed bytes, Content-Encoding: gzip.
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/arch/vendor/bundle.js", nil)
+	require.NoError(t, err)
+	req.Header.Set("Accept-Encoding", "gzip")
+	resp, err := client.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "application/javascript", resp.Header.Get("Content-Type"))
 	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"),
-		"vendor/bundle.js must be served with Content-Encoding: gzip (pre-compressed)")
+		"gzip-accepting client must get the pre-compressed bundle")
 	assert.Equal(t, "no-cache", resp.Header.Get("Cache-Control"))
+	assert.Equal(t, "Accept-Encoding", resp.Header.Get("Vary"))
 
-	// Verify the response body is non-empty gzip data
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	assert.Greater(t, len(body), 1000, "gzip bundle must be non-trivially sized")
+
+	// Client NOT advertising gzip → decompressed JS, no Content-Encoding (RFC 7231).
+	respID, err := client.Get(ts.URL + "/arch/vendor/bundle.js")
+	require.NoError(t, err)
+	defer respID.Body.Close()
+
+	assert.Equal(t, http.StatusOK, respID.StatusCode)
+	assert.Empty(t, respID.Header.Get("Content-Encoding"),
+		"non-gzip client must get identity-encoded bytes")
+	idBody, err := io.ReadAll(respID.Body)
+	require.NoError(t, err)
+	assert.Greater(t, len(idBody), len(body),
+		"identity body must be the decompressed (larger) bundle")
 }
