@@ -165,9 +165,13 @@ func buildIndexCore(root string, parser ports.Parser, archEnabled bool) (*ports.
 
 		// When FactParser is available (C4 on + parser implements FactParser),
 		// extract symbols AND edges in a single parse pass (G0: one traversal).
+		// parsedByFacts is set when ParseFileToMetaAndFacts succeeds, preventing
+		// a redundant ParseFileToMeta call for symbol-less files.
+		var parsedByFacts bool
 		if fp != nil {
 			metas, edges, parseErr := fp.ParseFileToMetaAndFacts(path, source)
 			if parseErr == nil {
+				parsedByFacts = true
 				for _, meta := range metas {
 					ref := ports.TokenRef{FileID: fileID, Line: meta.StartLine}
 					idx.Metadata[ref] = meta
@@ -190,13 +194,18 @@ func buildIndexCore(root string, parser ports.Parser, archEnabled bool) (*ports.
 					e.FromFile = relPath
 					allEdges = append(allEdges, e)
 				}
-				continue
+				if len(metas) > 0 {
+					continue // symbols found; skip content tokenization fallback
+				}
+				// len(metas)==0: fall through to content tokenization (C4 invariant T30:
+				// flag-on must produce identical index content to flag-off for symbol-less
+				// parseable files — only edge emission differs between the two modes).
 			}
 		}
 
 		// When parser is available (but not FactParser or edges not needed),
-		// extract symbols only.
-		if parser != nil {
+		// extract symbols only. Skipped when parsedByFacts=true to avoid re-parsing.
+		if !parsedByFacts && parser != nil {
 			metas, parseErr := parser.ParseFileToMeta(path, source)
 			if parseErr == nil && len(metas) > 0 {
 				for _, meta := range metas {
@@ -265,6 +274,19 @@ func groupEdgesByFile(idx *ports.Index, edges []ports.ImportEdge) map[uint32][]p
 		return nil
 	}
 	return byFile
+}
+
+// buildFileSet extracts the set of all relative file paths from an index.
+// Returns a map[relPath]bool for O(1) lookup by the §2.4 resolver.
+func buildFileSet(idx *ports.Index) map[string]bool {
+	if idx == nil || len(idx.Files) == 0 {
+		return nil
+	}
+	s := make(map[string]bool, len(idx.Files))
+	for _, fm := range idx.Files {
+		s[fm.Path] = true
+	}
+	return s
 }
 
 // gitTrackedFiles uses "git ls-files" to enumerate files that are tracked
