@@ -53,7 +53,10 @@ direct read-only bbolt access when the daemon is down. Requires AOA_ARCH=on
 	archCmd.AddCommand(archReachCmd)
 	archCmd.AddCommand(archBlastCmd)
 	archCmd.AddCommand(archFactsCmd)
-	archCmd.AddCommand(archPackCmd)
+	// `arch pack` is L22.5's verb (evidence/compliance packaging). The adopted
+	// F2 surface is six MethodArch* + the reach/blast CLI aliases (ADR
+	// 2026-07-02); L22.5 re-adds pack when pulled from the pool. The stub is
+	// removed here rather than shipped dark (checkpoint-F2 PC7 / ledger T49).
 
 	root.AddCommand(archCmd)
 }
@@ -62,7 +65,7 @@ direct read-only bbolt access when the daemon is down. Requires AOA_ARCH=on
 
 // archExecResult is the outcome of an arch command (socket or direct-RO).
 type archExecResult struct {
-	socketClient *socket.Client  // non-nil when daemon is up
+	socketClient *socket.Client    // non-nil when daemon is up
 	querier      ports.ArchQuerier // non-nil when using direct-RO fallback
 	closeStore   func()            // close the RO store when done; no-op for socket path
 	root         string
