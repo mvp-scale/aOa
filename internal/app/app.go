@@ -901,12 +901,11 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 			if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
 				logFn(fmt.Sprintf("warning: failed to persist index: %v", err))
 			}
-			// L19.10: persist edges per file outside the lock (C1 compliant).
+			// P3 (T31/T34): replace all edges in one atomic tx — clears stale file
+			// IDs from the previous build and writes new data without 257× per-file txs.
 			if a.ArchEnabled {
-				for fileID, fileEdges := range edgesByFile {
-					if err := a.Store.SaveEdgesForFile(a.ProjectID, fileID, fileEdges); err != nil {
-						a.debugf("WarmCaches: SaveEdgesForFile(%d): %v", fileID, err)
-					}
+				if err := a.Store.ReplaceAllEdges(a.ProjectID, edgesByFile); err != nil {
+					a.debugf("WarmCaches: ReplaceAllEdges: %v", err)
 				}
 				// §2.4: persist unresolved specs (findings fuel, never silently dropped).
 				if len(unresolvedEdges) > 0 {
@@ -1007,7 +1006,8 @@ func (a *App) markEdgeBatchDirty(fileID uint32, edges []ports.ImportEdge) {
 		a.edgePendingBatch = make(map[uint32][]ports.ImportEdge)
 	}
 	a.edgePendingProjID = a.ProjectID
-	a.edgePendingBatch[fileID] = edges // nil/empty = delete; non-empty = save
+	// nil or empty slice signals delete; a non-empty slice signals save.
+	a.edgePendingBatch[fileID] = edges
 
 	if a.edgeBatchTimer != nil {
 		// If Stop returns true the timer hadn't fired yet — decrement the
@@ -3190,12 +3190,11 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 		}
 	}
 
-	// L19.10: persist edges per file outside the lock (C1 compliant).
+	// P3 (T31/T34): replace all edges in one atomic tx — clears stale file IDs
+	// from the previous build and writes new data atomically (C1 compliant).
 	if a.Store != nil && a.ArchEnabled {
-		for fileID, fileEdges := range edgesByFile {
-			if err := a.Store.SaveEdgesForFile(projectID, fileID, fileEdges); err != nil {
-				a.debugf("Reindex: SaveEdgesForFile(%d): %v", fileID, err)
-			}
+		if err := a.Store.ReplaceAllEdges(projectID, edgesByFile); err != nil {
+			a.debugf("Reindex: ReplaceAllEdges: %v", err)
 		}
 		// §2.4: persist unresolved specs (findings fuel, never silently dropped).
 		if len(unresolvedEdges) > 0 {

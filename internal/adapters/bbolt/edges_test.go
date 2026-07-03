@@ -301,13 +301,23 @@ func TestEdgeStore_T19_OldBinaryNewDB_IndexNotCorrupted(t *testing.T) {
 }
 
 func TestEdgeStore_T19_SaveEdgesForFile_NeverUnderLock(t *testing.T) {
-	// Compile-time structural check: SaveEdgesForFile signature is correct.
-	// Runtime check: it compiles and is callable.
+	// C1 structural test: SaveEdgesForFile must exist, accept real edges, and
+	// round-trip correctly.  The lock-order invariant (must not be called while
+	// App.mu is held) is enforced by the T17 lockGuardStore harness in the app
+	// package; here we assert the method is correct at the storage layer.
 	store, _ := newTestStore(t)
 
-	// Just verifying the method exists and works — C1 enforcement is in T17 harness.
-	err := store.SaveEdgesForFile("proj-1", 1, nil) // nil = empty edge list
-	assert.NoError(t, err)
+	edges := makeTestEdges("cmd/aoa/main.go")
+	require.NoError(t, store.SaveEdgesForFile("proj-1", 1, edges))
+
+	got, err := store.LoadEdgesForFile("proj-1", 1)
+	require.NoError(t, err)
+	require.Len(t, got, len(edges), "saved edges must be loadable")
+	assert.Equal(t, edges[0].ImportPath, got[0].ImportPath, "ImportPath must round-trip")
+	assert.Equal(t, edges[0].StartLine, got[0].StartLine, "StartLine must round-trip (G7)")
+
+	// nil save must not error (idempotent clear).
+	assert.NoError(t, store.SaveEdgesForFile("proj-1", 2, nil))
 }
 
 func TestEdgeStore_EmptyEdgeSlice(t *testing.T) {
@@ -405,4 +415,130 @@ func TestEdgeStore_SaveEdgesBatch_Empty(t *testing.T) {
 	store, _ := newTestStore(t)
 	assert.NoError(t, store.SaveEdgesBatch("proj-1", nil))
 	assert.NoError(t, store.SaveEdgesBatch("proj-1", map[uint32][]ImportEdge{}))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// T38: _version enforced on the READ path (finding 12)
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestEdgeStore_T38_VersionCheck_ReadPath(t *testing.T) {
+	// T38: LoadEdgesForFile and LoadAllEdges must return empty results (not corrupt
+	// data) when the edges bucket carries a wrong _version byte.  Before this fix,
+	// openEdgesBucket returned the bucket regardless of version — a read-before-write
+	// scenario (new binary opening a DB with a future-version edges bucket) could
+	// silently return JSON-unmarshal failures or zero-valued edges.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.db")
+
+	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: time.Second})
+	require.NoError(t, err)
+
+	// Write a real edge under a wrong version byte (simulates future-format bucket).
+	goodEdge := []ImportEdge{{FromFile: "real.go", ImportPath: "fmt", StartLine: 1}}
+	data, _ := json.Marshal(goodEdge)
+	err = db.Update(func(tx *bolt.Tx) error {
+		proj, err := tx.CreateBucketIfNotExists([]byte("proj-1"))
+		if err != nil {
+			return err
+		}
+		eb, err := proj.CreateBucketIfNotExists(bucketEdges)
+		if err != nil {
+			return err
+		}
+		if err := eb.Put(keyVersion, []byte{0xFF}); err != nil { // future version
+			return err
+		}
+		return eb.Put(fileIDKey(1), data)
+	})
+	require.NoError(t, err)
+	db.Close()
+
+	store, err := NewStore(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { store.Close() })
+
+	// LoadEdgesForFile must return nil, nil (wrong version → treat as empty).
+	got, err := store.LoadEdgesForFile("proj-1", 1)
+	require.NoError(t, err, "wrong-version bucket must not error on load")
+	assert.Nil(t, got, "wrong-version bucket: LoadEdgesForFile must return nil (T38)")
+
+	// LoadAllEdges must also return nil (wrong version → no rows visible).
+	all, err := store.LoadAllEdges("proj-1")
+	require.NoError(t, err, "wrong-version bucket must not error on LoadAllEdges")
+	assert.Nil(t, all, "wrong-version bucket: LoadAllEdges must return nil (T38)")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ReplaceAllEdges — P3 atomic bulk write + stale-row elimination (T34)
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestEdgeStore_ReplaceAllEdges_ClearsStale(t *testing.T) {
+	// Seed two files; ReplaceAllEdges with only file 2 must leave file 1 absent
+	// (stale-row elimination — finding 9 / T34).
+	store, _ := newTestStore(t)
+
+	require.NoError(t, store.SaveEdgesForFile("proj-1", 1, makeTestEdges("old.go")))
+	require.NoError(t, store.SaveEdgesForFile("proj-1", 2, makeTestEdges("keep.go")))
+
+	// Replace with only file 2 — file 1 is a stale row from the "previous build".
+	fresh := map[uint32][]ImportEdge{
+		2: makeTestEdges("keep.go"),
+	}
+	require.NoError(t, store.ReplaceAllEdges("proj-1", fresh))
+
+	// File 1 must be gone.
+	stale, err := store.LoadEdgesForFile("proj-1", 1)
+	require.NoError(t, err)
+	assert.Nil(t, stale, "ReplaceAllEdges must eliminate stale file-1 row (T34)")
+
+	// File 2 must still be present.
+	kept, err := store.LoadEdgesForFile("proj-1", 2)
+	require.NoError(t, err)
+	assert.Len(t, kept, len(makeTestEdges("keep.go")), "ReplaceAllEdges must retain file-2 row")
+}
+
+func TestEdgeStore_ReplaceAllEdges_EmptyClears(t *testing.T) {
+	// ReplaceAllEdges with nil/empty fileEdges clears all existing rows.
+	store, _ := newTestStore(t)
+
+	require.NoError(t, store.SaveEdgesForFile("proj-1", 1, makeTestEdges("a.go")))
+	require.NoError(t, store.SaveEdgesForFile("proj-1", 2, makeTestEdges("b.go")))
+
+	// Replace with nil → clear only.
+	require.NoError(t, store.ReplaceAllEdges("proj-1", nil))
+
+	all, err := store.LoadAllEdges("proj-1")
+	require.NoError(t, err)
+	assert.Nil(t, all, "ReplaceAllEdges(nil) must clear all rows")
+}
+
+func TestEdgeStore_ReplaceAllEdges_Atomic(t *testing.T) {
+	// After ReplaceAllEdges the _version byte must be present and correct:
+	// ensureEdgesBucket is called on the fresh bucket inside the same tx.
+	store, _ := newTestStore(t)
+
+	batch := map[uint32][]ImportEdge{
+		10: makeTestEdges("internal/app/app.go"),
+		11: makeTestEdges("internal/ports/facts.go"),
+	}
+	require.NoError(t, store.ReplaceAllEdges("proj-1", batch))
+
+	// Verify _version is set correctly on the fresh bucket.
+	err := store.db.View(func(tx *bolt.Tx) error {
+		proj := tx.Bucket([]byte("proj-1"))
+		require.NotNil(t, proj)
+		eb := proj.Bucket(bucketEdges)
+		require.NotNil(t, eb, "edges bucket must exist after ReplaceAllEdges")
+		v := eb.Get(keyVersion)
+		assert.Equal(t, []byte{edgesVersion}, v, "_version must be correct after replace")
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Both files must be loadable.
+	for fileID, want := range batch {
+		got, err := store.LoadEdgesForFile("proj-1", fileID)
+		require.NoError(t, err, "LoadEdgesForFile(%d)", fileID)
+		assert.Len(t, got, len(want), "fileID=%d edge count after ReplaceAllEdges", fileID)
+	}
 }

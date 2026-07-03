@@ -26,12 +26,23 @@ func fileIDKey(fileID uint32) []byte {
 }
 
 // openEdgesBucket opens the edges sub-bucket inside proj for reading.
-// Returns nil if the bucket does not exist (no error — C3: old DB).
+// Returns nil if the bucket does not exist or carries a wrong _version (C3/T38).
+// A nil return is not an error: callers treat it as "no edges stored".
+// Version check on the read path prevents silently returning corrupt or
+// future-format data when a new binary reads a bucket it has not yet rewritten.
 func openEdgesBucket(proj *bolt.Bucket) *bolt.Bucket {
 	if proj == nil {
 		return nil
 	}
-	return proj.Bucket(bucketEdges)
+	eb := proj.Bucket(bucketEdges)
+	if eb == nil {
+		return nil
+	}
+	v := eb.Get(keyVersion)
+	if len(v) == 0 || v[0] != edgesVersion {
+		return nil // missing or wrong version — treat as empty (C3: stale/future data)
+	}
+	return eb
 }
 
 // ensureEdgesBucket opens or creates the edges sub-bucket inside proj for
@@ -284,6 +295,48 @@ func (s *Store) SaveUnresolved(projectID string, entries []ImportEdge) error {
 			}
 			if err := ub.Put(key, data); err != nil {
 				return fmt.Errorf("put unresolved %q: %w", e.ImportPath, err)
+			}
+		}
+		return nil
+	})
+}
+
+// ReplaceAllEdges atomically clears the edges bucket for the project and writes
+// all entries in a single bbolt write transaction.  The drop-and-recreate pattern
+// eliminates phantom rows from deleted or renumbered files on WarmCaches / Reindex
+// rebuilds (finding 9 / T34).  Passing nil or empty fileEdges still clears the
+// bucket (safe reset).  All-or-nothing: any error aborts the whole tx.
+// Implements ports.EdgeStore. C1: caller must NOT hold App.mu.
+func (s *Store) ReplaceAllEdges(projectID string, fileEdges map[uint32][]ImportEdge) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		proj, err := tx.CreateBucketIfNotExists([]byte(projectID))
+		if err != nil {
+			return err
+		}
+		// Drop the existing edges bucket (and all its rows) to eliminate stale
+		// file IDs from the previous build.  Atomically within this tx.
+		if proj.Bucket(bucketEdges) != nil {
+			if err := proj.DeleteBucket(bucketEdges); err != nil {
+				return fmt.Errorf("replace: delete edges bucket: %w", err)
+			}
+		}
+		if len(fileEdges) == 0 {
+			return nil // clear only — nothing to write
+		}
+		eb, err := ensureEdgesBucket(proj)
+		if err != nil {
+			return err
+		}
+		for fileID, edges := range fileEdges {
+			if len(edges) == 0 {
+				continue // skip empty entries: fresh bucket, nothing to delete
+			}
+			data, err := json.Marshal(edges)
+			if err != nil {
+				return fmt.Errorf("replace marshal fileID %d: %w", fileID, err)
+			}
+			if err := eb.Put(fileIDKey(fileID), data); err != nil {
+				return fmt.Errorf("replace put fileID %d: %w", fileID, err)
 			}
 		}
 		return nil

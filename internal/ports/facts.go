@@ -61,6 +61,16 @@ type EdgeStore interface {
 	// Keyed by ImportPath+"\x00"+FromFile+"\x00"+StartLine — idempotent Put.
 	// C1: caller must NOT hold App.mu.
 	SaveUnresolved(projectID string, entries []ImportEdge) error
+
+	// ReplaceAllEdges atomically clears the entire edges bucket for the project
+	// and writes the provided file→edges map in a single bbolt write transaction.
+	// Use this for WarmCaches and Reindex: stale file IDs from the previous build
+	// (deleted or renumbered files) are eliminated before new data is committed
+	// (finding 9 / T34). Passing nil or empty fileEdges still clears the bucket
+	// (safe reset, e.g., arch disabled after first boot).
+	// All-or-nothing: the tx is rolled back on any error.
+	// C1: caller must NOT hold App.mu.
+	ReplaceAllEdges(projectID string, fileEdges map[uint32][]ImportEdge) error
 }
 
 // FactParser is the extended parser interface that extracts both symbols and

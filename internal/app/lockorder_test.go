@@ -84,6 +84,9 @@ func (n *noopStore) LoadEdgesForFile(_ string, _ uint32) ([]ports.ImportEdge, er
 func (n *noopStore) DeleteEdgesForFile(_ string, _ uint32) error { return nil }
 func (n *noopStore) LoadAllEdges(_ string) ([]ports.ImportEdge, error) { return nil, nil }
 func (n *noopStore) SaveUnresolved(_ string, _ []ports.ImportEdge) error  { return nil }
+func (n *noopStore) ReplaceAllEdges(_ string, _ map[uint32][]ports.ImportEdge) error {
+	return nil
+}
 
 // ── lockGuardStore ─────────────────────────────────────────────────────────
 //
@@ -165,6 +168,12 @@ func (s *lockGuardStore) DeleteEdgesForFile(projectID string, fileID uint32) err
 func (s *lockGuardStore) SaveUnresolved(projectID string, entries []ports.ImportEdge) error {
 	s.assertUnlocked("SaveUnresolved", projectID)
 	return s.storeBackend.SaveUnresolved(projectID, entries)
+}
+
+// ReplaceAllEdges triggers a single db.Update that drops and rewrites all edges (P3 C1 check).
+func (s *lockGuardStore) ReplaceAllEdges(projectID string, fileEdges map[uint32][]ports.ImportEdge) error {
+	s.assertUnlocked("ReplaceAllEdges", projectID)
+	return s.storeBackend.ReplaceAllEdges(projectID, fileEdges)
 }
 
 // ── helper ─────────────────────────────────────────────────────────────────
