@@ -137,7 +137,7 @@ func factsHash(units []UnitFact, deps []DepFact) string {
 		return sigs[i].to < sigs[j].to
 	})
 	for _, sig := range sigs {
-		h.Write([]byte(fmt.Sprintf("%s\x00%s\x00%d\x00", sig.from, sig.to, sig.count)))
+		fmt.Fprintf(h, "%s\x00%s\x00%d\x00", sig.from, sig.to, sig.count)
 	}
 
 	return fmt.Sprintf("%x", h.Sum(nil))[:12]

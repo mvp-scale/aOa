@@ -3,7 +3,6 @@ package bbolt
 import (
 	"bytes"
 	"fmt"
-	"strings"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -219,11 +218,3 @@ func (s *Store) HasArchBucket(projectID string) bool {
 	return found
 }
 
-// scopeOf extracts the scope portion from a shard key like "{scope}/{view}@{hash}".
-// Returns "" if the key does not contain "/".
-func scopeOf(key string) string {
-	if idx := strings.Index(key, "/"); idx >= 0 {
-		return key[:idx]
-	}
-	return ""
-}
