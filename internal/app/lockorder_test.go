@@ -196,6 +196,14 @@ func (s *lockGuardStore) ReplaceAllEdges(projectID string, fileEdges map[uint32]
 	return s.storeBackend.ReplaceAllEdges(projectID, fileEdges)
 }
 
+// LoadAllEdges is a read-only method (db.View) so no C1 check is needed.
+// PC4: return real edges so deriveArch proceeds past the early-return guard
+// and the guarded write methods (SaveShards / SaveManifest / SaveFindings)
+// actually execute under the lock-order test, de-vacuating the harness.
+func (s *lockGuardStore) LoadAllEdges(projectID string) ([]ports.ImportEdge, error) {
+	return edgesForDeriveTest(), nil
+}
+
 // ArchStore write methods (L19.14 C1 check) — db.Update callers that must never
 // fire while App.mu is held.
 
@@ -455,6 +463,10 @@ func TestT17_EdgeStoreNotUnderMu(t *testing.T) {
 		// onFileChanged (arch-enabled) enqueues edges into edgePendingBatch under mu,
 		// then doFlushEdgeBatch dispatches SaveEdgesBatch outside mu — C1 compliant.
 		// lockGuardStore.SaveEdgesBatch will Errorf if App.mu is held.
+		// bgWg.Wait: PC4 — lockGuardStore.LoadAllEdges returns real edges so the
+		// arch-derive goroutine runs to completion; we drain it to avoid T32
+		// false-positives from the goroutine calling SaveShards while a subsequent
+		// test step holds a.mu.
 		tmpDir := t.TempDir()
 		a := newLockGuardApp(t, tmpDir)
 		a.ArchEnabled = true // enable C4 so the edge path fires
@@ -463,14 +475,19 @@ func TestT17_EdgeStoreNotUnderMu(t *testing.T) {
 		require.NoError(t, os.WriteFile(goFile,
 			[]byte("package main\nimport \"fmt\"\nfunc main() { fmt.Println(\"hi\") }"), 0644))
 
-		a.onFileChanged(goFile)            // populates edgePendingBatch
-		a.doFlushEdgeBatch()               // triggers SaveEdgesBatch — C1 guard fires here
+		a.onFileChanged(goFile)  // populates edgePendingBatch
+		a.doFlushEdgeBatch()     // triggers SaveEdgesBatch — C1 guard fires here
+		a.bgWg.Wait()            // drain arch-derive goroutine (PC4: now does real work)
 	})
 
 	t.Run("watcher_edge_delete_path", func(t *testing.T) {
 		// onFileChanged for a deleted file enqueues a nil delete entry into
 		// edgePendingBatch; doFlushEdgeBatch dispatches SaveEdgesBatch outside mu.
 		// lockGuardStore.SaveEdgesBatch will Errorf if App.mu is held.
+		// bgWg.Wait between flushes: PC4 — with real edges, the arch-derive goroutine
+		// from flush #1 must complete before flush #2 holds a.mu (otherwise the
+		// goroutine's SaveShards call hits a T32 false-positive from doFlushEdgeBatch's
+		// opening a.mu.Lock()).
 		tmpDir := t.TempDir()
 		a := newLockGuardApp(t, tmpDir)
 		a.ArchEnabled = true
@@ -482,11 +499,13 @@ func TestT17_EdgeStoreNotUnderMu(t *testing.T) {
 		// Seed the file into the index and flush its edges.
 		a.onFileChanged(goFile)
 		a.doFlushEdgeBatch()
+		a.bgWg.Wait() // drain arch-derive goroutine from flush #1 before continuing
 
 		// Now delete it — enqueues nil into edgePendingBatch.
 		require.NoError(t, os.Remove(goFile))
 		a.onFileChanged(goFile)
 		a.doFlushEdgeBatch() // lockGuardStore.SaveEdgesBatch Errorfed if under mu
+		a.bgWg.Wait()        // drain arch-derive goroutine from flush #2
 	})
 
 	t.Run("watcher_edge_batch_flush_path", func(t *testing.T) {
@@ -504,6 +523,7 @@ func TestT17_EdgeStoreNotUnderMu(t *testing.T) {
 
 		a.onFileChanged(goFile) // step 1: accumulate
 		a.doFlushEdgeBatch()    // step 2+3: flush — C1 check fires inside SaveEdgesBatch
+		a.bgWg.Wait()           // drain arch-derive goroutine (PC4: now does real work)
 	})
 }
 
@@ -660,18 +680,21 @@ func TestT17_ArchWritePathNotUnderMu(t *testing.T) {
 	// ── deriveArch path: arch write path via the real derive pipeline ────────
 	// deriveArch is always called via safeGo (outside mu). Verify that when we
 	// call it directly (sequentially, outside mu), no C1 violations fire.
-	// Because the noopStore returns zero edges, deriveArch returns early —
-	// this test confirms the early-return path is also C1-clean.
-	t.Run("deriveArch_early_return_no_violation", func(t *testing.T) {
+	// PC4: lockGuardStore now overrides LoadAllEdges to return edgesForDeriveTest()
+	// so deriveArch proceeds past the early-return guard and actually calls
+	// SaveShards / SaveManifest / SaveFindings — the guarded writes now execute.
+	t.Run("deriveArch_write_path_not_under_mu", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		a := newLockGuardApp(t, tmpDir)
 		a.ArchEnabled = true
 		a.stopCh = make(chan struct{})
 
-		// deriveArch with zero edges from noopStore → early return, no writes.
-		// lockGuardStore must not fire (no db.Update called, nothing under mu).
+		// lockGuardStore.LoadAllEdges returns edgesForDeriveTest() so deriveArch
+		// proceeds to SaveShards / SaveManifest / SaveFindings.
+		// lockGuardStore must NOT fire on any of those calls (they run outside mu).
 		a.deriveArch()
-		// If any write was called under mu, lockGuardStore would have Errorfed.
+		// If SaveShards, SaveManifest, or SaveFindings were called under a.mu,
+		// lockGuardStore would have Errorfed and marked the test failed.
 	})
 
 	// ── doFlushEdgeBatch → arch-derive trigger is outside mu ─────────────────
