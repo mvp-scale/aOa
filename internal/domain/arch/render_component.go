@@ -120,7 +120,7 @@ func RenderComponent(in RenderInput) (*Shard, error) {
 		Kind:    "buckets",
 		Title:   "Component diagram",
 		Dir:     "DOWN",
-		Prov:    Prov{Kind: "mixed", Label: "MIXED · imports real · grouping inferred"},
+		Prov:    Prov{Kind: "derived", Label: "REAL · imports + deterministic grouping"},
 		Buckets: buckets,
 		Edges:   shardEdges,
 	}

@@ -82,7 +82,7 @@ func RenderCycles(in RenderInput) (*Shard, error) {
 	shard := &Shard{
 		Kind:    "table",
 		Title:   "Dependency cycles",
-		Prov:    Prov{Kind: "mixed", Label: "MIXED · imports real · grouping inferred"},
+		Prov:    Prov{Kind: "derived", Label: "REAL · imports + deterministic grouping"},
 		Columns: columns,
 		Rows:    rows,
 	}

@@ -81,7 +81,9 @@ func slugify(s string) string {
 // Part assignment: sorted alphabetically by group label, then assigned 0,1,2,...
 // so that the rendering order is stable without an arch.yaml declaration.
 //
-// Prov for path-prefix grouping is always "mixed" (rung-2 is heuristic, not declared).
+// Prov for path-prefix grouping is "derived" (REAL): G7 permits deterministic
+// name/group/annotate of extracted facts; "mixed" is reserved for applied overlays
+// and ②b subset choices (kickoff-F2 §7 ruling D1, 2026-07-03).
 func Group(units []UnitFact) GroupingResult {
 	// Assign each unit to a group label.
 	labelFor := make(map[string]string, len(units)) // unitID → groupLabel

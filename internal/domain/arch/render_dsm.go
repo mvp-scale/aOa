@@ -92,7 +92,7 @@ func RenderDSM(in RenderInput) (*Shard, error) {
 		Kind:   "matrix",
 		Title:  "Dependency Structure Matrix",
 		Dir:    "DOWN",
-		Prov:   Prov{Kind: "mixed", Label: "MIXED · imports real · grouping inferred"},
+		Prov:   Prov{Kind: "derived", Label: "REAL · imports + deterministic grouping"},
 		Items:  items,
 		Matrix: matrix,
 	}
