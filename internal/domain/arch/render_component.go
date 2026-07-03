@@ -14,8 +14,7 @@ import (
 //  4. Emit ShardEdges sorted by ID.
 //  5. Count caption via DeriveCaption.
 //
-// Provenance: "mixed" when rung-2 path-prefix grouping is used (heuristic, not declared).
-// Override to "derived" when a declaration-based GroupingResult is provided.
+// Provenance: uses in.GroupProv ("derived" or "mixed"); defaults to "derived".
 func RenderComponent(in RenderInput) (*Shard, error) {
 	g := in.Grouping
 
@@ -116,11 +115,12 @@ func RenderComponent(in RenderInput) (*Shard, error) {
 		return shardEdges[i].ID < shardEdges[j].ID
 	})
 
+	prov := provFromKind(in.GroupProv)
 	shard := &Shard{
 		Kind:    "buckets",
 		Title:   "Component diagram",
 		Dir:     "DOWN",
-		Prov:    Prov{Kind: "derived", Label: "REAL · imports + deterministic grouping"},
+		Prov:    prov,
 		Buckets: buckets,
 		Edges:   shardEdges,
 	}

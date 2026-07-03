@@ -79,10 +79,11 @@ func RenderCycles(in RenderInput) (*Shard, error) {
 		rows = [][]string{}
 	}
 
+	prov := provFromKind(in.GroupProv)
 	shard := &Shard{
 		Kind:    "table",
 		Title:   "Dependency cycles",
-		Prov:    Prov{Kind: "derived", Label: "REAL · imports + deterministic grouping"},
+		Prov:    prov,
 		Columns: columns,
 		Rows:    rows,
 	}

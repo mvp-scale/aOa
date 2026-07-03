@@ -1,6 +1,7 @@
 package arch
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -125,4 +126,152 @@ func Group(units []UnitFact) GroupingResult {
 		UnitGroup: unitGroup,
 		Groups:    groups,
 	}
+}
+
+// GroupWithOptions runs the full three-rung grouping cascade with optional overlay.
+//
+// Rung priority (highest wins):
+//  1. Overlay (opts.Overlays) → prov "mixed" if any applied
+//  2. Rung-1 (opts.Declarations) → explicit arch.yaml assignments → prov "derived"
+//  3. Rung-3 (unit.Domain != "") → atlas domain label → prov "derived"
+//  4. Rung-2 (pathPrefixGroup) → path-prefix heuristic → prov "derived"
+//
+// All three non-overlay rungs stamp prov "derived" (REAL) per kickoff-F2 §7 D1.
+// Overlays (or OverlayHadInvalidIDs) stamp prov "mixed".
+//
+// Returns: result, provKind ("derived"|"mixed"), warning findings (overlay-leash).
+func GroupWithOptions(units []UnitFact, opts *GroupOptions) (GroupingResult, string, []Finding) {
+	// Start with rung-2 (path-prefix) for all units.
+	labelFor := make(map[string]string, len(units))
+	for _, u := range units {
+		labelFor[u.ID] = pathPrefixGroup(u.Path)
+	}
+
+	// Rung-3: atlas domain — overrides rung-2 where Domain is set.
+	for _, u := range units {
+		if u.Domain != "" {
+			labelFor[u.ID] = u.Domain
+		}
+	}
+
+	// Rung-1: explicit declarations — override rung-3/rung-2.
+	if opts != nil {
+		for uid, label := range opts.Declarations {
+			if _, exists := labelFor[uid]; exists {
+				labelFor[uid] = label
+			}
+		}
+	}
+
+	// Overlay: override everything. Prov → mixed.
+	overlayApplied := false
+	var warnings []Finding
+	if opts != nil {
+		if len(opts.Overlays) > 0 {
+			for uid, label := range opts.Overlays {
+				labelFor[uid] = label
+				overlayApplied = true
+			}
+		}
+		if opts.OverlayHadInvalidIDs {
+			overlayApplied = true
+			// Generate a warning finding for the leash violation.
+			f := Finding{
+				Rule:     "overlay-leash",
+				Severity: "warn",
+				Message:  "overlay references unit IDs absent from facts — invented IDs ignored",
+				Subjects: nil,
+				Sources:  nil,
+			}
+			f.ID = findingID(f.Rule, "overlay", []string{"leash"})
+			warnings = append(warnings, f)
+		}
+	}
+
+	provKind := "derived"
+	if overlayApplied {
+		provKind = "mixed"
+	}
+
+	result := buildGroupingFromLabels(units, labelFor)
+	return result, provKind, warnings
+}
+
+// buildGroupingFromLabels constructs a GroupingResult from a unitID → label map.
+func buildGroupingFromLabels(units []UnitFact, labelFor map[string]string) GroupingResult {
+	labelSet := make(map[string]struct{})
+	for _, lbl := range labelFor {
+		labelSet[lbl] = struct{}{}
+	}
+	labels := make([]string, 0, len(labelSet))
+	for lbl := range labelSet {
+		labels = append(labels, lbl)
+	}
+	sort.Strings(labels)
+
+	groups := make([]GroupMeta, len(labels))
+	groupIdx := make(map[string]int, len(labels))
+	for i, lbl := range labels {
+		id := fmt.Sprintf("g_%s", slugify(lbl))
+		groups[i] = GroupMeta{
+			ID:    id,
+			Label: lbl,
+			Part:  i,
+		}
+		groupIdx[lbl] = i
+	}
+
+	unitGroup := make(map[string]string, len(units))
+	for _, u := range units {
+		lbl := labelFor[u.ID]
+		if idx, ok := groupIdx[lbl]; ok {
+			unitGroup[u.ID] = groups[idx].ID
+		}
+	}
+	return GroupingResult{UnitGroup: unitGroup, Groups: groups}
+}
+
+// ParseOverlay decodes an overlay spec from JSON.
+// Returns an error if the $schema field is not "aoa.arch-overlay/v1".
+func ParseOverlay(data []byte) (*OverlaySpec, error) {
+	var spec OverlaySpec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		return nil, fmt.Errorf("overlay: parse JSON: %w", err)
+	}
+	if spec.Schema != "aoa.arch-overlay/v1" {
+		return nil, fmt.Errorf("overlay: unsupported schema %q — expected aoa.arch-overlay/v1", spec.Schema)
+	}
+	return &spec, nil
+}
+
+// ApplyOverlay validates an overlay spec against the unit fact set (leash law)
+// and returns:
+//   - approved: unitID → group label (only valid IDs; excludes invented IDs)
+//   - invalidIDs: unit IDs from the overlay absent from the fact set (leash violations)
+//
+// Invalid IDs are rejected silently from approved; they are reported so the
+// caller can emit warning findings and stamp provenance as "mixed".
+func ApplyOverlay(spec *OverlaySpec, units []UnitFact) (approved map[string]string, invalidIDs []string) {
+	unitSet := make(map[string]bool, len(units))
+	for _, u := range units {
+		unitSet[u.ID] = true
+	}
+
+	approved = make(map[string]string)
+	seen := make(map[string]bool)
+	for _, g := range spec.Groups {
+		for _, uid := range g.UnitIDs {
+			if seen[uid] {
+				continue // dedup
+			}
+			seen[uid] = true
+			if unitSet[uid] {
+				approved[uid] = g.ID
+			} else {
+				invalidIDs = append(invalidIDs, uid)
+			}
+		}
+	}
+	sort.Strings(invalidIDs) // deterministic order
+	return approved, invalidIDs
 }

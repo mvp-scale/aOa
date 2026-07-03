@@ -161,10 +161,73 @@ type GroupMeta struct {
 // RenderInput is the bundle passed to every renderer.
 // All fields are pre-computed by the Service before calling Render.
 type RenderInput struct {
-	Scope    string
-	Units    []UnitFact
-	Deps     []DepFact
-	Grouping GroupingResult
-	SCCs     [][]string // pre-computed SCCs (from TarjanSCC); shared by cycles renderer
-	Findings []Finding  // detector output for this scope
+	Scope     string
+	Units     []UnitFact
+	Deps      []DepFact
+	Grouping  GroupingResult
+	GroupProv string     // "derived" or "mixed" — propagated from grouping step
+	SCCs      [][]string // pre-computed SCCs (from TarjanSCC); shared by cycles renderer
+	Findings  []Finding  // detector output for this scope
+}
+
+// Manifest is the top-level catalog of all rendered shards for one scope.
+// Byte-stable: all slices sorted by ID; no timestamps inside.
+// Rev is a 12-char hash of the sorted unit+dep inputs — changes when facts change.
+type Manifest struct {
+	Scope string      `json:"scope"`
+	Rev   string      `json:"rev"`
+	Views []ViewEntry `json:"views"`
+}
+
+// ViewEntry is one rendered-view entry in the Manifest.
+type ViewEntry struct {
+	ID      string `json:"id"`      // e.g. "component"
+	Key     string `json:"key"`     // bbolt key: "{scope}/{id}@{hash}"
+	Hash    string `json:"hash"`    // 12-char ContentHash of shard JSON
+	Caption string `json:"caption"` // human summary from DeriveCaption
+	Prov    string `json:"prov"`    // "derived" | "mixed" | "simulated"
+}
+
+// GroupOptions controls the three-rung grouping cascade.
+// Nil or zero-value → rung-2 path-prefix only (default, always REAL/derived).
+type GroupOptions struct {
+	// Declarations (rung-1): declared group for a unit, keyed by unit ID.
+	// Takes priority over path-prefix. From arch.yaml role→path mappings,
+	// pre-resolved to unit IDs by the app layer before passing here.
+	Declarations map[string]string // unitID → group label
+
+	// Overlays (rung-overlay): group assignments from a validated overlay file.
+	// Pre-parsed and leash-validated (invalid unit IDs removed) by the app layer.
+	// If any overlay assignment was applied, GroupProv is set to "mixed".
+	Overlays map[string]string // unitID → group label
+
+	// OverlayHadInvalidIDs is true when the overlay file contained IDs that
+	// were absent from the fact set (leash violation). The invalid IDs have
+	// already been removed from Overlays; this flag drives warning-finding generation.
+	OverlayHadInvalidIDs bool
+}
+
+// OverlaySpec is the on-disk schema for .aoa/arch/overlays/<scope>.json.
+// Schema identifier: "aoa.arch-overlay/v1".
+type OverlaySpec struct {
+	Schema string             `json:"$schema"`
+	Groups []OverlayGroupSpec `json:"groups"`
+}
+
+// OverlayGroupSpec is one group entry in an overlay file.
+type OverlayGroupSpec struct {
+	ID      string   `json:"id"`      // group label (e.g. "infra")
+	Label   string   `json:"label"`   // display label
+	UnitIDs []string `json:"unitIds"` // unit IDs to assign to this group
+}
+
+// provFromKind converts a groupProv kind string to a Prov value.
+// Empty string → "derived" (REAL; default when no overlay applied).
+func provFromKind(kind string) Prov {
+	switch kind {
+	case "mixed":
+		return Prov{Kind: "mixed", Label: "MIXED · overlay applied"}
+	default:
+		return Prov{Kind: "derived", Label: "REAL · imports + deterministic grouping"}
+	}
 }

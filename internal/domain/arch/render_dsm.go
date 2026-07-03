@@ -88,11 +88,12 @@ func RenderDSM(in RenderInput) (*Shard, error) {
 		matrix[i] = row
 	}
 
+	prov := provFromKind(in.GroupProv)
 	shard := &Shard{
 		Kind:   "matrix",
 		Title:  "Dependency Structure Matrix",
 		Dir:    "DOWN",
-		Prov:   Prov{Kind: "derived", Label: "REAL · imports + deterministic grouping"},
+		Prov:   prov,
 		Items:  items,
 		Matrix: matrix,
 	}
