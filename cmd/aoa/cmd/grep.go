@@ -206,12 +206,10 @@ func executeSearch(query string, opts ports.SearchOptions, useColor bool) error 
 	}
 	if err != nil {
 		if isConnectError(err) {
-			if isShimMode() {
-				// Shim mode: fall back to system grep with correct args.
-				// os.Args[2:] skips ["aoa", "grep"] to get the original grep args.
-				return fallbackSystemGrep(os.Args[2:])
-			}
-			// Interactive mode: clear error message to stderr.
+			// Index search requires the daemon — do NOT fall back to system grep
+			// (which would read stdin for a no-file-arg call and hang the agent).
+			// L19.17/gotcha-3b: the lazy-revive above was already attempted;
+			// if it failed, surface a clear error in both shim and interactive mode.
 			fmt.Fprintln(os.Stderr, "Error: daemon not running. Start with: aoa daemon start")
 			return grepExit{2}
 		}
