@@ -149,6 +149,13 @@ func (a *App) onFileChanged(absPath string) {
 				m, edges, parseErr := fp.ParseFileToMetaAndFacts(absPath, source)
 				if parseErr == nil {
 					metas = m
+					// T33: relativize FromFile before queueing — the parser receives
+					// absPath but edges must carry the project-relative path (G7,
+					// ports/facts.go: "never absolute"). The indexer path (indexer.go)
+					// does the same at the emit loop; the watcher must match.
+					for i := range edges {
+						edges[i].FromFile = relPath
+					}
 					// C2 (L19.12): queue edge save into the batch accumulator (under mu).
 					// A Put with non-empty edges overwrites any stale data for fileID,
 					// so no prior Delete is needed for the modify case.

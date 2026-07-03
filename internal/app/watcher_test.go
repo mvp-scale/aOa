@@ -199,3 +199,50 @@ func TestOnFileChanged_BumpsRevision(t *testing.T) {
 		assert.Greater(t, a.Revision(), before, "revision must increase after file deletion")
 	})
 }
+
+// TestT33_WatcherFromFileRelative is the T33 invariant: edges queued by the
+// watcher must carry project-relative FromFile paths, never absolute paths.
+//
+// Root cause this guards against (checkpoint-F1 finding 7): the watcher called
+// fp.ParseFileToMetaAndFacts(absPath, …) and passed the returned edges verbatim
+// to markEdgeBatchDirty — so edges stored in bbolt had FromFile=absPath. The
+// indexer.go path (indexer.go:190) correctly relativised with `e.FromFile = relPath`
+// but the watcher lacked the equivalent step.
+func TestT33_WatcherFromFileRelative(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Build a subdirectory so the relative path is non-trivial.
+	subDir := filepath.Join(tmpDir, "internal", "app")
+	require.NoError(t, os.MkdirAll(subDir, 0755))
+
+	// Go file with imports — the parser will produce ImportEdges whose FromFile
+	// must be relative ("internal/app/server.go"), not absolute.
+	goFile := filepath.Join(subDir, "server.go")
+	require.NoError(t, os.WriteFile(goFile,
+		[]byte("package app\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n)\n\nfunc Serve() { fmt.Println(http.StatusOK) }\n"),
+		0644,
+	))
+
+	a := newWatcherTestApp(t, tmpDir)
+	a.ArchEnabled = true    // enable arch extraction path
+	a.Store = &noopStore{}  // markEdgeBatchDirty guards on Store != nil; must be set
+
+	a.onFileChanged(goFile)
+
+	// Inspect the pending edge batch directly (we're in the same package).
+	a.mu.Lock()
+	batch := a.edgePendingBatch
+	a.mu.Unlock()
+
+	require.NotEmpty(t, batch, "watcher must have queued edges for a Go file with imports")
+
+	for fileID, edges := range batch {
+		_ = fileID
+		for _, e := range edges {
+			assert.False(t, filepath.IsAbs(e.FromFile),
+				"T33: edge.FromFile must be relative, got absolute path %q", e.FromFile)
+			assert.Equal(t, "internal/app/server.go", e.FromFile,
+				"T33: edge.FromFile must be project-relative")
+		}
+	}
+}
