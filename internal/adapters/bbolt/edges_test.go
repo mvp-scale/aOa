@@ -469,6 +469,80 @@ func TestEdgeStore_T38_VersionCheck_ReadPath(t *testing.T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// T38 (surfacing half — PC4): corrupt JSON within a correctly-versioned bucket
+// must be surfaced, not silently fed as zero-values to F2's input (G7).
+// ─────────────────────────────────────────────────────────────────────────────
+
+func TestEdgeStore_T38_CorruptEntry_Surfaced(t *testing.T) {
+	// Write corrupt (non-JSON) bytes into the edges bucket under the CORRECT
+	// version so openEdgesBucket returns the bucket — the corrupt bytes are then
+	// hit by json.Unmarshal inside LoadEdgesForFile / LoadAllEdges.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.db")
+
+	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: time.Second})
+	require.NoError(t, err)
+
+	// Write one valid edge (fileID 1) and one corrupt entry (fileID 2).
+	goodEdge := []ImportEdge{{FromFile: "good.go", ImportPath: "fmt", StartLine: 1}}
+	goodData, _ := json.Marshal(goodEdge)
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		proj, err := tx.CreateBucketIfNotExists([]byte("proj-1"))
+		if err != nil {
+			return err
+		}
+		eb, err := proj.CreateBucketIfNotExists(bucketEdges)
+		if err != nil {
+			return err
+		}
+		// Correct version so openEdgesBucket lets us in.
+		if err := eb.Put(keyVersion, []byte{edgesVersion}); err != nil {
+			return err
+		}
+		// fileID 1: valid JSON.
+		if err := eb.Put(fileIDKey(1), goodData); err != nil {
+			return err
+		}
+		// fileID 2: corrupt bytes — json.Unmarshal will fail.
+		return eb.Put(fileIDKey(2), []byte("NOT JSON AT ALL {{{"))
+	})
+	require.NoError(t, err)
+	db.Close()
+
+	store, err := NewStore(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { store.Close() })
+
+	t.Run("LoadEdgesForFile_corrupt_returns_error", func(t *testing.T) {
+		// A corrupt row must surface an error — not silently return nil, nil.
+		got, err := store.LoadEdgesForFile("proj-1", 2)
+		assert.Error(t, err, "T38: corrupt edge entry must surface an error (not silent nil)")
+		assert.Nil(t, got, "T38: corrupt entry must yield nil edges")
+	})
+
+	t.Run("LoadEdgesForFile_valid_still_works", func(t *testing.T) {
+		// A valid row adjacent to a corrupt one must still be readable.
+		got, err := store.LoadEdgesForFile("proj-1", 1)
+		require.NoError(t, err)
+		require.NotNil(t, got)
+		assert.Equal(t, goodEdge, got, "T38: valid row must be returned correctly alongside corrupt sibling")
+	})
+
+	t.Run("LoadAllEdges_corrupt_skip_with_count", func(t *testing.T) {
+		// LoadAllEdges must continue past the corrupt row, return valid edges,
+		// AND surface a non-nil error carrying the skip count.
+		all, err := store.LoadAllEdges("proj-1")
+		assert.Error(t, err, "T38: LoadAllEdges must return non-nil error when entries are skipped")
+		assert.Contains(t, err.Error(), "skipped", "T38: error must mention the skip count")
+		// The valid row (fileID 1) must still be included.
+		require.NotNil(t, all, "T38: valid edges must be returned even when some rows are corrupt")
+		assert.Len(t, all, len(goodEdge),
+			"T38: exactly the valid edge entries must be present; corrupt row must not contribute")
+	})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ReplaceAllEdges — P3 atomic bulk write + stale-row elimination (T34)
 // ─────────────────────────────────────────────────────────────────────────────
 

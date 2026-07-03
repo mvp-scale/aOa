@@ -173,7 +173,10 @@ func (s *Store) LoadEdgesForFile(projectID string, fileID uint32) ([]ImportEdge,
 		copy(cp, v)
 		var edges []ImportEdge
 		if err := json.Unmarshal(cp, &edges); err != nil {
-			return nil // corrupt entry — return empty (graceful degradation)
+			// T38: surface corrupt entries — never silently return zero-values to F2.
+			// Return the error so callers know the row was unreadable; they can
+			// decide whether to treat it as empty or propagate (G7: no silent zeros).
+			return fmt.Errorf("LoadEdgesForFile: corrupt data for fileID %d: %w", fileID, err)
 		}
 		result = edges
 		return nil
@@ -201,9 +204,13 @@ func (s *Store) DeleteEdgesForFile(projectID string, fileID uint32) error {
 // LoadAllEdges returns every edge stored for the project, across all files.
 // Iterates the edges bucket in key order, skipping the _version metadata key.
 // Returns nil, nil if no edges bucket or project exists.
+// T38: corrupt rows are skipped but counted — if any were skipped the returned
+// error carries the count so callers (and F2's input pipeline) are never handed
+// silent zero-values from unreadable rows (G7: never silent zeros).
 // Implements ports.EdgeStore.
 func (s *Store) LoadAllEdges(projectID string) ([]ImportEdge, error) {
 	var all []ImportEdge
+	var skipped int
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		proj := tx.Bucket([]byte(projectID))
@@ -225,7 +232,10 @@ func (s *Store) LoadAllEdges(projectID string) ([]ImportEdge, error) {
 			copy(cp, v)
 			var edges []ImportEdge
 			if err := json.Unmarshal(cp, &edges); err != nil {
-				return nil // skip corrupt entries (graceful degradation)
+				// T38: count corrupt entries — never silently feed zeros to F2.
+				// Continue iterating so valid rows are still returned.
+				skipped++
+				return nil
 			}
 			all = append(all, edges...)
 			return nil
@@ -233,6 +243,9 @@ func (s *Store) LoadAllEdges(projectID string) ([]ImportEdge, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+	if skipped > 0 {
+		return all, fmt.Errorf("LoadAllEdges: %d corrupt entry/entries skipped", skipped)
 	}
 	return all, nil
 }

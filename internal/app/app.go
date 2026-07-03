@@ -888,6 +888,14 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 		a.Index.Tokens = freshIdx.Tokens
 		a.Index.Metadata = freshIdx.Metadata
 		a.Index.Files = freshIdx.Files
+		// T35: Clone under the lock — a.Index is live and another goroutine may
+		// write it after a.mu.Unlock(); passing the live pointer to SaveIndex
+		// (outside the lock) is a data race. Clone() makes a snapshot safe to
+		// read after the lock is released (C1 + T35 residual).
+		var idxSnap *ports.Index
+		if a.Store != nil {
+			idxSnap = a.Index.Clone()
+		}
 		a.mu.Unlock()
 		a.Engine.Rebuild()
 		r.FileCount = stats.FileCount
@@ -896,9 +904,9 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 			stats.FileCount, stats.SymbolCount, stats.TokenCount, time.Since(buildStart).Seconds()))
 		r.IndexTime += time.Since(buildStart).Seconds()
 
-		// Persist index — outside the lock (C1).
-		if a.Store != nil {
-			if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
+		// Persist index — outside the lock (C1). idxSnap is nil when Store is nil.
+		if idxSnap != nil {
+			if err := a.Store.SaveIndex(a.ProjectID, idxSnap); err != nil {
 				logFn(fmt.Sprintf("warning: failed to persist index: %v", err))
 			}
 			// P3 (T31/T34): replace all edges in one atomic tx — clears stale file
