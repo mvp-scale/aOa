@@ -970,6 +970,22 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 		})
 	}
 
+	// PC1 / T45: boot-time derive — edges present but arch_shards absent.
+	// Fires when `aoa init` has already written edges to the DB (edges bucket
+	// exists) but this is the first daemon boot for the current binary
+	// (arch_shards bucket absent). Without this trigger, the canonical
+	// `init → daemon → arch views` workflow returns "no data" until a file
+	// edit kicks off the watcher path.
+	// Same C4 gate and safeGo/bgWg pattern as the T43 trigger.
+	// Mutually exclusive with T43: T43 fires when edges are absent (Reindex →
+	// edges + shards); PC1 fires when edges are present but shards are absent
+	// (direct derive only). archDeriveMu serializes concurrent derives —
+	// no double-fire risk.
+	if r.FileCount > 0 && a.ArchEnabled && a.Store != nil &&
+		a.Store.HasEdgesBucket(a.ProjectID) && !a.Store.HasArchBucket(a.ProjectID) {
+		safeGo(&a.bgWg, "boot-arch-derive", nil, a.deriveArch)
+	}
+
 	r.TotalTime = time.Since(totalStart).Seconds()
 	return r
 }

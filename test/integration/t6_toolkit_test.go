@@ -22,28 +22,23 @@ import (
 	"time"
 )
 
-// startDaemonAndDeriveArch initialises a project, starts the daemon, triggers
-// a Reindex (via a second `aoa init`) so arch derivation fires, and polls for
-// shards. Returns (cleanup, hasData).
+// startDaemonAndDeriveArch initialises a project, starts the daemon, and polls
+// for arch shards. Returns (cleanup, hasData).
 //
-// Background: WarmCaches only backfills when the edges bucket is ABSENT (T43).
-// When init already populated the bucket, arch shards are derived only when
-// Reindex is called. The second init call delegates to Reindex via socket,
-// which queues deriveArch as a background goroutine.
+// After PC1: WarmCaches fires boot-arch-derive when the edges bucket exists but
+// arch_shards are absent (the canonical `init → daemon boot` scenario). The
+// second `aoa init` workaround (needed before PC1) has been removed — the
+// daemon derives on its own boot.
 func startDaemonAndDeriveArch(t *testing.T, dir string) (cleanup func(), hasData bool) {
 	t.Helper()
 
-	// First init: builds index and saves edges to DB (no daemon).
+	// Init: builds index and saves edges to DB (no daemon yet).
 	runAOA(t, dir, "init")
 
-	// Start daemon.
+	// Start daemon — WarmCaches detects edges+no shards and fires boot-arch-derive.
 	cleanup = startDaemon(t, dir)
 
-	// Second init: daemon is now up, so init delegates to Reindex via socket.
-	// Reindex triggers deriveArch as a background goroutine (arch-derive safeGo).
-	runAOA(t, dir, "init")
-
-	// Poll for arch shards (derivation is async after Reindex).
+	// Poll for arch shards (boot-arch-derive is async).
 	hasData = pollForArchData(t, dir, 15*time.Second)
 	return cleanup, hasData
 }
