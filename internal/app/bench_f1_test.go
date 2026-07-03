@@ -74,9 +74,9 @@ func TestT1KeystoneF1(t *testing.T) {
 
 	var results []runResult
 	// T28: interleaved per iteration — off,on,off,on,off,on,off,on.
+	// Arguments are evaluated left-to-right in Go, preserving off→on ordering.
 	for i := 0; i < pairs; i++ {
-		results = append(results, runOnce(false))
-		results = append(results, runOnce(true))
+		results = append(results, runOnce(false), runOnce(true))
 	}
 
 	fmt.Printf("\n=== T1 RE-RUN (F1 exit / T28+T29) — corpus %s, %d interleaved pairs ===\n", corpus, pairs)

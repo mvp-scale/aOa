@@ -56,38 +56,22 @@ func Hello() {
 
 // TestC4FlagOff_ReadArchFlag verifies readArchFlag correctly reads the env var.
 func TestC4FlagOff_ReadArchFlag(t *testing.T) {
-	// Helper to set and restore env var
-	setEnv := func(val string) func() {
-		old := os.Getenv("AOA_ARCH")
-		os.Setenv("AOA_ARCH", val)
-		return func() {
-			if old == "" {
-				os.Unsetenv("AOA_ARCH")
-			} else {
-				os.Setenv("AOA_ARCH", old)
-			}
-		}
-	}
-
 	tmpDir := t.TempDir()
 
-	// Default: ON
-	restore := setEnv("")
+	// Default: ON — t.Setenv registers cleanup to restore original value at test end.
+	t.Setenv("AOA_ARCH", "")
 	assert.True(t, readArchFlag(tmpDir), "empty AOA_ARCH → default ON")
-	restore()
 
-	// Explicit off
+	// Explicit off — each t.Setenv call saves the current value and restores in LIFO order.
 	for _, val := range []string{"off", "0", "false", "OFF", "False"} {
-		restore = setEnv(val)
+		t.Setenv("AOA_ARCH", val)
 		assert.False(t, readArchFlag(tmpDir), "AOA_ARCH=%q → OFF", val)
-		restore()
 	}
 
 	// Explicit on
 	for _, val := range []string{"on", "1", "true", "ON"} {
-		restore = setEnv(val)
+		t.Setenv("AOA_ARCH", val)
 		assert.True(t, readArchFlag(tmpDir), "AOA_ARCH=%q → ON", val)
-		restore()
 	}
 }
 
@@ -95,14 +79,8 @@ func TestC4FlagOff_ReadArchFlag(t *testing.T) {
 func TestC4FlagOff_Config(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Ensure env var is unset so config file takes effect
-	old := os.Getenv("AOA_ARCH")
-	os.Unsetenv("AOA_ARCH")
-	defer func() {
-		if old != "" {
-			os.Setenv("AOA_ARCH", old)
-		}
-	}()
+	// Ensure env var is unset so config file takes effect.
+	t.Setenv("AOA_ARCH", "")
 
 	// Without config: default ON
 	assert.True(t, readArchFlag(tmpDir))

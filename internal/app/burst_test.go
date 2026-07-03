@@ -70,9 +70,12 @@ func (s *blockingReadStore) SaveEdgesBatch(_ string, _ map[uint32][]ports.Import
 
 func (s *blockingReadStore) LoadEdgesForFile(_ string, _ uint32) ([]ports.ImportEdge, error) {
 	start := time.Now()
-	// Simulate a read that competes with the write lock.
-	s.mu.Lock()
-	s.mu.Unlock()
+	// Block until the write lock is available — measures wait-for-lock latency.
+	// Use a closure so defer is used, satisfying the lock-discipline linter.
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+	}()
 	lat := time.Since(start)
 	s.latMu.Lock()
 	s.readLatencies = append(s.readLatencies, lat)
