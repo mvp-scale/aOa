@@ -236,6 +236,12 @@ func (q *cliArchQuerier) Facts(_ string, subject string, limit int) ([]byte, err
 // ── prettyJSON helper ─────────────────────────────────────────────────────────
 
 // prettyPrintJSON writes JSON to stdout, pretty-printing if pretty=true.
+//
+// Byte-parity contract (PF2 / L19.19 AC): the non-pretty path writes stored
+// bytes verbatim with no trailing newline added.  This makes `aoa arch view`
+// output byte-identical to the HTTP shard body (`/api/arch/{scope}/{id}`).
+// Decision: CLI output = stored bytes; shell prompt appears on the next line
+// via the terminal's own newline after the command exits.
 func prettyPrintJSON(data json.RawMessage, pretty bool) {
 	if pretty {
 		var v interface{}
@@ -245,7 +251,8 @@ func prettyPrintJSON(data json.RawMessage, pretty bool) {
 			return
 		}
 	}
-	fmt.Println(string(data))
+	// No trailing newline — output is stored bytes verbatim (byte-parity AC).
+	_, _ = os.Stdout.Write(data)
 }
 
 // Compile-time check: cliArchQuerier satisfies ports.ArchQuerier.

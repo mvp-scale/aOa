@@ -22,7 +22,7 @@ func NewClient(sockPath string) *Client {
 
 // Search sends a search request and returns the result.
 func (c *Client) Search(query string, opts ports.SearchOptions) (*SearchResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodSearch,
 		Params: SearchParams{Query: query, Options: opts},
@@ -30,36 +30,25 @@ func (c *Client) Search(query string, opts ports.SearchOptions) (*SearchResult, 
 	if err != nil {
 		return nil, err
 	}
-
-	// Decode result
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal result: %w", err)
-	}
 	var result SearchResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal result: %w", err)
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal search result: %w", err)
 	}
 	return &result, nil
 }
 
 // Health sends a health check request.
 func (c *Client) Health() (*HealthResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodHealth,
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal result: %w", err)
-	}
 	var result HealthResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal result: %w", err)
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal health result: %w", err)
 	}
 	return &result, nil
 }
@@ -75,7 +64,7 @@ func (c *Client) Shutdown() error {
 
 // Files sends a files request with optional glob or name filter.
 func (c *Client) Files(glob, name string) (*FilesResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodFiles,
 		Params: FilesParams{Glob: glob, Name: name},
@@ -83,100 +72,80 @@ func (c *Client) Files(glob, name string) (*FilesResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal result: %w", err)
-	}
 	var result FilesResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal result: %w", err)
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal files result: %w", err)
 	}
 	return &result, nil
 }
 
 // Domains sends a domains request.
 func (c *Client) Domains() (*DomainsResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodDomains,
 	})
 	if err != nil {
 		return nil, err
 	}
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal result: %w", err)
-	}
 	var result DomainsResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal result: %w", err)
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal domains result: %w", err)
 	}
 	return &result, nil
 }
 
 // Bigrams sends a bigrams request.
 func (c *Client) Bigrams() (*BigramsResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodBigrams,
 	})
 	if err != nil {
 		return nil, err
 	}
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal result: %w", err)
-	}
 	var result BigramsResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal result: %w", err)
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal bigrams result: %w", err)
 	}
 	return &result, nil
 }
 
 // Stats sends a stats request.
 func (c *Client) Stats() (*StatsResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodStats,
 	})
 	if err != nil {
 		return nil, err
 	}
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal result: %w", err)
-	}
 	var result StatsResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal result: %w", err)
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal stats result: %w", err)
 	}
 	return &result, nil
 }
 
 // Reindex sends a reindex request to the daemon with an extended timeout.
 func (c *Client) Reindex() (*ReindexResult, error) {
-	resp, err := c.callWithTimeout(Request{
+	raw, err := c.callWithTimeout(Request{
 		ID:     "1",
 		Method: MethodReindex,
 	}, 120*time.Second)
 	if err != nil {
 		return nil, err
 	}
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal result: %w", err)
-	}
 	var result ReindexResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal result: %w", err)
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal reindex result: %w", err)
 	}
 	return &result, nil
 }
 
 // Peek sends a peek request to resolve codes to method source.
 func (c *Client) Peek(codes []string) (*PeekResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodPeek,
 		Params: PeekParams{Codes: codes},
@@ -184,13 +153,9 @@ func (c *Client) Peek(codes []string) (*PeekResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal result: %w", err)
-	}
 	var result PeekResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal result: %w", err)
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal peek result: %w", err)
 	}
 	return &result, nil
 }
@@ -208,7 +173,7 @@ func (c *Client) Wipe() error {
 
 // ArchViews sends an arch.views request and returns the manifest result.
 func (c *Client) ArchViews(scope string) (*ArchViewsResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodArchViews,
 		Params: ArchViewsParams{Scope: scope},
@@ -216,20 +181,21 @@ func (c *Client) ArchViews(scope string) (*ArchViewsResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal arch.views result: %w", err)
-	}
 	var result ArchViewsResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
+	if err := json.Unmarshal(raw, &result); err != nil {
 		return nil, fmt.Errorf("unmarshal arch.views result: %w", err)
 	}
 	return &result, nil
 }
 
 // ArchView sends an arch.view request and returns the shard result.
+//
+// PF2 (L19.19 byte-parity AC): callWithTimeout decodes the response into a
+// wireResponse with Result as json.RawMessage. This preserves the stored shard
+// bytes verbatim so ArchViewResult.Raw is byte-identical to the HTTP shard body.
+// The two-step marshal→unmarshal via interface{} (which reordered JSON keys) is gone.
 func (c *Client) ArchView(scope, view string) (*ArchViewResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodArchView,
 		Params: ArchViewParams{Scope: scope, View: view},
@@ -237,12 +203,8 @@ func (c *Client) ArchView(scope, view string) (*ArchViewResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal arch.view result: %w", err)
-	}
 	var result ArchViewResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
+	if err := json.Unmarshal(raw, &result); err != nil {
 		return nil, fmt.Errorf("unmarshal arch.view result: %w", err)
 	}
 	return &result, nil
@@ -250,7 +212,7 @@ func (c *Client) ArchView(scope, view string) (*ArchViewResult, error) {
 
 // ArchFindings sends an arch.findings request.
 func (c *Client) ArchFindings(scope string) (*ArchFindingsResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodArchFindings,
 		Params: ArchFindingsParams{Scope: scope},
@@ -258,12 +220,8 @@ func (c *Client) ArchFindings(scope string) (*ArchFindingsResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal arch.findings result: %w", err)
-	}
 	var result ArchFindingsResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
+	if err := json.Unmarshal(raw, &result); err != nil {
 		return nil, fmt.Errorf("unmarshal arch.findings result: %w", err)
 	}
 	return &result, nil
@@ -282,7 +240,7 @@ func (c *Client) ArchJourney(id string, list bool) error {
 // ArchDerive sends an arch.derive request and returns the path result.
 // from/to are unit IDs (e.g. "u_internal_app").
 func (c *Client) ArchDerive(scope, from, to string, k int) (*ArchDeriveResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodArchDerive,
 		Params: ArchDeriveParams{Scope: scope, From: from, To: to, K: k},
@@ -290,12 +248,8 @@ func (c *Client) ArchDerive(scope, from, to string, k int) (*ArchDeriveResult, e
 	if err != nil {
 		return nil, err
 	}
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal arch.derive result: %w", err)
-	}
 	var result ArchDeriveResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
+	if err := json.Unmarshal(raw, &result); err != nil {
 		return nil, fmt.Errorf("unmarshal arch.derive result: %w", err)
 	}
 	return &result, nil
@@ -303,7 +257,7 @@ func (c *Client) ArchDerive(scope, from, to string, k int) (*ArchDeriveResult, e
 
 // ArchFacts sends an arch.facts request and returns the facts result.
 func (c *Client) ArchFacts(scope, subject string, limit int) (*ArchFactsResult, error) {
-	resp, err := c.call(Request{
+	raw, err := c.call(Request{
 		ID:     "1",
 		Method: MethodArchFacts,
 		Params: ArchFactsParams{Scope: scope, Subject: subject, Limit: limit},
@@ -311,12 +265,8 @@ func (c *Client) ArchFacts(scope, subject string, limit int) (*ArchFactsResult, 
 	if err != nil {
 		return nil, err
 	}
-	resultJSON, err := json.Marshal(resp.Result)
-	if err != nil {
-		return nil, fmt.Errorf("marshal arch.facts result: %w", err)
-	}
 	var result ArchFactsResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
+	if err := json.Unmarshal(raw, &result); err != nil {
 		return nil, fmt.Errorf("unmarshal arch.facts result: %w", err)
 	}
 	return &result, nil
@@ -345,11 +295,21 @@ func (c *Client) PingTCP() bool {
 	return true
 }
 
-func (c *Client) call(req Request) (*Response, error) {
+// wireResponse is the client-side decoder for daemon wire responses.
+// Result is json.RawMessage to preserve byte order and content verbatim —
+// the two-step marshal(interface{})→unmarshal that reordered JSON keys is gone.
+// This is the PF2 fix: L19.19 byte-parity AC (CLI JSON == browser shard).
+type wireResponse struct {
+	ID     string          `json:"id"`
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  string          `json:"error,omitempty"`
+}
+
+func (c *Client) call(req Request) (json.RawMessage, error) {
 	return c.callWithTimeout(req, 5*time.Second)
 }
 
-func (c *Client) callWithTimeout(req Request, timeout time.Duration) (*Response, error) {
+func (c *Client) callWithTimeout(req Request, timeout time.Duration) (json.RawMessage, error) {
 	conn, err := net.DialTimeout("unix", c.sockPath, 2*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
@@ -379,12 +339,12 @@ func (c *Client) callWithTimeout(req Request, timeout time.Duration) (*Response,
 		return nil, fmt.Errorf("empty response")
 	}
 
-	var resp Response
+	var resp wireResponse
 	if err := json.Unmarshal(scanner.Bytes(), &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
 	if resp.Error != "" {
 		return nil, fmt.Errorf("server error: %s", resp.Error)
 	}
-	return &resp, nil
+	return resp.Result, nil
 }
