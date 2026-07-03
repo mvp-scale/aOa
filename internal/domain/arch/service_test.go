@@ -18,9 +18,9 @@ func TestService_RenderAll_Determinism(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	r1, m1, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil)
+	r1, m1, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil)
 	require.NoError(t, err)
-	r2, m2, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil)
+	r2, m2, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil)
 	require.NoError(t, err)
 
 	// All shards must be byte-identical across two independent renders.
@@ -46,7 +46,7 @@ func TestService_RenderAll_ViewsPresent(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	shards, manifest, findings, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil)
+	shards, manifest, findings, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil)
 	require.NoError(t, err)
 
 	// The three keystone views must be present.
@@ -80,7 +80,7 @@ func TestService_RenderAll_HashMatchesKey(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	shards, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil)
+	shards, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil)
 	require.NoError(t, err)
 
 	// Each manifest entry's hash must match the actual ContentHash of the shard bytes.
@@ -329,7 +329,7 @@ func TestT22_ByteStability_UnderPermutation(t *testing.T) {
 	in := makeFixture()
 
 	// Render with canonical order.
-	shards1, m1, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil)
+	shards1, m1, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil)
 	require.NoError(t, err)
 
 	// Shuffle units and deps.
@@ -342,7 +342,7 @@ func TestT22_ByteStability_UnderPermutation(t *testing.T) {
 	shuffleDepsDeterministic(shuffledDeps)
 
 	// Render with shuffled order.
-	shards2, m2, _, err := svc.RenderAll(in.Scope, shuffledUnits, shuffledDeps, nil)
+	shards2, m2, _, err := svc.RenderAll(in.Scope, shuffledUnits, shuffledDeps, nil, nil)
 	require.NoError(t, err)
 
 	// All shards must be byte-identical regardless of input order.
@@ -363,7 +363,7 @@ func TestT22_MemberMapsToRealUnit(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	shards, _, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil)
+	shards, _, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil)
 	require.NoError(t, err)
 
 	unitSet := make(map[string]bool, len(in.Units))
@@ -395,7 +395,7 @@ func TestT22_DSMMatchesEdgeSet(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	shards, _, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil)
+	shards, _, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil)
 	require.NoError(t, err)
 
 	dsmJSON := shards["dsm"]
@@ -422,7 +422,7 @@ func TestT22_CyclesSubsetOfSCCs(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	shards, _, findings, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil)
+	shards, _, findings, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil)
 	require.NoError(t, err)
 
 	cyclesJSON := shards["cycles"]
@@ -466,7 +466,7 @@ func shuffleDepsDeterministic(deps []DepFact) {
 func TestManifestGolden(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
-	_, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil)
+	_, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil)
 	require.NoError(t, err)
 
 	b, err := MarshalManifest(&manifest)

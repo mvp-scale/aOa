@@ -17,11 +17,15 @@ import (
 type Service struct{}
 
 // RenderAll runs the full derive pipeline for one scope:
-//  1. Detect cycles/gods/orphans (Tarjan SCC shared with cycles renderer).
-//  2. Group units via GroupWithOptions (rung-1/2/3 + overlays).
+//  1. Group units via GroupWithOptions (rung-1/2/3 + overlays).
+//  2. Detect cycles/gods/orphans/budget/dead-candidate/mutual (Tarjan SCC
+//     shared with cycles renderer; budget/mutual need the grouping).
 //  3. Render component, dsm, and cycles views.
 //  4. Marshal each shard to JSON and compute its 12-char ContentHash.
 //  5. Build a byte-stable Manifest.
+//
+// refHits maps unit ID → index reference hits (dead-candidate fuel); nil is
+// valid when no index is available — all units are then treated as 0 hits.
 //
 // Returns:
 //   - shards: view ID → raw JSON bytes (ready to write to arch_shards bucket)
@@ -30,17 +34,18 @@ type Service struct{}
 //   - error: any render/marshal error
 //
 // C1 context: this method does no writes; callers snapshot-release-write per C1.
-func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts *GroupOptions) (
+func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts *GroupOptions, refHits map[string]int) (
 	shards map[string][]byte,
 	manifest Manifest,
 	findings []Finding,
 	err error,
 ) {
-	// 1. Detect: cycles + gods + orphans. SCCs reused by cycles renderer.
-	detectedFindings, sccs := Detect(scope, units, deps, DefaultThresholds())
-
-	// 2. Group units (rung-1/2/3 + overlays). Collect overlay-leash warnings.
+	// 1. Group units (rung-1/2/3 + overlays). Collect overlay-leash warnings.
 	grouping, groupProv, leashWarnings := GroupWithOptions(units, opts)
+
+	// 2. Detect: cycles + gods + orphans + budget + dead-candidate + mutual.
+	// SCCs reused by cycles renderer.
+	detectedFindings, sccs := Detect(scope, units, deps, DefaultThresholds(), grouping, refHits)
 	findings = append(findings, detectedFindings...)
 	findings = append(findings, leashWarnings...)
 

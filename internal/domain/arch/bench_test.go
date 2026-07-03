@@ -129,7 +129,7 @@ func TestT15_30kFixture_LatencyBudget(t *testing.T) {
 
 	svc := &Service{}
 	start := time.Now()
-	shards, manifest, findings, err := svc.RenderAll("local", units, deps, nil)
+	shards, manifest, findings, err := svc.RenderAll("local", units, deps, nil, nil)
 	elapsed := time.Since(start)
 
 	require.NoError(t, err, "RenderAll must not error on 30k fixture")
@@ -158,7 +158,7 @@ func BenchmarkRenderAll_30k(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, _, err := svc.RenderAll("local", units, deps, nil)
+		_, _, _, err := svc.RenderAll("local", units, deps, nil, nil)
 		if err != nil {
 			b.Fatal(err)
 		}
