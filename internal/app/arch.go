@@ -242,6 +242,13 @@ func (a *App) deriveArch() {
 		return // C4 gate
 	}
 
+	// Serialize whole derives: without this, a stale-generation goroutine could
+	// finish SaveManifest after a fresher one (torn manifest). Each serialized
+	// run loads edges fresh inside the critical section, so the last completed
+	// run always reflects the newest data.
+	a.archDeriveMu.Lock()
+	defer a.archDeriveMu.Unlock()
+
 	// 1. Load all edges (read-only — db.View; C1 does not apply to reads).
 	edges, err := a.Store.LoadAllEdges(a.ProjectID)
 	if err != nil {
@@ -253,9 +260,10 @@ func (a *App) deriveArch() {
 	}
 
 	// 2. Snapshot the index under mu, then release (snapshot-release pattern).
-	// We only need the Domain field from FileMeta for rung-3 enrichment.
+	// MUST Clone: a.Index is live — Reindex/WarmCaches/Wipe write Index.Files
+	// under mu after we release it (same contract as SaveIndex, app.go).
 	a.mu.Lock()
-	idx := a.Index // pointer snapshot; files are not mutated by watcher during derive
+	idx := a.Index.Clone()
 	projectID := a.ProjectID
 	a.mu.Unlock()
 
@@ -408,8 +416,9 @@ func (q *archQuerier) Derive(scope, from, to string, k int) ([]string, error) {
 	}
 
 	// Snapshot idx for domain enrichment (only needed for aggregateEdges).
+	// MUST Clone: q.app.Index is live after mu release (see deriveArch).
 	q.app.mu.Lock()
-	idx := q.app.Index
+	idx := q.app.Index.Clone()
 	q.app.mu.Unlock()
 
 	_, deps := aggregateEdges(edges, idx)

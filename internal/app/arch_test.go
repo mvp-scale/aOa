@@ -289,3 +289,56 @@ func TestArchDerive_Querier(t *testing.T) {
 	a.ArchEnabled = true
 	assert.NotNil(t, a.Arch(), "C4 on: Arch() must return a non-nil querier")
 }
+
+// TestArchDerive_RaceWithIndexSwap is the regression test for the 5980b6a
+// review blocker: deriveArch (and archQuerier.Derive) must Clone the index
+// under mu — capturing the live *ports.Index pointer races with the
+// Index.Files swaps that Reindex/WarmCaches/Wipe perform under mu after the
+// snapshot is released. Meaningful only under -race: with an aliased pointer
+// the writer goroutine below trips the detector inside aggregateEdges.
+func TestArchDerive_RaceWithIndexSwap(t *testing.T) {
+	tmpDir := t.TempDir()
+	a := newWatcherTestApp(t, tmpDir)
+	counter := &countingArchStore{}
+	a.Store = counter
+	a.ArchEnabled = true
+	a.stopCh = make(chan struct{})
+
+	// Seed Files so aggregateEdges has something to read.
+	a.mu.Lock()
+	a.Index.Files = map[uint32]*ports.FileMeta{
+		1: {Path: "internal/app/arch.go"},
+		2: {Path: "internal/adapters/bbolt/store.go"},
+	}
+	a.mu.Unlock()
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	// Writer: swap Index.Files under mu, exactly as Reindex's in-memory swap does.
+	go func() {
+		defer wg.Done()
+		for i := uint32(0); ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			a.mu.Lock()
+			a.Index.Files = map[uint32]*ports.FileMeta{
+				i % 8: {Path: fmt.Sprintf("internal/gen/f%d.go", i)},
+			}
+			a.mu.Unlock()
+		}
+	}()
+
+	// Deriver + querier: both snapshot the index; both must be race-free.
+	q := a.Arch()
+	require.NotNil(t, q)
+	for i := 0; i < 50; i++ {
+		a.deriveArch()
+		_, _ = q.Derive("local", "u_internal_app", "u_internal_ports", 4)
+	}
+	close(stop)
+	wg.Wait()
+}

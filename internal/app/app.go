@@ -374,6 +374,10 @@ type App struct {
 	bgWg    sync.WaitGroup // tracks all safeGo goroutines
 	timerWg sync.WaitGroup // tracks in-flight debounce-timer goroutines (doSaveIndexDebounced, doFlushEdgeBatch)
 	stopCh  chan struct{}   // closed on Stop() to signal background goroutines
+
+	// archDeriveMu serializes deriveArch runs (flush-trigger vs Reindex-trigger)
+	// so a stale-generation render can never overwrite a fresher manifest.
+	archDeriveMu sync.Mutex
 }
 
 // Config holds initialization parameters for the App.
