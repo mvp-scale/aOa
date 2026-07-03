@@ -1026,7 +1026,8 @@ func (a *App) markEdgeBatchDirty(fileID uint32, edges []ports.ImportEdge) {
 }
 
 // doFlushEdgeBatch is the edgeBatchTimer callback (C2, L19.12).
-// Snapshots and clears the pending batch under a.mu, then calls SaveEdgesBatch
+// Snapshots and clears the pending batch under a.mu, runs §2.4 resolution
+// (T41, PC1 — one write choke-point), then calls SaveEdgesBatch + SaveUnresolved
 // outside the lock — C1 compliant: no db.Update while a.mu is held.
 // Callable directly from tests to bypass the 200ms timer.
 func (a *App) doFlushEdgeBatch() {
@@ -1038,12 +1039,59 @@ func (a *App) doFlushEdgeBatch() {
 	batch := a.edgePendingBatch
 	projectID := a.edgePendingProjID
 	a.edgePendingBatch = nil // reset; next window starts fresh
-	a.mu.Unlock()            // release before IO (C1)
+	// Snapshot fileSet for §2.4 resolver — Index is under a.mu, so capture
+	// it here before releasing the lock.
+	fileSet := buildFileSet(a.Index)
+	projectRoot := a.ProjectRoot
+	archEnabled := a.ArchEnabled
+	a.mu.Unlock() // release before IO (C1)
+
+	// §2.4 resolver: resolve raw ImportPath specs to canonical form before
+	// persisting — mirrors the WarmCaches/Reindex path so the watcher write
+	// path produces byte-identical rows (T41, PC1 one choke-point).
+	var unresolvedEdges []ports.ImportEdge
+	if archEnabled {
+		batch, unresolvedEdges = resolveEdgeBatch(batch, fileSet, projectRoot)
+	}
 
 	// db.Update happens here, outside a.mu — C1 compliant.
 	if err := a.Store.SaveEdgesBatch(projectID, batch); err != nil {
 		a.debugf("SaveEdgesBatch: %v", err)
 	}
+	// §2.4: persist unresolved specs (findings fuel, never silently dropped).
+	if len(unresolvedEdges) > 0 {
+		if err := a.Store.SaveUnresolved(projectID, unresolvedEdges); err != nil {
+			a.debugf("SaveUnresolved (watcher flush): %v", err)
+		}
+	}
+}
+
+// resolveEdgeBatch runs §2.4 resolution on a pending watcher edge batch.
+// Delete entries (nil or empty edge slices) are passed through unchanged —
+// they signal file removal to SaveEdgesBatch and must not be dropped.
+// The returned resolved map carries canonical ImportPaths; unresolvedEdges
+// contains specs that appeared intra-repo but did not probe to any known file
+// (persisted separately as findings fuel via SaveUnresolved).
+//
+// Reads manifests from projectRoot (go.mod walk) once per flush window;
+// uses the fileSet snapshot taken under a.mu before this call.
+func resolveEdgeBatch(
+	batch map[uint32][]ports.ImportEdge,
+	fileSet map[string]bool,
+	projectRoot string,
+) (resolved map[uint32][]ports.ImportEdge, unresolved []ports.ImportEdge) {
+	manifests := facts.ReadManifests(projectRoot)
+	resolved = make(map[uint32][]ports.ImportEdge, len(batch))
+	for fileID, edges := range batch {
+		if len(edges) == 0 {
+			resolved[fileID] = edges // nil/empty = delete signal; pass through
+			continue
+		}
+		rr := facts.Resolve(edges, fileSet, manifests)
+		resolved[fileID] = rr.Resolved
+		unresolved = append(unresolved, rr.Unresolved...)
+	}
+	return resolved, unresolved
 }
 
 // Stop gracefully shuts down all services and persists learner state.

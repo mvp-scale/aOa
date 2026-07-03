@@ -7,7 +7,8 @@ package ports
 // ImportPath is the raw import spec string as it appears in the source
 // (e.g., "fmt", "os/exec", "react", "numpy"). It is NOT resolved or classified
 // at extraction time; resolution to intra-repo unit ID, "ext:" facts, or
-// facts_unresolved happens in the EdgeStore write path (L19.10).
+// facts_unresolved happens in the App layer via domain/facts.Resolve (§2.4):
+// doFlushEdgeBatch for watcher events; WarmCaches/Reindex for bulk paths.
 // StartLine is the 1-based line number of the import statement in FromFile (G7 provenance).
 type ImportEdge struct {
 	FromFile   string // relative file path — never absolute (G7)

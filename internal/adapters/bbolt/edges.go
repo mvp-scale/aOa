@@ -301,11 +301,14 @@ func (s *Store) SaveUnresolved(projectID string, entries []ImportEdge) error {
 	})
 }
 
-// ReplaceAllEdges atomically clears the edges bucket for the project and writes
-// all entries in a single bbolt write transaction.  The drop-and-recreate pattern
-// eliminates phantom rows from deleted or renumbered files on WarmCaches / Reindex
-// rebuilds (finding 9 / T34).  Passing nil or empty fileEdges still clears the
-// bucket (safe reset).  All-or-nothing: any error aborts the whole tx.
+// ReplaceAllEdges atomically clears the edges and facts_unresolved buckets for
+// the project and writes the new file→edges map in a single bbolt write
+// transaction.  The drop-and-recreate pattern eliminates phantom rows from
+// deleted or renumbered files on WarmCaches / Reindex rebuilds (finding 9 /
+// T34).  Clearing facts_unresolved on the same rebuild prevents stale broken-
+// import records from accumulating across Reindex cycles (finding R8 / T42).
+// Passing nil or empty fileEdges still clears both buckets (safe reset).
+// All-or-nothing: any error aborts the whole tx.
 // Implements ports.EdgeStore. C1: caller must NOT hold App.mu.
 func (s *Store) ReplaceAllEdges(projectID string, fileEdges map[uint32][]ImportEdge) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
@@ -318,6 +321,15 @@ func (s *Store) ReplaceAllEdges(projectID string, fileEdges map[uint32][]ImportE
 		if proj.Bucket(bucketEdges) != nil {
 			if err := proj.DeleteBucket(bucketEdges); err != nil {
 				return fmt.Errorf("replace: delete edges bucket: %w", err)
+			}
+		}
+		// T42: clear facts_unresolved on full rebuild — stale broken-import
+		// records from deleted files accumulate forever without this reset.
+		// Both buckets are pure cache (always re-derivable); drop-and-recreate
+		// is the correct atomic pattern (C3: cache-only, safe to drop).
+		if proj.Bucket(bucketFactsUnresolved) != nil {
+			if err := proj.DeleteBucket(bucketFactsUnresolved); err != nil {
+				return fmt.Errorf("replace: delete facts_unresolved bucket: %w", err)
 			}
 		}
 		if len(fileEdges) == 0 {

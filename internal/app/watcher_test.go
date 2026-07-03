@@ -5,6 +5,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -198,6 +199,91 @@ func TestOnFileChanged_BumpsRevision(t *testing.T) {
 		a.onFileChanged(goFile) // file is gone — delete path
 		assert.Greater(t, a.Revision(), before, "revision must increase after file deletion")
 	})
+}
+
+// capturingEdgeStore records SaveEdgesBatch and SaveUnresolved calls for T41.
+// Sequential access only — no mutex needed in the single-goroutine test path.
+type capturingEdgeStore struct {
+	noopStore
+	batches     []map[uint32][]ports.ImportEdge
+	unresolvedN int
+}
+
+func (s *capturingEdgeStore) SaveEdgesBatch(_ string, batch map[uint32][]ports.ImportEdge) error {
+	s.batches = append(s.batches, batch)
+	return nil
+}
+
+func (s *capturingEdgeStore) SaveUnresolved(_ string, entries []ports.ImportEdge) error {
+	s.unresolvedN += len(entries)
+	return nil
+}
+
+// TestT41_WatcherPersistedEdgesResolved is the T41 invariant (PC1): edges flushed
+// through the watcher path must carry resolved ImportPaths — the same canonical
+// form that WarmCaches/Reindex produce — so the edges bucket is never a mixed
+// keyspace (raw specs vs. resolved) when F2's LoadAllEdges reads it.
+//
+// Before the PC1 fix, doFlushEdgeBatch called SaveEdgesBatch with raw ImportPath
+// specs ("fmt", "net/http") because facts.Resolve ran only on the bulk paths
+// (app.go WarmCaches/Reindex). This test asserts that after the fix every
+// persisted ImportPath is in resolved canonical form ("ext:std/fmt" etc.).
+func TestT41_WatcherPersistedEdgesResolved(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Go file with two known stdlib imports — no go.mod needed for stdlib
+	// resolution (first path segment has no dot → "ext:std/<spec>" rule).
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile,
+		[]byte("package main\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n)\n\nfunc main() { fmt.Println(http.StatusOK) }\n"),
+		0644,
+	))
+
+	cap := &capturingEdgeStore{}
+	a := newWatcherTestApp(t, tmpDir)
+	a.ArchEnabled = true
+	a.Store = cap
+	a.stopCh = make(chan struct{})
+
+	// Trigger the watcher path — queues raw edges into edgePendingBatch.
+	a.onFileChanged(goFile)
+
+	// Flush directly, bypassing the 200ms debounce timer (T18 convention).
+	a.doFlushEdgeBatch()
+
+	// Exactly one batch write must have occurred.
+	require.Len(t, cap.batches, 1, "expected exactly one SaveEdgesBatch call after flush")
+	batch := cap.batches[0]
+
+	// Collect all persisted edges across all file IDs.
+	var all []ports.ImportEdge
+	for _, edges := range batch {
+		all = append(all, edges...)
+	}
+	require.NotEmpty(t, all, "watcher flush must have persisted at least one edge")
+
+	// T41 core assertion: every ImportPath must be in resolved canonical form.
+	// Raw stdlib specs ("fmt", "net/http") must not reach the store — they must
+	// become "ext:std/…" after §2.4 resolution inside doFlushEdgeBatch.
+	for _, e := range all {
+		assert.Truef(t, strings.HasPrefix(e.ImportPath, "ext:"),
+			"T41: ImportPath %q must be resolved (ext: prefix); raw spec must not reach the store",
+			e.ImportPath)
+	}
+
+	// Spot-check the two known imports resolve to their canonical form.
+	foundFmt := false
+	foundHTTP := false
+	for _, e := range all {
+		if e.ImportPath == "ext:std/fmt" {
+			foundFmt = true
+		}
+		if e.ImportPath == "ext:std/net/http" {
+			foundHTTP = true
+		}
+	}
+	assert.True(t, foundFmt, "T41: 'fmt' must resolve to 'ext:std/fmt'")
+	assert.True(t, foundHTTP, "T41: 'net/http' must resolve to 'ext:std/net/http'")
 }
 
 // TestT33_WatcherFromFileRelative is the T33 invariant: edges queued by the

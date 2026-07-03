@@ -542,3 +542,49 @@ func TestEdgeStore_ReplaceAllEdges_Atomic(t *testing.T) {
 		assert.Len(t, got, len(want), "fileID=%d edge count after ReplaceAllEdges", fileID)
 	}
 }
+
+func TestEdgeStore_ReplaceAllEdges_ClearsUnresolved(t *testing.T) {
+	// T42: ReplaceAllEdges must drop the facts_unresolved bucket atomically with
+	// the edges bucket — stale broken-import records from deleted files must not
+	// survive across Reindex cycles (finding R8 / checkpoint-F1 PC1).
+	store, _ := newTestStore(t)
+
+	// Seed some unresolved entries (simulating a previous Reindex run that found
+	// broken imports for a file that has since been deleted).
+	unresolved := []ImportEdge{
+		{FromFile: "pkg/deleted.go", ImportPath: "./nonexistent", StartLine: 5},
+		{FromFile: "pkg/deleted.go", ImportPath: "./also-gone", StartLine: 10},
+	}
+	require.NoError(t, store.SaveUnresolved("proj-1", unresolved))
+
+	// Verify the entries are present before the replace.
+	err := store.db.View(func(tx *bolt.Tx) error {
+		proj := tx.Bucket([]byte("proj-1"))
+		require.NotNil(t, proj)
+		ub := proj.Bucket(bucketFactsUnresolved)
+		require.NotNil(t, ub, "facts_unresolved bucket must exist after SaveUnresolved")
+		return nil
+	})
+	require.NoError(t, err)
+
+	// ReplaceAllEdges with a fresh (non-empty) edge set.
+	fresh := map[uint32][]ImportEdge{
+		1: makeTestEdges("pkg/new.go"),
+	}
+	require.NoError(t, store.ReplaceAllEdges("proj-1", fresh))
+
+	// T42 core assertion: facts_unresolved bucket must be absent (dropped atomically).
+	err = store.db.View(func(tx *bolt.Tx) error {
+		proj := tx.Bucket([]byte("proj-1"))
+		require.NotNil(t, proj)
+		ub := proj.Bucket(bucketFactsUnresolved)
+		assert.Nil(t, ub, "T42: ReplaceAllEdges must clear the facts_unresolved bucket to prevent stale accumulation")
+		return nil
+	})
+	require.NoError(t, err)
+
+	// The new edge data must be present.
+	got, err := store.LoadEdgesForFile("proj-1", 1)
+	require.NoError(t, err)
+	assert.Len(t, got, len(fresh[1]), "fresh edges must be readable after ReplaceAllEdges")
+}
