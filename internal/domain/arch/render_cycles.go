@@ -49,7 +49,8 @@ func RenderCycles(in RenderInput) (*Shard, error) {
 
 		// Reuse cheapest edge from the pre-computed cycle finding (set by DetectCycles).
 		cheapestEdge := "unknown"
-		for _, finding := range in.Findings {
+		for fi := range in.Findings {
+			finding := &in.Findings[fi]
 			if finding.Rule != "cycle" || len(finding.Subjects) != len(scc) || finding.CheapestCut == "" {
 				continue
 			}

@@ -4,8 +4,8 @@
 // matching the 5-kind viewer contract. It is stdlib-only: no bbolt, no cobra,
 // no socket imports (G4 hexagonal law).
 //
-// PROVISIONAL TYPES (pre-F1): UnitFact, DepFact, and Edge are local stand-ins.
-// When L19.13 (FactStore substrate) merges, replace with ports.Fact slices.
+// Type provenance note: raw import edges are ports.ImportEdge (F1 merged).
+// UnitFact and DepFact remain local until ports.Fact (spec 01 FactStore) lands in F2.
 // See the TODO comments on each type.
 package arch
 
@@ -15,21 +15,9 @@ type SourceRef struct {
 	Line uint32 `json:"line"`
 }
 
-// Edge is a raw file-level import edge extracted from the AST.
-// TODO: reconcile with ports.ImportEdge when F1 (L19.13) merges.
-// The fields mirror the expected ports.ImportEdge shape so type reconciliation
-// is a rename, not a redesign.
-type Edge struct {
-	FromFile string // repo-relative path of the importing file
-	ToPath   string // import path of the imported package
-	Line     uint32 // line number in FromFile of the import statement
-}
-
-// Compile-time check: Edge is the reconciliation target for F1's ports.ImportEdge.
-var _ = Edge{}
-
 // UnitFact is a provisional unit fact used before ports.FactStore lands.
-// TODO: reconcile with ports.Fact{Kind:"unit"} when F1 merges.
+// TODO: reconcile with ports.Fact{Kind:"unit"} when spec-01 FactStore merges.
+// (F1 brought ports.ImportEdge/EdgeStore/FactParser — ports.Fact is a later addition.)
 type UnitFact struct {
 	ID     string     // e.g. "m_internal_domain_arch" — deterministic slug
 	Label  string     // display label; ≤30 chars (view-standards budget)
@@ -41,7 +29,8 @@ type UnitFact struct {
 
 // DepFact is a provisional dependency edge used before ports.FactStore lands.
 // Represents an aggregated unit→unit dependency (N raw import statements collapsed).
-// TODO: reconcile with ports.Fact{Kind:"dep"} when F1 merges.
+// TODO: reconcile with ports.Fact{Kind:"dep"} when spec-01 FactStore merges.
+// (F1 brought ports.ImportEdge/EdgeStore/FactParser — ports.Fact is a later addition.)
 type DepFact struct {
 	FromUnit string // source unit ID
 	ToUnit   string // target unit ID

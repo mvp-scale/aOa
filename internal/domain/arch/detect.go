@@ -241,7 +241,10 @@ func DetectGods(scope string, units []UnitFact, deps []DepFact, opts ThresholdOp
 		out := fanOut[u.ID]
 		if in >= opts.GodIn && out >= opts.GodOut {
 			msg := fmt.Sprintf("god component: %s (in %d · out %d)", u.Label, in, out)
-			sources := append(inSrc[u.ID], outSrc[u.ID]...)
+			// Fresh slice: appending onto inSrc[u.ID] directly could alias its backing array.
+			sources := make([]SourceRef, 0, len(inSrc[u.ID])+len(outSrc[u.ID]))
+			sources = append(sources, inSrc[u.ID]...)
+			sources = append(sources, outSrc[u.ID]...)
 			sort.Slice(sources, func(i, j int) bool {
 				if sources[i].File != sources[j].File {
 					return sources[i].File < sources[j].File
