@@ -407,7 +407,7 @@ print(f"contract: manifest {mbytes/1024:.1f}KB + {n_shards} shards (largest {big
 
 # Viewer JS is the canonical source in internal/adapters/web/static/arch/viewer.js
 # This generator is a consumer of that file, not its owner.
-# After reading, __VIEW_INTENT__ is injected at build time (V2 will move this to runtime fetch).
+# V2: VIEW_INTENT is now fetched at runtime from /api/arch/standards — no build-time injection.
 JS=open("internal/adapters/web/static/arch/viewer.js").read()
 HTML="""<!doctype html><html><head><meta charset="utf-8"><title>aOa — Architecture</title>
 <link rel="stylesheet" href="https://esm.sh/@xyflow/react@12.3.5/dist/style.css">
@@ -426,10 +426,6 @@ HTML="""<!doctype html><html><head><meta charset="utf-8"><title>aOa — Architec
 .react-flow__edge{cursor:pointer}
 .react-flow__edge:hover .react-flow__edge-path{stroke-width:3!important;opacity:1!important}</style>
 </head><body><div id="root"></div><script type="module">__JS__</script></body></html>"""
-# build-time injection: view intent (question/vital/hover) from the standards file
-_std=json.load(open("playbook/standards/view-standards.json"))
-_intent={vid:{"question":v["question"],"vital":v["vital"],"hover":v["hover"],"pass":v["pass"]}
-         for vid,v in _std["views"].items()}
-JS=JS.replace("__VIEW_INTENT__",json.dumps(_intent,ensure_ascii=False))
+# V2: VIEW_INTENT is fetched at runtime — no injection needed. JS inlined as-is.
 open("playbook/mockups/architecture-c4.html","w").write(HTML.replace("__JS__",JS))
 print("wrote playbook/mockups/architecture-c4.html")

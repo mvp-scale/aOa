@@ -1,10 +1,7 @@
 
-import React,{useState,useEffect,useCallback,memo} from "https://esm.sh/react@18.3.1";
-import {createRoot} from "https://esm.sh/react-dom@18.3.1/client";
-import {ReactFlow,Background,Controls,Handle,Position,BaseEdge,EdgeLabelRenderer,useReactFlow,ReactFlowProvider}
- from "https://esm.sh/@xyflow/react@12.3.5?deps=react@18.3.1,react-dom@18.3.1";
-import ELK from "https://esm.sh/elkjs@0.11.1/lib/elk.bundled.js";
-import htm from "https://esm.sh/htm@3.1.1";
+import {React,useState,useEffect,useCallback,memo,createRoot,
+ ReactFlow,Background,Controls,Handle,Position,BaseEdge,EdgeLabelRenderer,useReactFlow,ReactFlowProvider,
+ ELK,htm} from "./vendor/bundle.js";
 const html=htm.bind(React.createElement); const elk=new ELK();
 // the contract file IS the data source — anything that emits a valid archmodel gets every view
 const MQ=new URLSearchParams(location.search);
@@ -13,12 +10,12 @@ function showFatal(msg){let d=document.getElementById("fatal");if(!d){d=document
   document.body.appendChild(d);}if(!d._set){d._set=true;d.textContent="RENDER FAILURE · "+msg;}}
 window.addEventListener("error",ev=>showFatal(ev.message));
 window.addEventListener("unhandledrejection",ev=>showFatal(String(ev.reason&&ev.reason.message||ev.reason)));
-const MODEL_PATH=MQ.get("model")||"archmodel/manifest.json";
+const MODEL_PATH=MQ.get("model")||"/api/arch/manifest"; // L19.20: default is served API; ?model= overrides for dev
 const BASE=MODEL_PATH.includes("/")?MODEL_PATH.slice(0,MODEL_PATH.lastIndexOf("/")+1):"";
-let MODEL;
-try{MODEL=await fetch(MODEL_PATH).then(r=>{
-  if(!r.ok)throw new Error("HTTP "+r.status+" loading "+MODEL_PATH);
-  return r.json();});}
+let MODEL; let _eTag=""; // L19.20: boot ETag captured so first poll uses If-None-Match
+try{const _r0=await fetch(MODEL_PATH);
+  if(!_r0.ok)throw new Error("HTTP "+_r0.status+" loading "+MODEL_PATH);
+  _eTag=_r0.headers.get("ETag")||""; MODEL=await _r0.json();}
 catch(err){showFatal("MODEL LOAD FAILED · "+(err&&err.message||err));throw err;}
 const ISSUES=[];
 function validateView(path,v){
@@ -44,13 +41,13 @@ const T={bg:"#0a0a0c",chrome:"#121215",raise:"#18181b",card:"#161618",cardH:"#20
  band:"#101013",border:"#252528",borderR:"#34343a",text:"#e8e8ec",
  dim:"#8b8b96",mute:"#55555f",green:"#34d399",blue:"#60a5fa",purple:"#c084fc",cyan:"#22d3ee",
  yellow:"#fbbf24",red:"#f87171",arch:"#fb923c",neutral:"#94a3b8"};
-const PALETTES={
+let PALETTES={
  aoa:{cmd:T.purple,app:T.blue,adapters:T.arch,domain:T.green,ports:T.red,atlas:T.cyan,supporting:T.neutral},
  gf:{cli:T.purple,serve:T.blue,ingest:T.cyan,pipeline:T.green,render:T.yellow,infra:T.arch,supporting:T.neutral},
  dep:{dev:T.blue,ci:T.purple,registry:T.arch,user:T.green},
  retail:{order:T.arch,inventory:T.cyan,customer:T.purple,shared:T.neutral},
  mc:{aws:T.yellow,gcp:T.blue,shared:T.neutral}};
-const ESTATES=MODEL.estates;
+let ESTATES=MODEL.estates; // L19.20: let — poll updates on 200 before re-render
 const firstScope=e=>Object.keys(ESTATES[e].scopes)[0];
 const firstView=(e,sc)=>Object.keys(ESTATES[e].scopes[sc].views)[0];
 // generic catalog for simulated scopes: derived from the views the scope actually has
@@ -90,9 +87,19 @@ entity:  {...,"nodes":[{"id","type":"entity","label","tech","fields":["..."],"st
 stats = 3-4 named, reader-meaningful figures for the hover card (e.g. "stores":"≈2,300", "throughput":"14M txns/day") — NEVER packed into the label.
 table:   {...,"columns":["..."],"rows":[["...","..."]]}
 matrix:  {...,"items":["a","b"],"matrix":[[null,3],[1,null]]}`;
-// per-view intent from playbook/standards/view-standards.json (injected at build time):
-// the question each view answers, what is canvas-vital, what stays hover-tier
-const VIEW_INTENT=__VIEW_INTENT__;
+// per-view intent — fetched from daemon at boot time
+let VIEW_INTENT={};
+try{const _vs=await fetch("/api/arch/standards").then(r=>{
+  if(!r.ok)throw new Error("HTTP "+r.status+" loading standards");
+  return r.json();});
+VIEW_INTENT=(_vs&&_vs.views)||{};
+// pull named palettes from view-standards if present (falls back to built-in)
+if(_vs&&_vs.global&&_vs.global.palette&&_vs.global.palette.named_palettes){
+  const np=_vs.global.palette.named_palettes;
+  const CMAP={purple:T.purple,blue:T.blue,arch:T.arch,green:T.green,red:T.red,cyan:T.cyan,yellow:T.yellow,neutral:T.neutral,dim:T.dim};
+  Object.entries(np).forEach(([pid,pm])=>{PALETTES[pid]={};
+    Object.entries(pm).forEach(([layer,cname])=>{PALETTES[pid][layer]=CMAP[cname]||T.neutral;});});}}
+catch(err){showFatal("STANDARDS LOAD FAILED · "+(err&&err.message||err));}
 function genPrompt(estateId,scopeLabel,vid,label){
  const VI=VIEW_INTENT[vid];
  return "Generate an architecture view for the aOa playbook viewer.\n"+
@@ -364,7 +371,7 @@ async function layoutSimple(view,dir,d){
   const g={id:"root",layoutOptions:EOPT(dir,d),
     children:view.nodes.map(n=>({id:n.id,width:sizes[n.id].w,height:sizes[n.id].h})),
     edges:view.edges.map(e=>({id:e.id,sources:[e.source],targets:[e.target],
-      labels:[{text:e.label,width:lblW(e.label),height:16}]}))};
+      labels:[{text:e.label||"",width:lblW(e.label||""),height:16}]}))};
   const r=await elk.layout(g);
   const pos={};r.children.forEach(c=>pos[c.id]={x:snap(c.x),y:snap(c.y)});
   const laidById={};(r.edges||[]).forEach(e=>laidById[e.id]=e);
@@ -1011,4 +1018,20 @@ function Flow(){
         ${els&&(view._loaded||!view.shard)?html`<${Footer} view=${view} ov=${ov}/>`:null}
       </div>
     </div></div>`;}
-createRoot(document.getElementById("root")).render(html`<${ReactFlowProvider}><${Flow}/><//>`);
+// L19.20: refresh-on-save — keep a root ref so poll can re-render on 200.
+const _root=createRoot(document.getElementById("root"));
+_root.render(html`<${ReactFlowProvider}><${Flow}/><//>`)
+// Poll every 12s with If-None-Match (ETag = m.Rev set at boot and updated on each 200).
+// 304 → no-op (arch unchanged — correct, even for zero-symbol file changes).
+// 200 → update MODEL + ESTATES and re-render; React preserves hook state (selected
+//       view, density, layout direction) across the re-render.
+setInterval(async()=>{try{
+  const h=_eTag?{"If-None-Match":_eTag}:{};
+  const r=await fetch(MODEL_PATH,{headers:h});
+  if(r.status===304)return;  // unchanged — no-op
+  if(!r.ok)return;           // transient error — skip silently, retry next interval
+  _eTag=r.headers.get("ETag")||"";
+  MODEL=await r.json();
+  ESTATES=MODEL.estates;
+  _root.render(html`<${ReactFlowProvider}><${Flow}/><//>`)
+}catch(e){}},12000);

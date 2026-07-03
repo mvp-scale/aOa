@@ -4,5 +4,8 @@ package web
 
 import "embed"
 
-//go:embed static
+// staticFS contains the dashboard static assets (non-arch).
+// The arch-specific static files live in a separately-tagged embed (embed_arch.go, !lean).
+//
+//go:embed static/app.js static/hero.json static/index.html static/style.css
 var staticFS embed.FS
