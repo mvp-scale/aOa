@@ -6,12 +6,15 @@ import (
 )
 
 // DeriveCaption computes the human-readable count string for a shard's manifest entry.
-// This is a Go port of build_c4_mockup.py:901-926 for the three kinds we render.
+// This is a Go port of build_c4_mockup.py:901-926 for all five shard kinds.
 //
 // Format per kind:
-//   buckets: "N groups · M members — heaviest: A → B ×k"
-//   matrix:  "S dependencies · N modules · P mutual pairs: first"
-//   table:   "N rows · ⚠ F flagged — first: X"
+//
+//	buckets: "N groups · M members — heaviest: A → B ×k"
+//	matrix:  "S dependencies · N modules · P mutual pairs: first"
+//	table:   "N rows · ⚠ F flagged — first: X"
+//	entity:  "N entities"
+//	simple:  "N nodes"
 func DeriveCaption(s *Shard, findings []Finding) string {
 	findingsSuffix := ""
 	if count := len(findings); count > 0 {
@@ -27,6 +30,12 @@ func DeriveCaption(s *Shard, findings []Finding) string {
 
 	case "table":
 		return deriveTableCaption(s) + findingsSuffix
+
+	case "entity":
+		return deriveEntityCaption(s) + findingsSuffix
+
+	case "simple":
+		return deriveSimpleCaption(s) + findingsSuffix
 
 	default:
 		return fmt.Sprintf("%s shard%s", s.Kind, findingsSuffix)
@@ -111,4 +120,32 @@ func deriveTableCaption(s *Shard) string {
 	}
 
 	return base
+}
+
+// deriveEntityCaption summarises an "entity" shard (N entities).
+// Entity shards use the Nodes field (same as simple; caption text differs).
+func deriveEntityCaption(s *Shard) string {
+	n := len(s.Nodes)
+	switch n {
+	case 0:
+		return "0 entities"
+	case 1:
+		return "1 entity"
+	default:
+		return fmt.Sprintf("%d entities", n)
+	}
+}
+
+// deriveSimpleCaption summarises a "simple" shard (N nodes).
+// Simple shards use the Nodes field (e.g. symbol chain for code view).
+func deriveSimpleCaption(s *Shard) string {
+	n := len(s.Nodes)
+	switch n {
+	case 0:
+		return "0 nodes"
+	case 1:
+		return "1 node"
+	default:
+		return fmt.Sprintf("%d nodes", n)
+	}
 }

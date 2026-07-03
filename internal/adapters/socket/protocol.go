@@ -4,6 +4,7 @@ package socket
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,6 +47,15 @@ const (
 	MethodWipe     = "wipe"
 	MethodReindex  = "reindex"
 	MethodPeek     = "peek"
+
+	// L19.16 — six arch methods (protocol stays exactly these six; reach/blast
+	// are CLI-only aliases per ADR 2026-07-02, NOT added here).
+	MethodArchViews    = "arch.views"    // params: ArchViewsParams    → ArchViewsResult
+	MethodArchView     = "arch.view"     // params: ArchViewParams     → ArchViewResult
+	MethodArchFindings = "arch.findings" // params: ArchFindingsParams → ArchFindingsResult
+	MethodArchJourney  = "arch.journey"  // params: ArchJourneyParams  → stub (not yet implemented)
+	MethodArchDerive   = "arch.derive"   // params: ArchDeriveParams   → ArchDeriveResult
+	MethodArchFacts    = "arch.facts"    // params: ArchFactsParams    → ArchFactsResult
 )
 
 // Request is the wire format for client-to-server messages.
@@ -437,6 +447,90 @@ type DimensionalFindingResult struct {
 	Line     int    `json:"line"`
 	Symbol   string `json:"symbol"`
 	Severity int    `json:"severity"`
+}
+
+// ── L19.16 arch protocol DTOs ────────────────────────────────────────────────
+
+// ArchViewsParams is the params for an arch.views request.
+type ArchViewsParams struct {
+	Scope string `json:"scope,omitempty"` // defaults to "local"
+}
+
+// ArchViewParams is the params for an arch.view request.
+type ArchViewParams struct {
+	Scope string `json:"scope,omitempty"` // defaults to "local"
+	View  string `json:"view"`            // e.g. "component", "dsm", "cycles"
+}
+
+// ArchFindingsParams is the params for an arch.findings request.
+type ArchFindingsParams struct {
+	Scope    string `json:"scope,omitempty"`
+	Severity string `json:"severity,omitempty"` // "error"|"warn"|"info"
+}
+
+// ArchJourneyParams is the params for an arch.journey request (stub).
+type ArchJourneyParams struct {
+	ID   string `json:"id,omitempty"`
+	List bool   `json:"list,omitempty"`
+}
+
+// ArchDeriveParams is the params for an arch.derive request.
+// From/To are unit IDs (e.g. "u_internal_app") — the CLI converts directory
+// paths to unit IDs before sending.
+type ArchDeriveParams struct {
+	Scope string `json:"scope,omitempty"` // defaults to "local"
+	From  string `json:"from"`            // source unit ID
+	To    string `json:"to"`              // destination unit ID
+	K     int    `json:"k,omitempty"`     // max hops (default 10)
+	Via   string `json:"via,omitempty"`   // reserved
+}
+
+// ArchFactsParams is the params for an arch.facts request.
+type ArchFactsParams struct {
+	Scope   string `json:"scope,omitempty"`
+	Subject string `json:"subject"`         // substring matched against from_file or import_path
+	Kind    string `json:"kind,omitempty"`  // reserved
+	Limit   int    `json:"limit,omitempty"` // 0 means unlimited
+}
+
+// ArchViewsResult carries the manifest JSON for aoa arch views.
+// Raw is nil when no shards have been derived yet.
+type ArchViewsResult struct {
+	Raw     json.RawMessage `json:"raw"`      // encoded ArchManifest or null
+	HasData bool            `json:"has_data"` // false when no manifest exists
+}
+
+// ArchViewResult carries a rendered shard for aoa arch view.
+// Raw is nil when the view has not been rendered.
+type ArchViewResult struct {
+	Raw   json.RawMessage `json:"raw"`   // encoded shard JSON or null
+	Found bool            `json:"found"` // false when view not found → exit 1
+}
+
+// ArchFindingsResult carries arch findings.
+// Raw is nil when no findings have been computed.
+type ArchFindingsResult struct {
+	Raw    json.RawMessage `json:"raw"`     // encoded []Finding or null
+	HasNew bool            `json:"has_new"` // true when findings exist (--new gate)
+}
+
+// ArchDeriveResult carries a derived dep-path between two units.
+type ArchDeriveResult struct {
+	Path  []string `json:"path"`  // ordered unit IDs on the shortest path (empty when not found)
+	Found bool     `json:"found"` // false when no path within k hops → exit 1
+}
+
+// ArchFactsResult carries import edge facts for a subject.
+type ArchFactsResult struct {
+	Facts json.RawMessage `json:"facts"` // encoded []ArchFactEntry or null
+	Count int             `json:"count"`
+}
+
+// ArchFactEntry is one import edge in the provenance audit trail.
+type ArchFactEntry struct {
+	FromFile   string `json:"from_file"`
+	ImportPath string `json:"import_path"`
+	StartLine  uint32 `json:"start_line"` // 1-based line in FromFile (G7 provenance)
 }
 
 // DimScanProgress holds progress state for an in-flight dimensional scan.

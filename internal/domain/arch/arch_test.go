@@ -3,6 +3,7 @@ package arch
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -78,7 +79,7 @@ func makeFixture() RenderInput {
 
 	grouping := Group(units)
 
-	findings, sccs := Detect("test", units, deps, DefaultThresholds())
+	findings, sccs := Detect("test", units, deps, DefaultThresholds(), grouping, nil)
 
 	return RenderInput{
 		Scope:    "test",
@@ -546,5 +547,221 @@ func TestTarjanSCC_Deterministic(t *testing.T) {
 	require.Equal(t, len(r1), len(r2), "same adj must produce same SCC count")
 	for i := range r1 {
 		assert.Equal(t, r1[i], r2[i], "SCC[%d] must be identical", i)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// T5 extension — budget overflow, dead-code candidate, DSM mutual pair
+// ---------------------------------------------------------------------------
+
+// makeBudgetFixture returns a fixture with one group containing 42 members (>40).
+func makeBudgetFixture() ([]UnitFact, GroupingResult) {
+	// 42 units all in the "bigpkg" path-prefix group.
+	units := make([]UnitFact, 42)
+	for i := range units {
+		id := fmt.Sprintf("m_big_%02d", i)
+		units[i] = UnitFact{
+			ID:    id,
+			Label: fmt.Sprintf("big/%02d", i),
+			Path:  fmt.Sprintf("bigpkg/file%02d.go", i),
+			File:  fmt.Sprintf("bigpkg/file%02d.go", i),
+			Line:  1,
+		}
+	}
+	grouping := Group(units)
+	return units, grouping
+}
+
+func TestDetectors_BudgetOverflow(t *testing.T) {
+	units, grouping := makeBudgetFixture()
+	// No dep edges needed — budget is purely membership count.
+	findings := DetectBudgetOverflow("test", units, grouping)
+
+	require.Len(t, findings, 1, "exactly one budget finding expected for the big group")
+	f := findings[0]
+	assert.Equal(t, "budget", f.Rule)
+	assert.Equal(t, "warn", f.Severity)
+	assert.NotEmpty(t, f.ID, "finding must have stable fingerprint ID")
+	assert.Contains(t, f.Message, "42", "message must mention the member count")
+	assert.Contains(t, f.Message, "budget overflow", "message prefix must be 'budget overflow'")
+	assert.NotEmpty(t, f.Subjects, "budget finding must identify the overflowing group")
+	assert.NotEmpty(t, f.Sources, "budget finding must carry file:line sources (G7)")
+	for _, src := range f.Sources {
+		assert.NotEmpty(t, src.File, "source ref must have non-empty file (G7)")
+	}
+}
+
+func TestDetectors_BudgetOverflow_NoneBelow40(t *testing.T) {
+	// Groups with exactly 40 members must NOT produce a finding.
+	units := make([]UnitFact, 40)
+	for i := range units {
+		units[i] = UnitFact{
+			ID:   fmt.Sprintf("m_ok_%02d", i),
+			Label: fmt.Sprintf("ok/%02d", i),
+			Path: fmt.Sprintf("okpkg/file%02d.go", i),
+			File: fmt.Sprintf("okpkg/file%02d.go", i),
+			Line: 1,
+		}
+	}
+	grouping := Group(units)
+	findings := DetectBudgetOverflow("test", units, grouping)
+	assert.Empty(t, findings, "exactly 40 members must not trigger budget overflow (limit is >40)")
+}
+
+// makeDeadCodeFixture: one unit with outbound deps but zero inbound and zero ref hits.
+func makeDeadCodeFixture() ([]UnitFact, []DepFact, map[string]int) {
+	units := []UnitFact{
+		{ID: "m_entry",   Label: "entry",   Path: "cmd/entry.go",     File: "cmd/entry.go",     Line: 1},
+		{ID: "m_library", Label: "library", Path: "internal/lib/l.go", File: "internal/lib/l.go", Line: 1},
+		// dead candidate: has outbound dep to library, but nothing imports it.
+		{ID: "m_dead",    Label: "dead",    Path: "internal/dead/d.go", File: "internal/dead/d.go", Line: 1},
+		{ID: "m_util",    Label: "util",    Path: "internal/util/u.go", File: "internal/util/u.go", Line: 1},
+	}
+	deps := []DepFact{
+		{FromUnit: "m_entry",   ToUnit: "m_library", Count: 1, File: "cmd/entry.go",     Line: 5},
+		{FromUnit: "m_dead",    ToUnit: "m_util",    Count: 1, File: "internal/dead/d.go", Line: 3},
+		// m_util is imported by m_dead → has inbound dep → NOT a dead candidate.
+		// m_library is imported by m_entry → has inbound dep → NOT a dead candidate.
+		// m_dead: has outbound but zero inbound, and zero ref hits → dead candidate.
+		// m_entry: zero inbound. We give it a ref hit so it's NOT a dead candidate.
+	}
+	// m_entry has ref hits (e.g. it's the main package, known by name).
+	refHits := map[string]int{"m_entry": 5}
+	return units, deps, refHits
+}
+
+func TestDetectors_DeadCodeCandidate(t *testing.T) {
+	units, deps, refHits := makeDeadCodeFixture()
+
+	findings := DetectDeadCandidates("test", units, deps, refHits)
+
+	require.Len(t, findings, 1, "exactly one dead-code candidate expected")
+	f := findings[0]
+	assert.Equal(t, "dead-candidate", f.Rule)
+	assert.Equal(t, "info", f.Severity)
+	assert.Equal(t, []string{"m_dead"}, f.Subjects)
+	assert.Contains(t, f.Message, "dead", "message must mention the dead label")
+	assert.Contains(t, f.Message, "candidate", "message must say candidate (T5)")
+	// PC3/T46: with measured (non-nil) fuel the message states the real count.
+	assert.Contains(t, f.Message, "0 index references", "measured fuel must state 0 index references")
+	assert.NotContains(t, f.Message, "not measured", "measured fuel must not carry the unmeasured caveat")
+	assert.NotEmpty(t, f.Sources, "dead-candidate finding must carry file:line sources (G7)")
+	assert.Equal(t, "internal/dead/d.go", f.Sources[0].File)
+	// reflection caveat in attrs (WP step 5).
+	require.NotNil(t, f.Attrs, "dead-candidate finding must carry attrs (reflection caveat)")
+	assert.Contains(t, f.Attrs["caveat"], "reflection", "attrs.caveat must mention reflection")
+}
+
+func TestDetectors_DeadCodeCandidate_NilRefHits(t *testing.T) {
+	// nil refHits means all units have 0 ref hits — units with 0 inbound fire.
+	units := []UnitFact{
+		{ID: "m_root",  Label: "root",  Path: "cmd/main.go",        File: "cmd/main.go",        Line: 1},
+		{ID: "m_child", Label: "child", Path: "internal/child/c.go", File: "internal/child/c.go", Line: 1},
+	}
+	deps := []DepFact{
+		{FromUnit: "m_root", ToUnit: "m_child", Count: 1, File: "cmd/main.go", Line: 2},
+	}
+	// With nil refHits: m_root has 0 inbound + 0 ref hits → candidate.
+	// m_child has 1 inbound → not a candidate.
+	findings := DetectDeadCandidates("test", units, deps, nil)
+	require.Len(t, findings, 1, "m_root must be detected as dead-candidate with nil refHits")
+	assert.Equal(t, []string{"m_root"}, findings[0].Subjects)
+	// PC3/T46: nil fuel means references were NOT measured — the message must say
+	// so and must NOT claim "no index references" (an unverified assertion, G7).
+	assert.Contains(t, findings[0].Message, "not measured")
+	assert.NotContains(t, findings[0].Message, "index references,")
+}
+
+// TestPC3_30kDeadCandidateCollapse gives the concrete before→after delta at 30k
+// scale (ledger T46). NOTE: the T15 gen30kFixture has NO zero-inbound units —
+// its ~30k findings are god-nodes, not dead-candidates — so this uses a purpose
+// -built fixture of 30,000 leaf units that each import a shared core (zero
+// inbound each). With nil fuel every leaf fires (the shipped dead-candidate
+// noise); with real per-unit reference fuel only the genuinely-unreferenced
+// leaves survive.
+func TestPC3_30kDeadCandidateCollapse(t *testing.T) {
+	const n = 30_000
+	units := make([]UnitFact, 0, n+1)
+	deps := make([]DepFact, 0, n)
+	units = append(units, UnitFact{ID: "u_core", Label: "core", Path: "internal/core/c.go", File: "internal/core/c.go", Line: 1})
+	for i := 0; i < n; i++ {
+		id := fmt.Sprintf("u_leaf%06d", i)
+		f := fmt.Sprintf("internal/leaf%06d/l.go", i)
+		units = append(units, UnitFact{ID: id, Label: fmt.Sprintf("leaf%d", i), Path: f, File: f, Line: 1})
+		deps = append(deps, DepFact{FromUnit: id, ToUnit: "u_core", Count: 1, File: f, Line: 1})
+	}
+
+	// nil fuel (the defect): every leaf has zero inbound → all n fire as noise.
+	before := DetectDeadCandidates("local", units, deps, nil)
+	t.Logf("PC3 30k: nil fuel → %d dead-candidate findings (the noise)", len(before))
+	require.Len(t, before, n, "nil fuel fires on every zero-inbound leaf (the 30k-noise defect)")
+
+	// Real fuel: all but a handful of leaves carry index references.
+	const genuinelyDead = 2
+	refHits := map[string]int{"u_core": n}
+	for i := genuinelyDead; i < n; i++ {
+		refHits[fmt.Sprintf("u_leaf%06d", i)] = 1
+	}
+	after := DetectDeadCandidates("local", units, deps, refHits)
+	t.Logf("PC3 30k: real fuel → %d dead-candidate findings (collapsed)", len(after))
+	require.Len(t, after, genuinelyDead, "real fuel collapses 30k noise to only genuinely-unreferenced units")
+}
+
+// makeMutualPairFixture: two groups with deps in both directions (no unit-level cycle).
+func makeMutualPairFixture() ([]UnitFact, []DepFact, GroupingResult) {
+	units := []UnitFact{
+		// "frontend" group
+		{ID: "m_fe_view",       Label: "fe/view",       Path: "frontend/view.go",       File: "frontend/view.go",       Line: 1},
+		{ID: "m_fe_controller", Label: "fe/controller", Path: "frontend/controller.go", File: "frontend/controller.go", Line: 1},
+		// "backend" group
+		{ID: "m_be_api",     Label: "be/api",     Path: "backend/api.go",     File: "backend/api.go",     Line: 1},
+		{ID: "m_be_service", Label: "be/service", Path: "backend/service.go", File: "backend/service.go", Line: 1},
+	}
+	deps := []DepFact{
+		// frontend → backend (controller uses API)
+		{FromUnit: "m_fe_controller", ToUnit: "m_be_api", Count: 2, File: "frontend/controller.go", Line: 5},
+		// backend → frontend (service uses view — creates group-level mutual dep)
+		{FromUnit: "m_be_service", ToUnit: "m_fe_view", Count: 1, File: "backend/service.go", Line: 3},
+		// NO unit-level cycle: controller→api, service→view — no path back.
+	}
+	grouping := Group(units)
+	return units, deps, grouping
+}
+
+func TestDetectors_MutualPair(t *testing.T) {
+	units, deps, grouping := makeMutualPairFixture()
+
+	findings := DetectMutualPairs("test", units, deps, grouping)
+
+	require.Len(t, findings, 1, "exactly one mutual-pair finding expected")
+	f := findings[0]
+	assert.Equal(t, "mutual", f.Rule)
+	assert.Equal(t, "warn", f.Severity)
+	assert.Len(t, f.Subjects, 2, "mutual finding must identify both groups")
+	assert.Contains(t, f.Message, "mutual dependency", "message prefix must say 'mutual dependency'")
+	assert.NotEmpty(t, f.ID, "finding must have stable fingerprint ID")
+	assert.NotEmpty(t, f.Sources, "mutual finding must carry file:line sources (G7)")
+	for _, src := range f.Sources {
+		assert.NotEmpty(t, src.File, "source ref must have non-empty file (G7)")
+	}
+}
+
+func TestDetectors_MutualPair_NoCycleAtUnitGrain(t *testing.T) {
+	// The mutual-pair fixture must NOT produce unit-level cycle findings
+	// (the two groups mutually depend at group grain, but there is no SCC at unit grain).
+	units, deps, _ := makeMutualPairFixture()
+	cycleFindings, sccs := DetectCycles("test", units, deps)
+	assert.Empty(t, sccs, "mutual-pair fixture must have no unit-level SCCs")
+	assert.Empty(t, cycleFindings, "mutual-pair fixture must have no cycle findings")
+}
+
+func TestDetectors_MutualPair_Deterministic(t *testing.T) {
+	units, deps, grouping := makeMutualPairFixture()
+	f1 := DetectMutualPairs("test", units, deps, grouping)
+	f2 := DetectMutualPairs("test", units, deps, grouping)
+	require.Equal(t, len(f1), len(f2), "mutual pair detection must be deterministic")
+	if len(f1) > 0 {
+		assert.Equal(t, f1[0].ID, f2[0].ID, "finding ID must be stable")
+		assert.Equal(t, f1[0].Subjects, f2[0].Subjects, "subjects must be stable")
 	}
 }

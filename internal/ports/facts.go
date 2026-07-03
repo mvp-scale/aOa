@@ -72,6 +72,13 @@ type EdgeStore interface {
 	// All-or-nothing: the tx is rolled back on any error.
 	// C1: caller must NOT hold App.mu.
 	ReplaceAllEdges(projectID string, fileEdges map[uint32][]ImportEdge) error
+
+	// HasEdgesBucket reports whether the edges bucket exists and carries the
+	// correct schema version for the project. Used by WarmCaches to detect
+	// upgrade-boot scenarios (T43): populated index + no valid edges bucket +
+	// arch flag ON → background Reindex backfills edges without a manual step.
+	// Read-only: uses db.View, never db.Update. C1 does not apply.
+	HasEdgesBucket(projectID string) bool
 }
 
 // FactParser is the extended parser interface that extracts both symbols and

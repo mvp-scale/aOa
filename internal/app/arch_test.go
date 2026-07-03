@@ -3,11 +3,14 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/corey/aoa/internal/adapters/treesitter"
+	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -160,4 +163,184 @@ func Serve() {
 		assert.Greater(t, e.StartLine, uint32(0), "StartLine must be non-zero (G7)")
 		assert.NotEmpty(t, e.ImportPath, "ImportPath must not be empty")
 	}
+}
+
+// =============================================================================
+// L19.14 app-wiring tests — C4 dark check + C2 burst debounce
+// =============================================================================
+
+// countingArchStore embeds noopStore and counts SaveShards calls so tests can
+// assert that N file events coalesce into a bounded number of arch renders.
+type countingArchStore struct {
+	noopStore
+	shardCalls    int64 // number of SaveShards calls
+	manifestCalls int64 // number of SaveManifest calls
+	findingCalls  int64 // number of SaveFindings calls
+	mu            sync.Mutex
+}
+
+func (s *countingArchStore) SaveShards(_ string, _ map[string][]byte) error {
+	s.mu.Lock()
+	s.shardCalls++
+	s.mu.Unlock()
+	return nil
+}
+func (s *countingArchStore) SaveManifest(_ string, _ string, _ []byte) error {
+	s.mu.Lock()
+	s.manifestCalls++
+	s.mu.Unlock()
+	return nil
+}
+func (s *countingArchStore) LoadFindings(_ string, _ string) ([]ports.Finding, error) {
+	return nil, nil
+}
+func (s *countingArchStore) SaveFindings(_ string, _ string, _ []ports.Finding) error {
+	s.mu.Lock()
+	s.findingCalls++
+	s.mu.Unlock()
+	return nil
+}
+// countingArchStore needs to return non-empty edges so deriveArch proceeds past
+// the early-return guard. It uses edgesForDeriveTest to supply them.
+func (s *countingArchStore) LoadAllEdges(_ string) ([]ports.ImportEdge, error) {
+	return edgesForDeriveTest(), nil
+}
+
+// edgesForDeriveTest returns a minimal resolved edge slice for deriveArch tests.
+func edgesForDeriveTest() []ports.ImportEdge {
+	return []ports.ImportEdge{
+		{FromFile: "internal/app/arch.go", ImportPath: "internal/domain/arch", StartLine: 1},
+		{FromFile: "internal/app/arch.go", ImportPath: "ext:std/fmt", StartLine: 2},
+		{FromFile: "internal/adapters/bbolt/store.go", ImportPath: "internal/ports", StartLine: 1},
+	}
+}
+
+// TestC4FlagOff_DeriveArch verifies the C4 gate: when ArchEnabled is false,
+// deriveArch is a no-op and no store writes are triggered.
+func TestC4FlagOff_DeriveArch(t *testing.T) {
+	tmpDir := t.TempDir()
+	a := newWatcherTestApp(t, tmpDir)
+	counter := &countingArchStore{}
+	a.Store = counter
+	a.stopCh = make(chan struct{})
+
+	// C4 OFF — deriveArch must not write anything.
+	a.ArchEnabled = false
+	a.deriveArch()
+
+	counter.mu.Lock()
+	shards := counter.shardCalls
+	counter.mu.Unlock()
+
+	assert.Equal(t, int64(0), shards,
+		"C4 off: deriveArch must not call SaveShards")
+}
+
+// TestArchDerive_C2BurstDebounce verifies that N file events within one debounce
+// window produce exactly one arch render (one SaveShards call), not N.
+// This is the C2 burst-coalescing assertion for the arch derive path.
+func TestArchDerive_C2BurstDebounce(t *testing.T) {
+	const N = 10
+
+	tmpDir := t.TempDir()
+	a := newWatcherTestApp(t, tmpDir)
+	counter := &countingArchStore{}
+	a.Store = counter
+	a.ArchEnabled = true
+	a.stopCh = make(chan struct{})
+
+	// Create N Go files that will be batched into one debounce window.
+	for i := 0; i < N; i++ {
+		f := filepath.Join(tmpDir, fmt.Sprintf("c2_%d.go", i))
+		require.NoError(t, os.WriteFile(f,
+			[]byte(fmt.Sprintf("package main\nimport \"fmt\"\nfunc F%d() { fmt.Println(%d) }\n", i, i)),
+			0644))
+		a.onFileChanged(f) // accumulates into edgePendingBatch
+	}
+
+	// No flush yet — no renders should have fired.
+	counter.mu.Lock()
+	preShard := counter.shardCalls
+	counter.mu.Unlock()
+	assert.Equal(t, int64(0), preShard,
+		"C2: no SaveShards should fire before doFlushEdgeBatch")
+
+	// Single flush — triggers exactly one safeGo("arch-derive").
+	a.doFlushEdgeBatch()
+	a.bgWg.Wait() // wait for arch-derive to finish
+
+	counter.mu.Lock()
+	postShard := counter.shardCalls
+	counter.mu.Unlock()
+	assert.Equal(t, int64(1), postShard,
+		"C2: %d file events in one debounce window must produce exactly 1 SaveShards call", N)
+}
+
+// TestArchDerive_Querier verifies that App.Arch() returns a non-nil querier
+// when ArchEnabled=true, and nil when ArchEnabled=false.
+func TestArchDerive_Querier(t *testing.T) {
+	tmpDir := t.TempDir()
+	a := newWatcherTestApp(t, tmpDir)
+	counter := &countingArchStore{}
+	a.Store = counter
+	a.stopCh = make(chan struct{})
+
+	a.ArchEnabled = false
+	assert.Nil(t, a.Arch(), "C4 off: Arch() must return nil")
+
+	a.ArchEnabled = true
+	assert.NotNil(t, a.Arch(), "C4 on: Arch() must return a non-nil querier")
+}
+
+// TestArchDerive_RaceWithIndexSwap is the regression test for the 5980b6a
+// review blocker: deriveArch (and archQuerier.Derive) must Clone the index
+// under mu — capturing the live *ports.Index pointer races with the
+// Index.Files swaps that Reindex/WarmCaches/Wipe perform under mu after the
+// snapshot is released. Meaningful only under -race: with an aliased pointer
+// the writer goroutine below trips the detector inside aggregateEdges.
+func TestArchDerive_RaceWithIndexSwap(t *testing.T) {
+	tmpDir := t.TempDir()
+	a := newWatcherTestApp(t, tmpDir)
+	counter := &countingArchStore{}
+	a.Store = counter
+	a.ArchEnabled = true
+	a.stopCh = make(chan struct{})
+
+	// Seed Files so aggregateEdges has something to read.
+	a.mu.Lock()
+	a.Index.Files = map[uint32]*ports.FileMeta{
+		1: {Path: "internal/app/arch.go"},
+		2: {Path: "internal/adapters/bbolt/store.go"},
+	}
+	a.mu.Unlock()
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	// Writer: swap Index.Files under mu, exactly as Reindex's in-memory swap does.
+	go func() {
+		defer wg.Done()
+		for i := uint32(0); ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			a.mu.Lock()
+			a.Index.Files = map[uint32]*ports.FileMeta{
+				i % 8: {Path: fmt.Sprintf("internal/gen/f%d.go", i)},
+			}
+			a.mu.Unlock()
+		}
+	}()
+
+	// Deriver + querier: both snapshot the index; both must be race-free.
+	q := a.Arch()
+	require.NotNil(t, q)
+	for i := 0; i < 50; i++ {
+		a.deriveArch()
+		_, _ = q.Derive("local", "u_internal_app", "u_internal_ports", 4)
+	}
+	close(stop)
+	wg.Wait()
 }

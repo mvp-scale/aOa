@@ -11,6 +11,7 @@ import (
 	"github.com/corey/aoa/internal/adapters/bbolt"
 	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/app"
+	"github.com/corey/aoa/internal/domain/facts"
 	"github.com/corey/aoa/internal/domain/status"
 	"github.com/spf13/cobra"
 )
@@ -107,7 +108,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("  Indexing project (typically under a minute)...")
-	idx, stats, err := app.BuildIndex(root, parser)
+	archOn := archFlagEnabled()
+	idx, stats, rawEdges, err := app.BuildIndexWithFacts(root, parser, archOn)
 	if err != nil {
 		store.Close()
 		return fmt.Errorf("build index: %w", err)
@@ -116,6 +118,22 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err := store.SaveIndex(projectID, idx); err != nil {
 		store.Close()
 		return fmt.Errorf("save index: %w", err)
+	}
+
+	// §2.4: resolve + persist edges so WarmCaches finds a valid edges bucket on
+	// first daemon start (T43: upgrade-boot probe must not fire after a fresh init).
+	if archOn && len(rawEdges) > 0 {
+		fileSet := app.BuildFileSet(idx)
+		manifests := facts.ReadManifests(root)
+		rr := facts.Resolve(rawEdges, fileSet, manifests)
+		edgesByFile := app.GroupEdgesByFile(idx, rr.Resolved)
+		if err := store.ReplaceAllEdges(projectID, edgesByFile); err != nil {
+			// Non-fatal: edges are cache. T43 will backfill on next daemon start.
+			fmt.Fprintf(os.Stderr, "warning: could not save edges: %v\n", err)
+		}
+		if len(rr.Unresolved) > 0 {
+			_ = store.SaveUnresolved(projectID, rr.Unresolved)
+		}
 	}
 
 	store.Close()
@@ -612,6 +630,40 @@ $ aoa peek 2dkfzw 2dkg19                 # read multiple method bodies in one ca
 
 **Use Read for**: non-code files (YAML, configs, go.mod), surrounding context (imports, constants),
 or when peek shows ` + "`--`" + `.
+
+### Architecture — use ` + "`aoa arch`" + ` before reading files to map structure
+
+` + "`aoa arch`" + ` answers structure questions from the fact substrate in one call —
+package layout, dependencies, cycles, paths between modules. This applies to
+you AND any subagents you spawn.
+
+` + "```" + `
+$ aoa arch views
+{"scope":"local","views":[{"id":"component","prov":"derived",
+"caption":"30 groups · 616 members"},{"id":"cycles",...}]}
+
+$ aoa arch derive internal/app internal/adapters/bbolt
+["u_internal_app","u_internal_adapters_bbolt"]     # BFS unit path
+` + "```" + `
+
+Import-edge asymmetry: the importer side carries file:line (REAL, peekable);
+the imported side is package/dir grain (unit ID, not a symbol). To read the
+TARGET unit's code: ` + "`aoa locate <path>`" + ` → ` + "`grep <symbol>`" + ` → ` + "`aoa peek <code>`" + `.
+External imports stamp ` + "`ext:`" + ` (e.g. ` + "`ext:std/fmt`" + `) — source file:line is real,
+target resolves to package grain only, no peek body available.
+
+| Question | Command |
+|---|---|
+| What are the modules/layers?  | ` + "`aoa arch view component`" + ` |
+| Cycles or tangle?             | ` + "`aoa arch view cycles`" + ` · ` + "`aoa arch findings`" + ` |
+| Path from A to B?             | ` + "`aoa arch derive internal/app internal/adapters/bbolt`" + ` |
+| Why is this unit flagged?     | ` + "`aoa arch facts <unit-id>`" + ` (file:line evidence) |
+| CI gate for new drift?        | ` + "`aoa arch findings --new`" + ` (exit 1 = new findings) |
+
+Workflow: ` + "`arch views`" + ` → orient · ` + "`arch derive A B`" + ` → last hop unit →
+` + "`aoa locate <path>`" + ` → ` + "`grep <symbol>`" + ` → ` + "`aoa peek <code>`" + ` to read the body.
+Trust ` + "`derived`" + ` provenance (REAL), verify ` + "`mixed`" + `.
+If ` + "`aoa arch`" + ` reports "no facts substrate", fall back to ` + "`grep`" + `/` + "`aoa tree`" + `.
 <!-- /aOa-guidance -->
 `
 

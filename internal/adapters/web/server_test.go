@@ -134,6 +134,10 @@ func (m *mockQueries) GenerateHints(query string, opts ports.SearchOptions) []st
 	return nil
 }
 
+func (m *mockQueries) Arch() ports.ArchQuerier {
+	return nil // C4: arch not wired in mock
+}
+
 func (m *mockQueries) TelemetrySnapshot() socket.TelemetryResult {
 	return socket.TelemetryResult{
 		Lifetime: socket.TelemetryCounters{

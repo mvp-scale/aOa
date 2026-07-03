@@ -255,6 +255,13 @@ func buildIndexCore(root string, parser ports.Parser, archEnabled bool) (*ports.
 // Only edges whose FromFile resolves to a known fileID are included — phantom
 // edges (files absent from the index) are silently dropped (no phantom nodes).
 // Returns nil when edges is empty or idx has no files.
+// GroupEdgesByFile returns a fileID→edges map built from the index's path→fileID
+// mapping. Used by init (cmd layer) and WarmCaches/Reindex (app layer) to
+// produce the input for ReplaceAllEdges.
+func GroupEdgesByFile(idx *ports.Index, edges []ports.ImportEdge) map[uint32][]ports.ImportEdge {
+	return groupEdgesByFile(idx, edges)
+}
+
 func groupEdgesByFile(idx *ports.Index, edges []ports.ImportEdge) map[uint32][]ports.ImportEdge {
 	if len(edges) == 0 || idx == nil || len(idx.Files) == 0 {
 		return nil
@@ -274,6 +281,12 @@ func groupEdgesByFile(idx *ports.Index, edges []ports.ImportEdge) map[uint32][]p
 		return nil
 	}
 	return byFile
+}
+
+// BuildFileSet extracts the set of relative file paths from an index for O(1)
+// resolver lookup. Exported for use by the init command (cmd layer).
+func BuildFileSet(idx *ports.Index) map[string]bool {
+	return buildFileSet(idx)
 }
 
 // buildFileSet extracts the set of all relative file paths from an index.

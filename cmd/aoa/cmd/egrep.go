@@ -171,9 +171,10 @@ func runEgrepIndex(pattern string, useColor bool) error {
 	}
 	if err != nil {
 		if isConnectError(err) {
-			if isShimMode() {
-				return fallbackSystemGrep(os.Args[2:])
-			}
+			// Index search requires the daemon — do NOT fall back to system grep
+			// (which would read stdin for a no-file-arg call and hang the agent).
+			// L19.17/gotcha-3b: the lazy-revive above was already attempted;
+			// if it failed, surface a clear error in both shim and interactive mode.
 			fmt.Fprintln(os.Stderr, "Error: daemon not running. Start with: aoa daemon start")
 			return grepExit{2}
 		}

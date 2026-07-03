@@ -42,6 +42,10 @@ type storeBackend interface {
 	// EdgeStore (L19.10): per-file import-edge persistence.
 	// All methods are C1-compliant — must never be called while App.mu is held.
 	ports.EdgeStore
+	// ArchStore (L19.14): arch shard + findings cache (arch_shards + facts_findings
+	// buckets, C3 versioned). SaveFindings/LoadFindings are now part of ports.ArchStore.
+	// All write methods are C1-compliant — must never be called while App.mu is held.
+	ports.ArchStore
 	// Healthy reports whether the backend is operational.
 	Healthy() bool
 	// Recovered reports whether the backend rebuilt itself from a corrupt state
@@ -364,6 +368,10 @@ type App struct {
 	bgWg    sync.WaitGroup // tracks all safeGo goroutines
 	timerWg sync.WaitGroup // tracks in-flight debounce-timer goroutines (doSaveIndexDebounced, doFlushEdgeBatch)
 	stopCh  chan struct{}   // closed on Stop() to signal background goroutines
+
+	// archDeriveMu serializes deriveArch runs (flush-trigger vs Reindex-trigger)
+	// so a stale-generation render can never overwrite a fresher manifest.
+	archDeriveMu sync.Mutex
 }
 
 // Config holds initialization parameters for the App.
@@ -940,6 +948,38 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 	r.ReconTime = time.Since(reconStart).Seconds()
 	a.loadInvestigated()
 
+	// T43: upgrade-boot backfill — populated index (FileCount > 0) but no valid
+	// edges bucket. An old-binary DB has no edges bucket; arch extraction only
+	// exists since F1, so FileCount > 0 + no bucket + ArchEnabled = first F2 boot
+	// for this project. Background Reindex derives + persists edges without blocking
+	// the caller. C4: no backfill when arch flag is OFF.
+	// Fired AFTER the warm sequence: the background Reindex swaps a.Index.Files
+	// under a.mu, while Engine.WarmCache/warmDimCache read idx.Files lock-free —
+	// firing here removes that overlap (T43 review punch item).
+	if r.FileCount > 0 && a.ArchEnabled && a.Store != nil && !a.Store.HasEdgesBucket(a.ProjectID) {
+		safeGo(&a.bgWg, "upgrade-arch-derive", nil, func() {
+			if _, err := a.Reindex(); err != nil {
+				a.debugf("upgrade-arch-derive: Reindex: %v", err)
+			}
+		})
+	}
+
+	// PC1 / T45: boot-time derive — edges present but arch_shards absent.
+	// Fires when `aoa init` has already written edges to the DB (edges bucket
+	// exists) but this is the first daemon boot for the current binary
+	// (arch_shards bucket absent). Without this trigger, the canonical
+	// `init → daemon → arch views` workflow returns "no data" until a file
+	// edit kicks off the watcher path.
+	// Same C4 gate and safeGo/bgWg pattern as the T43 trigger.
+	// Mutually exclusive with T43: T43 fires when edges are absent (Reindex →
+	// edges + shards); PC1 fires when edges are present but shards are absent
+	// (direct derive only). archDeriveMu serializes concurrent derives —
+	// no double-fire risk.
+	if r.FileCount > 0 && a.ArchEnabled && a.Store != nil &&
+		a.Store.HasEdgesBucket(a.ProjectID) && !a.Store.HasArchBucket(a.ProjectID) {
+		safeGo(&a.bgWg, "boot-arch-derive", nil, a.deriveArch)
+	}
+
 	r.TotalTime = time.Since(totalStart).Seconds()
 	return r
 }
@@ -1071,6 +1111,13 @@ func (a *App) doFlushEdgeBatch() {
 		if err := a.Store.SaveUnresolved(projectID, unresolvedEdges); err != nil {
 			a.debugf("SaveUnresolved (watcher flush): %v", err)
 		}
+	}
+
+	// C2+C1: trigger arch re-derive after each debounce flush (one render per window).
+	// Runs in a background goroutine — never under a.mu, never in the watcher critical
+	// section. archEnabled is already snapshotted outside the lock above.
+	if archEnabled {
+		safeGo(&a.bgWg, "arch-derive", nil, a.deriveArch)
 	}
 }
 
@@ -3268,6 +3315,12 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 		safeGo(&a.bgWg, "dim-rescan", nil, func() {
 			a.warmDimCache(func(string) {})
 		})
+	}
+
+	// C1: trigger arch re-derive after full reindex, outside a.mu, in a background
+	// goroutine. This is one render per Reindex — not per file event (C2 upheld).
+	if a.ArchEnabled {
+		safeGo(&a.bgWg, "arch-derive", nil, a.deriveArch)
 	}
 
 	elapsed := time.Since(start)
