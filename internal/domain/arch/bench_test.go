@@ -5,8 +5,9 @@ package arch
 // This file provides:
 //   - gen30kFixture: generates a synthetic 30k-unit, ~90k-dep fixture in memory
 //   - BenchmarkRenderAll_30k: measures full derive latency (Detect + Group + 3 renders)
-//   - TestT15_30kFixture_LatencyAndRSS: asserts budget ≤ 5s latency (conservative; sub-ms
-//     is for the cached socket read, not fresh derive — WP T15 budget for derive pass)
+//   - TestT15_30kFixture_LatencyBudget: asserts budget ≤ 10s latency for a fresh derive
+//     pass (sub-ms is the cached socket-read budget, not the fresh-derive budget — see
+//     T15 daemon-read test in test/integration/t15_daemon_read_test.go)
 //
 // RSS measurement uses /proc/self/status on Linux; falls back to 0 on other platforms.
 // Numbers are always printed so CI logs capture them even when the assertion passes.
@@ -15,7 +16,9 @@ package arch
 //   - 30k files ≈ largest realistic Go mono-repo
 //   - Each file → 1 unit; avg 3 deps per unit → 90k DepFacts
 //   - Derive pass (Detect + Group + 3 renders) must complete in ≤ 10s wall-clock
-//   - This is a latency ceiling, not a performance target; real repos are smaller
+//     (measured baseline 2.6–2.8s; ×3.7 headroom; this is a ceiling, not a target)
+//   - RSS growth budget: ≤ 256 MB (measured baseline 71.8–93.9 MB; ×2.7 headroom)
+//     WP T15 names no explicit RSS number; 256 MB is the recorded budget (PC5)
 
 import (
 	"bufio"
@@ -36,7 +39,14 @@ const (
 	// t15DepsPerUnit is the average number of dep edges per unit.
 	t15DepsPerUnit = 3
 	// t15LatencyBudget is the maximum acceptable derive latency for the full pass.
+	// Measured baseline: 2.6–2.8s (BenchmarkRenderAll_30k). Budget = 10s gives ×3.7
+	// headroom. WP T15 names no explicit second value; 10s is the recorded budget (PC5).
 	t15LatencyBudget = 10 * time.Second
+	// t15RSSGrowthBudgetKB is the maximum acceptable RSS growth (in KB) for a single
+	// RenderAll pass on the 30k fixture. Measured baseline: 71.8–93.9 MB growth
+	// (checkpoint-F2.md finding 5 / PC5). Budget = 256 MB gives ×2.7 headroom.
+	// Only asserted on Linux (requires /proc/self/status); silently skipped elsewhere.
+	t15RSSGrowthBudgetKB = 256 * 1024 // 256 MB in KB
 )
 
 // gen30kFixture creates a synthetic 30k-unit, ~90k-dep fixture.
@@ -147,6 +157,17 @@ func TestT15_30kFixture_LatencyBudget(t *testing.T) {
 		t.Errorf("T15 BREACH: RenderAll latency %s > budget %s on 30k fixture", elapsed, t15LatencyBudget)
 	} else {
 		t.Logf("T15 PASS: latency %s ≤ budget %s", elapsed, t15LatencyBudget)
+	}
+
+	// Assert RSS growth budget (Linux only; skipped on non-Linux where maxRSSKilobytes returns 0).
+	if rssAfter > 0 {
+		if rssGrowth > t15RSSGrowthBudgetKB {
+			t.Errorf("T15 RSS BREACH: growth %dKB (%dMB) > budget %dKB (%dMB) on 30k fixture",
+				rssGrowth, rssGrowth/1024, t15RSSGrowthBudgetKB, t15RSSGrowthBudgetKB/1024)
+		} else {
+			t.Logf("T15 PASS RSS: growth %dKB (%dMB) ≤ budget %dKB (%dMB)",
+				rssGrowth, rssGrowth/1024, t15RSSGrowthBudgetKB, t15RSSGrowthBudgetKB/1024)
+		}
 	}
 }
 
