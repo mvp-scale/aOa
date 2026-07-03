@@ -387,7 +387,7 @@ async function layoutSimple(view,dir,d){
   const g={id:"root",layoutOptions:EOPT(dir,d),
     children:view.nodes.map(n=>({id:n.id,width:sizes[n.id].w,height:sizes[n.id].h})),
     edges:view.edges.map(e=>({id:e.id,sources:[e.source],targets:[e.target],
-      labels:[{text:e.label,width:lblW(e.label),height:16}]}))};
+      labels:[{text:e.label||"",width:lblW(e.label||""),height:16}]}))};
   const r=await elk.layout(g);
   const pos={};r.children.forEach(c=>pos[c.id]={x:snap(c.x),y:snap(c.y)});
   const laidById={};(r.edges||[]).forEach(e=>laidById[e.id]=e);

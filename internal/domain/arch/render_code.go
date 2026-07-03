@@ -105,21 +105,38 @@ func RenderCode(in RenderInput) (*Shard, error) {
 		})
 	}
 
-	// Build linear chain edges connecting nodes in walk order.
+	// Build BFS-tree parent→child edges — each is a REAL import dependency.
+	//
+	// Because codeWalkBFS only follows edges present in the DepFact adjacency
+	// (buildCodeAdj filters external units but never invents edges), every
+	// parent→child pair recorded in visitedUnit.parent is a genuine dep.  We
+	// emit those edges directly rather than constructing a linear chain that
+	// would mix fabricated ordering with real provenance (PF6 repair).
+	//
+	// "imports" label: dep edges in this view represent Go import statements.
+	// The label is required by the viewer's ELK layout pass (lblW crashes on
+	// undefined; PF1 guard is defense-in-depth — see viewer.js line 374).
 	edges := make([]ShardEdge, 0, max0(len(nodes)-1, 0))
-	for i := 1; i < len(nodes); i++ {
+	edgeIdx := 1
+	for _, vu := range visited {
+		if vu.parent == "" {
+			continue // entrypoint has no incoming BFS-tree edge
+		}
 		edges = append(edges, ShardEdge{
-			ID:     fmt.Sprintf("e%d", i),
-			Source: nodes[i-1].ID,
-			Target: nodes[i].ID,
+			ID:     fmt.Sprintf("e%d", edgeIdx),
+			Source: vu.parent,
+			Target: vu.id,
+			Label:  "imports",
 		})
+		edgeIdx++
 	}
 
 	// Provenance: MIXED because subset choice is heuristic.
 	// Nodes carry REAL file:line (stamped via sources field above).
+	// Edges are REAL import deps (BFS-tree parent→child, all from DepFact).
 	prov := Prov{
 		Kind:  "mixed",
-		Label: "MIXED · symbols real · subset selection inferred",
+		Label: "MIXED · symbols real · subset heuristic · edges real import deps",
 	}
 
 	// Caption: "N symbols along critical path — entrypoint: X" (WP step 2).
@@ -153,10 +170,15 @@ func max0(a, _ int) int {
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-// visitedUnit carries a unit ID and its BFS discovery depth.
+// visitedUnit carries a unit ID, its BFS discovery depth, and the ID of its
+// BFS-tree parent (empty string for the entrypoint).  The parent→child edge
+// in the BFS tree is always a real dep edge: codeWalkBFS only follows edges
+// that exist in the DepFact adjacency, so every parent→child pair corresponds
+// to a true import dependency.
 type visitedUnit struct {
-	id    string
-	depth int
+	id     string
+	depth  int
+	parent string // BFS-tree parent unit ID; "" for the start node
 }
 
 // buildCodeAdj builds a unit → sorted outbound-neighbor-IDs adjacency map.
@@ -249,13 +271,17 @@ func selectCodeEntrypoint(units []UnitFact, deps []DepFact) string {
 // codeWalkBFS performs a BFS from start through adj, limited to maxDepth hops.
 // Returns visited units in BFS order (breadth-first, with stable alphabetical
 // ordering within each depth level for T4 determinism).
+//
+// Each visitedUnit records its BFS-tree parent.  Because adj is built from
+// real DepFact edges (see buildCodeAdj), every parent→child pair in the BFS
+// tree is a genuine import dependency — safe to emit as a real edge.
 func codeWalkBFS(start string, adj map[string][]string, maxDepth int) []visitedUnit {
 	if start == "" {
 		return nil
 	}
 	visited := map[string]bool{start: true}
-	result := []visitedUnit{{id: start, depth: 0}}
-	queue := []visitedUnit{{id: start, depth: 0}}
+	result := []visitedUnit{{id: start, depth: 0, parent: ""}}
+	queue := []visitedUnit{{id: start, depth: 0, parent: ""}}
 
 	for len(queue) > 0 {
 		curr := queue[0]
@@ -269,7 +295,7 @@ func codeWalkBFS(start string, adj map[string][]string, maxDepth int) []visitedU
 		for _, next := range adj[curr.id] {
 			if !visited[next] {
 				visited[next] = true
-				vu := visitedUnit{id: next, depth: curr.depth + 1}
+				vu := visitedUnit{id: next, depth: curr.depth + 1, parent: curr.id}
 				result = append(result, vu)
 				queue = append(queue, vu)
 			}
