@@ -21,6 +21,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -30,6 +31,7 @@ import (
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/domain/learner"
 	"github.com/corey/aoa/internal/ports"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -343,6 +345,14 @@ func TestT17_NoSaveIndexUnderMu(t *testing.T) {
 		}
 		// If SaveLearnerState was called under a.mu at the 50th event,
 		// lockGuardStore would have Errorfed.
+
+		// Assert autotune actually fired (not vacuous — T17 guards only fire
+		// when the path is exercised; lastAutotune is set under lock in writeStatus).
+		a.mu.Lock()
+		tuned := a.lastAutotune != nil
+		a.mu.Unlock()
+		assert.True(t, tuned,
+			"T17/session_user_input_autotune_path: autotune must fire at promptN=50")
 	})
 
 	t.Run("session_grep_autotune_path", func(t *testing.T) {
@@ -381,6 +391,13 @@ func TestT17_NoSaveIndexUnderMu(t *testing.T) {
 			},
 		})
 		// If SaveLearnerState was called under a.mu, lockGuardStore would have Errorfed.
+
+		// Assert autotune actually fired (guard liveness: promptN=50 guarantees it).
+		a.mu.Lock()
+		tuned := a.lastAutotune != nil
+		a.mu.Unlock()
+		assert.True(t, tuned,
+			"T17/session_grep_autotune_path: autotune must fire when promptN=50 and grep pattern enriches")
 	})
 }
 
@@ -445,31 +462,70 @@ func TestT17_EdgeStoreNotUnderMu(t *testing.T) {
 	})
 }
 
+// capturingTB wraps a testing.TB and captures Errorf calls without failing the
+// outer test.  Used by TestT17_SaveAllDimensionsNotUnderMu to prove the
+// lockGuardStore CAN fire for a C1 violation before asserting the correct path
+// does not fire — turning a vacuous positive-only test into a live guard check.
+type capturingTB struct {
+	testing.TB
+	mu   sync.Mutex
+	errs []string
+}
+
+func (c *capturingTB) Errorf(format string, args ...interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.errs = append(c.errs, fmt.Sprintf(format, args...))
+}
+
+func (c *capturingTB) Helper() {}
+
+func (c *capturingTB) errors() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	cp := make([]string, len(c.errs))
+	copy(cp, c.errs)
+	return cp
+}
+
 // TestT17_SaveAllDimensionsNotUnderMu verifies C1 for SaveAllDimensions:
 // the dim-engine scan persists via SaveAllDimensions which must not be called
-// while App.mu is held. The dim-engine runs under reconMu (a separate mutex)
-// and calls SaveAllDimensions outside reconMu and a.mu.
+// while App.mu is held.
+//
+// De-vacuousing (PC4): this test now includes a NEGATIVE assertion — it
+// temporarily replaces the lockGuardStore's testing.TB with a capturingTB,
+// calls SaveAllDimensions while holding a.mu, and asserts the guard DID fire.
+// Then it restores the real TB and calls SaveAllDimensions without the lock to
+// confirm the production path is clean.  Both assertions are required; without
+// the negative check the test cannot fail even if the guard is broken.
 func TestT17_SaveAllDimensionsNotUnderMu(t *testing.T) {
-	// SaveAllDimensions is called from runDimScan (dim_engine.go) which releases
-	// reconMu before calling it. We verify the C1 property by injecting a
-	// lockGuardStore and driving a learner.ObserveEvent that reaches the dim path.
-	// Since the dim scan is a background goroutine we can't drive it directly;
-	// instead we verify the invariant structurally: the lockGuardStore intercepts
-	// any SaveAllDimensions call and asserts mu is unlocked.
-	//
-	// Note: the dim scan is triggered by WarmCaches → safeGo (not under a.mu),
-	// so this test validates the invariant is code-structurally ensured.
 	tmpDir := t.TempDir()
 	a := newLockGuardApp(t, tmpDir)
 
-	// Simulate a direct SaveAllDimensions call from outside the mutex (as dim_engine does).
-	// If the implementation ever calls it while holding a.mu, the lockGuardStore fires.
 	analyses := map[string]*ports.FileAnalysis{
 		"main.go": {Path: "main.go", Language: "go"},
 	}
-	// Call outside any lock — should pass the guard cleanly.
+
+	// ── Negative assertion: guard must FIRE when called under the lock ────────
+	// Swap the real t for a capturingTB so Errorf is captured, not test-fatal.
+	capture := &capturingTB{TB: t}
+	lgStore := a.Store.(*lockGuardStore)
+	lgStore.t = capture
+
+	a.mu.Lock()
+	_ = a.Store.SaveAllDimensions(a.ProjectID, analyses) // SHOULD trigger the guard
+	a.mu.Unlock()
+
+	captured := capture.errors()
+	assert.NotEmpty(t, captured,
+		"T17/SaveAllDimensions: lockGuardStore must fire when called under a.mu (guard liveness)")
+
+	// ── Positive assertion: guard must NOT fire when called without the lock ──
+	// Restore the real TB.
+	lgStore.t = t
 	err := a.Store.SaveAllDimensions(a.ProjectID, analyses)
-	require.NoError(t, err)
+	require.NoError(t, err,
+		"T17/SaveAllDimensions: calling outside a.mu must succeed cleanly")
 }
 
 // TestT17_LearnerObserveEvent confirms the Learner's ObserveEvent mechanism
