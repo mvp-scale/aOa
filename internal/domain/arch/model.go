@@ -169,6 +169,32 @@ type RenderInput struct {
 	GroupProv string     // "derived" or "mixed" — propagated from grouping step
 	SCCs      [][]string // pre-computed SCCs (from TarjanSCC); shared by cycles renderer
 	Findings  []Finding  // detector output for this scope
+
+	// CodeSymbols carries per-file symbol data for the code renderer (②b, L19.23).
+	// Nil → code view omitted (conditional registration per kickoff §22 item 22).
+	// The app layer populates this from a Clone of ports.Index (never aliased — race gate).
+	// Provenance split: REAL for symbol file:line; MIXED for subset selection heuristic.
+	CodeSymbols *CodeSymbolIndex
+}
+
+// CodeSymbolIndex is a symbol data bundle for the code renderer (②b, L19.23).
+// Built by the app layer from a Clone of ports.Index.
+// The arch domain is dependency-free; this type decouples the renderer from ports.SymbolMeta.
+type CodeSymbolIndex struct {
+	// ByFile maps file path → symbols in that file, sorted by StartLine ascending.
+	ByFile map[string][]CodeSymbol
+}
+
+// CodeSymbol is a single symbol translated from ports.SymbolMeta + TokenRef.
+// Used exclusively by the code renderer; other renderers ignore it.
+type CodeSymbol struct {
+	Name      string
+	Signature string
+	Kind      string
+	File      string
+	StartLine uint16
+	EndLine   uint16
+	Parent    string
 }
 
 // Manifest is the top-level catalog of all rendered shards for one scope.

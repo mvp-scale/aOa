@@ -20,12 +20,16 @@ type Service struct{}
 //  1. Group units via GroupWithOptions (rung-1/2/3 + overlays).
 //  2. Detect cycles/gods/orphans/budget/dead-candidate/mutual (Tarjan SCC
 //     shared with cycles renderer; budget/mutual need the grouping).
-//  3. Render component, dsm, and cycles views.
+//  3. Render component, dsm, cycles, and (when symbolIndex != nil) code views.
 //  4. Marshal each shard to JSON and compute its 12-char ContentHash.
 //  5. Build a byte-stable Manifest.
 //
 // refHits maps unit ID → index reference hits (dead-candidate fuel); nil is
 // valid when no index is available — all units are then treated as 0 hits.
+//
+// symbolIndex carries per-file symbol data for the code renderer (②b, L19.23).
+// Nil → code view omitted (never a phantom shard). Supplied by the app layer
+// from a Clone of ports.Index (never the live pointer — race gate).
 //
 // Returns:
 //   - shards: view ID → raw JSON bytes (ready to write to arch_shards bucket)
@@ -34,7 +38,7 @@ type Service struct{}
 //   - error: any render/marshal error
 //
 // C1 context: this method does no writes; callers snapshot-release-write per C1.
-func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts *GroupOptions, refHits map[string]int) (
+func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts *GroupOptions, refHits map[string]int, symbolIndex *CodeSymbolIndex) (
 	shards map[string][]byte,
 	manifest Manifest,
 	findings []Finding,
@@ -51,13 +55,14 @@ func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts
 
 	// 3. Build shared render input.
 	in := RenderInput{
-		Scope:     scope,
-		Units:     units,
-		Deps:      deps,
-		Grouping:  grouping,
-		GroupProv: groupProv,
-		SCCs:      sccs,
-		Findings:  findings,
+		Scope:       scope,
+		Units:       units,
+		Deps:        deps,
+		Grouping:    grouping,
+		GroupProv:   groupProv,
+		SCCs:        sccs,
+		Findings:    findings,
+		CodeSymbols: symbolIndex,
 	}
 
 	// 4. Render each view.
@@ -69,6 +74,14 @@ func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts
 		{"component", RenderComponent},
 		{"cycles", RenderCycles},
 		{"dsm", RenderDSM},
+	}
+	// Code view (②b, L19.23): registered only when symbol data is present.
+	// Nil symbolIndex → view absent from manifest (never a phantom shard).
+	if symbolIndex != nil {
+		viewDefs = append(viewDefs, struct {
+			id string
+			fn renderFn
+		}{"code", RenderCode})
 	}
 
 	shards = make(map[string][]byte, len(viewDefs))

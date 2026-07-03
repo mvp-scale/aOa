@@ -266,9 +266,13 @@ func (a *App) deriveArch() {
 	// detector fires only on units with zero inbound deps AND zero index refs.
 	refHits := buildRefHits(idx)
 
+	// 6b. Build symbol index for the code renderer (②b, L19.23).
+	// idx is already a Clone (snapshot-release, line 238); safe to read here.
+	symIndex := buildCodeSymbolIndex(idx)
+
 	// 7. RenderAll: pure domain computation — no I/O, no mu needed.
 	svc := &arch.Service{}
-	shards, manifest, findings, err := svc.RenderAll(archScope, units, deps, opts, refHits)
+	shards, manifest, findings, err := svc.RenderAll(archScope, units, deps, opts, refHits, symIndex)
 	if err != nil {
 		a.debugf("deriveArch: RenderAll: %v", err)
 		return
@@ -351,6 +355,54 @@ func buildRefHits(idx *ports.Index) map[string]int {
 		}
 	}
 	return refHits
+}
+
+// buildCodeSymbolIndex converts a ports.Index snapshot into an arch.CodeSymbolIndex
+// for the code renderer (②b, L19.23).
+//
+// The input is always a Clone of the live index (see deriveArch:238 and
+// Derive:493); it is safe to iterate without holding App.mu.
+//
+// Returns nil when idx has no symbol metadata — the caller treats nil as
+// "no symbols available" and omits the code view (never a phantom shard).
+func buildCodeSymbolIndex(idx *ports.Index) *arch.CodeSymbolIndex {
+	if idx == nil || len(idx.Metadata) == 0 {
+		return nil
+	}
+
+	byFile := make(map[string][]arch.CodeSymbol, len(idx.Files))
+	for ref, meta := range idx.Metadata {
+		if meta == nil {
+			continue
+		}
+		fm, ok := idx.Files[ref.FileID]
+		if !ok || fm.Path == "" {
+			continue
+		}
+		byFile[fm.Path] = append(byFile[fm.Path], arch.CodeSymbol{
+			Name:      meta.Name,
+			Signature: meta.Signature,
+			Kind:      meta.Kind,
+			File:      fm.Path,
+			StartLine: meta.StartLine,
+			EndLine:   meta.EndLine,
+			Parent:    meta.Parent,
+		})
+	}
+	if len(byFile) == 0 {
+		return nil
+	}
+
+	// Sort each file's symbol list by StartLine for determinism (T4).
+	for path := range byFile {
+		syms := byFile[path]
+		sort.Slice(syms, func(i, j int) bool {
+			return syms[i].StartLine < syms[j].StartLine
+		})
+		byFile[path] = syms
+	}
+
+	return &arch.CodeSymbolIndex{ByFile: byFile}
 }
 
 // ── Finding conversion ────────────────────────────────────────────────────
