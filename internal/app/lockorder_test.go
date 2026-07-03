@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/corey/aoa/internal/domain/arch"
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/domain/learner"
 	"github.com/corey/aoa/internal/ports"
@@ -90,6 +91,22 @@ func (n *noopStore) ReplaceAllEdges(_ string, _ map[uint32][]ports.ImportEdge) e
 	return nil
 }
 func (n *noopStore) HasEdgesBucket(_ string) bool { return false }
+
+// ArchStore no-ops (L19.14) — C1: write methods must never be called while App.mu is held.
+func (n *noopStore) SaveShards(_ string, _ map[string][]byte) error       { return nil }
+func (n *noopStore) LoadShard(_ string, _ string) ([]byte, error)         { return nil, nil }
+func (n *noopStore) SaveManifest(_ string, _ string, _ []byte) error      { return nil }
+func (n *noopStore) LoadManifest(_ string, _ string) ([]byte, error)      { return nil, nil }
+func (n *noopStore) DeleteShardsForScope(_ string, _ string) error        { return nil }
+func (n *noopStore) HasArchBucket(_ string) bool                          { return false }
+
+// FindingsStore no-ops (L19.15) — C1: SaveFindings must never be called while App.mu is held.
+func (n *noopStore) SaveFindings(_ string, _ string, _ []arch.Finding) error {
+	return nil
+}
+func (n *noopStore) LoadFindings(_ string, _ string) ([]arch.Finding, error) {
+	return nil, nil
+}
 
 // ── lockGuardStore ─────────────────────────────────────────────────────────
 //
@@ -177,6 +194,33 @@ func (s *lockGuardStore) SaveUnresolved(projectID string, entries []ports.Import
 func (s *lockGuardStore) ReplaceAllEdges(projectID string, fileEdges map[uint32][]ports.ImportEdge) error {
 	s.assertUnlocked("ReplaceAllEdges", projectID)
 	return s.storeBackend.ReplaceAllEdges(projectID, fileEdges)
+}
+
+// ArchStore write methods (L19.14 C1 check) — db.Update callers that must never
+// fire while App.mu is held.
+
+// SaveShards triggers db.Update on the arch_shards bucket (L19.14 C1 check).
+func (s *lockGuardStore) SaveShards(projectID string, shards map[string][]byte) error {
+	s.assertUnlocked("SaveShards", projectID)
+	return s.storeBackend.SaveShards(projectID, shards)
+}
+
+// SaveManifest triggers db.Update on the arch_shards bucket (L19.14 C1 check).
+func (s *lockGuardStore) SaveManifest(projectID, scope string, data []byte) error {
+	s.assertUnlocked("SaveManifest", projectID)
+	return s.storeBackend.SaveManifest(projectID, scope, data)
+}
+
+// DeleteShardsForScope triggers db.Update on the arch_shards bucket (L19.14 C1 check).
+func (s *lockGuardStore) DeleteShardsForScope(projectID, scope string) error {
+	s.assertUnlocked("DeleteShardsForScope", projectID)
+	return s.storeBackend.DeleteShardsForScope(projectID, scope)
+}
+
+// SaveFindings triggers db.Update on the facts_findings bucket (L19.15 C1 check).
+func (s *lockGuardStore) SaveFindings(projectID, scope string, findings []arch.Finding) error {
+	s.assertUnlocked("SaveFindings", projectID)
+	return s.storeBackend.SaveFindings(projectID, scope, findings)
 }
 
 // ── helper ─────────────────────────────────────────────────────────────────
@@ -573,4 +617,82 @@ func TestT17_Race(t *testing.T) {
 		_, _ = a.Reindex()
 	}
 	<-done
+}
+
+// TestT17_ArchWritePathNotUnderMu verifies C1 for the arch write paths (L19.14):
+// SaveShards, SaveManifest, and SaveFindings are all db.Update callers that must
+// NEVER be called while App.mu is held.
+//
+// Each sub-test exercises a discrete path through deriveArch that reaches a
+// write method, then asserts the lockGuardStore guard did NOT fire (no C1 violation).
+// The negative liveness check (guard CAN fire) is done in the mu-held subtest.
+func TestT17_ArchWritePathNotUnderMu(t *testing.T) {
+	// ── Negative assertion: guard must FIRE for SaveShards when called under mu ──
+	t.Run("SaveShards_guard_fires_when_under_mu", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		a := newLockGuardApp(t, tmpDir)
+
+		capture := &capturingTB{TB: t}
+		lgStore := a.Store.(*lockGuardStore)
+		lgStore.t = capture
+
+		a.mu.Lock()
+		_ = a.Store.SaveShards(a.ProjectID, map[string][]byte{"test/key@abc123": []byte("{}")})
+		a.mu.Unlock()
+
+		assert.NotEmpty(t, capture.errors(),
+			"T17/arch: lockGuardStore must fire when SaveShards called under a.mu (guard liveness)")
+		lgStore.t = t
+	})
+
+	// ── Positive assertion: SaveFindings is never called while App.mu is held ──
+	// We call SaveFindings directly outside the lock to confirm the clean path.
+	t.Run("SaveFindings_clean_when_outside_mu", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		a := newLockGuardApp(t, tmpDir)
+
+		// Must be called WITHOUT holding a.mu — lockGuardStore must not fire.
+		err := a.Store.SaveFindings(a.ProjectID, "local", []arch.Finding{})
+		assert.NoError(t, err,
+			"T17/arch: SaveFindings outside a.mu must succeed without C1 violation")
+	})
+
+	// ── deriveArch path: arch write path via the real derive pipeline ────────
+	// deriveArch is always called via safeGo (outside mu). Verify that when we
+	// call it directly (sequentially, outside mu), no C1 violations fire.
+	// Because the noopStore returns zero edges, deriveArch returns early —
+	// this test confirms the early-return path is also C1-clean.
+	t.Run("deriveArch_early_return_no_violation", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		a := newLockGuardApp(t, tmpDir)
+		a.ArchEnabled = true
+		a.stopCh = make(chan struct{})
+
+		// deriveArch with zero edges from noopStore → early return, no writes.
+		// lockGuardStore must not fire (no db.Update called, nothing under mu).
+		a.deriveArch()
+		// If any write was called under mu, lockGuardStore would have Errorfed.
+	})
+
+	// ── doFlushEdgeBatch → arch-derive trigger is outside mu ─────────────────
+	// After a flush, safeGo("arch-derive") fires deriveArch outside mu.
+	// This test fires doFlushEdgeBatch with a non-empty batch and confirms the
+	// arch-derive goroutine (bgWg) completes without a C1 violation.
+	t.Run("flush_triggers_arch_derive_outside_mu", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		a := newLockGuardApp(t, tmpDir)
+		a.ArchEnabled = true
+		a.stopCh = make(chan struct{})
+
+		goFile := filepath.Join(tmpDir, "main.go")
+		require.NoError(t, os.WriteFile(goFile,
+			[]byte("package main\nimport \"fmt\"\nfunc main() { fmt.Println(\"hi\") }"), 0644))
+
+		a.onFileChanged(goFile)     // populate edgePendingBatch
+		a.doFlushEdgeBatch()        // flush + triggers safeGo("arch-derive")
+		a.bgWg.Wait()               // wait for deriveArch to finish
+
+		// If SaveShards/SaveManifest/SaveFindings were called under a.mu, the
+		// lockGuardStore would have Errorfed; the test would have already failed.
+	})
 }

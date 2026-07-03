@@ -43,6 +43,11 @@ type AppQueries interface {
 	DimScanProgress() DimScanProgress
 	GenerateHints(query string, opts ports.SearchOptions) []string
 	TelemetrySnapshot() TelemetryResult
+	// Arch returns the arch querier for the project (L19.14 / L19.16 prep).
+	// Returns nil when the arch flag is off (C4) or no substrate is available.
+	// L19.16 adds dispatch arms — this accessor enables them without further
+	// interface changes.
+	Arch() ports.ArchQuerier
 }
 
 // Server is the daemon that listens on a Unix socket and serves search requests.

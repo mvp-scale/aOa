@@ -24,6 +24,7 @@ import (
 	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/adapters/web"
 	"github.com/corey/aoa/internal/domain/analyzer"
+	"github.com/corey/aoa/internal/domain/arch"
 	"github.com/corey/aoa/internal/domain/enricher"
 	"github.com/corey/aoa/internal/domain/facts"
 	"github.com/corey/aoa/internal/domain/hints"
@@ -42,6 +43,15 @@ type storeBackend interface {
 	// EdgeStore (L19.10): per-file import-edge persistence.
 	// All methods are C1-compliant — must never be called while App.mu is held.
 	ports.EdgeStore
+	// ArchStore (L19.14): arch shard cache (arch_shards bucket, C3 versioned).
+	// All write methods are C1-compliant — must never be called while App.mu is held.
+	ports.ArchStore
+	// SaveFindings persists arch detector findings for a (projectID, scope) pair.
+	// C1: caller must NOT hold App.mu (snapshot-release-write pattern).
+	SaveFindings(projectID, scope string, findings []arch.Finding) error
+	// LoadFindings retrieves arch findings for a (projectID, scope) pair.
+	// Returns nil, nil if no findings exist (C3: missing bucket → empty result).
+	LoadFindings(projectID, scope string) ([]arch.Finding, error)
 	// Healthy reports whether the backend is operational.
 	Healthy() bool
 	// Recovered reports whether the backend rebuilt itself from a corrupt state
@@ -1087,6 +1097,13 @@ func (a *App) doFlushEdgeBatch() {
 		if err := a.Store.SaveUnresolved(projectID, unresolvedEdges); err != nil {
 			a.debugf("SaveUnresolved (watcher flush): %v", err)
 		}
+	}
+
+	// C2+C1: trigger arch re-derive after each debounce flush (one render per window).
+	// Runs in a background goroutine — never under a.mu, never in the watcher critical
+	// section. archEnabled is already snapshotted outside the lock above.
+	if archEnabled {
+		safeGo(&a.bgWg, "arch-derive", nil, a.deriveArch)
 	}
 }
 
@@ -3284,6 +3301,12 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 		safeGo(&a.bgWg, "dim-rescan", nil, func() {
 			a.warmDimCache(func(string) {})
 		})
+	}
+
+	// C1: trigger arch re-derive after full reindex, outside a.mu, in a background
+	// goroutine. This is one render per Reindex — not per file event (C2 upheld).
+	if a.ArchEnabled {
+		safeGo(&a.bgWg, "arch-derive", nil, a.deriveArch)
 	}
 
 	elapsed := time.Since(start)
