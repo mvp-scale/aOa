@@ -140,6 +140,73 @@ type LearnerState struct {
 	PromptCount      uint32                 `json:"prompt_count"`
 }
 
+// Clone returns a deep copy of the LearnerState safe to use after App.mu is
+// released. All maps are copied so concurrent mutation of the original does
+// not affect the snapshot. Must be called with App.mu held.
+func (s *LearnerState) Clone() *LearnerState {
+	if s == nil {
+		return nil
+	}
+	c := &LearnerState{PromptCount: s.PromptCount}
+
+	if s.KeywordHits != nil {
+		c.KeywordHits = make(map[string]uint32, len(s.KeywordHits))
+		for k, v := range s.KeywordHits {
+			c.KeywordHits[k] = v
+		}
+	}
+	if s.TermHits != nil {
+		c.TermHits = make(map[string]uint32, len(s.TermHits))
+		for k, v := range s.TermHits {
+			c.TermHits[k] = v
+		}
+	}
+	if s.DomainMeta != nil {
+		c.DomainMeta = make(map[string]*DomainMeta, len(s.DomainMeta))
+		for k, v := range s.DomainMeta {
+			dm := *v // DomainMeta contains no pointers — struct copy is safe
+			c.DomainMeta[k] = &dm
+		}
+	}
+	if s.CohitKwTerm != nil {
+		c.CohitKwTerm = make(map[string]uint32, len(s.CohitKwTerm))
+		for k, v := range s.CohitKwTerm {
+			c.CohitKwTerm[k] = v
+		}
+	}
+	if s.CohitTermDomain != nil {
+		c.CohitTermDomain = make(map[string]uint32, len(s.CohitTermDomain))
+		for k, v := range s.CohitTermDomain {
+			c.CohitTermDomain[k] = v
+		}
+	}
+	if s.Bigrams != nil {
+		c.Bigrams = make(map[string]uint32, len(s.Bigrams))
+		for k, v := range s.Bigrams {
+			c.Bigrams[k] = v
+		}
+	}
+	if s.FileHits != nil {
+		c.FileHits = make(map[string]uint32, len(s.FileHits))
+		for k, v := range s.FileHits {
+			c.FileHits[k] = v
+		}
+	}
+	if s.KeywordBlocklist != nil {
+		c.KeywordBlocklist = make(map[string]bool, len(s.KeywordBlocklist))
+		for k, v := range s.KeywordBlocklist {
+			c.KeywordBlocklist[k] = v
+		}
+	}
+	if s.GapKeywords != nil {
+		c.GapKeywords = make(map[string]bool, len(s.GapKeywords))
+		for k, v := range s.GapKeywords {
+			c.GapKeywords[k] = v
+		}
+	}
+	return c
+}
+
 // DomainMeta holds per-domain metadata and lifecycle state.
 //
 // Hits is the decayed hit counter (float64, NOT int-truncated).

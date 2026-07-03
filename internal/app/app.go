@@ -360,8 +360,9 @@ type App struct {
 	cachedSnapshotTime time.Time
 
 	// Goroutine lifecycle (L11.1): all background goroutines tracked for clean shutdown.
-	bgWg   sync.WaitGroup // tracks all safeGo goroutines
-	stopCh chan struct{}   // closed on Stop() to signal background goroutines
+	bgWg    sync.WaitGroup // tracks all safeGo goroutines
+	timerWg sync.WaitGroup // tracks in-flight debounce-timer goroutines (doSaveIndexDebounced, doFlushEdgeBatch)
+	stopCh  chan struct{}   // closed on Stop() to signal background goroutines
 }
 
 // Config holds initialization parameters for the App.
@@ -625,11 +626,21 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 	a.mu.Lock()
 	defer a.bumpRevision() // L17.6: invalidate ETag cache — atomic, safe after unlock
 
+	// Panic-safe unlock: defer releases the lock if we panic before the
+	// explicit a.mu.Unlock() below. The bool ensures we don't double-unlock.
+	unlocked := false
+	defer func() {
+		if !unlocked {
+			a.mu.Unlock()
+		}
+	}()
+
 	a.promptN++
 
 	tokens := index.Tokenize(query)
 	if len(tokens) == 0 {
 		a.mu.Unlock()
+		unlocked = true
 		return
 	}
 
@@ -672,10 +683,11 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 	}
 
 	tuneResult := a.Learner.ObserveAndMaybeTune(event)
-	// Snapshot learner state under lock for IO outside — C1: no db.Update under a.mu.
+	// Deep-copy learner state under lock for IO outside — C1: no db.Update under a.mu.
+	// State() returns the live pointer; Clone() makes a snapshot safe beyond mu release.
 	var pendingLearnerState *ports.LearnerState
 	if tuneResult != nil {
-		pendingLearnerState = a.Learner.State() // snapshot under lock
+		pendingLearnerState = a.Learner.State().Clone() // deep-copy under lock
 		a.writeStatus(tuneResult)
 		// L0.7: Autotune activity event
 		a.pushActivity(ActivityEntry{
@@ -729,6 +741,7 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 	a.pushActivity(entry)
 
 	a.mu.Unlock() // explicit unlock — IO follows
+	unlocked = true
 
 	// SaveLearnerState outside lock — db.Update never called while a.mu is held (C1).
 	if pendingLearnerState != nil {
@@ -917,9 +930,19 @@ const indexSaveDebounce = 2 * time.Second
 func (a *App) markIndexDirty() {
 	a.indexDirty = true
 	if a.indexSaveTimer != nil {
-		a.indexSaveTimer.Stop()
+		// If Stop returns true the timer hadn't fired yet — decrement the
+		// timerWg Add we issued when arming it (goroutine will never run).
+		if a.indexSaveTimer.Stop() {
+			a.timerWg.Done()
+		}
+		a.indexSaveTimer = nil
 	}
-	a.indexSaveTimer = time.AfterFunc(indexSaveDebounce, a.doSaveIndexDebounced)
+	// Track this goroutine so Stop() can wait for it before Close().
+	a.timerWg.Add(1)
+	a.indexSaveTimer = time.AfterFunc(indexSaveDebounce, func() {
+		defer a.timerWg.Done()
+		a.doSaveIndexDebounced()
+	})
 }
 
 // doSaveIndexDebounced is the time.AfterFunc callback for markIndexDirty.
@@ -966,9 +989,19 @@ func (a *App) markEdgeBatchDirty(fileID uint32, edges []ports.ImportEdge) {
 	a.edgePendingBatch[fileID] = edges // nil/empty = delete; non-empty = save
 
 	if a.edgeBatchTimer != nil {
-		a.edgeBatchTimer.Stop()
+		// If Stop returns true the timer hadn't fired yet — decrement the
+		// timerWg Add we issued when arming it.
+		if a.edgeBatchTimer.Stop() {
+			a.timerWg.Done()
+		}
+		a.edgeBatchTimer = nil
 	}
-	a.edgeBatchTimer = time.AfterFunc(edgeBatchDebounce, a.doFlushEdgeBatch)
+	// Track this goroutine so Stop() can wait for it before Close().
+	a.timerWg.Add(1)
+	a.edgeBatchTimer = time.AfterFunc(edgeBatchDebounce, func() {
+		defer a.timerWg.Done()
+		a.doFlushEdgeBatch()
+	})
 }
 
 // doFlushEdgeBatch is the edgeBatchTimer callback (C2, L19.12).
@@ -1017,8 +1050,12 @@ func (a *App) Stop() error {
 	// Build session flush payload (in-memory only; IO happens after unlock).
 	pendingSum, pendingDelta := a.buildSessionFlushPayload()
 	// Cancel any pending debounce timer and snapshot the index if dirty.
+	// If Stop() returns true, the timer goroutine was never started — release
+	// the timerWg slot we reserved when arming the timer.
 	if a.indexSaveTimer != nil {
-		a.indexSaveTimer.Stop()
+		if a.indexSaveTimer.Stop() {
+			a.timerWg.Done() // goroutine never ran; release the reserved slot
+		}
 		a.indexSaveTimer = nil
 	}
 	var idxSnap *ports.Index
@@ -1030,7 +1067,9 @@ func (a *App) Stop() error {
 	// Mirror the indexSaveTimer pattern: stop the timer, snapshot under lock,
 	// flush outside the lock before Close — prevents use-after-close on bbolt.
 	if a.edgeBatchTimer != nil {
-		a.edgeBatchTimer.Stop()
+		if a.edgeBatchTimer.Stop() {
+			a.timerWg.Done() // goroutine never ran; release the reserved slot
+		}
 		a.edgeBatchTimer = nil
 	}
 	var edgeBatchSnap map[uint32][]ports.ImportEdge
@@ -1039,8 +1078,17 @@ func (a *App) Stop() error {
 		a.edgePendingBatch = nil
 	}
 	edgeProjIDSnap := a.edgePendingProjID
-	learnerState := a.Learner.State()
+	// Deep-copy learner state under lock — C1: State() returns live pointer;
+	// Clone() makes a snapshot safe to read after a.mu is released (T35).
+	learnerState := a.Learner.State().Clone()
 	a.mu.Unlock()
+
+	// Wait for any in-flight debounce-timer goroutines (doSaveIndexDebounced,
+	// doFlushEdgeBatch) before calling Store IO or Close. Timers that fired
+	// before the Stop() calls above may still be running their callbacks;
+	// timerWg.Wait() ensures they complete before we proceed — prevents
+	// use-after-close on bbolt (finding 10 / T37).
+	a.timerWg.Wait()
 
 	// Writes outside the lock — db.Update never called while a.mu is held (C1).
 	a.doSessionFlush(pendingSum, pendingDelta)
@@ -1068,6 +1116,19 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 	a.debugf("session-event kind=%d", ev.Kind)
 	a.mu.Lock()
 	defer a.bumpRevision() // L17.6: invalidate ETag cache — atomic, safe after unlock
+
+	// Panic-safe unlock: defer releases the lock if we panic before the
+	// explicit a.mu.Unlock() below. The bool ensures we don't double-unlock.
+	unlocked := false
+	defer func() {
+		if !unlocked {
+			a.mu.Unlock()
+		}
+	}()
+
+	// pendingLearnerState carries a deep-copied snapshot when any session-signal
+	// path triggers autotune. Persisted outside the lock — C1 compliant.
+	var pendingLearnerState *ports.LearnerState
 
 	// Track current model from every event
 	if ev.Model != "" {
@@ -1105,7 +1166,10 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 		a.sessionMetrics.TurnCount++
 		a.meter.RecordUser(len(ev.Text))
 		a.Learner.ProcessBigrams(ev.Text)
-		a.processConversationSignal(ev.Text, true) // observe=true: may trigger autotune
+		// observe=true: may trigger autotune — returns snapshot to save outside lock.
+		if snap := a.processConversationSignal(ev.Text, true); snap != nil {
+			pendingLearnerState = snap
+		}
 		a.writeStatus(nil)
 		// Push user turn to ring
 		a.pushTurn(ConversationTurn{
@@ -1308,9 +1372,12 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				attrib = "unguided"
 				// tokens deferred to result_chars (actual result size, not full-codebase estimate)
 				impact = a.estimateGrepCost(ev.Tool.Pattern)
-				// Session-log Grep → learning signals
+				// Session-log Grep → learning signals; may trigger autotune.
+				// Returns snapshot to save outside lock — C1 compliant.
 				if ev.Tool.Pattern != "" {
-					a.processGrepSignal(ev.Tool.Pattern)
+					if snap := a.processGrepSignal(ev.Tool.Pattern); snap != nil {
+						pendingLearnerState = snap
+					}
 				}
 			case "Write", "Edit":
 				if ev.File != nil && ev.File.Path != "" {
@@ -1580,8 +1647,14 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 	}
 
 	a.mu.Unlock() // explicit unlock — IO follows
+	unlocked = true
 
-	// Session flush outside lock — db.Update never called while a.mu is held (C1).
+	// All IO outside lock — db.Update never called while a.mu is held (C1).
+	// SaveLearnerState for any session-signal autotune that fired this event.
+	if pendingLearnerState != nil && a.Store != nil {
+		_ = a.Store.SaveLearnerState(a.ProjectID, pendingLearnerState)
+	}
+	// Session flush outside lock.
 	a.doSessionFlush(pendingSum, pendingDelta)
 }
 
