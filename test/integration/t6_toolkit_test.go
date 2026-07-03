@@ -268,3 +268,30 @@ func TestT6_DeadDaemon_ShimMode_EmitsError(t *testing.T) {
 		})
 	}
 }
+
+// TestT6_DeadDaemon_ShimMode_LazyRevives is gotcha 3b's POSITIVE half
+// (TestT6_DeadDaemon_ShimMode_EmitsError covers the uninitialized-project
+// negative): with an INITIALIZED project and a dead daemon, shim-mode index
+// search must lazy-revive the daemon (L21.1 flock-guarded spawn + one retry)
+// and return results — not error out, not read stdin.
+func TestT6_DeadDaemon_ShimMode_LazyRevives(t *testing.T) {
+	dir := setupArchProject(t)
+	runAOA(t, dir, "init") // index + DB exist; daemon deliberately NOT started
+	defer runAOA(t, dir, "daemon", "stop") // stop the daemon the shim revives
+
+	stdout, stderr, exit := runAOAWithEnv(t, dir,
+		[]string{"AOA_SHIM=1"},
+		"grep", "Connect")
+	if exit != 0 {
+		t.Fatalf("T6.4b: shim grep on initialized project + dead daemon must lazy-revive and answer; exit=%d\nstderr: %s", exit, stderr)
+	}
+	if !strings.Contains(stdout, "Connect") {
+		t.Errorf("T6.4b: expected index results for 'Connect', got stdout: %q", stdout)
+	}
+
+	// The revive must leave a live daemon behind (L21 lazy-start, not one-shot).
+	_, _, healthExit := runAOA(t, dir, "health")
+	if healthExit != 0 {
+		t.Errorf("T6.4b: daemon should be alive after lazy-revive; health exit=%d", healthExit)
+	}
+}
