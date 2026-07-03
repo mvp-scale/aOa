@@ -6,7 +6,7 @@
 #   ./build.sh         — core (tree-sitter + dynamic grammars)
 #   ./build.sh --light — lean (pure Go, no tree-sitter)
 
-.PHONY: build build-light test test-v test-active lint vet bench bench-gauntlet bench-baseline bench-compare coverage check status
+.PHONY: build build-light test test-v test-active lint lint-check lint-baseline vet bench bench-gauntlet bench-baseline bench-compare coverage check status
 
 # Core build — tree-sitter + dynamic grammar loading
 build:
@@ -28,9 +28,38 @@ test-v:
 test-active:
 	go test ./... -v 2>&1 | grep -E "^(=== RUN|--- PASS|--- FAIL|FAIL|ok)" || true
 
-# Lint with golangci-lint
+# Lint (raw) — runs golangci-lint and exits 1 on any finding.
+# Use lint-check (below) for the gate-passing baseline-diff mode.
 lint:
 	golangci-lint run ./...
+
+# Lint gate — zero findings introduced in F1 (--new-from-rev against F0 base).
+# P6 ruling (checkpoint-F1 PC2): ~91 pre-existing findings grandfathered at F0
+# (commit cd33a5c); any finding in F1-changed lines is a gate failure.
+# Audit record: scripts/lint-baseline.txt (human-readable, ~91 grandfathered).
+# GOLANGCI_LINT can be overridden: make lint-check GOLANGCI_LINT=/path/to/bin
+# Note: golangci-lint's --new-from-rev uses git diff, so it requires a git repo.
+GOLANGCI_LINT ?= $(shell command -v golangci-lint 2>/dev/null || ls $$HOME/go/bin/golangci-lint 2>/dev/null || ls $$HOME/.local/bin/golangci-lint 2>/dev/null || echo golangci-lint)
+F0_COMMIT ?= cd33a5c
+lint-check:
+	@echo "=== Lint gate: F1-changed code only (baseline: F0 @ $(F0_COMMIT)) ==="
+	@echo "  (pre-existing ~91 findings grandfathered — see scripts/lint-baseline.txt)"
+	@if $(GOLANGCI_LINT) run --new-from-rev=$(F0_COMMIT) ./... 2>&1; then \
+	  echo "  OK — 0 new findings in F1-changed code"; \
+	else \
+	  echo ""; \
+	  echo "FAIL: new lint findings introduced in F1-changed code (see above)"; \
+	  echo "  Fix the findings, or if pre-existing, update the F0 base commit:"; \
+	  echo "    make lint-check F0_COMMIT=<new-base-sha>"; \
+	  exit 1; \
+	fi
+
+# Regenerate the baseline audit file from the current golangci-lint output.
+# Does not affect the gate — gate always uses --new-from-rev=$(F0_COMMIT).
+lint-baseline:
+	@$(GOLANGCI_LINT) run ./... 2>&1 | \
+	  grep -E '^(internal|cmd|test|atlas)' | sort > scripts/lint-baseline.txt
+	@echo "Baseline updated: $$(wc -l < scripts/lint-baseline.txt) findings in scripts/lint-baseline.txt"
 
 # Go vet (built-in, no install needed)
 vet:
@@ -46,8 +75,8 @@ coverage:
 	go tool cover -func=coverage.out
 	@rm -f coverage.out
 
-# The local CI: vet + lint + test + standard build + size gate
-check: vet lint test build
+# The local CI: vet + lint gate (no new findings) + test + standard build + size gate
+check: vet lint-check test build
 	@SIZE=$$(stat --format=%s aoa 2>/dev/null || stat -f%z aoa); \
 	 SIZE_MB=$$((SIZE / 1048576)); \
 	 if [ "$$SIZE" -gt 20971520 ]; then \

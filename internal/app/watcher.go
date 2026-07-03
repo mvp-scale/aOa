@@ -17,6 +17,13 @@ import (
 
 // onFileChanged handles a file create/modify/delete event from the watcher.
 // It updates the index in-place and rebuilds the search engine.
+//
+// C1 + C2 compliance for EdgeStore writes (L19.12):
+//   - Edges are NEVER written while a.mu is held.
+//   - Per-event edges are accumulated into edgePendingBatch (under a.mu).
+//   - markEdgeBatchDirty arms/resets a 200ms timer that fires doFlushEdgeBatch,
+//     which snapshots the batch outside the lock and calls SaveEdgesBatch once
+//     per debounce window (one write tx, not one per file — C2).
 func (a *App) onFileChanged(absPath string) {
 	a.debugf("file-changed %s", absPath)
 
@@ -42,6 +49,7 @@ func (a *App) onFileChanged(absPath string) {
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.bumpRevision() // L19.11: invalidate ETag cache on every mutation path
 
 	ext := strings.ToLower(filepath.Ext(absPath))
 	if ext == "" {
@@ -79,6 +87,11 @@ func (a *App) onFileChanged(absPath string) {
 			a.Engine.RemoveCacheFile(existingID)
 			if a.Store != nil {
 				a.markIndexDirty()
+			}
+			// C2 (L19.12): queue edge delete into the batch accumulator (under mu).
+			// doFlushEdgeBatch fires outside the lock — C1 compliant.
+			if a.Store != nil && a.ArchEnabled {
+				a.markEdgeBatchDirty(existingID, nil) // nil = delete
 			}
 			// Update recon cache: remove deleted file's contribution
 			a.updateReconOrDimForFile(existingID, relPath)
@@ -125,13 +138,41 @@ func (a *App) onFileChanged(absPath string) {
 		Size:         info.Size(),
 	}
 
-	// When parser is available, extract symbols; otherwise tokenize file content only.
+	// When parser is available, extract symbols (and import edges when arch-enabled).
+	// C4: use ParseFileToMetaAndFacts when ArchEnabled and parser implements FactParser;
+	//     otherwise fall back to ParseFileToMeta (zero regression for existing callers).
 	var metas []*ports.SymbolMeta
 	if a.Parser != nil {
-		var parseErr error
-		metas, parseErr = a.Parser.ParseFileToMeta(absPath, source)
-		if parseErr != nil {
-			metas = nil
+		parsed := false
+		if a.ArchEnabled {
+			if fp, ok := a.Parser.(ports.FactParser); ok {
+				m, edges, parseErr := fp.ParseFileToMetaAndFacts(absPath, source)
+				if parseErr == nil {
+					metas = m
+					// T33: relativize FromFile before queueing — the parser receives
+					// absPath but edges must carry the project-relative path (G7,
+					// ports/facts.go: "never absolute"). The indexer path (indexer.go)
+					// does the same at the emit loop; the watcher must match.
+					for i := range edges {
+						edges[i].FromFile = relPath
+					}
+					// C2 (L19.12): queue edge save into the batch accumulator (under mu).
+					// A Put with non-empty edges overwrites any stale data for fileID,
+					// so no prior Delete is needed for the modify case.
+					// doFlushEdgeBatch fires outside the lock — C1 compliant.
+					if a.Store != nil {
+						a.markEdgeBatchDirty(fileID, edges)
+					}
+					parsed = true
+				}
+			}
+		}
+		if !parsed {
+			var parseErr error
+			metas, parseErr = a.Parser.ParseFileToMeta(absPath, source)
+			if parseErr != nil {
+				metas = nil
+			}
 		}
 	}
 

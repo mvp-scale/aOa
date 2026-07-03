@@ -16,6 +16,7 @@ type IndexResult struct {
 	FileCount   int
 	SymbolCount int
 	TokenCount  int
+	EdgeCount   int // import edges extracted (non-zero only when archEnabled=true)
 }
 
 // skipDirs lists directories to skip during indexing (matches fsnotify watcher).
@@ -80,10 +81,29 @@ var defaultCodeExtensions = map[string]bool{
 // and builds a fresh search index. When parser is nil, it operates in
 // tokenization-only mode: discovers files by extension, tokenizes content,
 // but produces no symbol metadata.
+//
+// This is the backward-compatible entry point. For import-edge extraction,
+// use BuildIndexWithFacts (called by App when ArchEnabled=true).
 func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, error) {
+	idx, result, _, err := buildIndexCore(root, parser, false)
+	return idx, result, err
+}
+
+// BuildIndexWithFacts is identical to BuildIndex but additionally extracts
+// import edges from P1 languages (Go/Python/JS/TS) when archEnabled=true and
+// the parser implements ports.FactParser.
+//
+// When archEnabled=false, the returned edge slice is always nil (C4 kill switch).
+// Used by App.WarmCaches and App.Reindex instead of BuildIndex.
+func BuildIndexWithFacts(root string, parser ports.Parser, archEnabled bool) (*ports.Index, *IndexResult, []ports.ImportEdge, error) {
+	return buildIndexCore(root, parser, archEnabled)
+}
+
+// buildIndexCore is the shared implementation for BuildIndex and BuildIndexWithFacts.
+func buildIndexCore(root string, parser ports.Parser, archEnabled bool) (*ports.Index, *IndexResult, []ports.ImportEdge, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Prefer git ls-files to respect .gitignore. Falls back to filepath.Walk
@@ -93,7 +113,7 @@ func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, e
 		// Fallback: walk with hardcoded skipDirs (non-git projects)
 		files, err = walkFiles(absRoot, parser)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
@@ -105,7 +125,15 @@ func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, e
 		Files:    make(map[uint32]*ports.FileMeta),
 	}
 
+	// Type-assert once; fp is nil when parser does not implement FactParser
+	// or when arch extraction is disabled (C4). Zero cost on hot path.
+	var fp ports.FactParser
+	if archEnabled && parser != nil {
+		fp, _ = parser.(ports.FactParser)
+	}
+
 	var totalSymbols int
+	var allEdges []ports.ImportEdge
 	var fileID uint32
 
 	for _, path := range files {
@@ -135,8 +163,49 @@ func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, e
 			Size:         info.Size(),
 		}
 
-		// When parser is available, extract symbols; otherwise tokenize file content.
-		if parser != nil {
+		// When FactParser is available (C4 on + parser implements FactParser),
+		// extract symbols AND edges in a single parse pass (G0: one traversal).
+		// parsedByFacts is set when ParseFileToMetaAndFacts succeeds, preventing
+		// a redundant ParseFileToMeta call for symbol-less files.
+		var parsedByFacts bool
+		if fp != nil {
+			metas, edges, parseErr := fp.ParseFileToMetaAndFacts(path, source)
+			if parseErr == nil {
+				parsedByFacts = true
+				for _, meta := range metas {
+					ref := ports.TokenRef{FileID: fileID, Line: meta.StartLine}
+					idx.Metadata[ref] = meta
+					totalSymbols++
+
+					tokens := index.Tokenize(meta.Name)
+					for _, tok := range tokens {
+						idx.Tokens[tok] = append(idx.Tokens[tok], ref)
+					}
+
+					lower := strings.ToLower(meta.Name)
+					if lower != "" {
+						idx.Tokens[lower] = append(idx.Tokens[lower], ref)
+					}
+				}
+				// Emit edges with relative FromFile path (G7: provenance stamps).
+				// Decoupled from the metas gate: var/const-only files produce 0 metas
+				// but may still have import edges (e.g. Go files with only declarations).
+				for _, e := range edges {
+					e.FromFile = relPath
+					allEdges = append(allEdges, e)
+				}
+				if len(metas) > 0 {
+					continue // symbols found; skip content tokenization fallback
+				}
+				// len(metas)==0: fall through to content tokenization (C4 invariant T30:
+				// flag-on must produce identical index content to flag-off for symbol-less
+				// parseable files — only edge emission differs between the two modes).
+			}
+		}
+
+		// When parser is available (but not FactParser or edges not needed),
+		// extract symbols only. Skipped when parsedByFacts=true to avoid re-parsing.
+		if !parsedByFacts && parser != nil {
 			metas, parseErr := parser.ParseFileToMeta(path, source)
 			if parseErr == nil && len(metas) > 0 {
 				for _, meta := range metas {
@@ -173,9 +242,51 @@ func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, e
 		FileCount:   len(idx.Files),
 		SymbolCount: totalSymbols,
 		TokenCount:  len(idx.Tokens),
+		EdgeCount:   len(allEdges),
 	}
 
-	return idx, result, nil
+	return idx, result, allEdges, nil
+}
+
+// groupEdgesByFile maps a flat []ports.ImportEdge slice into a map from fileID
+// to the edges belonging to that file. It derives fileID from idx.Files by
+// matching the edge's FromFile (relative path) against FileMeta.Path.
+//
+// Only edges whose FromFile resolves to a known fileID are included — phantom
+// edges (files absent from the index) are silently dropped (no phantom nodes).
+// Returns nil when edges is empty or idx has no files.
+func groupEdgesByFile(idx *ports.Index, edges []ports.ImportEdge) map[uint32][]ports.ImportEdge {
+	if len(edges) == 0 || idx == nil || len(idx.Files) == 0 {
+		return nil
+	}
+	// Build path→fileID lookup from the index.
+	pathToID := make(map[string]uint32, len(idx.Files))
+	for id, fm := range idx.Files {
+		pathToID[fm.Path] = id
+	}
+	byFile := make(map[uint32][]ports.ImportEdge, len(idx.Files))
+	for _, e := range edges {
+		if id, ok := pathToID[e.FromFile]; ok {
+			byFile[id] = append(byFile[id], e)
+		}
+	}
+	if len(byFile) == 0 {
+		return nil
+	}
+	return byFile
+}
+
+// buildFileSet extracts the set of all relative file paths from an index.
+// Returns a map[relPath]bool for O(1) lookup by the §2.4 resolver.
+func buildFileSet(idx *ports.Index) map[string]bool {
+	if idx == nil || len(idx.Files) == 0 {
+		return nil
+	}
+	s := make(map[string]bool, len(idx.Files))
+	for _, fm := range idx.Files {
+		s[fm.Path] = true
+	}
+	return s
 }
 
 // gitTrackedFiles uses "git ls-files" to enumerate files that are tracked
