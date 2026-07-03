@@ -89,6 +89,7 @@ func (n *noopStore) SaveUnresolved(_ string, _ []ports.ImportEdge) error  { retu
 func (n *noopStore) ReplaceAllEdges(_ string, _ map[uint32][]ports.ImportEdge) error {
 	return nil
 }
+func (n *noopStore) HasEdgesBucket(_ string) bool { return false }
 
 // ── lockGuardStore ─────────────────────────────────────────────────────────
 //

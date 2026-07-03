@@ -11,6 +11,7 @@ import (
 	"github.com/corey/aoa/internal/adapters/bbolt"
 	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/app"
+	"github.com/corey/aoa/internal/domain/facts"
 	"github.com/corey/aoa/internal/domain/status"
 	"github.com/spf13/cobra"
 )
@@ -107,7 +108,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("  Indexing project (typically under a minute)...")
-	idx, stats, err := app.BuildIndex(root, parser)
+	archOn := archFlagEnabled()
+	idx, stats, rawEdges, err := app.BuildIndexWithFacts(root, parser, archOn)
 	if err != nil {
 		store.Close()
 		return fmt.Errorf("build index: %w", err)
@@ -116,6 +118,22 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err := store.SaveIndex(projectID, idx); err != nil {
 		store.Close()
 		return fmt.Errorf("save index: %w", err)
+	}
+
+	// §2.4: resolve + persist edges so WarmCaches finds a valid edges bucket on
+	// first daemon start (T43: upgrade-boot probe must not fire after a fresh init).
+	if archOn && len(rawEdges) > 0 {
+		fileSet := app.BuildFileSet(idx)
+		manifests := facts.ReadManifests(root)
+		rr := facts.Resolve(rawEdges, fileSet, manifests)
+		edgesByFile := app.GroupEdgesByFile(idx, rr.Resolved)
+		if err := store.ReplaceAllEdges(projectID, edgesByFile); err != nil {
+			// Non-fatal: edges are cache. T43 will backfill on next daemon start.
+			fmt.Fprintf(os.Stderr, "warning: could not save edges: %v\n", err)
+		}
+		if len(rr.Unresolved) > 0 {
+			_ = store.SaveUnresolved(projectID, rr.Unresolved)
+		}
 	}
 
 	store.Close()

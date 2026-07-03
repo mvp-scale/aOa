@@ -368,6 +368,23 @@ func (s *Store) ReplaceAllEdges(projectID string, fileEdges map[uint32][]ImportE
 	})
 }
 
+// HasEdgesBucket reports whether the edges bucket exists and carries the correct
+// schema version for the project. Uses openEdgesBucket so a wrong-version bucket
+// (C3: stale or future format) is treated as absent — Reindex will re-derive.
+// Read-only (db.View). C1 does not apply.
+func (s *Store) HasEdgesBucket(projectID string) bool {
+	var found bool
+	_ = s.db.View(func(tx *bolt.Tx) error {
+		proj := tx.Bucket([]byte(projectID))
+		if proj == nil {
+			return nil
+		}
+		found = openEdgesBucket(proj) != nil
+		return nil
+	})
+	return found
+}
+
 // ImportEdge is an alias so the test file can reference the concrete type
 // without importing ports directly. The bbolt package uses ports.ImportEdge
 // everywhere; this alias exists only for the internal JSON encode/decode helpers.
