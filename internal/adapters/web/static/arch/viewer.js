@@ -44,7 +44,7 @@ const T={bg:"#0a0a0c",chrome:"#121215",raise:"#18181b",card:"#161618",cardH:"#20
  band:"#101013",border:"#252528",borderR:"#34343a",text:"#e8e8ec",
  dim:"#8b8b96",mute:"#55555f",green:"#34d399",blue:"#60a5fa",purple:"#c084fc",cyan:"#22d3ee",
  yellow:"#fbbf24",red:"#f87171",arch:"#fb923c",neutral:"#94a3b8"};
-const PALETTES={
+let PALETTES={
  aoa:{cmd:T.purple,app:T.blue,adapters:T.arch,domain:T.green,ports:T.red,atlas:T.cyan,supporting:T.neutral},
  gf:{cli:T.purple,serve:T.blue,ingest:T.cyan,pipeline:T.green,render:T.yellow,infra:T.arch,supporting:T.neutral},
  dep:{dev:T.blue,ci:T.purple,registry:T.arch,user:T.green},
@@ -90,9 +90,19 @@ entity:  {...,"nodes":[{"id","type":"entity","label","tech","fields":["..."],"st
 stats = 3-4 named, reader-meaningful figures for the hover card (e.g. "stores":"≈2,300", "throughput":"14M txns/day") — NEVER packed into the label.
 table:   {...,"columns":["..."],"rows":[["...","..."]]}
 matrix:  {...,"items":["a","b"],"matrix":[[null,3],[1,null]]}`;
-// per-view intent from playbook/standards/view-standards.json (injected at build time):
-// the question each view answers, what is canvas-vital, what stays hover-tier
-const VIEW_INTENT=__VIEW_INTENT__;
+// per-view intent — fetched from daemon at boot time
+let VIEW_INTENT={};
+try{const _vs=await fetch("/api/arch/standards").then(r=>{
+  if(!r.ok)throw new Error("HTTP "+r.status+" loading standards");
+  return r.json();});
+VIEW_INTENT=(_vs&&_vs.views)||{};
+// pull named palettes from view-standards if present (falls back to built-in)
+if(_vs&&_vs.global&&_vs.global.palette&&_vs.global.palette.named_palettes){
+  const np=_vs.global.palette.named_palettes;
+  const CMAP={purple:T.purple,blue:T.blue,arch:T.arch,green:T.green,red:T.red,cyan:T.cyan,yellow:T.yellow,neutral:T.neutral,dim:T.dim};
+  Object.entries(np).forEach(([pid,pm])=>{PALETTES[pid]={};
+    Object.entries(pm).forEach(([layer,cname])=>{PALETTES[pid][layer]=CMAP[cname]||T.neutral;});});}}
+catch(err){showFatal("STANDARDS LOAD FAILED · "+(err&&err.message||err));}
 function genPrompt(estateId,scopeLabel,vid,label){
  const VI=VIEW_INTENT[vid];
  return "Generate an architecture view for the aOa playbook viewer.\n"+
