@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/corey/aoa/internal/domain/arch"
+	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
@@ -17,8 +17,8 @@ import (
 // =============================================================================
 
 // makeTestFindings returns a stable set of findings for testing.
-func makeTestFindings() []arch.Finding {
-	return []arch.Finding{
+func makeTestFindings() []ports.Finding {
+	return []ports.Finding{
 		{
 			ID:       "abc123def456789a",
 			Rule:     "cycle",
@@ -26,7 +26,7 @@ func makeTestFindings() []arch.Finding {
 			Scope:    "internal",
 			Message:  "dependency cycle: pkg/a → pkg/b → pkg/a",
 			Subjects: []string{"m_pkg_a", "m_pkg_b"},
-			Sources:  []arch.SourceRef{{File: "pkg/a/a.go", Line: 5}},
+			Sources:  []ports.SourceRef{{File: "pkg/a/a.go", Line: 5}},
 		},
 		{
 			ID:       "bbb222ccc333444d",
@@ -35,7 +35,7 @@ func makeTestFindings() []arch.Finding {
 			Scope:    "internal",
 			Message:  "god component: Hub (in 5 · out 4)",
 			Subjects: []string{"m_hub"},
-			Sources:  []arch.SourceRef{{File: "internal/hub/hub.go", Line: 1}},
+			Sources:  []ports.SourceRef{{File: "internal/hub/hub.go", Line: 1}},
 		},
 	}
 }
@@ -84,10 +84,10 @@ func TestFindingsStore_Overwrite(t *testing.T) {
 	original := makeTestFindings()
 	require.NoError(t, store.SaveFindings("proj-1", "internal", original))
 
-	updated := []arch.Finding{{
+	updated := []ports.Finding{{
 		ID: "new111", Rule: "orphan", Severity: "info", Scope: "internal",
 		Message: "orphan: X — no connections", Subjects: []string{"m_x"},
-		Sources: []arch.SourceRef{{File: "x.go", Line: 1}},
+		Sources: []ports.SourceRef{{File: "x.go", Line: 1}},
 	}}
 	require.NoError(t, store.SaveFindings("proj-1", "internal", updated))
 
@@ -101,8 +101,8 @@ func TestFindingsStore_ProjectScoped(t *testing.T) {
 	// Findings are per-project: proj-A's findings are invisible to proj-B.
 	store, _ := newTestStore(t)
 
-	fa := []arch.Finding{{ID: "a1", Rule: "cycle", Severity: "error", Scope: "s", Message: "cycle A", Sources: []arch.SourceRef{}}}
-	fb := []arch.Finding{{ID: "b1", Rule: "god", Severity: "warn", Scope: "s", Message: "god B", Sources: []arch.SourceRef{}}}
+	fa := []ports.Finding{{ID: "a1", Rule: "cycle", Severity: "error", Scope: "s", Message: "cycle A", Sources: []ports.SourceRef{}}}
+	fb := []ports.Finding{{ID: "b1", Rule: "god", Severity: "warn", Scope: "s", Message: "god B", Sources: []ports.SourceRef{}}}
 
 	require.NoError(t, store.SaveFindings("proj-A", "s", fa))
 	require.NoError(t, store.SaveFindings("proj-B", "s", fb))
@@ -122,8 +122,8 @@ func TestFindingsStore_MultipleScopesInProject(t *testing.T) {
 	// Different scopes within the same project are stored independently.
 	store, _ := newTestStore(t)
 
-	f1 := []arch.Finding{{ID: "f1", Rule: "cycle", Severity: "error", Scope: "scope1", Message: "m1", Sources: []arch.SourceRef{{File: "a.go", Line: 1}}}}
-	f2 := []arch.Finding{{ID: "f2", Rule: "orphan", Severity: "info", Scope: "scope2", Message: "m2", Sources: []arch.SourceRef{{File: "b.go", Line: 1}}}}
+	f1 := []ports.Finding{{ID: "f1", Rule: "cycle", Severity: "error", Scope: "scope1", Message: "m1", Sources: []ports.SourceRef{{File: "a.go", Line: 1}}}}
+	f2 := []ports.Finding{{ID: "f2", Rule: "orphan", Severity: "info", Scope: "scope2", Message: "m2", Sources: []ports.SourceRef{{File: "b.go", Line: 1}}}}
 
 	require.NoError(t, store.SaveFindings("proj-1", "scope1", f1))
 	require.NoError(t, store.SaveFindings("proj-1", "scope2", f2))
@@ -144,7 +144,7 @@ func TestFindingsStore_SaveEmpty(t *testing.T) {
 	store, _ := newTestStore(t)
 
 	require.NoError(t, store.SaveFindings("proj-1", "s", makeTestFindings()))
-	require.NoError(t, store.SaveFindings("proj-1", "s", []arch.Finding{}))
+	require.NoError(t, store.SaveFindings("proj-1", "s", []ports.Finding{}))
 
 	got, err := store.LoadFindings("proj-1", "s")
 	require.NoError(t, err)
@@ -207,8 +207,8 @@ func TestFindingsStore_T19_VersionMismatch_DropAndRecreate(t *testing.T) {
 	require.NoError(t, err)
 
 	// Manually write a facts_findings bucket with version byte = 0xFF (unknown).
-	oldFinding := arch.Finding{ID: "old1", Rule: "old-rule", Severity: "info", Scope: "s", Message: "old", Sources: []arch.SourceRef{}}
-	oldData, _ := json.Marshal([]arch.Finding{oldFinding})
+	oldFinding := ports.Finding{ID: "old1", Rule: "old-rule", Severity: "info", Scope: "s", Message: "old", Sources: []ports.SourceRef{}}
+	oldData, _ := json.Marshal([]ports.Finding{oldFinding})
 	err = db.Update(func(tx *bolt.Tx) error {
 		proj, err := tx.CreateBucketIfNotExists([]byte("proj-1"))
 		if err != nil {
@@ -289,8 +289,8 @@ func TestFindingsStore_T19_ReadPath_WrongVersion_ReturnsEmpty(t *testing.T) {
 	require.NoError(t, err)
 
 	// Write findings under a wrong version byte.
-	goodFinding := arch.Finding{ID: "g1", Rule: "cycle", Severity: "error", Scope: "s", Message: "c", Sources: []arch.SourceRef{}}
-	data, _ := json.Marshal([]arch.Finding{goodFinding})
+	goodFinding := ports.Finding{ID: "g1", Rule: "cycle", Severity: "error", Scope: "s", Message: "c", Sources: []ports.SourceRef{}}
+	data, _ := json.Marshal([]ports.Finding{goodFinding})
 	err = db.Update(func(tx *bolt.Tx) error {
 		proj, err := tx.CreateBucketIfNotExists([]byte("proj-1"))
 		if err != nil {

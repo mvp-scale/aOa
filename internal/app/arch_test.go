@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/corey/aoa/internal/adapters/treesitter"
-	"github.com/corey/aoa/internal/domain/arch"
 	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -192,7 +191,10 @@ func (s *countingArchStore) SaveManifest(_ string, _ string, _ []byte) error {
 	s.mu.Unlock()
 	return nil
 }
-func (s *countingArchStore) SaveFindings(_ string, _ string, _ []arch.Finding) error {
+func (s *countingArchStore) LoadFindings(_ string, _ string) ([]ports.Finding, error) {
+	return nil, nil
+}
+func (s *countingArchStore) SaveFindings(_ string, _ string, _ []ports.Finding) error {
 	s.mu.Lock()
 	s.findingCalls++
 	s.mu.Unlock()

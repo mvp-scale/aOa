@@ -24,7 +24,6 @@ import (
 	"github.com/corey/aoa/internal/adapters/socket"
 	"github.com/corey/aoa/internal/adapters/web"
 	"github.com/corey/aoa/internal/domain/analyzer"
-	"github.com/corey/aoa/internal/domain/arch"
 	"github.com/corey/aoa/internal/domain/enricher"
 	"github.com/corey/aoa/internal/domain/facts"
 	"github.com/corey/aoa/internal/domain/hints"
@@ -43,15 +42,10 @@ type storeBackend interface {
 	// EdgeStore (L19.10): per-file import-edge persistence.
 	// All methods are C1-compliant — must never be called while App.mu is held.
 	ports.EdgeStore
-	// ArchStore (L19.14): arch shard cache (arch_shards bucket, C3 versioned).
+	// ArchStore (L19.14): arch shard + findings cache (arch_shards + facts_findings
+	// buckets, C3 versioned). SaveFindings/LoadFindings are now part of ports.ArchStore.
 	// All write methods are C1-compliant — must never be called while App.mu is held.
 	ports.ArchStore
-	// SaveFindings persists arch detector findings for a (projectID, scope) pair.
-	// C1: caller must NOT hold App.mu (snapshot-release-write pattern).
-	SaveFindings(projectID, scope string, findings []arch.Finding) error
-	// LoadFindings retrieves arch findings for a (projectID, scope) pair.
-	// Returns nil, nil if no findings exist (C3: missing bucket → empty result).
-	LoadFindings(projectID, scope string) ([]arch.Finding, error)
 	// Healthy reports whether the backend is operational.
 	Healthy() bool
 	// Recovered reports whether the backend rebuilt itself from a corrupt state

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/corey/aoa/internal/domain/arch"
+	"github.com/corey/aoa/internal/ports"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -81,7 +81,7 @@ func ensureFindingsBucket(proj *bolt.Bucket) (*bolt.Bucket, error) {
 // The entire slice is serialised as a JSON array and stored under the scope key.
 // C1: caller must NOT hold App.mu (snapshot-release-write pattern).
 // C3: bucket carries _version byte; version mismatch → drop-and-re-derive.
-func (s *Store) SaveFindings(projectID, scope string, findings []arch.Finding) error {
+func (s *Store) SaveFindings(projectID, scope string, findings []ports.Finding) error {
 	data, err := json.Marshal(findings)
 	if err != nil {
 		return fmt.Errorf("SaveFindings: marshal scope %q: %w", scope, err)
@@ -103,8 +103,8 @@ func (s *Store) SaveFindings(projectID, scope string, findings []arch.Finding) e
 // LoadFindings returns the findings stored for a given (projectID, scope) pair.
 // Returns nil, nil if no findings exist for that scope or if the bucket is absent.
 // C3: missing bucket or version mismatch → empty result, no panic.
-func (s *Store) LoadFindings(projectID, scope string) ([]arch.Finding, error) {
-	var result []arch.Finding
+func (s *Store) LoadFindings(projectID, scope string) ([]ports.Finding, error) {
+	var result []ports.Finding
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		proj := tx.Bucket([]byte(projectID))
@@ -122,7 +122,7 @@ func (s *Store) LoadFindings(projectID, scope string) ([]arch.Finding, error) {
 		// Copy bytes out of the transaction before json.Unmarshal.
 		cp := make([]byte, len(v))
 		copy(cp, v)
-		var findings []arch.Finding
+		var findings []ports.Finding
 		if err := json.Unmarshal(cp, &findings); err != nil {
 			return fmt.Errorf("LoadFindings: corrupt data for scope %q: %w", scope, err)
 		}

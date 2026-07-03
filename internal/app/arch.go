@@ -34,39 +34,11 @@ const archScope = "local"
 
 // ── Unit ID helpers ────────────────────────────────────────────────────────
 
-// unitSlug converts a path (directory or import path) to a stable unit ID.
-// Deterministic: same path → same slug on every machine and run.
-// Format: "u_" + lowercase-alphanum-with-underscores.
-// Examples:
-//
-//	"internal/app"         → "u_internal_app"
-//	"ext:std/fmt"          → "u_ext_std_fmt"
-//	"ext:go.etcd.io/bbolt" → "u_ext_go_etcd_io_bbolt"
-//	"" or "."              → "u_root"
-func unitSlug(path string) string {
-	if path == "" || path == "." {
-		return "u_root"
-	}
-	path = strings.ToLower(path)
-	var b strings.Builder
-	prevUnderscore := false
-	for _, r := range path {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
-			b.WriteRune(r)
-			prevUnderscore = false
-		} else {
-			if !prevUnderscore && b.Len() > 0 {
-				b.WriteByte('_')
-			}
-			prevUnderscore = true
-		}
-	}
-	s := strings.TrimRight(b.String(), "_")
-	if s == "" {
-		return "u_root"
-	}
-	return "u_" + s
-}
+// unitSlug is an app-package shim that delegates to the canonical
+// arch.UnitSlug implementation (internal/domain/arch/graph.go).
+// Both app/arch.go and cmd/arch.go consume the same code path;
+// copy discipline is eliminated (PC8 Finding 14).
+func unitSlug(path string) string { return arch.UnitSlug(path) }
 
 // unitLabel returns a short display label for a path.
 // Strips the "ext:" prefix from external paths and returns the last meaningful
@@ -328,7 +300,8 @@ func (a *App) deriveArch() {
 	}
 
 	// Persist findings (pure cache; always re-derivable).
-	if err := a.Store.SaveFindings(projectID, archScope, findings); err != nil {
+	// Convert domain findings to the ports DTO (adapter must not import domain/arch).
+	if err := a.Store.SaveFindings(projectID, archScope, archFindingsToPortsFindings(findings)); err != nil {
 		a.debugf("deriveArch: SaveFindings: %v", err)
 	}
 
@@ -378,6 +351,36 @@ func buildRefHits(idx *ports.Index) map[string]int {
 		}
 	}
 	return refHits
+}
+
+// ── Finding conversion ────────────────────────────────────────────────────
+
+// archFindingsToPortsFindings converts []arch.Finding (domain type) to
+// []ports.Finding (ports DTO) for persistence. The adapter layer must not
+// import domain/arch, so conversion happens here at the app boundary (PC8 F-1).
+// JSON tags are identical between the two types — bucket bytes are byte-compatible.
+func archFindingsToPortsFindings(findings []arch.Finding) []ports.Finding {
+	out := make([]ports.Finding, len(findings))
+	for i := range findings {
+		f := &findings[i] // pointer to avoid 160-byte copy per iteration
+		srcs := make([]ports.SourceRef, len(f.Sources))
+		for j := range f.Sources {
+			srcs[j] = ports.SourceRef{File: f.Sources[j].File, Line: f.Sources[j].Line}
+		}
+		out[i] = ports.Finding{
+			ID:          f.ID,
+			Rule:        f.Rule,
+			Severity:    f.Severity,
+			Scope:       f.Scope,
+			Message:     f.Message,
+			Subjects:    f.Subjects,
+			Sources:     srcs,
+			CheapestCut: f.CheapestCut,
+			Attrs:       f.Attrs,
+			New:         f.New,
+		}
+	}
+	return out
 }
 
 // ── App.Arch — ArchQuerier accessor ───────────────────────────────────────
@@ -432,8 +435,10 @@ func (q *archQuerier) View(scope, id string) ([]byte, error) {
 	return nil, nil // view not found
 }
 
-// Findings returns the JSON-encoded []arch.Finding for a scope.
+// Findings returns the JSON-encoded []ports.Finding for a scope.
 // Returns nil, nil when no findings have been computed.
+// The JSON shape is identical to arch.Finding (same tags) — callers and the
+// viewer see the same bytes regardless of which Go type was persisted.
 func (q *archQuerier) Findings(scope string) ([]byte, error) {
 	findings, err := q.app.Store.LoadFindings(q.app.ProjectID, scope)
 	if err != nil || findings == nil {
@@ -477,6 +482,7 @@ func (q *archQuerier) Facts(_ string, subject string, limit int) ([]byte, error)
 // Derive returns the shortest dep-path (unit IDs) from `from` to `to`,
 // limited to k hops.  Returns nil if no path exists within the hop budget.
 // Loads all edges and computes BFS at the unit-directory grain.
+// BFS delegated to arch.BFSShortestPath (canonical — PC8 Finding 14).
 func (q *archQuerier) Derive(scope, from, to string, k int) ([]string, error) {
 	edges, err := q.app.Store.LoadAllEdges(q.app.ProjectID)
 	if err != nil || len(edges) == 0 {
@@ -491,7 +497,7 @@ func (q *archQuerier) Derive(scope, from, to string, k int) ([]string, error) {
 
 	_, deps := aggregateEdges(edges, idx)
 
-	// Build unit-level adjacency.
+	// Build unit-level adjacency (de-duplicated).
 	adj := make(map[string][]string)
 	seen := make(map[[2]string]bool)
 	for _, d := range deps {
@@ -502,36 +508,5 @@ func (q *archQuerier) Derive(scope, from, to string, k int) ([]string, error) {
 		}
 	}
 
-	if from == to {
-		return []string{from}, nil
-	}
-
-	// BFS: breadth-first shortest-path, budget = k hops.
-	type bfsState struct {
-		id   string
-		path []string
-	}
-	visited := map[string]bool{from: true}
-	queue := []bfsState{{id: from, path: []string{from}}}
-
-	for len(queue) > 0 {
-		curr := queue[0]
-		queue = queue[1:]
-		if len(curr.path) > k {
-			break // exceeded hop budget
-		}
-		for _, next := range adj[curr.id] {
-			newPath := make([]string, len(curr.path)+1)
-			copy(newPath, curr.path)
-			newPath[len(curr.path)] = next
-			if next == to {
-				return newPath, nil // found shortest path
-			}
-			if !visited[next] && len(newPath) <= k {
-				visited[next] = true
-				queue = append(queue, bfsState{id: next, path: newPath})
-			}
-		}
-	}
-	return nil, nil // no path within k hops
+	return arch.BFSShortestPath(adj, from, to, k), nil
 }

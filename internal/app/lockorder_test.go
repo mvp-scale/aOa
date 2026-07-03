@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/corey/aoa/internal/domain/arch"
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/domain/learner"
 	"github.com/corey/aoa/internal/ports"
@@ -101,10 +100,10 @@ func (n *noopStore) DeleteShardsForScope(_ string, _ string) error        { retu
 func (n *noopStore) HasArchBucket(_ string) bool                          { return false }
 
 // FindingsStore no-ops (L19.15) — C1: SaveFindings must never be called while App.mu is held.
-func (n *noopStore) SaveFindings(_ string, _ string, _ []arch.Finding) error {
+func (n *noopStore) SaveFindings(_ string, _ string, _ []ports.Finding) error {
 	return nil
 }
-func (n *noopStore) LoadFindings(_ string, _ string) ([]arch.Finding, error) {
+func (n *noopStore) LoadFindings(_ string, _ string) ([]ports.Finding, error) {
 	return nil, nil
 }
 
@@ -226,7 +225,7 @@ func (s *lockGuardStore) DeleteShardsForScope(projectID, scope string) error {
 }
 
 // SaveFindings triggers db.Update on the facts_findings bucket (L19.15 C1 check).
-func (s *lockGuardStore) SaveFindings(projectID, scope string, findings []arch.Finding) error {
+func (s *lockGuardStore) SaveFindings(projectID, scope string, findings []ports.Finding) error {
 	s.assertUnlocked("SaveFindings", projectID)
 	return s.storeBackend.SaveFindings(projectID, scope, findings)
 }
@@ -672,7 +671,7 @@ func TestT17_ArchWritePathNotUnderMu(t *testing.T) {
 		a := newLockGuardApp(t, tmpDir)
 
 		// Must be called WITHOUT holding a.mu — lockGuardStore must not fire.
-		err := a.Store.SaveFindings(a.ProjectID, "local", []arch.Finding{})
+		err := a.Store.SaveFindings(a.ProjectID, "local", []ports.Finding{})
 		assert.NoError(t, err,
 			"T17/arch: SaveFindings outside a.mu must succeed without C1 violation")
 	})

@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/corey/aoa/internal/domain/arch"
 	"github.com/spf13/cobra"
 )
 
@@ -85,8 +86,8 @@ func runArchDerive(cmd *cobra.Command, args []string) error {
 		k = n
 	}
 
-	fromID := archUnitSlug(fromPath)
-	toID := archUnitSlug(toPath)
+	fromID := arch.UnitSlug(fromPath)
+	toID := arch.UnitSlug(toPath)
 
 	scope := archDeriveScope
 	if scope == "" {
@@ -163,8 +164,8 @@ func runArchReach(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr, "arch reach: requires two paths: <from> <to>. Use `arch derive` for BFS.")
 		os.Exit(2)
 	}
-	fromID := archUnitSlug(fromPath)
-	toID := archUnitSlug(toPath)
+	fromID := arch.UnitSlug(fromPath)
+	toID := arch.UnitSlug(toPath)
 	return doDerive(archDefaultScope, fromID, toID, 10)
 }
 

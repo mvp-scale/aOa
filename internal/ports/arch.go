@@ -1,11 +1,37 @@
 package ports
 
-// ArchStore persists and retrieves content-addressed arch shards.
-// Shards are pure cache: always re-derivable from the fact store.
+// SourceRef is the ports-layer DTO for a file:line attribution point.
+// Mirrors arch.SourceRef — defined here so adapters need not import domain/arch.
+// JSON tags are intentionally identical to arch.SourceRef for bucket compatibility.
+type SourceRef struct {
+	File string `json:"file"`
+	Line uint32 `json:"line"`
+}
+
+// Finding is the ports-layer DTO for an arch detector finding.
+// Mirrors arch.Finding — defined here so adapters need not import domain/arch.
+// JSON tags are intentionally identical to arch.Finding for bucket compatibility:
+// an existing facts_findings bucket written with arch.Finding bytes round-trips
+// cleanly through ports.Finding (same field names, same omitempty rules).
+type Finding struct {
+	ID          string            `json:"id"`
+	Rule        string            `json:"rule"`
+	Severity    string            `json:"severity"`
+	Scope       string            `json:"scope"`
+	Message     string            `json:"message"`
+	Subjects    []string          `json:"subjects"`
+	Sources     []SourceRef       `json:"sources"`
+	CheapestCut string            `json:"cheapestCut,omitempty"`
+	Attrs       map[string]string `json:"attrs,omitempty"`
+	New         bool              `json:"new,omitempty"`
+}
+
+// ArchStore persists and retrieves content-addressed arch shards and findings.
+// Shards and findings are pure cache: always re-derivable from the fact store.
 //
-// C3 bucket contract: arch_shards bucket carries a _version byte written on
-// creation; version mismatch → drop-and-re-create; missing bucket → empty
-// result (old binary opening a new DB simply ignores the bucket).
+// C3 bucket contract: arch_shards and facts_findings buckets each carry a
+// _version byte written on creation; version mismatch → drop-and-re-create;
+// missing bucket → empty result (old binary ignores the bucket).
 //
 // C1 rule: ALL write methods (Save*, Delete*) must NOT be called while
 // App.mu is held. Design the caller to snapshot state, release the mutex,
@@ -40,6 +66,16 @@ type ArchStore interface {
 	// HasArchBucket reports whether the arch_shards bucket exists and carries
 	// the correct schema version for the project. Read-only (db.View). C1 n/a.
 	HasArchBucket(projectID string) bool
+
+	// SaveFindings persists arch detector findings for a (projectID, scope) pair.
+	// Findings are pure cache — always re-derivable from edges + detectors.
+	// C1: caller must NOT hold App.mu (snapshot-release-write pattern).
+	// C3: bucket carries _version byte; version mismatch → drop-and-re-derive.
+	SaveFindings(projectID, scope string, findings []Finding) error
+
+	// LoadFindings retrieves arch findings for a (projectID, scope) pair.
+	// Returns nil, nil if no findings exist or the bucket is absent/mismatched (C3).
+	LoadFindings(projectID, scope string) ([]Finding, error)
 }
 
 // ArchManifest is the top-level catalog of all rendered shards for one scope.

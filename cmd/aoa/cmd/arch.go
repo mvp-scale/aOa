@@ -4,7 +4,9 @@
 //   - RegisterArchCommands: C4-gated entry point (called from root.go when arch is on).
 //   - archClient: shared daemon-first → direct-RO-fallback client helper.
 //   - cliArchQuerier: lightweight ArchQuerier backed by a read-only bbolt store.
-//   - archUnitSlug: CLI-local unit-ID converter (mirrors app.unitSlug, no import).
+//
+// Unit-slug and BFS are provided by arch.UnitSlug / arch.BFSShortestPath
+// (internal/domain/arch/graph.go — canonical, no duplication — PC8 Finding 14).
 //
 // Exit codes follow the grep convention (02-arch-service.md §1.3):
 //
@@ -177,6 +179,7 @@ func (q *cliArchQuerier) Derive(_ string, from, to string, k int) ([]string, err
 	}
 
 	// Aggregate to unit-level adjacency (mirrors app.aggregateEdges).
+	// arch.UnitSlug is the canonical implementation (PC8 Finding 14).
 	type depKey struct{ from, to string }
 	adj := make(map[string][]string)
 	seen := make(map[depKey]bool)
@@ -185,8 +188,8 @@ func (q *cliArchQuerier) Derive(_ string, from, to string, k int) ([]string, err
 		if fromDir == "." {
 			fromDir = "root"
 		}
-		fromID := archUnitSlug(fromDir)
-		toID := archUnitSlug(e.ImportPath)
+		fromID := arch.UnitSlug(fromDir)
+		toID := arch.UnitSlug(e.ImportPath)
 		if fromID == toID {
 			continue
 		}
@@ -197,38 +200,8 @@ func (q *cliArchQuerier) Derive(_ string, from, to string, k int) ([]string, err
 		}
 	}
 
-	if from == to {
-		return []string{from}, nil
-	}
-
-	// BFS bounded by k hops.
-	type bfsState struct {
-		id   string
-		path []string
-	}
-	visited := map[string]bool{from: true}
-	queue := []bfsState{{id: from, path: []string{from}}}
-
-	for len(queue) > 0 {
-		curr := queue[0]
-		queue = queue[1:]
-		if len(curr.path) > k {
-			break
-		}
-		for _, next := range adj[curr.id] {
-			newPath := make([]string, len(curr.path)+1)
-			copy(newPath, curr.path)
-			newPath[len(curr.path)] = next
-			if next == to {
-				return newPath, nil
-			}
-			if !visited[next] && len(newPath) <= k {
-				visited[next] = true
-				queue = append(queue, bfsState{id: next, path: newPath})
-			}
-		}
-	}
-	return nil, nil // no path within k hops
+	// BFS delegated to arch.BFSShortestPath (canonical — PC8 Finding 14).
+	return arch.BFSShortestPath(adj, from, to, k), nil
 }
 
 func (q *cliArchQuerier) Facts(_ string, subject string, limit int) ([]byte, error) {
@@ -260,42 +233,6 @@ func (q *cliArchQuerier) Facts(_ string, subject string, limit int) ([]byte, err
 	return json.Marshal(result)
 }
 
-// ── archUnitSlug — path → unit ID (mirrors app.unitSlug) ──────────────────────
-
-// archUnitSlug converts a directory path or import path to a stable unit ID.
-// Deterministic: same path → same slug on every machine.
-// Format: "u_" + lowercase-alphanum-with-underscores.
-//
-// Examples:
-//
-//	"internal/app"            → "u_internal_app"
-//	"ext:go.etcd.io/bbolt"   → "u_ext_go_etcd_io_bbolt"
-//	"" or "."                 → "u_root"
-func archUnitSlug(path string) string {
-	if path == "" || path == "." {
-		return "u_root"
-	}
-	path = strings.ToLower(path)
-	var b strings.Builder
-	prevUnderscore := false
-	for _, r := range path {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
-			b.WriteRune(r)
-			prevUnderscore = false
-		} else {
-			if !prevUnderscore && b.Len() > 0 {
-				b.WriteByte('_')
-			}
-			prevUnderscore = true
-		}
-	}
-	s := strings.TrimRight(b.String(), "_")
-	if s == "" {
-		return "u_root"
-	}
-	return "u_" + s
-}
-
 // ── prettyJSON helper ─────────────────────────────────────────────────────────
 
 // prettyPrintJSON writes JSON to stdout, pretty-printing if pretty=true.
@@ -313,6 +250,3 @@ func prettyPrintJSON(data json.RawMessage, pretty bool) {
 
 // Compile-time check: cliArchQuerier satisfies ports.ArchQuerier.
 var _ ports.ArchQuerier = (*cliArchQuerier)(nil)
-
-// Ensure domain/arch import is used (for cliArchQuerier.Findings).
-var _ = arch.Finding{}

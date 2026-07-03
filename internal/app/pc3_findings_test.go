@@ -93,7 +93,7 @@ func TestPC3_DeadCandidateNoiseCollapses(t *testing.T) {
 type capturingArchStore struct {
 	noopStore
 	mu       sync.Mutex
-	findings []arch.Finding
+	findings []ports.Finding
 }
 
 func (s *capturingArchStore) LoadAllEdges(_ string) ([]ports.ImportEdge, error) {
@@ -103,9 +103,12 @@ func (s *capturingArchStore) LoadAllEdges(_ string) ([]ports.ImportEdge, error) 
 
 func (s *capturingArchStore) SaveShards(_ string, _ map[string][]byte) error  { return nil }
 func (s *capturingArchStore) SaveManifest(_ string, _ string, _ []byte) error { return nil }
-func (s *capturingArchStore) SaveFindings(_ string, _ string, f []arch.Finding) error {
+func (s *capturingArchStore) LoadFindings(_ string, _ string) ([]ports.Finding, error) {
+	return nil, nil
+}
+func (s *capturingArchStore) SaveFindings(_ string, _ string, f []ports.Finding) error {
 	s.mu.Lock()
-	s.findings = append([]arch.Finding(nil), f...)
+	s.findings = append([]ports.Finding(nil), f...)
 	s.mu.Unlock()
 	return nil
 }
@@ -133,7 +136,7 @@ func TestPC3_DeriveArch_UsesRealFuel(t *testing.T) {
 	findings := store.findings
 	store.mu.Unlock()
 
-	var dead []arch.Finding
+	var dead []ports.Finding
 	for _, f := range findings {
 		if f.Rule == "dead-candidate" {
 			dead = append(dead, f)
