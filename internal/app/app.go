@@ -925,19 +925,6 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 		}
 	}
 
-	// T43: upgrade-boot backfill — populated index (FileCount > 0) but no valid
-	// edges bucket. An old-binary DB has no edges bucket; arch extraction only
-	// exists since F1, so FileCount > 0 + no bucket + ArchEnabled = first F2 boot
-	// for this project. Background Reindex derives + persists edges without blocking
-	// the caller. C4: no backfill when arch flag is OFF.
-	if r.FileCount > 0 && a.ArchEnabled && a.Store != nil && !a.Store.HasEdgesBucket(a.ProjectID) {
-		safeGo(&a.bgWg, "upgrade-arch-derive", nil, func() {
-			if _, err := a.Reindex(); err != nil {
-				a.debugf("upgrade-arch-derive: Reindex: %v", err)
-			}
-		})
-	}
-
 	// 3. Warm file cache first, then dim scan.
 	// Sequential: dim scan reads from the warm file cache instead of re-reading
 	// every file from disk (avoids duplicating 24K+ file reads on large repos).
@@ -952,6 +939,22 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 	}
 	r.ReconTime = time.Since(reconStart).Seconds()
 	a.loadInvestigated()
+
+	// T43: upgrade-boot backfill — populated index (FileCount > 0) but no valid
+	// edges bucket. An old-binary DB has no edges bucket; arch extraction only
+	// exists since F1, so FileCount > 0 + no bucket + ArchEnabled = first F2 boot
+	// for this project. Background Reindex derives + persists edges without blocking
+	// the caller. C4: no backfill when arch flag is OFF.
+	// Fired AFTER the warm sequence: the background Reindex swaps a.Index.Files
+	// under a.mu, while Engine.WarmCache/warmDimCache read idx.Files lock-free —
+	// firing here removes that overlap (T43 review punch item).
+	if r.FileCount > 0 && a.ArchEnabled && a.Store != nil && !a.Store.HasEdgesBucket(a.ProjectID) {
+		safeGo(&a.bgWg, "upgrade-arch-derive", nil, func() {
+			if _, err := a.Reindex(); err != nil {
+				a.debugf("upgrade-arch-derive: Reindex: %v", err)
+			}
+		})
+	}
 
 	r.TotalTime = time.Since(totalStart).Seconds()
 	return r
