@@ -289,8 +289,9 @@ func (a *App) deriveArch() {
 		}
 	}
 
-	// 6. Compute refHits from the index (dead-candidate fuel).
-	// refHits is nil-safe in the domain service; nil is acceptable per spec.
+	// 6. Compute refHits from the index (dead-candidate fuel). Non-nil whenever
+	// idx is non-nil (here it always is — Clone never returns nil), so the
+	// detector fires only on units with zero inbound deps AND zero index refs.
 	refHits := buildRefHits(idx)
 
 	// 7. RenderAll: pure domain computation — no I/O, no mu needed.
@@ -335,13 +336,48 @@ func (a *App) deriveArch() {
 		archScope, len(units), len(deps), len(storeShards), len(findings), manifest.Rev)
 }
 
-// buildRefHits returns a map of unit ID → index reference hit count for use
-// as the dead-candidate fuel in the Detect step.
-// Currently returns nil (all units treated as 0 hits) — acceptable per spec
-// ("nil acceptable if the WP doesn't specify").
-// TODO(L19.15): populate from index token hit counts keyed by unit directory.
-func buildRefHits(_ *ports.Index) map[string]int {
-	return nil
+// buildRefHits returns a map of unit ID → count of index token references that
+// land in files belonging to that unit. It is the dead-candidate detector's
+// fuel: a unit fires as a dead-code candidate only when it has zero inbound
+// dependencies AND zero index references (refHits[u]==0). A unit whose files
+// carry indexed symbols is suppressed — it is live code the import graph simply
+// never saw an inbound edge for (an entry point, or reachable via reflection or
+// build tags the extractor cannot see).
+//
+// Grain: package/directory, identical to aggregateEdges' source-unit slugging —
+// filepath.Dir of each file's relative path ("." → "root"), then unitSlug. Both
+// this map and the aggregated units share the same relative-path keyspace
+// (indexer.go writes FileMeta.Path and ImportEdge.FromFile from one relPath), so
+// the two agree on unit IDs by construction.
+//
+// A "reference" here is one TokenRef in the index — every indexed symbol
+// occurrence in a file counts once toward that file's unit. This is a
+// deterministic proxy for "does this unit have indexed code", not a precise
+// cross-reference analysis; its only job is to separate a genuinely empty /
+// unindexed directory from a real package that merely lacks an inbound import.
+//
+// Returns nil when idx is nil so the detector can distinguish "measured, zero
+// references" (non-nil map, 0 entry) from "not measured" (nil) and word its
+// message honestly (detect.go DetectDeadCandidates).
+func buildRefHits(idx *ports.Index) map[string]int {
+	if idx == nil {
+		return nil
+	}
+	refHits := make(map[string]int)
+	for _, refs := range idx.Tokens {
+		for _, ref := range refs {
+			fm, ok := idx.Files[ref.FileID]
+			if !ok || fm.Path == "" {
+				continue
+			}
+			dir := filepath.Dir(fm.Path)
+			if dir == "." {
+				dir = "root"
+			}
+			refHits[unitSlug(dir)]++
+		}
+	}
+	return refHits
 }
 
 // ── App.Arch — ArchQuerier accessor ───────────────────────────────────────

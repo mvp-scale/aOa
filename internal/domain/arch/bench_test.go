@@ -152,6 +152,14 @@ func TestT15_30kFixture_LatencyBudget(t *testing.T) {
 	t.Logf("T15 shard sizes: component=%dB dsm=%dB cycles=%dB",
 		len(shards["component"]), len(shards["dsm"]), len(shards["cycles"]))
 
+	// Under -race the wall-clock latency and RSS numbers are inflated ~4x by the
+	// instrumentation, so the budgets are meaningless — log them but skip the
+	// pass/fail check. RenderAll still ran above (exercising the code race-free).
+	if raceDetectorEnabled {
+		t.Logf("T15: skipping latency/RSS budget assertions under -race (instrumentation inflates timing)")
+		return
+	}
+
 	// Assert latency budget.
 	if elapsed > t15LatencyBudget {
 		t.Errorf("T15 BREACH: RenderAll latency %s > budget %s on 30k fixture", elapsed, t15LatencyBudget)

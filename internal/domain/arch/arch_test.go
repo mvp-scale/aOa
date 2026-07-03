@@ -642,6 +642,9 @@ func TestDetectors_DeadCodeCandidate(t *testing.T) {
 	assert.Equal(t, []string{"m_dead"}, f.Subjects)
 	assert.Contains(t, f.Message, "dead", "message must mention the dead label")
 	assert.Contains(t, f.Message, "candidate", "message must say candidate (T5)")
+	// PC3/T46: with measured (non-nil) fuel the message states the real count.
+	assert.Contains(t, f.Message, "0 index references", "measured fuel must state 0 index references")
+	assert.NotContains(t, f.Message, "not measured", "measured fuel must not carry the unmeasured caveat")
 	assert.NotEmpty(t, f.Sources, "dead-candidate finding must carry file:line sources (G7)")
 	assert.Equal(t, "internal/dead/d.go", f.Sources[0].File)
 	// reflection caveat in attrs (WP step 5).
@@ -663,6 +666,45 @@ func TestDetectors_DeadCodeCandidate_NilRefHits(t *testing.T) {
 	findings := DetectDeadCandidates("test", units, deps, nil)
 	require.Len(t, findings, 1, "m_root must be detected as dead-candidate with nil refHits")
 	assert.Equal(t, []string{"m_root"}, findings[0].Subjects)
+	// PC3/T46: nil fuel means references were NOT measured — the message must say
+	// so and must NOT claim "no index references" (an unverified assertion, G7).
+	assert.Contains(t, findings[0].Message, "not measured")
+	assert.NotContains(t, findings[0].Message, "index references,")
+}
+
+// TestPC3_30kDeadCandidateCollapse gives the concrete before→after delta at 30k
+// scale (ledger T46). NOTE: the T15 gen30kFixture has NO zero-inbound units —
+// its ~30k findings are god-nodes, not dead-candidates — so this uses a purpose
+// -built fixture of 30,000 leaf units that each import a shared core (zero
+// inbound each). With nil fuel every leaf fires (the shipped dead-candidate
+// noise); with real per-unit reference fuel only the genuinely-unreferenced
+// leaves survive.
+func TestPC3_30kDeadCandidateCollapse(t *testing.T) {
+	const n = 30_000
+	units := make([]UnitFact, 0, n+1)
+	deps := make([]DepFact, 0, n)
+	units = append(units, UnitFact{ID: "u_core", Label: "core", Path: "internal/core/c.go", File: "internal/core/c.go", Line: 1})
+	for i := 0; i < n; i++ {
+		id := fmt.Sprintf("u_leaf%06d", i)
+		f := fmt.Sprintf("internal/leaf%06d/l.go", i)
+		units = append(units, UnitFact{ID: id, Label: fmt.Sprintf("leaf%d", i), Path: f, File: f, Line: 1})
+		deps = append(deps, DepFact{FromUnit: id, ToUnit: "u_core", Count: 1, File: f, Line: 1})
+	}
+
+	// nil fuel (the defect): every leaf has zero inbound → all n fire as noise.
+	before := DetectDeadCandidates("local", units, deps, nil)
+	t.Logf("PC3 30k: nil fuel → %d dead-candidate findings (the noise)", len(before))
+	require.Len(t, before, n, "nil fuel fires on every zero-inbound leaf (the 30k-noise defect)")
+
+	// Real fuel: all but a handful of leaves carry index references.
+	const genuinelyDead = 2
+	refHits := map[string]int{"u_core": n}
+	for i := genuinelyDead; i < n; i++ {
+		refHits[fmt.Sprintf("u_leaf%06d", i)] = 1
+	}
+	after := DetectDeadCandidates("local", units, deps, refHits)
+	t.Logf("PC3 30k: real fuel → %d dead-candidate findings (collapsed)", len(after))
+	require.Len(t, after, genuinelyDead, "real fuel collapses 30k noise to only genuinely-unreferenced units")
 }
 
 // makeMutualPairFixture: two groups with deps in both directions (no unit-level cycle).

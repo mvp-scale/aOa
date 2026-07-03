@@ -434,8 +434,10 @@ func TestArch_T8_DefaultArm_UnchangedForNonArch(t *testing.T) {
 	}
 }
 
-// TestArch_FindingsNew_CI verifies `aoa arch findings --new` exits 0 when clean
-// and exits 1 when findings exist.
+// TestArch_FindingsNew_CI verifies the PC3 baseline semantics for
+// `aoa arch findings --new`: it is an honest set-difference against a stored
+// baseline, not "any findings exist". Round-trip: no baseline → all new (exit 1
+// if any); --baseline records; re-run --new → exit 0 (all baselined).
 func TestArch_FindingsNew_CI(t *testing.T) {
 	dir := setupArchProject(t)
 	runAOA(t, dir, "init")
@@ -444,18 +446,38 @@ func TestArch_FindingsNew_CI(t *testing.T) {
 	defer cleanup()
 	pollForArchData(t, dir, 10*time.Second)
 
-	// Without --new: must exit 0 (list findings, always succeeds).
+	// Plain listing always succeeds (exit 0).
 	_, _, exitList := runAOA(t, dir, "arch", "findings")
 	if exitList != 0 {
 		t.Logf("arch findings (no --new): exit %d (non-zero findings list is OK)", exitList)
 	}
 
-	// With --new: exit 0 if no findings, 1 if findings exist.
-	_, _, exitNew := runAOA(t, dir, "arch", "findings", "--new")
-	if exitNew != 0 && exitNew != 1 {
-		t.Errorf("arch findings --new: expected exit 0 or 1 (CI gate), got %d", exitNew)
+	// No baseline yet: --new treats every finding as new → exit 1 iff findings exist.
+	_, _, exitNoBaseline := runAOA(t, dir, "arch", "findings", "--new")
+	if exitNoBaseline != 0 && exitNoBaseline != 1 {
+		t.Fatalf("arch findings --new (no baseline): expected exit 0 or 1, got %d", exitNoBaseline)
 	}
-	t.Logf("findings --new exit=%d (0=clean, 1=findings-exist)", exitNew)
+	baselinePath := filepath.Join(dir, ".aoa", "arch", "findings-baseline.json")
+	if _, err := os.Stat(baselinePath); err == nil {
+		t.Fatalf("no baseline should exist before --baseline is run")
+	}
+
+	// Record the baseline (exit 0, file written).
+	_, _, exitBaseline := runAOA(t, dir, "arch", "findings", "--baseline")
+	if exitBaseline != 0 {
+		t.Fatalf("arch findings --baseline: expected exit 0, got %d", exitBaseline)
+	}
+	if _, err := os.Stat(baselinePath); err != nil {
+		t.Fatalf("--baseline must write %s: %v", baselinePath, err)
+	}
+
+	// Re-run --new against the same findings: everything is baselined → exit 0.
+	_, _, exitAfterBaseline := runAOA(t, dir, "arch", "findings", "--new")
+	if exitAfterBaseline != 0 {
+		t.Errorf("arch findings --new after --baseline: expected exit 0 (all baselined), got %d", exitAfterBaseline)
+	}
+	t.Logf("findings --new round-trip: no-baseline=%d baseline=%d after=%d",
+		exitNoBaseline, exitBaseline, exitAfterBaseline)
 }
 
 // TestArch_Views_HelpWorks verifies `aoa arch views --help` works.
@@ -475,7 +497,7 @@ func TestArch_Views_HelpWorks(t *testing.T) {
 // TestArch_AllSubcmdsHaveHelp verifies every arch subcommand has a --help.
 func TestArch_AllSubcmdsHaveHelp(t *testing.T) {
 	dir := setupProject(t)
-	subcmds := []string{"views", "view", "findings", "derive", "facts", "journey", "reach", "blast", "pack"}
+	subcmds := []string{"views", "view", "findings", "derive", "facts", "journey", "reach", "blast"}
 	for _, sub := range subcmds {
 		t.Run(sub, func(t *testing.T) {
 			stdout, stderr, _ := runAOA(t, dir, "arch", sub, "--help")

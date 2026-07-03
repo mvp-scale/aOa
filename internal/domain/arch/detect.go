@@ -362,9 +362,18 @@ func DetectBudgetOverflow(scope string, units []UnitFact, grouping GroupingResul
 // DetectDeadCandidates finds units with zero inbound dependencies AND zero index
 // reference hits. These are "dead-code candidates" — they may be reachable only
 // via reflection or build tags, so the finding is always stamped "candidate".
-// refHits maps unit ID → reference count from the search index; nil or absent = 0.
-// Message format: "dead-code candidate: {label} — no inbound deps, no index references".
+//
+// refHits maps unit ID → index reference count (see app.buildRefHits); a nil map
+// means references were NOT measured (no index available). The two cases are
+// worded honestly and never conflated:
+//   - measured (refHits != nil): "…no inbound deps, 0 index references"
+//   - not measured (refHits == nil): "…no inbound deps (index references not measured)"
+//
+// The message never claims "no index references" unless a real index was
+// consulted and returned zero for the unit (G7 — no unverified assertions).
 func DetectDeadCandidates(scope string, units []UnitFact, deps []DepFact, refHits map[string]int) []Finding {
+	measured := refHits != nil
+
 	hasInbound := make(map[string]bool, len(units))
 	for _, d := range deps {
 		hasInbound[d.ToUnit] = true
@@ -382,7 +391,12 @@ func DetectDeadCandidates(scope string, units []UnitFact, deps []DepFact, refHit
 		if refHits[u.ID] > 0 {
 			continue
 		}
-		msg := fmt.Sprintf("dead-code candidate: %s — no inbound deps, no index references", u.Label)
+		var msg string
+		if measured {
+			msg = fmt.Sprintf("dead-code candidate: %s — no inbound deps, 0 index references", u.Label)
+		} else {
+			msg = fmt.Sprintf("dead-code candidate: %s — no inbound deps (index references not measured)", u.Label)
+		}
 		f := Finding{
 			Rule:     "dead-candidate",
 			Severity: "info",
