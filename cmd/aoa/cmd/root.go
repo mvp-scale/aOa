@@ -3,8 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/corey/aoa/internal/app"
 	"github.com/corey/aoa/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -61,14 +63,23 @@ func init() {
 	}
 }
 
-// archFlagEnabled checks the AOA_ARCH env var at binary startup.
-// The .aoa/config check requires a project root and is performed at App.New;
-// here we only check the env var since Cobra registration happens before any
-// command runs. Default: true (ON).
+// archFlagEnabled is the C4 predicate for Cobra registration (T36: unified
+// predicate — same logic as App.New). It calls app.ReadArchFlag with the
+// .aoa directory derived from the current working directory so that both
+// the env var and the .aoa/config file are consulted at startup.
+//
+// This eliminates the split-brain found in checkpoint-F1 finding 8:
+// previously only the env var was checked here, allowing .aoa/config arch=off
+// to leave `aoa arch` registered in the help output.
 func archFlagEnabled() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("AOA_ARCH"))) {
-	case "off", "0", "false":
-		return false
+	cwd, err := os.Getwd()
+	if err != nil {
+		// Cannot determine project root; fall back to env-only (safe default).
+		switch strings.ToLower(strings.TrimSpace(os.Getenv("AOA_ARCH"))) {
+		case "off", "0", "false":
+			return false
+		}
+		return true
 	}
-	return true
+	return app.ReadArchFlag(filepath.Join(cwd, ".aoa"))
 }
