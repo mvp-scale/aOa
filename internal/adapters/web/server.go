@@ -112,6 +112,9 @@ func (s *Server) Start(preferredPort int) error {
 	mux.HandleFunc("GET /api/source-line", s.handleSourceLine) // no ETag — file content
 	mux.HandleFunc("GET /api/usage", s.withETag(s.handleUsage))
 
+	// Arch viewer routes (no-op in lean builds via arch_handler_lean.go)
+	s.registerArchRoutes(mux)
+
 	s.httpSrv = &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
