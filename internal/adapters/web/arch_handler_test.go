@@ -309,3 +309,34 @@ func TestArchShard_Returns404ForMissingPathSegment(t *testing.T) {
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
+
+// --- /arch/vendor/bundle.js gzip serving test ---
+
+// TestArchVendorBundle_ServedWithGzipEncoding ensures /arch/vendor/bundle.js is served
+// with Content-Type: application/javascript and Content-Encoding: gzip from the
+// pre-compressed bundle.js.gz (stored under 1 MB per-file limit).
+// The browser's ES module loader handles Content-Encoding: gzip transparently.
+func TestArchVendorBundle_ServedWithGzipEncoding(t *testing.T) {
+	q := &mockArchQuerier{}
+	ts := setupArchServer(t, q)
+	defer ts.Close()
+
+	// Request without auto-decompression to verify raw headers
+	client := &http.Client{
+		Transport: &http.Transport{DisableCompression: true},
+	}
+	resp, err := client.Get(ts.URL + "/arch/vendor/bundle.js")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/javascript", resp.Header.Get("Content-Type"))
+	assert.Equal(t, "gzip", resp.Header.Get("Content-Encoding"),
+		"vendor/bundle.js must be served with Content-Encoding: gzip (pre-compressed)")
+	assert.Equal(t, "no-cache", resp.Header.Get("Cache-Control"))
+
+	// Verify the response body is non-empty gzip data
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Greater(t, len(body), 1000, "gzip bundle must be non-trivially sized")
+}

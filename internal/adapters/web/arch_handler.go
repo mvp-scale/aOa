@@ -21,12 +21,31 @@ import (
 func (s *Server) registerArchRoutes(mux *http.ServeMux) {
 	// /arch/ page — serves the viewer HTML + static assets.
 	// C4: returns 404 when arch is disabled.
+	//
+	// The vendor bundle is stored pre-compressed as vendor/bundle.js.gz (≈537 KB)
+	// to stay within the git 1 MB per-file limit; requests for vendor/bundle.js are
+	// intercepted and served with Content-Encoding: gzip so browsers decode it
+	// transparently as a normal ES module.
 	archStatic, _ := fs.Sub(archStaticFS, "static/arch")
 	archFileServer := http.FileServerFS(archStatic)
 
 	serveArchStatic := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.queries == nil || s.queries.Arch() == nil {
 			http.NotFound(w, r)
+			return
+		}
+		// Intercept vendor/bundle.js → serve vendor/bundle.js.gz with gzip encoding.
+		// The browser's ES module loader handles Content-Encoding: gzip transparently.
+		if r.URL.Path == "/vendor/bundle.js" {
+			data, err := archStaticFS.ReadFile("static/arch/vendor/bundle.js.gz")
+			if err != nil {
+				http.Error(w, "bundle unavailable", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/javascript")
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Set("Cache-Control", "no-cache")
+			_, _ = w.Write(data)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
@@ -64,13 +83,13 @@ func (s *Server) handleArchManifest(w http.ResponseWriter, r *http.Request) {
 	if m == nil {
 		// No shards derived yet — return empty but valid estates manifest
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(emptyEstatesManifest())
+		_ = json.NewEncoder(w).Encode(emptyEstatesManifest())
 		return
 	}
 
 	estate := buildEstatesManifest(m, q)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(estate)
+	_ = json.NewEncoder(w).Encode(estate)
 }
 
 // emptyEstatesManifest returns a valid estates manifest with no views yet.
@@ -185,7 +204,7 @@ func (s *Server) handleArchStandards(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 // handleArchShard serves a single shard by scope/view path.
@@ -226,7 +245,7 @@ func (s *Server) handleArchShard(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 // archQuerier returns the ArchQuerier for this server, or writes a 404 and returns nil.

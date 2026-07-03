@@ -1,10 +1,7 @@
 
-import React,{useState,useEffect,useCallback,memo} from "https://esm.sh/react@18.3.1";
-import {createRoot} from "https://esm.sh/react-dom@18.3.1/client";
-import {ReactFlow,Background,Controls,Handle,Position,BaseEdge,EdgeLabelRenderer,useReactFlow,ReactFlowProvider}
- from "https://esm.sh/@xyflow/react@12.3.5?deps=react@18.3.1,react-dom@18.3.1";
-import ELK from "https://esm.sh/elkjs@0.11.1/lib/elk.bundled.js";
-import htm from "https://esm.sh/htm@3.1.1";
+import {React,useState,useEffect,useCallback,memo,createRoot,
+ ReactFlow,Background,Controls,Handle,Position,BaseEdge,EdgeLabelRenderer,useReactFlow,ReactFlowProvider,
+ ELK,htm} from "./vendor/bundle.js";
 const html=htm.bind(React.createElement); const elk=new ELK();
 // the contract file IS the data source — anything that emits a valid archmodel gets every view
 const MQ=new URLSearchParams(location.search);
