@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/corey/aoa/internal/ports"
 	bolt "go.etcd.io/bbolt"
@@ -223,6 +224,70 @@ func (s *Store) LoadAllEdges(projectID string) ([]ImportEdge, error) {
 		return nil, err
 	}
 	return all, nil
+}
+
+// ensureUnresolvedBucket opens or creates the facts_unresolved sub-bucket inside
+// proj for writing, enforcing the same C3 version contract as ensureEdgesBucket.
+func ensureUnresolvedBucket(proj *bolt.Bucket) (*bolt.Bucket, error) {
+	ub, err := proj.CreateBucketIfNotExists(bucketFactsUnresolved)
+	if err != nil {
+		return nil, fmt.Errorf("create facts_unresolved bucket: %w", err)
+	}
+	v := ub.Get(keyVersion)
+	if len(v) == 0 {
+		if err := ub.Put(keyVersion, []byte{edgesVersion}); err != nil {
+			return nil, fmt.Errorf("write facts_unresolved version: %w", err)
+		}
+		return ub, nil
+	}
+	if v[0] == edgesVersion {
+		return ub, nil
+	}
+	// Version mismatch — drop and re-create (C3: cache-only, always re-derivable).
+	if err := proj.DeleteBucket(bucketFactsUnresolved); err != nil {
+		return nil, fmt.Errorf("delete mismatched facts_unresolved bucket: %w", err)
+	}
+	ub, err = proj.CreateBucket(bucketFactsUnresolved)
+	if err != nil {
+		return nil, fmt.Errorf("recreate facts_unresolved bucket: %w", err)
+	}
+	if err := ub.Put(keyVersion, []byte{edgesVersion}); err != nil {
+		return nil, fmt.Errorf("write facts_unresolved version after recreate: %w", err)
+	}
+	return ub, nil
+}
+
+// SaveUnresolved persists import specs that looked intra-repo but did not
+// resolve to any known file in the current index. Keyed by ImportPath+"\x00"+
+// FromFile+"\x00"+StartLine for per-site deduplication. Idempotent.
+// Implements ports.EdgeStore. C1: caller must NOT hold App.mu.
+func (s *Store) SaveUnresolved(projectID string, entries []ImportEdge) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	return s.db.Update(func(tx *bolt.Tx) error {
+		proj, err := tx.CreateBucketIfNotExists([]byte(projectID))
+		if err != nil {
+			return err
+		}
+		ub, err := ensureUnresolvedBucket(proj)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			// keyed by NUL-separated spec, fromFile, and line for per-site deduplication.
+			key := []byte(e.ImportPath + "\x00" + e.FromFile + "\x00" +
+				strconv.FormatUint(uint64(e.StartLine), 10))
+			data, err := json.Marshal(e)
+			if err != nil {
+				continue // skip corrupt; individual failures are non-fatal
+			}
+			if err := ub.Put(key, data); err != nil {
+				return fmt.Errorf("put unresolved %q: %w", e.ImportPath, err)
+			}
+		}
+		return nil
+	})
 }
 
 // ImportEdge is an alias so the test file can reference the concrete type

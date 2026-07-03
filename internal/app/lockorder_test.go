@@ -83,6 +83,7 @@ func (n *noopStore) LoadEdgesForFile(_ string, _ uint32) ([]ports.ImportEdge, er
 }
 func (n *noopStore) DeleteEdgesForFile(_ string, _ uint32) error { return nil }
 func (n *noopStore) LoadAllEdges(_ string) ([]ports.ImportEdge, error) { return nil, nil }
+func (n *noopStore) SaveUnresolved(_ string, _ []ports.ImportEdge) error  { return nil }
 
 // ── lockGuardStore ─────────────────────────────────────────────────────────
 //
@@ -158,6 +159,12 @@ func (s *lockGuardStore) SaveEdgesBatch(projectID string, batch map[uint32][]por
 func (s *lockGuardStore) DeleteEdgesForFile(projectID string, fileID uint32) error {
 	s.assertUnlocked("DeleteEdgesForFile", projectID)
 	return s.storeBackend.DeleteEdgesForFile(projectID, fileID)
+}
+
+// SaveUnresolved triggers db.Update on the facts_unresolved bucket (§2.4 C1 check).
+func (s *lockGuardStore) SaveUnresolved(projectID string, entries []ports.ImportEdge) error {
+	s.assertUnlocked("SaveUnresolved", projectID)
+	return s.storeBackend.SaveUnresolved(projectID, entries)
 }
 
 // ── helper ─────────────────────────────────────────────────────────────────

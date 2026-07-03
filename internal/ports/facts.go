@@ -53,6 +53,14 @@ type EdgeStore interface {
 	// LoadAllEdges returns every edge stored for the project.
 	// Returns nil, nil if no edges exist.
 	LoadAllEdges(projectID string) ([]ImportEdge, error)
+
+	// SaveUnresolved persists import specs that appear intra-repo (relative or
+	// module-prefixed) but did not resolve to any file in the current index.
+	// These are findings fuel: broken-import candidates that re-resolve cheaply
+	// when a matching file appears (§2.4 unresolved handling).
+	// Keyed by ImportPath+"\x00"+FromFile+"\x00"+StartLine — idempotent Put.
+	// C1: caller must NOT hold App.mu.
+	SaveUnresolved(projectID string, entries []ImportEdge) error
 }
 
 // FactParser is the extended parser interface that extracts both symbols and

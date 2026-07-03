@@ -35,9 +35,10 @@ var (
 	bucketSessions        = []byte("sessions")
 	bucketDimensions      = []byte("dimensions")
 	bucketTelemetry       = []byte("telemetry")
-	bucketEdges           = []byte("edges")           // L19.10: import-edge store (C3 versioned)
-	bucketArchShards      = []byte("arch_shards")     // L19.10: arch shard cache (C3 versioned)
-	bucketFactsUnresolved = []byte("facts_unresolved") // L19.10: unresolved import specs (C3 versioned)
+	bucketEdges           = []byte("edges")            // L19.10: import-edge store (C3 versioned)
+	bucketFactsUnresolved = []byte("facts_unresolved") // L19.9: unresolved import specs (C3 versioned; §2.4 resolver output)
+	// bucketArchShards is reserved for F2 (arch shard cache, C3 versioned).
+	// Added here when L19.16 populates RegisterArchCommands; not yet in use.
 	keyTokens             = []byte("tokens")
 	keyMetadata           = []byte("metadata")
 	keyFiles              = []byte("files")

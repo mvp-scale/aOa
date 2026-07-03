@@ -124,6 +124,34 @@ func TestC4FlagOff_Config(t *testing.T) {
 	assert.False(t, readArchFlag(tmpDir), ".aoa/config AOA_ARCH=off → disabled")
 }
 
+// TestT36_ReadArchFlagExported verifies that the exported ReadArchFlag function
+// is the unified C4 predicate: it reads env AND .aoa/config identically to the
+// internal readArchFlag used by App.New, eliminating the split-brain found in
+// checkpoint-F1 finding 8 (root.go checked only env; App.New checked both).
+func TestT36_ReadArchFlagExported(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Unset AOA_ARCH so config-file path is exercised.
+	t.Setenv("AOA_ARCH", "")
+
+	// Default: ON when no env and no config file.
+	assert.True(t, ReadArchFlag(tmpDir), "T36: exported ReadArchFlag default must be ON")
+	assert.True(t, readArchFlag(tmpDir), "T36: internal readArchFlag default must be ON")
+	assert.Equal(t, ReadArchFlag(tmpDir), readArchFlag(tmpDir),
+		"T36: exported and internal predicates must agree")
+
+	// Write config with arch=off — both must return false.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmpDir, "config"),
+		[]byte("# aOa config\narch=off\n"),
+		0644,
+	))
+	assert.False(t, ReadArchFlag(tmpDir), "T36: config arch=off must disable via exported ReadArchFlag")
+	assert.False(t, readArchFlag(tmpDir), "T36: config arch=off must disable via internal readArchFlag")
+	assert.Equal(t, ReadArchFlag(tmpDir), readArchFlag(tmpDir),
+		"T36: exported and internal predicates must agree on config-off")
+}
+
 // TestBuildIndexWithFacts_EdgeProvenance verifies that edges have correct
 // relative FromFile paths and non-zero StartLine (G7 provenance).
 func TestBuildIndexWithFacts_EdgeProvenance(t *testing.T) {

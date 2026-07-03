@@ -25,6 +25,7 @@ import (
 	"github.com/corey/aoa/internal/adapters/web"
 	"github.com/corey/aoa/internal/domain/analyzer"
 	"github.com/corey/aoa/internal/domain/enricher"
+	"github.com/corey/aoa/internal/domain/facts"
 	"github.com/corey/aoa/internal/domain/hints"
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/domain/learner"
@@ -866,8 +867,22 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 			r.TotalTime = time.Since(totalStart).Seconds()
 			return r
 		}
+		// §2.4 resolver (L19.9): classify raw edges before grouping/persisting.
+		// Reads manifests from the project root (go.mod paths, etc.) and resolves
+		// each ImportEdge to an intra-repo target, "ext:<spec>", or unresolved.
+		// Pure function — freshIdx is local, no lock needed here.
+		var resolvedEdges []ports.ImportEdge
+		var unresolvedEdges []ports.ImportEdge
+		if a.ArchEnabled && len(edges) > 0 {
+			manifests := facts.ReadManifests(a.ProjectRoot)
+			fileSet := buildFileSet(freshIdx)
+			rr := facts.Resolve(edges, fileSet, manifests)
+			resolvedEdges = rr.Resolved
+			unresolvedEdges = rr.Unresolved
+		}
+
 		// L19.10: compute path→fileID grouping before the lock swap (freshIdx is local).
-		edgesByFile := groupEdgesByFile(freshIdx, edges)
+		edgesByFile := groupEdgesByFile(freshIdx, resolvedEdges)
 
 		a.mu.Lock()
 		a.Index.Tokens = freshIdx.Tokens
@@ -891,6 +906,12 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 				for fileID, fileEdges := range edgesByFile {
 					if err := a.Store.SaveEdgesForFile(a.ProjectID, fileID, fileEdges); err != nil {
 						a.debugf("WarmCaches: SaveEdgesForFile(%d): %v", fileID, err)
+					}
+				}
+				// §2.4: persist unresolved specs (findings fuel, never silently dropped).
+				if len(unresolvedEdges) > 0 {
+					if err := a.Store.SaveUnresolved(a.ProjectID, unresolvedEdges); err != nil {
+						a.debugf("WarmCaches: SaveUnresolved: %v", err)
 					}
 				}
 			}
@@ -3131,10 +3152,21 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 		return socket.ReindexResult{}, fmt.Errorf("build index: %w", err)
 	}
 
+	// §2.4 resolver (L19.9): classify raw edges before grouping/persisting.
+	var resolvedEdges []ports.ImportEdge
+	var unresolvedEdges []ports.ImportEdge
+	if a.ArchEnabled && len(edges) > 0 {
+		manifests := facts.ReadManifests(a.ProjectRoot)
+		fileSet := buildFileSet(idx)
+		rr := facts.Resolve(edges, fileSet, manifests)
+		resolvedEdges = rr.Resolved
+		unresolvedEdges = rr.Unresolved
+	}
+
 	// L19.10: build path→fileID map from the fresh index (no lock needed —
 	// idx is local, not shared). Group edges by fileID for batch persistence.
 	// Computed before the swap so the mapping is consistent with what we write.
-	edgesByFile := groupEdgesByFile(idx, edges)
+	edgesByFile := groupEdgesByFile(idx, resolvedEdges)
 
 	a.mu.Lock()
 	// Swap index maps in-place (engine/server hold pointer to a.Index struct)
@@ -3163,6 +3195,12 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 		for fileID, fileEdges := range edgesByFile {
 			if err := a.Store.SaveEdgesForFile(projectID, fileID, fileEdges); err != nil {
 				a.debugf("Reindex: SaveEdgesForFile(%d): %v", fileID, err)
+			}
+		}
+		// §2.4: persist unresolved specs (findings fuel, never silently dropped).
+		if len(unresolvedEdges) > 0 {
+			if err := a.Store.SaveUnresolved(projectID, unresolvedEdges); err != nil {
+				a.debugf("Reindex: SaveUnresolved: %v", err)
 			}
 		}
 	}
@@ -3352,6 +3390,18 @@ func (a *App) WipeProject() error {
 	a.reconMu.Unlock()
 
 	return nil
+}
+
+// ReadArchFlag is the exported C4 predicate used by both App (construction-time)
+// and cmd/aoa/cmd (Cobra registration). Having a single shared function eliminates
+// the split-brain found in checkpoint-F1 finding 8 (T36): the env path and the
+// .aoa/config path are evaluated identically regardless of where the check runs.
+//
+// dotAOA is the path to the .aoa directory (typically projectRoot+"/.aoa").
+// Call sites that do not yet know the project root should pass the path computed
+// from os.Getwd()+".aoa"; that is the same directory App.New will use.
+func ReadArchFlag(dotAOA string) bool {
+	return readArchFlag(dotAOA)
 }
 
 // readArchFlag evaluates the C4 AOA_ARCH kill switch at construction time.
