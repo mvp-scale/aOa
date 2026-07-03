@@ -347,11 +347,13 @@ func TestT17_NoSaveIndexUnderMu(t *testing.T) {
 			SessionID: "grep-session",
 		})
 
-		// Drive 50 Grep tool events so the 50th triggers autotune inside
-		// processGrepSignal. We use the learner directly to prime promptN to 49
-		// so the first grep event tips the counter to 50.
+		// Prime promptN to 50 so the grep event fires autotune:
+		// processGrepSignal passes PromptNumber=a.promptN to ObserveAndMaybeTune;
+		// autotune fires when PromptCount % AutotuneInterval == 0 (interval=50).
+		// promptN=49 is OFF BY ONE: 49 % 50 ≠ 0, autotune never fires, test is
+		// vacuous. promptN=50: 50 % 50 == 0, autotune fires, test is live.
 		a.mu.Lock()
-		a.promptN = 49
+		a.promptN = 50
 		a.mu.Unlock()
 
 		a.onSessionEvent(ports.SessionEvent{
