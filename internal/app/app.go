@@ -25,12 +25,35 @@ import (
 	"github.com/corey/aoa/internal/adapters/web"
 	"github.com/corey/aoa/internal/domain/analyzer"
 	"github.com/corey/aoa/internal/domain/enricher"
+	"github.com/corey/aoa/internal/domain/facts"
 	"github.com/corey/aoa/internal/domain/hints"
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/domain/learner"
 	"github.com/corey/aoa/internal/domain/status"
 	"github.com/corey/aoa/internal/ports"
 )
+
+// storeBackend is the full storage contract required by App.
+// It extends ports.Storage and ports.EdgeStore with lifecycle and extended-analysis methods.
+// Using an interface here (rather than the concrete *bbolt.Store) satisfies G4
+// (ports-first) and allows test doubles to be injected without embedding real bbolt.
+type storeBackend interface {
+	ports.Storage
+	// EdgeStore (L19.10): per-file import-edge persistence.
+	// All methods are C1-compliant — must never be called while App.mu is held.
+	ports.EdgeStore
+	// Healthy reports whether the backend is operational.
+	Healthy() bool
+	// Recovered reports whether the backend rebuilt itself from a corrupt state
+	// during the current session.
+	Recovered() bool
+	// Close releases all resources held by the storage backend.
+	Close() error
+	// SaveAllDimensions persists dimensional-analysis results for all files.
+	SaveAllDimensions(projectID string, analyses map[string]*ports.FileAnalysis) error
+	// LoadAllDimensions retrieves all persisted dimensional-analysis results.
+	LoadAllDimensions(projectID string) (map[string]*ports.FileAnalysis, error)
+}
 
 // SessionMetrics holds aggregated token and turn counters from session events.
 type SessionMetrics struct {
@@ -203,7 +226,7 @@ type App struct {
 	ProjectID   string
 	Paths       *Paths // resolved .aoa/ directory paths
 
-	Store     *bbolt.Store
+	Store     storeBackend
 	Watcher   *fsw.Watcher
 	Enricher  *enricher.Enricher
 	Engine    *index.SearchEngine
@@ -313,10 +336,24 @@ type App struct {
 	// Usage quota (from pasted /usage output via .aoa/usage.txt)
 	usageQuota *UsageQuota
 
+	// C4: AOA_ARCH kill switch (construction-time, default ON).
+	// When false: no import edges extracted, no arch subcommands registered,
+	// no /api/arch/* routes mounted. Zero hot-path cost (boolean on struct).
+	ArchEnabled bool
+
 	// Debounced index persistence — in-memory index is always current,
 	// only the bbolt write is delayed to avoid 306MB rewrites on every file change.
 	indexDirty     bool
 	indexSaveTimer *time.Timer
+
+	// C2: debounced edge-batch accumulator (L19.12).
+	// Per-file edge deltas are accumulated here (under a.mu) and flushed in a
+	// single SaveEdgesBatch call when the timer fires — one write tx per window.
+	// len(edges) == 0 signals "delete this file's edges" (file was removed).
+	// All protected by a.mu; the timer callback reads and clears outside the lock.
+	edgePendingBatch  map[uint32][]ports.ImportEdge // nil = no pending batch
+	edgePendingProjID string
+	edgeBatchTimer    *time.Timer
 
 	// Cached learner snapshot (L11.8) — avoids serializing under mu on every HTTP request.
 	// Multiple dashboard handlers in the same poll cycle share one snapshot.
@@ -324,8 +361,9 @@ type App struct {
 	cachedSnapshotTime time.Time
 
 	// Goroutine lifecycle (L11.1): all background goroutines tracked for clean shutdown.
-	bgWg   sync.WaitGroup // tracks all safeGo goroutines
-	stopCh chan struct{}   // closed on Stop() to signal background goroutines
+	bgWg    sync.WaitGroup // tracks all safeGo goroutines
+	timerWg sync.WaitGroup // tracks in-flight debounce-timer goroutines (doSaveIndexDebounced, doFlushEdgeBatch)
+	stopCh  chan struct{}   // closed on Stop() to signal background goroutines
 }
 
 // Config holds initialization parameters for the App.
@@ -443,6 +481,7 @@ func New(cfg Config) (*App, error) {
 		Enricher:       enr,
 		hintGen:        hg,
 		debug:          cfg.Debug || os.Getenv("AOA_DEBUG") == "1",
+		ArchEnabled:    readArchFlag(paths.Root), // C4: evaluated once at construction
 		Engine:         engine,
 		Learner:        lrn,
 		Parser:         cfg.Parser, // nil = tokenization-only mode
@@ -586,13 +625,23 @@ func (sc *signalCollector) addTermDomain(term, domain string) {
 func (a *App) searchObserver(query string, opts ports.SearchOptions, result *index.SearchResult, elapsed time.Duration) {
 	a.debugf("search query=%q hits=%d elapsed=%v", query, len(result.Hits), elapsed)
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	defer a.bumpRevision() // L17.6: invalidate ETag cache
+	defer a.bumpRevision() // L17.6: invalidate ETag cache — atomic, safe after unlock
+
+	// Panic-safe unlock: defer releases the lock if we panic before the
+	// explicit a.mu.Unlock() below. The bool ensures we don't double-unlock.
+	unlocked := false
+	defer func() {
+		if !unlocked {
+			a.mu.Unlock()
+		}
+	}()
 
 	a.promptN++
 
 	tokens := index.Tokenize(query)
 	if len(tokens) == 0 {
+		a.mu.Unlock()
+		unlocked = true
 		return
 	}
 
@@ -635,8 +684,11 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 	}
 
 	tuneResult := a.Learner.ObserveAndMaybeTune(event)
+	// Deep-copy learner state under lock for IO outside — C1: no db.Update under a.mu.
+	// State() returns the live pointer; Clone() makes a snapshot safe beyond mu release.
+	var pendingLearnerState *ports.LearnerState
 	if tuneResult != nil {
-		_ = a.Store.SaveLearnerState(a.ProjectID, a.Learner.State())
+		pendingLearnerState = a.Learner.State().Clone() // deep-copy under lock
 		a.writeStatus(tuneResult)
 		// L0.7: Autotune activity event
 		a.pushActivity(ActivityEntry{
@@ -688,6 +740,14 @@ func (a *App) searchObserver(query string, opts ports.SearchOptions, result *ind
 		entry.Learned = a.nextLearnWord()
 	}
 	a.pushActivity(entry)
+
+	a.mu.Unlock() // explicit unlock — IO follows
+	unlocked = true
+
+	// SaveLearnerState outside lock — db.Update never called while a.mu is held (C1).
+	if pendingLearnerState != nil {
+		_ = a.Store.SaveLearnerState(a.ProjectID, pendingLearnerState)
+	}
 }
 
 // Start begins the daemon (socket server + HTTP server + session reader).
@@ -800,16 +860,42 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 		// No persisted index — build from project files (git ls-files / walk).
 		logFn("no persisted index, building from project files...")
 		buildStart := time.Now()
-		freshIdx, stats, buildErr := BuildIndex(a.ProjectRoot, a.Parser)
+		// C4: use BuildIndexWithFacts when arch extraction is enabled.
+		freshIdx, stats, edges, buildErr := BuildIndexWithFacts(a.ProjectRoot, a.Parser, a.ArchEnabled)
 		if buildErr != nil {
 			logFn(fmt.Sprintf("warning: failed to build index: %v", buildErr))
 			r.TotalTime = time.Since(totalStart).Seconds()
 			return r
 		}
+		// §2.4 resolver (L19.9): classify raw edges before grouping/persisting.
+		// Reads manifests from the project root (go.mod paths, etc.) and resolves
+		// each ImportEdge to an intra-repo target, "ext:<spec>", or unresolved.
+		// Pure function — freshIdx is local, no lock needed here.
+		var resolvedEdges []ports.ImportEdge
+		var unresolvedEdges []ports.ImportEdge
+		if a.ArchEnabled && len(edges) > 0 {
+			manifests := facts.ReadManifests(a.ProjectRoot)
+			fileSet := buildFileSet(freshIdx)
+			rr := facts.Resolve(edges, fileSet, manifests)
+			resolvedEdges = rr.Resolved
+			unresolvedEdges = rr.Unresolved
+		}
+
+		// L19.10: compute path→fileID grouping before the lock swap (freshIdx is local).
+		edgesByFile := groupEdgesByFile(freshIdx, resolvedEdges)
+
 		a.mu.Lock()
 		a.Index.Tokens = freshIdx.Tokens
 		a.Index.Metadata = freshIdx.Metadata
 		a.Index.Files = freshIdx.Files
+		// T35: Clone under the lock — a.Index is live and another goroutine may
+		// write it after a.mu.Unlock(); passing the live pointer to SaveIndex
+		// (outside the lock) is a data race. Clone() makes a snapshot safe to
+		// read after the lock is released (C1 + T35 residual).
+		var idxSnap *ports.Index
+		if a.Store != nil {
+			idxSnap = a.Index.Clone()
+		}
 		a.mu.Unlock()
 		a.Engine.Rebuild()
 		r.FileCount = stats.FileCount
@@ -818,10 +904,23 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 			stats.FileCount, stats.SymbolCount, stats.TokenCount, time.Since(buildStart).Seconds()))
 		r.IndexTime += time.Since(buildStart).Seconds()
 
-		// Persist so next startup is instant.
-		if a.Store != nil {
-			if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
+		// Persist index — outside the lock (C1). idxSnap is nil when Store is nil.
+		if idxSnap != nil {
+			if err := a.Store.SaveIndex(a.ProjectID, idxSnap); err != nil {
 				logFn(fmt.Sprintf("warning: failed to persist index: %v", err))
+			}
+			// P3 (T31/T34): replace all edges in one atomic tx — clears stale file
+			// IDs from the previous build and writes new data without 257× per-file txs.
+			if a.ArchEnabled {
+				if err := a.Store.ReplaceAllEdges(a.ProjectID, edgesByFile); err != nil {
+					a.debugf("WarmCaches: ReplaceAllEdges: %v", err)
+				}
+				// §2.4: persist unresolved specs (findings fuel, never silently dropped).
+				if len(unresolvedEdges) > 0 {
+					if err := a.Store.SaveUnresolved(a.ProjectID, unresolvedEdges); err != nil {
+						a.debugf("WarmCaches: SaveUnresolved: %v", err)
+					}
+				}
 			}
 		}
 	}
@@ -859,33 +958,148 @@ const indexSaveDebounce = 2 * time.Second
 func (a *App) markIndexDirty() {
 	a.indexDirty = true
 	if a.indexSaveTimer != nil {
-		a.indexSaveTimer.Stop()
-	}
-	a.indexSaveTimer = time.AfterFunc(indexSaveDebounce, func() {
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		if a.indexDirty {
-			if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
-				a.debugf("SaveIndex error: %v", err)
-			}
-			a.indexDirty = false
+		// If Stop returns true the timer hadn't fired yet — decrement the
+		// timerWg Add we issued when arming it (goroutine will never run).
+		if a.indexSaveTimer.Stop() {
+			a.timerWg.Done()
 		}
+		a.indexSaveTimer = nil
+	}
+	// Track this goroutine so Stop() can wait for it before Close().
+	a.timerWg.Add(1)
+	a.indexSaveTimer = time.AfterFunc(indexSaveDebounce, func() {
+		defer a.timerWg.Done()
+		a.doSaveIndexDebounced()
 	})
 }
 
-// flushIndex saves the index to bbolt immediately if dirty.
-// Must be called with a.mu held.
-func (a *App) flushIndex() {
-	if a.indexSaveTimer != nil {
-		a.indexSaveTimer.Stop()
-		a.indexSaveTimer = nil
+// doSaveIndexDebounced is the time.AfterFunc callback for markIndexDirty.
+// Snapshots the index under a.mu, releases the lock, then writes to bbolt.
+// C1 compliant: db.Update is never called while a.mu is held.
+// Called from: markIndexDirty timer; also callable directly in tests to avoid
+// the 2 s debounce delay.
+func (a *App) doSaveIndexDebounced() {
+	a.mu.Lock()
+	if !a.indexDirty {
+		a.mu.Unlock()
+		return
 	}
-	if a.indexDirty {
-		if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
-			a.debugf("flushIndex error: %v", err)
+	snap := a.Index.Clone() // snapshot under lock (fast, CPU-only)
+	a.indexDirty = false
+	projectID := a.ProjectID
+	a.mu.Unlock() // release before IO
+
+	// db.Update happens here, outside a.mu — C1 compliant.
+	if err := a.Store.SaveIndex(projectID, snap); err != nil {
+		a.debugf("SaveIndex error: %v", err)
+	}
+}
+
+// edgeBatchDebounce is the delay after the last file event before the
+// accumulated edge batch is flushed to bbolt in a single write tx (C2, L19.12).
+// Shorter than indexSaveDebounce: edges are small and the batch is pure cache.
+const edgeBatchDebounce = 200 * time.Millisecond
+
+// markEdgeBatchDirty queues a fileID delta into the pending edge batch and
+// (re-)arms the flush timer. Must be called with a.mu held.
+//
+// edges == nil or len(edges) == 0 signals "delete" (file was removed).
+// Non-nil non-empty edges signal "save" (file created or modified).
+//
+// Later events for the same fileID within the same debounce window overwrite
+// earlier ones — last-write-wins, which is correct: a remove followed by a
+// recreate within the window results in a save.
+func (a *App) markEdgeBatchDirty(fileID uint32, edges []ports.ImportEdge) {
+	if a.edgePendingBatch == nil {
+		a.edgePendingBatch = make(map[uint32][]ports.ImportEdge)
+	}
+	a.edgePendingProjID = a.ProjectID
+	// nil or empty slice signals delete; a non-empty slice signals save.
+	a.edgePendingBatch[fileID] = edges
+
+	if a.edgeBatchTimer != nil {
+		// If Stop returns true the timer hadn't fired yet — decrement the
+		// timerWg Add we issued when arming it.
+		if a.edgeBatchTimer.Stop() {
+			a.timerWg.Done()
 		}
-		a.indexDirty = false
+		a.edgeBatchTimer = nil
 	}
+	// Track this goroutine so Stop() can wait for it before Close().
+	a.timerWg.Add(1)
+	a.edgeBatchTimer = time.AfterFunc(edgeBatchDebounce, func() {
+		defer a.timerWg.Done()
+		a.doFlushEdgeBatch()
+	})
+}
+
+// doFlushEdgeBatch is the edgeBatchTimer callback (C2, L19.12).
+// Snapshots and clears the pending batch under a.mu, runs §2.4 resolution
+// (T41, PC1 — one write choke-point), then calls SaveEdgesBatch + SaveUnresolved
+// outside the lock — C1 compliant: no db.Update while a.mu is held.
+// Callable directly from tests to bypass the 200ms timer.
+func (a *App) doFlushEdgeBatch() {
+	a.mu.Lock()
+	if len(a.edgePendingBatch) == 0 {
+		a.mu.Unlock()
+		return
+	}
+	batch := a.edgePendingBatch
+	projectID := a.edgePendingProjID
+	a.edgePendingBatch = nil // reset; next window starts fresh
+	// Snapshot fileSet for §2.4 resolver — Index is under a.mu, so capture
+	// it here before releasing the lock.
+	fileSet := buildFileSet(a.Index)
+	projectRoot := a.ProjectRoot
+	archEnabled := a.ArchEnabled
+	a.mu.Unlock() // release before IO (C1)
+
+	// §2.4 resolver: resolve raw ImportPath specs to canonical form before
+	// persisting — mirrors the WarmCaches/Reindex path so the watcher write
+	// path produces byte-identical rows (T41, PC1 one choke-point).
+	var unresolvedEdges []ports.ImportEdge
+	if archEnabled {
+		batch, unresolvedEdges = resolveEdgeBatch(batch, fileSet, projectRoot)
+	}
+
+	// db.Update happens here, outside a.mu — C1 compliant.
+	if err := a.Store.SaveEdgesBatch(projectID, batch); err != nil {
+		a.debugf("SaveEdgesBatch: %v", err)
+	}
+	// §2.4: persist unresolved specs (findings fuel, never silently dropped).
+	if len(unresolvedEdges) > 0 {
+		if err := a.Store.SaveUnresolved(projectID, unresolvedEdges); err != nil {
+			a.debugf("SaveUnresolved (watcher flush): %v", err)
+		}
+	}
+}
+
+// resolveEdgeBatch runs §2.4 resolution on a pending watcher edge batch.
+// Delete entries (nil or empty edge slices) are passed through unchanged —
+// they signal file removal to SaveEdgesBatch and must not be dropped.
+// The returned resolved map carries canonical ImportPaths; unresolvedEdges
+// contains specs that appeared intra-repo but did not probe to any known file
+// (persisted separately as findings fuel via SaveUnresolved).
+//
+// Reads manifests from projectRoot (go.mod walk) once per flush window;
+// uses the fileSet snapshot taken under a.mu before this call.
+func resolveEdgeBatch(
+	batch map[uint32][]ports.ImportEdge,
+	fileSet map[string]bool,
+	projectRoot string,
+) (resolved map[uint32][]ports.ImportEdge, unresolved []ports.ImportEdge) {
+	manifests := facts.ReadManifests(projectRoot)
+	resolved = make(map[uint32][]ports.ImportEdge, len(batch))
+	for fileID, edges := range batch {
+		if len(edges) == 0 {
+			resolved[fileID] = edges // nil/empty = delete signal; pass through
+			continue
+		}
+		rr := facts.Resolve(edges, fileSet, manifests)
+		resolved[fileID] = rr.Resolved
+		unresolved = append(unresolved, rr.Unresolved...)
+	}
+	return resolved, unresolved
 }
 
 // Stop gracefully shuts down all services and persists learner state.
@@ -907,12 +1121,67 @@ func (a *App) Stop() error {
 	// Wait for all safeGo goroutines (shadow searches, WarmCaches, dim scan).
 	a.bgWg.Wait()
 
-	// Persist final state — all goroutines are stopped, no races.
+	// Snapshot persistent state under the lock, then write outside — C1 compliant
+	// (db.Update must never be called while a.mu is held).
 	a.mu.Lock()
-	a.flushSessionSummary()
-	a.flushIndex()
-	_ = a.Store.SaveLearnerState(a.ProjectID, a.Learner.State())
+	// Build session flush payload (in-memory only; IO happens after unlock).
+	pendingSum, pendingDelta := a.buildSessionFlushPayload()
+	// Cancel any pending debounce timer and snapshot the index if dirty.
+	// If Stop() returns true, the timer goroutine was never started — release
+	// the timerWg slot we reserved when arming the timer.
+	if a.indexSaveTimer != nil {
+		if a.indexSaveTimer.Stop() {
+			a.timerWg.Done() // goroutine never ran; release the reserved slot
+		}
+		a.indexSaveTimer = nil
+	}
+	var idxSnap *ports.Index
+	if a.indexDirty {
+		idxSnap = a.Index.Clone()
+		a.indexDirty = false
+	}
+	// Cancel edgeBatchTimer and snapshot pending batch (C1+C2, L19.12).
+	// Mirror the indexSaveTimer pattern: stop the timer, snapshot under lock,
+	// flush outside the lock before Close — prevents use-after-close on bbolt.
+	if a.edgeBatchTimer != nil {
+		if a.edgeBatchTimer.Stop() {
+			a.timerWg.Done() // goroutine never ran; release the reserved slot
+		}
+		a.edgeBatchTimer = nil
+	}
+	var edgeBatchSnap map[uint32][]ports.ImportEdge
+	if len(a.edgePendingBatch) > 0 {
+		edgeBatchSnap = a.edgePendingBatch
+		a.edgePendingBatch = nil
+	}
+	edgeProjIDSnap := a.edgePendingProjID
+	// Deep-copy learner state under lock — C1: State() returns live pointer;
+	// Clone() makes a snapshot safe to read after a.mu is released (T35).
+	learnerState := a.Learner.State().Clone()
 	a.mu.Unlock()
+
+	// Wait for any in-flight debounce-timer goroutines (doSaveIndexDebounced,
+	// doFlushEdgeBatch) before calling Store IO or Close. Timers that fired
+	// before the Stop() calls above may still be running their callbacks;
+	// timerWg.Wait() ensures they complete before we proceed — prevents
+	// use-after-close on bbolt (finding 10 / T37).
+	a.timerWg.Wait()
+
+	// Writes outside the lock — db.Update never called while a.mu is held (C1).
+	a.doSessionFlush(pendingSum, pendingDelta)
+	if idxSnap != nil {
+		if err := a.Store.SaveIndex(a.ProjectID, idxSnap); err != nil {
+			a.debugf("Stop: SaveIndex error: %v", err)
+		}
+	}
+	_ = a.Store.SaveLearnerState(a.ProjectID, learnerState)
+	// Flush any edge batch pending in the debounce window (C1+C2, L19.12).
+	// Must happen before Store.Close() to avoid SaveEdgesBatch on a closed DB.
+	if edgeBatchSnap != nil {
+		if err := a.Store.SaveEdgesBatch(edgeProjIDSnap, edgeBatchSnap); err != nil {
+			a.debugf("Stop: SaveEdgesBatch error: %v", err)
+		}
+	}
 	a.Store.Close()
 	return nil
 }
@@ -923,16 +1192,29 @@ func (a *App) Stop() error {
 func (a *App) onSessionEvent(ev ports.SessionEvent) {
 	a.debugf("session-event kind=%d", ev.Kind)
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	defer a.bumpRevision() // L17.6: invalidate ETag cache
+	defer a.bumpRevision() // L17.6: invalidate ETag cache — atomic, safe after unlock
+
+	// Panic-safe unlock: defer releases the lock if we panic before the
+	// explicit a.mu.Unlock() below. The bool ensures we don't double-unlock.
+	unlocked := false
+	defer func() {
+		if !unlocked {
+			a.mu.Unlock()
+		}
+	}()
+
+	// pendingLearnerState carries a deep-copied snapshot when any session-signal
+	// path triggers autotune. Persisted outside the lock — C1 compliant.
+	var pendingLearnerState *ports.LearnerState
 
 	// Track current model from every event
 	if ev.Model != "" {
 		a.currentModel = ev.Model
 	}
 
-	// Session boundary detection (L0.5)
-	a.handleSessionBoundary(ev)
+	// Session boundary detection (L0.5).
+	// Returns a pending flush for the old session; IO happens outside the lock (C1).
+	pendingSum, pendingDelta := a.handleSessionBoundary(ev)
 
 	ts := ev.Timestamp.Unix()
 	if ts == 0 {
@@ -961,7 +1243,10 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 		a.sessionMetrics.TurnCount++
 		a.meter.RecordUser(len(ev.Text))
 		a.Learner.ProcessBigrams(ev.Text)
-		a.processConversationSignal(ev.Text, true) // observe=true: may trigger autotune
+		// observe=true: may trigger autotune — returns snapshot to save outside lock.
+		if snap := a.processConversationSignal(ev.Text, true); snap != nil {
+			pendingLearnerState = snap
+		}
 		a.writeStatus(nil)
 		// Push user turn to ring
 		a.pushTurn(ConversationTurn{
@@ -1164,9 +1449,12 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 				attrib = "unguided"
 				// tokens deferred to result_chars (actual result size, not full-codebase estimate)
 				impact = a.estimateGrepCost(ev.Tool.Pattern)
-				// Session-log Grep → learning signals
+				// Session-log Grep → learning signals; may trigger autotune.
+				// Returns snapshot to save outside lock — C1 compliant.
 				if ev.Tool.Pattern != "" {
-					a.processGrepSignal(ev.Tool.Pattern)
+					if snap := a.processGrepSignal(ev.Tool.Pattern); snap != nil {
+						pendingLearnerState = snap
+					}
 				}
 			case "Write", "Edit":
 				if ev.File != nil && ev.File.Path != "" {
@@ -1434,6 +1722,17 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			tb.DurationMs = ev.DurationMs
 		}
 	}
+
+	a.mu.Unlock() // explicit unlock — IO follows
+	unlocked = true
+
+	// All IO outside lock — db.Update never called while a.mu is held (C1).
+	// SaveLearnerState for any session-signal autotune that fired this event.
+	if pendingLearnerState != nil && a.Store != nil {
+		_ = a.Store.SaveLearnerState(a.ProjectID, pendingLearnerState)
+	}
+	// Session flush outside lock.
+	a.doSessionFlush(pendingSum, pendingDelta)
 }
 
 // writeStatus generates and writes status JSON to the project-local file.
@@ -2189,6 +2488,9 @@ func (a *App) actionToResult(act TurnAction) socket.TurnActionResult {
 		SubagentToolUses:   act.SubagentToolUses,
 		SubagentDurationMs: act.SubagentDurationMs,
 		SubagentType:       act.SubagentType,
+		// L18.4: mark Agent rows so the UI renders '—' not the known-wrong estimate.
+		// SubagentTokens is preserved for future L18.3 per-call attribution.
+		AgentTokensPending: act.Tool == "Agent",
 	}
 	// Convert children recursively
 	if len(act.Children) > 0 {
@@ -2411,14 +2713,17 @@ func (a *App) flushStaleTurns(activeTurnID string) {
 }
 
 // handleSessionBoundary detects Claude session changes and flushes/loads session summaries.
-// Must be called with a.mu held.
-func (a *App) handleSessionBoundary(ev ports.SessionEvent) {
+// Must be called with a.mu held. Returns a pending session flush payload when an old session
+// is being closed; the caller must write it outside the lock via doSessionFlush (C1).
+func (a *App) handleSessionBoundary(ev ports.SessionEvent) (*ports.SessionSummary, *ports.ProjectTelemetry) {
 	if ev.SessionID == "" || ev.SessionID == a.currentSessionID {
-		return
+		return nil, nil
 	}
-	// Flush old session if we had one
+	// Build flush payload for old session (in-memory only — IO happens outside the lock).
+	var pendingSum *ports.SessionSummary
+	var pendingDelta *ports.ProjectTelemetry
 	if a.currentSessionID != "" {
-		a.flushSessionSummary()
+		pendingSum, pendingDelta = a.buildSessionFlushPayload()
 	}
 	// Check if revisiting an existing session
 	if a.Store != nil {
@@ -2469,14 +2774,16 @@ func (a *App) handleSessionBoundary(ev ports.SessionEvent) {
 	a.currentSessionID = ev.SessionID
 	// L9.1: Reset content meter on session boundary
 	a.meter.Reset()
+	return pendingSum, pendingDelta
 }
 
-// flushSessionSummary builds a SessionSummary from current counters and persists it
-// atomically with a telemetry delta increment (L17.2).
-// Must be called with a.mu held.
-func (a *App) flushSessionSummary() {
+// buildSessionFlushPayload builds a SessionSummary and telemetry delta from
+// current counters and advances the lastFlushed* accounting fields.
+// Must be called with a.mu held. Does NO IO — callers must write outside the lock.
+// Returns (nil, nil) when there is nothing to flush.
+func (a *App) buildSessionFlushPayload() (*ports.SessionSummary, *ports.ProjectTelemetry) {
 	if a.currentSessionID == "" || a.Store == nil {
-		return
+		return nil, nil
 	}
 	var guidedRatio float64
 	if a.sessionReadCount > 0 {
@@ -2517,9 +2824,7 @@ func (a *App) flushSessionSummary() {
 		a.sessionIsNew = false
 	}
 
-	_ = a.Store.SaveSessionWithTelemetry(a.ProjectID, summary, delta)
-
-	// Update lastFlushed to current values
+	// Advance lastFlushed accounting (in-memory only — no IO here).
 	a.lastFlushedTokensSaved = a.counterfactTokensSaved
 	a.lastFlushedTimeSavedMs = a.sessionTimeSavedMs
 	a.lastFlushedReads = a.sessionReadCount
@@ -2528,6 +2833,17 @@ func (a *App) flushSessionSummary() {
 	a.lastFlushedInputTokens = a.sessionMetrics.InputTokens
 	a.lastFlushedOutputTokens = a.sessionMetrics.OutputTokens
 	a.lastFlushedCacheReadTokens = a.sessionMetrics.CacheReadTokens
+
+	return summary, delta
+}
+
+// doSessionFlush writes a session summary + telemetry delta to the store.
+// Must be called outside a.mu — db.Update must never be called while a.mu is held (C1).
+func (a *App) doSessionFlush(summary *ports.SessionSummary, delta *ports.ProjectTelemetry) {
+	if summary == nil {
+		return
+	}
+	_ = a.Store.SaveSessionWithTelemetry(a.ProjectID, summary, delta)
 }
 
 // turnFromBuilder converts a turnBuilder into a ConversationTurn.
@@ -2888,25 +3204,62 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 	a.debugf("reindex starting")
 	start := time.Now()
 
-	// Build new index outside the mutex (IO-heavy)
-	idx, stats, err := BuildIndex(a.ProjectRoot, a.Parser)
+	// Build new index outside the mutex (IO-heavy).
+	// C4: use BuildIndexWithFacts when arch extraction is enabled.
+	idx, stats, edges, err := BuildIndexWithFacts(a.ProjectRoot, a.Parser, a.ArchEnabled)
 	if err != nil {
 		return socket.ReindexResult{}, fmt.Errorf("build index: %w", err)
 	}
 
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	// §2.4 resolver (L19.9): classify raw edges before grouping/persisting.
+	var resolvedEdges []ports.ImportEdge
+	var unresolvedEdges []ports.ImportEdge
+	if a.ArchEnabled && len(edges) > 0 {
+		manifests := facts.ReadManifests(a.ProjectRoot)
+		fileSet := buildFileSet(idx)
+		rr := facts.Resolve(edges, fileSet, manifests)
+		resolvedEdges = rr.Resolved
+		unresolvedEdges = rr.Unresolved
+	}
 
+	// L19.10: build path→fileID map from the fresh index (no lock needed —
+	// idx is local, not shared). Group edges by fileID for batch persistence.
+	// Computed before the swap so the mapping is consistent with what we write.
+	edgesByFile := groupEdgesByFile(idx, resolvedEdges)
+
+	a.mu.Lock()
 	// Swap index maps in-place (engine/server hold pointer to a.Index struct)
 	a.Index.Tokens = idx.Tokens
 	a.Index.Metadata = idx.Metadata
 	a.Index.Files = idx.Files
-
 	a.Engine.Rebuild()
-
+	a.bumpRevision() // L19.11: invalidate ETag cache after index swap
+	// Snapshot for C1-compliant persistence: clone under lock, write outside.
+	var idxSnap *ports.Index
 	if a.Store != nil {
-		if err := a.Store.SaveIndex(a.ProjectID, a.Index); err != nil {
+		idxSnap = a.Index.Clone()
+	}
+	projectID := a.ProjectID
+	a.mu.Unlock()
+
+	// db.Update happens here, outside a.mu — C1 compliant.
+	if idxSnap != nil {
+		if err := a.Store.SaveIndex(projectID, idxSnap); err != nil {
 			return socket.ReindexResult{}, fmt.Errorf("save index: %w", err)
+		}
+	}
+
+	// P3 (T31/T34): replace all edges in one atomic tx — clears stale file IDs
+	// from the previous build and writes new data atomically (C1 compliant).
+	if a.Store != nil && a.ArchEnabled {
+		if err := a.Store.ReplaceAllEdges(projectID, edgesByFile); err != nil {
+			a.debugf("Reindex: ReplaceAllEdges: %v", err)
+		}
+		// §2.4: persist unresolved specs (findings fuel, never silently dropped).
+		if len(unresolvedEdges) > 0 {
+			if err := a.Store.SaveUnresolved(projectID, unresolvedEdges); err != nil {
+				a.debugf("Reindex: SaveUnresolved: %v", err)
+			}
 		}
 	}
 
@@ -3095,4 +3448,53 @@ func (a *App) WipeProject() error {
 	a.reconMu.Unlock()
 
 	return nil
+}
+
+// ReadArchFlag is the exported C4 predicate used by both App (construction-time)
+// and cmd/aoa/cmd (Cobra registration). Having a single shared function eliminates
+// the split-brain found in checkpoint-F1 finding 8 (T36): the env path and the
+// .aoa/config path are evaluated identically regardless of where the check runs.
+//
+// dotAOA is the path to the .aoa directory (typically projectRoot+"/.aoa").
+// Call sites that do not yet know the project root should pass the path computed
+// from os.Getwd()+".aoa"; that is the same directory App.New will use.
+func ReadArchFlag(dotAOA string) bool {
+	return readArchFlag(dotAOA)
+}
+
+// readArchFlag evaluates the C4 AOA_ARCH kill switch at construction time.
+// Default: ON (arch extraction enabled).
+//
+// Resolution order:
+//  1. AOA_ARCH env var: "off", "0", or "false" → disabled; "on", "1", or "true" → enabled.
+//  2. .aoa/config file: line containing "AOA_ARCH=off" or "arch=off" (case-insensitive) → disabled.
+//  3. Default: enabled.
+//
+// The result is stored once on App and never re-read — zero hot-path cost.
+func readArchFlag(dotAOA string) bool {
+	// Env var takes priority
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("AOA_ARCH"))) {
+	case "off", "0", "false":
+		return false
+	case "on", "1", "true":
+		return true
+	}
+
+	// Check .aoa/config for a simple key=value line
+	configPath := filepath.Join(dotAOA, "config")
+	data, err := os.ReadFile(configPath)
+	if err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "#") {
+				continue // skip comments
+			}
+			lower := strings.ToLower(line)
+			if lower == "aoa_arch=off" || lower == "arch=off" {
+				return false
+			}
+		}
+	}
+
+	return true // default ON
 }

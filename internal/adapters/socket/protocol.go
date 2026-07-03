@@ -239,6 +239,11 @@ type TurnActionResult struct {
 	SubagentDurationMs int64              `json:"subagent_duration_ms,omitempty"`
 	SubagentType       string             `json:"subagent_type,omitempty"`
 	Children           []TurnActionResult `json:"children,omitempty"`
+
+	// L18.4: Agent rows carry this flag so the UI renders '—' instead of the
+	// known-wrong estimate. SubagentTokens is preserved for future L18.3
+	// attribution but must not be displayed until attribution is reliable.
+	AgentTokensPending bool `json:"agent_tokens_pending,omitempty"`
 }
 
 // ActivityEntryResult describes a single action in the activity feed.

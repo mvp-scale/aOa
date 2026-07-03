@@ -105,6 +105,7 @@ func (p *Parser) ParseFile(filePath string, source []byte) ([]Symbol, error) {
 }
 
 // ParseFileToMeta converts symbols to ports.SymbolMeta.
+// Behavior is unchanged from before L19.9 — zero regression for existing callers.
 func (p *Parser) ParseFileToMeta(filePath string, source []byte) ([]*ports.SymbolMeta, error) {
 	symbols, err := p.ParseFile(filePath, source)
 	if err != nil {
@@ -122,6 +123,47 @@ func (p *Parser) ParseFileToMeta(filePath string, source []byte) ([]*ports.Symbo
 		}
 	}
 	return metas, nil
+}
+
+// ParseFileToMetaAndFacts extracts both symbols and import edges from a source
+// file in a single tree-sitter parse pass (one call to parser.Parse per file,
+// satisfying G0: one traversal). Implements ports.FactParser.
+//
+// The symbols returned are identical to those of ParseFileToMeta — callers that
+// need both symbols and edges should prefer this method to avoid a second parse.
+// Returns nil, nil, nil for unsupported languages (not an error).
+func (p *Parser) ParseFileToMetaAndFacts(filePath string, source []byte) ([]*ports.SymbolMeta, []ports.ImportEdge, error) {
+	// ParseToTree detects the language and parses once; caller owns tree.Close().
+	tree, langName, err := p.ParseToTree(filePath, source)
+	if err != nil {
+		return nil, nil, err
+	}
+	if tree == nil {
+		// Unknown language or empty file handled by ParseToTree
+		return nil, nil, nil
+	}
+	defer tree.Close()
+
+	root := tree.RootNode()
+
+	// Extract symbols (identical to ParseFileToMeta path)
+	symbols := extractSymbols(root, source, langName)
+	metas := make([]*ports.SymbolMeta, len(symbols))
+	for i, sym := range symbols {
+		metas[i] = &ports.SymbolMeta{
+			Name:      sym.Name,
+			Signature: sym.Signature,
+			Kind:      sym.Kind,
+			StartLine: sym.StartLine,
+			EndLine:   sym.EndLine,
+			Parent:    sym.Parent,
+		}
+	}
+
+	// Extract import edges using the same root (no second parse)
+	edges := extractImports(root, source, filePath, langName)
+
+	return metas, edges, nil
 }
 
 // SupportsExtension returns true if the parser recognizes this file extension.

@@ -88,6 +88,39 @@ func TestBuildIndex_SkipsIgnoredDirs(t *testing.T) {
 	assert.Equal(t, 1, result.SymbolCount)
 }
 
+// TestBuildIndexWithFacts_VarOnlyFileHasEdges is a regression test for the bug
+// where `if parseErr == nil && len(metas) > 0` gated edge collection on non-empty
+// metas. Go files with only var/const declarations produce 0 metas (extractGo
+// handles only func/method/type), but they may still have import edges.
+// Correct behaviour: edges are emitted regardless of metas length.
+func TestBuildIndexWithFacts_VarOnlyFileHasEdges(t *testing.T) {
+	tmpDir := t.TempDir()
+	parser := treesitter.NewParser()
+
+	// var-only Go file — no functions or types, so metas will be empty.
+	// Two imports → expects 2 import edges.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmpDir, "consts.go"),
+		[]byte("package main\n\nimport (\n\t\"os\"\n\t\"fmt\"\n)\n\nvar Debug = os.Getenv(\"DEBUG\") != \"\"\nvar Prefix = fmt.Sprintf(\"[app]\")\n"),
+		0644,
+	))
+
+	_, result, edges, err := BuildIndexWithFacts(tmpDir, parser, true)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, result.FileCount)
+	assert.Equal(t, 0, result.SymbolCount, "var-only file produces no symbol metas")
+	assert.Equal(t, 2, result.EdgeCount, "import edges must be collected even when metas is empty")
+	require.Len(t, edges, 2, "edges slice must match EdgeCount")
+
+	paths := make([]string, len(edges))
+	for i, e := range edges {
+		paths[i] = e.ImportPath
+	}
+	assert.Contains(t, paths, "os")
+	assert.Contains(t, paths, "fmt")
+}
+
 // TestBuildIndex_NilParser_TokenizationOnly verifies that BuildIndex works
 // without a parser (tokenization-only mode). Files are discovered via
 // defaultCodeExtensions, and content is tokenized for file-level search.
@@ -123,4 +156,71 @@ func TestBuildIndex_NilParser_TokenizationOnly(t *testing.T) {
 	// Check specific tokens exist — Tokenize("SearchEngine") → ["search", "engine"]
 	assert.Greater(t, len(idx.Tokens["search"]), 0, "should tokenize 'search' from content")
 	assert.Greater(t, len(idx.Tokens["engine"]), 0, "should tokenize 'engine' from content")
+}
+
+// TestT30_FlagOn_ContentEquivalence is the T30 invariant: BuildIndexWithFacts
+// with archEnabled=true must produce identical index content (Tokens, Metadata)
+// as archEnabled=false for all file types — only edge emission differs between modes.
+//
+// Root cause this guards against (checkpoint-F1 finding 6): when parseErr==nil
+// but len(metas)==0, the old code used an unconditional `continue` which skipped
+// content tokenization for symbol-less parseable files. Flag-on would miss the
+// content tokens that flag-off correctly populated.
+func TestT30_FlagOn_ContentEquivalence(t *testing.T) {
+	tmpDir := t.TempDir()
+	parser := treesitter.NewParser()
+
+	// File with symbols (functions): both modes produce symbol metadata.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmpDir, "symbols.go"),
+		[]byte("package main\n\nimport \"fmt\"\n\nfunc SearchEngine() { fmt.Println() }\nfunc QueryParser() {}\n"),
+		0644,
+	))
+
+	// Symbol-less parseable file: var/const only → metas==0; parser succeeds but
+	// returns no SymbolMeta. Flag-on must NOT skip its content tokens (T30).
+	// "zebrafoobar" is a distinctive token that only appears in this file.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmpDir, "consts.go"),
+		[]byte("package main\n\nimport \"os\"\n\nvar Debug = os.Getenv(\"DEBUG\") != \"\"\nvar ZebraFooBar = true // zebrafoobar marker token\n"),
+		0644,
+	))
+
+	// Run flag-OFF (archEnabled=false).
+	idxOff, _, _, err := BuildIndexWithFacts(tmpDir, parser, false)
+	require.NoError(t, err)
+
+	// Run flag-ON (archEnabled=true).
+	idxOn, _, _, err := BuildIndexWithFacts(tmpDir, parser, true)
+	require.NoError(t, err)
+
+	// Tokens must be identical: same keys, same reference counts.
+	// (TokenRef slices may vary in order; compare lengths per token.)
+	assert.Equal(t, len(idxOff.Tokens), len(idxOn.Tokens),
+		"T30: flag-on and flag-off must produce the same number of distinct tokens")
+
+	for tok, refsOff := range idxOff.Tokens {
+		refsOn := idxOn.Tokens[tok]
+		assert.Equal(t, len(refsOff), len(refsOn),
+			"T30: token %q has %d refs OFF but %d refs ON — content equivalence violated",
+			tok, len(refsOff), len(refsOn))
+	}
+
+	// Metadata (symbols) must be identical.
+	assert.Equal(t, len(idxOff.Metadata), len(idxOn.Metadata),
+		"T30: symbol count must be identical between flag-off and flag-on")
+
+	// Specifically verify the symbol-less file's content tokens exist in flag-ON.
+	// "zebrafoobar" is a distinctive content token from consts.go (appears only there).
+	// TokenizeContentLine splits "ZebraFooBar" → ["zebra","foo","bar"] and tokenises
+	// "zebrafoobar" from the comment. At least one of these must appear.
+	// Flag-on must produce the same content tokens as flag-off (T30 invariant).
+	//
+	// Old bug: the unconditional `continue` after ParseFileToMetaAndFacts skipped
+	// content tokenization for symbol-less files, so flag-on produced 0 refs for
+	// content tokens that flag-off correctly populated.
+	assert.Greater(t, len(idxOn.Tokens["zebrafoobar"]), 0,
+		"T30: symbol-less file must have content tokens in flag-on mode (was skipped by old `continue` bug)")
+	assert.Greater(t, len(idxOff.Tokens["zebrafoobar"]), 0,
+		"T30: symbol-less file must have content tokens in flag-off mode (sanity check)")
 }

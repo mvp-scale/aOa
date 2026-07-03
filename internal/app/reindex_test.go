@@ -45,3 +45,23 @@ func TestApp_Reindex(t *testing.T) {
 	searchResult := a.Engine.Search("hello", ports.SearchOptions{})
 	assert.GreaterOrEqual(t, len(searchResult.Hits), 1)
 }
+
+// TestReindex_BumpsRevision verifies L19.11: Reindex increments the global revision
+// counter so ETag caches are invalidated on the same tick the index swaps.
+func TestReindex_BumpsRevision(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmpDir, "hello.go"),
+		[]byte("package main\n\nfunc Hello() {}\n"),
+		0644,
+	))
+
+	a := newWatcherTestApp(t, tmpDir)
+
+	before := a.Revision()
+	_, err := a.Reindex()
+	require.NoError(t, err)
+
+	assert.Greater(t, a.Revision(), before, "revision must increase after Reindex")
+}

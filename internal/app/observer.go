@@ -5,6 +5,7 @@ import (
 
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/domain/learner"
+	"github.com/corey/aoa/internal/ports"
 )
 
 // hitSignals is an enricher-free signal container extracted directly from
@@ -96,9 +97,13 @@ const conversationProseCap = 8192
 // for keyword/term/domain resolution. Unlike processGrepSignal, this does NOT
 // call ProcessBigrams (the caller already does that). Must be called with
 // a.mu held.
-func (a *App) processConversationSignal(text string, observe bool) {
+//
+// Returns a deep-copied LearnerState snapshot when autotune fires (observe=true
+// and tune triggers), nil otherwise. The caller must persist it via
+// Store.SaveLearnerState AFTER releasing a.mu — C1: no db.Update under a.mu.
+func (a *App) processConversationSignal(text string, observe bool) *ports.LearnerState {
 	if text == "" || a.Enricher == nil {
-		return
+		return nil
 	}
 
 	// Strip code blocks — only prose carries intent signal
@@ -111,7 +116,7 @@ func (a *App) processConversationSignal(text string, observe bool) {
 
 	tokens := index.Tokenize(text)
 	if len(tokens) == 0 {
-		return
+		return nil
 	}
 
 	sc := newSignalCollector()
@@ -122,7 +127,7 @@ func (a *App) processConversationSignal(text string, observe bool) {
 
 	// Only emit an observe event if the enricher resolved something
 	if len(sc.Keywords) == 0 {
-		return
+		return nil
 	}
 
 	event := learner.ObserveEvent{
@@ -138,27 +143,33 @@ func (a *App) processConversationSignal(text string, observe bool) {
 
 	if observe {
 		tuneResult := a.Learner.ObserveAndMaybeTune(event)
-		if tuneResult != nil && a.Store != nil {
-			_ = a.Store.SaveLearnerState(a.ProjectID, a.Learner.State())
+		if tuneResult != nil {
 			a.writeStatus(tuneResult)
+			// Deep-copy under lock — caller saves outside lock (C1 compliant).
+			return a.Learner.State().Clone()
 		}
 	} else {
 		a.Learner.Observe(event)
 	}
+	return nil
 }
 
 // processGrepSignal generates learning signals from a session-log Grep pattern.
 // Tokenizes the pattern through the enricher for keyword/term/domain resolution,
 // then feeds the pattern text to ProcessBigrams. Pushes a Learn activity with
 // "(grep)" suffix. Must be called with a.mu held.
-func (a *App) processGrepSignal(pattern string) {
+//
+// Returns a deep-copied LearnerState snapshot when autotune fires, nil otherwise.
+// The caller must persist it via Store.SaveLearnerState AFTER releasing a.mu
+// — C1: no db.Update under a.mu.
+func (a *App) processGrepSignal(pattern string) *ports.LearnerState {
 	if pattern == "" {
-		return
+		return nil
 	}
 
 	tokens := index.Tokenize(pattern)
 	if len(tokens) == 0 {
-		return
+		return nil
 	}
 
 	sc := newSignalCollector()
@@ -178,10 +189,12 @@ func (a *App) processGrepSignal(pattern string) {
 	}
 
 	tuneResult := a.Learner.ObserveAndMaybeTune(event)
-	if tuneResult != nil && a.Store != nil {
-		_ = a.Store.SaveLearnerState(a.ProjectID, a.Learner.State())
-		a.writeStatus(tuneResult)
-	}
-
 	a.Learner.ProcessBigrams(pattern)
+
+	if tuneResult != nil {
+		a.writeStatus(tuneResult)
+		// Deep-copy under lock — caller saves outside lock (C1 compliant).
+		return a.Learner.State().Clone()
+	}
+	return nil
 }

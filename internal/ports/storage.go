@@ -62,6 +62,36 @@ type Index struct {
 	Files    map[uint32]*FileMeta      // file_id -> file info
 }
 
+// Clone returns a deep copy of the Index.
+// All map entries are duplicated so the clone is safe to read and pass to
+// Store.SaveIndex after releasing a.mu. Each TokenRef slice and SymbolMeta
+// pointer is individually copied; no live references remain to the original maps.
+func (idx *Index) Clone() *Index {
+	c := &Index{
+		Tokens:   make(map[string][]TokenRef, len(idx.Tokens)),
+		Metadata: make(map[TokenRef]*SymbolMeta, len(idx.Metadata)),
+		Files:    make(map[uint32]*FileMeta, len(idx.Files)),
+	}
+	for k, refs := range idx.Tokens {
+		cp := make([]TokenRef, len(refs))
+		copy(cp, refs)
+		c.Tokens[k] = cp
+	}
+	for k, sym := range idx.Metadata {
+		s := *sym // SymbolMeta fields are all value types except Tags ([]string)
+		if len(sym.Tags) > 0 {
+			s.Tags = make([]string, len(sym.Tags))
+			copy(s.Tags, sym.Tags)
+		}
+		c.Metadata[k] = &s
+	}
+	for k, fm := range idx.Files {
+		f := *fm // FileMeta is all value types (strings, int64)
+		c.Files[k] = &f
+	}
+	return c
+}
+
 // TokenRef is a compact reference to a code location
 type TokenRef struct {
 	FileID uint32
@@ -108,6 +138,73 @@ type LearnerState struct {
 	KeywordBlocklist map[string]bool        `json:"keyword_blocklist"`
 	GapKeywords      map[string]bool        `json:"gap_keywords"`
 	PromptCount      uint32                 `json:"prompt_count"`
+}
+
+// Clone returns a deep copy of the LearnerState safe to use after App.mu is
+// released. All maps are copied so concurrent mutation of the original does
+// not affect the snapshot. Must be called with App.mu held.
+func (s *LearnerState) Clone() *LearnerState {
+	if s == nil {
+		return nil
+	}
+	c := &LearnerState{PromptCount: s.PromptCount}
+
+	if s.KeywordHits != nil {
+		c.KeywordHits = make(map[string]uint32, len(s.KeywordHits))
+		for k, v := range s.KeywordHits {
+			c.KeywordHits[k] = v
+		}
+	}
+	if s.TermHits != nil {
+		c.TermHits = make(map[string]uint32, len(s.TermHits))
+		for k, v := range s.TermHits {
+			c.TermHits[k] = v
+		}
+	}
+	if s.DomainMeta != nil {
+		c.DomainMeta = make(map[string]*DomainMeta, len(s.DomainMeta))
+		for k, v := range s.DomainMeta {
+			dm := *v // DomainMeta contains no pointers — struct copy is safe
+			c.DomainMeta[k] = &dm
+		}
+	}
+	if s.CohitKwTerm != nil {
+		c.CohitKwTerm = make(map[string]uint32, len(s.CohitKwTerm))
+		for k, v := range s.CohitKwTerm {
+			c.CohitKwTerm[k] = v
+		}
+	}
+	if s.CohitTermDomain != nil {
+		c.CohitTermDomain = make(map[string]uint32, len(s.CohitTermDomain))
+		for k, v := range s.CohitTermDomain {
+			c.CohitTermDomain[k] = v
+		}
+	}
+	if s.Bigrams != nil {
+		c.Bigrams = make(map[string]uint32, len(s.Bigrams))
+		for k, v := range s.Bigrams {
+			c.Bigrams[k] = v
+		}
+	}
+	if s.FileHits != nil {
+		c.FileHits = make(map[string]uint32, len(s.FileHits))
+		for k, v := range s.FileHits {
+			c.FileHits[k] = v
+		}
+	}
+	if s.KeywordBlocklist != nil {
+		c.KeywordBlocklist = make(map[string]bool, len(s.KeywordBlocklist))
+		for k, v := range s.KeywordBlocklist {
+			c.KeywordBlocklist[k] = v
+		}
+	}
+	if s.GapKeywords != nil {
+		c.GapKeywords = make(map[string]bool, len(s.GapKeywords))
+		for k, v := range s.GapKeywords {
+			c.GapKeywords[k] = v
+		}
+	}
+	return c
 }
 
 // DomainMeta holds per-domain metadata and lifecycle state.
