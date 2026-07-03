@@ -121,15 +121,16 @@ type ShardEdge struct {
 // Finding is produced by detectors and carried into renderers.
 // Message phrasing mirrors build_c4_mockup.py:817-829 so dock text is identical.
 type Finding struct {
-	ID           string      `json:"id"`
-	Rule         string      `json:"rule"`                   // cycle|god|orphan|budget|dead-candidate|mutual|band|divergent|absent
-	Severity     string      `json:"severity"`               // error|warn|info
-	Scope        string      `json:"scope"`
-	Message      string      `json:"message"`
-	Subjects     []string    `json:"subjects"`
-	Sources      []SourceRef `json:"sources"`
-	CheapestCut  string      `json:"cheapestCut,omitempty"` // cycle findings only: "A → B (×N)" — reused by RenderCycles
-	New          bool        `json:"new,omitempty"`
+	ID          string            `json:"id"`
+	Rule        string            `json:"rule"`              // cycle|god|orphan|budget|dead-candidate|mutual|band|divergent|absent
+	Severity    string            `json:"severity"`          // error|warn|info
+	Scope       string            `json:"scope"`
+	Message     string            `json:"message"`
+	Subjects    []string          `json:"subjects"`
+	Sources     []SourceRef       `json:"sources"`
+	CheapestCut string            `json:"cheapestCut,omitempty"` // cycle findings only: "A → B (×N)" — reused by RenderCycles
+	Attrs       map[string]string `json:"attrs,omitempty"`       // detector-specific key/value metadata (e.g. dead-candidate reflection caveat)
+	New         bool              `json:"new,omitempty"`
 }
 
 // ThresholdOpts holds configurable detector thresholds (arch.yaml:thresholds).

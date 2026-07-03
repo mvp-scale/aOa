@@ -302,16 +302,200 @@ func DetectOrphans(scope string, units []UnitFact, deps []DepFact) []Finding {
 	return findings
 }
 
+// budgetLimit is the maximum number of members per group before a "budget"
+// finding is emitted. Matches the viewer's 40-member overflow threshold.
+const budgetLimit = 40
+
+// DetectBudgetOverflow emits a "budget" finding for each group with more than
+// budgetLimit (40) members. The finding makes the overflow visible in the dock
+// so it is not only reflected by truncated rendering.
+// Message format: "budget overflow: {label} has {N} members (limit 40)".
+func DetectBudgetOverflow(scope string, units []UnitFact, grouping GroupingResult) []Finding {
+	// Count members per group and collect source evidence.
+	counts := make(map[string]int, len(grouping.Groups))
+	srcs := make(map[string][]SourceRef, len(grouping.Groups))
+	for _, u := range units {
+		gid := grouping.UnitGroup[u.ID]
+		counts[gid]++
+		srcs[gid] = append(srcs[gid], SourceRef{File: u.File, Line: u.Line})
+	}
+
+	// Iterate groups in stable order (by ID).
+	groups := make([]GroupMeta, len(grouping.Groups))
+	copy(groups, grouping.Groups)
+	sort.Slice(groups, func(i, j int) bool { return groups[i].ID < groups[j].ID })
+
+	var findings []Finding
+	for _, gm := range groups {
+		cnt := counts[gm.ID]
+		if cnt <= budgetLimit {
+			continue
+		}
+		msg := fmt.Sprintf("budget overflow: %s has %d members (limit %d)", gm.Label, cnt, budgetLimit)
+
+		// Limit provenance evidence to three representatives (avoids huge source lists).
+		evidence := srcs[gm.ID]
+		sort.Slice(evidence, func(i, j int) bool {
+			if evidence[i].File != evidence[j].File {
+				return evidence[i].File < evidence[j].File
+			}
+			return evidence[i].Line < evidence[j].Line
+		})
+		if len(evidence) > 3 {
+			evidence = evidence[:3]
+		}
+
+		f := Finding{
+			Rule:     "budget",
+			Severity: "warn",
+			Scope:    scope,
+			Message:  msg,
+			Subjects: []string{gm.ID},
+			Sources:  evidence,
+		}
+		f.ID = findingID(f.Rule, f.Scope, f.Subjects)
+		findings = append(findings, f)
+	}
+	return findings
+}
+
+// DetectDeadCandidates finds units with zero inbound dependencies AND zero index
+// reference hits. These are "dead-code candidates" — they may be reachable only
+// via reflection or build tags, so the finding is always stamped "candidate".
+// refHits maps unit ID → reference count from the search index; nil or absent = 0.
+// Message format: "dead-code candidate: {label} — no inbound deps, no index references".
+func DetectDeadCandidates(scope string, units []UnitFact, deps []DepFact, refHits map[string]int) []Finding {
+	hasInbound := make(map[string]bool, len(units))
+	for _, d := range deps {
+		hasInbound[d.ToUnit] = true
+	}
+
+	sorted := make([]UnitFact, len(units))
+	copy(sorted, units)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+
+	var findings []Finding
+	for _, u := range sorted {
+		if hasInbound[u.ID] {
+			continue
+		}
+		if refHits[u.ID] > 0 {
+			continue
+		}
+		msg := fmt.Sprintf("dead-code candidate: %s — no inbound deps, no index references", u.Label)
+		f := Finding{
+			Rule:     "dead-candidate",
+			Severity: "info",
+			Scope:    scope,
+			Message:  msg,
+			Subjects: []string{u.ID},
+			Sources:  []SourceRef{{File: u.File, Line: u.Line}},
+			Attrs: map[string]string{
+				"caveat": "reflection or build-tag-gated usage may not be visible to the extractor",
+			},
+		}
+		f.ID = findingID(f.Rule, f.Scope, f.Subjects)
+		findings = append(findings, f)
+	}
+	return findings
+}
+
+// groupLabel returns the display label for a group ID, or the ID itself as fallback.
+func groupLabel(id string, grouping GroupingResult) string {
+	for _, gm := range grouping.Groups {
+		if gm.ID == id {
+			return gm.Label
+		}
+	}
+	return id
+}
+
+// DetectMutualPairs finds group pairs with dependency edges in both directions
+// (i.e. groupA → groupB AND groupB → groupA in the dep graph, at group grain).
+// Each unordered pair is emitted once, subjects sorted for a stable fingerprint.
+// Message format: "mutual dependency: {labelA} ↔ {labelB}".
+func DetectMutualPairs(scope string, units []UnitFact, deps []DepFact, grouping GroupingResult) []Finding {
+	// Build group-level dep set and source evidence.
+	type pairKey struct{ a, b string }
+	groupHasDep := make(map[pairKey]bool)
+	pairSrcs := make(map[pairKey][]SourceRef)
+
+	for _, d := range deps {
+		sg := grouping.UnitGroup[d.FromUnit]
+		dg := grouping.UnitGroup[d.ToUnit]
+		if sg == "" || dg == "" || sg == dg {
+			continue
+		}
+		k := pairKey{sg, dg}
+		groupHasDep[k] = true
+		pairSrcs[k] = append(pairSrcs[k], SourceRef{File: d.File, Line: d.Line})
+	}
+
+	// Sorted group IDs for deterministic pair iteration.
+	groupIDs := make([]string, 0, len(grouping.Groups))
+	for _, gm := range grouping.Groups {
+		groupIDs = append(groupIDs, gm.ID)
+	}
+	sort.Strings(groupIDs)
+
+	var findings []Finding
+	for i, gA := range groupIDs {
+		for _, gB := range groupIDs[i+1:] {
+			if !groupHasDep[pairKey{gA, gB}] || !groupHasDep[pairKey{gB, gA}] {
+				continue
+			}
+			lA := groupLabel(gA, grouping)
+			lB := groupLabel(gB, grouping)
+			msg := fmt.Sprintf("mutual dependency: %s ↔ %s", lA, lB)
+
+			// Combine sources from both directions.
+			srcsAB := pairSrcs[pairKey{gA, gB}]
+			srcsBA := pairSrcs[pairKey{gB, gA}]
+			sources := make([]SourceRef, 0, len(srcsAB)+len(srcsBA))
+			sources = append(sources, srcsAB...)
+			sources = append(sources, srcsBA...)
+			sort.Slice(sources, func(i, j int) bool {
+				if sources[i].File != sources[j].File {
+					return sources[i].File < sources[j].File
+				}
+				return sources[i].Line < sources[j].Line
+			})
+			sources = dedupSources(sources)
+
+			subjects := []string{gA, gB} // already in sorted order (i < j ⟹ gA < gB alphabetically)
+			f := Finding{
+				Rule:     "mutual",
+				Severity: "warn",
+				Scope:    scope,
+				Message:  msg,
+				Subjects: subjects,
+				Sources:  sources,
+			}
+			f.ID = findingID(f.Rule, f.Scope, f.Subjects)
+			findings = append(findings, f)
+		}
+	}
+	return findings
+}
+
 // Detect runs all detectors and returns combined findings + SCCs (shared with renderer).
-func Detect(scope string, units []UnitFact, deps []DepFact, opts ThresholdOpts) ([]Finding, [][]string) {
+// grouping is required for budget-overflow and mutual-pair detection.
+// refHits maps unit ID → index reference count for dead-code detection; nil = all zero.
+func Detect(scope string, units []UnitFact, deps []DepFact, opts ThresholdOpts, grouping GroupingResult, refHits map[string]int) ([]Finding, [][]string) {
 	cycleFx, sccs := DetectCycles(scope, units, deps)
 	godFx := DetectGods(scope, units, deps, opts)
 	orphanFx := DetectOrphans(scope, units, deps)
+	budgetFx := DetectBudgetOverflow(scope, units, grouping)
+	deadFx := DetectDeadCandidates(scope, units, deps, refHits)
+	mutualFx := DetectMutualPairs(scope, units, deps, grouping)
 
-	all := make([]Finding, 0, len(cycleFx)+len(godFx)+len(orphanFx))
+	all := make([]Finding, 0, len(cycleFx)+len(godFx)+len(orphanFx)+len(budgetFx)+len(deadFx)+len(mutualFx))
 	all = append(all, cycleFx...)
 	all = append(all, godFx...)
 	all = append(all, orphanFx...)
+	all = append(all, budgetFx...)
+	all = append(all, deadFx...)
+	all = append(all, mutualFx...)
 	return all, sccs
 }
 
