@@ -201,3 +201,20 @@ func TestT16BundleBudget(t *testing.T) {
 		t.Logf("T16 bundle budget PASS: no CDN imports, bundle within budget")
 	}
 }
+
+// TestStandardsCopiesInSync guards the dual copy of view-standards.json:
+// playbook/standards/ is the source of truth; static/arch/ is the embedded
+// serving copy. They must stay byte-identical (L19.19 review nit N2).
+func TestStandardsCopiesInSync(t *testing.T) {
+	served, err := os.ReadFile("static/arch/view-standards.json")
+	if err != nil {
+		t.Fatalf("read served copy: %v", err)
+	}
+	canonical, err := os.ReadFile("../../../playbook/standards/view-standards.json")
+	if err != nil {
+		t.Fatalf("read canonical copy: %v", err)
+	}
+	if !bytes.Equal(served, canonical) {
+		t.Fatal("static/arch/view-standards.json has drifted from playbook/standards/view-standards.json — copy the canonical file over the served one")
+	}
+}

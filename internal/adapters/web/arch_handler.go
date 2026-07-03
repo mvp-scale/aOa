@@ -3,7 +3,10 @@
 package web
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"io"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -36,6 +39,7 @@ func (s *Server) registerArchRoutes(mux *http.ServeMux) {
 		}
 		// Intercept vendor/bundle.js → serve vendor/bundle.js.gz with gzip encoding.
 		// The browser's ES module loader handles Content-Encoding: gzip transparently.
+		// Clients that don't accept gzip get the bytes decompressed (RFC 7231 §3.1.2.2).
 		if r.URL.Path == "/vendor/bundle.js" {
 			data, err := archStaticFS.ReadFile("static/arch/vendor/bundle.js.gz")
 			if err != nil {
@@ -43,9 +47,20 @@ func (s *Server) registerArchRoutes(mux *http.ServeMux) {
 				return
 			}
 			w.Header().Set("Content-Type", "application/javascript")
-			w.Header().Set("Content-Encoding", "gzip")
 			w.Header().Set("Cache-Control", "no-cache")
-			_, _ = w.Write(data)
+			w.Header().Set("Vary", "Accept-Encoding")
+			if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+				w.Header().Set("Content-Encoding", "gzip")
+				_, _ = w.Write(data)
+				return
+			}
+			zr, err := gzip.NewReader(bytes.NewReader(data))
+			if err != nil {
+				http.Error(w, "bundle unavailable", http.StatusInternalServerError)
+				return
+			}
+			defer zr.Close()
+			_, _ = io.Copy(w, zr)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
