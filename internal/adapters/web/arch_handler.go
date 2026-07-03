@@ -5,10 +5,13 @@ package web
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"io/fs"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -75,7 +78,12 @@ func (s *Server) registerArchRoutes(mux *http.ServeMux) {
 	// global revision — 304 only when arch facts unchanged; see handleArchManifest for rationale).
 	mux.HandleFunc("GET /api/arch/manifest", s.handleArchManifest)
 	mux.HandleFunc("GET /api/arch/standards", s.handleArchStandards)
-	mux.HandleFunc("GET /api/arch/{path...}", s.withETag(s.handleArchShard))
+	// PF4: arch shard route must NOT be wrapped in withETag.
+	// withETag answers 304 before the archQuerier C4 fence runs — a disabled daemon
+	// would leak existence information to holders of a stale ETag.  The shard route
+	// uses content-addressed ?v=hash immutable caching instead; the two strategies are
+	// incompatible, so withETag is dropped here (resolves cop F1 + F4 together).
+	mux.HandleFunc("GET /api/arch/{path...}", s.handleArchShard)
 }
 
 // handleArchManifest synthesizes the estates-shaped manifest the viewer requires.
@@ -95,10 +103,14 @@ func (s *Server) registerArchRoutes(mux *http.ServeMux) {
 //   - Timestamp safety: ETag is m.Rev (not the serialised body), so the serve-time
 //     generated.timestamp injection never causes spurious 200 responses.
 func (s *Server) handleArchManifest(w http.ResponseWriter, r *http.Request) {
-	q := s.archQuerier(w)
+	q := s.archQuerier(w, r)
 	if q == nil {
 		return
 	}
+
+	// PF7: derive estate label and tech from project context (not hardcoded).
+	label := s.estateLabel()
+	tech := s.estateTech()
 
 	m, err := q.Manifest("local")
 	if err != nil {
@@ -108,7 +120,7 @@ func (s *Server) handleArchManifest(w http.ResponseWriter, r *http.Request) {
 	if m == nil {
 		// No shards derived yet — return empty but valid estates manifest (no ETag: no Rev).
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(emptyEstatesManifest())
+		_ = json.NewEncoder(w).Encode(emptyEstatesManifest(label, tech))
 		return
 	}
 
@@ -122,13 +134,14 @@ func (s *Server) handleArchManifest(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("ETag", etag)
 	}
 
-	estate := buildEstatesManifest(m, q)
+	estate := buildEstatesManifest(m, q, label, tech)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(estate)
 }
 
 // emptyEstatesManifest returns a valid estates manifest with no views yet.
-func emptyEstatesManifest() map[string]interface{} {
+// label is the project root basename (PF7); tech is the dominant language (may be "").
+func emptyEstatesManifest(label, tech string) map[string]interface{} {
 	return map[string]interface{}{
 		"schema":  "aoa.archmodel/v1",
 		"sharded": true,
@@ -137,11 +150,11 @@ func emptyEstatesManifest() map[string]interface{} {
 		},
 		"estates": map[string]interface{}{
 			"local": map[string]interface{}{
-				"label": "aOa",
+				"label": label,
 				"scopes": map[string]interface{}{
 					"local": map[string]interface{}{
-						"label": "aOa",
-						"tech":  "Go",
+						"label": label,
+						"tech":  tech,
 						"views": map[string]interface{}{},
 					},
 				},
@@ -168,8 +181,9 @@ type provJSON struct {
 // For each view it reads the minimal shard header (kind, title, count, prov) from the store
 // so the viewer can render the catalog and header bar before the full shard is lazy-loaded.
 //
+// label is the project root basename (PF7); tech is the dominant language (may be "").
 // Timestamp is injected at serve-time; shards are byte-stable (T-4 ruling).
-func buildEstatesManifest(m *ports.ArchManifest, q ports.ArchQuerier) map[string]interface{} {
+func buildEstatesManifest(m *ports.ArchManifest, q ports.ArchQuerier, label, tech string) map[string]interface{} {
 	views := make(map[string]interface{})
 
 	for _, ve := range m.Views {
@@ -211,11 +225,11 @@ func buildEstatesManifest(m *ports.ArchManifest, q ports.ArchQuerier) map[string
 		},
 		"estates": map[string]interface{}{
 			"local": map[string]interface{}{
-				"label": "aOa",
+				"label": label,
 				"scopes": map[string]interface{}{
 					"local": map[string]interface{}{
-						"label": "aOa",
-						"tech":  "Go",
+						"label": label,
+						"tech":  tech,
 						"views": views,
 					},
 				},
@@ -229,7 +243,7 @@ func buildEstatesManifest(m *ports.ArchManifest, q ports.ArchQuerier) map[string
 // and named_palettes. No ETag — content is static (embedded at build time).
 // C4: returns 404 when arch is disabled.
 func (s *Server) handleArchStandards(w http.ResponseWriter, r *http.Request) {
-	if s.archQuerier(w) == nil {
+	if s.archQuerier(w, r) == nil {
 		return
 	}
 	data, err := archStaticFS.ReadFile("static/arch/view-standards.json")
@@ -245,10 +259,17 @@ func (s *Server) handleArchStandards(w http.ResponseWriter, r *http.Request) {
 // handleArchShard serves a single shard by scope/view path.
 // Route: GET /api/arch/{path...}
 // The viewer fetches: /api/arch/{scope}/{id}?v={hash}
-// Byte-identity: the bytes returned here are IDENTICAL to `aoa arch view <id>` CLI output.
-// C4: returns 404 when arch is disabled.
+//
+// Byte-identity (PF2): the bytes returned here are IDENTICAL to `aoa arch view <id>` CLI output.
+// C4 (PF4): archQuerier fence runs BEFORE any cache logic — no withETag wrapper on this route.
+//
+// PF5 — Immutable-cache honesty:
+// When ?v=hash is present, the served bytes are verified against contentHash(data).
+// If the hash doesn't match (shard was re-derived since the manifest was fetched), 404 is
+// returned so the browser discards the stale URL and refetches the manifest for the new hash.
+// Only when the hash matches is Cache-Control: immutable stamped.
 func (s *Server) handleArchShard(w http.ResponseWriter, r *http.Request) {
-	q := s.archQuerier(w)
+	q := s.archQuerier(w, r) // PF4: C4 fence first — no withETag above
 	if q == nil {
 		return
 	}
@@ -272,9 +293,15 @@ func (s *Server) handleArchShard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Immutable cache: the ?v=hash query param means this exact hash is content-addressed.
-	// Cache-Control: immutable is safe; the URL changes when the content changes.
-	if r.URL.Query().Get("v") != "" {
+	if v := r.URL.Query().Get("v"); v != "" {
+		// PF5: verify the requested hash matches actual content before serving immutable.
+		// If the shard was re-derived, contentHash(data) will differ from the requested v;
+		// 404 tells the client to discard the stale URL and refetch the manifest.
+		if contentHash(data) != v {
+			http.Error(w, `{"error":"stale hash; refetch manifest"}`, http.StatusNotFound)
+			return
+		}
+		// Hash verified — safe to cache immutably (content-addressed URL).
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	} else {
 		w.Header().Set("Cache-Control", "no-cache")
@@ -285,15 +312,63 @@ func (s *Server) handleArchShard(w http.ResponseWriter, r *http.Request) {
 
 // archQuerier returns the ArchQuerier for this server, or writes a 404 and returns nil.
 // Callers must check for nil and return immediately (C4 kill-switch).
-func (s *Server) archQuerier(w http.ResponseWriter) ports.ArchQuerier {
+// PF4: request r is passed so http.NotFound can log correctly (no nil-request).
+func (s *Server) archQuerier(w http.ResponseWriter, r *http.Request) ports.ArchQuerier {
 	if s.queries == nil {
-		http.NotFound(w, nil)
+		http.NotFound(w, r)
 		return nil
 	}
 	q := s.queries.Arch()
 	if q == nil {
-		http.NotFound(w, nil)
+		http.NotFound(w, r)
 		return nil
 	}
 	return q
+}
+
+// contentHash returns the first 12 hex characters of SHA-256(b).
+// Algorithm matches arch.ContentHash in internal/domain/arch/marshal.go — kept local
+// to avoid importing the domain package from this adapter.
+func contentHash(b []byte) string {
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:])[:12]
+}
+
+// estateLabel derives the estate label from the project root basename.
+// Falls back to "local" when the project root is unavailable.
+// PF7: replaces the hardcoded "aOa" label.
+func (s *Server) estateLabel() string {
+	if s.queries == nil {
+		return "local"
+	}
+	root := s.queries.ProjectConfig().ProjectRoot
+	if root == "" {
+		return "local"
+	}
+	return filepath.Base(root)
+}
+
+// estateTech derives the dominant programming language from the index file metadata.
+// Returns "" when the index is absent or contains no language metadata.
+// PF7: replaces the hardcoded "Go" label; returns "" when unknown (honest omission).
+func (s *Server) estateTech() string {
+	if s.idx == nil || len(s.idx.Files) == 0 {
+		return ""
+	}
+	count := make(map[string]int)
+	for _, f := range s.idx.Files {
+		if f != nil && f.Language != "" {
+			count[f.Language]++
+		}
+	}
+	if len(count) == 0 {
+		return ""
+	}
+	best, bestN := "", 0
+	for lang, n := range count {
+		if n > bestN || (n == bestN && lang < best) {
+			best, bestN = lang, n
+		}
+	}
+	return best
 }
