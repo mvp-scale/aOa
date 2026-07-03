@@ -56,7 +56,9 @@ func (s *Server) registerArchRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /arch/", http.StripPrefix("/arch", serveArchStatic))
 
 	// API routes
-	mux.HandleFunc("GET /api/arch/manifest", s.withETag(s.handleArchManifest))
+	// L19.20: manifest ETag is handled inside handleArchManifest using m.Rev (tighter than
+	// global revision — 304 only when arch facts unchanged; see handleArchManifest for rationale).
+	mux.HandleFunc("GET /api/arch/manifest", s.handleArchManifest)
 	mux.HandleFunc("GET /api/arch/standards", s.handleArchStandards)
 	mux.HandleFunc("GET /api/arch/{path...}", s.withETag(s.handleArchShard))
 }
@@ -69,6 +71,14 @@ func (s *Server) registerArchRoutes(mux *http.ServeMux) {
 // Timestamp is injected at SERVE-TIME only — stored shards stay byte-stable
 // so the byte-identity AC (CLI JSON == browser shard) holds on shards.
 // C4: returns 404 when arch is disabled.
+//
+// L19.20 ETag strategy: ETag = m.Rev (12-char factsHash), NOT the global revision counter.
+//   - Tighter invalidation: 304 only when arch facts are unchanged; 200 after any re-derive.
+//   - Zero-symbol file change: if facts are unchanged, m.Rev is unchanged → 304 is CORRECT
+//     (the view truly didn't change). Board AC "no stale 304" = no 304 when the view changed;
+//     304 on an unchanged view is honest. See L19.20 commit for the recorded reading.
+//   - Timestamp safety: ETag is m.Rev (not the serialised body), so the serve-time
+//     generated.timestamp injection never causes spurious 200 responses.
 func (s *Server) handleArchManifest(w http.ResponseWriter, r *http.Request) {
 	q := s.archQuerier(w)
 	if q == nil {
@@ -81,10 +91,20 @@ func (s *Server) handleArchManifest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if m == nil {
-		// No shards derived yet — return empty but valid estates manifest
+		// No shards derived yet — return empty but valid estates manifest (no ETag: no Rev).
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(emptyEstatesManifest())
 		return
+	}
+
+	// ETag from m.Rev — see function-level doc for rationale.
+	etag := m.Rev
+	if etag != "" {
+		if r.Header.Get("If-None-Match") == etag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.Header().Set("ETag", etag)
 	}
 
 	estate := buildEstatesManifest(m, q)
