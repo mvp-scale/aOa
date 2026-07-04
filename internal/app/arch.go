@@ -531,6 +531,160 @@ func (q *archQuerier) Facts(_ string, subject string, limit int) ([]byte, error)
 	return json.Marshal(result)
 }
 
+// Graph returns the raw substrate knowledge graph as JSON.
+// grain="file": file-level nodes (FromFile + resolved ImportPath) and edges with G7 provenance.
+// grain="unit": package-directory aggregation via aggregateEdges.
+// SIZE GUARD: if file grain would produce > 20,000 edges, downgrades to unit grain.
+// C4: returns nil, nil when no edges exist.
+// C1: index Clone under mu before release (avoids aliasing race — T20).
+func (q *archQuerier) Graph(scope string, grain string) ([]byte, error) {
+	edges, err := q.app.Store.LoadAllEdges(q.app.ProjectID)
+	if err != nil || len(edges) == 0 {
+		return nil, err
+	}
+
+	// Get manifest rev for provenance annotation (best-effort; "" on miss).
+	var rev string
+	if m, mErr := q.Manifest(scope); mErr == nil && m != nil {
+		rev = m.Rev
+	}
+
+	const edgeBudget = 20000
+	needUnitGrain := grain == "unit" || len(edges) > edgeBudget
+
+	var idx *ports.Index
+	if needUnitGrain {
+		// MUST Clone: q.app.Index is live; Reindex/WarmCaches write it under mu.
+		q.app.mu.Lock()
+		idx = q.app.Index.Clone()
+		q.app.mu.Unlock()
+	}
+
+	downgraded := ""
+	if grain != "unit" && len(edges) > edgeBudget {
+		downgraded = fmt.Sprintf("file→unit (%d edges over budget)", len(edges))
+	}
+	payload := BuildGraphPayload(edges, idx, rev, grain, downgraded)
+	return json.Marshal(payload)
+}
+
+// BuildGraphPayload assembles a ports.GraphPayload from raw import edges.
+// grain="file": file-level graph with G7 provenance.
+// grain="unit": package-directory aggregation (idx may be nil).
+// downgraded carries the server-side SIZE GUARD message when non-empty.
+// Exported so cliArchQuerier (cmd/aoa) can call it without duplicating logic.
+func BuildGraphPayload(edges []ports.ImportEdge, idx *ports.Index, rev, grain, downgraded string) ports.GraphPayload {
+	if grain == "unit" || downgraded != "" {
+		return buildUnitGrainGraph(edges, idx, rev, downgraded)
+	}
+	return buildFileGrainGraph(edges, rev, "")
+}
+
+// buildFileGrainGraph produces the file-grain graph payload.
+// Nodes: distinct FromFile values (internal) + distinct ImportPath values (may be ext:*).
+// Edges: one entry per distinct (FromFile, ImportPath) pair with G7 StartLine provenance.
+// Both slices are sorted for byte-determinism.
+func buildFileGrainGraph(edges []ports.ImportEdge, rev, downgraded string) ports.GraphPayload {
+	nodeMap := make(map[string]*ports.GraphNode, len(edges)*2)
+	edgeSeen := make(map[[2]string]bool, len(edges))
+	var gEdges []ports.GraphEdge
+
+	for _, e := range edges {
+		// Source node: the importing file.
+		if _, ok := nodeMap[e.FromFile]; !ok {
+			nodeMap[e.FromFile] = &ports.GraphNode{
+				ID:    e.FromFile,
+				Label: filepath.Base(e.FromFile),
+				Path:  e.FromFile,
+			}
+		}
+		// Target node: the resolved import path (intra-repo dir or "ext:...").
+		tgt := e.ImportPath
+		if _, ok := nodeMap[tgt]; !ok {
+			isExt := strings.HasPrefix(tgt, "ext:")
+			nodeMap[tgt] = &ports.GraphNode{
+				ID:    tgt,
+				Label: unitLabel(tgt),
+				Path:  tgt,
+				Ext:   isExt,
+			}
+		}
+		// Edge: deduplicate (FromFile, ImportPath) — keep first StartLine.
+		key := [2]string{e.FromFile, tgt}
+		if !edgeSeen[key] {
+			edgeSeen[key] = true
+			gEdges = append(gEdges, ports.GraphEdge{
+				From: e.FromFile,
+				To:   tgt,
+				File: e.FromFile,
+				Line: e.StartLine,
+			})
+		}
+	}
+
+	// Sort nodes by ID for byte-determinism.
+	nodes := make([]ports.GraphNode, 0, len(nodeMap))
+	for _, n := range nodeMap {
+		nodes = append(nodes, *n)
+	}
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].ID < nodes[j].ID })
+
+	// Sort edges by (from, to) for byte-determinism.
+	sort.Slice(gEdges, func(i, j int) bool {
+		if gEdges[i].From != gEdges[j].From {
+			return gEdges[i].From < gEdges[j].From
+		}
+		return gEdges[i].To < gEdges[j].To
+	})
+
+	return ports.GraphPayload{
+		Grain:      "file",
+		Rev:        rev,
+		Downgraded: downgraded,
+		Nodes:      nodes,
+		Edges:      gEdges,
+	}
+}
+
+// buildUnitGrainGraph produces the unit-grain graph payload via aggregateEdges.
+// idx may be nil (domain enrichment skipped — acceptable for headless or CLI use).
+// Both slices are sorted for byte-determinism (aggregateEdges guarantees this).
+func buildUnitGrainGraph(edges []ports.ImportEdge, idx *ports.Index, rev, downgraded string) ports.GraphPayload {
+	units, deps := aggregateEdges(edges, idx)
+
+	nodes := make([]ports.GraphNode, 0, len(units))
+	for _, u := range units {
+		isExt := strings.HasPrefix(u.Path, "ext:")
+		nodes = append(nodes, ports.GraphNode{
+			ID:    u.ID,
+			Label: u.Label,
+			Path:  u.Path,
+			Ext:   isExt,
+		})
+	}
+	// aggregateEdges returns units sorted by ID — no re-sort needed.
+
+	gEdges := make([]ports.GraphEdge, 0, len(deps))
+	for _, d := range deps {
+		gEdges = append(gEdges, ports.GraphEdge{
+			From:  d.FromUnit,
+			To:    d.ToUnit,
+			Count: d.Count,
+			File:  d.File,
+			Line:  d.Line,
+		})
+	}
+	// aggregateEdges returns deps sorted by (from, to) — no re-sort needed.
+
+	return ports.GraphPayload{
+		Grain:      "unit",
+		Rev:        rev,
+		Downgraded: downgraded,
+		Nodes:      nodes,
+		Edges:      gEdges,
+	}
+}
+
 // Derive returns the shortest dep-path (unit IDs) from `from` to `to`,
 // limited to k hops.  Returns nil if no path exists within the hop budget.
 // Loads all edges and computes BFS at the unit-directory grain.

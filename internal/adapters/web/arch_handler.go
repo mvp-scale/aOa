@@ -83,6 +83,10 @@ func (s *Server) registerArchRoutes(mux *http.ServeMux) {
 	// would leak existence information to holders of a stale ETag.  The shard route
 	// uses content-addressed ?v=hash immutable caching instead; the two strategies are
 	// incompatible, so withETag is dropped here (resolves cop F1 + F4 together).
+	// Terrain knowledge graph endpoint — live substrate (not a rendered shard).
+	// Go 1.22 ServeMux: /api/arch/graph (literal) wins over /api/arch/{path...}
+	// (wildcard) by specificity — registration order is irrelevant.
+	mux.HandleFunc("GET /api/arch/graph", s.handleArchGraph)
 	mux.HandleFunc("GET /api/arch/{path...}", s.handleArchShard)
 }
 
@@ -251,6 +255,49 @@ func (s *Server) handleArchStandards(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"standards unavailable"}`, http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(data)
+}
+
+// handleArchGraph serves the raw substrate knowledge graph for the Terrain tab.
+// Route: GET /api/arch/graph?grain=file|unit (default: file)
+//
+// This is NOT a rendered shard — it is computed live from the raw import edges
+// (LoadAllEdges + in-memory aggregation) and reflects the actual substrate at
+// the time of the request. Numbers are real: file grain gives ~310 nodes /
+// ~1,700 edges on a typical mid-size Go project.
+//
+// SIZE GUARD (honest): if grain=file produces >20,000 edges, the response
+// switches to grain=unit and sets "downgraded" — never a silent truncation.
+// C4: returns 404 when arch is disabled.
+// C1: the implementation clones the index (for unit grain) outside App.mu.
+func (s *Server) handleArchGraph(w http.ResponseWriter, r *http.Request) {
+	q := s.archQuerier(w, r)
+	if q == nil {
+		return // C4: 404 already written
+	}
+
+	grain := r.URL.Query().Get("grain")
+	if grain == "" {
+		grain = "file"
+	}
+	if grain != "file" && grain != "unit" {
+		http.Error(w, `{"error":"grain must be 'file' or 'unit'"}`, http.StatusBadRequest)
+		return
+	}
+
+	data, err := q.Graph("local", grain)
+	if err != nil {
+		http.Error(w, `{"error":"graph unavailable"}`, http.StatusInternalServerError)
+		return
+	}
+	if data == nil {
+		// No edges yet — substrate empty.
+		http.NotFound(w, r)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(data)

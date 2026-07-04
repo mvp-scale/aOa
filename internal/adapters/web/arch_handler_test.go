@@ -17,8 +17,9 @@ import (
 // --- mock ArchQuerier ---
 
 type mockArchQuerier struct {
-	manifest *ports.ArchManifest
-	views    map[string][]byte
+	manifest  *ports.ArchManifest
+	views     map[string][]byte
+	graphData map[string][]byte // grain → raw JSON bytes
 }
 
 func (m *mockArchQuerier) Manifest(scope string) (*ports.ArchManifest, error) {
@@ -39,6 +40,15 @@ func (m *mockArchQuerier) View(scope, id string) ([]byte, error) {
 func (m *mockArchQuerier) Findings(scope string) ([]byte, error)                    { return nil, nil }
 func (m *mockArchQuerier) Derive(scope, from, to string, k int) ([]string, error)   { return nil, nil }
 func (m *mockArchQuerier) Facts(scope, subject string, limit int) ([]byte, error)   { return nil, nil }
+func (m *mockArchQuerier) Graph(scope, grain string) ([]byte, error) {
+	if m.graphData != nil {
+		if d, ok := m.graphData[grain]; ok {
+			return d, nil
+		}
+	}
+	return nil, nil
+}
+
 
 // --- mock AppQueries with arch ---
 
@@ -476,4 +486,226 @@ func TestArchVendorBundle_ServedWithGzipEncoding(t *testing.T) {
 	require.NoError(t, err)
 	assert.Greater(t, len(idBody), len(body),
 		"identity body must be the decompressed (larger) bundle")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// /api/arch/graph  — Terrain knowledge-graph endpoint tests
+// ══════════════════════════════════════════════════════════════════════════════
+
+// buildFileGrainJSON returns a minimal valid file-grain GraphPayload JSON for tests.
+func buildFileGrainJSON(t *testing.T) []byte {
+	t.Helper()
+	payload := ports.GraphPayload{
+		Grain: "file",
+		Rev:   "abc123def456",
+		Nodes: []ports.GraphNode{
+			{ID: "internal/app/app.go", Label: "app.go", Path: "internal/app/app.go"},
+			{ID: "ext:fmt", Label: "fmt", Path: "ext:fmt", Ext: true},
+		},
+		Edges: []ports.GraphEdge{
+			{From: "internal/app/app.go", To: "ext:fmt", File: "internal/app/app.go", Line: 5},
+		},
+	}
+	b, err := json.Marshal(payload)
+	require.NoError(t, err)
+	return b
+}
+
+// TestArchGraph_C4_Returns404WhenDisabled verifies /api/arch/graph returns 404
+// when Arch() is nil (C4 kill-switch).
+func TestArchGraph_C4_Returns404WhenDisabled(t *testing.T) {
+	ts := setupArchServer(t, nil) // arch disabled
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/arch/graph")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode,
+		"disabled arch must return 404 for /api/arch/graph (C4)")
+}
+
+// TestArchGraph_Returns404WhenNoEdges verifies /api/arch/graph returns 404 when
+// the querier returns nil (no edges indexed yet).
+func TestArchGraph_Returns404WhenNoEdges(t *testing.T) {
+	q := &mockArchQuerier{} // graphData is nil → Graph returns nil
+	ts := setupArchServer(t, q)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/arch/graph")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode,
+		"no edges → 404 (substrate not yet populated)")
+}
+
+// TestArchGraph_FileGrainShape verifies /api/arch/graph?grain=file returns the
+// correct JSON shape: grain, rev, nodes, edges (no downgraded field when not degraded).
+func TestArchGraph_FileGrainShape(t *testing.T) {
+	fileJSON := buildFileGrainJSON(t)
+	q := &mockArchQuerier{
+		graphData: map[string][]byte{"file": fileJSON},
+	}
+	ts := setupArchServer(t, q)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/arch/graph?grain=file")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	assert.Equal(t, "no-cache", resp.Header.Get("Cache-Control"))
+
+	var result map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+
+	assert.Equal(t, "file", result["grain"], "grain field must be 'file'")
+	assert.Equal(t, "abc123def456", result["rev"], "rev must be set")
+	assert.Nil(t, result["downgraded"], "downgraded must be absent when not degraded")
+
+	nodes, ok := result["nodes"].([]interface{})
+	require.True(t, ok, "nodes must be an array")
+	assert.Len(t, nodes, 2, "expected 2 nodes")
+
+	edges, ok := result["edges"].([]interface{})
+	require.True(t, ok, "edges must be an array")
+	assert.Len(t, edges, 1, "expected 1 edge")
+}
+
+// TestArchGraph_DefaultGrainIsFile verifies /api/arch/graph (no grain param)
+// defaults to file grain.
+func TestArchGraph_DefaultGrainIsFile(t *testing.T) {
+	fileJSON := buildFileGrainJSON(t)
+	q := &mockArchQuerier{
+		graphData: map[string][]byte{"file": fileJSON},
+	}
+	ts := setupArchServer(t, q)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/arch/graph")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.Equal(t, "file", result["grain"], "default grain must be 'file'")
+}
+
+// TestArchGraph_InvalidGrainReturns400 verifies /api/arch/graph?grain=invalid
+// returns 400 Bad Request.
+func TestArchGraph_InvalidGrainReturns400(t *testing.T) {
+	q := &mockArchQuerier{}
+	ts := setupArchServer(t, q)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/arch/graph?grain=group")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+// TestArchGraph_DowngradedFieldPresent verifies that when the querier returns a
+// payload with a downgraded message, the response body includes it.
+func TestArchGraph_DowngradedFieldPresent(t *testing.T) {
+	downgradedPayload := ports.GraphPayload{
+		Grain:      "unit",
+		Rev:        "abc123def456",
+		Downgraded: "file→unit (25000 edges over budget)",
+		Nodes: []ports.GraphNode{
+			{ID: "internal/app", Label: "app", Path: "internal/app"},
+		},
+		Edges: []ports.GraphEdge{},
+	}
+	b, err := json.Marshal(downgradedPayload)
+	require.NoError(t, err)
+
+	q := &mockArchQuerier{
+		graphData: map[string][]byte{"file": b},
+	}
+	ts := setupArchServer(t, q)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/arch/graph?grain=file")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.Equal(t, "unit", result["grain"], "grain must be 'unit' after downgrade")
+	assert.Equal(t, "file→unit (25000 edges over budget)", result["downgraded"],
+		"downgraded field must carry the server-side message")
+}
+
+// TestArchGraph_Determinism verifies two identical requests to /api/arch/graph
+// return byte-identical responses (sort stability + JSON determinism).
+func TestArchGraph_Determinism(t *testing.T) {
+	fileJSON := buildFileGrainJSON(t)
+	q := &mockArchQuerier{
+		graphData: map[string][]byte{"file": fileJSON},
+	}
+	ts := setupArchServer(t, q)
+	defer ts.Close()
+
+	body1 := fetchBody(t, ts.URL+"/api/arch/graph?grain=file")
+	body2 := fetchBody(t, ts.URL+"/api/arch/graph?grain=file")
+	assert.Equal(t, body1, body2, "two identical requests must produce byte-identical responses")
+}
+
+// fetchBody is a test helper that GETs a URL and returns the body bytes.
+func fetchBody(t *testing.T, url string) []byte {
+	t.Helper()
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return b
+}
+
+// TestArchGraph_UnitGrainShape verifies /api/arch/graph?grain=unit returns the
+// correct JSON shape with count field on edges (aggregated).
+func TestArchGraph_UnitGrainShape(t *testing.T) {
+	unitPayload := ports.GraphPayload{
+		Grain: "unit",
+		Rev:   "rev12345abcde",
+		Nodes: []ports.GraphNode{
+			{ID: "internal/app", Label: "app", Path: "internal/app"},
+			{ID: "ext:fmt", Label: "fmt", Path: "ext:fmt", Ext: true},
+		},
+		Edges: []ports.GraphEdge{
+			{From: "internal/app", To: "ext:fmt", Count: 5, File: "internal/app/app.go", Line: 10},
+		},
+	}
+	b, err := json.Marshal(unitPayload)
+	require.NoError(t, err)
+
+	q := &mockArchQuerier{
+		graphData: map[string][]byte{"unit": b},
+	}
+	ts := setupArchServer(t, q)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/api/arch/graph?grain=unit")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var result map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+
+	assert.Equal(t, "unit", result["grain"])
+	assert.Equal(t, "rev12345abcde", result["rev"])
+
+	edges := result["edges"].([]interface{})
+	require.Len(t, edges, 1)
+	edge := edges[0].(map[string]interface{})
+	// count must be present for unit grain (aggregated import count)
+	count, ok := edge["count"]
+	assert.True(t, ok, "unit grain edges must have count field")
+	assert.Equal(t, float64(5), count, "count must be 5")
 }

@@ -135,4 +135,45 @@ type ArchQuerier interface {
 	// Returns nil, nil when no edges match or no edge store is available.
 	// limit ≤ 0 means unlimited.
 	Facts(scope, subject string, limit int) ([]byte, error)
+
+	// Graph returns the raw substrate knowledge graph as JSON for the Terrain tab.
+	// grain="file": nodes are distinct source files and resolved import targets;
+	//               edges carry G7 StartLine provenance.
+	// grain="unit": package-directory aggregation (same grain as deriveArch).
+	// SIZE GUARD (server-side, honest): if grain="file" would exceed 20,000 edges,
+	// the response is automatically downgraded to grain="unit" and a "downgraded"
+	// field is populated — never a silent truncation (no-silent-caps law).
+	// Returns nil, nil when no edges exist or no store is available (C4 safe).
+	Graph(scope string, grain string) ([]byte, error)
+}
+
+// GraphNode is one node in the substrate knowledge graph payload.
+// Used by the Terrain tab for force-directed rendering.
+type GraphNode struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Path  string `json:"path"`
+	Ext   bool   `json:"ext,omitempty"`
+	Line  uint32 `json:"line,omitempty"` // first-occurrence line (file grain)
+}
+
+// GraphEdge is one directed edge in the substrate knowledge graph payload.
+// Count is only populated for unit grain; File and Line carry G7 provenance.
+type GraphEdge struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Count int    `json:"count,omitempty"` // unit grain: aggregated import count
+	File  string `json:"file,omitempty"`  // G7: source file for this edge
+	Line  uint32 `json:"line,omitempty"`  // G7: import statement line
+}
+
+// GraphPayload is the substrate knowledge graph response for /api/arch/graph.
+// Fields are ordered for byte-stable JSON (grain→rev→downgraded→nodes→edges).
+// Nodes and edges are sorted deterministically (by ID / by from+to).
+type GraphPayload struct {
+	Grain      string      `json:"grain"`
+	Rev        string      `json:"rev"`
+	Downgraded string      `json:"downgraded,omitempty"`
+	Nodes      []GraphNode `json:"nodes"`
+	Edges      []GraphEdge `json:"edges"`
 }

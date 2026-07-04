@@ -50,6 +50,7 @@ func (m *swappableQuerier) View(scope, id string) ([]byte, error) {
 func (m *swappableQuerier) Findings(scope string) ([]byte, error)                    { return nil, nil }
 func (m *swappableQuerier) Derive(scope, from, to string, k int) ([]string, error)   { return nil, nil }
 func (m *swappableQuerier) Facts(scope, subject string, limit int) ([]byte, error)   { return nil, nil }
+func (m *swappableQuerier) Graph(scope, grain string) ([]byte, error)                { return nil, nil }
 
 // =============================================================================
 // L19.20 (item d): 304 round-trip on unchanged Rev

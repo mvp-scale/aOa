@@ -233,6 +233,30 @@ func (q *cliArchQuerier) Facts(_ string, subject string, limit int) ([]byte, err
 	return json.Marshal(result)
 }
 
+func (q *cliArchQuerier) Graph(_ string, grain string) ([]byte, error) {
+	edges, err := q.store.LoadAllEdges(q.projectID)
+	if err != nil || len(edges) == 0 {
+		return nil, err
+	}
+
+	// Get manifest rev for provenance annotation (best-effort; "" on miss).
+	var rev string
+	if m, mErr := q.Manifest("local"); mErr == nil && m != nil {
+		rev = m.Rev
+	}
+
+	const edgeBudget = 20000
+	downgraded := ""
+	if grain != "unit" && len(edges) > edgeBudget {
+		downgraded = fmt.Sprintf("file→unit (%d edges over budget)", len(edges))
+	}
+
+	// Delegate to app.BuildGraphPayload (canonical implementation — no duplication).
+	// idx is nil: domain-enrichment skipped in the CLI path (same as Derive).
+	payload := app.BuildGraphPayload(edges, nil, rev, grain, downgraded)
+	return json.Marshal(payload)
+}
+
 // ── prettyJSON helper ─────────────────────────────────────────────────────────
 
 // prettyPrintJSON writes JSON to stdout, pretty-printing if pretty=true.
