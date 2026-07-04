@@ -191,3 +191,5 @@ Record: `checkpoint-F3.md`.
 and T16 (no CDN / offline bundle) are the tests that keep the product *self-maintaining* —
 diagrams that never go stale, never need a manual rebuild, and never phone home. They are
 the ones to never let regress.
+
+| T61 | **Empty-but-valid edges bucket suppresses backfill forever** — discovered live 2026-07-03 (arch-tab work): a `lean` binary's `aoa init` (no tree-sitter) with arch on writes a schema-valid, EMPTY `edges` bucket; every later standard-binary boot then skips T43 (`HasEdgesBucket`=true) and T45's derive early-returns on 0 edges — the project shows "no views" permanently until a manual wipe+re-init. Same trap when grammars are absent (fresh project pre-`download.sh`, or post-`wipe` which deletes `.so` files). | 🟧 | 3 | G6 | Treat an EMPTY edges bucket (0 keys) as absent in the T43 probe (or re-probe when `LoadAllEdges`=0 and the parser now has grammars); surface "grammars missing — run download.sh" in `arch views`/dashboard instead of silent emptiness; test: lean init → standard boot → backfill fires. |
