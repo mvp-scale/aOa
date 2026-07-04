@@ -2999,9 +2999,12 @@ function terrainBuildSimFromGraph(payload) {
   }
 
   var grain = payload.grain || 'file';
-  // Radius scale: smaller circle for file grain (denser graph).
-  var rScale = (grain === 'file') ? 10 : 18;
-  var R = Math.max(80, n * rScale);
+  // Initial circle radius: √n × K keeps node spacing ~20–30 px regardless of n.
+  // n=8→113px, n=37→244px, n=310→707px (file), n=611→494px (unit).
+  // Much smaller than the old n*rScale (10,998 for n=611) which pushed nodes
+  // off-screen and stalled convergence under centering gravity.
+  var K = (grain === 'file') ? 40 : 20;
+  var R = Math.max(80, Math.sqrt(n) * K);
 
   var simNodes = rawNodes.map(function(nd, idx) {
     var angle = (2 * Math.PI * idx) / n;
