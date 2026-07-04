@@ -5,6 +5,7 @@ import {React,useState,useEffect,useCallback,memo,createRoot,
 const html=htm.bind(React.createElement); const elk=new ELK();
 // the contract file IS the data source — anything that emits a valid archmodel gets every view
 const MQ=new URLSearchParams(location.search);
+const EMBED=MQ.get("embed")==="1"; // embed=1: hide top header/estate-scope chrome; keep view-switcher + catalog (used by dashboard iframe)
 function showFatal(msg){let d=document.getElementById("fatal");if(!d){d=document.createElement("div");d.id="fatal";
   d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:9999;background:#7f1d1d;color:#fff;font:600 12px ui-monospace,monospace;padding:8px 14px;border-bottom:2px solid #f87171";
   document.body.appendChild(d);}if(!d._set){d._set=true;d.textContent="RENDER FAILURE · "+msg;}}
@@ -805,7 +806,20 @@ function Flow(){
   const[els,setEls]=useState(null);
   const SC=ESTATES[estate].scopes;
   const sys=SC[scope]||SC[firstScope(estate)];
-  const view=sys.views[level]||sys.views[Object.keys(sys.views)[0]];
+  const view=sys.views[level]||sys.views[Object.keys(sys.views)[0]]||null;
+  // No views derived yet — render a placeholder rather than crashing on view.count etc.
+  if(!view)return html`<div style=${{height:"100vh",display:"flex",flexDirection:"column",background:T.bg,font:"13px -apple-system,Segoe UI,Inter,Roboto,sans-serif",color:T.text}}>
+    ${!EMBED&&html`<div style=${{padding:"9px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10,background:T.chrome}}>
+      <div style=${{fontWeight:750,fontSize:15}}>aOa <span style=${{color:T.dim,fontWeight:400}}>· architecture</span></div>
+    </div>`}
+    <div style=${{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:T.dim,fontSize:13}}>
+      <div style=${{textAlign:"center",lineHeight:1.8}}>
+        <div style=${{fontSize:28,marginBottom:12,color:T.arch}}>⬡</div>
+        <div style=${{fontWeight:600,fontSize:14,color:T.text,marginBottom:6}}>No architecture views yet</div>
+        <div>Run <code style=${{background:T.card,border:`1px solid ${T.border}`,padding:"2px 8px",borderRadius:4}}>aoa</code> to derive views from your imports.</div>
+      </div>
+    </div>
+  </div>`;
   const[ov,setOv]=useState(()=>{const o=(q.get("ov")||"").split(",");
     return {concerns:o.includes("concerns"),changed:o.includes("changed")};});
   const[last,setLast]=useState({});
@@ -932,7 +946,7 @@ function Flow(){
     color:a?T.text:T.dim,borderRadius:7,padding:"5px 11px",fontSize:12,cursor:"pointer",fontWeight:550});
   return html`<div style=${{height:"100vh",display:"flex",flexDirection:"column",background:T.bg,
     font:"13px -apple-system,Segoe UI,Inter,Roboto,sans-serif",color:T.text}}>
-    <div style=${{padding:"9px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10,background:T.chrome}}>
+    ${!EMBED&&html`<div style=${{padding:"9px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10,background:T.chrome}}>
       <div style=${{fontWeight:750,fontSize:15,flexShrink:0}}>aOa <span style=${{color:T.dim,fontWeight:400}}>· architecture</span></div>
       <select value=${estate} onChange=${e=>goEstate(e.target.value)}
         style=${{background:T.card,color:ESTATES[estate].sim?T.yellow:T.green,border:`1px solid ${T.border}`,
@@ -955,7 +969,7 @@ function Flow(){
           style=${{fontSize:9.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:5,
           padding:"1px 7px",whiteSpace:"nowrap",cursor:"help",flexShrink:0}}>◌ ${ISSUES.length}</span>`:null}
       </div>
-      </div>
+      </div>`}
     <div style=${{padding:"3px 18px",borderBottom:`1px solid ${T.border}`,fontSize:10.5,color:T.dim,
       display:"flex",alignItems:"center",gap:10,background:T.chrome}}>
       <span style=${{minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}

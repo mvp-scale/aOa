@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════
    aOa Dashboard — Application Logic
-   5-tab SPA: Live · Recon · Intel · Debrief · Arsenal
+   6-tab SPA: Live · Recon · Intel · Debrief · Architecture · Arsenal
    ══════════════════════════════════════════════════════════ */
 (function() {
 'use strict';
@@ -10,6 +10,7 @@ var activeTab = 'live';
 var pollTimer = null;
 var cache = {};
 var heroData = null;
+var archIframeLoaded = false; // lazy: set iframe src only on first architecture tab activation
 
 /* ══════════════════════════════════════════════════════════
    HELPERS
@@ -254,6 +255,12 @@ function switchTab(name) {
   }
   location.hash = name;
   renderHero(name);
+  // Lazy-load the arch iframe on first architecture tab activation.
+  // The iframe src is not set in HTML to avoid loading the React/xyflow bundle at boot.
+  if (name === 'architecture' && !archIframeLoaded) {
+    var archFr = document.getElementById('archFrame');
+    if (archFr) { archFr.src = '/arch/?embed=1'; archIframeLoaded = true; }
+  }
   // Restart poll timer: 1s for debrief (live thinking), 3s for others
   if (pollTimer) clearInterval(pollTimer);
   var interval = (name === 'debrief') ? 1000 : 3000;
@@ -295,6 +302,11 @@ var HERO_STORIES = {
     { outcome: 'want their system configured and ready to perform', exclusion: 'setup friction that delays the real work' },
     { outcome: 'need full visibility into daemon health and indexing state', exclusion: 'wondering whether the system is actually running' },
     { outcome: 'want one place to verify everything is wired correctly', exclusion: 'debugging configuration spread across scattered files' }
+  ],
+  architecture: [
+    { outcome: 'want to see how their codebase is actually structured', exclusion: 'architecture diagrams that drift from reality the moment they are drawn' },
+    { outcome: 'need dependency cycles surfaced before they compound into technical debt', exclusion: 'finding coupling problems only after refactoring becomes painful' },
+    { outcome: 'want a live map of component relationships derived from real imports', exclusion: 'hand-drawn diagrams that nobody trusts' }
   ]
 };
 var HERO_IDENTITIES = ['10x Developers', 'Relentless Builders', 'Precision Engineers', 'Full-Stack Architects', 'High-Velocity Teams'];
@@ -331,7 +343,7 @@ function renderHero(tab) {
 }
 
 // Render initial heroes for all tabs
-['live', 'recon', 'intel', 'debrief', 'arsenal'].forEach(function(t) { renderHero(t); });
+['live', 'recon', 'intel', 'debrief', 'architecture', 'arsenal'].forEach(function(t) { renderHero(t); });
 
 // Restore tab from URL hash (must be after HERO_STORIES is defined)
 var hashTab = location.hash.replace('#', '');
@@ -411,6 +423,14 @@ function poll() {
         safeFetch('/api/conversation/metrics').then(function(d) { cache.convMetrics = d; }).catch(function() {}),
         safeFetch('/api/stats').then(function(d) { cache.stats = d; }).catch(function() {})
       ]).then(function() { renderArsenal(); });
+      break;
+    case 'architecture':
+      // The embedded iframe self-polls at 12s; the dashboard hero only needs a light
+      // manifest poll to keep the hero metrics current (ETag via safeFetch).
+      safeFetch('/api/arch/manifest').then(function(d) {
+        cache.arch = d;
+        renderArchitecture();
+      }).catch(function() {});
       break;
     case 'recon':
       if (!cache.recon || !cache.recon.files_scanned) {
@@ -2880,7 +2900,74 @@ function reconAggregateFile(data, folder, file) {
   return { byCat: byCat, sevs: sevs, total: total };
 }
 
+/* ══════════════════════════════════════════════════════════
+   RENDER: ARCHITECTURE TAB
+   ══════════════════════════════════════════════════════════ */
+function renderArchitecture() {
+  var manifest = cache.arch;
+  if (!manifest) return;
+
+  // Extract first estate's first scope views from the estates-shaped manifest
+  var views = {};
+  var estateLabel = '';
+  var estates = manifest.estates || {};
+  var ekeys = Object.keys(estates);
+  if (ekeys.length > 0) {
+    var est = estates[ekeys[0]];
+    estateLabel = est.label || '';
+    var skeys = Object.keys(est.scopes || {});
+    if (skeys.length > 0) {
+      views = (est.scopes[skeys[0]] || {}).views || {};
+    }
+  }
+
+  var comp = views.component || {};
+  var dsm = views.dsm || {};
+  var cycles = views.cycles || {};
+  var viewCount = Object.keys(views).length;
+
+  // Parse leading numeric from count captions like "12 units", "45 deps", "3 cycles"
+  function parseCount(s) {
+    if (!s) return '-';
+    var m = String(s).match(/^(\d+)/);
+    return m ? m[1] : s;
+  }
+
+  setGlow('hm-arch-0', parseCount(comp.count));
+  setGlow('hm-arch-1', parseCount(dsm.count));
+  setGlow('hm-arch-2', parseCount(cycles.count));
+  setText('archViewCount', viewCount > 0 ? viewCount + ' views' : '-');
+
+  // Provenance: update both text and color class
+  var provKind = (comp.prov && comp.prov.kind) || '';
+  var provText = provKind === 'derived' ? 'REAL' : provKind === 'simulated' ? 'SIM' : provKind === 'mixed' ? 'MIXED' : '-';
+  var provEl = document.getElementById('hm-arch-3');
+  if (provEl && provEl.textContent !== provText) {
+    provEl.textContent = provText;
+    provEl.className = 'hm-value ' + (provKind === 'derived' ? 'green' : provKind ? 'yellow' : 'dim');
+  }
+
+  // Hero support line
+  var sup = [];
+  if (estateLabel) sup.push('<span class="b">' + escapeHtml(estateLabel) + '</span>');
+  if (viewCount > 0) sup.push('<span class="c">' + viewCount + '</span> view' + (viewCount !== 1 ? 's' : ''));
+  if (provKind === 'derived') sup.push('derived from <span class="g">import graph</span>');
+  else if (provKind === 'simulated') sup.push('<span class="y">simulated</span> · not yet derived');
+  else if (viewCount === 0) sup.push('no views derived yet · run aOa once to seed');
+  setHtml('heroSupport-architecture', sup.length > 0 ? sup.join(' &middot; ') : '-');
+}
+
 /* ── Start ── */
+// Probe /api/arch/manifest to decide whether to show the Architecture tab.
+// 200 → show the tab and seed hero metrics; 404/error → tab stays hidden.
+// This is C4-honest (disabled arch = no route = no tab) and lean-honest
+// (lean builds omit the /api/arch routes entirely — 404 keeps the button hidden).
+safeFetch('/api/arch/manifest').then(function(d) {
+  cache.arch = d;
+  var btn = document.getElementById('navTabArch');
+  if (btn) btn.style.display = '';
+  renderArchitecture();
+}).catch(function() {});
 startPolling();
 
 })();

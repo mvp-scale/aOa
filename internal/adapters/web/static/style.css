@@ -717,6 +717,13 @@ body {
 .sys-sep { width: 1px; height: 14px; background: var(--border); flex-shrink: 0; }
 
 /* ══════════════════════════════════════════════════════════
+   ARCHITECTURE TAB: Embedded viewer iframe
+   ══════════════════════════════════════════════════════════ */
+.arch-embed-frame {
+  flex: 1; min-height: 0; width: 100%; border: none; display: block;
+}
+
+/* ══════════════════════════════════════════════════════════
    RECON TAB: Sidebar + Tree Layout
    ══════════════════════════════════════════════════════════ */
 .recon-layout {
