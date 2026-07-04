@@ -1,6 +1,8 @@
 /* ══════════════════════════════════════════════════════════
    aOa Dashboard — Application Logic
-   6-tab SPA: Live · Recon · Intel · Debrief · Architecture · Arsenal
+   7-tab SPA: Live · Recon · Intel · Debrief · Arsenal ⫶ Terrain · Blueprints
+   Knowledge zone (Terrain + Blueprints) is revealed only after
+   /api/arch/manifest 200 — hidden in lean builds and C4-off daemons.
    ══════════════════════════════════════════════════════════ */
 (function() {
 'use strict';
@@ -10,7 +12,16 @@ var activeTab = 'live';
 var pollTimer = null;
 var cache = {};
 var heroData = null;
-var archIframeLoaded = false; // lazy: set iframe src only on first architecture tab activation
+var blueprintsIframeLoaded = false; // lazy: src set on first blueprints tab activation
+
+/* ── Terrain state ── */
+var terrainState = null;       // current sim: {nodes,edges,alpha,maxDegree,maxWeight,count,prov}
+var terrainManifestRev = null; // last observed manifest rev (to detect shard change)
+var terrainRAF = null;         // requestAnimationFrame handle (null when sim settled)
+var terrainView = { x: 0, y: 0, scale: 1 };
+var terrainHover = -1;         // hovered node index (-1 = none)
+var terrainDrag = null;        // { nodeIdx }
+var terrainPan = null;         // { startX, startY, origX, origY }
 
 /* ══════════════════════════════════════════════════════════
    HELPERS
@@ -255,15 +266,26 @@ function switchTab(name) {
   }
   location.hash = name;
   renderHero(name);
-  // Lazy-load the arch iframe on first architecture tab activation.
-  // The iframe src is not set in HTML to avoid loading the React/xyflow bundle at boot.
-  if (name === 'architecture' && !archIframeLoaded) {
+  // Lazy-load the blueprints iframe on first blueprints tab activation.
+  // The iframe src is not set in HTML to avoid loading the xyflow bundle at boot.
+  if (name === 'blueprints' && !blueprintsIframeLoaded) {
     var archFr = document.getElementById('archFrame');
-    if (archFr) { archFr.src = '/arch/?embed=1'; archIframeLoaded = true; }
+    if (archFr) { archFr.src = '/arch/?embed=1'; blueprintsIframeLoaded = true; }
   }
-  // Restart poll timer: 1s for debrief (live thinking), 3s for others
+  // On terrain activation: set up canvas interaction (idempotent) and kick simulation.
+  if (name === 'terrain') {
+    terrainSetupCanvas();
+    if (terrainState && !terrainRAF && terrainState.alpha > 0.01) {
+      terrainRAF = requestAnimationFrame(terrainTick);
+    } else if (!terrainState && cache.arch) {
+      terrainInit();
+    } else {
+      terrainRender(); // re-render on resize / re-activation
+    }
+  }
+  // Restart poll timer: 1s for debrief (live thinking), 12s for terrain, 3s for others
   if (pollTimer) clearInterval(pollTimer);
-  var interval = (name === 'debrief') ? 1000 : 3000;
+  var interval = (name === 'debrief') ? 1000 : (name === 'terrain') ? 12000 : 3000;
   pollTimer = setInterval(poll, interval);
   poll(); // immediate fetch for new tab
 }
@@ -302,12 +324,8 @@ var HERO_STORIES = {
     { outcome: 'want their system configured and ready to perform', exclusion: 'setup friction that delays the real work' },
     { outcome: 'need full visibility into daemon health and indexing state', exclusion: 'wondering whether the system is actually running' },
     { outcome: 'want one place to verify everything is wired correctly', exclusion: 'debugging configuration spread across scattered files' }
-  ],
-  architecture: [
-    { outcome: 'want to see how their codebase is actually structured', exclusion: 'architecture diagrams that drift from reality the moment they are drawn' },
-    { outcome: 'need dependency cycles surfaced before they compound into technical debt', exclusion: 'finding coupling problems only after refactoring becomes painful' },
-    { outcome: 'want a live map of component relationships derived from real imports', exclusion: 'hand-drawn diagrams that nobody trusts' }
   ]
+  // Terrain and Blueprints have no hero — the knowledge content IS the hero.
 };
 var HERO_IDENTITIES = ['10x Developers', 'Relentless Builders', 'Precision Engineers', 'Full-Stack Architects', 'High-Velocity Teams'];
 var HERO_SEPARATORS = ['minus the', 'instead of', 'bypassing', 'without'];
@@ -342,8 +360,8 @@ function renderHero(tab) {
   }
 }
 
-// Render initial heroes for all tabs
-['live', 'recon', 'intel', 'debrief', 'architecture', 'arsenal'].forEach(function(t) { renderHero(t); });
+// Render initial heroes for all tabs (knowledge tabs terrain+blueprints have no hero)
+['live', 'recon', 'intel', 'debrief', 'arsenal'].forEach(function(t) { renderHero(t); });
 
 // Restore tab from URL hash (must be after HERO_STORIES is defined)
 var hashTab = location.hash.replace('#', '');
@@ -424,12 +442,25 @@ function poll() {
         safeFetch('/api/stats').then(function(d) { cache.stats = d; }).catch(function() {})
       ]).then(function() { renderArsenal(); });
       break;
-    case 'architecture':
-      // The embedded iframe self-polls at 12s; the dashboard hero only needs a light
-      // manifest poll to keep the hero metrics current (ETag via safeFetch).
+    case 'blueprints':
+      // iframe self-polls; nothing to do here (no hero on knowledge surfaces).
+      break;
+    case 'terrain':
+      // Poll manifest at 12s interval (poll() fires every 12s for terrain tab).
+      // ETag via safeFetch: 304 returns cached data → no-op if manifest unchanged.
       safeFetch('/api/arch/manifest').then(function(d) {
         cache.arch = d;
-        renderArchitecture();
+        // Extract manifest rev to detect when the DSM shard has changed.
+        var rev = terrainGetManifestRev(d);
+        if (rev && rev !== terrainManifestRev) {
+          terrainManifestRev = rev;
+          var dsmView = terrainGetDSMEntry(d);
+          if (dsmView) terrainLoadShard(dsmView);
+        } else if (!terrainState) {
+          // First activation with a fresh manifest that has no rev yet.
+          var dsmV = terrainGetDSMEntry(d);
+          if (dsmV) { terrainManifestRev = rev; terrainLoadShard(dsmV); }
+        }
       }).catch(function() {});
       break;
     case 'recon':
@@ -2901,72 +2932,462 @@ function reconAggregateFile(data, folder, file) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   RENDER: ARCHITECTURE TAB
+   TERRAIN: force-directed dependency graph (canvas, vanilla JS)
    ══════════════════════════════════════════════════════════ */
-function renderArchitecture() {
-  var manifest = cache.arch;
-  if (!manifest) return;
 
-  // Extract first estate's first scope views from the estates-shaped manifest
-  var views = {};
-  var estateLabel = '';
+// Extract the dsm view entry from the estates-shaped manifest.
+function terrainGetDSMEntry(manifest) {
+  if (!manifest) return null;
   var estates = manifest.estates || {};
   var ekeys = Object.keys(estates);
-  if (ekeys.length > 0) {
-    var est = estates[ekeys[0]];
-    estateLabel = est.label || '';
-    var skeys = Object.keys(est.scopes || {});
-    if (skeys.length > 0) {
-      views = (est.scopes[skeys[0]] || {}).views || {};
+  if (!ekeys.length) return null;
+  var scopes = (estates[ekeys[0]] || {}).scopes || {};
+  var skeys = Object.keys(scopes);
+  if (!skeys.length) return null;
+  return ((scopes[skeys[0]] || {}).views || {}).dsm || null;
+}
+
+// Extract a stable rev string from the manifest (uses dsm shard hash as proxy).
+function terrainGetManifestRev(manifest) {
+  var dsm = terrainGetDSMEntry(manifest);
+  return (dsm && dsm.shard && dsm.shard.hash) || null;
+}
+
+// Build simulation state from a DSM shard.
+function terrainBuildSim(shard) {
+  var items = shard.items || [];
+  var matrix = shard.matrix || [];
+  var n = items.length;
+
+  var edges = [];
+  var degOut = new Array(n).fill(0);
+  var degIn = new Array(n).fill(0);
+  var maxWeight = 1;
+
+  for (var i = 0; i < n; i++) {
+    var row = matrix[i] || [];
+    for (var j = 0; j < n; j++) {
+      var w = row[j];
+      if (w && w > 0) {
+        edges.push({ src: i, dst: j, weight: w });
+        degOut[i] += 1;
+        degIn[j] += 1;
+        if (w > maxWeight) maxWeight = w;
+      }
     }
   }
 
-  var comp = views.component || {};
-  var dsm = views.dsm || {};
-  var cycles = views.cycles || {};
-  var viewCount = Object.keys(views).length;
+  var degree = items.map(function(_, k) { return degOut[k] + degIn[k]; });
+  var maxDeg = 1;
+  for (var d = 0; d < degree.length; d++) { if (degree[d] > maxDeg) maxDeg = degree[d]; }
 
-  // Parse leading numeric from count captions like "12 units", "45 deps", "3 cycles"
-  function parseCount(s) {
-    if (!s) return '-';
-    var m = String(s).match(/^(\d+)/);
-    return m ? m[1] : s;
+  // Circle layout initial positions
+  var R = Math.max(100, n * 18);
+  var nodes = items.map(function(label, idx) {
+    var angle = (2 * Math.PI * idx) / n;
+    var isExt = label.indexOf('Ext:') === 0 || label.indexOf('ext:') === 0;
+    return {
+      id: idx, label: label,
+      x: R * Math.cos(angle), y: R * Math.sin(angle),
+      vx: 0, vy: 0,
+      pinned: false, degree: degree[idx], ext: isExt
+    };
+  });
+
+  return {
+    nodes: nodes, edges: edges,
+    maxDegree: maxDeg, maxWeight: maxWeight,
+    alpha: 1.0, count: shard.count || '', prov: shard.prov || {}
+  };
+}
+
+// One simulation step: repulsion + spring + centering gravity.
+function terrainSimStep(sim) {
+  if (sim.alpha < 0.008) return;
+  var nodes = sim.nodes;
+  var n = nodes.length;
+  var alpha = sim.alpha;
+  var repulse = 2800;
+  var restLen = 130;
+  var stiff = 0.06;
+  var grav = 0.035;
+  var damp = 0.82;
+
+  // Repulsion (O(n²), fine for n < 400)
+  for (var i = 0; i < n; i++) {
+    for (var j = i + 1; j < n; j++) {
+      var dx = nodes[j].x - nodes[i].x;
+      var dy = nodes[j].y - nodes[i].y;
+      var d2 = dx * dx + dy * dy;
+      if (d2 < 0.1) { dx = (Math.random() - 0.5) * 2; dy = (Math.random() - 0.5) * 2; d2 = 1; }
+      var dist = Math.sqrt(d2);
+      var f = repulse / d2;
+      var fx = f * dx / dist;
+      var fy = f * dy / dist;
+      nodes[i].vx -= fx; nodes[i].vy -= fy;
+      nodes[j].vx += fx; nodes[j].vy += fy;
+    }
   }
 
-  setGlow('hm-arch-0', parseCount(comp.count));
-  setGlow('hm-arch-1', parseCount(dsm.count));
-  setGlow('hm-arch-2', parseCount(cycles.count));
-  setText('archViewCount', viewCount > 0 ? viewCount + ' views' : '-');
-
-  // Provenance: update both text and color class
-  var provKind = (comp.prov && comp.prov.kind) || '';
-  var provText = provKind === 'derived' ? 'REAL' : provKind === 'simulated' ? 'SIM' : provKind === 'mixed' ? 'MIXED' : '-';
-  var provEl = document.getElementById('hm-arch-3');
-  if (provEl && provEl.textContent !== provText) {
-    provEl.textContent = provText;
-    provEl.className = 'hm-value ' + (provKind === 'derived' ? 'green' : provKind ? 'yellow' : 'dim');
+  // Spring along edges
+  for (var e = 0; e < sim.edges.length; e++) {
+    var edge = sim.edges[e];
+    var sn = nodes[edge.src];
+    var tn = nodes[edge.dst];
+    var ex = tn.x - sn.x;
+    var ey = tn.y - sn.y;
+    var ed = Math.sqrt(ex * ex + ey * ey) || 1;
+    var stretch = (ed - restLen) * stiff * Math.sqrt(edge.weight);
+    var efx = stretch * ex / ed;
+    var efy = stretch * ey / ed;
+    if (!sn.pinned) { sn.vx += efx; sn.vy += efy; }
+    if (!tn.pinned) { tn.vx -= efx; tn.vy -= efy; }
   }
 
-  // Hero support line
-  var sup = [];
-  if (estateLabel) sup.push('<span class="b">' + escapeHtml(estateLabel) + '</span>');
-  if (viewCount > 0) sup.push('<span class="c">' + viewCount + '</span> view' + (viewCount !== 1 ? 's' : ''));
-  if (provKind === 'derived') sup.push('derived from <span class="g">import graph</span>');
-  else if (provKind === 'simulated') sup.push('<span class="y">simulated</span> · not yet derived');
-  else if (viewCount === 0) sup.push('no views derived yet · run aOa once to seed');
-  setHtml('heroSupport-architecture', sup.length > 0 ? sup.join(' &middot; ') : '-');
+  // Centering gravity
+  for (var k = 0; k < n; k++) {
+    nodes[k].vx -= nodes[k].x * grav;
+    nodes[k].vy -= nodes[k].y * grav;
+  }
+
+  // Integrate + damping
+  for (var m = 0; m < n; m++) {
+    if (!nodes[m].pinned) {
+      nodes[m].vx *= damp;
+      nodes[m].vy *= damp;
+      nodes[m].x += nodes[m].vx * alpha;
+      nodes[m].y += nodes[m].vy * alpha;
+    }
+  }
+  sim.alpha *= 0.976;
+}
+
+function terrainNodeR(deg, maxDeg) {
+  return 5 + (maxDeg > 0 ? deg / maxDeg : 0) * 13;
+}
+
+// Render the terrain canvas.
+function terrainRender() {
+  var canvas = document.getElementById('terrainCanvas');
+  var wrap = document.getElementById('terrainCanvasWrap');
+  if (!canvas || !wrap) return;
+
+  var dpr = window.devicePixelRatio || 1;
+  var W = wrap.clientWidth;
+  var H = wrap.clientHeight;
+  if (W <= 0 || H <= 0) return;
+
+  if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+  }
+
+  var ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  var empty = document.getElementById('terrainEmpty');
+  var sim = terrainState;
+  if (!sim || !sim.nodes || sim.nodes.length === 0) {
+    if (empty) empty.style.display = '';
+    ctx.restore();
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  var cx = W / 2 + terrainView.x;
+  var cy = H / 2 + terrainView.y;
+  var sc = terrainView.scale;
+
+  ctx.translate(cx, cy);
+  ctx.scale(sc, sc);
+
+  var nodes = sim.nodes;
+  var edges = sim.edges;
+  var hover = terrainHover;
+
+  // Identify edges + neighbors connected to hovered node
+  var hoverEdge = {};
+  var hoverNeigh = {};
+  if (hover >= 0) {
+    for (var he = 0; he < edges.length; he++) {
+      if (edges[he].src === hover || edges[he].dst === hover) {
+        hoverEdge[he] = true;
+        hoverNeigh[edges[he].src] = true;
+        hoverNeigh[edges[he].dst] = true;
+      }
+    }
+  }
+
+  // ── Edges ──
+  for (var ei = 0; ei < edges.length; ei++) {
+    var edge = edges[ei];
+    var snode = nodes[edge.src];
+    var tnode = nodes[edge.dst];
+    var wA = 0.12 + 0.5 * (edge.weight / sim.maxWeight);
+    var opacity = (hover >= 0 && !hoverEdge[ei]) ? 0.06 : wA;
+    var lw = 0.6 + 1.6 * (edge.weight / sim.maxWeight);
+
+    ctx.beginPath();
+    ctx.moveTo(snode.x, snode.y);
+    ctx.lineTo(tnode.x, tnode.y);
+    ctx.strokeStyle = 'rgba(34,211,238,' + opacity + ')';
+    ctx.lineWidth = lw;
+    ctx.stroke();
+
+    // Arrowhead (only when not dimmed)
+    if (hover < 0 || hoverEdge[ei]) {
+      var ang = Math.atan2(tnode.y - snode.y, tnode.x - snode.x);
+      var tr = terrainNodeR(tnode.degree, sim.maxDegree);
+      var ax = tnode.x - (tr + 2) * Math.cos(ang);
+      var ay = tnode.y - (tr + 2) * Math.sin(ang);
+      var al = 7, aw = 0.38;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax - al * Math.cos(ang - aw), ay - al * Math.sin(ang - aw));
+      ctx.lineTo(ax - al * Math.cos(ang + aw), ay - al * Math.sin(ang + aw));
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(34,211,238,' + opacity + ')';
+      ctx.fill();
+    }
+  }
+
+  // ── Nodes ──
+  for (var ni = 0; ni < nodes.length; ni++) {
+    var node = nodes[ni];
+    var r = terrainNodeR(node.degree, sim.maxDegree);
+    var isHov = (ni === hover);
+    var isNeigh = (hover >= 0 && hoverNeigh[ni]);
+    var isDim = (hover >= 0 && !isHov && !isNeigh);
+
+    // Color: external nodes are dimmer / outlined
+    var nr, ng, nb;
+    if (node.ext) { nr = 139; ng = 139; nb = 150; }  // --dim
+    else if (isHov) { nr = 52; ng = 211; nb = 153; } // --green (hovered)
+    else { nr = 34; ng = 211; nb = 238; }             // --cyan
+
+    var nodeAlpha = isDim ? 0.18 : 1.0;
+
+    // Glow halo
+    if (!isDim) {
+      var grad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, r * 3.5);
+      var ga = isHov ? 0.45 : (isNeigh ? 0.2 : 0.13);
+      grad.addColorStop(0, 'rgba(' + nr + ',' + ng + ',' + nb + ',' + ga + ')');
+      grad.addColorStop(1, 'rgba(' + nr + ',' + ng + ',' + nb + ',0)');
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r * 3.5, 0, 2 * Math.PI);
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    // Node circle
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+    if (node.ext) {
+      ctx.strokeStyle = 'rgba(' + nr + ',' + ng + ',' + nb + ',' + nodeAlpha * 0.45 + ')';
+      ctx.lineWidth = 1.5;
+      ctx.fillStyle = 'rgba(' + nr + ',' + ng + ',' + nb + ',' + nodeAlpha * 0.06 + ')';
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = 'rgba(' + nr + ',' + ng + ',' + nb + ',' + nodeAlpha * (isHov ? 0.92 : 0.72) + ')';
+      ctx.fill();
+    }
+
+    // Label: always for hovered; for larger nodes; for all when zoomed in
+    var showLabel = isHov || node.degree >= sim.maxDegree * 0.25 || sc > 1.5;
+    if (showLabel) {
+      var fs = Math.max(9, 11 / sc);
+      ctx.font = (isHov ? '600 ' : '') + fs + 'px "JetBrains Mono",monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = 'rgba(232,232,236,' + (isDim ? 0.15 : (isHov ? 1.0 : 0.65)) + ')';
+      ctx.fillText(node.label, node.x, node.y - r - 3 / sc);
+    }
+  }
+
+  ctx.restore();
+}
+
+// Animation loop: run simulation steps + render; stop when alpha is settled.
+function terrainTick() {
+  terrainRAF = null;
+  if (!terrainState) return;
+  for (var i = 0; i < 3; i++) { terrainSimStep(terrainState); }
+  terrainRender();
+  if (activeTab === 'terrain' && terrainState.alpha > 0.008) {
+    terrainRAF = requestAnimationFrame(terrainTick);
+  }
+}
+
+function terrainStartSim() {
+  if (terrainRAF) cancelAnimationFrame(terrainRAF);
+  terrainRAF = requestAnimationFrame(terrainTick);
+}
+
+// Update the status strip with live metrics from current sim.
+function terrainUpdateStrip() {
+  var strip = document.getElementById('terrainStatusText');
+  if (!strip || !terrainState) return;
+  var sim = terrainState;
+  var nodeCount = sim.nodes.length;
+  var edgeCount = sim.edges.length;
+  var provKind = (sim.prov && sim.prov.kind) || '';
+  var provLabel = provKind === 'derived' ? '<span class="terrain-status-live">REAL</span> — derived from imports · always current'
+                : provKind === 'simulated' ? 'SIM — not yet derived' : '';
+  var revStr = terrainManifestRev ? 'rev ' + terrainManifestRev.slice(0, 8) : '';
+  var parts = [nodeCount + ' units', edgeCount + ' dependencies'];
+  if (revStr) parts.push(revStr);
+  if (provLabel) parts.push(provLabel);
+  strip.innerHTML = parts.join(' &middot; ');
+
+  // Pulse on update
+  var stripEl = document.getElementById('terrainStatusStrip');
+  if (stripEl) {
+    stripEl.classList.remove('terrain-pulse');
+    void stripEl.offsetWidth;
+    stripEl.classList.add('terrain-pulse');
+  }
+}
+
+// Fetch DSM shard and rebuild simulation.
+function terrainLoadShard(dsmView) {
+  if (!dsmView || !dsmView.shard) return;
+  var url = '/api/arch/' + dsmView.shard.path + '?v=' + dsmView.shard.hash;
+  safeFetch(url).then(function(shard) {
+    if (!shard || !shard.items || shard.items.length === 0) return;
+    var prevNodes = terrainState ? terrainState.nodes : null;
+    terrainState = terrainBuildSim(shard);
+    // Preserve positions for nodes that survived the update
+    if (prevNodes) {
+      var byLabel = {};
+      prevNodes.forEach(function(n) { byLabel[n.label] = n; });
+      terrainState.nodes.forEach(function(n) {
+        var old = byLabel[n.label];
+        if (old) { n.x = old.x; n.y = old.y; n.vx = old.vx * 0.3; n.vy = old.vy * 0.3; n.pinned = old.pinned; }
+      });
+      terrainState.alpha = 0.6; // brief re-settle
+    }
+    terrainUpdateStrip();
+    terrainStartSim();
+  }).catch(function() {});
+}
+
+// Called from probe and from switchTab when terrain tab is activated.
+function terrainInit() {
+  var manifest = cache.arch;
+  if (!manifest) return;
+  var dsmView = terrainGetDSMEntry(manifest);
+  if (!dsmView) return;
+  if (!terrainManifestRev) terrainManifestRev = terrainGetManifestRev(manifest);
+  terrainLoadShard(dsmView);
+}
+
+// Wire up canvas interaction (idempotent via _terrainSetup flag).
+function terrainSetupCanvas() {
+  var canvas = document.getElementById('terrainCanvas');
+  if (!canvas || canvas._terrainSetup) return;
+  canvas._terrainSetup = true;
+
+  function canvasXY(e) {
+    var rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+  function simXY(px, py) {
+    var W = canvas.clientWidth, H = canvas.clientHeight;
+    return {
+      x: (px - W / 2 - terrainView.x) / terrainView.scale,
+      y: (py - H / 2 - terrainView.y) / terrainView.scale
+    };
+  }
+  function hitTest(px, py) {
+    if (!terrainState) return -1;
+    var sp = simXY(px, py);
+    var nodes = terrainState.nodes;
+    for (var hi = 0; hi < nodes.length; hi++) {
+      var hr = terrainNodeR(nodes[hi].degree, terrainState.maxDegree) + 5;
+      var hx = nodes[hi].x - sp.x, hy = nodes[hi].y - sp.y;
+      if (hx * hx + hy * hy < hr * hr) return hi;
+    }
+    return -1;
+  }
+
+  canvas.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    var delta = e.deltaY > 0 ? 0.88 : 1.14;
+    terrainView.scale = Math.max(0.08, Math.min(10, terrainView.scale * delta));
+    terrainRender();
+  }, { passive: false });
+
+  canvas.addEventListener('mousedown', function(e) {
+    var pt = canvasXY(e);
+    var hit = hitTest(pt.x, pt.y);
+    if (hit >= 0) {
+      terrainDrag = { nodeIdx: hit };
+      canvas.classList.add('dragging');
+    } else {
+      terrainPan = { startX: pt.x, startY: pt.y, origX: terrainView.x, origY: terrainView.y };
+      canvas.classList.add('dragging');
+    }
+  });
+
+  canvas.addEventListener('mousemove', function(e) {
+    var pt = canvasXY(e);
+    if (terrainDrag !== null) {
+      var node = terrainState && terrainState.nodes[terrainDrag.nodeIdx];
+      if (node) {
+        var sp = simXY(pt.x, pt.y);
+        node.x = sp.x; node.y = sp.y;
+        node.vx = 0; node.vy = 0;
+        node.pinned = true;
+        if (!terrainRAF) terrainRAF = requestAnimationFrame(terrainTick);
+      }
+    } else if (terrainPan !== null) {
+      terrainView.x = terrainPan.origX + (pt.x - terrainPan.startX);
+      terrainView.y = terrainPan.origY + (pt.y - terrainPan.startY);
+      terrainRender();
+    } else {
+      var hit = hitTest(pt.x, pt.y);
+      if (hit !== terrainHover) {
+        terrainHover = hit;
+        terrainRender();
+      }
+    }
+  });
+
+  canvas.addEventListener('mouseup', function() {
+    terrainDrag = null; terrainPan = null;
+    canvas.classList.remove('dragging');
+  });
+
+  canvas.addEventListener('mouseleave', function() {
+    terrainHover = -1; terrainDrag = null; terrainPan = null;
+    canvas.classList.remove('dragging');
+    terrainRender();
+  });
+
+  window.addEventListener('resize', function() {
+    if (activeTab === 'terrain') terrainRender();
+  });
 }
 
 /* ── Start ── */
-// Probe /api/arch/manifest to decide whether to show the Architecture tab.
-// 200 → show the tab and seed hero metrics; 404/error → tab stays hidden.
-// This is C4-honest (disabled arch = no route = no tab) and lean-honest
-// (lean builds omit the /api/arch routes entirely — 404 keeps the button hidden).
+// Probe /api/arch/manifest to decide whether to show the knowledge zone.
+// 200 → reveal spine + Terrain + Blueprints buttons and seed the terrain sim.
+// 404/error → all three stay hidden (lean builds, C4-off daemons).
 safeFetch('/api/arch/manifest').then(function(d) {
   cache.arch = d;
-  var btn = document.getElementById('navTabArch');
-  if (btn) btn.style.display = '';
-  renderArchitecture();
+  var spine = document.getElementById('navSpine');
+  var btnT = document.getElementById('navTabTerrain');
+  var btnB = document.getElementById('navTabBlueprints');
+  if (spine) spine.style.display = '';
+  if (btnT) btnT.style.display = '';
+  if (btnB) btnB.style.display = '';
+  terrainManifestRev = terrainGetManifestRev(d);
+  terrainInit();
 }).catch(function() {});
 startPolling();
 

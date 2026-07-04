@@ -23,11 +23,14 @@
       <button class="nav-tab" data-tab="recon">Recon</button>
       <button class="nav-tab" data-tab="intel">Intel</button>
       <button class="nav-tab" data-tab="debrief">Debrief</button>
-      <!-- Architecture tab: shown only when /api/arch/manifest returns 200.
-           display:none by default so C4-off and lean builds degrade cleanly —
-           the JS probe in app.js reveals the button on a successful manifest fetch. -->
-      <button class="nav-tab" data-tab="architecture" id="navTabArch" style="display:none">Architecture</button>
       <button class="nav-tab" data-tab="arsenal">Arsenal</button>
+      <!-- Knowledge zone: spine + Terrain + Blueprints.
+           All three hidden by default — app.js reveals them only when
+           /api/arch/manifest returns 200 (C4-off and lean builds see a
+           clean five-tab nav). -->
+      <div class="nav-spine" id="navSpine" style="display:none"></div>
+      <button class="nav-tab" data-tab="terrain" id="navTabTerrain" style="display:none">Terrain</button>
+      <button class="nav-tab" data-tab="blueprints" id="navTabBlueprints" style="display:none">Blueprints</button>
     </div>
   </div>
   <div class="nav-right">
@@ -263,36 +266,28 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════
-       ARCHITECTURE TAB
-       iframe is lazy: src is set by app.js on first tab activation.
-       This avoids loading the React/xyflow bundle on dashboard boot.
+       TERRAIN TAB — live force-directed dependency graph.
+       Canvas is rendered by app.js; status strip at bottom.
+       Hidden until /api/arch/manifest 200 (see navTabTerrain).
        ════════════════════════════════════════════════════ -->
-  <div class="tab-content" id="tab-architecture">
-    <div class="hero-row">
-      <div class="hero-card-wrapper">
-        <div class="hero-card">
-          <div class="hero-label">ARCHITECTURE</div>
-          <div class="hero-headline" id="heroHeadline-architecture"></div>
-          <div class="hero-support" id="heroSupport-architecture">-</div>
-        </div>
-      </div>
-      <div class="hero-metrics">
-        <div class="hm-cell" data-tooltip="Number of component groups derived from the import graph — packages, layers, or modules that cluster together. Each group is a named unit of related code."><div class="hm-value green" id="hm-arch-0">-</div><div class="hm-label">groups</div></div>
-        <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right" data-tooltip="Dependency relationships between component groups, derived from import statements. More dependencies means more interconnection — the DSM view shows the full coupling matrix."><div class="hm-value cyan" id="hm-arch-1">-</div><div class="hm-label">dependencies</div></div>
-        <div class="hm-cell" data-tooltip="Circular dependency cycles detected between components. Each cycle is a concrete improvement opportunity — cycles tighten coupling and make code harder to refactor or test in isolation."><div class="hm-value red" id="hm-arch-2">-</div><div class="hm-label">cycles</div></div>
-        <div class="hm-arrow">&rarr;</div>
-        <div class="hm-cell right" data-tooltip="How these views were built. REAL means derived directly from live import analysis — not guessed, not simulated. Provenance is always shown honestly in every view."><div class="hm-value green" id="hm-arch-3">-</div><div class="hm-label">provenance</div></div>
-      </div>
+  <div class="tab-content" id="tab-terrain">
+    <div class="terrain-canvas-wrap" id="terrainCanvasWrap">
+      <canvas id="terrainCanvas"></canvas>
+      <div class="terrain-empty" id="terrainEmpty">No terrain yet — run aoa to derive the knowledge graph</div>
     </div>
+    <div class="terrain-status-strip" id="terrainStatusStrip">
+      <span id="terrainStatusText">—</span>
+    </div>
+  </div>
 
-    <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">
-      <div class="card-header">
-        <span class="card-title">Architecture Views</span>
-        <span class="card-badge" id="archViewCount">-</span>
-      </div>
-      <iframe id="archFrame" class="arch-embed-frame" title="Architecture Viewer"></iframe>
-    </div>
+  <!-- ════════════════════════════════════════════════════
+       BLUEPRINTS TAB — edge-to-edge arch viewer iframe.
+       iframe is lazy: src is set by app.js on first activation.
+       This avoids loading the xyflow bundle on dashboard boot.
+       Hidden until /api/arch/manifest 200 (see navTabBlueprints).
+       ════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-blueprints">
+    <iframe id="archFrame" class="arch-embed-frame" title="Architecture Viewer"></iframe>
   </div>
 
   <!-- ════════════════════════════════════════════════════

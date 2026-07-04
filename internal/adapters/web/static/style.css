@@ -717,7 +717,48 @@ body {
 .sys-sep { width: 1px; height: 14px; background: var(--border); flex-shrink: 0; }
 
 /* ══════════════════════════════════════════════════════════
-   ARCHITECTURE TAB: Embedded viewer iframe
+   NAV SPINE: visual divider between OPERATIONS and KNOWLEDGE
+   ══════════════════════════════════════════════════════════ */
+.nav-spine {
+  width: 1px; height: 18px; margin: 0 6px;
+  align-self: center; flex-shrink: 0;
+  background: linear-gradient(to bottom, transparent, var(--border), transparent);
+}
+[data-theme="dark"] .nav-spine {
+  background: linear-gradient(to bottom, transparent, var(--cyan), transparent);
+  opacity: 0.35;
+  box-shadow: 0 0 4px rgba(34,211,238,0.15);
+}
+
+/* ══════════════════════════════════════════════════════════
+   TERRAIN TAB: live force-directed dependency graph canvas
+   ══════════════════════════════════════════════════════════ */
+#tab-terrain, #tab-blueprints { margin: -24px; gap: 0; }
+.terrain-canvas-wrap {
+  flex: 1; min-height: 0; position: relative; overflow: hidden;
+  background: var(--bg);
+}
+#terrainCanvas { position: absolute; top: 0; left: 0; display: block; }
+#terrainCanvas:not(.dragging) { cursor: grab; }
+#terrainCanvas.dragging { cursor: grabbing; }
+.terrain-empty {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--dim); font-size: 14px; pointer-events: none;
+}
+.terrain-status-strip {
+  flex-shrink: 0; height: 36px;
+  border-top: 1px solid var(--border); background: var(--card);
+  display: flex; align-items: center; padding: 0 20px;
+  font-size: 11px; font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+  color: var(--dim); gap: 0; letter-spacing: 0.3px;
+}
+.terrain-status-live { color: var(--green); }
+@keyframes terrain-pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+.terrain-pulse { animation: terrain-pulse 0.8s ease-out; }
+
+/* ══════════════════════════════════════════════════════════
+   BLUEPRINTS TAB: edge-to-edge arch viewer iframe
    ══════════════════════════════════════════════════════════ */
 .arch-embed-frame {
   flex: 1; min-height: 0; width: 100%; border: none; display: block;
