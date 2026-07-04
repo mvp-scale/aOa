@@ -15,8 +15,9 @@ var heroData = null;
 var blueprintsIframeLoaded = false; // lazy: src set on first blueprints tab activation
 
 /* ── Terrain state ── */
-var terrainState = null;       // current sim: {nodes,edges,alpha,maxDegree,maxWeight,count,prov}
-var terrainManifestRev = null; // last observed manifest rev (to detect shard change)
+var terrainState = null;       // current sim: {nodes,edges,alpha,maxDegree,maxWeight,grain,rev,downgraded,nodeCount,edgeCount}
+var terrainManifestRev = null; // last observed manifest rev (DSM hash — change detector)
+var terrainGrain = 'file';     // 'file' | 'unit' — current grain (per-session, not persisted)
 var terrainRAF = null;         // requestAnimationFrame handle (null when sim settled)
 var terrainView = { x: 0, y: 0, scale: 1 };
 var terrainHover = -1;         // hovered node index (-1 = none)
@@ -257,6 +258,13 @@ var tabs = document.querySelectorAll('.nav-tab');
 var tabContents = document.querySelectorAll('.tab-content');
 
 function switchTab(name) {
+  // Cancel terrain animation immediately when leaving terrain tab (settle-and-sleep law).
+  // terrainTick already guards on activeTab === 'terrain', but cancelling here avoids
+  // one extra frame firing after the switch.
+  if (activeTab === 'terrain' && name !== 'terrain' && terrainRAF) {
+    cancelAnimationFrame(terrainRAF);
+    terrainRAF = null;
+  }
   activeTab = name;
   for (var i = 0; i < tabs.length; i++) {
     tabs[i].classList.toggle('active', tabs[i].getAttribute('data-tab') === name);
@@ -448,18 +456,16 @@ function poll() {
     case 'terrain':
       // Poll manifest at 12s interval (poll() fires every 12s for terrain tab).
       // ETag via safeFetch: 304 returns cached data → no-op if manifest unchanged.
+      // DSM hash is used purely as a change-detection proxy for the facts revision.
       safeFetch('/api/arch/manifest').then(function(d) {
         cache.arch = d;
-        // Extract manifest rev to detect when the DSM shard has changed.
         var rev = terrainGetManifestRev(d);
         if (rev && rev !== terrainManifestRev) {
           terrainManifestRev = rev;
-          var dsmView = terrainGetDSMEntry(d);
-          if (dsmView) terrainLoadShard(dsmView);
+          terrainLoadGraph(terrainGrain); // graph changed — refetch
         } else if (!terrainState) {
-          // First activation with a fresh manifest that has no rev yet.
-          var dsmV = terrainGetDSMEntry(d);
-          if (dsmV) { terrainManifestRev = rev; terrainLoadShard(dsmV); }
+          if (rev) terrainManifestRev = rev;
+          terrainLoadGraph(terrainGrain); // first activation
         }
       }).catch(function() {});
       break;
@@ -2936,6 +2942,7 @@ function reconAggregateFile(data, folder, file) {
    ══════════════════════════════════════════════════════════ */
 
 // Extract the dsm view entry from the estates-shaped manifest.
+// Still used for manifest change detection (DSM hash as rev proxy).
 function terrainGetDSMEntry(manifest) {
   if (!manifest) return null;
   var estates = manifest.estates || {};
@@ -2947,57 +2954,74 @@ function terrainGetDSMEntry(manifest) {
   return ((scopes[skeys[0]] || {}).views || {}).dsm || null;
 }
 
-// Extract a stable rev string from the manifest (uses dsm shard hash as proxy).
+// Extract a stable rev string from the manifest (uses DSM shard hash as proxy).
+// Used only for change detection — the Terrain tab fetches the graph directly.
 function terrainGetManifestRev(manifest) {
   var dsm = terrainGetDSMEntry(manifest);
   return (dsm && dsm.shard && dsm.shard.hash) || null;
 }
 
-// Build simulation state from a DSM shard.
-function terrainBuildSim(shard) {
-  var items = shard.items || [];
-  var matrix = shard.matrix || [];
-  var n = items.length;
+// Build simulation state from a /api/arch/graph payload.
+// payload: {grain, rev, nodes:[{id,label,path,ext}], edges:[{from,to,count,file,line}], downgraded?}
+// Returns a sim object suitable for terrainSimStep / terrainRender, or null on empty input.
+function terrainBuildSimFromGraph(payload) {
+  var rawNodes = payload.nodes || [];
+  var rawEdges = payload.edges || [];
+  var n = rawNodes.length;
+  if (n === 0) return null;
+
+  // Map id → index for edge construction.
+  var idToIdx = {};
+  for (var i = 0; i < n; i++) { idToIdx[rawNodes[i].id] = i; }
 
   var edges = [];
   var degOut = new Array(n).fill(0);
-  var degIn = new Array(n).fill(0);
+  var degIn  = new Array(n).fill(0);
   var maxWeight = 1;
 
-  for (var i = 0; i < n; i++) {
-    var row = matrix[i] || [];
-    for (var j = 0; j < n; j++) {
-      var w = row[j];
-      if (w && w > 0) {
-        edges.push({ src: i, dst: j, weight: w });
-        degOut[i] += 1;
-        degIn[j] += 1;
-        if (w > maxWeight) maxWeight = w;
-      }
-    }
+  for (var e = 0; e < rawEdges.length; e++) {
+    var re = rawEdges[e];
+    var src = idToIdx[re.from];
+    var dst = idToIdx[re.to];
+    if (src === undefined || dst === undefined) continue;
+    var w = re.count || 1;
+    edges.push({ src: src, dst: dst, weight: w });
+    degOut[src]++;
+    degIn[dst]++;
+    if (w > maxWeight) maxWeight = w;
   }
 
-  var degree = items.map(function(_, k) { return degOut[k] + degIn[k]; });
+  var degree = new Array(n);
   var maxDeg = 1;
-  for (var d = 0; d < degree.length; d++) { if (degree[d] > maxDeg) maxDeg = degree[d]; }
+  for (var k = 0; k < n; k++) {
+    degree[k] = degOut[k] + degIn[k];
+    if (degree[k] > maxDeg) maxDeg = degree[k];
+  }
 
-  // Circle layout initial positions
-  var R = Math.max(100, n * 18);
-  var nodes = items.map(function(label, idx) {
+  var grain = payload.grain || 'file';
+  // Radius scale: smaller circle for file grain (denser graph).
+  var rScale = (grain === 'file') ? 10 : 18;
+  var R = Math.max(80, n * rScale);
+
+  var simNodes = rawNodes.map(function(nd, idx) {
     var angle = (2 * Math.PI * idx) / n;
-    var isExt = label.indexOf('Ext:') === 0 || label.indexOf('ext:') === 0;
     return {
-      id: idx, label: label,
+      id: nd.id, label: nd.label,
       x: R * Math.cos(angle), y: R * Math.sin(angle),
       vx: 0, vy: 0,
-      pinned: false, degree: degree[idx], ext: isExt
+      pinned: false, degree: degree[idx], ext: !!nd.ext
     };
   });
 
   return {
-    nodes: nodes, edges: edges,
+    nodes: simNodes, edges: edges,
     maxDegree: maxDeg, maxWeight: maxWeight,
-    alpha: 1.0, count: shard.count || '', prov: shard.prov || {}
+    alpha: 1.0,
+    grain: grain,
+    rev: payload.rev || '',
+    downgraded: payload.downgraded || '',
+    nodeCount: n,
+    edgeCount: edges.length
   };
 }
 
@@ -3007,13 +3031,16 @@ function terrainSimStep(sim) {
   var nodes = sim.nodes;
   var n = nodes.length;
   var alpha = sim.alpha;
-  var repulse = 2800;
-  var restLen = 130;
-  var stiff = 0.06;
-  var grav = 0.035;
-  var damp = 0.82;
+  var isFile = (sim.grain === 'file');
+  // File grain (~310 nodes): smaller repulsion radius + shorter rest length for
+  // a tighter, denser layout. Unit grain: original values.
+  var repulse = isFile ? 900 : 2800;
+  var restLen = isFile ? 60 : 130;
+  var stiff   = isFile ? 0.04 : 0.06;
+  var grav    = isFile ? 0.04 : 0.035;
+  var damp    = 0.82;
 
-  // Repulsion (O(n²), fine for n < 400)
+  // Repulsion (O(n²), fine for n < 600)
   for (var i = 0; i < n; i++) {
     for (var j = i + 1; j < n; j++) {
       var dx = nodes[j].x - nodes[i].x;
@@ -3062,8 +3089,12 @@ function terrainSimStep(sim) {
   sim.alpha *= 0.976;
 }
 
-function terrainNodeR(deg, maxDeg) {
-  return 5 + (maxDeg > 0 ? deg / maxDeg : 0) * 13;
+// Node radius, grain-adaptive.
+// file grain: smaller (denser graph, ~310 nodes) — 2–7 px.
+// unit grain: larger (sparse, ~37 nodes) — 5–18 px.
+function terrainNodeR(deg, maxDeg, grain) {
+  var t = maxDeg > 0 ? deg / maxDeg : 0;
+  return (grain === 'file') ? 2 + t * 5 : 5 + t * 13;
 }
 
 // Render the terrain canvas.
@@ -3108,6 +3139,8 @@ function terrainRender() {
   var nodes = sim.nodes;
   var edges = sim.edges;
   var hover = terrainHover;
+  var grain = sim.grain || 'file';
+  var isFilGrain = (grain === 'file');
 
   // Identify edges + neighbors connected to hovered node
   var hoverEdge = {};
@@ -3123,13 +3156,20 @@ function terrainRender() {
   }
 
   // ── Edges ──
+  // File grain: thinner lines, lower alpha (1700+ edges).
+  // Unit grain: weight-scaled width/alpha (existing behaviour).
   for (var ei = 0; ei < edges.length; ei++) {
     var edge = edges[ei];
     var snode = nodes[edge.src];
     var tnode = nodes[edge.dst];
-    var wA = 0.12 + 0.5 * (edge.weight / sim.maxWeight);
-    var opacity = (hover >= 0 && !hoverEdge[ei]) ? 0.06 : wA;
-    var lw = 0.6 + 1.6 * (edge.weight / sim.maxWeight);
+    var wRatio = edge.weight / sim.maxWeight;
+    var wA, lw;
+    if (isFilGrain) {
+      wA = 0.06; lw = 0.35;
+    } else {
+      wA = 0.12 + 0.5 * wRatio; lw = 0.6 + 1.6 * wRatio;
+    }
+    var opacity = (hover >= 0 && !hoverEdge[ei]) ? (isFilGrain ? 0.03 : 0.06) : wA;
 
     ctx.beginPath();
     ctx.moveTo(snode.x, snode.y);
@@ -3138,10 +3178,10 @@ function terrainRender() {
     ctx.lineWidth = lw;
     ctx.stroke();
 
-    // Arrowhead (only when not dimmed)
-    if (hover < 0 || hoverEdge[ei]) {
+    // Arrowhead (only when not dimmed; skip for file grain — too cluttered)
+    if (!isFilGrain && (hover < 0 || hoverEdge[ei])) {
       var ang = Math.atan2(tnode.y - snode.y, tnode.x - snode.x);
-      var tr = terrainNodeR(tnode.degree, sim.maxDegree);
+      var tr = terrainNodeR(tnode.degree, sim.maxDegree, grain);
       var ax = tnode.x - (tr + 2) * Math.cos(ang);
       var ay = tnode.y - (tr + 2) * Math.sin(ang);
       var al = 7, aw = 0.38;
@@ -3158,7 +3198,7 @@ function terrainRender() {
   // ── Nodes ──
   for (var ni = 0; ni < nodes.length; ni++) {
     var node = nodes[ni];
-    var r = terrainNodeR(node.degree, sim.maxDegree);
+    var r = terrainNodeR(node.degree, sim.maxDegree, grain);
     var isHov = (ni === hover);
     var isNeigh = (hover >= 0 && hoverNeigh[ni]);
     var isDim = (hover >= 0 && !isHov && !isNeigh);
@@ -3171,8 +3211,8 @@ function terrainRender() {
 
     var nodeAlpha = isDim ? 0.18 : 1.0;
 
-    // Glow halo
-    if (!isDim) {
+    // Glow halo (skip for file grain unless hovered/neighbour — reduces clutter)
+    if (!isDim && (!isFilGrain || isHov || isNeigh)) {
       var grad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, r * 3.5);
       var ga = isHov ? 0.45 : (isNeigh ? 0.2 : 0.13);
       grad.addColorStop(0, 'rgba(' + nr + ',' + ng + ',' + nb + ',' + ga + ')');
@@ -3197,8 +3237,11 @@ function terrainRender() {
       ctx.fill();
     }
 
-    // Label: always for hovered; for larger nodes; for all when zoomed in
-    var showLabel = isHov || node.degree >= sim.maxDegree * 0.25 || sc > 1.5;
+    // Label threshold: file grain needs a higher bar to avoid clutter.
+    // Show label for: hovered, high-degree (top 15% for file, 25% for unit), or zoomed in.
+    var degThresh = isFilGrain ? 0.15 : 0.25;
+    var zoomThresh = isFilGrain ? 3.0 : 1.5;
+    var showLabel = isHov || node.degree >= sim.maxDegree * degThresh || sc > zoomThresh;
     if (showLabel) {
       var fs = Math.max(9, 11 / sc);
       ctx.font = (isHov ? '600 ' : '') + fs + 'px "JetBrains Mono",monospace';
@@ -3228,20 +3271,24 @@ function terrainStartSim() {
   terrainRAF = requestAnimationFrame(terrainTick);
 }
 
-// Update the status strip with live metrics from current sim.
+// Update the status strip with grain-truthful metrics from the current sim.
+// Numbers come ONLY from the payload — never invented.
 function terrainUpdateStrip() {
   var strip = document.getElementById('terrainStatusText');
   if (!strip || !terrainState) return;
   var sim = terrainState;
-  var nodeCount = sim.nodes.length;
-  var edgeCount = sim.edges.length;
-  var provKind = (sim.prov && sim.prov.kind) || '';
-  var provLabel = provKind === 'derived' ? '<span class="terrain-status-live">REAL</span> — derived from imports · always current'
-                : provKind === 'simulated' ? 'SIM — not yet derived' : '';
-  var revStr = terrainManifestRev ? 'rev ' + terrainManifestRev.slice(0, 8) : '';
-  var parts = [nodeCount + ' units', edgeCount + ' dependencies'];
+  var g = sim.grain || 'file';
+  var isFile = (g === 'file');
+  var nodeWord = isFile ? 'files' : 'units';
+  var edgeWord = isFile ? 'import edges' : 'dependencies';
+  var revStr = sim.rev ? 'rev ' + sim.rev.slice(0, 8) : '';
+  var provLabel = '<span class="terrain-status-live">REAL</span> — derived from imports · always current';
+  var parts = [sim.nodeCount + ' ' + nodeWord, sim.edgeCount + ' ' + edgeWord];
   if (revStr) parts.push(revStr);
-  if (provLabel) parts.push(provLabel);
+  parts.push(provLabel);
+  if (sim.downgraded) {
+    parts.push('<span class="terrain-status-downgraded">' + sim.downgraded + '</span>');
+  }
   strip.innerHTML = parts.join(' &middot; ');
 
   // Pulse on update
@@ -3253,20 +3300,36 @@ function terrainUpdateStrip() {
   }
 }
 
-// Fetch DSM shard and rebuild simulation.
-function terrainLoadShard(dsmView) {
-  if (!dsmView || !dsmView.shard) return;
-  var url = '/api/arch/' + dsmView.shard.path + '?v=' + dsmView.shard.hash;
-  safeFetch(url).then(function(shard) {
-    if (!shard || !shard.items || shard.items.length === 0) return;
+// Fetch /api/arch/graph and rebuild simulation.
+// grain: 'file' | 'unit'
+// Runtime guard: if server returns file grain with >600 nodes, auto-drop to unit
+// client-side (O(n²) repulsion at n=600 is still manageable but visually crowded).
+function terrainLoadGraph(grain) {
+  var url = '/api/arch/graph?grain=' + grain;
+  safeFetch(url).then(function(payload) {
+    if (!payload || !payload.nodes || payload.nodes.length === 0) return;
+    var actualGrain = payload.grain || grain;
+    // Client-side guard: file grain with >600 nodes → silently switch to unit.
+    if (actualGrain === 'file' && payload.nodes.length > 600) {
+      terrainGrain = 'unit';
+      terrainUpdateGrainButtons();
+      terrainLoadGraph('unit');
+      return;
+    }
+    // Update terrainGrain to what was actually delivered (server may have downgraded).
+    terrainGrain = actualGrain;
+    terrainUpdateGrainButtons();
+
     var prevNodes = terrainState ? terrainState.nodes : null;
-    terrainState = terrainBuildSim(shard);
-    // Preserve positions for nodes that survived the update
+    terrainState = terrainBuildSimFromGraph(payload);
+    if (!terrainState) return;
+
+    // Preserve positions for nodes that survived the update (by stable id).
     if (prevNodes) {
-      var byLabel = {};
-      prevNodes.forEach(function(n) { byLabel[n.label] = n; });
+      var byId = {};
+      prevNodes.forEach(function(n) { byId[n.id] = n; });
       terrainState.nodes.forEach(function(n) {
-        var old = byLabel[n.label];
+        var old = byId[n.id];
         if (old) { n.x = old.x; n.y = old.y; n.vx = old.vx * 0.3; n.vy = old.vy * 0.3; n.pinned = old.pinned; }
       });
       terrainState.alpha = 0.6; // brief re-settle
@@ -3276,14 +3339,29 @@ function terrainLoadShard(dsmView) {
   }).catch(function() {});
 }
 
-// Called from probe and from switchTab when terrain tab is activated.
+// Called from probe and from switchTab when terrain tab is first activated.
+// Fetches the actual substrate knowledge graph (not a pre-rendered shard).
 function terrainInit() {
   var manifest = cache.arch;
   if (!manifest) return;
-  var dsmView = terrainGetDSMEntry(manifest);
-  if (!dsmView) return;
   if (!terrainManifestRev) terrainManifestRev = terrainGetManifestRev(manifest);
-  terrainLoadShard(dsmView);
+  terrainLoadGraph(terrainGrain);
+}
+
+// Set grain and reload. Called by the grain toggle buttons.
+function terrainSetGrain(grain) {
+  if (grain === terrainGrain) return;
+  terrainGrain = grain;
+  terrainUpdateGrainButtons();
+  terrainLoadGraph(grain);
+}
+
+// Sync grain toggle button active states.
+function terrainUpdateGrainButtons() {
+  var btnFile = document.getElementById('terrainGrainFile');
+  var btnUnit = document.getElementById('terrainGrainUnit');
+  if (btnFile) btnFile.classList.toggle('active', terrainGrain === 'file');
+  if (btnUnit) btnUnit.classList.toggle('active', terrainGrain === 'unit');
 }
 
 // Wire up canvas interaction (idempotent via _terrainSetup flag).
@@ -3308,7 +3386,7 @@ function terrainSetupCanvas() {
     var sp = simXY(px, py);
     var nodes = terrainState.nodes;
     for (var hi = 0; hi < nodes.length; hi++) {
-      var hr = terrainNodeR(nodes[hi].degree, terrainState.maxDegree) + 5;
+      var hr = terrainNodeR(nodes[hi].degree, terrainState.maxDegree, terrainState.grain) + 5;
       var hx = nodes[hi].x - sp.x, hy = nodes[hi].y - sp.y;
       if (hx * hx + hy * hy < hr * hr) return hi;
     }

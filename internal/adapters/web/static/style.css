@@ -754,8 +754,10 @@ body {
   color: var(--dim); gap: 0; letter-spacing: 0.3px;
 }
 .terrain-status-live { color: var(--green); }
+.terrain-status-downgraded { color: var(--yellow, #f59e0b); font-style: italic; }
 @keyframes terrain-pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 .terrain-pulse { animation: terrain-pulse 0.8s ease-out; }
+.terrain-grain-toggle { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0; }
 
 /* ══════════════════════════════════════════════════════════
    BLUEPRINTS TAB: edge-to-edge arch viewer iframe
