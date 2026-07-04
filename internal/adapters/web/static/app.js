@@ -18,6 +18,8 @@ var blueprintsIframeLoaded = false; // lazy: src set on first blueprints tab act
 var terrainState = null;       // current sim: {nodes,edges,alpha,maxDegree,maxWeight,grain,rev,downgraded,nodeCount,edgeCount}
 var terrainManifestRev = null; // last observed manifest rev (DSM hash — change detector)
 var terrainGrain = 'file';     // 'file' | 'unit' — current grain (per-session, not persisted)
+var terrainShowExt = false;    // externals (ext:*) hidden by default — they can be 90%+ of
+                               // nodes and are context, not the subject; strip states the count
 var terrainRAF = null;         // requestAnimationFrame handle (null when sim settled)
 var terrainView = { x: 0, y: 0, scale: 1 };
 var terrainHover = -1;         // hovered node index (-1 = none)
@@ -2965,8 +2967,18 @@ function terrainGetManifestRev(manifest) {
 // payload: {grain, rev, nodes:[{id,label,path,ext}], edges:[{from,to,count,file,line}], downgraded?}
 // Returns a sim object suitable for terrainSimStep / terrainRender, or null on empty input.
 function terrainBuildSimFromGraph(payload) {
-  var rawNodes = payload.nodes || [];
+  var allNodes = payload.nodes || [];
   var rawEdges = payload.edges || [];
+
+  // Externals filter: ext:* targets are context, not the subject — on real repos
+  // they can be >90% of nodes and drown the codebase. Hidden by default; the
+  // strip states the hidden count (honesty), the Externals toggle shows them.
+  var rawNodes = allNodes;
+  var extTotal = 0;
+  for (var xi = 0; xi < allNodes.length; xi++) { if (allNodes[xi].ext) extTotal++; }
+  if (!terrainShowExt && extTotal > 0) {
+    rawNodes = allNodes.filter(function(nd) { return !nd.ext; });
+  }
   var n = rawNodes.length;
   if (n === 0) return null;
 
@@ -2979,11 +2991,12 @@ function terrainBuildSimFromGraph(payload) {
   var degIn  = new Array(n).fill(0);
   var maxWeight = 1;
 
+  var extEdgesHidden = 0;
   for (var e = 0; e < rawEdges.length; e++) {
     var re = rawEdges[e];
     var src = idToIdx[re.from];
     var dst = idToIdx[re.to];
-    if (src === undefined || dst === undefined) continue;
+    if (src === undefined || dst === undefined) { extEdgesHidden++; continue; }
     var w = re.count || 1;
     edges.push({ src: src, dst: dst, weight: w });
     degOut[src]++;
@@ -3024,7 +3037,10 @@ function terrainBuildSimFromGraph(payload) {
     rev: payload.rev || '',
     downgraded: payload.downgraded || '',
     nodeCount: n,
-    edgeCount: edges.length
+    edgeCount: edges.length,
+    extTotal: extTotal,
+    extHidden: (!terrainShowExt && extTotal > 0) ? extTotal : 0,
+    extEdgesHidden: (!terrainShowExt && extTotal > 0) ? extEdgesHidden : 0
   };
 }
 
@@ -3287,6 +3303,11 @@ function terrainUpdateStrip() {
   var revStr = sim.rev ? 'rev ' + sim.rev.slice(0, 8) : '';
   var provLabel = '<span class="terrain-status-live">REAL</span> — derived from imports · always current';
   var parts = [sim.nodeCount + ' ' + nodeWord, sim.edgeCount + ' ' + edgeWord];
+  if (sim.extHidden > 0) {
+    parts.push(sim.extHidden + ' externals hidden');
+  } else if (terrainShowExt && sim.extTotal > 0) {
+    parts.push(sim.extTotal + ' externals shown');
+  }
   if (revStr) parts.push(revStr);
   parts.push(provLabel);
   if (sim.downgraded) {
@@ -3312,8 +3333,14 @@ function terrainLoadGraph(grain) {
   safeFetch(url).then(function(payload) {
     if (!payload || !payload.nodes || payload.nodes.length === 0) return;
     var actualGrain = payload.grain || grain;
-    // Client-side guard: file grain with >600 nodes → silently switch to unit.
-    if (actualGrain === 'file' && payload.nodes.length > 600) {
+    // Client-side guard on the VISIBLE node count (externals may be filtered):
+    // file grain with >600 visible nodes → switch to unit grain.
+    var visible = payload.nodes.length;
+    if (!terrainShowExt) {
+      visible = 0;
+      for (var vi = 0; vi < payload.nodes.length; vi++) { if (!payload.nodes[vi].ext) visible++; }
+    }
+    if (actualGrain === 'file' && visible > 600) {
       terrainGrain = 'unit';
       terrainUpdateGrainButtons();
       terrainLoadGraph('unit');
@@ -3363,8 +3390,17 @@ function terrainSetGrain(grain) {
 function terrainUpdateGrainButtons() {
   var btnFile = document.getElementById('terrainGrainFile');
   var btnUnit = document.getElementById('terrainGrainUnit');
+  var btnExt = document.getElementById('terrainExtBtn');
   if (btnFile) btnFile.classList.toggle('active', terrainGrain === 'file');
   if (btnUnit) btnUnit.classList.toggle('active', terrainGrain === 'unit');
+  if (btnExt) btnExt.classList.toggle('active', terrainShowExt);
+}
+
+// Toggle external (ext:*) node visibility and rebuild from the current grain.
+function terrainToggleExt() {
+  terrainShowExt = !terrainShowExt;
+  terrainUpdateGrainButtons();
+  terrainLoadGraph(terrainGrain);
 }
 
 // Wire up canvas interaction (idempotent via _terrainSetup flag).
