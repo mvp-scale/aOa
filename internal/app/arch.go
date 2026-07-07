@@ -222,6 +222,8 @@ func (a *App) deriveArch() {
 	defer a.archDeriveMu.Unlock()
 
 	// 1. Load all edges (read-only — db.View; C1 does not apply to reads).
+	// BE-2 policy: _test.go imports ARE included in the fact substrate — they enter
+	// via LoadAllEdges without filtering, affecting fan-in counts, road directions, and DAG claims.
 	edges, err := a.Store.LoadAllEdges(a.ProjectID)
 	if err != nil {
 		a.debugf("deriveArch: LoadAllEdges: %v", err)

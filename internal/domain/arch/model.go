@@ -255,6 +255,6 @@ func provFromKind(kind string) Prov {
 	case "mixed":
 		return Prov{Kind: "mixed", Label: "MIXED · overlay applied"}
 	default:
-		return Prov{Kind: "derived", Label: "REAL · imports + deterministic grouping"}
+		return Prov{Kind: "derived", Label: "REAL · imports (incl. test files) + deterministic grouping"}
 	}
 }
