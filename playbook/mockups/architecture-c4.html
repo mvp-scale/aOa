@@ -356,13 +356,35 @@ function MatrixView({view,onSel,selId}){
 // invisible nodes covering edge-label extents so fitView never clips a label
 // (React Flow fits to NODE bounds only; detour-routed edge labels can fall outside)
 function SpacerNode(){return html`<div style=${{pointerEvents:"none"}}></div>`;}
+// CapsuleNode: collapsed or expandable group capsule (Rung 0/1 per §4.1)
+// Collapsed: header + count chip only. Expanded: full bucket content (via BucketNode).
+function CapsuleNode({data}){
+  const c=data.col;
+  const ext=data._external;
+  const dash=ext||data.layer==="supporting"||data.boundary;
+  if(data.expanded){
+    return html`<${BucketNode} data=${data}/>`;
+  }
+  return html`<div style=${{width:"100%",height:"100%",background:T.band,
+    border:`1.5px ${dash?"dashed":"solid"} ${ext?T.mute:c}`,borderRadius:4,boxSizing:"border-box",
+    cursor:"pointer",display:"flex",alignItems:"center",gap:7,padding:"7px 12px",
+    boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none"}}>
+    <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
+    <${Ico} k=${ext?"ext":data.ico||data.layer} c=${ext?T.mute:c} s=${14}/>
+    <span style=${{fontSize:11,fontWeight:700,color:ext?T.mute:c,textTransform:"uppercase",letterSpacing:1.1,
+      whiteSpace:"nowrap",flex:1,overflow:"hidden",textOverflow:"ellipsis"}}>${data.label}</span>
+    <span style=${{fontSize:10.5,fontWeight:700,color:ext?T.mute:T.dim,flexShrink:0,
+      background:T.chrome,borderRadius:8,padding:"1px 6px"}}>${data.memberCount!==undefined?data.memberCount:data.members&&data.members.length||0}</span>
+    <span style=${{fontSize:9,color:T.mute,flexShrink:0}}>▸</span>
+    <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
+  </div>`;}
 function labelSpacers(laidById){const sp=[];let i=0;
   Object.values(laidById).forEach(le=>{(le.labels||[]).forEach(l=>{
     if(l.x===undefined)return;
     sp.push({id:"_lsp"+(i++),type:"spacer",position:{x:l.x,y:l.y},
       width:l.width||40,height:l.height||16,draggable:false,selectable:false,data:{}});});});
   return sp;}
-const nodeTypes={box:BoxNode,bucket:BucketNode,solo:SoloNode,member:MemberNode,entity:EntityNode,spacer:SpacerNode};
+const nodeTypes={box:BoxNode,bucket:BucketNode,solo:SoloNode,member:MemberNode,entity:EntityNode,spacer:SpacerNode,capsule:CapsuleNode};
 const edgeTypes={elk:ElkEdge};
 
 const SP={
@@ -439,20 +461,47 @@ const viewLayerColors=view=>{const pal=PALETTES[view.palette||"aoa"]||{};
     map[l]=CYCLE[i];used.add(CYCLE[i]);});
   return map;};
 const layerColor=(view,l)=>viewLayerColors(view)[l]||LAYER_PIN[l]||CYCLE[lhash(l||"")%CYCLE.length];
-async function layoutBuckets(view,dir,d,ov){
-  ov=ov||{};
-  const B=view.buckets;
+// mergeExternalBuckets: fold all g_ext_* buckets into ONE EXTERNALS capsule (R3).
+// Returns [internals[], externals_capsule_or_null].
+function mergeExternalBuckets(buckets){
+  const internal=buckets.filter(b=>!b.id.startsWith("g_ext_"));
+  const external=buckets.filter(b=>b.id.startsWith("g_ext_"));
+  if(!external.length)return[buckets,null];
+  const allExtMembers=external.flatMap(b=>b.members||[]);
+  const extCapsule={id:"g_EXTERNALS",layer:"supporting",boundary:true,
+    label:"EXTERNALS",members:allExtMembers,
+    memberCount:allExtMembers.length,part:99,
+    _external:true};
+  return[internal,extCapsule];}
+async function layoutBuckets(view,dir,d,ov,opts){
+  ov=ov||{};opts=opts||{};
+  const capsuleMode=!!opts.capsuleMode;
+  const expandedSet=capsuleMode?(opts.expandedGroups||new Set()):null;
+  // EXTERNALS fold: merge g_ext_* into one capsule (R3)
+  const[internalBuckets,extCapsule]=mergeExternalBuckets(view.buckets);
+  const B=extCapsule?[...internalBuckets,extCapsule]:internalBuckets;
   const colOf=l=>layerColor(view,l);
+  // remapId: redirects g_ext_* → g_EXTERNALS when the external fold is active
+  const remapId=id=>extCapsule&&id&&id.startsWith("g_ext_")?"g_EXTERNALS":id;
   const problems=[];const deg={};B.forEach(b=>deg[b.id]={i:0,o:0});
   const bById={};B.forEach(b=>bById[b.id]=b);
-  view.edges.forEach(e=>{deg[e.source].o++;deg[e.target].i++;
+  // Also keep original bById for label lookups (before fold)
+  const origBById={};(view.buckets||[]).forEach(b=>origBById[b.id]=b);
+  const nameOfBucket=id=>(bById[id]||origBById[id]||{}).label||id;
+  // Build remapped edges for degree + ELK (g_ext_* → g_EXTERNALS)
+  const remappedEdges=view.edges.map(e=>({...e,source:remapId(e.source),target:remapId(e.target)}));
+  // Deduplicate remapped edges by (source,target) so merged externals don't produce parallel ELK edges
+  const edgeSeen=new Set();
+  const elkEdges=remappedEdges.filter(e=>{if(e.source===e.target)return false;
+    const k=e.source+"\x00"+e.target;if(edgeSeen.has(k))return false;edgeSeen.add(k);return true;});
+  elkEdges.forEach(e=>{if(deg[e.source])deg[e.source].o++;if(deg[e.target])deg[e.target].i++;
     const sp=bById[e.source],tp=bById[e.target];
-    if(sp&&tp&&sp.part>tp.part){e._viol=true;problems.push("band violation: "+sp.label+" → "+tp.label);}
-    if(e.tag){e._viol=true;problems.push(e.tag+": "+sp.label+" → "+tp.label);}});
+    if(sp&&tp&&sp.part>tp.part){e._viol=true;problems.push("band violation: "+nameOfBucket(e.source)+" → "+nameOfBucket(e.target));}
+    if(e.tag){e._viol=true;problems.push(e.tag+": "+nameOfBucket(e.source)+" → "+nameOfBucket(e.target));}});
   B.forEach(b=>{const dg=deg[b.id];
     if(dg.i+dg.o===0&&B.length>1){b._dead=true;problems.push("orphan: "+b.label+" — no connections");}
     if(dg.i>=3&&dg.o>=3){b._god=true;problems.push("god component: "+b.label+" (in "+dg.i+" · out "+dg.o+")");}});
-  (function(){const adj={};view.edges.forEach(e=>{(adj[e.source]=adj[e.source]||[]).push(e.target);});
+  (function(){const adj={};elkEdges.forEach(e=>{(adj[e.source]=adj[e.source]||[]).push(e.target);});
    const st={};let cyc=null;
    function dfs(u,stk){st[u]=1;stk.push(u);
      for(const v2 of adj[u]||[]){if(st[v2]===1){cyc=stk.slice(stk.indexOf(v2)).concat(v2);return true;}
@@ -461,9 +510,14 @@ async function layoutBuckets(view,dir,d,ov){
    for(const b of B){if(!st[b.id]&&dfs(b.id,[]))break;}
    if(cyc){problems.push("dependency cycle: "+cyc.map(id=>bById[id]?bById[id].label:id).join(" → "));
      cyc.forEach(id=>{if(bById[id])bById[id]._cyc=true;});}})();
-  B.forEach(b=>{if((b.members||[]).length>40){b._over=b.members.length;
+  B.forEach(b=>{if(!capsuleMode&&(b.members||[]).length>40){b._over=b.members.length;
     b.members=b.members.slice(0,23).concat([{id:b.id+"_more",label:"+"+(b._over-23)+" more…",sub:"over budget"}]);}});
-  B.forEach(b=>{const n=b.members.length;
+  B.forEach(b=>{
+    // Capsule mode: collapsed buckets use header-only height; EXTERNALS capsule always collapsed
+    if(capsuleMode&&!expandedSet.has(b.id)){
+      b._capsule=true;b._collapsed=true;
+      b.w=Math.max(d.solo[0],snap((b.label||"").length*7.4+120));b.h=d.head;return;}
+    const n=(b.members||[]).length;
     b.solo=(n===1);
     if(b.solo){b.w=Math.max(d.solo[0],snap((b.members[0].label||"").length*7.2+(b.label||"").length*7+96));b.h=d.solo[1];return;}
     // member cell width follows the longest label (sub moved to hover); very long labels wrap to 2 lines
@@ -481,7 +535,7 @@ async function layoutBuckets(view,dir,d,ov){
     children:B.map(b=>({id:b.id,width:b.w,height:b.h,
       layoutOptions:{"elk.partitioning.partition":String(b.part),
                      "elk.portConstraints":"FIXED_SIDE"}})),
-    edges:view.edges.map(e=>({id:e.id,sources:[e.source],targets:[e.target],
+    edges:elkEdges.map(e=>({id:e.id,sources:[e.source],targets:[e.target],
       labels:[{text:(view.labeled&&e.label)?e.label+" ×"+e.count:"×"+e.count,
                width:lblW((view.labeled&&e.label)?e.label+" x"+e.count:"x"+e.count),height:16}]}))};
   const r=await elk.layout(g);
@@ -489,6 +543,12 @@ async function layoutBuckets(view,dir,d,ov){
   const laidById={};(r.edges||[]).forEach(e=>laidById[e.id]=e);
   const nodes=[];
   B.forEach(b=>{const bp=pos[b.id];const col=colOf(b.layer);
+    // Capsule mode: collapsed buckets render as CapsuleNode (header-only, no members)
+    if(b._collapsed){
+      nodes.push({id:b.id,type:"capsule",position:bp,width:b.w,height:b.h,
+        style:{width:b.w,height:b.h},zIndex:0,draggable:false,selectable:false,
+        data:{...b,head:d.head,col,expanded:false}});
+      return;}
     if(b.solo){
       nodes.push({id:b.id,type:"solo",position:bp,width:b.w,height:b.h,
         zIndex:0,draggable:false,selectable:false,
@@ -504,7 +564,7 @@ async function layoutBuckets(view,dir,d,ov){
         data:{...m,lay:b.layer,col,w:b.iw,h:b.ih,wrap:b.wrap,
           showC:!!(ov.concerns&&m.concerns>0),showH:!!(ov.changed&&m.changed)}});});});
   const bcol={};B.forEach(b=>bcol[b.id]=colOf(b.layer));
-  const edges2=view.edges.map(e=>{const r=rfEdge(e,laidById,ee=>bcol[ee.source]||T.dim,id2=>(bById[id2]||{}).label||id2);
+  const edges2=elkEdges.map(e=>{const r=rfEdge(e,laidById,ee=>bcol[ee.source]||T.dim,id2=>nameOfBucket(id2));
     if(e._viol){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3",opacity:.95};
       r.markerEnd={...r.markerEnd,color:T.red};
       if(r.data.label)r.data.label.text="⚠ "+r.data.label.text;}
@@ -945,12 +1005,23 @@ function Flow(){
   </div>`;
   const[ov,setOv]=useState(()=>{const o=(q.get("ov")||"").split(",");
     return {concerns:o.includes("concerns"),changed:o.includes("changed")};});
+  // Capsule expand state — persisted in localStorage (R5: stable base map)
+  const[expandedGroups,setExpandedGroups]=useState(()=>{
+    try{const s=localStorage.getItem("bp:expanded:"+estate+":"+scope);
+      return new Set(s?JSON.parse(s):[]);}catch{return new Set();}});
+  const isCapsuleView=!!(view&&view.kind==="buckets");
+  const toggleCapsule=useCallback((bid)=>{
+    setExpandedGroups(prev=>{
+      const next=new Set(prev);
+      if(next.has(bid))next.delete(bid);else next.add(bid);
+      try{localStorage.setItem("bp:expanded:"+estate+":"+scope,JSON.stringify([...next]));}catch{}
+      return next;});},[estate,scope]);
   const[last,setLast]=useState({});
   const[autoDir,setAutoDir]=useState(null);
   const dir=dirOv||autoDir||"DOWN";
   useEffect(()=>{let on=true;const d=SP[den];
     setEls(null);setSelRaw(null);setSelId(null);   // view change clears selection but PRESERVES dock expansion; remount canvas with the new layout
-    const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov):layoutSimple(view,dd,d);
+    const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov,{capsuleMode:true,expandedGroups}):layoutSimple(view,dd,d);
     // Auto direction: lay out BOTH ways, keep whichever fits the viewport at the larger scale
     const fitScale=r=>{const xs=r.nodes.map(n=>n.position.x),ys=r.nodes.map(n=>n.position.y),
       xe=r.nodes.map(n=>n.position.x+(n.width||208)),ye=r.nodes.map(n=>n.position.y+(n.height||64));
@@ -982,7 +1053,7 @@ function Flow(){
         if(fitScale(a)>=fitScale(b)){e=a;dd="DOWN";}else{e=b;dd="RIGHT";}}
       if(on){setEls(e);setAutoDir(dd);setLast(l=>({...l,[estate+":"+scope+":"+level]:Date.now()}));}
     }catch(err){showFatal("VIEW LOAD FAILED · "+(err&&err.message||err));}})();
-    return()=>{on=false;};},[estate,scope,level,dirOv,den,ov]);
+    return()=>{on=false;};},[estate,scope,level,dirOv,den,ov,expandedGroups]);
   // test hook: ?auto=<view>:<ms> simulates a user click after ms (verifies the CLICK path, not URL load)
   useEffect(()=>{const auto=q.get("auto");
     if(auto){const[lv,ms]=auto.split(":");const t=setTimeout(()=>setLevel(lv),parseInt(ms||"800",10));
@@ -1009,6 +1080,8 @@ function Flow(){
   const onNodeClick=useCallback((_,n)=>{if(!n.data)return;
     if(n.data.drillTo){setLevel(n.data.drillTo);setDirOv(null);return;}
     if(n.type==="spacer")return;
+    // Capsule toggle: click expands/collapses the group (R5: in-place, no global relayout)
+    if(n.type==="capsule"&&isCapsuleView){toggleCapsule(n.id);return;}
     const d=n.data,m=(n.type==="solo"?d.member:d)||{};
     const rows=(m.stats?Object.entries(m.stats):[]).concat(m.sub?[["detail",m.sub]]:[]);
     if(d.layer||d.lay)rows.unshift(["layer",d.layer||d.lay]);
