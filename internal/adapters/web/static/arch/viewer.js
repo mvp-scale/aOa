@@ -223,18 +223,25 @@ function EntityNode({data}){
     <${HoverCard} title=${data.label} rows=${data.stats?Object.entries(data.stats):[["store",data.tech]]} hint="click → details"/>
   </div>`;}
 function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting"||data.boundary;
-  return html`<div style=${{width:"100%",height:"100%",background:T.band,
-    border:`1.5px ${dash?"dashed":"solid"} ${data._god?T.red:c}`,borderRadius:4,boxSizing:"border-box",
+  // _expanded: rendered from capsule expansion — distinct visual treatment
+  const fromCapsule=data._fromCapsule;
+  return html`<div style=${{width:"100%",height:"100%",
+    background:fromCapsule?c+"0f":T.band,
+    border:`${fromCapsule?"2.5px":"1.5px"} ${dash?"dashed":"solid"} ${data._god?T.red:c}`,
+    borderRadius:4,boxSizing:"border-box",
     opacity:data._dead?0.45:1,cursor:"pointer",
-    boxShadow:data._sel?`0 0 0 2px ${T.blue}`:data._god?`0 0 0 2px ${T.red}55, 0 0 22px ${T.red}44`:"none"}}>
+    boxShadow:fromCapsule?`0 0 0 1px ${c}55, 0 0 14px ${c}22`:data._sel?`0 0 0 2px ${T.blue}`:data._god?`0 0 0 2px ${T.red}55, 0 0 22px ${T.red}44`:"none"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
-    <div style=${{display:"flex",alignItems:"center",gap:7,padding:"7px 12px",height:data.head,boxSizing:"border-box"}}>
+    <div style=${{display:"flex",alignItems:"center",gap:7,padding:"7px 12px",height:data.head,boxSizing:"border-box",
+      background:fromCapsule?c+"18":"transparent",
+      borderRadius:"3px 3px 0 0"}}>
       <${Ico} k=${data.ico||data.layer} c=${c} s=${14}/>
       <span style=${{fontSize:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:1.1}}>${data.label}</span>
       ${data._cyc?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:4,padding:"0 4px"}}>⟳ CYCLE</span>`:null}
       ${data._dead?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>ORPHAN</span>`:null}
       ${data._over?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>${data._over} · COLLAPSED</span>`:null}
-      <span style=${{marginLeft:"auto",fontSize:10.5,color:T.dim}}>${data.members.length}</span>
+      <span style=${{marginLeft:"auto",fontSize:10.5,color:fromCapsule?c:T.dim,fontWeight:fromCapsule?700:400}}>${data.members.length} ${fromCapsule?"members":""}</span>
+      ${fromCapsule?html`<span style=${{fontSize:9,color:T.mute,marginLeft:4}}>▾</span>`:null}
     </div>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
@@ -553,7 +560,7 @@ async function layoutBuckets(view,dir,d,ov,opts){
       return;}
     nodes.push({id:b.id,type:"bucket",position:bp,width:b.w,height:b.h,
       style:{width:b.w,height:b.h},zIndex:0,draggable:false,selectable:false,
-      data:{...b,head:d.head,col}});
+      data:{...b,head:d.head,col,_fromCapsule:capsuleMode&&!b._collapsed}});
     b.members.forEach((m,i)=>{const c2=i%b.cols,row=Math.floor(i/b.cols);
       nodes.push({id:m.id,type:"member",draggable:false,selectable:false,zIndex:10,
         width:b.iw,height:b.ih,
@@ -674,8 +681,12 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows}
           </div>`:null}
           ${(sel.members&&sel.members.length)?html`<div style=${{flex:1.2,minWidth:0}}>
             <${DockTable} cols=${["member ("+sel.members.length+")","detail"]}
-              rows=${sel.members.slice(0,24).map(m=>[m.label,
-                m.stats?Object.values(m.stats)[0]:(m.sub||"")])}/>
+              rows=${sel.members.slice(0,24).map((m,_i,arr)=>{
+                // Disambiguate duplicate labels: qualify with path segment from member ID
+                const dups=arr.filter(x=>x.label===m.label).length>1;
+                const pathQual=dups?(()=>{const p=(m.sub||m.id||"").replace(/^[gu]_/,"").replace(/_/g,"/");
+                  const segs=p.split("/");return segs.length>1?"("+segs.slice(0,-1).pop()+")":"";})():"";
+                return [m.label+(pathQual?" "+pathQual:""),m.stats?Object.values(m.stats)[0]:(m.sub||"")];})}/>
           </div>`:null}
         </div>
         ${sel.agent?html`<div style=${{marginTop:10,paddingTop:8,borderTop:`1px solid ${T.border}33`}}>
@@ -717,10 +728,10 @@ function CanvasLegend({view}){
       items.push({txt:ETYPE_NAME[n.type]||n.type,c:ETYPE_COLR[n.type]||T.dim});}});}
   if(items.length<2)return null;
   return html`<div style=${{position:"absolute",top:10,right:14,zIndex:6,background:"#18181bf0",
-    border:`1px solid ${T.borderR}`,borderRadius:8,padding:"7px 11px",
-    display:"flex",flexDirection:"column",gap:4}}>
-    ${items.map((it,i)=>html`<div key=${i} style=${{display:"flex",alignItems:"center",gap:7,fontSize:10.5,color:T.dim}}>
-      <span style=${{width:10,height:10,borderRadius:3,background:it.c+"30",border:`1.5px solid ${it.c}`,flexShrink:0}}></span>
+    border:`1px solid ${T.borderR}`,borderRadius:8,padding:"8px 13px",
+    display:"flex",flexDirection:"column",gap:5}}>
+    ${items.map((it,i)=>html`<div key=${i} style=${{display:"flex",alignItems:"center",gap:8,fontSize:12,color:T.dim}}>
+      <span style=${{width:11,height:11,borderRadius:3,background:it.c+"30",border:`1.5px solid ${it.c}`,flexShrink:0}}></span>
       ${it.txt}</div>`)}
   </div>`;}
 function Footer({view,ov}){
@@ -736,8 +747,9 @@ function Footer({view,ov}){
     groups.push({label:"ELEMENTS",items:[{txt:"bucket table",c:T.green,ico:"store"}]});
     groups.push({label:"EDGES",items:[{txt:"contains",glyph:"━"}]});
   } else {
-    const seen={};(view.nodes||[]).forEach(n=>{if(!seen[n.type])seen[n.type]=n.icon;});
-    groups.push({label:"ELEMENTS",items:Object.keys(seen).map(t=>({txt:ETYPE_NAME[t]||t,c:ETYPE_COLR[t]||T.dim,ico:seen[t]}))});
+    const seen={};(view.nodes||[]).forEach(n=>{if(n.type&&!seen[n.type])seen[n.type]=n.icon;});
+    const elemItems=Object.keys(seen).map(t=>({txt:ETYPE_NAME[t]||t,c:ETYPE_COLR[t]||T.dim,ico:seen[t]}));
+    if(elemItems.length)groups.push({label:"ELEMENTS",items:elemItems});
     const ed=[{txt:"labeled flow",glyph:"━"}];
     if((view.nodes||[]).some(n=>n.real===false))ed.push({txt:"inferred · sourceable",glyph:"┄"});
     groups.push({label:"EDGES",items:ed});
@@ -807,28 +819,41 @@ const STATUS={live:{dot:"●",col:T.green,lbl:"derived live"},
               planned:{dot:"○",col:T.mute,lbl:"planned · extractor gated"}};
 
 const ago=t=>{const s=(Date.now()-t)/1000;return s<5?"now":s<60?Math.floor(s)+"s ago":Math.floor(s/60)+"m ago";};
-// narrateOne: converts a Finding to a plain-language headline per §4.2 patterns
-function narrateOne(f){
+// narrateOne: converts a Finding to a plain-language headline per §4.2 patterns.
+// rank=0 (top finding) gets full sentence; higher ranks get shorter diagnostics.
+function narrateOne(f,rank){
   if(!f)return"";
+  rank=rank||0;
   const msg=f.message||"";
   if(f.rule==="god"){
     const m=msg.match(/in (\d+).*out (\d+)/);
     const inN=m?m[1]:"?",outN=m?m[2]:"?";
     const subj=f.subjects&&f.subjects[0]?f.subjects[0].replace(/^[gu]_/,""):msg.split(":")[1]||"this package";
-    return `${subj} is load-bearing — ${inN} packages lean on it and it reaches into ${outN}. Changes here ripple widest.`;}
+    if(rank===0)return `${subj} is load-bearing — ${inN} packages lean on it and it reaches into ${outN}. Changes here ripple widest.`;
+    return `also load-bearing — ${inN} packages lean on ${subj}, reaches ${outN}`;}
   if(f.rule==="cycle"){
-    const m=msg.match(/×(\d+)/);const cuts=m?m[1]:"?";
     const parts=msg.replace("dependency cycle: ","").split(" → ");
     if(parts.length>=2){const a=parts[0].replace(/^[gu]_/,""),b=parts[1].replace(/^[gu]_/,"");
-      return `${a} and ${b} depend on each other — a cycle. Cheapest cut: the ${a} → ${b} edge (${f.cheapestCut||"unknown"}).`;}
+      if(rank===0)return `${a} and ${b} depend on each other — a cycle. Cheapest cut: the ${a} → ${b} edge (${f.cheapestCut||"unknown"}).`;
+      return `cycle: ${a} ↔ ${b}${f.cheapestCut?" · cut: "+f.cheapestCut:""}`;}
     return msg;}
   if(f.rule==="dead-candidate"||f.rule==="dead"||f.rule==="orphan"){
     const subj=f.subjects&&f.subjects[0]?f.subjects[0].replace(/^[gu]_/,""):msg.split(":")[1]||"this package";
-    return `${subj} looks dead — nothing imports it and search has never touched it. Removal candidate.`;}
+    if(rank===0)return `${subj} looks dead — nothing imports it and search has never touched it. Removal candidate.`;
+    return `${subj} — no importers, no search hits`;}
   if(f.rule==="budget"){
     const subj=f.subjects&&f.subjects[0]?f.subjects[0].replace(/^[gu]_/,""):msg;
-    return `${subj} exceeds the member budget. Consider splitting the group.`;}
+    if(rank===0)return `${subj} exceeds the group size budget. Consider splitting it.`;
+    return `${subj} over size budget`;}
   return msg;}
+
+// Spell out finding rule codes for human-readable header
+const RULE_NAMES={god:"load-bearing",cycle:"cycle",dead:"unreachable","dead-candidate":"unreachable",
+  orphan:"orphan",budget:"over budget"};
+function spellRuleCount(rule,n){
+  const name=RULE_NAMES[rule]||rule;
+  return `${n} ${name}${n>1?"s":""}`;}
+
 // FindingsDrawer: slide-over panel showing all daemon findings with narration + sources
 function FindingsDrawer({findings,open,setOpen,expandedId,setExpandedId}){
   if(!open)return null;
@@ -836,20 +861,23 @@ function FindingsDrawer({findings,open,setOpen,expandedId,setExpandedId}){
   findings.forEach(f=>{(bySev[f.severity]||bySev.warn).push(f);});
   const ruleCounts={};
   findings.forEach(f=>{ruleCounts[f.rule]=(ruleCounts[f.rule]||0)+1;});
-  const ruleHeader=Object.entries(ruleCounts).sort((a,b)=>b[1]-a[1]).map(([r,n])=>r+" ×"+n).join(" · ");
+  const ruleHeader=Object.entries(ruleCounts).sort((a,b)=>b[1]-a[1]).map(([r,n])=>spellRuleCount(r,n)).join(" · ");
+  // Budget header: "N groups over size budget" instead of "budget ×N"
+  const budgetCount=ruleCounts["budget"]||0;
+  const ruleHeaderDisplay=budgetCount>0?ruleHeader.replace(spellRuleCount("budget",budgetCount),budgetCount+" group"+(budgetCount>1?"s":"")+" over size budget"):ruleHeader;
   return html`<div style=${{position:"absolute",top:0,right:0,width:460,height:"100%",
     background:T.chrome,borderLeft:`1px solid ${T.border}`,zIndex:20,display:"flex",
     flexDirection:"column",boxShadow:"-8px 0 20px #0008"}}>
     <div style=${{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8}}>
       <span style=${{fontSize:12,fontWeight:700,color:T.text}}>FINDINGS</span>
-      <span style=${{fontSize:10,color:T.dim,flex:1}}>${ruleHeader}</span>
+      <span style=${{fontSize:10,color:T.dim,flex:1}}>${ruleHeaderDisplay}</span>
       <button onClick=${()=>setOpen(false)} style=${{background:"transparent",border:"none",
         color:T.mute,cursor:"pointer",fontSize:15}}>✕</button>
     </div>
     <div style=${{flex:1,overflowY:"auto",padding:"8px 0"}}>
       ${["error","warn","info"].flatMap(sev=>bySev[sev]).map((f,fi)=>{
         const expanded=expandedId===f.id;
-        const headline=narrateOne(f);
+        const headline=narrateOne(f,fi);
         return html`<div key=${fi} style=${{borderBottom:`1px solid ${T.border}33`,padding:"10px 16px",
           background:f.new?"#fbbf2406":"transparent",
           borderLeft:f.severity==="error"?`3px solid ${T.red}`:f.new?`3px solid ${T.yellow}`:"3px solid transparent"}}>
@@ -1015,9 +1043,15 @@ function Flow(){
     return {concerns:o.includes("concerns"),changed:o.includes("changed")};});
   // Capsule expand state — persisted in localStorage (R5: stable base map)
   // test hook: ?expandedGroups=g_domain,g_app pre-expands groups for screenshot verification
+  // Accepts IDs with or without "g_" prefix; also matches on label (case-insensitive).
   const[expandedGroups,setExpandedGroups]=useState(()=>{
     const qGroups=q.get("expandedGroups");
-    if(qGroups)return new Set(qGroups.split(",").filter(Boolean));
+    if(qGroups){
+      const raw=new Set(qGroups.split(",").filter(Boolean));
+      // Also add "g_"-prefixed variants so "adapters" matches "g_adapters"
+      const expanded=new Set(raw);
+      raw.forEach(id=>{if(!id.startsWith("g_"))expanded.add("g_"+id);});
+      return expanded;}
     try{const s=localStorage.getItem("bp:expanded:"+estate+":"+scope);
       return new Set(s?JSON.parse(s):[]);}catch{return new Set();}});
   const isCapsuleView=!!(view&&view.kind==="buckets");
@@ -1224,7 +1258,7 @@ function Flow(){
       <span style=${{fontSize:9.5,fontWeight:700,color:T.arch,letterSpacing:.5,flexShrink:0}}>FINDINGS</span>
       ${hasNewFindings?html`<span style=${{fontSize:8,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,
         borderRadius:4,padding:"0 4px",flexShrink:0}}>NEW</span>`:null}
-      <span style=${{flex:1,color:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${narrateOne(topFinding)}</span>
+      <span style=${{flex:1,color:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${narrateOne(topFinding,0)}</span>
       <span style=${{fontSize:9.5,color:T.mute,flexShrink:0}}>${findings.length} · click for all</span>
     </div>`:null}
     ${jr&&jr.idx>=0?(st=>html`<div style=${{padding:"6px 18px",borderBottom:`1px solid ${T.border}`,
