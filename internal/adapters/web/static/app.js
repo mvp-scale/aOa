@@ -4339,7 +4339,7 @@ function terrainLoadGraph() {
     if (!prevNodes) { terrainDescended = null; terrainUpdateBreadcrumb(); }
 
     // R1: rev change invalidates answer — mark stale, never destroy ("graph changed — re-ask")
-    if (terrainAnswer && terrainState && terrainAnswer.grain !== terrainState.rev) {
+    if (terrainAnswer && terrainState && terrainAnswer.rev !== terrainState.rev) {
       terrainAnswer.stale = true;
       terrainAnswer.staleMsg = 'graph changed — re-ask';
     }
@@ -4857,7 +4857,9 @@ function terrainBuildAdj(payload) {
     if (!outAdj[e.from]) outAdj[e.from] = [];
     if (!inAdj[e.to])   inAdj[e.to]   = [];
     outAdj[e.from].push({to: e.to, file: e.file || '', line: e.line || 0});
-    inAdj[e.to].push({from: e.from, file: e.file || '', line: e.line || 0});
+    // Neighbor-normalized: `.to` is always the traversal neighbor, so terrainBFS
+    // works over either adjacency. For inAdj the neighbor is the IMPORTER (e.from).
+    inAdj[e.to].push({to: e.from, file: e.file || '', line: e.line || 0});
   });
   return {outAdj: outAdj, inAdj: inAdj};
 }
@@ -5095,9 +5097,9 @@ function terrainVerbDependents(target) {
   highlight[idx] = true;
   var rankItems = [];
   importers.forEach(function(e) {
-    var ni = idxMap[e.from];
+    var ni = idxMap[e.to];
     if (ni !== undefined) highlight[ni] = true;
-    rankItems.push({id: e.from, val: e.file + ':' + e.line});
+    rankItems.push({id: e.to, val: e.file + ':' + e.line});
   });
   return {
     verb: 'dependents', args: target, highlight: highlight, rankItems: rankItems,
@@ -5131,7 +5133,9 @@ function terrainVerbDeps(target) {
   };
 }
 
-// blast X — BFS forward from X with hop-distance shading, max 6 hops (Q3)
+// blast X — impact propagates from the change point TO its consumers:
+// reverse BFS over importers (inAdj). NOT outAdj — that would answer
+// "what does X use", which is `deps`, not blast. with hop-distance shading, max 6 hops (Q3)
 // "static may-depend upper bound" label mandated by §2.3
 function terrainVerbBlast(target) {
   var sim = terrainState;
@@ -5140,7 +5144,7 @@ function terrainVerbBlast(target) {
   if (idx < 0) return {err: 'not found: ' + target};
   var node = sim.nodes[idx];
   var adj = terrainBuildAdj(terrainRawPayload);
-  var distById = terrainBFS(node.id, adj.outAdj, 6);
+  var distById = terrainBFS(node.id, adj.inAdj, 6);
   var idxMap = terrainNodeIdxMap();
   var highlight = {};
   var hopDist = {};   // nodeIdx → hops
@@ -5390,9 +5394,9 @@ function terrainQCommit(verb, args) {
     terrainQShowError(ans.err);
     return;
   }
-  // R1 continuity: clear grain from previous answer; don't destroy
+  // R1 continuity: stamp the rev this answer was computed at; never destroy on change
   // Store grain at commit time for stale detection
-  ans.grain = terrainState ? terrainState.rev : '';
+  ans.rev = terrainState ? terrainState.rev : ''; // rev the answer was computed at (R1 staleness check)
   ans.ts = Date.now();
   ans.stale = false;
   // Clear descend dim on query commit (§2.3, §6.H: composition prevention)
@@ -5405,7 +5409,7 @@ function terrainQCommit(verb, args) {
   terrainUpdateStrip();
   terrainRender();
   // Show list panel for hubs, cycles, flagged
-  if (v === 'hubs' || v === 'cycles' || v === 'flagged' || v === 'dependents' || v === 'deps') {
+  if (v === 'hubs' || v === 'cycles' || v === 'flagged' || v === 'dependents' || v === 'deps' || v === 'domain') {
     terrainQListShow(ans);
   } else {
     terrainQListClose();
@@ -5612,7 +5616,7 @@ function terrainQSuggest(raw) {
     } else {
       // No-match fallback (§6.A BLOCKER): show closest templates + synonym suggestions
       items.push({type: 'nomatch', label: 'Closest questions:'});
-      QNAV_TEMPLATES.slice(0, 5).forEach(function(t) {
+      QNAV_TEMPLATES.forEach(function(t) {
         items.push({type: 'template', verb: t.verb, arg: t.slot, desc: t.desc, commit: null});
       });
       // Suggest synonyms that contain the input word

@@ -233,3 +233,17 @@ func TestSemanticLensInDashboard(t *testing.T) {
 
 	t.Log("semantic lens assertions PASS: terrainLensBtn present inside terrain-status-strip")
 }
+
+// TestBlastWalksImporters is the direction tripwire for the blast verb
+// (merge-review blocker 2026-07-07): blast X answers "what breaks if X
+// changes" = reverse BFS over IMPORTERS (inAdj). A regression to outAdj
+// would silently answer "what does X use" (that's `deps`).
+func TestBlastWalksImporters(t *testing.T) {
+	js, err := os.ReadFile("static/app.js")
+	if err != nil {
+		t.Fatalf("read app.js: %v", err)
+	}
+	if !bytes.Contains(js, []byte("terrainBFS(node.id, adj.inAdj, 6)")) {
+		t.Fatal("blast verb must reverse-BFS over adj.inAdj (importers); found no such call — direction regression?")
+	}
+}
