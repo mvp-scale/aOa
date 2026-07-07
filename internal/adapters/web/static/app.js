@@ -17,7 +17,6 @@ var blueprintsIframeLoaded = false; // lazy: src set on first blueprints tab act
 /* ── Terrain state ── */
 var terrainState = null;       // current sim: {nodes,edges,alpha,maxDegree,maxWeight,grain,rev,downgraded,nodeCount,edgeCount}
 var terrainManifestRev = null; // last observed manifest rev (DSM hash — change detector)
-var terrainGrain = 'file';     // 'file' | 'unit' — current grain (per-session, not persisted)
 var terrainShowExt = false;    // externals (ext:*) hidden by default — they can be 90%+ of
                                // nodes and are context, not the subject; strip states the count
 var terrainRAF = null;         // requestAnimationFrame handle (null when sim settled)
@@ -25,6 +24,11 @@ var terrainView = { x: 0, y: 0, scale: 1 };
 var terrainHover = -1;         // hovered node index (-1 = none)
 var terrainDrag = null;        // { nodeIdx }
 var terrainPan = null;         // { startX, startY, origX, origY }
+var terrainGroups = null;      // [{id,label,memberSet:{}}] from component shard
+var terrainHulls = null;       // {groupId:{pts,cx,cy,memberCount}} — computed at settle
+var terrainPanel = null;       // null | nodeIdx — open panel
+var terrainDelta = null;       // null | {added:{},removed:{},expiry} — bounded pulse
+var terrainFileSim = null;     // lazily-fetched file-grain sim for panel files list
 
 /* ══════════════════════════════════════════════════════════
    HELPERS
@@ -2963,9 +2967,56 @@ function terrainGetManifestRev(manifest) {
   return (dsm && dsm.shard && dsm.shard.hash) || null;
 }
 
+// Returns current altitude string: 'z0' (zoomed out) or 'z1' (zoomed in).
+// Z0 shows territory hulls + bundled roads; Z1 shows unit nodes + individual edges.
+function terrainGetAlt() {
+  return terrainView.scale >= 0.9 ? 'z1' : 'z0';
+}
+
+// Fetch the component shard from the manifest and build terrainGroups.
+// Groups are [{id, label, memberSet:{unitId:true}}], filtered to exclude u_ext_* members.
+function terrainFetchGroups() {
+  var manifest = cache.arch;
+  if (!manifest) return;
+  var estates = manifest.estates || {};
+  var ekeys = Object.keys(estates);
+  if (!ekeys.length) return;
+  var scopes = (estates[ekeys[0]] || {}).scopes || {};
+  var skeys = Object.keys(scopes);
+  if (!skeys.length) return;
+  var views = (scopes[skeys[0]] || {}).views || {};
+  var compView = views.component;
+  if (!compView || !compView.shard) return;
+  var shardPath = compView.shard.path;
+  var shardHash = compView.shard.hash;
+  if (!shardPath) return;
+  var url = '/api/arch/' + shardPath + (shardHash ? '?v=' + shardHash : '');
+  safeFetch(url).then(function(shard) {
+    if (!shard || !shard.buckets) return;
+    var groups = [];
+    shard.buckets.forEach(function(bucket) {
+      var members = bucket.members || [];
+      var filtered = members.filter(function(m) { return m.indexOf('u_ext_') !== 0; });
+      if (filtered.length === 0) return;
+      var memberSet = {};
+      filtered.forEach(function(m) { memberSet[m] = true; });
+      groups.push({ id: bucket.id || bucket.label || '', label: bucket.label || bucket.id || '', memberSet: memberSet });
+    });
+    terrainGroups = groups;
+    // If sim is already settled, build hulls immediately
+    if (terrainState && terrainState.alpha < 0.05) {
+      terrainHulls = terrainBuildHulls(terrainState, terrainGroups);
+    }
+    terrainRender();
+    terrainUpdateStrip();
+    if (terrainGroups.length > 0) terrainShowCoach(terrainGroups.length);
+  }).catch(function() {});
+}
+
 // Build simulation state from a /api/arch/graph payload.
 // payload: {grain, rev, nodes:[{id,label,path,ext}], edges:[{from,to,count,file,line}], downgraded?}
 // Returns a sim object suitable for terrainSimStep / terrainRender, or null on empty input.
+// Always unit grain — grain toggle removed in V1.
 function terrainBuildSimFromGraph(payload) {
   var allNodes = payload.nodes || [];
   var rawEdges = payload.edges || [];
@@ -2998,7 +3049,7 @@ function terrainBuildSimFromGraph(payload) {
     var dst = idToIdx[re.to];
     if (src === undefined || dst === undefined) { extEdgesHidden++; continue; }
     var w = re.count || 1;
-    edges.push({ src: src, dst: dst, weight: w });
+    edges.push({ src: src, dst: dst, weight: w, file: re.file || '', line: re.line || 0 });
     degOut[src]++;
     degIn[dst]++;
     if (w > maxWeight) maxWeight = w;
@@ -3011,21 +3062,17 @@ function terrainBuildSimFromGraph(payload) {
     if (degree[k] > maxDeg) maxDeg = degree[k];
   }
 
-  var grain = payload.grain || 'file';
-  // Initial circle radius: √n × K keeps node spacing ~20–30 px regardless of n.
-  // n=8→113px, n=37→244px, n=310→707px (file), n=611→494px (unit).
-  // Much smaller than the old n*rScale (10,998 for n=611) which pushed nodes
-  // off-screen and stalled convergence under centering gravity.
-  var K = (grain === 'file') ? 40 : 20;
-  var R = Math.max(80, Math.sqrt(n) * K);
+  // Unit grain: √n × 20 keeps node spacing ~20–30 px regardless of n.
+  var R = Math.max(80, Math.sqrt(n) * 20);
 
   var simNodes = rawNodes.map(function(nd, idx) {
     var angle = (2 * Math.PI * idx) / n;
     return {
-      id: nd.id, label: nd.label,
+      id: nd.id, label: nd.label, path: nd.path || '',
       x: R * Math.cos(angle), y: R * Math.sin(angle),
       vx: 0, vy: 0,
-      pinned: false, degree: degree[idx], ext: !!nd.ext
+      pinned: false, degree: degree[idx], ext: !!nd.ext,
+      degIn: degIn[idx], degOut: degOut[idx]
     };
   });
 
@@ -3033,7 +3080,7 @@ function terrainBuildSimFromGraph(payload) {
     nodes: simNodes, edges: edges,
     maxDegree: maxDeg, maxWeight: maxWeight,
     alpha: 1.0,
-    grain: grain,
+    grain: 'unit',
     rev: payload.rev || '',
     downgraded: payload.downgraded || '',
     nodeCount: n,
@@ -3045,18 +3092,16 @@ function terrainBuildSimFromGraph(payload) {
 }
 
 // One simulation step: repulsion + spring + centering gravity.
+// Unit grain only: repulse=2800, restLen=130, stiff=0.06, grav=0.035.
 function terrainSimStep(sim) {
   if (sim.alpha < 0.008) return;
   var nodes = sim.nodes;
   var n = nodes.length;
   var alpha = sim.alpha;
-  var isFile = (sim.grain === 'file');
-  // File grain (~310 nodes): smaller repulsion radius + shorter rest length for
-  // a tighter, denser layout. Unit grain: original values.
-  var repulse = isFile ? 900 : 2800;
-  var restLen = isFile ? 60 : 130;
-  var stiff   = isFile ? 0.04 : 0.06;
-  var grav    = isFile ? 0.04 : 0.035;
+  var repulse = 2800;
+  var restLen = 130;
+  var stiff   = 0.06;
+  var grav    = 0.035;
   var damp    = 0.82;
 
   // Repulsion (O(n²), fine for n < 600)
@@ -3108,15 +3153,411 @@ function terrainSimStep(sim) {
   sim.alpha *= 0.976;
 }
 
-// Node radius, grain-adaptive.
-// file grain: smaller (denser graph, ~310 nodes) — 2–7 px.
-// unit grain: larger (sparse, ~37 nodes) — 5–18 px.
-function terrainNodeR(deg, maxDeg, grain) {
+// Node radius for unit grain: 5–18 px based on degree.
+function terrainNodeR(deg, maxDeg) {
   var t = maxDeg > 0 ? deg / maxDeg : 0;
-  return (grain === 'file') ? 2 + t * 5 : 5 + t * 13;
+  return 5 + t * 13;
 }
 
-// Render the terrain canvas.
+// ── Convex hull via gift-wrapping algorithm ──
+function terrainConvexHull(pts) {
+  if (pts.length < 3) return pts.slice();
+  // Find leftmost point
+  var start = 0;
+  for (var i = 1; i < pts.length; i++) {
+    if (pts[i].x < pts[start].x || (pts[i].x === pts[start].x && pts[i].y < pts[start].y)) start = i;
+  }
+  var hull = [];
+  var cur = start;
+  do {
+    hull.push(pts[cur]);
+    var next = (cur + 1) % pts.length;
+    for (var j = 0; j < pts.length; j++) {
+      // Cross product: if pts[j] is more counterclockwise than pts[next], update next
+      var cross = (pts[next].x - pts[cur].x) * (pts[j].y - pts[cur].y) -
+                  (pts[next].y - pts[cur].y) * (pts[j].x - pts[cur].x);
+      if (cross < 0) { next = j; }
+    }
+    cur = next;
+  } while (cur !== start && hull.length <= pts.length);
+  return hull;
+}
+
+// ── Build hull shapes from sim node positions for each group ──
+function terrainBuildHulls(sim, groups) {
+  if (!sim || !groups) return null;
+  var nodes = sim.nodes;
+  var hulls = {};
+
+  // Build unitId → groupId lookup
+  var unitToGroup = {};
+  groups.forEach(function(g) {
+    Object.keys(g.memberSet).forEach(function(uid) { unitToGroup[uid] = g.id; });
+  });
+
+  // Collect node positions per group
+  var groupPts = {};
+  groups.forEach(function(g) { groupPts[g.id] = []; });
+  nodes.forEach(function(n) {
+    var gid = unitToGroup[n.id];
+    if (gid && groupPts[gid]) groupPts[gid].push({ x: n.x, y: n.y });
+  });
+
+  groups.forEach(function(g) {
+    var pts = groupPts[g.id];
+    if (!pts || pts.length === 0) return;
+    var hullPts = terrainConvexHull(pts);
+    // Centroid of hull vertices
+    var cx = 0, cy = 0;
+    hullPts.forEach(function(p) { cx += p.x; cy += p.y; });
+    cx /= hullPts.length; cy /= hullPts.length;
+    hulls[g.id] = { pts: hullPts, cx: cx, cy: cy, memberCount: pts.length };
+  });
+  return hulls;
+}
+
+// ── Draw a convex hull shape with rounded corners, padded outward from centroid ──
+function terrainDrawHull(ctx, pts, pad, cx, cy) {
+  if (pts.length === 0) return;
+  if (pts.length === 1) {
+    var r1 = Math.max(36, pad);
+    ctx.beginPath();
+    ctx.arc(pts[0].x, pts[0].y, r1, 0, 2 * Math.PI);
+    return;
+  }
+  if (pts.length === 2) {
+    // Capsule shape between two points
+    var ax = pts[0].x, ay = pts[0].y, bx = pts[1].x, by = pts[1].y;
+    var capDx = bx - ax, capDy = by - ay;
+    var capLen = Math.sqrt(capDx * capDx + capDy * capDy) || 1;
+    var nx = -capDy / capLen * pad, ny = capDx / capLen * pad;
+    var angAB = Math.atan2(capDy, capDx);
+    ctx.beginPath();
+    ctx.moveTo(ax + nx, ay + ny);
+    ctx.lineTo(bx + nx, by + ny);
+    ctx.arc(bx, by, pad, angAB - Math.PI / 2, angAB + Math.PI / 2);
+    ctx.lineTo(ax - nx, ay - ny);
+    ctx.arc(ax, ay, pad, angAB + Math.PI / 2, angAB - Math.PI / 2);
+    ctx.closePath();
+    return;
+  }
+  // n >= 3: expand each hull vertex outward from centroid by pad, then draw
+  // rounded corners via midpoint + quadraticCurveTo.
+  var expanded = pts.map(function(p) {
+    var pdx = p.x - cx, pdy = p.y - cy;
+    var pd = Math.sqrt(pdx * pdx + pdy * pdy) || 1;
+    return { x: p.x + (pdx / pd) * pad, y: p.y + (pdy / pd) * pad };
+  });
+  ctx.beginPath();
+  var n3 = expanded.length;
+  for (var i = 0; i < n3; i++) {
+    var prev = expanded[(i - 1 + n3) % n3];
+    var curr = expanded[i];
+    var next = expanded[(i + 1) % n3];
+    var m1x = (prev.x + curr.x) / 2, m1y = (prev.y + curr.y) / 2;
+    var m2x = (curr.x + next.x) / 2, m2y = (curr.y + next.y) / 2;
+    if (i === 0) ctx.moveTo(m1x, m1y);
+    else ctx.lineTo(m1x, m1y);
+    ctx.quadraticCurveTo(curr.x, curr.y, m2x, m2y);
+  }
+  ctx.closePath();
+}
+
+// ── Draw a small V-shaped chevron at (x,y) pointing in direction (ux,uy) ──
+function terrainDrawChevron(ctx, x, y, ux, uy, alpha) {
+  var perp = 3.5;
+  var len  = 5;
+  var px = -uy, py = ux; // perpendicular unit vector
+  ctx.beginPath();
+  ctx.moveTo(x - ux * len + px * perp, y - uy * len + py * perp);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x - ux * len - px * perp, y - uy * len - py * perp);
+  ctx.strokeStyle = 'rgba(34,211,238,' + (alpha * 0.7) + ')';
+  ctx.lineWidth = 1.0;
+  ctx.stroke();
+}
+
+// ── Draw a bundled road between two group centroids (B2: bidirectional = two lanes) ──
+function terrainDrawRoadBetween(ctx, ax, ay, bx, by, countAB, countBA, maxCount, alpha) {
+  var dx = bx - ax, dy = by - ay;
+  var len = Math.sqrt(dx * dx + dy * dy) || 1;
+  var ux = dx / len, uy = dy / len;
+  var px = -uy, py = ux; // perpendicular
+
+  var total = countAB + countBA;
+  var roadAlpha = alpha * (0.15 + 0.25 * (total / maxCount));
+  var lw = 1.0 + 2.0 * (total / maxCount);
+
+  if (countAB > 0 && countBA > 0) {
+    // B2: two half-width lanes
+    var off = 3.5;
+    // Lane A→B (offset +perp)
+    ctx.beginPath();
+    ctx.moveTo(ax + px * off, ay + py * off);
+    ctx.lineTo(bx + px * off, by + py * off);
+    ctx.strokeStyle = 'rgba(34,211,238,' + roadAlpha + ')';
+    ctx.lineWidth = lw * 0.6;
+    ctx.stroke();
+    // Chevron at 2/3 along A→B lane
+    var cx1 = ax + px * off + ux * len * 0.65, cy1 = ay + py * off + uy * len * 0.65;
+    terrainDrawChevron(ctx, cx1, cy1, ux, uy, roadAlpha * 1.4);
+
+    // Lane B→A (offset -perp)
+    ctx.beginPath();
+    ctx.moveTo(bx - px * off, by - py * off);
+    ctx.lineTo(ax - px * off, ay - py * off);
+    ctx.strokeStyle = 'rgba(34,211,238,' + roadAlpha + ')';
+    ctx.lineWidth = lw * 0.6;
+    ctx.stroke();
+    // Chevron at 2/3 along B→A lane
+    var cx2 = bx - px * off - ux * len * 0.65, cy2 = by - py * off - uy * len * 0.65;
+    terrainDrawChevron(ctx, cx2, cy2, -ux, -uy, roadAlpha * 1.4);
+  } else {
+    // Single lane
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.strokeStyle = 'rgba(34,211,238,' + roadAlpha + ')';
+    ctx.lineWidth = lw;
+    ctx.stroke();
+    // Chevron at 2/3 along
+    var dirUx = countAB > 0 ? ux : -ux;
+    var dirUy = countAB > 0 ? uy : -uy;
+    var cxM = countAB > 0 ? ax + ux * len * 0.65 : bx - ux * len * 0.65;
+    var cyM = countAB > 0 ? ay + uy * len * 0.65 : by - uy * len * 0.65;
+    terrainDrawChevron(ctx, cxM, cyM, dirUx, dirUy, roadAlpha * 1.4);
+  }
+}
+
+// ── Render territory layer (Z0): hulls, roads, labels, faint dots ──
+function terrainRenderTerritories(ctx, sim, hullAlpha) {
+  if (!terrainGroups || !terrainHulls) return;
+  var nodes = sim.nodes;
+  var edges = sim.edges;
+  var pad = 24;
+
+  // Build nodeIdx → groupId (fast: iterate nodes once using memberSet lookups)
+  var unitToGroup = {};
+  terrainGroups.forEach(function(g) {
+    Object.keys(g.memberSet).forEach(function(uid) { unitToGroup[uid] = g.id; });
+  });
+  var nodeToGroup = {};
+  nodes.forEach(function(n, idx) {
+    var gid = unitToGroup[n.id];
+    if (gid) nodeToGroup[idx] = gid;
+  });
+
+  // Build group centroids map
+  var groupCentroids = {};
+  terrainGroups.forEach(function(g) {
+    var h = terrainHulls[g.id];
+    if (h) groupCentroids[g.id] = { x: h.cx, y: h.cy };
+  });
+
+  // Count directional edges between groups
+  // key = gA + '|' + gB where gA < gB alphabetically
+  // pairAtoB[key] = A→B count, pairBtoA[key] = B→A count
+  var pairAtoB = {}, pairBtoA = {};
+  edges.forEach(function(e) {
+    var ga = nodeToGroup[e.src];
+    var gb = nodeToGroup[e.dst];
+    if (!ga || !gb || ga === gb) return;
+    if (ga < gb) {
+      pairAtoB[ga + '|' + gb] = (pairAtoB[ga + '|' + gb] || 0) + 1;
+    } else {
+      pairBtoA[gb + '|' + ga] = (pairBtoA[gb + '|' + ga] || 0) + 1;
+    }
+  });
+
+  // Union of all pair keys
+  var allPairs = {};
+  Object.keys(pairAtoB).forEach(function(k) { allPairs[k] = true; });
+  Object.keys(pairBtoA).forEach(function(k) { allPairs[k] = true; });
+
+  // Find max traffic for road width scaling
+  var maxCount = 1;
+  Object.keys(allPairs).forEach(function(k) {
+    var t = (pairAtoB[k] || 0) + (pairBtoA[k] || 0);
+    if (t > maxCount) maxCount = t;
+  });
+
+  // Draw roads
+  Object.keys(allPairs).forEach(function(key) {
+    var parts = key.split('|');
+    var ga = parts[0], gb = parts[1];
+    var ca = groupCentroids[ga], cb = groupCentroids[gb];
+    if (!ca || !cb) return;
+    terrainDrawRoadBetween(ctx, ca.x, ca.y, cb.x, cb.y,
+      pairAtoB[key] || 0, pairBtoA[key] || 0, maxCount, hullAlpha);
+  });
+
+  // Draw hulls + labels + faint dots
+  terrainGroups.forEach(function(g) {
+    var h = terrainHulls[g.id];
+    if (!h) return;
+    ctx.save();
+    terrainDrawHull(ctx, h.pts, pad, h.cx, h.cy);
+    ctx.fillStyle = 'rgba(34,211,238,' + (0.04 * hullAlpha) + ')';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(34,211,238,' + (0.18 * hullAlpha) + ')';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // Group label at centroid
+    var sc = terrainView.scale;
+    var fs = Math.max(10, 13 / sc);
+    ctx.font = '600 ' + fs + 'px "JetBrains Mono",monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(34,211,238,' + (0.55 * hullAlpha) + ')';
+    ctx.fillText(g.label, h.cx, h.cy);
+
+    // Faint unit dots inside hull
+    nodes.forEach(function(n, idx) {
+      if (nodeToGroup[idx] !== g.id) return;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, 3, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(34,211,238,' + (0.30 * hullAlpha) + ')';
+      ctx.fill();
+    });
+  });
+}
+
+// ── Render unit-grain node layer (Z1 or fallback when no groups loaded) ──
+function terrainRenderUnitLayer(ctx, sim, sc) {
+  var nodes = sim.nodes;
+  var edges = sim.edges;
+  var hover = terrainHover;
+  var panel = terrainPanel;
+
+  // Identify edges + neighbors connected to hovered/panel node
+  var focusNode = (panel !== null) ? panel : hover;
+  var hoverEdge = {};
+  var hoverNeigh = {};
+  if (focusNode >= 0) {
+    for (var he = 0; he < edges.length; he++) {
+      if (edges[he].src === focusNode || edges[he].dst === focusNode) {
+        hoverEdge[he] = true;
+        hoverNeigh[edges[he].src] = true;
+        hoverNeigh[edges[he].dst] = true;
+      }
+    }
+  }
+
+  // Delta pulse: added/removed coloring
+  var deltaAdded = (terrainDelta && Date.now() < terrainDelta.expiry) ? terrainDelta.added : null;
+  var deltaRemoved = (terrainDelta && Date.now() < terrainDelta.expiry) ? terrainDelta.removed : null;
+  if (terrainDelta && Date.now() >= terrainDelta.expiry) terrainDelta = null;
+
+  // ── Edges ──
+  for (var ei = 0; ei < edges.length; ei++) {
+    var edge = edges[ei];
+    var snode = nodes[edge.src];
+    var tnode = nodes[edge.dst];
+    var wRatio = edge.weight / sim.maxWeight;
+    var wA = 0.12 + 0.5 * wRatio;
+    var lw = 0.6 + 1.6 * wRatio;
+    var opacity = (focusNode >= 0 && !hoverEdge[ei]) ? 0.06 : wA;
+
+    ctx.beginPath();
+    ctx.moveTo(snode.x, snode.y);
+    ctx.lineTo(tnode.x, tnode.y);
+    ctx.strokeStyle = 'rgba(34,211,238,' + opacity + ')';
+    ctx.lineWidth = lw;
+    ctx.stroke();
+
+    // Arrowhead
+    if (focusNode < 0 || hoverEdge[ei]) {
+      var ang = Math.atan2(tnode.y - snode.y, tnode.x - snode.x);
+      var tr = terrainNodeR(tnode.degree, sim.maxDegree);
+      var arax = tnode.x - (tr + 2) * Math.cos(ang);
+      var aray = tnode.y - (tr + 2) * Math.sin(ang);
+      var al = 7, aw = 0.38;
+      ctx.beginPath();
+      ctx.moveTo(arax, aray);
+      ctx.lineTo(arax - al * Math.cos(ang - aw), aray - al * Math.sin(ang - aw));
+      ctx.lineTo(arax - al * Math.cos(ang + aw), aray - al * Math.sin(ang + aw));
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(34,211,238,' + opacity + ')';
+      ctx.fill();
+    }
+  }
+
+  // ── Nodes ──
+  for (var ni = 0; ni < nodes.length; ni++) {
+    var node = nodes[ni];
+    var r = terrainNodeR(node.degree, sim.maxDegree);
+    var isHov = (ni === hover);
+    var isPanel = (ni === panel);
+    var isNeigh = (focusNode >= 0 && hoverNeigh[ni]);
+    var isDim = (focusNode >= 0 && !isHov && !isPanel && !isNeigh);
+
+    // Delta pulse tinting
+    var nr, ng, nb;
+    if (deltaAdded && deltaAdded[node.id]) {
+      nr = 52; ng = 211; nb = 99; // green pulse for added
+    } else if (deltaRemoved && deltaRemoved[node.id]) {
+      nr = 239; ng = 68; nb = 68; // red pulse for removed
+    } else if (node.ext) {
+      nr = 139; ng = 139; nb = 150; // --dim
+    } else if (isHov || isPanel) {
+      nr = 52; ng = 211; nb = 153; // --green (hovered/open panel)
+    } else {
+      nr = 34; ng = 211; nb = 238; // --cyan
+    }
+
+    var nodeAlpha = isDim ? 0.18 : 1.0;
+
+    // Glow halo
+    if (!isDim) {
+      var grad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, r * 3.5);
+      var ga2 = (isHov || isPanel) ? 0.45 : (isNeigh ? 0.2 : 0.13);
+      grad.addColorStop(0, 'rgba(' + nr + ',' + ng + ',' + nb + ',' + ga2 + ')');
+      grad.addColorStop(1, 'rgba(' + nr + ',' + ng + ',' + nb + ',0)');
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r * 3.5, 0, 2 * Math.PI);
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    // Node circle
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+    if (node.ext) {
+      ctx.strokeStyle = 'rgba(' + nr + ',' + ng + ',' + nb + ',' + nodeAlpha * 0.45 + ')';
+      ctx.lineWidth = 1.5;
+      ctx.fillStyle = 'rgba(' + nr + ',' + ng + ',' + nb + ',' + nodeAlpha * 0.06 + ')';
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = 'rgba(' + nr + ',' + ng + ',' + nb + ',' + nodeAlpha * ((isHov || isPanel) ? 0.92 : 0.72) + ')';
+      ctx.fill();
+    }
+
+    // Panel ring indicator
+    if (isPanel) {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r + 3, 0, 2 * Math.PI);
+      ctx.strokeStyle = 'rgba(52,211,153,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // Label
+    var showLabel = isHov || isPanel || node.degree >= sim.maxDegree * 0.25 || sc > 1.5;
+    if (showLabel) {
+      var fs = Math.max(9, 11 / sc);
+      ctx.font = ((isHov || isPanel) ? '600 ' : '') + fs + 'px "JetBrains Mono",monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = 'rgba(232,232,236,' + (isDim ? 0.15 : ((isHov || isPanel) ? 1.0 : 0.65)) + ')';
+      ctx.fillText(node.label, node.x, node.y - r - 3 / sc);
+    }
+  }
+}
+
+// ── Main render function: altitude-aware, cross-fades territory and unit layers ──
 function terrainRender() {
   var canvas = document.getElementById('terrainCanvas');
   var wrap = document.getElementById('terrainCanvasWrap');
@@ -3148,138 +3589,53 @@ function terrainRender() {
   }
   if (empty) empty.style.display = 'none';
 
-  var cx = W / 2 + terrainView.x;
-  var cy = H / 2 + terrainView.y;
+  var panX = W / 2 + terrainView.x;
+  var panY = H / 2 + terrainView.y;
   var sc = terrainView.scale;
 
-  ctx.translate(cx, cy);
+  ctx.translate(panX, panY);
   ctx.scale(sc, sc);
 
-  var nodes = sim.nodes;
-  var edges = sim.edges;
-  var hover = terrainHover;
-  var grain = sim.grain || 'file';
-  var isFilGrain = (grain === 'file');
+  // Altitude cross-fade:
+  // hullAlpha: 1.0 at sc<0.5, fades to ~0 by sc=1.3 (200ms feel via alpha blend)
+  // unitAlpha: 0 at sc<0.5, full at sc≥0.9
+  var hullAlpha = (sc < 0.9) ? 1.0 : Math.max(0.0, 1.0 - (sc - 0.9) / 0.4);
+  var unitAlpha = (sc < 0.5) ? 0.0 : Math.min(1.0, (sc - 0.5) / 0.4);
 
-  // Identify edges + neighbors connected to hovered node
-  var hoverEdge = {};
-  var hoverNeigh = {};
-  if (hover >= 0) {
-    for (var he = 0; he < edges.length; he++) {
-      if (edges[he].src === hover || edges[he].dst === hover) {
-        hoverEdge[he] = true;
-        hoverNeigh[edges[he].src] = true;
-        hoverNeigh[edges[he].dst] = true;
-      }
-    }
+  // Territory layer (Z0)
+  if (terrainGroups && terrainHulls && hullAlpha > 0.01) {
+    terrainRenderTerritories(ctx, sim, hullAlpha);
   }
 
-  // ── Edges ──
-  // File grain: thinner lines, lower alpha (1700+ edges).
-  // Unit grain: weight-scaled width/alpha (existing behaviour).
-  for (var ei = 0; ei < edges.length; ei++) {
-    var edge = edges[ei];
-    var snode = nodes[edge.src];
-    var tnode = nodes[edge.dst];
-    var wRatio = edge.weight / sim.maxWeight;
-    var wA, lw;
-    if (isFilGrain) {
-      wA = 0.06; lw = 0.35;
-    } else {
-      wA = 0.12 + 0.5 * wRatio; lw = 0.6 + 1.6 * wRatio;
+  // Unit node layer (Z1, or fallback when no groups loaded)
+  if (unitAlpha > 0.01 || !terrainGroups) {
+    if (unitAlpha < 0.99 && terrainGroups) {
+      // Partial blend: draw into composited alpha
+      ctx.globalAlpha = unitAlpha;
     }
-    var opacity = (hover >= 0 && !hoverEdge[ei]) ? (isFilGrain ? 0.03 : 0.06) : wA;
-
-    ctx.beginPath();
-    ctx.moveTo(snode.x, snode.y);
-    ctx.lineTo(tnode.x, tnode.y);
-    ctx.strokeStyle = 'rgba(34,211,238,' + opacity + ')';
-    ctx.lineWidth = lw;
-    ctx.stroke();
-
-    // Arrowhead (only when not dimmed; skip for file grain — too cluttered)
-    if (!isFilGrain && (hover < 0 || hoverEdge[ei])) {
-      var ang = Math.atan2(tnode.y - snode.y, tnode.x - snode.x);
-      var tr = terrainNodeR(tnode.degree, sim.maxDegree, grain);
-      var ax = tnode.x - (tr + 2) * Math.cos(ang);
-      var ay = tnode.y - (tr + 2) * Math.sin(ang);
-      var al = 7, aw = 0.38;
-      ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.lineTo(ax - al * Math.cos(ang - aw), ay - al * Math.sin(ang - aw));
-      ctx.lineTo(ax - al * Math.cos(ang + aw), ay - al * Math.sin(ang + aw));
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(34,211,238,' + opacity + ')';
-      ctx.fill();
-    }
-  }
-
-  // ── Nodes ──
-  for (var ni = 0; ni < nodes.length; ni++) {
-    var node = nodes[ni];
-    var r = terrainNodeR(node.degree, sim.maxDegree, grain);
-    var isHov = (ni === hover);
-    var isNeigh = (hover >= 0 && hoverNeigh[ni]);
-    var isDim = (hover >= 0 && !isHov && !isNeigh);
-
-    // Color: external nodes are dimmer / outlined
-    var nr, ng, nb;
-    if (node.ext) { nr = 139; ng = 139; nb = 150; }  // --dim
-    else if (isHov) { nr = 52; ng = 211; nb = 153; } // --green (hovered)
-    else { nr = 34; ng = 211; nb = 238; }             // --cyan
-
-    var nodeAlpha = isDim ? 0.18 : 1.0;
-
-    // Glow halo (skip for file grain unless hovered/neighbour — reduces clutter)
-    if (!isDim && (!isFilGrain || isHov || isNeigh)) {
-      var grad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, r * 3.5);
-      var ga = isHov ? 0.45 : (isNeigh ? 0.2 : 0.13);
-      grad.addColorStop(0, 'rgba(' + nr + ',' + ng + ',' + nb + ',' + ga + ')');
-      grad.addColorStop(1, 'rgba(' + nr + ',' + ng + ',' + nb + ',0)');
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, r * 3.5, 0, 2 * Math.PI);
-      ctx.fillStyle = grad;
-      ctx.fill();
-    }
-
-    // Node circle
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
-    if (node.ext) {
-      ctx.strokeStyle = 'rgba(' + nr + ',' + ng + ',' + nb + ',' + nodeAlpha * 0.45 + ')';
-      ctx.lineWidth = 1.5;
-      ctx.fillStyle = 'rgba(' + nr + ',' + ng + ',' + nb + ',' + nodeAlpha * 0.06 + ')';
-      ctx.fill();
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = 'rgba(' + nr + ',' + ng + ',' + nb + ',' + nodeAlpha * (isHov ? 0.92 : 0.72) + ')';
-      ctx.fill();
-    }
-
-    // Label threshold: file grain needs a higher bar to avoid clutter.
-    // Show label for: hovered, high-degree (top 15% for file, 25% for unit), or zoomed in.
-    var degThresh = isFilGrain ? 0.15 : 0.25;
-    var zoomThresh = isFilGrain ? 3.0 : 1.5;
-    var showLabel = isHov || node.degree >= sim.maxDegree * degThresh || sc > zoomThresh;
-    if (showLabel) {
-      var fs = Math.max(9, 11 / sc);
-      ctx.font = (isHov ? '600 ' : '') + fs + 'px "JetBrains Mono",monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillStyle = 'rgba(232,232,236,' + (isDim ? 0.15 : (isHov ? 1.0 : 0.65)) + ')';
-      ctx.fillText(node.label, node.x, node.y - r - 3 / sc);
-    }
+    terrainRenderUnitLayer(ctx, sim, sc);
+    ctx.globalAlpha = 1.0;
   }
 
   ctx.restore();
 }
 
 // Animation loop: run simulation steps + render; stop when alpha is settled.
+// After settling, rebuild hulls if terrainGroups exists and hulls are stale.
 function terrainTick() {
   terrainRAF = null;
   if (!terrainState) return;
+  var prevAlpha = terrainState.alpha;
   for (var i = 0; i < 3; i++) { terrainSimStep(terrainState); }
   terrainRender();
+
+  // After crossing below 0.05 for the first time, rebuild hulls (positions stable)
+  if (prevAlpha >= 0.05 && terrainState.alpha < 0.05 && terrainGroups && !terrainHulls) {
+    terrainHulls = terrainBuildHulls(terrainState, terrainGroups);
+    terrainUpdateStrip();
+    terrainRender();
+  }
+
   if (activeTab === 'terrain' && terrainState.alpha > 0.008) {
     terrainRAF = requestAnimationFrame(terrainTick);
   }
@@ -3290,21 +3646,28 @@ function terrainStartSim() {
   terrainRAF = requestAnimationFrame(terrainTick);
 }
 
-// Update the status strip with grain-truthful metrics from the current sim.
-// Numbers come ONLY from the payload — never invented.
+// Update the status strip — altitude-aware.
+// Z0: N territories · M units · E dependencies · X externals off-map · rev N · REAL
+// Z1: M units · E dependencies · X externals off-map · rev N · REAL
 function terrainUpdateStrip() {
   var strip = document.getElementById('terrainStatusText');
   if (!strip || !terrainState) return;
   var sim = terrainState;
-  var g = sim.grain || 'file';
-  var isFile = (g === 'file');
-  var nodeWord = isFile ? 'files' : 'units';
-  var edgeWord = isFile ? 'import edges' : 'dependencies';
+  var alt = terrainGetAlt();
   var revStr = sim.rev ? 'rev ' + sim.rev.slice(0, 8) : '';
-  var provLabel = '<span class="terrain-status-live">REAL</span> — derived from imports · always current';
-  var parts = [sim.nodeCount + ' ' + nodeWord, sim.edgeCount + ' ' + edgeWord];
+  var provLabel = '<span class="terrain-status-live">REAL</span>';
+  var parts = [];
+
+  if (alt === 'z0' && terrainGroups && terrainHulls) {
+    // Count groups that have hulls (have members in the current sim)
+    var nTerritories = 0;
+    terrainGroups.forEach(function(g) { if (terrainHulls[g.id]) nTerritories++; });
+    parts.push(nTerritories + ' territories');
+  }
+  parts.push(sim.nodeCount + ' units');
+  parts.push(sim.edgeCount + ' dependencies');
   if (sim.extHidden > 0) {
-    parts.push(sim.extHidden + ' externals hidden');
+    parts.push(sim.extHidden + ' externals off-map');
   } else if (terrainShowExt && sim.extTotal > 0) {
     parts.push(sim.extTotal + ' externals shown');
   }
@@ -3324,31 +3687,33 @@ function terrainUpdateStrip() {
   }
 }
 
-// Fetch /api/arch/graph and rebuild simulation.
-// grain: 'file' | 'unit'
-// Runtime guard: if server returns file grain with >600 nodes, auto-drop to unit
-// client-side (O(n²) repulsion at n=600 is still manageable but visually crowded).
-function terrainLoadGraph(grain) {
-  var url = '/api/arch/graph?grain=' + grain;
+// Fetch /api/arch/graph at unit grain and rebuild simulation.
+// Also fetches component groups for territory rendering (Z0).
+// Rev-delta: compares old vs new node IDs, populates terrainDelta for 2s pulse (R1).
+function terrainLoadGraph() {
+  var url = '/api/arch/graph?grain=unit';
   safeFetch(url).then(function(payload) {
     if (!payload || !payload.nodes || payload.nodes.length === 0) return;
-    var actualGrain = payload.grain || grain;
-    // Client-side guard on the VISIBLE node count (externals may be filtered):
-    // file grain with >600 visible nodes → switch to unit grain.
-    var visible = payload.nodes.length;
-    if (!terrainShowExt) {
-      visible = 0;
-      for (var vi = 0; vi < payload.nodes.length; vi++) { if (!payload.nodes[vi].ext) visible++; }
+
+    // Build rev-delta: track added/removed nodes (R1: bounded 2s expiry)
+    var prevNodeIds = {};
+    var newNodeIds = {};
+    if (terrainState) {
+      terrainState.nodes.forEach(function(n) { prevNodeIds[n.id] = true; });
     }
-    if (actualGrain === 'file' && visible > 600) {
-      terrainGrain = 'unit';
-      terrainUpdateGrainButtons();
-      terrainLoadGraph('unit');
-      return;
+    (payload.nodes || []).forEach(function(n) { newNodeIds[n.id] = true; });
+
+    var added = {}, removed = {};
+    var hasDelta = false;
+    Object.keys(newNodeIds).forEach(function(id) {
+      if (!prevNodeIds[id]) { added[id] = true; hasDelta = true; }
+    });
+    Object.keys(prevNodeIds).forEach(function(id) {
+      if (!newNodeIds[id]) { removed[id] = true; hasDelta = true; }
+    });
+    if (hasDelta && terrainState) {
+      terrainDelta = { added: added, removed: removed, expiry: Date.now() + 2000 };
     }
-    // Update terrainGrain to what was actually delivered (server may have downgraded).
-    terrainGrain = actualGrain;
-    terrainUpdateGrainButtons();
 
     var prevNodes = terrainState ? terrainState.nodes : null;
     terrainState = terrainBuildSimFromGraph(payload);
@@ -3363,9 +3728,19 @@ function terrainLoadGraph(grain) {
         if (old) { n.x = old.x; n.y = old.y; n.vx = old.vx * 0.3; n.vy = old.vy * 0.3; n.pinned = old.pinned; }
       });
       terrainState.alpha = 0.6; // brief re-settle
+      // Hulls still valid if positions are preserved — rebuild after re-settle
+      terrainHulls = null;
     }
+
+    // Fetch groups if not yet loaded
+    if (!terrainGroups) terrainFetchGroups();
+
     terrainUpdateStrip();
     terrainStartSim();
+
+    // Sync ext button state
+    var btnExt = document.getElementById('terrainExtBtn');
+    if (btnExt) btnExt.classList.toggle('active', terrainShowExt);
   }).catch(function() {});
 }
 
@@ -3375,32 +3750,164 @@ function terrainInit() {
   var manifest = cache.arch;
   if (!manifest) return;
   if (!terrainManifestRev) terrainManifestRev = terrainGetManifestRev(manifest);
-  terrainLoadGraph(terrainGrain);
+  terrainLoadGraph();
 }
 
-// Set grain and reload. Called by the grain toggle buttons.
-function terrainSetGrain(grain) {
-  if (grain === terrainGrain) return;
-  terrainGrain = grain;
-  terrainUpdateGrainButtons();
-  terrainLoadGraph(grain);
-}
-
-// Sync grain toggle button active states.
-function terrainUpdateGrainButtons() {
-  var btnFile = document.getElementById('terrainGrainFile');
-  var btnUnit = document.getElementById('terrainGrainUnit');
-  var btnExt = document.getElementById('terrainExtBtn');
-  if (btnFile) btnFile.classList.toggle('active', terrainGrain === 'file');
-  if (btnUnit) btnUnit.classList.toggle('active', terrainGrain === 'unit');
-  if (btnExt) btnExt.classList.toggle('active', terrainShowExt);
-}
-
-// Toggle external (ext:*) node visibility and rebuild from the current grain.
+// Toggle external (ext:*) node visibility and rebuild.
+// Hulls must be rebuilt since node positions change (ext nodes included/excluded).
 function terrainToggleExt() {
   terrainShowExt = !terrainShowExt;
-  terrainUpdateGrainButtons();
-  terrainLoadGraph(terrainGrain);
+  terrainHulls = null; // force hull rebuild after re-settle
+  var btnExt = document.getElementById('terrainExtBtn');
+  if (btnExt) btnExt.classList.toggle('active', terrainShowExt);
+  terrainLoadGraph();
+}
+
+// ── Coach chip: shown on first terrain activation when groups are loaded ──
+// Dismissed on first zoom or explicit close. localStorage key: terrain_coach_v1.
+function terrainShowCoach(groupCount) {
+  if (localStorage.getItem('terrain_coach_v1')) return;
+  var el = document.getElementById('terrainCoach');
+  if (!el) return;
+  el.textContent = groupCount + ' territories · scroll to descend';
+  el.style.display = 'block';
+}
+
+function terrainDismissCoach() {
+  localStorage.setItem('terrain_coach_v1', '1');
+  var el = document.getElementById('terrainCoach');
+  if (el) el.style.display = 'none';
+}
+
+// ── Panel: click a unit node to open the right-side overlay ──
+
+function terrainClosePanel() {
+  terrainPanel = null;
+  var el = document.getElementById('terrainPanelOverlay');
+  if (el) el.style.display = 'none';
+  terrainRender();
+}
+
+function terrainCopyText(text, btnId) {
+  if (!navigator.clipboard) return;
+  navigator.clipboard.writeText(text).then(function() {
+    var btn = document.getElementById(btnId);
+    if (btn) { var orig = btn.textContent; btn.textContent = 'Copied'; setTimeout(function() { btn.textContent = orig; }, 1500); }
+  }).catch(function() {});
+}
+
+// Lazy-fetch file-grain sim for the panel files list (R4: unit-grain fan from sim edges only).
+function terrainPanelFetchFiles(nodeIdx) {
+  if (terrainFileSim) { terrainUpdatePanelFiles(nodeIdx); return; }
+  safeFetch('/api/arch/graph?grain=file').then(function(payload) {
+    if (!payload) return;
+    terrainFileSim = payload;
+    terrainUpdatePanelFiles(nodeIdx);
+  }).catch(function() {});
+}
+
+function terrainUpdatePanelFiles(nodeIdx) {
+  var sim = terrainState;
+  if (!sim || !terrainFileSim || nodeIdx !== terrainPanel) return;
+  var node = sim.nodes[nodeIdx];
+  if (!node) return;
+  var filesDiv = document.getElementById('terrainPanelFiles');
+  if (!filesDiv) return;
+  // Find file nodes whose unit ID matches
+  var fileNodes = (terrainFileSim.nodes || []).filter(function(fn) {
+    return fn.path && fn.path.indexOf(node.path) === 0;
+  });
+  if (fileNodes.length === 0) { filesDiv.textContent = '(no files found)'; return; }
+  var shown = fileNodes.slice(0, 8);
+  var more = fileNodes.length - shown.length;
+  var html = shown.map(function(fn) {
+    return '<span class="tp-file">' + escHtml(fn.path || fn.label) + '</span>';
+  }).join('');
+  if (more > 0) html += '<span class="tp-more">+' + more + ' more via facts</span>';
+  filesDiv.innerHTML = html;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function terrainOpenPanel(nodeIdx) {
+  var sim = terrainState;
+  if (!sim) return;
+  var node = sim.nodes[nodeIdx];
+  if (!node) return;
+  terrainPanel = nodeIdx;
+
+  // Build panel content
+  var el = document.getElementById('terrainPanelOverlay');
+  if (!el) return;
+
+  var fanIn = node.degIn || 0;
+  var fanOut = node.degOut || 0;
+  var rev = (sim.rev || '').slice(0, 8);
+  var nodeId = node.id;
+  var nodePath = node.path || nodeId;
+  var nodeLabel = node.label || nodeId;
+
+  // Collect inbound edges for panel (up to 6)
+  var inEdges = [];
+  sim.edges.forEach(function(e) {
+    if (e.dst === nodeIdx && e.file) inEdges.push({ file: e.file, line: e.line });
+  });
+  var inShown = inEdges.slice(0, 6);
+  var inMore = inEdges.length - inShown.length;
+
+  // Build copy-for-claude text (B1: use path not id)
+  var copyLines = [
+    'Context: aOa Terrain, rev ' + rev + ' (REAL — derived from imports).',
+    'Unit: ' + nodeId + '  (' + nodePath + ') · in ' + fanIn + ' / out ' + fanOut,
+    'Files: (loading)',
+    'Evidence: aoa arch facts ' + nodePath + '   # every import with file:line',
+    'Read code: grep <symbol> → aoa peek <code>   (fallback: Read at the [start-end] lines grep prints)'
+  ];
+  if (inShown.length > 0) {
+    var inLines = inShown.map(function(e) { return e.file + ':' + e.line; });
+    if (inMore > 0) inLines.push('+' + inMore + ' more via facts');
+    copyLines.push('Inbound: ' + inLines.join(', '));
+  }
+  var copyText = copyLines.join('\n');
+
+  var inboundHtml = '';
+  if (inShown.length > 0) {
+    inboundHtml = '<div class="tp-section-label">Inbound (' + fanIn + ')</div><div class="tp-inbound">' +
+      inShown.map(function(e) { return '<span class="tp-edge">' + escHtml(e.file) + ':' + e.line + '</span>'; }).join('') +
+      (inMore > 0 ? '<span class="tp-more">+' + inMore + ' more via facts</span>' : '') +
+      '</div>';
+  }
+
+  el.innerHTML = '<div class="tp-header">' +
+    '<span class="tp-label">' + escHtml(nodeLabel) + '</span>' +
+    '<button class="tp-close" onclick="terrainClosePanel()">&#x2715;</button>' +
+    '</div>' +
+    '<div class="tp-id"><code>' + escHtml(nodeId) + '</code></div>' +
+    '<div class="tp-meta">rev ' + escHtml(rev) + ' &middot; REAL &middot; in ' + fanIn + ' / out ' + fanOut + '</div>' +
+    '<div class="tp-section-label">Files</div>' +
+    '<div id="terrainPanelFiles" class="tp-files"><em>loading…</em></div>' +
+    inboundHtml +
+    '<div class="tp-section-label">Copy for Claude</div>' +
+    '<pre id="terrainCopyPre" class="tp-copy-pre">' + escHtml(copyText) + '</pre>' +
+    '<button id="terrainCopyBtn" class="tp-copy-btn" onclick="terrainCopyText(' +
+      JSON.stringify(copyText) + ', \'terrainCopyBtn\')">Copy</button>' +
+    '<div class="tp-footer">' +
+    '<button class="tp-ask-btn" onclick="terrainCopyText(' +
+      JSON.stringify('Why does ' + nodePath + ' depend on [other]?\naoa arch derive ' + nodePath + ' [other]') +
+      ', \'terrainAskDepBtn\')">Why does this depend on…</button>' +
+    '<button id="terrainAskDepBtn" class="tp-ask-btn" onclick="terrainCopyText(' +
+      JSON.stringify('What imports ' + nodePath + '?\naoa arch facts ' + nodePath) +
+      ', \'terrainAskImpBtn\')">What imports this?</button>' +
+    '<button id="terrainAskImpBtn" class="tp-ask-btn">Ask about this</button>' +
+    '</div>';
+
+  el.style.display = 'flex';
+  terrainRender();
+
+  // Lazy-fetch files
+  terrainPanelFetchFiles(nodeIdx);
 }
 
 // Wire up canvas interaction (idempotent via _terrainSetup flag).
@@ -3408,6 +3915,10 @@ function terrainSetupCanvas() {
   var canvas = document.getElementById('terrainCanvas');
   if (!canvas || canvas._terrainSetup) return;
   canvas._terrainSetup = true;
+
+  // Check ?debugpanel=<unitid> URL param
+  var urlParams = new URLSearchParams(window.location.search);
+  var debugPanel = urlParams.get('debugpanel');
 
   function canvasXY(e) {
     var rect = canvas.getBoundingClientRect();
@@ -3425,23 +3936,31 @@ function terrainSetupCanvas() {
     var sp = simXY(px, py);
     var nodes = terrainState.nodes;
     for (var hi = 0; hi < nodes.length; hi++) {
-      var hr = terrainNodeR(nodes[hi].degree, terrainState.maxDegree, terrainState.grain) + 5;
+      var hr = terrainNodeR(nodes[hi].degree, terrainState.maxDegree) + 5;
       var hx = nodes[hi].x - sp.x, hy = nodes[hi].y - sp.y;
       if (hx * hx + hy * hy < hr * hr) return hi;
     }
     return -1;
   }
 
+  // Track drag vs click: only open panel if mouseup on same node without significant movement
+  var _clickNode = -1;
+  var _dragMoved = false;
+
   canvas.addEventListener('wheel', function(e) {
     e.preventDefault();
     var delta = e.deltaY > 0 ? 0.88 : 1.14;
     terrainView.scale = Math.max(0.08, Math.min(10, terrainView.scale * delta));
+    terrainDismissCoach();
     terrainRender();
+    terrainUpdateStrip();
   }, { passive: false });
 
   canvas.addEventListener('mousedown', function(e) {
     var pt = canvasXY(e);
     var hit = hitTest(pt.x, pt.y);
+    _clickNode = hit;
+    _dragMoved = false;
     if (hit >= 0) {
       terrainDrag = { nodeIdx: hit };
       canvas.classList.add('dragging');
@@ -3457,6 +3976,8 @@ function terrainSetupCanvas() {
       var node = terrainState && terrainState.nodes[terrainDrag.nodeIdx];
       if (node) {
         var sp = simXY(pt.x, pt.y);
+        var moved = Math.abs(sp.x - node.x) + Math.abs(sp.y - node.y);
+        if (moved > 3) _dragMoved = true;
         node.x = sp.x; node.y = sp.y;
         node.vx = 0; node.vy = 0;
         node.pinned = true;
@@ -3465,6 +3986,7 @@ function terrainSetupCanvas() {
     } else if (terrainPan !== null) {
       terrainView.x = terrainPan.origX + (pt.x - terrainPan.startX);
       terrainView.y = terrainPan.origY + (pt.y - terrainPan.startY);
+      _dragMoved = true;
       terrainRender();
     } else {
       var hit = hitTest(pt.x, pt.y);
@@ -3475,13 +3997,20 @@ function terrainSetupCanvas() {
     }
   });
 
-  canvas.addEventListener('mouseup', function() {
+  canvas.addEventListener('mouseup', function(e) {
+    var wasDrag = terrainDrag;
     terrainDrag = null; terrainPan = null;
     canvas.classList.remove('dragging');
+    // Open panel on clean click (no significant drag movement)
+    if (!_dragMoved && _clickNode >= 0 && wasDrag) {
+      terrainOpenPanel(_clickNode);
+    }
+    _clickNode = -1;
   });
 
   canvas.addEventListener('mouseleave', function() {
     terrainHover = -1; terrainDrag = null; terrainPan = null;
+    _clickNode = -1;
     canvas.classList.remove('dragging');
     terrainRender();
   });
@@ -3489,6 +4018,20 @@ function terrainSetupCanvas() {
   window.addEventListener('resize', function() {
     if (activeTab === 'terrain') terrainRender();
   });
+
+  // Debug panel: ?debugpanel=<unitid> forces panel open after sim settles
+  if (debugPanel) {
+    var _debugWait = setInterval(function() {
+      if (!terrainState || terrainState.alpha > 0.05) return;
+      clearInterval(_debugWait);
+      var nodes = terrainState.nodes;
+      for (var di = 0; di < nodes.length; di++) {
+        if (nodes[di].id === debugPanel || nodes[di].path === debugPanel) {
+          terrainOpenPanel(di); break;
+        }
+      }
+    }, 200);
+  }
 }
 
 /* ── Start ── */

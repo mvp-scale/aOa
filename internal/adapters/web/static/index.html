@@ -274,12 +274,14 @@
     <div class="terrain-canvas-wrap" id="terrainCanvasWrap">
       <canvas id="terrainCanvas"></canvas>
       <div class="terrain-empty" id="terrainEmpty">No terrain yet — run aoa to derive the knowledge graph</div>
+      <!-- Coach chip: shown once on first terrain activation, dismissed on zoom -->
+      <div class="terrain-coach" id="terrainCoach" style="display:none" onclick="terrainDismissCoach()"></div>
+      <!-- Node panel overlay: shown on node click -->
+      <div class="terrain-panel-overlay" id="terrainPanelOverlay" style="display:none"></div>
     </div>
     <div class="terrain-status-strip" id="terrainStatusStrip">
       <span id="terrainStatusText">—</span>
       <span class="terrain-grain-toggle">
-        <button class="toolbar-btn active" id="terrainGrainFile" onclick="terrainSetGrain('file')">Files</button>
-        <button class="toolbar-btn" id="terrainGrainUnit" onclick="terrainSetGrain('unit')">Units</button>
         <button class="toolbar-btn" id="terrainExtBtn" onclick="terrainToggleExt()">Externals</button>
       </span>
     </div>
