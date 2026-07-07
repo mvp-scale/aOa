@@ -10,6 +10,7 @@
 package web
 
 import (
+	"bytes"
 	"os"
 	"strings"
 	"testing"
@@ -183,7 +184,7 @@ func TestQNavBarInDashboard(t *testing.T) {
 		t.Fatal("terrainQueryWrap not found")
 	}
 	// Check hidden attribute near terrainQueryWrap
-	qwSnip := html[qwPos:qwPos+80]
+	qwSnip := html[qwPos : qwPos+80]
 	if !strings.Contains(qwSnip, `style="display:none"`) {
 		t.Error(`terrainQueryWrap must ship with style="display:none"`)
 	}
@@ -195,7 +196,7 @@ func TestQNavBarInDashboard(t *testing.T) {
 
 	// Query bar must appear between canvas-wrap and status strip
 	canvasWrapPos := strings.Index(html, `id="terrainCanvasWrap"`)
-	queryWrapPos  := strings.Index(html, `id="terrainQueryWrap"`)
+	queryWrapPos := strings.Index(html, `id="terrainQueryWrap"`)
 	statusStripPos := strings.Index(html, `id="terrainStatusStrip"`)
 	if canvasWrapPos < 0 || queryWrapPos < 0 || statusStripPos < 0 {
 		t.Fatal("one of terrainCanvasWrap/terrainQueryWrap/terrainStatusStrip not found")
@@ -223,7 +224,7 @@ func TestSemanticLensInDashboard(t *testing.T) {
 	}
 	// Lens button must be inside the terrain-status-strip (not outside)
 	stripPos := strings.Index(html, `id="terrainStatusStrip"`)
-	lensPos  := strings.Index(html, `id="terrainLensBtn"`)
+	lensPos := strings.Index(html, `id="terrainLensBtn"`)
 	if stripPos < 0 || lensPos < 0 {
 		t.Fatal("terrainStatusStrip or terrainLensBtn not found")
 	}
