@@ -723,6 +723,79 @@ const STATUS={live:{dot:"●",col:T.green,lbl:"derived live"},
               planned:{dot:"○",col:T.mute,lbl:"planned · extractor gated"}};
 
 const ago=t=>{const s=(Date.now()-t)/1000;return s<5?"now":s<60?Math.floor(s)+"s ago":Math.floor(s/60)+"m ago";};
+// narrateOne: converts a Finding to a plain-language headline per §4.2 patterns
+function narrateOne(f){
+  if(!f)return"";
+  const msg=f.message||"";
+  if(f.rule==="god"){
+    const m=msg.match(/in (\d+).*out (\d+)/);
+    const inN=m?m[1]:"?",outN=m?m[2]:"?";
+    const subj=f.subjects&&f.subjects[0]?f.subjects[0].replace(/^[gu]_/,""):msg.split(":")[1]||"this package";
+    return `${subj} is load-bearing — ${inN} packages lean on it and it reaches into ${outN}. Changes here ripple widest.`;}
+  if(f.rule==="cycle"){
+    const m=msg.match(/×(\d+)/);const cuts=m?m[1]:"?";
+    const parts=msg.replace("dependency cycle: ","").split(" → ");
+    if(parts.length>=2){const a=parts[0].replace(/^[gu]_/,""),b=parts[1].replace(/^[gu]_/,"");
+      return `${a} and ${b} depend on each other — a cycle. Cheapest cut: the ${a} → ${b} edge (${f.cheapestCut||"unknown"}).`;}
+    return msg;}
+  if(f.rule==="dead-candidate"||f.rule==="dead"||f.rule==="orphan"){
+    const subj=f.subjects&&f.subjects[0]?f.subjects[0].replace(/^[gu]_/,""):msg.split(":")[1]||"this package";
+    return `${subj} looks dead — nothing imports it and search has never touched it. Removal candidate.`;}
+  if(f.rule==="budget"){
+    const subj=f.subjects&&f.subjects[0]?f.subjects[0].replace(/^[gu]_/,""):msg;
+    return `${subj} exceeds the member budget. Consider splitting the group.`;}
+  return msg;}
+// FindingsDrawer: slide-over panel showing all daemon findings with narration + sources
+function FindingsDrawer({findings,open,setOpen,expandedId,setExpandedId}){
+  if(!open)return null;
+  const bySev={error:[],warn:[],info:[]};
+  findings.forEach(f=>{(bySev[f.severity]||bySev.warn).push(f);});
+  const ruleCounts={};
+  findings.forEach(f=>{ruleCounts[f.rule]=(ruleCounts[f.rule]||0)+1;});
+  const ruleHeader=Object.entries(ruleCounts).sort((a,b)=>b[1]-a[1]).map(([r,n])=>r+" ×"+n).join(" · ");
+  return html`<div style=${{position:"absolute",top:0,right:0,width:460,height:"100%",
+    background:T.chrome,borderLeft:`1px solid ${T.border}`,zIndex:20,display:"flex",
+    flexDirection:"column",boxShadow:"-8px 0 20px #0008"}}>
+    <div style=${{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8}}>
+      <span style=${{fontSize:12,fontWeight:700,color:T.text}}>FINDINGS</span>
+      <span style=${{fontSize:10,color:T.dim,flex:1}}>${ruleHeader}</span>
+      <button onClick=${()=>setOpen(false)} style=${{background:"transparent",border:"none",
+        color:T.mute,cursor:"pointer",fontSize:15}}>✕</button>
+    </div>
+    <div style=${{flex:1,overflowY:"auto",padding:"8px 0"}}>
+      ${["error","warn","info"].flatMap(sev=>bySev[sev]).map((f,fi)=>{
+        const expanded=expandedId===f.id;
+        const headline=narrateOne(f);
+        return html`<div key=${fi} style=${{borderBottom:`1px solid ${T.border}33`,padding:"10px 16px",
+          background:f.new?"#fbbf2406":"transparent",
+          borderLeft:f.severity==="error"?`3px solid ${T.red}`:f.new?`3px solid ${T.yellow}`:"3px solid transparent"}}>
+          <div style=${{display:"flex",alignItems:"flex-start",gap:6,cursor:"pointer"}}
+            onClick=${()=>setExpandedId(expanded?null:f.id)}>
+            <span style=${{fontSize:10.5,color:T.text,flex:1,lineHeight:1.45}}>${headline}</span>
+            <div style=${{display:"flex",gap:4,flexShrink:0,alignItems:"center"}}>
+              <span style=${{fontSize:8,fontWeight:700,color:T.mute,border:`1px solid ${T.border}`,
+                borderRadius:4,padding:"0 4px"}}>${f.rule}</span>
+              ${f.new?html`<span style=${{fontSize:8,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,
+                borderRadius:4,padding:"0 4px"}}>NEW</span>`:null}
+              ${f.sources&&f.sources.length?html`<span style=${{fontSize:9,color:T.mute}}>${f.sources.length} src</span>`:null}
+            </div>
+          </div>
+          ${expanded?html`<div style=${{marginTop:8,paddingTop:8,borderTop:`1px solid ${T.border}33`}}>
+            ${(f.sources||[]).slice(0,10).map((s,si)=>html`<div key=${si}
+              style=${{fontSize:9.5,fontFamily:"ui-monospace,monospace",color:T.dim,padding:"2px 0",
+                display:"flex",alignItems:"center",gap:8}}>
+              <span style=${{color:T.text}}>${s.file}:${s.line}</span>
+              <span title="Copy read command" onClick=${ev=>{ev.stopPropagation();
+                navigator.clipboard.writeText("Read "+s.file+" "+s.line);}}
+                style=${{cursor:"pointer",color:T.mute,fontSize:9}}>⧉</span>
+            </div>`)}
+            ${(f.sources||[]).length>10?html`<div style=${{fontSize:9.5,color:T.mute,marginTop:4}}>+${f.sources.length-10} more</div>`:null}
+          </div>`:null}
+        </div>`;
+      })}
+      ${!findings.length?html`<div style=${{padding:"24px",textAlign:"center",color:T.mute,fontSize:11}}>no daemon findings yet</div>`:null}
+    </div>
+  </div>`;}
 function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,collapsed,setCollapsed,last,journeys,startJourney}){
   const[copied,setCopied]=useState(null);
   const[stdExpanded,setStdExpanded]=useState(false);
@@ -971,6 +1044,15 @@ function Flow(){
     window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[sel,clearSel,jr,jumpStep,exitJourney]);
   const[open,setOpen]=useState({});
   const[collapsed,setCollapsed]=useState(false);
+  // Narrated findings from daemon (BE-1 route; B3 fix: never client-computed problems)
+  const[findings,setFindings]=useState([]);
+  const[findingsOpen,setFindingsOpen]=useState(false);
+  const[findingsExpandedId,setFindingsExpandedId]=useState(null);
+  useEffect(()=>{let on=true;
+    fetch("/api/arch/findings").then(r=>r.ok?r.json():[]).then(d=>{if(on)setFindings(Array.isArray(d)?d:[]);}).catch(()=>{});
+    return()=>{on=false;};},[]);
+  const topFinding=findings.find(f=>f.severity==="error")||findings.find(f=>f.new)||findings[0]||null;
+  const hasNewFindings=findings.some(f=>f.new);
   // manual navigation leaves journey mode — the journey owns scope/view only while followed
   const go=useCallback(id=>{setJr(null);setLevel(id);setDirOv(null);},[]);
   const goScope=useCallback(sid=>{setJr(null);setScope(sid);setLevel(firstView(estate,sid));setDirOv(null);},[estate]);
@@ -1025,6 +1107,17 @@ function Flow(){
         <button style=${btn(dirOv==="RIGHT")} onClick=${()=>setDirOv("RIGHT")} title="Left–Right">→</button>
       </div>
     </div>
+    ${topFinding?html`<div onClick=${()=>setFindingsOpen(true)}
+      style=${{padding:"4px 18px",borderBottom:`1px solid ${T.border}`,fontSize:11,
+        background:hasNewFindings?"#fbbf2408":T.chrome,cursor:"pointer",
+        display:"flex",alignItems:"center",gap:8,
+        borderLeft:hasNewFindings?`2px solid ${T.yellow}`:"2px solid transparent"}}>
+      <span style=${{fontSize:9.5,fontWeight:700,color:T.arch,letterSpacing:.5,flexShrink:0}}>FINDINGS</span>
+      ${hasNewFindings?html`<span style=${{fontSize:8,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,
+        borderRadius:4,padding:"0 4px",flexShrink:0}}>NEW</span>`:null}
+      <span style=${{flex:1,color:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${narrateOne(topFinding)}</span>
+      <span style=${{fontSize:9.5,color:T.mute,flexShrink:0}}>${findings.length} · click for all</span>
+    </div>`:null}
     ${jr&&jr.idx>=0?(st=>html`<div style=${{padding:"6px 18px",borderBottom:`1px solid ${T.border}`,
       background:T.raise,display:"flex",alignItems:"center",gap:10}}>
       <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.purple,
@@ -1050,6 +1143,8 @@ function Flow(){
         journeys=${ESTATES[estate].journeys||[]} startJourney=${startJourney}/>
       <div style=${{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
         <div style=${{flex:1,position:"relative",minHeight:0}}>
+          ${findingsOpen?html`<${FindingsDrawer} findings=${findings} open=${findingsOpen} setOpen=${setFindingsOpen}
+            expandedId=${findingsExpandedId} setExpandedId=${setFindingsExpandedId}/>`:null}
           ${els&&els.htmlView?html`<${view.kind==="table"?TableView:MatrixView} view=${view} onSel=${select} selId=${selId} vid=${level}/>`:null}
           ${els&&!els.htmlView?html`<${ReactFlow} key=${estate+"|"+scope+"|"+level+"|"+dir+"|"+den}
             nodes=${els.nodes} edges=${els.edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
