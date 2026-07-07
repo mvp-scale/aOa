@@ -397,9 +397,14 @@ function renderHero(tab) {
 // Render initial heroes for all tabs (knowledge tabs terrain+blueprints have no hero)
 ['live', 'recon', 'intel', 'debrief', 'arsenal'].forEach(function(t) { renderHero(t); });
 
-// Restore tab from URL hash (must be after HERO_STORIES is defined)
+// Restore tab from URL hash (must be after HERO_STORIES is defined).
+// Knowledge tabs (terrain, blueprints) are hidden until the manifest probe
+// reveals their nav buttons — deep-linking to #terrain before the probe
+// would activate the tab content but leave the nav button invisible.
+// Defer those to the probe callback below; handle all other tabs immediately.
 var hashTab = location.hash.replace('#', '');
-if (hashTab && document.getElementById('tab-' + hashTab)) {
+if (hashTab && hashTab !== 'terrain' && hashTab !== 'blueprints' &&
+    document.getElementById('tab-' + hashTab)) {
   switchTab(hashTab);
 }
 
@@ -3369,7 +3374,8 @@ function terrainComputeFit(nodes, sim, W, H) {
 function terrainAutoFit() {
   var wrap = document.getElementById('terrainCanvasWrap');
   if (!wrap) return;
-  var W = wrap.clientWidth, H = wrap.clientHeight;
+  var W = wrap.clientWidth || wrap.getBoundingClientRect().width || (window.innerWidth > 0 ? window.innerWidth : 1400);
+  var H = wrap.clientHeight || wrap.getBoundingClientRect().height || (window.innerHeight > 0 ? window.innerHeight - 120 : 780);
   if (W <= 0 || H <= 0) return;
   var sim = terrainState;
   if (!sim || !sim.nodes || sim.nodes.length === 0) return;
@@ -4023,8 +4029,10 @@ function terrainRender() {
   if (!canvas || !wrap) return;
 
   var dpr = window.devicePixelRatio || 1;
-  var W = wrap.clientWidth;
-  var H = wrap.clientHeight;
+  // clientWidth may be 0 in headless Chromium before first paint (layout not yet computed).
+  // Fall back to getBoundingClientRect().width then window.innerWidth as last resort.
+  var W = wrap.clientWidth || wrap.getBoundingClientRect().width || (window.innerWidth > 0 ? window.innerWidth : 1400);
+  var H = wrap.clientHeight || wrap.getBoundingClientRect().height || (window.innerHeight > 0 ? window.innerHeight - 120 : 780);
   if (W <= 0 || H <= 0) return;
 
   if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
@@ -4347,10 +4355,12 @@ function terrainLoadGraph() {
     var qw = document.getElementById('terrainQueryWrap');
     if (qw) qw.style.display = '';
 
-    // Debug: ?query=<verb+arg> executes on load; ?debugac=<prefix> shows autocomplete
+    // Debug: ?query=<verb+arg> executes on load; ?debugac=<prefix> shows autocomplete;
+    // ?lens=meaning activates the semantic (atlas domain) lens on first graph load.
     var _qp = new URLSearchParams(window.location.search);
     var _dbq = _qp.get('query');
     var _dbac = _qp.get('debugac');
+    var _dblens = _qp.get('lens');
     if (_dbq) {
       var _parts = _dbq.replace('+', ' ').split(' ');
       terrainQCommit(_parts[0], _parts.slice(1).join(' '));
@@ -4358,6 +4368,15 @@ function terrainLoadGraph() {
       var inp = document.getElementById('terrainQInput');
       if (inp) { inp.value = _dbac; terrainQOnInput(); }
       terrainQFocus();
+    }
+    // Activate lens after groups become available (groups load async via terrainFetchGroups).
+    if (_dblens === 'meaning' && terrainLensMode !== 'meaning') {
+      var _lensWait = setInterval(function() {
+        if (terrainGroups) {
+          clearInterval(_lensWait);
+          if (terrainLensMode !== 'meaning') terrainToggleLens();
+        }
+      }, 100);
     }
 
     // Sync ext button state
@@ -5940,6 +5959,12 @@ safeFetch('/api/arch/manifest').then(function(d) {
   if (spine) spine.style.display = '';
   if (btnT) btnT.style.display = '';
   if (btnB) btnB.style.display = '';
+  // Honor deep-link to knowledge tabs now that their nav buttons are visible.
+  // (boot-time hash read skipped these — see comment near hashTab above.)
+  var _kHash = location.hash.replace('#', '');
+  if (_kHash === 'terrain' || _kHash === 'blueprints') {
+    switchTab(_kHash);
+  }
   terrainManifestRev = terrainGetManifestRev(d);
   terrainInit();
 }).catch(function() {});
