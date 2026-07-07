@@ -1049,7 +1049,9 @@ function Flow(){
   const[scope,setScope]=useState(q.get("scope")||firstScope(e0));
   const[level,setLevel]=useState(()=>{const sc=q.get("scope")||firstScope(e0);
     // ?expandedGroups= only applies to buckets views — route there when no explicit level given
-    return q.get("level")||(q.get("expandedGroups")?firstBucketsView(e0,sc):firstView(e0,sc));});
+    // Default landing prefers a buckets view (component) — the code view is
+    // listed-not-drawn per ruling R1 and must never be the silent default.
+    return q.get("level")||firstBucketsView(e0,sc);});
   const[dirOv,setDirOv]=useState(q.get("dir")||null);
   const[den,setDen]=useState(q.get("density")||"compact");
   const[els,setEls]=useState(null);

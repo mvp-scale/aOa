@@ -3,7 +3,7 @@
  "sharded": true,
  "generated": {
   "tool": "build_c4_mockup.py",
-  "timestamp": "2026-07-07 07:09 UTC",
+  "timestamp": "2026-07-07 07:41 UTC",
   "inputs": [
    "go list",
    "repo/graphify/*.py imports",
@@ -62,8 +62,8 @@
        },
        "shard": {
         "path": "local/aoa/component.json",
-        "hash": "cabdff4c289d",
-        "bytes": 4229
+        "hash": "836b1f94f316",
+        "bytes": 4231
        }
       },
       "dataflow": {
