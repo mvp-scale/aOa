@@ -17,9 +17,10 @@ import (
 // --- mock ArchQuerier ---
 
 type mockArchQuerier struct {
-	manifest  *ports.ArchManifest
-	views     map[string][]byte
-	graphData map[string][]byte // grain → raw JSON bytes
+	manifest     *ports.ArchManifest
+	views        map[string][]byte
+	graphData    map[string][]byte // grain → raw JSON bytes
+	findingsData map[string][]byte // scope → raw JSON bytes
 }
 
 func (m *mockArchQuerier) Manifest(scope string) (*ports.ArchManifest, error) {
@@ -37,7 +38,14 @@ func (m *mockArchQuerier) View(scope, id string) ([]byte, error) {
 	return b, nil
 }
 
-func (m *mockArchQuerier) Findings(scope string) ([]byte, error)                    { return nil, nil }
+func (m *mockArchQuerier) Findings(scope string) ([]byte, error) {
+	if m.findingsData != nil {
+		if d, ok := m.findingsData[scope]; ok {
+			return d, nil
+		}
+	}
+	return nil, nil
+}
 func (m *mockArchQuerier) Derive(scope, from, to string, k int) ([]string, error)   { return nil, nil }
 func (m *mockArchQuerier) Facts(scope, subject string, limit int) ([]byte, error)   { return nil, nil }
 func (m *mockArchQuerier) Graph(scope, grain string) ([]byte, error) {
@@ -664,6 +672,58 @@ func fetchBody(t *testing.T, url string) []byte {
 	b, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	return b
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// /api/arch/findings  — BE-1 findings route tests
+// ══════════════════════════════════════════════════════════════════════════════
+
+// TestArchC4_FindingsReturns404WhenDisabled ensures /api/arch/findings returns 404
+// when Arch() is nil (C4 kill-switch).
+func TestArchC4_FindingsReturns404WhenDisabled(t *testing.T) {
+	ts := setupArchServer(t, nil)
+	defer ts.Close()
+	resp, err := http.Get(ts.URL + "/api/arch/findings")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "disabled arch must return 404 for /api/arch/findings")
+}
+
+// TestArchFindings_EmptyWhenNil ensures /api/arch/findings returns "[]" when no findings exist.
+func TestArchFindings_EmptyWhenNil(t *testing.T) {
+	ts := setupArchServer(t, &mockArchQuerier{})
+	defer ts.Close()
+	resp, err := http.Get(ts.URL + "/api/arch/findings")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(body), "nil findings must return empty JSON array")
+}
+
+// TestArchFindings_ReturnsJSONArray ensures /api/arch/findings returns the findings bytes verbatim.
+func TestArchFindings_ReturnsJSONArray(t *testing.T) {
+	findingsJSON := `[{"id":"f1","rule":"god","severity":"warn","scope":"local","message":"god component: bbolt","subjects":["u_bbolt"]}]`
+	q := &mockArchQuerier{
+		findingsData: map[string][]byte{
+			"local": []byte(findingsJSON),
+		},
+	}
+	ts := setupArchServer(t, q)
+	defer ts.Close()
+	resp, err := http.Get(ts.URL + "/api/arch/findings")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	// Must be valid JSON array
+	var findings []map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &findings), "response must be valid JSON array")
+	require.Len(t, findings, 1)
+	assert.Equal(t, "god", findings[0]["rule"])
 }
 
 // TestArchGraph_UnitGrainShape verifies /api/arch/graph?grain=unit returns the

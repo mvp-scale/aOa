@@ -87,6 +87,7 @@ func (s *Server) registerArchRoutes(mux *http.ServeMux) {
 	// Go 1.22 ServeMux: /api/arch/graph (literal) wins over /api/arch/{path...}
 	// (wildcard) by specificity — registration order is irrelevant.
 	mux.HandleFunc("GET /api/arch/graph", s.handleArchGraph)
+	mux.HandleFunc("GET /api/arch/findings", s.handleArchFindings)
 	mux.HandleFunc("GET /api/arch/{path...}", s.handleArchShard)
 }
 
@@ -298,6 +299,37 @@ func (s *Server) handleArchGraph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(data)
+}
+
+// handleArchFindings serves the arch detector findings for a scope.
+// Route: GET /api/arch/findings?scope=<scope> (default: local)
+//
+// Returns the JSON-encoded []ports.Finding slice computed by the daemon detectors.
+// Returns "[]" (empty JSON array) when no findings have been computed yet.
+// C4: returns 404 when arch is disabled.
+func (s *Server) handleArchFindings(w http.ResponseWriter, r *http.Request) {
+	q := s.archQuerier(w, r)
+	if q == nil {
+		return
+	}
+	scope := r.URL.Query().Get("scope")
+	if scope == "" {
+		scope = "local"
+	}
+	data, err := q.Findings(scope)
+	if err != nil {
+		http.Error(w, `{"error":"findings unavailable"}`, http.StatusInternalServerError)
+		return
+	}
+	if data == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write([]byte("[]"))
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(data)
