@@ -478,7 +478,8 @@ async function layoutBuckets(view,dir,d,ov,opts){
   const remappedEdges=view.edges.map(e=>({...e,source:remapId(e.source),target:remapId(e.target)}));
   // Deduplicate remapped edges by (source,target) so merged externals don't produce parallel ELK edges
   const edgeSeen=new Set();
-  const elkEdges=remappedEdges.filter(e=>{if(e.source===e.target)return false;
+  // Use let so first-paint edge restraint can reassign below.
+  let elkEdges=remappedEdges.filter(e=>{if(e.source===e.target)return false;
     const k=e.source+"\x00"+e.target;if(edgeSeen.has(k))return false;edgeSeen.add(k);return true;});
   elkEdges.forEach(e=>{if(deg[e.source])deg[e.source].o++;if(deg[e.target])deg[e.target].i++;
     const sp=bById[e.source],tp=bById[e.target];
@@ -496,6 +497,16 @@ async function layoutBuckets(view,dir,d,ov,opts){
    for(const b of B){if(!st[b.id]&&dfs(b.id,[]))break;}
    if(cyc){problems.push("dependency cycle: "+cyc.map(id=>bById[id]?bById[id].label:id).join(" → "));
      cyc.forEach(id=>{if(bById[id])bById[id]._cyc=true;});}})();
+  // First-paint edge restraint (§4 design brief): in capsule mode with no groups expanded,
+  // show only the TOP-K=12 heaviest inter-group flows; the rest are summarised in the caption.
+  // When any group is expanded the user has engaged — show full edge set.
+  // Degrees + findings above are computed on the FULL set so findings remain accurate.
+  const FIRST_PAINT_K=12;
+  let moreFlows=0;
+  if(capsuleMode&&expandedSet&&expandedSet.size===0&&elkEdges.length>FIRST_PAINT_K){
+    const sorted=elkEdges.slice().sort((a,b)=>(b.count||0)-(a.count||0));
+    moreFlows=elkEdges.length-FIRST_PAINT_K;
+    elkEdges=sorted.slice(0,FIRST_PAINT_K);}
   B.forEach(b=>{if(!capsuleMode&&(b.members||[]).length>40){b._over=b.members.length;
     b.members=b.members.slice(0,23).concat([{id:b.id+"_more",label:"+"+(b._over-23)+" more…",sub:"over budget"}]);}});
   B.forEach(b=>{
@@ -555,7 +566,7 @@ async function layoutBuckets(view,dir,d,ov,opts){
       r.markerEnd={...r.markerEnd,color:T.red};
       if(r.data.label)r.data.label.text="⚠ "+r.data.label.text;}
     return r;});
-  return {nodes:nodes.concat(labelSpacers(laidById)),edges:edges2,problems};}
+  return {nodes:nodes.concat(labelSpacers(laidById)),edges:edges2,problems,moreFlows};}
 
 // Docked footer: ONE derived legend — shows only what the current view actually renders —
 // plus the provenance stamp anchored right.
@@ -577,14 +588,15 @@ function DockTable({cols,rows}){
   </tbody></table>`;}
 // The caption: the view ANSWERS its own question, derived at render time from data
 // already on screen — counts, heaviest edge, mutual pairs, flagged rows, findings.
-function caption(view,probs){
+function caption(view,probs,moreFlows){
   const fin=probs&&probs.length?` · ⚠ ${probs.length} finding${probs.length>1?"s":""}`:"";
   if(view.kind==="buckets"){
     const B=view.buckets||[],members=B.reduce((a,b)=>a+(b.members||[]).length,0);
     const he=(view.edges||[]).reduce((m,e)=>((e.count||0)>(m.count||0)?e:m),{});
     const bn=id=>{const b=B.find(x=>x.id===id);return b?b.label:id;};
+    const mf=moreFlows?` · +${moreFlows} more flows — click groups to reveal`:"";
     return `${B.length} groups · ${members} members`+
-      (he.id?` — heaviest: ${bn(he.source)} → ${bn(he.target)} ×${he.count}`:"")+fin;}
+      (he.id?` — heaviest: ${bn(he.source)} → ${bn(he.target)} ×${he.count}`:"")+mf+fin;}
   if(view.kind==="matrix"){
     const it=view.items||[],M=view.matrix||[];let sum=0;const mut=[];
     for(let i=0;i<it.length;i++)for(let j=0;j<it.length;j++){sum+=(M[i]||[])[j]||0;
@@ -603,9 +615,9 @@ function caption(view,probs){
   const tag=(view.edges||[]).find(e=>e.tag);
   return `${(view.nodes||[]).length} elements · ${(view.edges||[]).length} labeled flows`+
     (tag?` · ⚠ ${tag.tag}: ${(tag.label||"").slice(0,48)}`:fin);}
-function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded}){
+function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows}){
   const VI=VIEW_INTENT[vid]||null;
-  const cap=caption(view,probs);
+  const cap=caption(view,probs,moreFlows||0);
   const hl=p=>sel&&sel.label&&String(p).includes(String(sel.label).slice(0,24));
   const sortedProbs=sel?[...probs].sort((a,b)=>(hl(b)?1:0)-(hl(a)?1:0)):probs;
   const Seg=({title,col,flex,wash,children})=>html`<div style=${{flex,minWidth:0,padding:"9px 16px",
@@ -1254,7 +1266,8 @@ function Flow(){
           ${els&&!els.htmlView&&(view._loaded||!view.shard)?html`<${CanvasLegend} view=${view}/>`:null}
         </div>
         <${BottomDock} vid=${level} view=${view} sel=${sel} clearSel=${clearSel}
-          probs=${els&&els.problems||[]} expanded=${expanded} setExpanded=${setExpanded}/>
+          probs=${els&&els.problems||[]} expanded=${expanded} setExpanded=${setExpanded}
+          moreFlows=${els&&els.moreFlows||0}/>
         ${els&&(view._loaded||!view.shard)?html`<${Footer} view=${view} ov=${ov}/>`:null}
       </div>
     </div></div>`;}

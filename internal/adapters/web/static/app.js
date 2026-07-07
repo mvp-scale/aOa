@@ -3004,9 +3004,41 @@ function terrainFetchGroups() {
       groups.push({ id: bucket.id || bucket.label || '', label: bucket.label || bucket.id || '', memberSet: memberSet });
     });
     terrainGroups = groups;
+    // Group-aware scatter: when groups first arrive, re-position nodes onto a ring so
+    // each group starts clustered around its ring target. This gives the sim a head-start
+    // — nodes only need to fine-tune position rather than escape a hairball.
+    // Only runs once per sim instance (sim._groupsRef unset ↔ first load).
+    if (terrainState && !terrainState._groupsRef) {
+      var nGrp = groups.length;
+      var ringRsc = Math.max(120, Math.sqrt(nGrp) * 52);
+      var ugSc = {};
+      groups.forEach(function(g) {
+        Object.keys(g.memberSet).forEach(function(uid) { ugSc[uid] = g.id; });
+      });
+      var ringPosSc = {};
+      groups.forEach(function(g, gi) {
+        var ang = (2 * Math.PI * gi) / nGrp - Math.PI / 2;
+        ringPosSc[g.id] = { x: ringRsc * Math.cos(ang), y: ringRsc * Math.sin(ang) };
+      });
+      terrainState.nodes.forEach(function(n) {
+        if (n.pinned) return;
+        var gid = ugSc[n.id];
+        var pos = gid && ringPosSc[gid];
+        if (pos) {
+          n.x = pos.x + (Math.random() - 0.5) * 18;
+          n.y = pos.y + (Math.random() - 0.5) * 18;
+          n.vx = 0; n.vy = 0;
+        }
+      });
+      // Reheat so the sim settles from the scattered positions.
+      if (terrainState.alpha < 0.6) terrainState.alpha = 0.7;
+      terrainHulls = null;
+      // Ensure RAF loop is running (may have stopped before groups arrived).
+      if (!terrainRAF) terrainStartSim();
+    }
     // Build hulls eagerly from current positions (may be rough if sim not yet settled;
     // they are rebuilt when RAF stops at alpha<0.008 for the stable final layout)
-    if (terrainState) {
+    if (terrainState && terrainState._groupsRef) {
       terrainHulls = terrainBuildHulls(terrainState, terrainGroups);
     }
     terrainRender();
@@ -3093,8 +3125,16 @@ function terrainBuildSimFromGraph(payload) {
   };
 }
 
-// One simulation step: repulsion + spring + centering gravity.
+// One simulation step: repulsion + spring + centering gravity + group forces.
 // Unit grain only: repulse=2800, restLen=130, stiff=0.06, grav=0.035.
+// Group forces (when terrainGroups loaded): target attraction toward fixed ring positions
+// per group (GROUP_TARGET_K=0.018) + intra-group cohesion (GROUP_COHESION_K=0.025).
+// When groups are loaded the centering gravity is reduced to GROUP_GRAV=0.010 because
+// the ring-target force provides global positioning. O(nodes + groups) per tick.
+var GROUP_TARGET_K  = 0.018;  // pull each node toward its group's ring-target position
+var GROUP_COHESION_K = 0.025; // pull each node toward its group's current centroid
+var GROUP_GRAV       = 0.010; // reduced gravity when group forces are active
+
 function terrainSimStep(sim) {
   if (sim.alpha < 0.008) return;
   var nodes = sim.nodes;
@@ -3105,6 +3145,26 @@ function terrainSimStep(sim) {
   var stiff   = 0.06;
   var grav    = 0.035;
   var damp    = 0.82;
+
+  // Lazily build group data on sim when terrainGroups arrives/changes.
+  // _groupTargets: {groupId:{x,y}} — fixed ring positions for global separation.
+  // _unitToGroup: {unitId:groupId} — fast lookup.
+  if (terrainGroups && (!sim._unitToGroup || sim._groupsRef !== terrainGroups)) {
+    var ug0 = {};
+    terrainGroups.forEach(function(g0) {
+      Object.keys(g0.memberSet).forEach(function(uid) { ug0[uid] = g0.id; });
+    });
+    var ng0 = terrainGroups.length;
+    var ringR0 = Math.max(120, Math.sqrt(ng0) * 52);
+    var gt0 = {};
+    terrainGroups.forEach(function(g0, gi0) {
+      var ang0 = (2 * Math.PI * gi0) / ng0 - Math.PI / 2;
+      gt0[g0.id] = { x: ringR0 * Math.cos(ang0), y: ringR0 * Math.sin(ang0) };
+    });
+    sim._unitToGroup = ug0;
+    sim._groupTargets = gt0;
+    sim._groupsRef = terrainGroups;
+  }
 
   // Repulsion (O(n²), fine for n < 600)
   for (var i = 0; i < n; i++) {
@@ -3137,10 +3197,48 @@ function terrainSimStep(sim) {
     if (!tn.pinned) { tn.vx -= efx; tn.vy -= efy; }
   }
 
-  // Centering gravity
+  // Centering gravity — reduced when group forces handle global positioning.
+  var gravNow = (terrainGroups && sim._unitToGroup) ? GROUP_GRAV : grav;
   for (var k = 0; k < n; k++) {
-    nodes[k].vx -= nodes[k].x * grav;
-    nodes[k].vy -= nodes[k].y * grav;
+    nodes[k].vx -= nodes[k].x * gravNow;
+    nodes[k].vy -= nodes[k].y * gravNow;
+  }
+
+  // Group forces: ring-target attraction + intra-group cohesion (O(nodes + groups)).
+  if (terrainGroups && sim._unitToGroup && sim._groupTargets) {
+    // Compute dynamic group centroids from current positions.
+    var gSumX = {}, gSumY = {}, gCnt = {};
+    terrainGroups.forEach(function(g1) { gSumX[g1.id] = 0; gSumY[g1.id] = 0; gCnt[g1.id] = 0; });
+    for (var pi = 0; pi < n; pi++) {
+      var pgid = sim._unitToGroup[nodes[pi].id];
+      if (pgid !== undefined && gCnt[pgid] !== undefined) {
+        gSumX[pgid] += nodes[pi].x; gSumY[pgid] += nodes[pi].y; gCnt[pgid]++;
+      }
+    }
+    var gCentX = {}, gCentY = {};
+    terrainGroups.forEach(function(g1) {
+      if (gCnt[g1.id] > 0) {
+        gCentX[g1.id] = gSumX[g1.id] / gCnt[g1.id];
+        gCentY[g1.id] = gSumY[g1.id] / gCnt[g1.id];
+      }
+    });
+
+    for (var qi = 0; qi < n; qi++) {
+      if (nodes[qi].pinned) continue;
+      var qgid = sim._unitToGroup[nodes[qi].id];
+      if (!qgid) continue;
+      // (a) Ring-target attraction: pull toward fixed group ring position.
+      var tgt = sim._groupTargets[qgid];
+      if (tgt) {
+        nodes[qi].vx += (tgt.x - nodes[qi].x) * GROUP_TARGET_K;
+        nodes[qi].vy += (tgt.y - nodes[qi].y) * GROUP_TARGET_K;
+      }
+      // (b) Cohesion: pull toward current group centroid (keeps members clustered).
+      if (gCnt[qgid] > 1 && gCentX[qgid] !== undefined) {
+        nodes[qi].vx += (gCentX[qgid] - nodes[qi].x) * GROUP_COHESION_K;
+        nodes[qi].vy += (gCentY[qgid] - nodes[qi].y) * GROUP_COHESION_K;
+      }
+    }
   }
 
   // Integrate + damping
@@ -3393,7 +3491,9 @@ function terrainRenderTerritories(ctx, sim, hullAlpha) {
       pairAtoB[key] || 0, pairBtoA[key] || 0, maxCount, hullAlpha);
   });
 
-  // Draw hulls + labels + faint dots
+  // Pass 1: draw hull fills + strokes for all groups.
+  var sc = terrainView.scale;
+  var fs = Math.max(10, 13 / sc);
   terrainGroups.forEach(function(g) {
     var h = terrainHulls[g.id];
     if (!h) return;
@@ -3405,19 +3505,39 @@ function terrainRenderTerritories(ctx, sim, hullAlpha) {
     ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.restore();
+  });
 
-    // Group label at centroid
-    var sc = terrainView.scale;
-    var fs = Math.max(10, 13 / sc);
-    ctx.font = '600 ' + fs + 'px "JetBrains Mono",monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+  // Collect label candidates and resolve collisions via a single vertical-nudge pass.
+  // Labels start at hull centroid; any that land within 80px of an earlier label are
+  // pushed downward by 1.4 line-heights. ~14 groups → O(196) comparisons, negligible.
+  var labelItems = [];
+  terrainGroups.forEach(function(g) {
+    var h = terrainHulls[g.id];
+    if (h) labelItems.push({ g: g, h: h, x: h.cx, y: h.cy });
+  });
+  labelItems.sort(function(a, b) { return a.y - b.y; });
+  var lineH = fs * 1.5;
+  for (var lci = 1; lci < labelItems.length; lci++) {
+    for (var lpi = 0; lpi < lci; lpi++) {
+      var ldx = labelItems[lci].x - labelItems[lpi].x;
+      var ldy = labelItems[lci].y - labelItems[lpi].y;
+      if (ldx * ldx + ldy * ldy < 80 * 80) {
+        labelItems[lci].y = labelItems[lpi].y + lineH;
+        break; // re-sorted each time would be ideal but one pass is fine for ~14 items
+      }
+    }
+  }
+
+  // Pass 2: draw labels at resolved positions + faint unit dots inside each hull.
+  ctx.font = '600 ' + fs + 'px "JetBrains Mono",monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  labelItems.forEach(function(lp) {
     ctx.fillStyle = 'rgba(34,211,238,' + (0.55 * hullAlpha) + ')';
-    ctx.fillText(g.label, h.cx, h.cy);
-
+    ctx.fillText(lp.g.label, lp.x, lp.y);
     // Faint unit dots inside hull
     nodes.forEach(function(n, idx) {
-      if (nodeToGroup[idx] !== g.id) return;
+      if (nodeToGroup[idx] !== lp.g.id) return;
       ctx.beginPath();
       ctx.arc(n.x, n.y, 3, 0, 2 * Math.PI);
       ctx.fillStyle = 'rgba(34,211,238,' + (0.30 * hullAlpha) + ')';
