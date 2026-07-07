@@ -300,3 +300,16 @@ func TestMenuItemCountSpanTripwire(t *testing.T) {
 	}
 	t.Log("menu count span tripwire PASS")
 }
+
+// TestCtxActionExported guards the inline-onclick dispatcher: menu items call
+// terrainCtxAction via inline onclick (window scope); the definition is
+// closure-nested, so the explicit window export must exist.
+func TestCtxActionExported(t *testing.T) {
+	js, err := os.ReadFile("static/app.js")
+	if err != nil {
+		t.Fatalf("read app.js: %v", err)
+	}
+	if !bytes.Contains(js, []byte("window.terrainCtxAction = terrainCtxAction")) {
+		t.Fatal("terrainCtxAction must be exported to window for inline onclick handlers")
+	}
+}

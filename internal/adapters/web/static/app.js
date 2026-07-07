@@ -6176,6 +6176,10 @@ function terrainCtxMenuShow(x, y, html) {
   menu.style.top  = my + 'px';
 }
 
+// Inline onclick resolves against window; this code is closure-nested, so the
+// dispatcher must be exported explicitly (live bug 2026-07-07: ReferenceError).
+window.terrainCtxAction = terrainCtxAction;
+
 // Build a single menu item; registers the action in _tcmActions for safe callbacks.
 function _tcmItem(text, countStr, enabled, actionFn) {
   var countHtml = (countStr !== null && countStr !== undefined)
