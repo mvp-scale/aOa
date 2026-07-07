@@ -1018,7 +1018,10 @@ function Flow(){
   const[ov,setOv]=useState(()=>{const o=(q.get("ov")||"").split(",");
     return {concerns:o.includes("concerns"),changed:o.includes("changed")};});
   // Capsule expand state — persisted in localStorage (R5: stable base map)
+  // test hook: ?expandedGroups=g_domain,g_app pre-expands groups for screenshot verification
   const[expandedGroups,setExpandedGroups]=useState(()=>{
+    const qGroups=q.get("expandedGroups");
+    if(qGroups)return new Set(qGroups.split(",").filter(Boolean));
     try{const s=localStorage.getItem("bp:expanded:"+estate+":"+scope);
       return new Set(s?JSON.parse(s):[]);}catch{return new Set();}});
   const isCapsuleView=!!(view&&view.kind==="buckets");
@@ -1155,7 +1158,8 @@ function Flow(){
   const[collapsed,setCollapsed]=useState(false);
   // Narrated findings from daemon (BE-1 route; B3 fix: never client-computed problems)
   const[findings,setFindings]=useState([]);
-  const[findingsOpen,setFindingsOpen]=useState(false);
+  // test hook: ?findingsOpen=1 pre-opens the drawer for screenshot verification
+  const[findingsOpen,setFindingsOpen]=useState(q.get("findingsOpen")==="1");
   const[findingsExpandedId,setFindingsExpandedId]=useState(null);
   useEffect(()=>{let on=true;
     fetch("/api/arch/findings").then(r=>r.ok?r.json():[]).then(d=>{if(on)setFindings(Array.isArray(d)?d:[]);}).catch(()=>{});
