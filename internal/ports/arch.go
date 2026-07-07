@@ -150,11 +150,12 @@ type ArchQuerier interface {
 // GraphNode is one node in the substrate knowledge graph payload.
 // Used by the Terrain tab for force-directed rendering.
 type GraphNode struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
-	Path  string `json:"path"`
-	Ext   bool   `json:"ext,omitempty"`
-	Line  uint32 `json:"line,omitempty"` // first-occurrence line (file grain)
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Path   string `json:"path"`
+	Ext    bool   `json:"ext,omitempty"`
+	Line   uint32 `json:"line,omitempty"`  // first-occurrence line (file grain)
+	Domain string `json:"domain,omitempty"` // atlas domain (unit grain, from UnitFact.Domain); omitted when empty
 }
 
 // GraphEdge is one directed edge in the substrate knowledge graph payload.

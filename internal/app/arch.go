@@ -112,6 +112,10 @@ func aggregateEdges(edges []ports.ImportEdge, idx *ports.Index) ([]arch.UnitFact
 				Line:   e.StartLine,
 				Domain: fileDomains[e.FromFile],
 			}
+		} else if unitMap[fromID].Domain == "" && fileDomains[e.FromFile] != "" {
+			// Unit was first seen as an import target (no domain set then); retroactively
+			// assign the domain now that we have a source file for this unit.
+			unitMap[fromID].Domain = fileDomains[e.FromFile]
 		}
 
 		// Target unit: the resolved ImportPath (intra-repo dir or "ext:...").
@@ -658,10 +662,11 @@ func buildUnitGrainGraph(edges []ports.ImportEdge, idx *ports.Index, rev, downgr
 	for _, u := range units {
 		isExt := strings.HasPrefix(u.Path, "ext:")
 		nodes = append(nodes, ports.GraphNode{
-			ID:    u.ID,
-			Label: u.Label,
-			Path:  u.Path,
-			Ext:   isExt,
+			ID:     u.ID,
+			Label:  u.Label,
+			Path:   u.Path,
+			Ext:    isExt,
+			Domain: u.Domain, // atlas domain from UnitFact (populated by aggregateEdges via fileDomains)
 		})
 	}
 	// aggregateEdges returns units sorted by ID — no re-sort needed.

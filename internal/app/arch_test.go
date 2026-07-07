@@ -16,6 +16,84 @@ import (
 )
 
 // =============================================================================
+// GraphPayload domain field tests (QNAV COMMIT A)
+// =============================================================================
+
+// TestBuildGraphPayload_Domain verifies that BuildGraphPayload (unit grain)
+// propagates the atlas domain from UnitFact.Domain onto GraphNode.Domain when
+// an index with domain-enriched files is provided.
+func TestBuildGraphPayload_Domain(t *testing.T) {
+	edges := []ports.ImportEdge{
+		{FromFile: "internal/auth/login.go", ImportPath: "internal/ports", StartLine: 3},
+		{FromFile: "internal/ports/search.go", ImportPath: "ext:std/fmt", StartLine: 1},
+	}
+
+	// Build an index that maps internal/auth/login.go → domain "authentication"
+	idx := &ports.Index{
+		Files: map[uint32]*ports.FileMeta{
+			1: {Path: "internal/auth/login.go", Domain: "authentication"},
+			2: {Path: "internal/ports/search.go", Domain: "search"},
+		},
+	}
+
+	payload := BuildGraphPayload(edges, idx, "abc123", "unit", "")
+
+	// Find nodes by path prefix
+	domainByPath := make(map[string]string)
+	for _, n := range payload.Nodes {
+		domainByPath[n.Path] = n.Domain
+	}
+
+	assert.Equal(t, "authentication", domainByPath["internal/auth"],
+		"unit node for internal/auth/login.go should carry the atlas domain from fileDomains")
+	assert.Equal(t, "search", domainByPath["internal/ports"],
+		"unit node for internal/ports should carry its domain")
+
+	// ext nodes have no domain (UnitFact.Domain is not set for ext targets)
+	extDomain, ok := domainByPath["ext:std/fmt"]
+	if ok {
+		assert.Empty(t, extDomain, "ext node must not carry a domain")
+	}
+}
+
+// TestBuildGraphPayload_DomainNilIdx verifies that nil idx (C4/headless) still
+// produces a valid payload — nodes carry empty Domain, no panic.
+func TestBuildGraphPayload_DomainNilIdx(t *testing.T) {
+	edges := []ports.ImportEdge{
+		{FromFile: "internal/app/arch.go", ImportPath: "internal/domain/arch", StartLine: 1},
+	}
+	payload := BuildGraphPayload(edges, nil, "test", "unit", "")
+	require.NotEmpty(t, payload.Nodes, "nil idx must still produce nodes")
+	for _, n := range payload.Nodes {
+		assert.Empty(t, n.Domain, "nil idx: no domain expected on any node")
+	}
+}
+
+// TestBuildGraphPayload_DomainDeterminism verifies that two calls with identical
+// input produce byte-identical payloads (sort stability / determinism).
+func TestBuildGraphPayload_DomainDeterminism(t *testing.T) {
+	edges := []ports.ImportEdge{
+		{FromFile: "pkg/a/a.go", ImportPath: "pkg/b", StartLine: 1},
+		{FromFile: "pkg/b/b.go", ImportPath: "ext:std/fmt", StartLine: 1},
+		{FromFile: "pkg/c/c.go", ImportPath: "pkg/a", StartLine: 5},
+	}
+	idx := &ports.Index{
+		Files: map[uint32]*ports.FileMeta{
+			1: {Path: "pkg/a/a.go", Domain: "alpha"},
+			2: {Path: "pkg/b/b.go", Domain: "beta"},
+			3: {Path: "pkg/c/c.go", Domain: "gamma"},
+		},
+	}
+	p1 := BuildGraphPayload(edges, idx, "rev1", "unit", "")
+	p2 := BuildGraphPayload(edges, idx, "rev1", "unit", "")
+	require.Equal(t, len(p1.Nodes), len(p2.Nodes), "node count must be stable")
+	for i := range p1.Nodes {
+		assert.Equal(t, p1.Nodes[i].ID, p2.Nodes[i].ID, "node order must be stable")
+		assert.Equal(t, p1.Nodes[i].Domain, p2.Nodes[i].Domain, "domain must be stable")
+	}
+}
+
+// =============================================================================
 // L19.9 C4 dark test — flag-off = zero edges ("fully dark")
 // =============================================================================
 
