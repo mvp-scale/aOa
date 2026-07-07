@@ -67,6 +67,10 @@ let PALETTES={
 let ESTATES=MODEL.estates; // L19.20: let — poll updates on 200 before re-render
 const firstScope=e=>Object.keys(ESTATES[e].scopes)[0];
 const firstView=(e,sc)=>Object.keys(ESTATES[e].scopes[sc].views)[0];
+// firstBucketsView: prefer the first buckets-kind view; fall back to firstView.
+// Used when ?expandedGroups= is in the URL so the param lands on a view that can expand.
+const firstBucketsView=(e,sc)=>{const vs=ESTATES[e].scopes[sc].views;
+  return Object.keys(vs).find(id=>vs[id].kind==="buckets")||firstView(e,sc);};
 // generic catalog for simulated scopes: derived from the views the scope actually has
 const VIEWFAM={context:["C4 Model","System Context"],container:["C4 Model","Container"],
  component:["C4 Model","Component"],domains:["C4 Model","Domain map"],
@@ -1044,7 +1048,8 @@ function Flow(){
   const e0=q.get("estate")||(ESTATES.local?"local":Object.keys(ESTATES)[0]);
   const[scope,setScope]=useState(q.get("scope")||firstScope(e0));
   const[level,setLevel]=useState(()=>{const sc=q.get("scope")||firstScope(e0);
-    return q.get("level")||firstView(e0,sc);});
+    // ?expandedGroups= only applies to buckets views — route there when no explicit level given
+    return q.get("level")||(q.get("expandedGroups")?firstBucketsView(e0,sc):firstView(e0,sc));});
   const[dirOv,setDirOv]=useState(q.get("dir")||null);
   const[den,setDen]=useState(q.get("density")||"compact");
   const[els,setEls]=useState(null);
