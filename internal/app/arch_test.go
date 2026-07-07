@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/corey/aoa/internal/adapters/treesitter"
+	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -90,6 +91,113 @@ func TestBuildGraphPayload_DomainDeterminism(t *testing.T) {
 	for i := range p1.Nodes {
 		assert.Equal(t, p1.Nodes[i].ID, p2.Nodes[i].ID, "node order must be stable")
 		assert.Equal(t, p1.Nodes[i].Domain, p2.Nodes[i].Domain, "domain must be stable")
+	}
+}
+
+// =============================================================================
+// QNAV COMMIT D — DeriveFileDomains + Graph() wiring tests
+// =============================================================================
+
+// buildDeriveArchTestEngine creates a SearchEngine whose refToTokens maps
+// tokens for "auth/login.go" (FileID 1) to authentication-domain keywords.
+// Used to test that DeriveFileDomains → BuildGraphPayload produces non-empty
+// Domain fields on GraphNode.
+func buildDeriveArchTestEngine() *index.SearchEngine {
+	idx := &ports.Index{
+		Tokens: map[string][]ports.TokenRef{
+			"login":    {{FileID: 1, Line: 10}},
+			"logout":   {{FileID: 1, Line: 20}},
+			"password": {{FileID: 1, Line: 30}},
+		},
+		Metadata: map[ports.TokenRef]*ports.SymbolMeta{
+			{FileID: 1, Line: 10}: {Name: "Login", Kind: "function", StartLine: 10, EndLine: 15},
+			{FileID: 1, Line: 20}: {Name: "Logout", Kind: "function", StartLine: 20, EndLine: 25},
+			{FileID: 1, Line: 30}: {Name: "Password", Kind: "function", StartLine: 30, EndLine: 35},
+		},
+		Files: map[uint32]*ports.FileMeta{
+			1: {Path: "auth/login.go"},
+		},
+	}
+	domains := map[string]index.Domain{
+		"authentication": {Terms: map[string][]string{
+			"login":    {"login", "logout", "authenticate"},
+			"password": {"password", "bcrypt", "salt"},
+		}},
+	}
+	return index.NewSearchEngine(idx, domains, "")
+}
+
+// TestDeriveFileDomains_GraphChain verifies the full chain:
+// DeriveFileDomains() → populate cloned idx.Files → BuildGraphPayload → GraphNode.Domain.
+// This is the Commit D integration path: token scoring produces non-empty domain fields
+// on unit-grain graph nodes when the Engine is wired.
+func TestDeriveFileDomains_GraphChain(t *testing.T) {
+	engine := buildDeriveArchTestEngine()
+	edges := []ports.ImportEdge{
+		{FromFile: "auth/login.go", ImportPath: "ext:std/fmt", StartLine: 1},
+	}
+
+	// Simulate what Graph() does: clone idx, derive domains, populate clone.
+	idx := &ports.Index{
+		Tokens:   map[string][]ports.TokenRef{},
+		Metadata: map[ports.TokenRef]*ports.SymbolMeta{},
+		Files: map[uint32]*ports.FileMeta{
+			1: {Path: "auth/login.go"},
+		},
+	}
+	derived := engine.DeriveFileDomains()
+	for fileID, fm := range idx.Files {
+		if d, ok := derived[fm.Path]; ok {
+			idx.Files[fileID].Domain = d
+		}
+	}
+
+	payload := BuildGraphPayload(edges, idx, "test", "unit", "")
+	domainByPath := make(map[string]string)
+	for _, n := range payload.Nodes {
+		domainByPath[n.Path] = n.Domain
+	}
+
+	assert.Equal(t, "@authentication", domainByPath["auth"],
+		"unit node for auth/ must carry @authentication from DeriveFileDomains")
+	// ext nodes must never carry a domain.
+	if d, ok := domainByPath["ext:std/fmt"]; ok {
+		assert.Empty(t, d, "ext node must not carry a domain")
+	}
+}
+
+// TestDeriveFileDomains_GraphChain_Determinism verifies that two successive
+// DeriveFileDomains calls followed by BuildGraphPayload produce identical node ordering
+// and identical Domain fields (byte-determinism requirement).
+func TestDeriveFileDomains_GraphChain_Determinism(t *testing.T) {
+	engine := buildDeriveArchTestEngine()
+	edges := []ports.ImportEdge{
+		{FromFile: "auth/login.go", ImportPath: "ext:std/fmt", StartLine: 1},
+	}
+
+	runOnce := func() []ports.GraphNode {
+		idx := &ports.Index{
+			Tokens:   map[string][]ports.TokenRef{},
+			Metadata: map[ports.TokenRef]*ports.SymbolMeta{},
+			Files: map[uint32]*ports.FileMeta{
+				1: {Path: "auth/login.go"},
+			},
+		}
+		derived := engine.DeriveFileDomains()
+		for fileID, fm := range idx.Files {
+			if d, ok := derived[fm.Path]; ok {
+				idx.Files[fileID].Domain = d
+			}
+		}
+		return BuildGraphPayload(edges, idx, "rev", "unit", "").Nodes
+	}
+
+	n1 := runOnce()
+	n2 := runOnce()
+	require.Equal(t, len(n1), len(n2), "node count must be stable")
+	for i := range n1 {
+		assert.Equal(t, n1[i].ID, n2[i].ID, "node ID[%d] must be stable", i)
+		assert.Equal(t, n1[i].Domain, n2[i].Domain, "node Domain[%d] must be stable", i)
 	}
 }
 

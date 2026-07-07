@@ -564,6 +564,20 @@ func (q *archQuerier) Graph(scope string, grain string) ([]byte, error) {
 		q.app.mu.Lock()
 		idx = q.app.Index.Clone()
 		q.app.mu.Unlock()
+
+		// D: Derive file-level domains at Graph() time using the same deterministic
+		// atlas mapping as search (assignDomainByKeywords). The Engine holds the
+		// already-inverted refToTokens; this is a single read pass — O(symbols).
+		// Engine reads are safe concurrently (same contract as search calls).
+		// Provenance: D1-ruled REAL — derived from actual symbol tokens, not guessed.
+		if q.app.Engine != nil {
+			derived := q.app.Engine.DeriveFileDomains()
+			for fileID, fm := range idx.Files {
+				if d, ok := derived[fm.Path]; ok {
+					idx.Files[fileID].Domain = d
+				}
+			}
+		}
 	}
 
 	downgraded := ""

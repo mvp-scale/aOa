@@ -101,6 +101,50 @@ func (e *SearchEngine) resolveTerms(tokens []string) []string {
 	return terms
 }
 
+// DeriveFileDomains computes the dominant domain for each file in the index.
+// For each file, it scores all its symbols against atlas domain keywords using
+// the same deterministic enricher mapping as assignDomainByKeywords (D1-ruled,
+// provenance: REAL). Returns a map[filePath]domain where domain carries the "@"
+// prefix. Files with no scoreable tokens are omitted (omitempty: no fake domains).
+// Ties between equal-scoring domains are broken lexicographically (deterministic).
+// Safe to call concurrently — reads only e.refToTokens, e.idx, and scoring tables,
+// none of which are written outside Rebuild (which holds a.mu).
+func (e *SearchEngine) DeriveFileDomains() map[string]string {
+	// Accumulate domain vote counts per file: fileID → domain → count.
+	votes := make(map[uint32]map[string]int)
+	for ref := range e.refToTokens {
+		d := e.assignDomainByKeywords(ref)
+		if d == "" {
+			continue
+		}
+		if votes[ref.FileID] == nil {
+			votes[ref.FileID] = make(map[string]int)
+		}
+		votes[ref.FileID][d]++
+	}
+
+	// Pick modal domain per file; ties broken lexicographically.
+	result := make(map[string]string, len(votes))
+	for fileID, domainVotes := range votes {
+		file := e.idx.Files[fileID]
+		if file == nil {
+			continue
+		}
+		best := ""
+		bestCount := 0
+		for d, count := range domainVotes {
+			if count > bestCount || (count == bestCount && (best == "" || d < best)) {
+				best = d
+				bestCount = count
+			}
+		}
+		if best != "" {
+			result[file.Path] = best
+		}
+	}
+	return result
+}
+
 // refTokenSet returns the set of tokens for a ref from the reverse map.
 func (e *SearchEngine) refTokenSet(ref ports.TokenRef) map[string]bool {
 	tokens := e.refToTokens[ref]
