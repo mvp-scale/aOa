@@ -242,6 +242,7 @@ type App struct {
 	Index     *ports.Index
 	hintGen   *hints.Generator
 
+	searcher       ports.Searcher         // search adapter (for peek EnrichRef/FormatSymbol)
 	dimEngine      any                    // *recon.Engine in full builds, nil in lean
 	dimRules       []analyzer.Rule         // loaded from YAML at startup
 	debug          bool                   // AOA_DEBUG=1 enables verbose event logging
@@ -515,6 +516,7 @@ func New(cfg Config) (*App, error) {
 
 	// Create search adapter for ports.Searcher interface
 	searcher := index.NewSearchAdapter(engine)
+	a.searcher = searcher
 
 	// Create server with App as query provider (for domains, stats, etc.)
 	sockPath := socket.SocketPath(cfg.ProjectRoot)

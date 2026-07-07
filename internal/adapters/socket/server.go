@@ -48,6 +48,10 @@ type AppQueries interface {
 	// L19.16 adds dispatch arms — this accessor enables them without further
 	// interface changes.
 	Arch() ports.ArchQuerier
+	// IndexQuerier returns the index querier for peek and refs HTTP routes.
+	// Returns nil when the index is not yet populated.
+	// Routes backed by this interface work in all builds (lean and full).
+	IndexQuerier() ports.IndexQuerier
 }
 
 // Server is the daemon that listens on a Unix socket and serves search requests.

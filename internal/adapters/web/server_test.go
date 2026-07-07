@@ -138,6 +138,10 @@ func (m *mockQueries) Arch() ports.ArchQuerier {
 	return nil // C4: arch not wired in mock
 }
 
+func (m *mockQueries) IndexQuerier() ports.IndexQuerier {
+	return nil // no index querier in base mock
+}
+
 func (m *mockQueries) TelemetrySnapshot() socket.TelemetryResult {
 	return socket.TelemetryResult{
 		Lifetime: socket.TelemetryCounters{

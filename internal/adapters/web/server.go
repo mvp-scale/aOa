@@ -112,6 +112,10 @@ func (s *Server) Start(preferredPort int) error {
 	mux.HandleFunc("GET /api/source-line", s.handleSourceLine) // no ETag — file content
 	mux.HandleFunc("GET /api/usage", s.withETag(s.handleUsage))
 
+	// Index routes — always-on (peek and refs are L1 data, not L5 arch data)
+	mux.HandleFunc("GET /api/peek", s.handlePeek)
+	mux.HandleFunc("GET /api/refs", s.handleRefs)
+
 	// Arch viewer routes (no-op in lean builds via arch_handler_lean.go)
 	s.registerArchRoutes(mux)
 

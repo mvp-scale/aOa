@@ -53,6 +53,7 @@ func (nilArchQueries) UsageQuota() *UsageQuotaResult                { return nil
 func (nilArchQueries) DimScanProgress() DimScanProgress             { return DimScanProgress{} }
 func (nilArchQueries) GenerateHints(query string, opts ports.SearchOptions) []string { return nil }
 func (nilArchQueries) TelemetrySnapshot() TelemetryResult           { return TelemetryResult{} }
+func (nilArchQueries) IndexQuerier() ports.IndexQuerier              { return nil }
 
 // assertC4Resp verifies that err is non-nil, contains "C4", and does NOT
 // contain "unknown method" (which would indicate the guard was bypassed).
