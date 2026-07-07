@@ -4434,6 +4434,12 @@ function terrainClosePanel() {
   terrainRender();
 }
 
+// Payload registry: button payloads stay in JS — inlining JSON into HTML
+// attributes broke on embedded quotes (live leak) and closure-nested helpers
+// were unreachable from inline onclick anyway.
+var _tpPayloads = {};
+window.terrainCopyReg = function(key, btnId) { terrainCopyText(_tpPayloads[key] || '', btnId); };
+
 function terrainCopyText(text, btnId) {
   if (!navigator.clipboard) return;
   navigator.clipboard.writeText(text).then(function() {
@@ -4482,7 +4488,7 @@ function terrainUpdatePanelFiles(nodeIdx) {
   var oldText = copyPre.textContent;
   var newText = oldText.replace(/^Files:.*$/m, filesLine);
   copyPre.textContent = newText;
-  copyBtn.setAttribute('onclick', 'terrainCopyText(' + JSON.stringify(newText) + ", 'terrainCopyBtn')");
+  _tpPayloads.copy = newText;
 }
 
 function escHtml(s) {
@@ -4536,6 +4542,11 @@ function terrainOpenPanel(nodeIdx) {
     copyLines.push('Inbound: ' + inLines.join(', '));
   }
   var copyText = copyLines.join('\n');
+  _tpPayloads = {
+    copy: copyText,
+    askDep: 'Why does ' + nodePath + ' depend on [other]?\naoa arch derive ' + nodePath + ' [other]',
+    askImp: 'What imports ' + nodePath + '?\naoa arch facts ' + nodePath
+  };
 
   var inboundHtml = '';
   if (inShown.length > 0) {
@@ -4566,15 +4577,10 @@ function terrainOpenPanel(nodeIdx) {
     chipsHtml +
     '<div class="tp-section-label">Copy for Claude</div>' +
     '<pre id="terrainCopyPre" class="tp-copy-pre">' + escHtml(copyText) + '</pre>' +
-    '<button id="terrainCopyBtn" class="tp-copy-btn" onclick="terrainCopyText(' +
-      JSON.stringify(copyText) + ', \'terrainCopyBtn\')">Copy</button>' +
+    '<button id="terrainCopyBtn" class="tp-copy-btn" onclick="terrainCopyReg(\'copy\', \'terrainCopyBtn\')">Copy</button>' +
     '<div class="tp-footer">' +
-    '<button class="tp-ask-btn" onclick="terrainCopyText(' +
-      JSON.stringify('Why does ' + nodePath + ' depend on [other]?\naoa arch derive ' + nodePath + ' [other]') +
-      ', \'terrainAskDepBtn\')">Why does this depend on…</button>' +
-    '<button id="terrainAskDepBtn" class="tp-ask-btn" onclick="terrainCopyText(' +
-      JSON.stringify('What imports ' + nodePath + '?\naoa arch facts ' + nodePath) +
-      ', \'terrainAskImpBtn\')">What imports this?</button>' +
+    '<button id="terrainAskDepBtn" class="tp-ask-btn" onclick="terrainCopyReg(\'askDep\', \'terrainAskDepBtn\')">Why does this depend on…</button>' +
+    '<button id="terrainAskImpBtn2" class="tp-ask-btn" onclick="terrainCopyReg(\'askImp\', \'terrainAskImpBtn2\')">What imports this?</button>' +
     '<button id="terrainAskImpBtn" class="tp-ask-btn">Ask about this</button>' +
     '</div>';
 
@@ -4709,6 +4715,7 @@ function terrainSetupCanvas() {
   }, { passive: false });
 
   canvas.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return; // right/middle buttons never arm click/descend/drag
     var pt = canvasXY(e);
     var hit = hitTest(pt.x, pt.y);
     _clickNode = hit;
@@ -6146,7 +6153,8 @@ var _tcmActions = [];
 function terrainCtxAction(idx) {
   var fn = _tcmActions[idx];
   terrainCtxMenuClose();
-  if (fn) fn();
+  if (fn) { fn(); }
+  else if (window.console) { console.error('terrainCtxAction: no action at', idx, '— registry/menu build order bug'); }
 }
 
 // ── Context menu DOM management ──
@@ -6159,7 +6167,9 @@ function terrainCtxMenuClose() {
 
 function terrainCtxMenuShow(x, y, html) {
   terrainCtxMenuClose();
-  _tcmActions = [];
+  // Do NOT reset _tcmActions here: the *Show builders register actions while
+  // building `html` BEFORE calling this (live bug: the reset wiped every
+  // action after registration — clicks dispatched nothing, silently).
   var menu = document.createElement('div');
   menu.className = 'tcm-menu';
   menu.id = 'terrainCtxMenu';
