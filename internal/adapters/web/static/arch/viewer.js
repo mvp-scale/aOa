@@ -65,7 +65,7 @@ const STD_CATALOG=[
    {vid:["component","domains"],label:"Component"},
    {vid:["deployment"],label:"Deployment"},
    {vid:["sequence"],label:"Dynamic (sequence)",note:"needs call-edge resolution"},
-   {vid:["code"],label:"Code (L4)",note:"symbol table"}]},
+   {vid:["code"],label:"Code (L4)",note:"symbol table · not drawn by design — needs call-edge resolution"}]},
  {grp:"Flows & Behavior",items:[
    {vid:["dataflow"],label:"Data Flow (DFD)"},
    {vid:["trust"],label:"Trust Boundaries (STRIDE)",note:"DFD overlay · rule-pack"},
@@ -116,6 +116,9 @@ function genPrompt(estateId,scopeLabel,vid,label){
  ", then run python3 playbook/generators/build_c4_mockup.py and refresh the viewer.";}
 function dynamicCatalog(sv){
   return STD_CATALOG.map(g=>({grp:g.grp,tag:g.tag,items:g.items.map(it=>{
+    // R1: code view is always listed-not-drawn regardless of manifest presence
+    if((it.vid||[]).includes("code")){
+      return {label:it.label,status:"planned",note:"symbol table · not drawn by design — needs call-edge resolution"};}
     const hit=(it.vid||[]).find(v=>sv.views&&sv.views[v]);
     if(hit){const v=sv.views[hit];
       return {id:hit,label:it.label,alias:it.alias,
@@ -709,7 +712,8 @@ const STATUS={live:{dot:"●",col:T.green,lbl:"derived live"},
 const ago=t=>{const s=(Date.now()-t)/1000;return s<5?"now":s<60?Math.floor(s)+"s ago":Math.floor(s/60)+"m ago";};
 function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,collapsed,setCollapsed,last,journeys,startJourney}){
   const[copied,setCopied]=useState(null);
-  const CATALOG=(estate==="local"&&CATALOGS[scope])?CATALOGS[scope]:dynamicCatalog(scopes[scope]||{views:{}});
+  const[stdExpanded,setStdExpanded]=useState(false);
+  const CATALOG=dynamicCatalog(scopes[scope]||{views:{}});
   if(collapsed) return html`<div style=${{width:44,borderRight:`1px solid ${T.border}`,background:T.chrome,
     display:"flex",flexDirection:"column",alignItems:"center",paddingTop:10,flexShrink:0}}>
     <button onClick=${()=>setCollapsed(false)} title="Show views"
@@ -756,37 +760,54 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
       <span style=${{fontSize:9,color:T.mute,marginLeft:6}}>· ${(scopes[scope]||{}).label} only</span>
     </div>
     <div style=${{flex:1,padding:"6px 0"}}>
-    ${CATALOG.map(g=>{const isOpen=open[g.grp]!==false;
-      return html`<div key=${g.grp}>
-        <div onClick=${()=>setOpen({...open,[g.grp]:!isOpen})}
-          style=${{display:"flex",alignItems:"center",gap:7,padding:"8px 14px",cursor:"pointer",userSelect:"none"}}>
-          <span style=${{color:T.mute,fontSize:9,transform:isOpen?"rotate(90deg)":"none",transition:"transform .15s",width:8}}>▶</span>
-          <span style=${{fontSize:11.5,fontWeight:700,letterSpacing:.6,color:T.text}}>${g.grp}</span>
-          ${g.tag?html`<span style=${{fontSize:8.5,color:T.blue,border:`1px solid ${T.blue}`,borderRadius:4,
-            padding:"0 4px",letterSpacing:.5,textTransform:"uppercase"}}>${g.tag}</span>`:null}
-        </div>
-        ${isOpen?g.items.map((it,ix)=>{const st=STATUS[it.status];const active=it.id&&it.id===level&&!it.alias;
-          const aliasActive=it.id&&it.id===level&&it.alias;
-          const clickable=!!it.id;
-          return html`<div key=${ix} class="vrow" onClick=${clickable?()=>go(it.id):null}
-            style=${{display:"flex",alignItems:"flex-start",gap:8,padding:"5px 14px 5px 29px",
-              cursor:clickable?"pointer":"default",
-              background:(active||aliasActive)?"#60a5fa14":"transparent",
-              borderLeft:(active||aliasActive)?`2px solid ${T.blue}`:"2px solid transparent"}}>
-            <span style=${{color:st.col,fontSize:10,lineHeight:"17px"}}>${st.dot}</span>
-            <div style=${{minWidth:0,flex:1}}>
-              <div style=${{fontSize:12,fontWeight:active?650:500,
-                color:clickable?T.text:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${it.label}</div>
-              ${it.note?html`<div style=${{fontSize:9.5,color:T.mute}}>${it.note}</div>`:null}
-            </div>
-            ${it.id&&last&&last[estate+":"+scope+":"+it.id]?html`<span class="ago" style=${{fontSize:8.5,color:T.mute,lineHeight:"17px",flexShrink:0}}>${ago(last[estate+":"+scope+":"+it.id])}</span>`:null}
-            ${it.status==="planned"&&estate!=="local"&&it.vid0?html`<span title="Copy AI-generation prompt for this view"
-              onClick=${ev=>{ev.stopPropagation();
-                navigator.clipboard.writeText(genPrompt(estate,(scopes[scope]||{}).label||scope,it.vid0,it.label));
-                setCopied(it.label);setTimeout(()=>setCopied(null),1400);}}
-              style=${{fontSize:10,color:copied===it.label?T.green:T.mute,cursor:"pointer",flexShrink:0,lineHeight:"17px"}}>${copied===it.label?"✓":"⧉"}</span>`:null}
-          </div>`;}):null}
-      </div>`;})}
+    ${(()=>{
+      // Two-tier sidebar: Tier 1 = DERIVED (live/sim views from manifest); Tier 2 = collapsed "N more"
+      const allItems=CATALOG.flatMap(g=>g.items.map(it=>({...it,grp:g.grp,tag:g.tag})));
+      const derivedItems=allItems.filter(it=>it.status==="live"||it.status==="sim");
+      const plannedItems=allItems.filter(it=>it.status==="planned");
+      // Group derived items by grp for display
+      const derivedGroups=[...new Map(derivedItems.map(it=>[it.grp,{grp:it.grp,tag:it.tag,items:[]}])).values()];
+      derivedItems.forEach(it=>{const g=derivedGroups.find(x=>x.grp===it.grp);if(g)g.items.push(it);});
+      const renderItem=(it,ix)=>{const st=STATUS[it.status];const active=it.id&&it.id===level&&!it.alias;
+        const aliasActive=it.id&&it.id===level&&it.alias;
+        const clickable=!!it.id;
+        return html`<div key=${ix} class="vrow" onClick=${clickable?()=>go(it.id):null}
+          style=${{display:"flex",alignItems:"flex-start",gap:8,padding:"5px 14px 5px 29px",
+            cursor:clickable?"pointer":"default",
+            background:(active||aliasActive)?"#60a5fa14":"transparent",
+            borderLeft:(active||aliasActive)?`2px solid ${T.blue}`:"2px solid transparent"}}>
+          <span style=${{color:st.col,fontSize:10,lineHeight:"17px"}}>${st.dot}</span>
+          <div style=${{minWidth:0,flex:1}}>
+            <div style=${{fontSize:12,fontWeight:active?650:500,
+              color:clickable?T.text:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${it.label}</div>
+            ${it.note?html`<div style=${{fontSize:9.5,color:T.mute}}>${it.note}</div>`:null}
+          </div>
+          ${it.id&&last&&last[estate+":"+scope+":"+it.id]?html`<span class="ago" style=${{fontSize:8.5,color:T.mute,lineHeight:"17px",flexShrink:0}}>${ago(last[estate+":"+scope+":"+it.id])}</span>`:null}
+          ${it.status==="planned"&&estate!=="local"&&it.vid0?html`<span title="Copy AI-generation prompt for this view"
+            onClick=${ev=>{ev.stopPropagation();
+              navigator.clipboard.writeText(genPrompt(estate,(scopes[scope]||{}).label||scope,it.vid0,it.label));
+              setCopied(it.label);setTimeout(()=>setCopied(null),1400);}}
+            style=${{fontSize:10,color:copied===it.label?T.green:T.mute,cursor:"pointer",flexShrink:0,lineHeight:"17px"}}>${copied===it.label?"✓":"⧉"}</span>`:null}
+        </div>`;};
+      return html`<${React.Fragment}>
+        ${derivedGroups.map(g=>html`<div key=${g.grp}>
+          <div style=${{display:"flex",alignItems:"center",gap:7,padding:"8px 14px"}}>
+            <span style=${{fontSize:11.5,fontWeight:700,letterSpacing:.6,color:T.text}}>${g.grp}</span>
+            ${g.tag?html`<span style=${{fontSize:8.5,color:T.blue,border:`1px solid ${T.blue}`,borderRadius:4,
+              padding:"0 4px",letterSpacing:.5,textTransform:"uppercase"}}>${g.tag}</span>`:null}
+          </div>
+          ${g.items.map(renderItem)}
+        </div>`)}
+        ${plannedItems.length?html`<div style=${{marginTop:8,borderTop:`1px solid ${T.border}33`}}>
+          <div onClick=${()=>setStdExpanded(!stdExpanded)} style=${{display:"flex",alignItems:"center",
+            gap:8,padding:"7px 14px",cursor:"pointer",userSelect:"none"}}>
+            <span style=${{color:T.mute,fontSize:9,transform:stdExpanded?"rotate(90deg)":"none",transition:"transform .15s",width:8}}>▶</span>
+            <span style=${{color:T.mute,fontSize:11}}><span style=${{color:T.mute}}>○</span> ${plannedItems.length} more standard views available</span>
+          </div>
+          ${stdExpanded?plannedItems.map(renderItem):null}
+        </div>`:null}
+      <//>`;
+    })()}
     </div>
     <div style=${{borderTop:`1px solid ${T.border}`,padding:"9px 14px",fontSize:9.5,color:T.dim,
       display:"flex",flexDirection:"column",gap:3}}>
