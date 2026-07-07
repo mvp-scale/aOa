@@ -49,6 +49,9 @@ var terrainLensMode = 'structure'; // 'structure' | 'meaning' — domain-group l
 var terrainDomainGroups = null; // domain-based territory groups for 'meaning' lens
 var terrainStructureGroups = null; // save of terrainGroups when lens flips to meaning
 var terrainQListEl = null;     // currently open tq-list-overlay element
+var terrainCtxMenu = null;      // DOM element of open context menu, or null
+var terrainPathPending = null;  // {nodeId} while path two-click gesture is armed
+var terrainAdjCache = null;     // {rev, outAdj, inAdj} — cached adjacency per rev
 
 /* ══════════════════════════════════════════════════════════
    HELPERS
@@ -4127,6 +4130,7 @@ function terrainTick() {
     terrainUpdateStrip();
     terrainUpdateBreadcrumb();
     terrainRender();
+    terrainFirstVisitCheck();
   }
 
   if (activeTab === 'terrain' && terrainState.alpha > 0.008) {
@@ -4418,6 +4422,7 @@ function terrainDismissCoach() {
   localStorage.setItem('terrain_coach_v1', '1');
   var el = document.getElementById('terrainCoach');
   if (el) el.style.display = 'none';
+  terrainFirstVisitDismiss();
 }
 
 // ── Panel: click a unit node to open the right-side overlay ──
@@ -4510,6 +4515,13 @@ function terrainOpenPanel(nodeIdx) {
   var inShown = inEdges.slice(0, 6);
   var inMore = inEdges.length - inShown.length;
 
+  // Quick-action chips with pre-checked counts (COMMIT D)
+  var _adj = terrainGetAdj();
+  var _depsC  = _adj ? (_adj.outAdj[nodeId] || []).length : 0;
+  var _depC   = _adj ? (_adj.inAdj[nodeId]  || []).length : 0;
+  var _blastD = _adj ? terrainBFS(nodeId, _adj.inAdj, 6) : {};
+  var _blastC = Math.max(0, Object.keys(_blastD).length - 1);
+
   // Build copy-for-claude text (B1: use path not id)
   var copyLines = [
     'Context: aOa Terrain, rev ' + rev + ' (REAL — derived from imports).',
@@ -4533,6 +4545,15 @@ function terrainOpenPanel(nodeIdx) {
       '</div>';
   }
 
+  var chipsHtml =
+    '<div class="tp-section-label">Quick actions</div>' +
+    '<div class="tp-chips">' +
+    terrainPanelChip('Dependents (' + _depC + ')',   _depC   > 0, function() { terrainClosePanel(); terrainQCommit('dependents', nodeId); }) +
+    terrainPanelChip('Dependencies (' + _depsC + ')', _depsC > 0, function() { terrainClosePanel(); terrainQCommit('deps', nodeId); }) +
+    terrainPanelChip('Blast (' + _blastC + ' units)', _blastC > 0, function() { terrainClosePanel(); terrainQCommit('blast', nodeId); }) +
+    terrainPanelChip('Path to…', true, function() { terrainClosePanel(); terrainPathPendingStart(nodeId); }) +
+    '</div>';
+
   el.innerHTML = '<div class="tp-header">' +
     '<span class="tp-label">' + escHtml(nodeLabel) + '</span>' +
     '<button class="tp-close" onclick="terrainClosePanel()">&#x2715;</button>' +
@@ -4542,6 +4563,7 @@ function terrainOpenPanel(nodeIdx) {
     '<div class="tp-section-label">Files</div>' +
     '<div id="terrainPanelFiles" class="tp-files"><em>loading…</em></div>' +
     inboundHtml +
+    chipsHtml +
     '<div class="tp-section-label">Copy for Claude</div>' +
     '<pre id="terrainCopyPre" class="tp-copy-pre">' + escHtml(copyText) + '</pre>' +
     '<button id="terrainCopyBtn" class="tp-copy-btn" onclick="terrainCopyText(' +
@@ -4576,6 +4598,8 @@ function terrainSetupCanvas() {
   var debugPanel = urlParams.get('debugpanel');
   var debugScale = parseFloat(urlParams.get('debugscale') || '');
   var debugDescend = urlParams.get('descend');
+  var debugMenu   = urlParams.get('debugmenu');
+  var debugIntent = urlParams.get('debugintent');
   if (debugScale > 0) {
     terrainView.scale = debugScale;
   }
@@ -4729,6 +4753,17 @@ function terrainSetupCanvas() {
     var wasDrag = terrainDrag;
     terrainDrag = null; terrainPan = null;
     canvas.classList.remove('dragging');
+    // Path two-click gesture: if pending and a node is clicked, complete path
+    if (terrainPathPending && !_dragMoved && _clickNode >= 0 && wasDrag) {
+      var _pSrc = terrainPathPending.nodeId;
+      var _pTgt = terrainState && terrainState.nodes[_clickNode];
+      terrainPathPendingCancel();
+      if (_pTgt && _pTgt.id !== _pSrc) {
+        terrainQCommit('path', _pSrc + ' ' + _pTgt.id);
+      }
+      _clickNode = -1;
+      return;
+    }
     if (!_dragMoved) {
       if (_clickNode >= 0 && wasDrag) {
         // Node click: open panel if descended (Z1) or no groups; otherwise descend to territory
@@ -4782,6 +4817,11 @@ function terrainSetupCanvas() {
       terrainQFocus();
       return;
     }
+    if (ev.key === 'Escape' && terrainPathPending) {
+      ev.preventDefault();
+      terrainPathPendingCancel();
+      return;
+    }
     if (ev.key === 'Escape') {
       var inp = document.getElementById('terrainQInput');
       var acEl = document.getElementById('terrainQAC');
@@ -4804,6 +4844,28 @@ function terrainSetupCanvas() {
         // Step 5: ascend territory
         terrainAscend();
       }
+    }
+  });
+
+  // Right-click context menu (COMMIT D)
+  canvas.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    terrainCtxMenuClose();
+    var pt = canvasXY(e);
+    var hit = hitTest(pt.x, pt.y);
+    if (hit >= 0) {
+      // Node right-click
+      terrainCtxMenuNodeShow(hit, e.clientX, e.clientY);
+    } else if (!terrainDescended && terrainGroups && terrainHulls) {
+      // Check hull hit
+      var hitGroup = terrainHullHitTest(pt.x, pt.y);
+      if (hitGroup) {
+        terrainCtxMenuHullShow(hitGroup, e.clientX, e.clientY);
+      } else {
+        terrainCtxMenuCanvasShow(e.clientX, e.clientY);
+      }
+    } else {
+      terrainCtxMenuCanvasShow(e.clientX, e.clientY);
     }
   });
 
@@ -4837,6 +4899,37 @@ function terrainSetupCanvas() {
         if (nodes[di].id === debugPanel || nodes[di].path === debugPanel) {
           terrainOpenPanel(di); break;
         }
+      }
+    }, 200);
+  }
+  // ?debugmenu=<unitid>: open context menu after sim settles (screenshot evidence)
+  if (debugMenu) {
+    var _menuWait = setInterval(function() {
+      if (!terrainState || terrainState.alpha > 0.05) return;
+      clearInterval(_menuWait);
+      var nodes = terrainState.nodes;
+      for (var dmi = 0; dmi < nodes.length; dmi++) {
+        if (nodes[dmi].id === debugMenu || nodes[dmi].path === debugMenu ||
+            nodes[dmi].label === debugMenu) {
+          var canvas2 = document.getElementById('terrainCanvas');
+          var rect2 = canvas2 ? canvas2.getBoundingClientRect() : {left:0,top:0,width:400,height:300};
+          terrainCtxMenuNodeShow(dmi, rect2.left + rect2.width/2, rect2.top + rect2.height/2);
+          break;
+        }
+      }
+    }, 200);
+  }
+  // ?debugintent=<text>: pre-fill bar + open autocomplete with intent (screenshot evidence)
+  if (debugIntent) {
+    var _intentWait = setInterval(function() {
+      if (!terrainState || terrainState.alpha > 0.05) return;
+      clearInterval(_intentWait);
+      var qw = document.getElementById('terrainQueryWrap');
+      if (qw) qw.style.display = '';
+      var inp2 = document.getElementById('terrainQInput');
+      if (inp2) {
+        inp2.value = decodeURIComponent(debugIntent);
+        terrainQOnInput();
       }
     }, 200);
   }
@@ -5635,11 +5728,29 @@ function terrainQSuggest(raw) {
     // Also show entity matches
     var ents = terrainQFuzzyEntities(raw);
     if (ents.length > 0) {
-      items.push({type: 'section', label: 'Units'});
-      ents.forEach(function(e) {
+      items.push({type: 'section', label: 'Units — did you mean:'});
+      var _intentAdj = terrainGetAdj();
+      ents.slice(0, 3).forEach(function(e) {
+        // Focus entry
         items.push({type: 'entity', label: e.label, id: e.id, kind: e.kind,
                     commit: {verb: 'focus', args: e.id}});
+        // Verb suggestions with pre-checked counts (intent matcher)
+        if (e.kind === 'unit' && _intentAdj) {
+          var _dc  = (_intentAdj.inAdj[e.id]  || []).length;
+          var _dpc = (_intentAdj.outAdj[e.id] || []).length;
+          var _bd  = terrainBFS(e.id, _intentAdj.inAdj, 6);
+          var _bc  = Math.max(0, Object.keys(_bd).length - 1);
+          if (_dc > 0)  items.push({type: 'intent', label: 'dependents ' + e.label, count: String(_dc),  commit: {verb: 'dependents', args: e.id}});
+          if (_dpc > 0) items.push({type: 'intent', label: 'deps ' + e.label,       count: String(_dpc), commit: {verb: 'deps', args: e.id}});
+          if (_bc > 0)  items.push({type: 'intent', label: 'blast ' + e.label,      count: _bc + ' units', commit: {verb: 'blast', args: e.id}});
+        }
       });
+      if (ents.length > 3) {
+        ents.slice(3).forEach(function(e) {
+          items.push({type: 'entity', label: e.label, id: e.id, kind: e.kind,
+                      commit: {verb: 'focus', args: e.id}});
+        });
+      }
     }
     return items;
   }
@@ -5710,6 +5821,11 @@ function terrainQShowAC(items) {
           '<span class="tqb-item-verb">' + escHtml(it.verb || '') + '</span>' +
           '<span class="tqb-item-arg">' + escHtml(it.arg || '') + '</span>' +
           '<span class="tqb-item-kind">remembered</span>' +
+          '</div>';
+      } else if (it.type === 'intent') {
+        html += '<div class="' + cls + ' onclick="terrainQACClick(' + fi + ')">' +
+          '<span class="tqb-item-verb">' + escHtml(it.label || '') + '</span>' +
+          (it.count ? '<span class="tqb-item-count">(' + escHtml(it.count) + ')</span>' : '') +
           '</div>';
       } else if (it.type === 'synonym') {
         html += '<div class="' + cls + ' onclick="terrainQACClick(' + fi + ')">' +
@@ -5972,6 +6088,227 @@ safeFetch('/api/arch/manifest').then(function(d) {
   terrainManifestRev = terrainGetManifestRev(d);
   terrainInit();
 }).catch(function() {});
+
+/* ══════════════════════════════════════════════════════════
+   COMMIT D — CLICK-FIRST CONTEXT MENUS + FIRST-VISIT OVERLAY
+   Pre-check counts from in-memory adjacency before display.
+   ══════════════════════════════════════════════════════════ */
+
+// ── Cached adjacency getter (shared by context menu + intent matcher) ──
+function terrainGetAdj() {
+  if (!terrainRawPayload) return null;
+  var rev = terrainRawPayload.rev || '';
+  if (!terrainAdjCache || terrainAdjCache.rev !== rev) {
+    var a = terrainBuildAdj(terrainRawPayload);
+    terrainAdjCache = {rev: rev, outAdj: a.outAdj, inAdj: a.inAdj};
+  }
+  return terrainAdjCache;
+}
+
+// ── Pre-check count computation ──
+function terrainCtxNodeCounts(nodeId) {
+  var adj = terrainGetAdj();
+  if (!adj) return {deps: 0, dependents: 0, blast: 0};
+  var depsCount = (adj.outAdj[nodeId] || []).length;
+  var dependentsCount = (adj.inAdj[nodeId] || []).length;
+  var blastDist = terrainBFS(nodeId, adj.inAdj, 6);
+  return {deps: depsCount, dependents: dependentsCount, blast: Math.max(0, Object.keys(blastDist).length - 1)};
+}
+
+function terrainCtxHullCounts(groupId) {
+  var g = null;
+  if (terrainGroups) {
+    for (var _gi = 0; _gi < terrainGroups.length; _gi++) {
+      if (terrainGroups[_gi].id === groupId) { g = terrainGroups[_gi]; break; }
+    }
+  }
+  if (!g) return {members: 0, reaches: 0, externals: 0};
+  var members = g.memberSet || {};
+  var memberCount = Object.keys(members).length;
+  var adj = terrainGetAdj();
+  if (!adj) return {members: memberCount, reaches: 0, externals: 0};
+  var reachSet = {};
+  Object.keys(members).forEach(function(mid) {
+    (adj.inAdj[mid] || []).forEach(function(e) { if (!members[e.to]) reachSet[e.to] = true; });
+  });
+  var extSet = {};
+  var _nodeMap = {};
+  (terrainRawPayload.nodes || []).forEach(function(n) { _nodeMap[n.id] = n; });
+  Object.keys(members).forEach(function(mid) {
+    (adj.outAdj[mid] || []).forEach(function(e) { var n = _nodeMap[e.to]; if (n && n.ext) extSet[e.to] = true; });
+  });
+  return {members: memberCount, reaches: Object.keys(reachSet).length, externals: Object.keys(extSet).length};
+}
+
+// ── Global action registry: avoids inline onclick escaping problems ──
+var _tcmActions = [];
+
+function terrainCtxAction(idx) {
+  var fn = _tcmActions[idx];
+  terrainCtxMenuClose();
+  if (fn) fn();
+}
+
+// ── Context menu DOM management ──
+function terrainCtxMenuClose() {
+  if (terrainCtxMenu && terrainCtxMenu.parentNode) {
+    terrainCtxMenu.parentNode.removeChild(terrainCtxMenu);
+  }
+  terrainCtxMenu = null;
+}
+
+function terrainCtxMenuShow(x, y, html) {
+  terrainCtxMenuClose();
+  _tcmActions = [];
+  var menu = document.createElement('div');
+  menu.className = 'tcm-menu';
+  menu.id = 'terrainCtxMenu';
+  menu.innerHTML = html;
+  document.body.appendChild(menu);
+  terrainCtxMenu = menu;
+  var mw = menu.offsetWidth || 240, mh = menu.offsetHeight || 180;
+  var mx = x, my = y;
+  if (mx + mw + 10 > window.innerWidth)  mx = window.innerWidth - mw - 10;
+  if (my + mh + 10 > window.innerHeight) my = window.innerHeight - mh - 10;
+  if (mx < 4) mx = 4;
+  if (my < 4) my = 4;
+  menu.style.left = mx + 'px';
+  menu.style.top  = my + 'px';
+}
+
+// Build a single menu item; registers the action in _tcmActions for safe callbacks.
+function _tcmItem(text, countStr, enabled, actionFn) {
+  var countHtml = (countStr !== null && countStr !== undefined)
+    ? ' <span class="tcm-count">(' + escHtml(String(countStr)) + ')</span>'
+    : '';
+  if (!enabled || !actionFn) {
+    return '<div class="tcm-item tcm-disabled">' + escHtml(text) + countHtml + '</div>';
+  }
+  var idx = _tcmActions.length;
+  _tcmActions.push(actionFn);
+  return '<div class="tcm-item" onclick="terrainCtxAction(' + idx + ')">' +
+    escHtml(text) + countHtml + '</div>';
+}
+function _tcmSep()      { return '<div class="tcm-sep"></div>'; }
+function _tcmHeader(t)  { return '<div class="tcm-header">' + escHtml(t) + '</div>'; }
+
+// ── Node right-click menu ──
+function terrainCtxMenuNodeShow(nodeIdx, px, py) {
+  var sim = terrainState;
+  if (!sim) return;
+  var node = sim.nodes[nodeIdx];
+  if (!node) return;
+  var nodeId = node.id;
+  _tcmActions = [];
+  var c = terrainCtxNodeCounts(nodeId);
+  var html = _tcmHeader(node.label || nodeId) +
+    _tcmItem('Dependents',   c.dependents,          c.dependents > 0, function() { terrainQCommit('dependents', nodeId); }) +
+    _tcmItem('Dependencies', c.deps,                c.deps > 0,       function() { terrainQCommit('deps', nodeId); }) +
+    _tcmItem('Blast radius', c.blast + ' units',    c.blast > 0,      function() { terrainQCommit('blast', nodeId); }) +
+    _tcmItem('Path to…', null, true, function() { terrainPathPendingStart(nodeId); }) +
+    _tcmSep() +
+    _tcmItem('Files & evidence', null, true, function() { terrainOpenPanel(nodeIdx); }) +
+    _tcmItem('Copy for Claude', null, true, function() {
+      var ct = 'Unit: ' + nodeId + '\naoa arch facts ' + (node.path || nodeId) + '\ngrep <symbol> → aoa peek <code>';
+      terrainCopyText(ct, null);
+    });
+  terrainCtxMenuShow(px, py, html);
+}
+
+// ── Hull (territory) right-click menu ──
+function terrainCtxMenuHullShow(groupId, px, py) {
+  var g = null;
+  if (terrainGroups) {
+    for (var _hi = 0; _hi < terrainGroups.length; _hi++) {
+      if (terrainGroups[_hi].id === groupId) { g = terrainGroups[_hi]; break; }
+    }
+  }
+  if (!g) return;
+  _tcmActions = [];
+  var c = terrainCtxHullCounts(groupId);
+  var html = _tcmHeader(g.label) +
+    _tcmItem('Descend', null, true, function() { terrainDescend(groupId); }) +
+    _tcmItem('What\'s inside', c.members + ' units', false, null) +
+    _tcmItem('What reaches this territory', c.reaches, c.reaches > 0, null) +
+    _tcmItem('Externals it touches', c.externals, c.externals > 0, null);
+  terrainCtxMenuShow(px, py, html);
+}
+
+// ── Empty canvas right-click menu ──
+function terrainCtxMenuCanvasShow(px, py) {
+  _tcmActions = [];
+  var hasAns = !!terrainAnswer;
+  var html = _tcmHeader('Canvas') +
+    _tcmItem('Fit map', null, true, function() { terrainAutoFit(); }) +
+    _tcmItem('Clear answer', null, hasAns, hasAns ? function() { terrainQClear(); } : null) +
+    _tcmSep() +
+    _tcmItem('Ask a question…', '⌘K', true, function() { terrainQFocus(); });
+  terrainCtxMenuShow(px, py, html);
+}
+
+// ── Close menu on click-away / scroll ──
+document.addEventListener('click', function(e) {
+  if (terrainCtxMenu && !terrainCtxMenu.contains(e.target)) terrainCtxMenuClose();
+});
+document.addEventListener('scroll', function() { terrainCtxMenuClose(); }, true);
+
+// ── Path two-click gesture ──
+function terrainPathPendingStart(nodeId) {
+  terrainPathPending = {nodeId: nodeId};
+  var sim = terrainState;
+  var label = nodeId;
+  if (sim) {
+    for (var _pi = 0; _pi < sim.nodes.length; _pi++) {
+      if (sim.nodes[_pi].id === nodeId) { label = sim.nodes[_pi].label || nodeId; break; }
+    }
+  }
+  var hint = document.getElementById('terrainPathHint');
+  if (hint) {
+    hint.textContent = 'Click another node to find path from "' + label + '"   (␛ Esc to cancel)';
+    hint.style.display = '';
+  }
+}
+
+function terrainPathPendingCancel() {
+  terrainPathPending = null;
+  var hint = document.getElementById('terrainPathHint');
+  if (hint) hint.style.display = 'none';
+}
+
+// ── Panel chip builder (reuses _tcmActions registry) ──
+function terrainPanelChip(label, enabled, actionFn) {
+  if (!enabled || !actionFn) {
+    return '<button class="tp-chip" disabled>' + escHtml(label) + '</button>';
+  }
+  var idx = _tcmActions.length;
+  _tcmActions.push(actionFn);
+  return '<button class="tp-chip" onclick="terrainCtxAction(' + idx + ')">' + escHtml(label) + '</button>';
+}
+
+// ── First-visit overlay ──
+var _TERRAIN_FV_KEY = 'terrain_firstvisit_v1';
+
+function terrainFirstVisitCheck() {
+  if (document.getElementById('terrainFirstVisit')) return;
+  try { if (localStorage.getItem(_TERRAIN_FV_KEY)) return; } catch(e) { return; }
+  var wrap = document.getElementById('terrainCanvasWrap');
+  if (!wrap) return;
+  var el = document.createElement('div');
+  el.className = 'terrain-firstvisit';
+  el.id = 'terrainFirstVisit';
+  el.innerHTML =
+    '<p>Right-click anything &nbsp;&middot;&nbsp; or press <span class="tfv-kbd">&#8984;K</span></p>' +
+    '<div class="tfv-dismiss">Click to dismiss</div>';
+  el.onclick = function() { terrainFirstVisitDismiss(); };
+  wrap.appendChild(el);
+}
+
+function terrainFirstVisitDismiss() {
+  var el = document.getElementById('terrainFirstVisit');
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+  try { localStorage.setItem(_TERRAIN_FV_KEY, '1'); } catch(e) {}
+}
+
 startPolling();
 
 })();

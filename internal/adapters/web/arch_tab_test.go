@@ -190,8 +190,8 @@ func TestQNavBarInDashboard(t *testing.T) {
 	}
 
 	// Input must have placeholder text (invitation copy per §2.1)
-	if !strings.Contains(html, `placeholder="Search a file, or pick a question"`) {
-		t.Error(`terrainQInput must have placeholder="Search a file, or pick a question"`)
+	if !strings.Contains(html, `placeholder="Ask about your code — or right-click anything"`) {
+		t.Error(`terrainQInput must have placeholder="Ask about your code — or right-click anything"`)
 	}
 
 	// Query bar must appear between canvas-wrap and status strip
@@ -247,4 +247,56 @@ func TestBlastWalksImporters(t *testing.T) {
 	if !bytes.Contains(js, []byte("terrainBFS(node.id, adj.inAdj, 6)")) {
 		t.Fatal("blast verb must reverse-BFS over adj.inAdj (importers); found no such call — direction regression?")
 	}
+}
+
+// TestContextMenuMarkup verifies that app.js ships the context menu system:
+//   - tcm-menu class used for the context menu container
+//   - tcm-count spans present (pre-checked counts on menu items)
+//   - tcm-disabled class for zero-count items
+//   - terrainCtxMenuNodeShow function exists
+//   - terrainCtxMenuHullShow function exists
+//   - terrainCtxMenuCanvasShow function exists
+func TestContextMenuMarkup(t *testing.T) {
+	js, err := os.ReadFile("static/app.js")
+	if err != nil {
+		t.Fatalf("cannot read static/app.js: %v", err)
+	}
+	for _, want := range []string{
+		"tcm-menu",
+		"tcm-count",
+		"tcm-disabled",
+		"terrainCtxMenuNodeShow",
+		"terrainCtxMenuHullShow",
+		"terrainCtxMenuCanvasShow",
+		"terrainPathPendingStart",
+		"terrainFirstVisitCheck",
+	} {
+		if !bytes.Contains(js, []byte(want)) {
+			t.Errorf("app.js missing %q (context menu / first-visit markup)", want)
+		}
+	}
+	t.Log("context menu markup assertions PASS")
+}
+
+// TestMenuItemCountSpanTripwire verifies that context menu items carry
+// count spans: the _tcmItem helper must produce <span class="tcm-count">
+// markup so that pre-checked counts are visible in the rendered menu.
+func TestMenuItemCountSpanTripwire(t *testing.T) {
+	js, err := os.ReadFile("static/app.js")
+	if err != nil {
+		t.Fatalf("cannot read static/app.js: %v", err)
+	}
+	// _tcmItem must embed tcm-count spans
+	if !bytes.Contains(js, []byte(`class="tcm-count"`)) {
+		t.Fatal("_tcmItem must produce <span class=\"tcm-count\"> markup — count regression?")
+	}
+	// Panel chips must be present
+	if !bytes.Contains(js, []byte("terrainPanelChip")) {
+		t.Fatal("terrainPanelChip must exist for panel quick-action chips")
+	}
+	// Intent matcher must produce count-bearing items
+	if !bytes.Contains(js, []byte("type: 'intent'")) {
+		t.Fatal("terrainQSuggest must produce intent-type items for node-name matches")
+	}
+	t.Log("menu count span tripwire PASS")
 }

@@ -1558,3 +1558,153 @@ body.screenshot-main .tab-content.active > .hero-row,
 body.screenshot-main .tab-content.active > .stats-grid {
   display: none !important;
 }
+
+/* ══════════════════════════════════════════════════════════
+   COMMIT D — CONTEXT MENU · FIRST-VISIT · PANEL CHIPS
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Context menu (tcm-*) ── */
+.tcm-menu {
+  position: fixed;
+  z-index: 9900;
+  background: #0d1117;
+  border: 1px solid rgba(34,211,238,0.45);
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(34,211,238,0.15), 0 6px 32px rgba(0,0,0,0.75);
+  min-width: 230px;
+  max-width: 300px;
+  padding: 5px 0;
+  font-size: 12px;
+  user-select: none;
+}
+.tcm-header {
+  padding: 6px 14px 5px;
+  color: var(--cyan, #22d3ee);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(34,211,238,0.12);
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tcm-item {
+  padding: 7px 14px;
+  color: var(--text, #e2e8f0);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.tcm-item:hover:not(.tcm-disabled) {
+  background: rgba(34,211,238,0.07);
+}
+.tcm-disabled {
+  color: var(--mute, #4b5563);
+  cursor: default;
+}
+.tcm-count {
+  color: var(--cyan, #22d3ee);
+  font-size: 10px;
+  margin-left: auto;
+  padding-left: 8px;
+}
+.tcm-disabled .tcm-count {
+  color: var(--mute, #4b5563);
+}
+.tcm-sep {
+  height: 1px;
+  background: rgba(34,211,238,0.1);
+  margin: 4px 8px;
+}
+
+/* ── Path-pending hint bar ── */
+.terrain-path-hint {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 7px 16px;
+  background: rgba(245,158,11,0.12);
+  border-top: 1px solid rgba(245,158,11,0.35);
+  color: var(--yellow, #f59e0b);
+  font-size: 11px;
+  text-align: center;
+  z-index: 800;
+  pointer-events: none;
+}
+
+/* ── First-visit overlay ── */
+.terrain-firstvisit {
+  position: absolute;
+  bottom: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(13,17,23,0.96);
+  border: 1px solid rgba(34,211,238,0.35);
+  border-radius: 10px;
+  padding: 14px 24px 12px;
+  font-size: 12px;
+  text-align: center;
+  z-index: 1000;
+  box-shadow: 0 0 22px rgba(34,211,238,0.12), 0 4px 24px rgba(0,0,0,0.6);
+  cursor: pointer;
+  white-space: nowrap;
+  pointer-events: all;
+}
+.terrain-firstvisit p {
+  margin: 0 0 5px;
+  color: var(--text, #e2e8f0);
+  font-size: 13px;
+}
+.terrain-firstvisit .tfv-kbd {
+  display: inline-block;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--cyan, #22d3ee);
+}
+.terrain-firstvisit .tfv-dismiss {
+  color: var(--mute, #4b5563);
+  font-size: 10px;
+}
+
+/* ── Panel action chips (tp-chip) ── */
+.tp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 14px 10px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.07));
+}
+.tp-chip {
+  background: rgba(34,211,238,0.07);
+  border: 1px solid rgba(34,211,238,0.25);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 10px;
+  color: var(--cyan, #22d3ee);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.tp-chip:hover:not(:disabled) {
+  background: rgba(34,211,238,0.18);
+}
+.tp-chip:disabled {
+  color: var(--mute, #4b5563);
+  border-color: rgba(255,255,255,0.06);
+  cursor: default;
+  background: transparent;
+}
+
+/* ── Intent matcher count badges in autocomplete ── */
+.tqb-item-count {
+  color: var(--cyan, #22d3ee);
+  font-size: 10px;
+  margin-left: auto;
+  padding-left: 8px;
+}

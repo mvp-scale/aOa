@@ -280,13 +280,14 @@
       <div class="terrain-coach" id="terrainCoach" style="display:none" onclick="terrainDismissCoach()"></div>
       <!-- Node panel overlay: shown on node click -->
       <div class="terrain-panel-overlay" id="terrainPanelOverlay" style="display:none"></div>
+      <div class="terrain-path-hint" id="terrainPathHint" style="display:none"></div>
     </div>
     <!-- Query bar: docked above status strip, below canvas. Hidden until graph loads. -->
     <div class="terrain-query-wrap" id="terrainQueryWrap" style="display:none">
       <div class="terrain-query-row">
         <span class="tqb-hint" title="⌘K / Ctrl-K to focus">&crarr; </span>
         <input class="tqb-input" id="terrainQInput" type="text"
-               placeholder="Search a file, or pick a question"
+               placeholder="Ask about your code — or right-click anything"
                autocomplete="off" spellcheck="false">
         <button class="tqb-clear" id="terrainQClearBtn" onclick="terrainQBarClear()" style="display:none" title="Clear (Esc)">&#x2715;</button>
       </div>
