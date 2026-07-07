@@ -20,7 +20,7 @@ var terrainManifestRev = null; // last observed manifest rev (DSM hash — chang
 var terrainShowExt = false;    // externals (ext:*) hidden by default — they can be 90%+ of
                                // nodes and are context, not the subject; strip states the count
 var terrainRAF = null;         // requestAnimationFrame handle (null when sim settled)
-var terrainView = { x: 0, y: 0, scale: 1 };
+var terrainView = { x: 0, y: 0, scale: 0.55 }; // start zoomed out — Z0 territories first paint
 var terrainHover = -1;         // hovered node index (-1 = none)
 var terrainDrag = null;        // { nodeIdx }
 var terrainPan = null;         // { startX, startY, origX, origY }
@@ -3004,8 +3004,9 @@ function terrainFetchGroups() {
       groups.push({ id: bucket.id || bucket.label || '', label: bucket.label || bucket.id || '', memberSet: memberSet });
     });
     terrainGroups = groups;
-    // If sim is already settled, build hulls immediately
-    if (terrainState && terrainState.alpha < 0.05) {
+    // Build hulls eagerly from current positions (may be rough if sim not yet settled;
+    // they are rebuilt when RAF stops at alpha<0.008 for the stable final layout)
+    if (terrainState) {
       terrainHulls = terrainBuildHulls(terrainState, terrainGroups);
     }
     terrainRender();
@@ -3619,6 +3620,16 @@ function terrainRender() {
   }
 
   ctx.restore();
+
+  // Debug: ?debugpanel=<id> — also trigger from render once sim+groups ready
+  // (belt-and-suspenders alongside the setInterval in terrainSetupCanvas)
+  if (terrainPanel === null && typeof _terrainDebugPanel !== 'undefined' && _terrainDebugPanel && sim) {
+    for (var _dpi = 0; _dpi < sim.nodes.length; _dpi++) {
+      if (sim.nodes[_dpi].id === _terrainDebugPanel || sim.nodes[_dpi].path === _terrainDebugPanel) {
+        terrainOpenPanel(_dpi); break;
+      }
+    }
+  }
 }
 
 // Animation loop: run simulation steps + render; stop when alpha is settled.
@@ -3630,8 +3641,9 @@ function terrainTick() {
   for (var i = 0; i < 3; i++) { terrainSimStep(terrainState); }
   terrainRender();
 
-  // After crossing below 0.05 for the first time, rebuild hulls (positions stable)
-  if (prevAlpha >= 0.05 && terrainState.alpha < 0.05 && terrainGroups && !terrainHulls) {
+  // When sim fully settles (alpha drops to stop threshold), rebuild hulls from stable positions.
+  // This gives a clean final layout after initial eager build (which may have run mid-settle).
+  if (terrainState.alpha <= 0.008 && terrainGroups) {
     terrainHulls = terrainBuildHulls(terrainState, terrainGroups);
     terrainUpdateStrip();
     terrainRender();
@@ -3826,6 +3838,18 @@ function terrainUpdatePanelFiles(nodeIdx) {
   }).join('');
   if (more > 0) html += '<span class="tp-more">+' + more + ' more via facts</span>';
   filesDiv.innerHTML = html;
+
+  // Update Copy-for-Claude text with real file paths now that they've loaded
+  var copyPre = document.getElementById('terrainCopyPre');
+  var copyBtn = document.getElementById('terrainCopyBtn');
+  if (!copyPre || !copyBtn) return;
+  var filePaths = shown.map(function(fn) { return fn.path || fn.label; });
+  var filesLine = 'Files (' + fileNodes.length + '): ' + filePaths.join(', ') +
+    (more > 0 ? ', +' + more + ' more' : '');
+  var oldText = copyPre.textContent;
+  var newText = oldText.replace(/^Files:.*$/m, filesLine);
+  copyPre.textContent = newText;
+  copyBtn.setAttribute('onclick', 'terrainCopyText(' + JSON.stringify(newText) + ", 'terrainCopyBtn')");
 }
 
 function escHtml(s) {
@@ -3917,9 +3941,17 @@ function terrainSetupCanvas() {
   if (!canvas || canvas._terrainSetup) return;
   canvas._terrainSetup = true;
 
-  // Check ?debugpanel=<unitid> URL param
+  // Check debug URL params: ?debugpanel=<unitid>, ?debugscale=<number>
   var urlParams = new URLSearchParams(window.location.search);
   var debugPanel = urlParams.get('debugpanel');
+  var debugScale = parseFloat(urlParams.get('debugscale') || '');
+  if (debugScale > 0) {
+    terrainView.scale = debugScale;
+  }
+  // Expose to module scope so terrainRender can trigger panel open on first render with sim data
+  if (debugPanel) {
+    window._terrainDebugPanel = debugPanel;
+  }
 
   function canvasXY(e) {
     var rect = canvas.getBoundingClientRect();
