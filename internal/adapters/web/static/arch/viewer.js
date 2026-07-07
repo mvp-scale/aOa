@@ -664,6 +664,16 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded}){
                 m.stats?Object.values(m.stats)[0]:(m.sub||"")])}/>
           </div>`:null}
         </div>
+        ${sel.agent?html`<div style=${{marginTop:10,paddingTop:8,borderTop:`1px solid ${T.border}33`}}>
+          <div style=${{fontSize:9,fontWeight:700,letterSpacing:.8,color:T.mute,marginBottom:5}}>AGENT</div>
+          <div style=${{display:"flex",alignItems:"center",gap:8,background:T.card,
+            borderRadius:6,padding:"5px 10px",border:`1px solid ${T.border}`}}>
+            <code style=${{fontSize:10.5,fontFamily:"ui-monospace,monospace",color:T.cyan,flex:1}}>${sel.agent.cmd}</code>
+            <span title="Copy command" onClick=${()=>navigator.clipboard.writeText(sel.agent.cmd)}
+              style=${{cursor:"pointer",color:T.mute,fontSize:11,flexShrink:0}}>⧉</span>
+          </div>
+          <div style=${{fontSize:9.5,color:T.mute,marginTop:4}}>⧉ copies a command your agent can run — facts, derive, or read at file:line.</div>
+        </div>`:null}
       <//>`:html`<div style=${{color:T.mute,fontSize:11,marginTop:28,textAlign:"center"}}>none — click an element or edge</div>`}
     <//>
     <${Seg} title=${"FINDINGS · "+probs.length} col=${probs.length?T.red:T.mute} flex=${1}
@@ -1073,8 +1083,16 @@ function Flow(){
     if(m.concerns)rows.push(["findings",m.concerns+" recon findings"]);
     if(m.changed)rows.push(["recent","touched in last 15 commits"]);
     const chip=n.type==="bucket"?"group":n.type==="entity"?"entity":n.type==="member"?"member":(ETYPE_NAME[d.type]||"element");
+    // AGENT row: B1 — paths not unit IDs (Facts() substring-matches paths, not u_... IDs)
+    let agent=null;
+    if(n.type==="bucket"||n.type==="solo"){
+      const path=(d.path||(d.id||"").replace(/^g_/,"").replace(/_/g,"/"));
+      agent={cmd:"aoa arch facts "+path,path};}
+    else if(n.type==="member"&&m.id){
+      const path=(m.path||m.id.replace(/^[gu]_/,"").replace(/_/g,"/"));
+      agent={cmd:"aoa tree "+path+" -d 2",path};}
     select({label:m.label||d.label,chip,rows,relations:relationsFor(n.id),
-      members:n.type==="bucket"?(d.members||[]):null},n.id);},[select,relationsFor]);
+      members:n.type==="bucket"?(d.members||[]):null,agent},n.id);},[select,relationsFor,isCapsuleView]);
   const onEdgeClick=useCallback((_,ed)=>{const mt=ed.data&&ed.data.meta;if(!mt)return;
     const rows=[["from",mt.s],["to",mt.t]];
     if(mt.verb)rows.push(["flow",mt.verb]);
