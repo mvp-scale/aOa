@@ -3,7 +3,7 @@
  "sharded": true,
  "generated": {
   "tool": "build_c4_mockup.py",
-  "timestamp": "2026-07-07 05:08 UTC",
+  "timestamp": "2026-07-07 05:28 UTC",
   "inputs": [
    "go list",
    "repo/graphify/*.py imports",
