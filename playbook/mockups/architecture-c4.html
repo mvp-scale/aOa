@@ -285,10 +285,23 @@ function MemberNode({data}){const c=data.col;
       [data.concerns?"findings":"",data.concerns?data.concerns+" recon findings":""],
       [data.changed?"recent":"",data.changed?"touched in last 15 commits":""]])} hint="click → details"/>
   </div>`;}
-function TableView({view,onSel,selId}){
+function TableView({view,onSel,selId,vid}){
   // row click = select: the dock shows the full record (long prose cells live there untruncated)
   const pick=(r,ri)=>onSel&&onSel({label:String(r[0]),chip:"record",
     rows:(view.columns||[]).map((c,ci)=>[c,r[ci]]),relations:[]},"row:"+ri);
+  if(vid==="cycles"&&!(view.rows||[]).length){
+    const nMods=view.count?parseInt((view.count.match(/\d+/)||["15"])[0]):15;
+    return html`<div style=${{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style=${{textAlign:"center",maxWidth:480,padding:"40px 32px",background:T.card,
+        border:`1px solid ${T.border}`,borderRadius:12}}>
+        <div style=${{fontSize:28,marginBottom:12,color:T.green}}>✓</div>
+        <div style=${{fontSize:16,fontWeight:700,color:T.text,marginBottom:8}}>no cycles among ${nMods} modules this rev</div>
+        <div style=${{fontSize:11.5,color:T.dim,lineHeight:1.6}}>
+          checked every import edge among ${nMods} modules this rev · Tarjan SCC · re-derived on change
+        </div>
+        ${view.prov?html`<div style=${{marginTop:14,fontSize:10,color:T.mute}}>${view.prov.label}</div>`:null}
+      </div>
+    </div>`;}
   return html`<div style=${{position:"absolute",inset:0,overflow:"auto",padding:"56px 40px 40px"}}>
     <table style=${{borderCollapse:"collapse",minWidth:560,fontSize:12.5,color:T.text}}>
       <thead><tr>${(view.columns||[]).map((c,i)=>html`<th key=${i} style=${{textAlign:"left",
@@ -1053,7 +1066,7 @@ function Flow(){
         journeys=${ESTATES[estate].journeys||[]} startJourney=${startJourney}/>
       <div style=${{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
         <div style=${{flex:1,position:"relative",minHeight:0}}>
-          ${els&&els.htmlView?html`<${view.kind==="table"?TableView:MatrixView} view=${view} onSel=${select} selId=${selId}/>`:null}
+          ${els&&els.htmlView?html`<${view.kind==="table"?TableView:MatrixView} view=${view} onSel=${select} selId=${selId} vid=${level}/>`:null}
           ${els&&!els.htmlView?html`<${ReactFlow} key=${estate+"|"+scope+"|"+level+"|"+dir+"|"+den}
             nodes=${els.nodes} edges=${els.edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
             onNodeClick=${onNodeClick} onEdgeClick=${onEdgeClick} onPaneClick=${onPaneClick}
