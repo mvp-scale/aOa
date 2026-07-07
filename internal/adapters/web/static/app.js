@@ -2996,10 +2996,11 @@ function terrainFetchGroups() {
     var groups = [];
     shard.buckets.forEach(function(bucket) {
       var members = bucket.members || [];
-      var filtered = members.filter(function(m) { return m.indexOf('u_ext_') !== 0; });
+      // members are Member objects {id, label, ...} — filter by id, not the object itself
+      var filtered = members.filter(function(m) { return (m.id || '').indexOf('u_ext_') !== 0; });
       if (filtered.length === 0) return;
       var memberSet = {};
-      filtered.forEach(function(m) { memberSet[m] = true; });
+      filtered.forEach(function(m) { memberSet[m.id] = true; });
       groups.push({ id: bucket.id || bucket.label || '', label: bucket.label || bucket.id || '', memberSet: memberSet });
     });
     terrainGroups = groups;
