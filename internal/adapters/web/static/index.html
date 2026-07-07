@@ -274,6 +274,8 @@
     <div class="terrain-canvas-wrap" id="terrainCanvasWrap">
       <canvas id="terrainCanvas"></canvas>
       <div class="terrain-empty" id="terrainEmpty">No terrain yet — run aoa to derive the knowledge graph</div>
+      <!-- Breadcrumb: shown when descended into a territory — click root to ascend -->
+      <div class="terrain-breadcrumb" id="terrainBreadcrumb" style="display:none"></div>
       <!-- Coach chip: shown once on first terrain activation, dismissed on zoom -->
       <div class="terrain-coach" id="terrainCoach" style="display:none" onclick="terrainDismissCoach()"></div>
       <!-- Node panel overlay: shown on node click -->

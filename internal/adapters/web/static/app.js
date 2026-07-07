@@ -29,6 +29,11 @@ var terrainHulls = null;       // {groupId:{pts,cx,cy,memberCount}} — computed
 var terrainPanel = null;       // null | nodeIdx — open panel
 var terrainDelta = null;       // null | {added:{},removed:{},expiry} — bounded pulse
 var terrainFileSim = null;     // lazily-fetched file-grain sim for panel files list
+var terrainDescended = null;   // null | groupId — currently descended territory
+var terrainCamAnim = null;     // camera tween {fromX,fromY,fromSc,toX,toY,toSc,t0,dur,done}
+var terrainWheelAccum = 0;     // accumulated (normalized) wheel delta for rAF coalescing
+var terrainWheelRAF = null;    // rAF handle for coalesced wheel apply
+var terrainFitNeeded = false;  // auto-fit pending after sim settle or data change
 
 /* ══════════════════════════════════════════════════════════
    HELPERS
@@ -2967,10 +2972,10 @@ function terrainGetManifestRev(manifest) {
   return (dsm && dsm.shard && dsm.shard.hash) || null;
 }
 
-// Returns current altitude string: 'z0' (zoomed out) or 'z1' (zoomed in).
-// Z0 shows territory hulls + bundled roads; Z1 shows unit nodes + individual edges.
+// Returns current altitude string: 'z0' (territory view) or 'z1' (unit/descended view).
+// Driven by descent state; scale no longer determines view mode.
 function terrainGetAlt() {
-  return terrainView.scale >= 0.9 ? 'z1' : 'z0';
+  return terrainDescended ? 'z1' : 'z0';
 }
 
 // Fetch the component shard from the manifest and build terrainGroups.
@@ -3037,9 +3042,16 @@ function terrainFetchGroups() {
       if (!terrainRAF) terrainStartSim();
     }
     // Build hulls eagerly from current positions (may be rough if sim not yet settled;
-    // they are rebuilt when RAF stops at alpha<0.008 for the stable final layout)
-    if (terrainState && terrainState._groupsRef) {
+    // they are rebuilt when RAF stops at alpha<0.008 for the stable final layout).
+    // Unconditional: headless chromium stalls RAF after a few ticks so we cannot
+    // gate on _groupsRef (set inside terrainSimStep). Rough hulls are better than
+    // blank canvas; auto-fit fires immediately so the view is correct.
+    if (terrainState) {
       terrainHulls = terrainBuildHulls(terrainState, terrainGroups);
+      if (terrainFitNeeded && !terrainDescended) {
+        terrainFitNeeded = false;
+        terrainAutoFit();
+      }
     }
     terrainRender();
     terrainUpdateStrip();
@@ -3316,6 +3328,190 @@ function terrainBuildHulls(sim, groups) {
   return hulls;
 }
 
+// ── Auto-fit: compute view that fills canvas with all nodes (10% padding) ──
+// Returns {scale,x,y} — does NOT apply it; caller decides (direct or animated).
+// No scale cap: fills canvas fully. Z0 territory view is maintained by showing
+// hulls independently of scale (descent-state controls hull/unit visibility).
+function terrainComputeFit(nodes, sim, W, H) {
+  var pad = 0.10;
+  var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (var i = 0; i < nodes.length; i++) {
+    var n = nodes[i];
+    var r = terrainNodeR(n.degree, sim.maxDegree) + 12;
+    if (n.x - r < minX) minX = n.x - r;
+    if (n.x + r > maxX) maxX = n.x + r;
+    if (n.y - r < minY) minY = n.y - r;
+    if (n.y + r > maxY) maxY = n.y + r;
+  }
+  var bW = maxX - minX || 1, bH = maxY - minY || 1;
+  var scale = Math.max(0.08, Math.min(3.0, Math.min(W * (1 - 2*pad) / bW, H * (1 - 2*pad) / bH)));
+  var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  return { scale: scale, x: -cx * scale, y: -cy * scale };
+}
+
+// Auto-fit all nodes to canvas — applies immediately (no animation).
+function terrainAutoFit() {
+  var wrap = document.getElementById('terrainCanvasWrap');
+  if (!wrap) return;
+  var W = wrap.clientWidth, H = wrap.clientHeight;
+  if (W <= 0 || H <= 0) return;
+  var sim = terrainState;
+  if (!sim || !sim.nodes || sim.nodes.length === 0) return;
+  var v = terrainComputeFit(sim.nodes, sim, W, H);
+  terrainView.scale = v.scale;
+  terrainView.x = v.x;
+  terrainView.y = v.y;
+}
+
+// Compute bounds that tightly fit a single territory's nodes.
+// Returns {scale,x,y} for the territory camera, or null if no nodes found.
+function terrainGroupFitTarget(groupId) {
+  var sim = terrainState;
+  if (!sim || !terrainGroups) return null;
+  var g = null;
+  for (var gi = 0; gi < terrainGroups.length; gi++) {
+    if (terrainGroups[gi].id === groupId) { g = terrainGroups[gi]; break; }
+  }
+  if (!g) return null;
+  var wrap = document.getElementById('terrainCanvasWrap');
+  if (!wrap) return null;
+  var W = wrap.clientWidth || 800, H = wrap.clientHeight || 600;
+  var nodes = sim.nodes;
+  var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (var i = 0; i < nodes.length; i++) {
+    if (!g.memberSet[nodes[i].id]) continue;
+    var r = terrainNodeR(nodes[i].degree, sim.maxDegree) + 20;
+    if (nodes[i].x - r < minX) minX = nodes[i].x - r;
+    if (nodes[i].x + r > maxX) maxX = nodes[i].x + r;
+    if (nodes[i].y - r < minY) minY = nodes[i].y - r;
+    if (nodes[i].y + r > maxY) maxY = nodes[i].y + r;
+  }
+  if (minX === Infinity) return null;
+  var bW = maxX - minX || 1, bH = maxY - minY || 1;
+  var pad = 0.12;
+  var scale = Math.max(0.08, Math.min(4.0, Math.min(W * (1-2*pad) / bW, H * (1-2*pad) / bH)));
+  var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  return { scale: scale, x: -cx * scale, y: -cy * scale };
+}
+
+// Camera animation (easeInOutCubic, 350ms). Drives terrainView over rAF frames.
+function terrainAnimCamera(target, onDone) {
+  if (terrainCamAnim) terrainCamAnim = null; // cancel previous
+  terrainCamAnim = {
+    fromX: terrainView.x, fromY: terrainView.y, fromSc: terrainView.scale,
+    toX: target.x, toY: target.y, toSc: target.scale,
+    t0: performance.now(), dur: 340, done: onDone || null
+  };
+  requestAnimationFrame(terrainAnimStep);
+}
+
+function terrainAnimStep() {
+  var anim = terrainCamAnim;
+  if (!anim) return;
+  var t = Math.min(1.0, (performance.now() - anim.t0) / anim.dur);
+  var ease = t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; // easeInOutCubic
+  terrainView.scale = anim.fromSc + (anim.toSc - anim.fromSc) * ease;
+  terrainView.x = anim.fromX + (anim.toX - anim.fromX) * ease;
+  terrainView.y = anim.fromY + (anim.toY - anim.fromY) * ease;
+  terrainRender();
+  terrainUpdateStrip();
+  if (t < 1.0) {
+    requestAnimationFrame(terrainAnimStep);
+  } else {
+    terrainCamAnim = null;
+    terrainRender();
+    terrainUpdateStrip();
+    if (anim.done) anim.done();
+  }
+}
+
+// Hull hit-test: returns groupId of territory under canvas point (px,py), or null.
+// Uses ray-casting on the convex hull pts expanded by pad sim units from centroid.
+function terrainHullHitTest(px, py) {
+  if (!terrainHulls || !terrainGroups) return null;
+  var canvas = document.getElementById('terrainCanvas');
+  if (!canvas) return null;
+  var W = canvas.clientWidth, H = canvas.clientHeight;
+  var sc = terrainView.scale;
+  var wx = (px - W / 2 - terrainView.x) / sc;
+  var wy = (py - H / 2 - terrainView.y) / sc;
+  for (var gi = 0; gi < terrainGroups.length; gi++) {
+    var g = terrainGroups[gi];
+    var h = terrainHulls[g.id];
+    if (!h || !h.pts || h.pts.length < 2) continue;
+    if (terrainPtInExpandedHull(wx, wy, h.pts, h.cx, h.cy, 28)) return g.id;
+  }
+  return null;
+}
+
+// Ray-casting point-in-polygon on hull pts expanded by pad from (cx,cy).
+function terrainPtInExpandedHull(wx, wy, pts, cx, cy, pad) {
+  var expanded = [];
+  for (var i = 0; i < pts.length; i++) {
+    var dx = pts[i].x - cx, dy = pts[i].y - cy;
+    var len = Math.sqrt(dx*dx + dy*dy) || 1;
+    expanded.push({ x: pts[i].x + dx/len*pad, y: pts[i].y + dy/len*pad });
+  }
+  var inside = false;
+  for (var j = 0, k = expanded.length - 1; j < expanded.length; k = j++) {
+    var xi = expanded[j].x, yi = expanded[j].y;
+    var xk = expanded[k].x, yk = expanded[k].y;
+    if (((yi > wy) !== (yk > wy)) && (wx < (xk - xi) * (wy - yi) / (yk - yi) + xi))
+      inside = !inside;
+  }
+  return inside;
+}
+
+// Descend into a territory: animate camera to fit, dim others, show breadcrumb.
+function terrainDescend(groupId) {
+  if (terrainDescended === groupId) return;
+  terrainDescended = groupId;
+  terrainUpdateBreadcrumb();
+  terrainUpdateStrip();
+  terrainDismissCoach();
+  var target = terrainGroupFitTarget(groupId);
+  if (target) {
+    terrainAnimCamera(target);
+  } else {
+    terrainRender();
+  }
+}
+
+// Ascend back to Z0 full view.
+function terrainAscend() {
+  if (!terrainDescended && !terrainCamAnim) return;
+  terrainDescended = null;
+  terrainUpdateBreadcrumb();
+  terrainUpdateStrip();
+  var wrap = document.getElementById('terrainCanvasWrap');
+  if (!wrap) return;
+  var W = wrap.clientWidth || 800, H = wrap.clientHeight || 600;
+  var sim = terrainState;
+  if (!sim || !sim.nodes.length) return;
+  var v = terrainComputeFit(sim.nodes, sim, W, H);
+  terrainAnimCamera(v);
+}
+
+// Update breadcrumb element based on descent state.
+function terrainUpdateBreadcrumb() {
+  var el = document.getElementById('terrainBreadcrumb');
+  if (!el) return;
+  if (!terrainDescended) {
+    el.style.display = 'none';
+    return;
+  }
+  var label = terrainDescended;
+  if (terrainGroups) {
+    for (var gi = 0; gi < terrainGroups.length; gi++) {
+      if (terrainGroups[gi].id === terrainDescended) { label = terrainGroups[gi].label; break; }
+    }
+  }
+  el.innerHTML = '<span class="tbc-root" onclick="terrainAscend()">&#8963; codebase</span>' +
+    '<span class="tbc-sep"> &#8250; </span>' +
+    '<span class="tbc-current">' + escHtml(label) + '</span>';
+  el.style.display = 'flex';
+}
+
 // ── Draw a convex hull shape with rounded corners, padded outward from centroid ──
 function terrainDrawHull(ctx, pts, pad, cx, cy) {
   if (pts.length === 0) return;
@@ -3435,6 +3631,8 @@ function terrainRenderTerritories(ctx, sim, hullAlpha) {
   var nodes = sim.nodes;
   var edges = sim.edges;
   var pad = 24;
+  // When descended, dim non-descended territories to 15%
+  var dimFactor = terrainDescended ? 0.15 : 1.0;
 
   // Build nodeIdx → groupId (fast: iterate nodes once using memberSet lookups)
   var unitToGroup = {};
@@ -3492,17 +3690,27 @@ function terrainRenderTerritories(ctx, sim, hullAlpha) {
   });
 
   // Pass 1: draw hull fills + strokes for all groups.
+  // Descended territory gets full alpha; others dim to 15%.
   var sc = terrainView.scale;
   var fs = Math.max(10, 13 / sc);
   terrainGroups.forEach(function(g) {
     var h = terrainHulls[g.id];
     if (!h) return;
+    var gDim = (terrainDescended && g.id !== terrainDescended) ? dimFactor : 1.0;
     ctx.save();
     terrainDrawHull(ctx, h.pts, pad, h.cx, h.cy);
-    ctx.fillStyle = 'rgba(34,211,238,' + (0.04 * hullAlpha) + ')';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(34,211,238,' + (0.18 * hullAlpha) + ')';
-    ctx.lineWidth = 1.5;
+    if (terrainDescended && g.id === terrainDescended) {
+      // Highlight descended territory with stronger fill + border
+      ctx.fillStyle = 'rgba(34,211,238,' + (0.08 * hullAlpha) + ')';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(34,211,238,' + (0.50 * hullAlpha) + ')';
+      ctx.lineWidth = 2.0;
+    } else {
+      ctx.fillStyle = 'rgba(34,211,238,' + (0.04 * hullAlpha * gDim) + ')';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(34,211,238,' + (0.18 * hullAlpha * gDim) + ')';
+      ctx.lineWidth = 1.5;
+    }
     ctx.stroke();
     ctx.restore();
   });
@@ -3529,18 +3737,20 @@ function terrainRenderTerritories(ctx, sim, hullAlpha) {
   }
 
   // Pass 2: draw labels at resolved positions + faint unit dots inside each hull.
+  // Z0 labels: show territory labels (collision-resolved above) with per-territory alpha.
   ctx.font = '600 ' + fs + 'px "JetBrains Mono",monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   labelItems.forEach(function(lp) {
-    ctx.fillStyle = 'rgba(34,211,238,' + (0.55 * hullAlpha) + ')';
+    var gDimLabel = (terrainDescended && lp.g.id !== terrainDescended) ? dimFactor : 1.0;
+    ctx.fillStyle = 'rgba(34,211,238,' + (0.75 * hullAlpha * gDimLabel) + ')';
     ctx.fillText(lp.g.label, lp.x, lp.y);
     // Faint unit dots inside hull
     nodes.forEach(function(n, idx) {
       if (nodeToGroup[idx] !== lp.g.id) return;
       ctx.beginPath();
       ctx.arc(n.x, n.y, 3, 0, 2 * Math.PI);
-      ctx.fillStyle = 'rgba(34,211,238,' + (0.30 * hullAlpha) + ')';
+      ctx.fillStyle = 'rgba(34,211,238,' + (0.30 * hullAlpha * gDimLabel) + ')';
       ctx.fill();
     });
   });
@@ -3552,6 +3762,17 @@ function terrainRenderUnitLayer(ctx, sim, sc) {
   var edges = sim.edges;
   var hover = terrainHover;
   var panel = terrainPanel;
+
+  // Build descended territory membership lookup (once per render call)
+  var descendedSet = null;
+  if (terrainDescended && terrainGroups) {
+    for (var dgi = 0; dgi < terrainGroups.length; dgi++) {
+      if (terrainGroups[dgi].id === terrainDescended) {
+        descendedSet = terrainGroups[dgi].memberSet;
+        break;
+      }
+    }
+  }
 
   // Identify edges + neighbors connected to hovered/panel node
   var focusNode = (panel !== null) ? panel : hover;
@@ -3629,10 +3850,12 @@ function terrainRenderUnitLayer(ctx, sim, sc) {
       nr = 34; ng = 211; nb = 238; // --cyan
     }
 
-    var nodeAlpha = isDim ? 0.18 : 1.0;
+    // Descended dimming: nodes outside the descended territory are dimmed to ~12%
+    var inDescended = !descendedSet || descendedSet[node.id];
+    var nodeAlpha = isDim ? 0.18 : (inDescended ? 1.0 : 0.12);
 
     // Glow halo
-    if (!isDim) {
+    if (!isDim && inDescended) {
       var grad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, r * 3.5);
       var ga2 = (isHov || isPanel) ? 0.45 : (isNeigh ? 0.2 : 0.13);
       grad.addColorStop(0, 'rgba(' + nr + ',' + ng + ',' + nb + ',' + ga2 + ')');
@@ -3666,14 +3889,19 @@ function terrainRenderUnitLayer(ctx, sim, sc) {
       ctx.stroke();
     }
 
-    // Label
-    var showLabel = isHov || isPanel || node.degree >= sim.maxDegree * 0.25 || sc > 1.5;
-    if (showLabel) {
+    // Label: suppress at Z0 (territory view) unless descended into this territory.
+    // Show unit labels only when: descended (inside that territory), zoomed past Z1, or hovered/panel.
+    var inLabelZone = isHov || isPanel ||
+      (descendedSet && inDescended) ||
+      (!terrainGroups && (node.degree >= sim.maxDegree * 0.25 || sc > 1.5)) ||
+      (terrainGroups && sc > 1.5 && inDescended);
+    if (inLabelZone) {
+      var labelAlpha = isDim ? 0.15 : (!inDescended ? 0.18 : ((isHov || isPanel) ? 1.0 : 0.75));
       var fs = Math.max(9, 11 / sc);
       ctx.font = ((isHov || isPanel) ? '600 ' : '') + fs + 'px "JetBrains Mono",monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.fillStyle = 'rgba(232,232,236,' + (isDim ? 0.15 : ((isHov || isPanel) ? 1.0 : 0.65)) + ')';
+      ctx.fillStyle = 'rgba(232,232,236,' + labelAlpha + ')';
       ctx.fillText(node.label, node.x, node.y - r - 3 / sc);
     }
   }
@@ -3718,11 +3946,19 @@ function terrainRender() {
   ctx.translate(panX, panY);
   ctx.scale(sc, sc);
 
-  // Altitude cross-fade:
-  // hullAlpha: 1.0 at sc<0.5, fades to ~0 by sc=1.3 (200ms feel via alpha blend)
-  // unitAlpha: 0 at sc<0.5, full at sc≥0.9
-  var hullAlpha = (sc < 0.9) ? 1.0 : Math.max(0.0, 1.0 - (sc - 0.9) / 0.4);
-  var unitAlpha = (sc < 0.5) ? 0.0 : Math.min(1.0, (sc - 0.5) / 0.4);
+  // Altitude cross-fade — descent-state primary, scale secondary:
+  // Not descended (Z0): territories always fully visible; units hidden below scale 1.8.
+  // Descended (Z1): hulls fade as camera zooms in; units fully visible.
+  var hullAlpha, unitAlpha;
+  if (terrainDescended) {
+    // Camera has zoomed into a territory — fade hulls out as scale rises past ~1.2
+    hullAlpha = Math.max(0.0, 1.0 - (sc - 1.2) / 0.4);
+    unitAlpha = 1.0;
+  } else {
+    // Overview mode — territories always visible; units appear only when very zoomed
+    hullAlpha = 1.0;
+    unitAlpha = (sc < 1.8) ? 0.0 : Math.min(1.0, (sc - 1.8) / 0.4);
+  }
 
   // Territory layer (Z0)
   if (terrainGroups && terrainHulls && hullAlpha > 0.01) {
@@ -3757,15 +3993,22 @@ function terrainRender() {
 function terrainTick() {
   terrainRAF = null;
   if (!terrainState) return;
-  var prevAlpha = terrainState.alpha;
   for (var i = 0; i < 3; i++) { terrainSimStep(terrainState); }
   terrainRender();
 
-  // When sim fully settles (alpha drops to stop threshold), rebuild hulls from stable positions.
-  // This gives a clean final layout after initial eager build (which may have run mid-settle).
-  if (terrainState.alpha <= 0.008 && terrainGroups) {
-    terrainHulls = terrainBuildHulls(terrainState, terrainGroups);
+  // When sim fully settles (alpha drops to stop threshold), rebuild hulls + auto-fit.
+  if (terrainState.alpha <= 0.008) {
+    if (terrainGroups) {
+      terrainHulls = terrainBuildHulls(terrainState, terrainGroups);
+    }
+    if (terrainFitNeeded) {
+      terrainFitNeeded = false;
+      if (!terrainDescended) {
+        terrainAutoFit();
+      }
+    }
     terrainUpdateStrip();
+    terrainUpdateBreadcrumb();
     terrainRender();
   }
 
@@ -3779,9 +4022,9 @@ function terrainStartSim() {
   terrainRAF = requestAnimationFrame(terrainTick);
 }
 
-// Update the status strip — altitude-aware.
-// Z0: N territories · M units · E dependencies · X externals off-map · rev N · REAL
-// Z1: M units · E dependencies · X externals off-map · rev N · REAL
+// Update the status strip — altitude-aware narrative HUD.
+// Z0: N territories · heaviest road: A → B ×N · click a territory to descend · rev N · REAL
+// Descended: territory · N units · imported by X, Y · N internal deps · rev N · REAL
 function terrainUpdateStrip() {
   var strip = document.getElementById('terrainStatusText');
   if (!strip || !terrainState) return;
@@ -3791,20 +4034,104 @@ function terrainUpdateStrip() {
   var provLabel = '<span class="terrain-status-live">REAL</span>';
   var parts = [];
 
-  if (alt === 'z0' && terrainGroups && terrainHulls) {
-    // Count groups that have hulls (have members in the current sim)
+  if (terrainDescended && terrainGroups && terrainHulls) {
+    // Descended: territory-level narrative
+    var descGroup = null;
+    for (var dgi = 0; dgi < terrainGroups.length; dgi++) {
+      if (terrainGroups[dgi].id === terrainDescended) { descGroup = terrainGroups[dgi]; break; }
+    }
+    if (descGroup) {
+      parts.push('<strong>' + escHtml(descGroup.label) + '</strong>');
+      // Count units in this territory
+      var unitCount = Object.keys(descGroup.memberSet).filter(function(uid) {
+        for (var ni = 0; ni < sim.nodes.length; ni++) {
+          if (sim.nodes[ni].id === uid) return true;
+        }
+        return false;
+      }).length;
+      parts.push(unitCount + ' units');
+      // Find other territories that import this one (edges from their nodes to our nodes)
+      var incomingGroups = {};
+      var unitToGroup = {};
+      terrainGroups.forEach(function(g) {
+        Object.keys(g.memberSet).forEach(function(uid) { unitToGroup[uid] = g.id; });
+      });
+      sim.edges.forEach(function(e) {
+        var srcNode = sim.nodes[e.src], dstNode = sim.nodes[e.dst];
+        if (!srcNode || !dstNode) return;
+        var srcG = unitToGroup[srcNode.id], dstG = unitToGroup[dstNode.id];
+        if (dstG === terrainDescended && srcG && srcG !== terrainDescended) {
+          incomingGroups[srcG] = true;
+        }
+      });
+      var incomingLabels = [];
+      terrainGroups.forEach(function(g) {
+        if (incomingGroups[g.id]) incomingLabels.push(g.label);
+      });
+      if (incomingLabels.length > 0) {
+        var shown = incomingLabels.slice(0, 3);
+        var extra = incomingLabels.length - shown.length;
+        parts.push('imported by ' + shown.join(', ') + (extra > 0 ? ', +' + extra + ' more' : ''));
+      }
+      // Count intra-territory edges
+      var intraDeps = 0;
+      sim.edges.forEach(function(e) {
+        var srcNode = sim.nodes[e.src], dstNode = sim.nodes[e.dst];
+        if (srcNode && dstNode && descGroup.memberSet[srcNode.id] && descGroup.memberSet[dstNode.id])
+          intraDeps++;
+      });
+      if (intraDeps > 0) parts.push(intraDeps + ' internal deps');
+    }
+  } else if (alt === 'z0' && terrainGroups && terrainHulls) {
+    // Z0 territory view: count territories, find heaviest inter-territory road
     var nTerritories = 0;
     terrainGroups.forEach(function(g) { if (terrainHulls[g.id]) nTerritories++; });
     parts.push(nTerritories + ' territories');
+    // Find heaviest road between territories
+    var unitToGroupZ0 = {};
+    terrainGroups.forEach(function(g) {
+      Object.keys(g.memberSet).forEach(function(uid) { unitToGroupZ0[uid] = g.id; });
+    });
+    var roadCounts = {};
+    sim.edges.forEach(function(e) {
+      var sn = sim.nodes[e.src], dn = sim.nodes[e.dst];
+      if (!sn || !dn) return;
+      var sg = unitToGroupZ0[sn.id], dg = unitToGroupZ0[dn.id];
+      if (!sg || !dg || sg === dg) return;
+      var key = sg + '\x00' + dg;
+      roadCounts[key] = (roadCounts[key] || 0) + 1;
+    });
+    var heaviestKey = null, heaviestCount = 0;
+    Object.keys(roadCounts).forEach(function(k) {
+      if (roadCounts[k] > heaviestCount) { heaviestCount = roadCounts[k]; heaviestKey = k; }
+    });
+    if (heaviestKey) {
+      var kp = heaviestKey.split('\x00');
+      var srcLbl = kp[0], dstLbl = kp[1];
+      terrainGroups.forEach(function(g) {
+        if (g.id === kp[0]) srcLbl = g.label;
+        if (g.id === kp[1]) dstLbl = g.label;
+      });
+      parts.push('heaviest road: ' + escHtml(srcLbl) + ' &#8594; ' + escHtml(dstLbl) + ' &times;' + heaviestCount);
+    }
+    parts.push('<span class="terrain-status-coach">click a territory to descend</span>');
+  } else {
+    // Fallback or Z1 without descent
+    parts.push(sim.nodeCount + ' units');
+    parts.push(sim.edgeCount + ' dependencies');
+    if (sim.extHidden > 0) {
+      parts.push(sim.extHidden + ' externals off-map');
+    } else if (terrainShowExt && sim.extTotal > 0) {
+      parts.push(sim.extTotal + ' externals shown');
+    }
   }
-  parts.push(sim.nodeCount + ' units');
-  parts.push(sim.edgeCount + ' dependencies');
-  if (sim.extHidden > 0) {
-    parts.push(sim.extHidden + ' externals off-map');
-  } else if (terrainShowExt && sim.extTotal > 0) {
-    parts.push(sim.extTotal + ' externals shown');
+
+  if (!terrainDescended) {
+    if (sim.extHidden > 0 && alt !== 'z0') parts.push(sim.extHidden + ' externals off-map');
+    if (revStr) parts.push(revStr);
+  } else {
+    if (revStr) parts.push(revStr);
   }
-  if (revStr) parts.push(revStr);
   parts.push(provLabel);
   if (sim.downgraded) {
     parts.push('<span class="terrain-status-downgraded">' + sim.downgraded + '</span>');
@@ -3868,6 +4195,10 @@ function terrainLoadGraph() {
     // Fetch groups if not yet loaded
     if (!terrainGroups) terrainFetchGroups();
 
+    // Request auto-fit after sim settles; reset descent if graph changed
+    terrainFitNeeded = true;
+    if (!prevNodes) { terrainDescended = null; terrainUpdateBreadcrumb(); }
+
     terrainUpdateStrip();
     terrainStartSim();
 
@@ -3902,7 +4233,7 @@ function terrainShowCoach(groupCount) {
   if (localStorage.getItem('terrain_coach_v1')) return;
   var el = document.getElementById('terrainCoach');
   if (!el) return;
-  el.textContent = groupCount + ' territories · scroll to descend';
+  el.textContent = groupCount + ' territories · click a territory to descend';
   el.style.display = 'block';
 }
 
@@ -3956,7 +4287,7 @@ function terrainUpdatePanelFiles(nodeIdx) {
   var html = shown.map(function(fn) {
     return '<span class="tp-file">' + escHtml(fn.path || fn.label) + '</span>';
   }).join('');
-  if (more > 0) html += '<span class="tp-more">+' + more + ' more via facts</span>';
+  if (more > 0) html += '<span class="tp-more">+' + more + ' more — see facts</span>';
   filesDiv.innerHTML = html;
 
   // Update Copy-for-Claude text with real file paths now that they've loaded
@@ -4012,7 +4343,7 @@ function terrainOpenPanel(nodeIdx) {
   ];
   if (inShown.length > 0) {
     var inLines = inShown.map(function(e) { return e.file + ':' + e.line; });
-    if (inMore > 0) inLines.push('+' + inMore + ' more via facts');
+    if (inMore > 0) inLines.push('+' + inMore + ' more — see facts');
     copyLines.push('Inbound: ' + inLines.join(', '));
   }
   var copyText = copyLines.join('\n');
@@ -4021,7 +4352,7 @@ function terrainOpenPanel(nodeIdx) {
   if (inShown.length > 0) {
     inboundHtml = '<div class="tp-section-label">Inbound (' + fanIn + ')</div><div class="tp-inbound">' +
       inShown.map(function(e) { return '<span class="tp-edge">' + escHtml(e.file) + ':' + e.line + '</span>'; }).join('') +
-      (inMore > 0 ? '<span class="tp-more">+' + inMore + ' more via facts</span>' : '') +
+      (inMore > 0 ? '<span class="tp-more">+' + inMore + ' more — see facts</span>' : '') +
       '</div>';
   }
 
@@ -4061,16 +4392,47 @@ function terrainSetupCanvas() {
   if (!canvas || canvas._terrainSetup) return;
   canvas._terrainSetup = true;
 
-  // Check debug URL params: ?debugpanel=<unitid>, ?debugscale=<number>
+  // Check debug URL params: ?debugpanel=<unitid>, ?debugscale=<number>, ?descend=<groupid>
   var urlParams = new URLSearchParams(window.location.search);
   var debugPanel = urlParams.get('debugpanel');
   var debugScale = parseFloat(urlParams.get('debugscale') || '');
+  var debugDescend = urlParams.get('descend');
   if (debugScale > 0) {
     terrainView.scale = debugScale;
   }
   // Expose to module scope so terrainRender can trigger panel open on first render with sim data
   if (debugPanel) {
     window._terrainDebugPanel = debugPanel;
+  }
+  // ?descend=<groupid>: auto-descend once groups and hulls exist (for screenshot evidence).
+  // Does NOT require alpha < 0.05 — headless RAF stalls after a few ticks so the sim
+  // may never fully settle. Snaps camera directly (no animation) so the screenshot
+  // captures the descended territory without depending on the animation RAF loop.
+  if (debugDescend) {
+    var _descendWait = setInterval(function() {
+      if (!terrainState || !terrainGroups || !terrainHulls) return;
+      clearInterval(_descendWait);
+      // Accept partial group ID match (e.g. "domain" matches "g_domain" or "u_internal_domain")
+      var matchId = null;
+      terrainGroups.forEach(function(g) {
+        if (!matchId && (g.id === debugDescend || g.id.indexOf(debugDescend) !== -1 || g.label === debugDescend))
+          matchId = g.id;
+      });
+      if (matchId) {
+        // Set descended state directly — skip animation RAF (unreliable in headless).
+        terrainDescended = matchId;
+        terrainUpdateBreadcrumb();
+        terrainUpdateStrip();
+        terrainDismissCoach();
+        var snapTarget = terrainGroupFitTarget(matchId);
+        if (snapTarget) {
+          terrainView.scale = snapTarget.scale;
+          terrainView.x = snapTarget.x;
+          terrainView.y = snapTarget.y;
+        }
+        terrainRender();
+      }
+    }, 200);
   }
 
   function canvasXY(e) {
@@ -4099,14 +4461,48 @@ function terrainSetupCanvas() {
   // Track drag vs click: only open panel if mouseup on same node without significant movement
   var _clickNode = -1;
   var _dragMoved = false;
+  // Wheel cursor position (closure-local, captured by wheel rAF callback)
+  var terrainWheelPx = 0, terrainWheelPy = 0;
 
+  // Professional wheel handler:
+  // 1. Normalize deltaY by deltaMode (pixel=1, line=16, page=100)
+  // 2. Accumulate into terrainWheelAccum
+  // 3. Apply once per rAF with exponential scaling anchored at cursor
+  // 4. Clamp per-frame accumulated delta to avoid runaway on fast trackpads
   canvas.addEventListener('wheel', function(e) {
     e.preventDefault();
-    var delta = e.deltaY > 0 ? 0.88 : 1.14;
-    terrainView.scale = Math.max(0.08, Math.min(10, terrainView.scale * delta));
-    terrainDismissCoach();
-    terrainRender();
-    terrainUpdateStrip();
+    var mode = e.deltaMode || 0;
+    var normFactor = mode === 2 ? 100 : (mode === 1 ? 16 : 1);
+    terrainWheelAccum += e.deltaY * normFactor;
+    // Clamp accumulator to ±300 pixels worth of delta per frame
+    if (terrainWheelAccum > 300) terrainWheelAccum = 300;
+    if (terrainWheelAccum < -300) terrainWheelAccum = -300;
+    // Store cursor position for anchor-zoom
+    var rect = canvas.getBoundingClientRect();
+    terrainWheelPx = e.clientX - rect.left;
+    terrainWheelPy = e.clientY - rect.top;
+    if (!terrainWheelRAF) {
+      terrainWheelRAF = requestAnimationFrame(function() {
+        terrainWheelRAF = null;
+        if (Math.abs(terrainWheelAccum) < 0.5) { terrainWheelAccum = 0; return; }
+        var delta = terrainWheelAccum;
+        terrainWheelAccum = 0;
+        var W = canvas.clientWidth, H = canvas.clientHeight;
+        // World point under cursor before scale change
+        var wx = (terrainWheelPx - W/2 - terrainView.x) / terrainView.scale;
+        var wy = (terrainWheelPy - H/2 - terrainView.y) / terrainView.scale;
+        // Exponential scale: sensitivity 0.0015/pixel, clamp to [0.08, 10]
+        var newScale = terrainView.scale * Math.exp(-delta * 0.0015);
+        newScale = Math.max(0.08, Math.min(10, newScale));
+        // Anchor: keep world point under cursor fixed
+        terrainView.x = terrainWheelPx - W/2 - wx * newScale;
+        terrainView.y = terrainWheelPy - H/2 - wy * newScale;
+        terrainView.scale = newScale;
+        terrainDismissCoach();
+        terrainRender();
+        terrainUpdateStrip();
+      });
+    }
   }, { passive: false });
 
   canvas.addEventListener('mousedown', function(e) {
@@ -4154,11 +4550,46 @@ function terrainSetupCanvas() {
     var wasDrag = terrainDrag;
     terrainDrag = null; terrainPan = null;
     canvas.classList.remove('dragging');
-    // Open panel on clean click (no significant drag movement)
-    if (!_dragMoved && _clickNode >= 0 && wasDrag) {
-      terrainOpenPanel(_clickNode);
+    if (!_dragMoved) {
+      if (_clickNode >= 0 && wasDrag) {
+        // Node click: open panel if descended (Z1) or no groups; otherwise descend to territory
+        if (!terrainGroups || terrainDescended) {
+          terrainOpenPanel(_clickNode);
+        } else {
+          // Z0: try to find the territory this node belongs to and descend
+          var nodeName = terrainState && terrainState.nodes[_clickNode];
+          if (nodeName && terrainGroups) {
+            var tgid = null;
+            for (var tgi = 0; tgi < terrainGroups.length; tgi++) {
+              if (terrainGroups[tgi].memberSet[nodeName.id]) { tgid = terrainGroups[tgi].id; break; }
+            }
+            if (tgid) terrainDescend(tgid);
+            else terrainOpenPanel(_clickNode);
+          } else {
+            terrainOpenPanel(_clickNode);
+          }
+        }
+      } else if (!wasDrag) {
+        // Empty space click
+        var pt2 = canvasXY(e);
+        if (!terrainDescended && terrainGroups && terrainHulls) {
+          // Z0: try hull hit for descent
+          var hitGroup = terrainHullHitTest(pt2.x, pt2.y);
+          if (hitGroup) {
+            terrainDescend(hitGroup);
+          }
+        } else if (terrainDescended) {
+          // Descended + empty space click → ascend
+          terrainAscend();
+        }
+      }
     }
     _clickNode = -1;
+  });
+
+  // Esc key: ascend from territory
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key === 'Escape' && terrainDescended) { terrainAscend(); }
   });
 
   canvas.addEventListener('mouseleave', function() {
@@ -4169,7 +4600,16 @@ function terrainSetupCanvas() {
   });
 
   window.addEventListener('resize', function() {
-    if (activeTab === 'terrain') terrainRender();
+    if (activeTab === 'terrain') {
+      // Re-fit on resize: if descended, re-fit to territory; otherwise re-fit all
+      if (terrainDescended) {
+        var rt = terrainGroupFitTarget(terrainDescended);
+        if (rt) { terrainView.scale = rt.scale; terrainView.x = rt.x; terrainView.y = rt.y; }
+      } else if (terrainState && terrainState.alpha <= 0.008) {
+        terrainAutoFit();
+      }
+      terrainRender();
+    }
   });
 
   // Debug panel: ?debugpanel=<unitid> forces panel open after sim settles

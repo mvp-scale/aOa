@@ -759,6 +759,24 @@ body {
 .terrain-pulse { animation: terrain-pulse 0.8s ease-out; }
 .terrain-grain-toggle { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0; }
 
+/* ── Breadcrumb: top-left overlay shown when descended into a territory ── */
+.terrain-breadcrumb {
+  position: absolute; top: 12px; left: 14px; z-index: 15;
+  background: rgba(18,18,21,0.88); border: 1px solid rgba(34,211,238,0.28);
+  border-radius: 7px; padding: 5px 12px;
+  display: flex; align-items: center; gap: 4px;
+  font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+  color: var(--dim); pointer-events: auto; backdrop-filter: blur(4px);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+}
+.tbc-root { color: var(--dim); cursor: pointer; transition: color .15s; }
+.tbc-root:hover { color: var(--cyan); }
+.tbc-sep { color: var(--mute); }
+.tbc-current { color: var(--cyan); font-weight: 600; }
+
+/* Narrative coach text in status strip */
+.terrain-status-coach { color: var(--dim); font-style: italic; }
+
 /* ── Coach chip: floated over canvas, click or zoom to dismiss ── */
 .terrain-coach {
   position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
