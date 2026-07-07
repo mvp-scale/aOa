@@ -290,7 +290,9 @@ function TableView({view,onSel,selId,vid}){
   const pick=(r,ri)=>onSel&&onSel({label:String(r[0]),chip:"record",
     rows:(view.columns||[]).map((c,ci)=>[c,r[ci]]),relations:[]},"row:"+ri);
   if(vid==="cycles"&&!(view.rows||[]).length){
-    const nMods=view.count?parseInt((view.count.match(/\d+/)||["15"])[0]):15;
+    // Parse "N modules" from the grain-scoped count string (e.g. "0 cycles · 29 modules · ⚠ 8 findings")
+    const modMatch=view.count&&view.count.match(/(\d+)\s+modules/);
+    const nMods=modMatch?parseInt(modMatch[1],10):15;
     return html`<div style=${{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style=${{textAlign:"center",maxWidth:480,padding:"40px 32px",background:T.card,
         border:`1px solid ${T.border}`,borderRadius:12}}>

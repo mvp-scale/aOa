@@ -79,6 +79,20 @@ func RenderCycles(in RenderInput) (*Shard, error) {
 		rows = [][]string{}
 	}
 
+	// B4 fix: grain-scoped count includes the module count so the verdict card
+	// can display "no cycles among N modules this rev" without parsing ambiguity.
+	nModules := len(in.Units)
+	findingsSuffix := ""
+	if fc := len(in.Findings); fc > 0 {
+		findingsSuffix = fmt.Sprintf(" · ⚠ %d findings", fc)
+	}
+	var count string
+	if len(rows) == 0 {
+		count = fmt.Sprintf("0 cycles · %d modules%s", nModules, findingsSuffix)
+	} else {
+		count = fmt.Sprintf("%d cycles · %d modules%s", len(rows), nModules, findingsSuffix)
+	}
+
 	prov := provFromKind(in.GroupProv)
 	shard := &Shard{
 		Kind:    "table",
@@ -87,6 +101,6 @@ func RenderCycles(in RenderInput) (*Shard, error) {
 		Columns: columns,
 		Rows:    rows,
 	}
-	shard.Count = DeriveCaption(shard, in.Findings)
+	shard.Count = count
 	return shard, nil
 }
