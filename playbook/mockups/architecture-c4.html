@@ -239,25 +239,29 @@ function EntityNode({data}){
     <${HoverCard} title=${data.label} rows=${data.stats?Object.entries(data.stats):[["store",data.tech]]} hint="click → details"/>
   </div>`;}
 function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting"||data.boundary;
-  // _expanded: rendered from capsule expansion — distinct visual treatment
+  // _fromCapsule: expanded from capsule mode — UNMISTAKABLE container treatment so a cold
+  // reader can answer "which group is open, what members does it contain, what does it import"
+  // from a static screenshot alone.
   const fromCapsule=data._fromCapsule;
   return html`<div style=${{width:"100%",height:"100%",
-    background:fromCapsule?c+"0f":T.band,
-    border:`${fromCapsule?"2.5px":"1.5px"} ${dash?"dashed":"solid"} ${data._god?T.red:c}`,
-    borderRadius:4,boxSizing:"border-box",
+    background:fromCapsule?c+"2a":T.band,
+    border:`${fromCapsule?"4px":"1.5px"} ${dash?"dashed":"solid"} ${data._god?T.red:c}`,
+    borderRadius:fromCapsule?8:4,boxSizing:"border-box",
     opacity:data._dead?0.45:1,cursor:"pointer",
-    boxShadow:fromCapsule?`0 0 0 1px ${c}55, 0 0 14px ${c}22`:data._sel?`0 0 0 2px ${T.blue}`:data._god?`0 0 0 2px ${T.red}55, 0 0 22px ${T.red}44`:"none"}}>
+    boxShadow:fromCapsule?`0 0 0 3px ${c}88, 0 0 32px ${c}55`:data._sel?`0 0 0 2px ${T.blue}`:data._god?`0 0 0 2px ${T.red}55, 0 0 22px ${T.red}44`:"none"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
     <div style=${{display:"flex",alignItems:"center",gap:7,padding:"7px 12px",height:data.head,boxSizing:"border-box",
-      background:fromCapsule?c+"18":"transparent",
+      background:fromCapsule?c+"40":"transparent",
+      borderBottom:fromCapsule?`1px solid ${c}66`:undefined,
       borderRadius:"3px 3px 0 0"}}>
-      <${Ico} k=${data.ico||data.layer} c=${c} s=${14}/>
-      <span style=${{fontSize:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:1.1}}>${data.label}</span>
+      <${Ico} k=${data.ico||data.layer} c=${c} s=${fromCapsule?16:14}/>
+      <span style=${{fontSize:fromCapsule?13:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:1.1}}>${data.label}</span>
+      ${fromCapsule?html`<span style=${{fontSize:9.5,fontWeight:700,color:c,border:`1.5px solid ${c}`,borderRadius:4,padding:"1px 6px",letterSpacing:.5,marginLeft:2}}>OPEN</span>`:null}
       ${data._cyc?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:4,padding:"0 4px"}}>⟳ CYCLE</span>`:null}
       ${data._dead?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>ORPHAN</span>`:null}
       ${data._over?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>${data._over} · COLLAPSED</span>`:null}
-      <span style=${{marginLeft:"auto",fontSize:10.5,color:fromCapsule?c:T.dim,fontWeight:fromCapsule?700:400}}>${data.members.length} ${fromCapsule?"members":""}</span>
-      ${fromCapsule?html`<span style=${{fontSize:9,color:T.mute,marginLeft:4}}>▾</span>`:null}
+      <span style=${{marginLeft:"auto",fontSize:10.5,color:fromCapsule?c:T.dim,fontWeight:fromCapsule?700:400}}>${data.members.length}${fromCapsule?" members":""}</span>
+      ${fromCapsule?html`<span title="collapse" style=${{fontSize:12,color:c,marginLeft:6,fontWeight:700}}>▴</span>`:null}
     </div>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
@@ -588,6 +592,11 @@ async function layoutBuckets(view,dir,d,ov,opts){
     if(e._viol){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3",opacity:.95};
       r.markerEnd={...r.markerEnd,color:T.red};
       if(r.data.label)r.data.label.text="⚠ "+r.data.label.text;}
+    // Expanded group: its flows drawn full-weight (§4 brief "edges fully drawn");
+    // flows not touching the open group are restrained — dim + thin so they recede.
+    if(expandedSet&&expandedSet.size>0&&!e._viol){
+      const touching=expandedSet.has(e.source)||expandedSet.has(e.target);
+      r.style={...r.style,opacity:touching?1:0.18,strokeWidth:touching?2.5:1};}
     return r;});
   return {nodes:nodes.concat(labelSpacers(laidById)),edges:edges2,problems,moreFlows};}
 
