@@ -473,10 +473,10 @@ function poll() {
         var rev = terrainGetManifestRev(d);
         if (rev && rev !== terrainManifestRev) {
           terrainManifestRev = rev;
-          terrainLoadGraph(terrainGrain); // graph changed — refetch
+          terrainLoadGraph(); // graph changed — refetch
         } else if (!terrainState) {
           if (rev) terrainManifestRev = rev;
-          terrainLoadGraph(terrainGrain); // first activation
+          terrainLoadGraph(); // first activation
         }
       }).catch(function() {});
       break;
