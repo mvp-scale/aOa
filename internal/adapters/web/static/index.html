@@ -281,9 +281,22 @@
       <!-- Node panel overlay: shown on node click -->
       <div class="terrain-panel-overlay" id="terrainPanelOverlay" style="display:none"></div>
     </div>
+    <!-- Query bar: docked above status strip, below canvas. Hidden until graph loads. -->
+    <div class="terrain-query-wrap" id="terrainQueryWrap" style="display:none">
+      <div class="terrain-query-row">
+        <span class="tqb-hint" title="⌘K / Ctrl-K to focus">&crarr; </span>
+        <input class="tqb-input" id="terrainQInput" type="text"
+               placeholder="Search a file, or pick a question"
+               autocomplete="off" spellcheck="false">
+        <button class="tqb-clear" id="terrainQClearBtn" onclick="terrainQBarClear()" style="display:none" title="Clear (Esc)">&#x2715;</button>
+      </div>
+      <!-- Autocomplete dropdown: floats above the bar -->
+      <div class="tqb-ac" id="terrainQAC" style="display:none"></div>
+    </div>
     <div class="terrain-status-strip" id="terrainStatusStrip">
       <span id="terrainStatusText">—</span>
       <span class="terrain-grain-toggle">
+        <button class="toolbar-btn" id="terrainLensBtn" onclick="terrainToggleLens()" title="Semantic lens: group territories by atlas domain">Meaning</button>
         <button class="toolbar-btn" id="terrainExtBtn" onclick="terrainToggleExt()">Externals</button>
       </span>
     </div>

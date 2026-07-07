@@ -35,6 +35,21 @@ var terrainWheelAccum = 0;     // accumulated (normalized) wheel delta for rAF c
 var terrainWheelRAF = null;    // rAF handle for coalesced wheel apply
 var terrainFitNeeded = false;  // auto-fit pending after sim settle or data change
 
+/* ── QNAV state (COMMIT B/C) ── */
+var terrainRawPayload = null;  // unfiltered graph payload for verb computation (degree math over all edges)
+var terrainAnswer = null;      // {verb,args,highlight:{},hopDist:{},pathIds:[],sccs:[],rankItems:[],grain,stale,ts} | null
+var terrainQBook = [];         // localStorage query notebook [{verb,args,ts}]
+var terrainFindings = null;    // fetched findings cache for 'flagged' verb
+var terrainEntityRev = null;   // rev at which entity list was built
+var terrainQACSel = -1;        // selected autocomplete item index (-1=none)
+var terrainQACItems = [];      // current autocomplete item list
+var terrainCyclesCache = null; // {rev, sccs:[[ids...],...]} — iterative Tarjan, cached per rev
+var terrainHubsCache = null;   // {rev, ranked:[{id,fanIn},...]} — top fan-in, cached per rev
+var terrainLensMode = 'structure'; // 'structure' | 'meaning' — domain-group lens
+var terrainDomainGroups = null; // domain-based territory groups for 'meaning' lens
+var terrainStructureGroups = null; // save of terrainGroups when lens flips to meaning
+var terrainQListEl = null;     // currently open tq-list-overlay element
+
 /* ══════════════════════════════════════════════════════════
    HELPERS
    ══════════════════════════════════════════════════════════ */
@@ -3115,6 +3130,7 @@ function terrainBuildSimFromGraph(payload) {
     var angle = (2 * Math.PI * idx) / n;
     return {
       id: nd.id, label: nd.label, path: nd.path || '',
+      domain: nd.domain || '',  // atlas domain from COMMIT A (empty string when not set)
       x: R * Math.cos(angle), y: R * Math.sin(angle),
       vx: 0, vy: 0,
       pinned: false, degree: degree[idx], ext: !!nd.ext,
@@ -3496,19 +3512,40 @@ function terrainAscend() {
 function terrainUpdateBreadcrumb() {
   var el = document.getElementById('terrainBreadcrumb');
   if (!el) return;
-  if (!terrainDescended) {
+  var hasDesc = !!terrainDescended;
+  var hasAnswer = !!(terrainAnswer);
+  if (!hasDesc && !hasAnswer) {
     el.style.display = 'none';
     return;
   }
-  var label = terrainDescended;
-  if (terrainGroups) {
-    for (var gi = 0; gi < terrainGroups.length; gi++) {
-      if (terrainGroups[gi].id === terrainDescended) { label = terrainGroups[gi].label; break; }
+  var html = '<span class="tbc-root" onclick="terrainAscend()">&#8963; codebase</span>';
+  if (hasDesc) {
+    var label = terrainDescended;
+    if (terrainGroups) {
+      for (var gi = 0; gi < terrainGroups.length; gi++) {
+        if (terrainGroups[gi].id === terrainDescended) { label = terrainGroups[gi].label; break; }
+      }
+    }
+    html += '<span class="tbc-sep"> &#8250; </span>' +
+      '<span class="tbc-current">' + escHtml(label) + '</span>';
+  }
+  if (hasAnswer) {
+    var ans = terrainAnswer;
+    var ansLabel = ans.verb + (ans.args ? ': ' + ans.args : '');
+    if (ans.stale) ansLabel += ' (stale)';
+    html += '<span class="tbc-sep"> &#8250; </span>' +
+      '<span class="terrain-answer-bc">' + escHtml(ansLabel) +
+      '<button class="terrain-answer-bc-close" onclick="terrainQClear()" title="Clear answer (Esc)">&#x2715;</button>' +
+      '</span>';
+    // R1: if stale, offer recompute + clear chips
+    if (ans.stale) {
+      html += '<span class="terrain-answer-stale"> ' +
+        '<span class="terrain-answer-chip" onclick="terrainQRecompute()" title="Re-run at current grain">[recompute]</span> ' +
+        '<span class="terrain-answer-chip" onclick="terrainQClear()">[clear]</span>' +
+        '</span>';
     }
   }
-  el.innerHTML = '<span class="tbc-root" onclick="terrainAscend()">&#8963; codebase</span>' +
-    '<span class="tbc-sep"> &#8250; </span>' +
-    '<span class="tbc-current">' + escHtml(label) + '</span>';
+  el.innerHTML = html;
   el.style.display = 'flex';
 }
 
@@ -3763,6 +3800,26 @@ function terrainRenderUnitLayer(ctx, sim, sc) {
   var hover = terrainHover;
   var panel = terrainPanel;
 
+  // ── Answer overlay: build highlight set (node index → true) ──
+  // When an answer is active, non-highlighted nodes dim to 0.15.
+  // This overrides the hover-based dim but coexists with hover glow.
+  var ansHighlight = null; // {nodeIdx: true}
+  var ansHopDist  = null;  // {nodeIdx: hops} for blast/reach
+  var ansPathSet  = null;  // {nodeIdx: true, edgeIdx: true} for path
+  var ansRankBadge= null;  // {nodeIdx: rank_number} for hubs
+  var ansCycSCC   = null;  // {nodeIdx: sccIdx} for cycles
+  if (terrainAnswer && !terrainAnswer.stale) {
+    ansHighlight = {};
+    var ans = terrainAnswer;
+    if (ans.highlight) {
+      Object.keys(ans.highlight).forEach(function(k) { ansHighlight[parseInt(k,10)] = true; });
+    }
+    if (ans.hopDist) ansHopDist = ans.hopDist;
+    if (ans.pathIdxSet) ansPathSet = ans.pathIdxSet;
+    if (ans.rankBadge) ansRankBadge = ans.rankBadge;
+    if (ans.cycSCC) ansCycSCC = ans.cycSCC;
+  }
+
   // Build descended territory membership lookup (once per render call)
   var descendedSet = null;
   if (terrainDescended && terrainGroups) {
@@ -3801,7 +3858,17 @@ function terrainRenderUnitLayer(ctx, sim, sc) {
     var wRatio = edge.weight / sim.maxWeight;
     var wA = 0.12 + 0.5 * wRatio;
     var lw = 0.6 + 1.6 * wRatio;
-    var opacity = (focusNode >= 0 && !hoverEdge[ei]) ? 0.06 : wA;
+    // Answer path edges: highlight path edges brighter
+    var isPathEdge = ansPathSet && (ansPathSet['e' + ei]);
+    var opacity;
+    if (ansHighlight) {
+      // Answer active: dim non-highlighted edges; bright path edges
+      var edgeInAnswer = isPathEdge ||
+        (ansHighlight[edge.src] && ansHighlight[edge.dst]);
+      opacity = edgeInAnswer ? (isPathEdge ? 0.85 : wA) : 0.05;
+    } else {
+      opacity = (focusNode >= 0 && !hoverEdge[ei]) ? 0.06 : wA;
+    }
 
     ctx.beginPath();
     ctx.moveTo(snode.x, snode.y);
@@ -3834,7 +3901,11 @@ function terrainRenderUnitLayer(ctx, sim, sc) {
     var isHov = (ni === hover);
     var isPanel = (ni === panel);
     var isNeigh = (focusNode >= 0 && hoverNeigh[ni]);
-    var isDim = (focusNode >= 0 && !isHov && !isPanel && !isNeigh);
+    // Answer-based dim: if answer active, dim nodes not in highlight set
+    var isDimByAnswer = ansHighlight && !ansHighlight[ni];
+    var isDim = ansHighlight
+      ? (isDimByAnswer && !isHov && !isPanel)
+      : (focusNode >= 0 && !isHov && !isPanel && !isNeigh);
 
     // Delta pulse tinting
     var nr, ng, nb;
@@ -3842,6 +3913,22 @@ function terrainRenderUnitLayer(ctx, sim, sc) {
       nr = 52; ng = 211; nb = 99; // green pulse for added
     } else if (deltaRemoved && deltaRemoved[node.id]) {
       nr = 239; ng = 68; nb = 68; // red pulse for removed
+    } else if (ansHopDist && ansHopDist[ni] !== undefined) {
+      // Blast/reach: color by hop distance from source
+      var hop = ansHopDist[ni];
+      if (hop === 0)      { nr = 52;  ng = 211; nb = 99;  } // source: green
+      else if (hop === 1) { nr = 234; ng = 179; nb = 8;   } // hop 1: yellow
+      else if (hop === 2) { nr = 249; ng = 115; nb = 22;  } // hop 2: orange
+      else                { nr = 239; ng = 68;  nb = 68;  } // hop 3+: red
+    } else if (ansCycSCC && ansCycSCC[ni] !== undefined) {
+      // Cycles: distinct tint per SCC index
+      var sccPalette = [
+        [250,204,21],[249,115,22],[239,68,68],[167,139,250],[52,211,238],[52,211,99]
+      ];
+      var tint = sccPalette[ansCycSCC[ni] % sccPalette.length];
+      nr = tint[0]; ng = tint[1]; nb = tint[2];
+    } else if (ansPathSet && ansPathSet[ni]) {
+      nr = 52; ng = 211; nb = 99; // path: green
     } else if (node.ext) {
       nr = 139; ng = 139; nb = 150; // --dim
     } else if (isHov || isPanel) {
@@ -3852,7 +3939,7 @@ function terrainRenderUnitLayer(ctx, sim, sc) {
 
     // Descended dimming: nodes outside the descended territory are dimmed to ~12%
     var inDescended = !descendedSet || descendedSet[node.id];
-    var nodeAlpha = isDim ? 0.18 : (inDescended ? 1.0 : 0.12);
+    var nodeAlpha = isDim ? 0.15 : (inDescended ? 1.0 : 0.12);
 
     // Glow halo
     if (!isDim && inDescended) {
@@ -3904,6 +3991,28 @@ function terrainRenderUnitLayer(ctx, sim, sc) {
       ctx.fillStyle = 'rgba(232,232,236,' + labelAlpha + ')';
       ctx.fillText(node.label, node.x, node.y - r - 3 / sc);
     }
+  }
+
+  // ── Hub rank badges (static numbered, no rAF — §6.F) ──
+  if (ansRankBadge) {
+    Object.keys(ansRankBadge).forEach(function(niStr) {
+      var ni2 = parseInt(niStr, 10);
+      var nd2 = nodes[ni2];
+      if (!nd2) return;
+      var rank = ansRankBadge[ni2];
+      var r2 = terrainNodeR(nd2.degree, sim.maxDegree);
+      var bx = nd2.x + r2 * 0.7, by = nd2.y - r2 * 0.7;
+      var bsz = Math.max(9, 12 / sc);
+      ctx.beginPath();
+      ctx.arc(bx, by, bsz / sc, 0, 2 * Math.PI);
+      ctx.fillStyle = 'rgba(250,204,21,0.92)';
+      ctx.fill();
+      ctx.font = '700 ' + Math.max(7, 9 / sc) + 'px "JetBrains Mono",monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillText(rank, bx, by);
+    });
   }
 }
 
@@ -4136,6 +4245,26 @@ function terrainUpdateStrip() {
   if (sim.downgraded) {
     parts.push('<span class="terrain-status-downgraded">' + sim.downgraded + '</span>');
   }
+
+  // Answer narration: appended to strip when an answer is active
+  if (terrainAnswer) {
+    var ans = terrainAnswer;
+    if (ans.stale) {
+      parts.push('<span class="terrain-status-stale">' + escHtml(ans.staleMsg || 'stale') + '</span>');
+    } else if (ans.narrate) {
+      parts.push('<span class="terrain-status-answer">' + escHtml(ans.narrate) + '</span>');
+    }
+  }
+  // Semantic lens indicator
+  if (terrainLensMode === 'meaning') {
+    var covN = 0, covTotal = 0;
+    if (sim.nodes) {
+      sim.nodes.forEach(function(n) { if (!n.ext) { covTotal++; if (n.domain) covN++; } });
+    }
+    var covPct = covTotal > 0 ? Math.round(covN * 100 / covTotal) : 0;
+    parts.push('<span class="terrain-status-answer">semantic lens · ' + covPct + '% domain coverage</span>');
+  }
+
   strip.innerHTML = parts.join(' &middot; ');
 
   // Pulse on update
@@ -4154,6 +4283,8 @@ function terrainLoadGraph() {
   var url = '/api/arch/graph?grain=unit';
   safeFetch(url).then(function(payload) {
     if (!payload || !payload.nodes || payload.nodes.length === 0) return;
+    // Save unfiltered payload for verb computation (degree math over all edges, §2.2)
+    terrainRawPayload = payload;
 
     // Build rev-delta: track added/removed nodes (R1: bounded 2s expiry)
     var prevNodeIds = {};
@@ -4199,8 +4330,35 @@ function terrainLoadGraph() {
     terrainFitNeeded = true;
     if (!prevNodes) { terrainDescended = null; terrainUpdateBreadcrumb(); }
 
+    // R1: rev change invalidates answer — mark stale, never destroy ("graph changed — re-ask")
+    if (terrainAnswer && terrainState && terrainAnswer.grain !== terrainState.rev) {
+      terrainAnswer.stale = true;
+      terrainAnswer.staleMsg = 'graph changed — re-ask';
+    }
+    // Invalidate caches that are rev-bound
+    terrainCyclesCache = null;
+    terrainHubsCache = null;
+    terrainEntityRev = null; // force entity list rebuild
+
     terrainUpdateStrip();
     terrainStartSim();
+
+    // Show query bar (hidden until graph loads)
+    var qw = document.getElementById('terrainQueryWrap');
+    if (qw) qw.style.display = '';
+
+    // Debug: ?query=<verb+arg> executes on load; ?debugac=<prefix> shows autocomplete
+    var _qp = new URLSearchParams(window.location.search);
+    var _dbq = _qp.get('query');
+    var _dbac = _qp.get('debugac');
+    if (_dbq) {
+      var _parts = _dbq.replace('+', ' ').split(' ');
+      terrainQCommit(_parts[0], _parts.slice(1).join(' '));
+    } else if (_dbac !== null) {
+      var inp = document.getElementById('terrainQInput');
+      if (inp) { inp.value = _dbac; terrainQOnInput(); }
+      terrainQFocus();
+    }
 
     // Sync ext button state
     var btnExt = document.getElementById('terrainExtBtn');
@@ -4391,6 +4549,8 @@ function terrainSetupCanvas() {
   var canvas = document.getElementById('terrainCanvas');
   if (!canvas || canvas._terrainSetup) return;
   canvas._terrainSetup = true;
+  // Wire query bar (idempotent)
+  terrainQSetup();
 
   // Check debug URL params: ?debugpanel=<unitid>, ?debugscale=<number>, ?descend=<groupid>
   var urlParams = new URLSearchParams(window.location.search);
@@ -4587,9 +4747,45 @@ function terrainSetupCanvas() {
     _clickNode = -1;
   });
 
-  // Esc key: ascend from territory
+  // Esc ladder (§2.1): clear input → blur → clear answer → ascend
+  // Cmd-K / Ctrl-K: focus query bar from anywhere on the terrain tab
   document.addEventListener('keydown', function(ev) {
-    if (ev.key === 'Escape' && terrainDescended) { terrainAscend(); }
+    if (activeTab !== 'terrain') return;
+    // Cmd-K / Ctrl-K: focus bar
+    if ((ev.metaKey || ev.ctrlKey) && ev.key === 'k') {
+      ev.preventDefault();
+      terrainQFocus();
+      return;
+    }
+    // '/' when not in input: focus bar
+    if (ev.key === '/' && document.activeElement !== document.getElementById('terrainQInput')) {
+      ev.preventDefault();
+      terrainQFocus();
+      return;
+    }
+    if (ev.key === 'Escape') {
+      var inp = document.getElementById('terrainQInput');
+      var acEl = document.getElementById('terrainQAC');
+      if (acEl && acEl.style.display !== 'none') {
+        // Step 1: close autocomplete
+        terrainQHideAC();
+      } else if (inp && inp.value) {
+        // Step 2: clear input
+        inp.value = '';
+        var cb = document.getElementById('terrainQClearBtn');
+        if (cb) cb.style.display = 'none';
+        terrainQHideAC();
+      } else if (inp && document.activeElement === inp) {
+        // Step 3: blur
+        inp.blur();
+      } else if (terrainAnswer) {
+        // Step 4: clear answer
+        terrainQClear();
+      } else if (terrainDescended) {
+        // Step 5: ascend territory
+        terrainAscend();
+      }
+    }
   });
 
   canvas.addEventListener('mouseleave', function() {
@@ -4625,6 +4821,1111 @@ function terrainSetupCanvas() {
       }
     }, 200);
   }
+}
+
+/* ══════════════════════════════════════════════════════════
+   QNAV — DIRECTED NAVIGATION v1 (COMMIT B)
+   Query bar · 8 verbs · answer overlay · R1 continuity · R2 notebook
+   ══════════════════════════════════════════════════════════ */
+
+// ── Unfiltered adjacency builder ──
+// Builds outAdj and inAdj from raw payload (all edges, including to ext nodes).
+// Used by all verb walks; prevents false dead-code positives when ext is hidden.
+function terrainBuildAdj(payload) {
+  var outAdj = {}, inAdj = {};
+  (payload.nodes || []).forEach(function(n) { outAdj[n.id] = []; inAdj[n.id] = []; });
+  (payload.edges || []).forEach(function(e) {
+    if (!outAdj[e.from]) outAdj[e.from] = [];
+    if (!inAdj[e.to])   inAdj[e.to]   = [];
+    outAdj[e.from].push({to: e.to, file: e.file || '', line: e.line || 0});
+    inAdj[e.to].push({from: e.from, file: e.file || '', line: e.line || 0});
+  });
+  return {outAdj: outAdj, inAdj: inAdj};
+}
+
+// ── Node finder: locate node in terrainState by id, label, or path prefix ──
+function terrainFindNode(query) {
+  var sim = terrainState;
+  if (!sim) return -1;
+  var q = query.toLowerCase().trim();
+  // Exact id match
+  for (var i = 0; i < sim.nodes.length; i++) {
+    if (sim.nodes[i].id.toLowerCase() === q) return i;
+  }
+  // Exact label match
+  for (var j = 0; j < sim.nodes.length; j++) {
+    if (sim.nodes[j].label.toLowerCase() === q) return j;
+  }
+  // Suffix/path contains match
+  for (var k = 0; k < sim.nodes.length; k++) {
+    if (sim.nodes[k].id.toLowerCase().indexOf(q) !== -1 ||
+        (sim.nodes[k].path || '').toLowerCase().indexOf(q) !== -1) return k;
+  }
+  return -1;
+}
+
+// ── BFS hop-distance from sourceId over outAdj ──
+// Returns {nodeId: hops} for all reachable nodes within maxHops. O(V+E).
+function terrainBFS(sourceId, outAdj, maxHops) {
+  var dist = {};
+  dist[sourceId] = 0;
+  var queue = [sourceId];
+  var head = 0;
+  while (head < queue.length) {
+    var v = queue[head++];
+    var d = dist[v];
+    if (d >= maxHops) continue;
+    var nbrs = outAdj[v] || [];
+    for (var i = 0; i < nbrs.length; i++) {
+      var w = nbrs[i].to;
+      if (dist[w] === undefined) {
+        dist[w] = d + 1;
+        queue.push(w);
+      }
+    }
+  }
+  return dist;
+}
+
+// ── BFS shortest path ──
+// Returns [sourceId, ..., targetId] or null if unreachable.
+function terrainBFSPath(sourceId, targetId, outAdj) {
+  if (sourceId === targetId) return [sourceId];
+  var prev = {};
+  prev[sourceId] = null;
+  var queue = [sourceId];
+  var head = 0;
+  while (head < queue.length) {
+    var v = queue[head++];
+    var nbrs = outAdj[v] || [];
+    for (var i = 0; i < nbrs.length; i++) {
+      var w = nbrs[i].to;
+      if (prev[w] === undefined) {
+        prev[w] = v;
+        if (w === targetId) {
+          var path = [];
+          var cur = targetId;
+          while (cur !== null) { path.push(cur); cur = prev[cur]; }
+          return path.reverse();
+        }
+        queue.push(w);
+      }
+    }
+  }
+  return null;
+}
+
+// ── Iterative Tarjan SCC (§6.G: stack-safe at 10k nodes) ──
+// Returns array of SCCs; each SCC is an array of node IDs (size ≥ 2 only).
+function terrainTarjanSCCs(nodeIds, outAdj) {
+  var idx = 0;
+  var S = [];
+  var onS = {};
+  var num = {};
+  var low = {};
+  var sccs = [];
+
+  nodeIds.forEach(function(startV) {
+    if (num[startV] !== undefined) return;
+    var work = [{v: startV, ci: 0, children: (outAdj[startV] || []).map(function(e) { return e.to; })}];
+    num[startV] = low[startV] = idx++;
+    S.push(startV);
+    onS[startV] = true;
+
+    while (work.length > 0) {
+      var top = work[work.length - 1];
+      var v = top.v;
+      if (top.ci < top.children.length) {
+        var w = top.children[top.ci++];
+        if (num[w] === undefined) {
+          var wch = (outAdj[w] || []).map(function(e) { return e.to; });
+          work.push({v: w, ci: 0, children: wch});
+          num[w] = low[w] = idx++;
+          S.push(w);
+          onS[w] = true;
+        } else if (onS[w]) {
+          if (low[v] > num[w]) low[v] = num[w];
+        }
+      } else {
+        work.pop();
+        if (work.length > 0) {
+          var pv = work[work.length - 1].v;
+          if (low[pv] > low[v]) low[pv] = low[v];
+        }
+        if (low[v] === num[v]) {
+          var scc = [];
+          while (true) {
+            var u = S.pop();
+            onS[u] = false;
+            scc.push(u);
+            if (u === v) break;
+          }
+          if (scc.length > 1) sccs.push(scc);
+        }
+      }
+    }
+  });
+  return sccs;
+}
+
+// ── Hub ranking: distinct fan-in from unfiltered payload (§2.2, §6.I) ──
+function terrainComputeHubs(payload) {
+  var fanIn = {};
+  (payload.nodes || []).forEach(function(n) { if (!n.ext) fanIn[n.id] = 0; });
+  (payload.edges || []).forEach(function(e) {
+    if (fanIn[e.to] !== undefined) fanIn[e.to]++;
+  });
+  var ranked = [];
+  Object.keys(fanIn).forEach(function(id) { if (fanIn[id] > 0) ranked.push({id: id, fanIn: fanIn[id]}); });
+  ranked.sort(function(a, b) { return b.fanIn - a.fanIn; });
+  return ranked;
+}
+
+// ── Node index map: id → sim array index ──
+function terrainNodeIdxMap() {
+  var map = {};
+  if (terrainState) {
+    terrainState.nodes.forEach(function(n, i) { map[n.id] = i; });
+  }
+  return map;
+}
+
+// ── Top hub id (for placeholder rotation) ──
+function terrainTopHubId() {
+  if (!terrainRawPayload) return null;
+  if (terrainHubsCache && terrainHubsCache.rev === (terrainRawPayload.rev || '')) {
+    return terrainHubsCache.ranked[0] && terrainHubsCache.ranked[0].id;
+  }
+  var ranked = terrainComputeHubs(terrainRawPayload);
+  return ranked[0] && ranked[0].id;
+}
+
+// ── Copy for Claude: builds the full context string for any answer ──
+function terrainCopyForClaude(ans) {
+  if (!ans) return '';
+  var sim = terrainState;
+  var rev = sim ? (sim.rev || '').slice(0, 8) : '?';
+  var grain = sim ? sim.grain : 'unit';
+  var lines = [
+    'aOa Terrain query: ' + ans.verb + (ans.args ? ' ' + ans.args : ''),
+    'Rev: ' + rev + '  Grain: ' + grain + '  Scope: ' + (grain === 'unit' ? 'import graph, module grain, may-depend' : 'file grain'),
+    ''
+  ];
+  if (ans.narrate) lines.push(ans.narrate);
+  if (ans.pathIds && ans.pathIds.length > 0) {
+    lines.push('Path (' + ans.pathIds.length + ' hops):');
+    ans.pathIds.forEach(function(id, i) { lines.push('  ' + i + '. ' + id); });
+  }
+  if (ans.rankItems && ans.rankItems.length > 0) {
+    lines.push('Top results:');
+    ans.rankItems.slice(0, 10).forEach(function(r, i) {
+      lines.push('  ' + (i+1) + '. ' + r.id + (r.val ? ' (' + r.val + ')' : ''));
+    });
+  }
+  if (ans.sccs && ans.sccs.length > 0) {
+    lines.push('Cycles (' + ans.sccs.length + ' SCCs):');
+    ans.sccs.slice(0, 6).forEach(function(scc, i) {
+      lines.push('  SCC ' + (i+1) + ': ' + scc.slice(0, 4).join(' → ') + (scc.length > 4 ? ' (+' + (scc.length-4) + ')' : ''));
+    });
+  }
+  lines.push('');
+  lines.push('Honesty: static import graph, may-depend, module grain. Cannot answer call-level, runtime, reflection, RPC edges.');
+  lines.push('CLI next steps:');
+  lines.push('  aoa arch facts ' + (ans.args || '<unit>') + '   # every import with file:line');
+  lines.push('  grep <symbol> → aoa peek <code>   # symbol-level detail');
+  lines.push('  aoa arch derive <from> <to>        # dependency path');
+  return lines.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════
+// VERB IMPLEMENTATIONS — all O(V+E) on fetched adjacency
+// ═══════════════════════════════════════════════════════════
+
+// focus X — ring + immediate neighbors of X (Q2)
+function terrainVerbFocus(target) {
+  var sim = terrainState;
+  if (!sim) return {err: 'no graph loaded'};
+  var idx = terrainFindNode(target);
+  if (idx < 0) return {err: 'not found: ' + target};
+  var node = sim.nodes[idx];
+  var highlight = {};
+  highlight[idx] = true;
+  sim.edges.forEach(function(e) {
+    if (e.src === idx) highlight[e.dst] = true;
+    if (e.dst === idx) highlight[e.src] = true;
+  });
+  var degIn = node.degIn || 0, degOut = node.degOut || 0;
+  return {
+    verb: 'focus', args: target, highlight: highlight,
+    narrate: 'focus · ' + node.label + ' · in ' + degIn + ' / out ' + degOut +
+             ' · unit grain · import edges · externals hidden (' + (sim.extHidden || 0) + ')'
+  };
+}
+
+// dependents X — nodes that import X (Q4: most-observed question)
+function terrainVerbDependents(target) {
+  var sim = terrainState;
+  if (!sim || !terrainRawPayload) return {err: 'no graph loaded'};
+  var idx = terrainFindNode(target);
+  if (idx < 0) return {err: 'not found: ' + target};
+  var node = sim.nodes[idx];
+  var adj = terrainBuildAdj(terrainRawPayload);
+  var importers = adj.inAdj[node.id] || [];
+  var idxMap = terrainNodeIdxMap();
+  var highlight = {};
+  highlight[idx] = true;
+  var rankItems = [];
+  importers.forEach(function(e) {
+    var ni = idxMap[e.from];
+    if (ni !== undefined) highlight[ni] = true;
+    rankItems.push({id: e.from, val: e.file + ':' + e.line});
+  });
+  return {
+    verb: 'dependents', args: target, highlight: highlight, rankItems: rankItems,
+    narrate: 'dependents · ' + node.label + ' · ' + importers.length + ' importers' +
+             ' · unit grain · first import site · externals hidden (' + (sim.extHidden || 0) + ')'
+  };
+}
+
+// deps X — what X imports (Q5)
+function terrainVerbDeps(target) {
+  var sim = terrainState;
+  if (!sim || !terrainRawPayload) return {err: 'no graph loaded'};
+  var idx = terrainFindNode(target);
+  if (idx < 0) return {err: 'not found: ' + target};
+  var node = sim.nodes[idx];
+  var adj = terrainBuildAdj(terrainRawPayload);
+  var deps = adj.outAdj[node.id] || [];
+  var idxMap = terrainNodeIdxMap();
+  var highlight = {};
+  highlight[idx] = true;
+  var rankItems = [];
+  deps.forEach(function(e) {
+    var ni = idxMap[e.to];
+    if (ni !== undefined) highlight[ni] = true;
+    rankItems.push({id: e.to, val: e.file + ':' + e.line});
+  });
+  return {
+    verb: 'deps', args: target, highlight: highlight, rankItems: rankItems,
+    narrate: 'deps · ' + node.label + ' · imports ' + deps.length + ' units' +
+             ' · unit grain · first import site · externals hidden (' + (sim.extHidden || 0) + ')'
+  };
+}
+
+// blast X — BFS forward from X with hop-distance shading, max 6 hops (Q3)
+// "static may-depend upper bound" label mandated by §2.3
+function terrainVerbBlast(target) {
+  var sim = terrainState;
+  if (!sim || !terrainRawPayload) return {err: 'no graph loaded'};
+  var idx = terrainFindNode(target);
+  if (idx < 0) return {err: 'not found: ' + target};
+  var node = sim.nodes[idx];
+  var adj = terrainBuildAdj(terrainRawPayload);
+  var distById = terrainBFS(node.id, adj.outAdj, 6);
+  var idxMap = terrainNodeIdxMap();
+  var highlight = {};
+  var hopDist = {};   // nodeIdx → hops
+  var maxHops = 0;
+  Object.keys(distById).forEach(function(id) {
+    var ni = idxMap[id];
+    if (ni !== undefined) {
+      highlight[ni] = true;
+      hopDist[ni] = distById[id];
+      if (distById[id] > maxHops) maxHops = distById[id];
+    }
+  });
+  var affected = Object.keys(distById).length - 1; // exclude source
+  return {
+    verb: 'blast', args: target, highlight: highlight, hopDist: hopDist,
+    narrate: 'blast · ' + node.label + ' · ' + affected + ' affected units (max ' + maxHops + ' hops)' +
+             ' · static may-depend upper bound · unit grain · externals hidden (' + (sim.extHidden || 0) + ')'
+  };
+}
+
+// path A B — BFS shortest path (Q6)
+function terrainVerbPath(argStr) {
+  var sim = terrainState;
+  if (!sim || !terrainRawPayload) return {err: 'no graph loaded'};
+  var parts = argStr.trim().split(/\s+/);
+  if (parts.length < 2) return {err: 'path needs two args: path A B'};
+  var aStr = parts[0], bStr = parts.slice(1).join(' ');
+  var ai = terrainFindNode(aStr), bi = terrainFindNode(bStr);
+  if (ai < 0) return {err: 'not found: ' + aStr};
+  if (bi < 0) return {err: 'not found: ' + bStr};
+  var an = sim.nodes[ai], bn = sim.nodes[bi];
+  var adj = terrainBuildAdj(terrainRawPayload);
+  var pathIds = terrainBFSPath(an.id, bn.id, adj.outAdj);
+  if (!pathIds) return {err: 'no path from ' + an.label + ' to ' + bn.label};
+  var idxMap = terrainNodeIdxMap();
+  var highlight = {};
+  var pathIdxSet = {};
+  pathIds.forEach(function(id) {
+    var ni = idxMap[id];
+    if (ni !== undefined) { highlight[ni] = true; pathIdxSet[ni] = true; }
+  });
+  // Mark path edges (e.src and e.dst both in pathIdxSet, consecutive)
+  var pathIdxArr = pathIds.map(function(id) { return idxMap[id]; });
+  sim.edges.forEach(function(e, ei) {
+    // Edge is on the path if its src and dst are consecutive in the path
+    for (var pi = 0; pi < pathIdxArr.length - 1; pi++) {
+      if (e.src === pathIdxArr[pi] && e.dst === pathIdxArr[pi+1]) {
+        pathIdxSet['e' + ei] = true;
+        break;
+      }
+    }
+  });
+  return {
+    verb: 'path', args: argStr, highlight: highlight, pathIds: pathIds, pathIdxSet: pathIdxSet,
+    narrate: 'path · ' + an.label + ' → ' + bn.label + ' · ' + (pathIds.length-1) + ' hops' +
+             ' · unit grain · first import site'
+  };
+}
+
+// hubs — top-10 by distinct fan-in (Q8)
+function terrainVerbHubs() {
+  var sim = terrainState;
+  if (!sim || !terrainRawPayload) return {err: 'no graph loaded'};
+  var rev = terrainRawPayload.rev || '';
+  if (!terrainHubsCache || terrainHubsCache.rev !== rev) {
+    terrainHubsCache = {rev: rev, ranked: terrainComputeHubs(terrainRawPayload)};
+  }
+  var top10 = terrainHubsCache.ranked.slice(0, 10);
+  var idxMap = terrainNodeIdxMap();
+  var highlight = {};
+  var rankBadge = {};  // nodeIdx → rank (1-based)
+  var rankItems = [];
+  top10.forEach(function(r, i) {
+    var ni = idxMap[r.id];
+    if (ni !== undefined) { highlight[ni] = true; rankBadge[ni] = i + 1; }
+    rankItems.push({id: r.id, val: r.fanIn + ' importers'});
+  });
+  return {
+    verb: 'hubs', args: '', highlight: highlight, rankBadge: rankBadge, rankItems: rankItems,
+    narrate: 'hubs · top ' + top10.length + ' by distinct fan-in · unit grain'
+  };
+}
+
+// cycles — iterative Tarjan SCC, cached per rev (Q9)
+function terrainVerbCycles() {
+  var sim = terrainState;
+  if (!sim || !terrainRawPayload) return {err: 'no graph loaded'};
+  var rev = terrainRawPayload.rev || '';
+  if (!terrainCyclesCache || terrainCyclesCache.rev !== rev) {
+    var adj = terrainBuildAdj(terrainRawPayload);
+    var allIds = (terrainRawPayload.nodes || []).map(function(n) { return n.id; });
+    var sccs = terrainTarjanSCCs(allIds, adj.outAdj);
+    terrainCyclesCache = {rev: rev, sccs: sccs};
+  }
+  var sccs = terrainCyclesCache.sccs;
+  if (sccs.length === 0) {
+    return {
+      verb: 'cycles', args: '', highlight: {}, sccs: [],
+      narrate: 'cycles · no cycles found · unit grain · import edges (may-depend)'
+    };
+  }
+  var idxMap = terrainNodeIdxMap();
+  var highlight = {};
+  var cycSCC = {};   // nodeIdx → sccIdx
+  var rankItems = [];
+  sccs.forEach(function(scc, si) {
+    scc.forEach(function(id) {
+      var ni = idxMap[id];
+      if (ni !== undefined) { highlight[ni] = true; cycSCC[ni] = si; }
+    });
+    rankItems.push({id: scc.slice(0, 3).join(' ↔ ') + (scc.length > 3 ? ' +' + (scc.length-3) : ''), val: scc.length + ' units'});
+  });
+  return {
+    verb: 'cycles', args: '', highlight: highlight, sccs: sccs, cycSCC: cycSCC, rankItems: rankItems,
+    narrate: 'cycles · ' + sccs.length + ' SCC(s) found · unit grain · import edges (may-depend)'
+  };
+}
+
+// flagged — join with server findings (renamed from orphans; §6.B, §6.C)
+// Unit grain only; at file grain, returns client SCC findings instead.
+function terrainVerbFlagged() {
+  var sim = terrainState;
+  if (!sim) return {err: 'no graph loaded'};
+  // Use cached findings if available
+  if (terrainFindings) {
+    return terrainBuildFlaggedAnswer(terrainFindings);
+  }
+  // Fetch findings
+  safeFetch('/api/arch/findings?scope=local').then(function(findings) {
+    terrainFindings = findings || [];
+    var ans = terrainBuildFlaggedAnswer(terrainFindings);
+    if (terrainAnswer && terrainAnswer.verb === 'flagged') {
+      terrainAnswer = ans;
+      terrainRender();
+      terrainUpdateStrip();
+      terrainUpdateBreadcrumb();
+      terrainQListShow(ans);
+    }
+  }).catch(function() {
+    terrainFindings = [];
+  });
+  return {
+    verb: 'flagged', args: '', highlight: {}, rankItems: [],
+    narrate: 'flagged · loading findings…'
+  };
+}
+
+function terrainBuildFlaggedAnswer(findings) {
+  var sim = terrainState;
+  var idxMap = terrainNodeIdxMap();
+  var highlight = {};
+  var rankItems = [];
+  // Join findings (orphan/dead-candidate rules) with node map
+  var relevant = (findings || []).filter(function(f) {
+    return f.rule === 'orphan' || f.rule === 'dead-candidate' || f.rule === 'unreachable';
+  });
+  relevant.forEach(function(f) {
+    (f.subjects || []).forEach(function(subj) {
+      var ni = idxMap[subj];
+      if (ni !== undefined) highlight[ni] = true;
+      rankItems.push({id: subj, val: f.rule + (f.severity ? ' · ' + f.severity : '')});
+    });
+  });
+  // Deduplicate
+  var seen = {};
+  rankItems = rankItems.filter(function(r) { if (seen[r.id]) return false; seen[r.id] = true; return true; });
+  return {
+    verb: 'flagged', args: '', highlight: highlight, rankItems: rankItems,
+    narrate: 'flagged (from findings) · ' + rankItems.length + ' flagged units · unit grain only' +
+             ' · reflection/DI edges not visible'
+  };
+}
+
+// domain X — filter to units with matching domain (§9)
+function terrainVerbDomain(domainQ) {
+  var sim = terrainState;
+  if (!sim) return {err: 'no graph loaded'};
+  var q = domainQ.toLowerCase().trim();
+  var highlight = {};
+  var rankItems = [];
+  sim.nodes.forEach(function(n, ni) {
+    if (n.domain && n.domain.toLowerCase().indexOf(q) !== -1) {
+      highlight[ni] = true;
+      rankItems.push({id: n.id, val: n.domain});
+    }
+  });
+  if (rankItems.length === 0) return {err: 'no units with domain matching: ' + domainQ};
+  return {
+    verb: 'domain', args: domainQ, highlight: highlight, rankItems: rankItems,
+    narrate: 'domain · ' + domainQ + ' · ' + rankItems.length + ' units · atlas domain (REAL)'
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+// QUERY COMMIT — dispatch verb → answer
+// ═══════════════════════════════════════════════════════════
+
+// Global synonym table (§2.1, §6.A — non-negotiable no-match fallback)
+var QNAV_SYNONYMS = {
+  'break': 'blast', 'impact': 'blast', 'affect': 'blast', 'blast-radius': 'blast',
+  'slow-to-change': 'blast', 'what-breaks': 'blast', 'ripple': 'blast',
+  'uses': 'dependents', 'imports-of': 'dependents', 'imported-by': 'dependents',
+  'who-uses': 'dependents', 'consumers': 'dependents', 'callers': 'dependents',
+  'what-depends': 'deps', 'dependencies-of': 'deps', 'depends-on': 'deps',
+  'what-imports': 'deps', 'imports': 'deps',
+  'unused': 'flagged', 'dead': 'flagged', 'orphan': 'flagged',
+  'unreachable': 'flagged', 'dead-code': 'flagged',
+  'connect': 'path', 'path-from': 'path', 'connected-to': 'path', 'route': 'path',
+  'most-imported': 'hubs', 'central': 'hubs', 'load-bearing': 'hubs',
+  'critical': 'hubs', 'important': 'hubs',
+  'cycle': 'cycles', 'circular': 'cycles', 'tangled': 'cycles', 'tangle': 'cycles'
+};
+
+// The 10 question templates (§1, §2.5)
+var QNAV_TEMPLATES = [
+  {verb: 'blast',      slot: '<unit>',   desc: 'If I touch this, what breaks?'},
+  {verb: 'dependents', slot: '<unit>',   desc: 'Who uses this module?'},
+  {verb: 'deps',       slot: '<unit>',   desc: 'What does this depend on?'},
+  {verb: 'path',       slot: '<A> <B>',  desc: 'How does this connect to that?'},
+  {verb: 'hubs',       slot: '',         desc: 'Which modules are load-bearing?'},
+  {verb: 'cycles',     slot: '',         desc: 'Anything tangled — cycles?'},
+  {verb: 'flagged',    slot: '',         desc: 'Dead code / architectural findings'},
+  {verb: 'focus',      slot: '<unit>',   desc: 'Explore a starting point'},
+  {verb: 'domain',     slot: '<domain>', desc: 'Show units by semantic domain'},
+  {verb: 'blast',      slot: '[top-hub]',desc: 'Blast radius of the top hub'}
+];
+
+function terrainQCommit(verb, args) {
+  var v = verb ? verb.toLowerCase().trim() : '';
+  var a = args ? args.trim() : '';
+  // Synonym resolution
+  if (QNAV_SYNONYMS[v]) v = QNAV_SYNONYMS[v];
+  var ans = null;
+  if      (v === 'focus')      ans = terrainVerbFocus(a);
+  else if (v === 'dependents' || v === 'imported-by') ans = terrainVerbDependents(a);
+  else if (v === 'deps' || v === 'imports-of')        ans = terrainVerbDeps(a);
+  else if (v === 'blast')      ans = terrainVerbBlast(a);
+  else if (v === 'path')       ans = terrainVerbPath(a);
+  else if (v === 'hubs')       ans = terrainVerbHubs();
+  else if (v === 'cycles')     ans = terrainVerbCycles();
+  else if (v === 'flagged')    ans = terrainVerbFlagged();
+  else if (v === 'domain')     ans = terrainVerbDomain(a);
+  else {
+    ans = {err: 'unknown verb: ' + v + ' — try: blast, dependents, deps, path, hubs, cycles, flagged, domain, focus'};
+  }
+  if (ans.err) {
+    terrainQShowError(ans.err);
+    return;
+  }
+  // R1 continuity: clear grain from previous answer; don't destroy
+  // Store grain at commit time for stale detection
+  ans.grain = terrainState ? terrainState.rev : '';
+  ans.ts = Date.now();
+  ans.stale = false;
+  // Clear descend dim on query commit (§2.3, §6.H: composition prevention)
+  terrainDescended = null;
+  terrainAnswer = ans;
+  // R2: log to local notebook
+  terrainQBookAppend(v, a);
+  // Update breadcrumb, strip, render
+  terrainUpdateBreadcrumb();
+  terrainUpdateStrip();
+  terrainRender();
+  // Show list panel for hubs, cycles, flagged
+  if (v === 'hubs' || v === 'cycles' || v === 'flagged' || v === 'dependents' || v === 'deps') {
+    terrainQListShow(ans);
+  } else {
+    terrainQListClose();
+  }
+  // Hide autocomplete after commit
+  terrainQHideAC();
+  // Update input to show committed query
+  var inp = document.getElementById('terrainQInput');
+  if (inp) {
+    inp.value = v + (a ? ' ' + a : '');
+    inp.blur();
+    var cb = document.getElementById('terrainQClearBtn');
+    if (cb) cb.style.display = '';
+  }
+}
+
+// terrainQRecompute: re-run the last answer at current grain (R1 recompute chip)
+function terrainQRecompute() {
+  if (!terrainAnswer) return;
+  terrainQCommit(terrainAnswer.verb, terrainAnswer.args);
+}
+
+// terrainQClear: clear active answer + reset bar
+function terrainQClear() {
+  terrainAnswer = null;
+  var inp = document.getElementById('terrainQInput');
+  if (inp) { inp.value = ''; }
+  var cb = document.getElementById('terrainQClearBtn');
+  if (cb) cb.style.display = 'none';
+  terrainQHideAC();
+  terrainQListClose();
+  terrainUpdateBreadcrumb();
+  terrainUpdateStrip();
+  terrainRender();
+}
+
+// terrainQBarClear: clear the bar input only (inline clear btn)
+function terrainQBarClear() {
+  var inp = document.getElementById('terrainQInput');
+  if (inp) inp.value = '';
+  var cb = document.getElementById('terrainQClearBtn');
+  if (cb) cb.style.display = 'none';
+  terrainQHideAC();
+  if (inp) inp.focus();
+}
+
+function terrainQShowError(msg) {
+  var inp = document.getElementById('terrainQInput');
+  // Flash a transient error in the autocomplete area
+  var acEl = document.getElementById('terrainQAC');
+  if (!acEl) return;
+  acEl.innerHTML = '<div class="tqb-nomatch">' + escHtml('Error: ' + msg) + '</div>';
+  acEl.style.display = '';
+  setTimeout(function() { if (acEl.style.display !== 'none') terrainQHideAC(); }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════
+// LIST PANEL (hubs / cycles / flagged / dependents / deps)
+// ═══════════════════════════════════════════════════════════
+
+function terrainQListShow(ans) {
+  terrainQListClose();
+  var sim = terrainState;
+  if (!sim || !ans || !ans.rankItems || ans.rankItems.length === 0) return;
+  var wrap = document.getElementById('terrainCanvasWrap');
+  if (!wrap) return;
+  var el = document.createElement('div');
+  el.className = 'tq-list-overlay';
+
+  var title = {
+    hubs: 'Load-bearing hubs',
+    cycles: 'Cycles (SCCs)',
+    flagged: 'Flagged units',
+    dependents: 'Dependents',
+    deps: 'Dependencies'
+  }[ans.verb] || ans.verb;
+
+  var copyText = terrainCopyForClaude(ans);
+  el.innerHTML = '<div class="tq-list-header">' + escHtml(title) +
+    '<button class="tq-list-close" onclick="terrainQListClose()">&#x2715;</button></div>' +
+    '<div class="tq-list-body" id="tqListBody"></div>' +
+    '<div class="tq-list-footer">' +
+    '<span>' + escHtml(ans.narrate || '') + '</span>' +
+    '<button class="tq-copy-btn" id="tqCopyBtn" onclick="terrainCopyText(' +
+      JSON.stringify(copyText) + ", 'tqCopyBtn')\">[copy for Claude]</button>" +
+    '</div>';
+
+  var body = el.querySelector('#tqListBody');
+  ans.rankItems.slice(0, 20).forEach(function(r, i) {
+    var row = document.createElement('div');
+    row.className = 'tq-list-row';
+    var ni = terrainNodeIdxMap()[r.id];
+    row.onclick = (function(nodeId) { return function() {
+      var nIdx = terrainNodeIdxMap()[nodeId];
+      if (nIdx !== undefined) { terrainOpenPanel(nIdx); }
+    }; })(r.id);
+    row.innerHTML = '<span class="tq-list-rank">' + (i+1) + '</span>' +
+      '<span class="tq-list-label" title="' + escHtml(r.id) + '">' + escHtml(r.id) + '</span>' +
+      (r.val ? '<span class="tq-list-val">' + escHtml(r.val) + '</span>' : '');
+    body.appendChild(row);
+  });
+  if (ans.rankItems.length > 20) {
+    var more = document.createElement('div');
+    more.className = 'tq-list-row';
+    more.style.color = 'var(--mute)';
+    more.textContent = '… +' + (ans.rankItems.length - 20) + ' more';
+    body.appendChild(more);
+  }
+  wrap.appendChild(el);
+  terrainQListEl = el;
+}
+
+function terrainQListClose() {
+  if (terrainQListEl && terrainQListEl.parentNode) {
+    terrainQListEl.parentNode.removeChild(terrainQListEl);
+  }
+  terrainQListEl = null;
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUTOCOMPLETE ENGINE
+// ═══════════════════════════════════════════════════════════
+
+// Build entity list from sim (nodes + territory labels). Cached per rev.
+function terrainQBuildEntityList() {
+  if (!terrainRawPayload) return [];
+  var rev = terrainRawPayload.rev || '';
+  if (terrainEntityRev === rev) return; // already built
+  terrainEntityRev = rev;
+  // Entities = non-ext sim nodes + territory labels
+  var list = [];
+  (terrainRawPayload.nodes || []).forEach(function(n) {
+    if (!n.ext) list.push({label: n.label, id: n.id, path: n.path || '', kind: 'unit'});
+  });
+  if (terrainGroups) {
+    terrainGroups.forEach(function(g) {
+      list.push({label: g.label, id: g.id, path: '', kind: 'territory'});
+    });
+  }
+  // Sort: shorter labels first (more likely to be exact matches)
+  list.sort(function(a, b) { return a.label.length - b.label.length; });
+  return list;
+}
+
+// Fuzzy entity search: prefix > contains > none, limited to 8
+function terrainQFuzzyEntities(q) {
+  var list = terrainQBuildEntityList() || [];
+  if (!q) return list.slice(0, 8);
+  var ql = q.toLowerCase();
+  var prefix = [], contain = [];
+  list.forEach(function(e) {
+    var lbl = e.label.toLowerCase(), id = e.id.toLowerCase();
+    if (lbl.startsWith(ql) || id.startsWith(ql)) prefix.push(e);
+    else if (lbl.indexOf(ql) !== -1 || id.indexOf(ql) !== -1) contain.push(e);
+  });
+  return prefix.concat(contain).slice(0, 8);
+}
+
+// Parse bar input into {verb, argPrefix, partial}
+function terrainQParse(raw) {
+  var parts = raw.trim().split(/\s+/);
+  var verb = parts[0] || '';
+  var rest = parts.slice(1).join(' ');
+  var knownVerbs = ['focus','dependents','deps','blast','path','hubs','cycles','flagged','domain'];
+  var isVerb = knownVerbs.indexOf(verb.toLowerCase()) !== -1 ||
+               !!QNAV_SYNONYMS[verb.toLowerCase()];
+  return {verb: isVerb ? verb.toLowerCase() : '', argPrefix: isVerb ? rest : raw, partial: !isVerb};
+}
+
+// Build autocomplete items for the current input value
+function terrainQSuggest(raw) {
+  var items = [];
+  if (!raw || !raw.trim()) {
+    // Empty bar: show all 10 templates with top-hub substituted
+    var hub = terrainTopHubId() || '<unit>';
+    QNAV_TEMPLATES.forEach(function(t) {
+      var slot = t.slot.replace('[top-hub]', hub);
+      var complete = !slot || slot.startsWith('<') ? (slot ? false : true) : true;
+      items.push({
+        type: 'template',
+        verb: t.verb, arg: slot, desc: t.desc,
+        commit: complete ? {verb: t.verb, args: slot.replace(/^<|>$/g,'').replace('[top-hub]', hub)} : null
+      });
+    });
+    // Query notebook at bottom
+    if (terrainQBook.length > 0) {
+      items.push({type: 'section', label: 'Recent'});
+      terrainQBook.slice(-4).reverse().forEach(function(entry) {
+        items.push({type: 'book', verb: entry.verb, arg: entry.args, commit: {verb: entry.verb, args: entry.args}});
+      });
+    }
+    return items;
+  }
+
+  var parsed = terrainQParse(raw);
+
+  if (parsed.partial || !parsed.verb) {
+    // No verb recognized: try synonym lookup first
+    var rawLow = raw.toLowerCase().trim();
+    var synVerb = QNAV_SYNONYMS[rawLow];
+    if (synVerb) {
+      items.push({type: 'section', label: 'Closest questions'});
+      items.push({type: 'template', verb: synVerb, arg: '<unit>', desc: 'Try: ' + synVerb, commit: null});
+    } else {
+      // No-match fallback (§6.A BLOCKER): show closest templates + synonym suggestions
+      items.push({type: 'nomatch', label: 'Closest questions:'});
+      QNAV_TEMPLATES.slice(0, 5).forEach(function(t) {
+        items.push({type: 'template', verb: t.verb, arg: t.slot, desc: t.desc, commit: null});
+      });
+      // Suggest synonyms that contain the input word
+      var words = rawLow.split(/\s+/);
+      var synSuggested = {};
+      Object.keys(QNAV_SYNONYMS).forEach(function(k) {
+        if (words.some(function(w) { return k.indexOf(w) !== -1 || w.indexOf(k) !== -1; })) {
+          var tv = QNAV_SYNONYMS[k];
+          if (!synSuggested[tv]) {
+            synSuggested[tv] = true;
+            items.push({type: 'synonym', label: 'did you mean: ' + tv, verb: tv, arg: '', commit: null});
+          }
+        }
+      });
+    }
+    // Also show entity matches
+    var ents = terrainQFuzzyEntities(raw);
+    if (ents.length > 0) {
+      items.push({type: 'section', label: 'Units'});
+      ents.forEach(function(e) {
+        items.push({type: 'entity', label: e.label, id: e.id, kind: e.kind,
+                    commit: {verb: 'focus', args: e.id}});
+      });
+    }
+    return items;
+  }
+
+  // Known verb typed — show arg autocomplete
+  var vl = parsed.verb, argQ = parsed.argPrefix;
+  var needsArg = ['focus','dependents','deps','blast','path','domain'].indexOf(vl) !== -1;
+  if (needsArg && argQ) {
+    var ents2 = terrainQFuzzyEntities(argQ);
+    if (ents2.length > 0) {
+      items.push({type: 'section', label: 'Matching units'});
+      ents2.forEach(function(e) {
+        items.push({type: 'entity', label: vl + ' ' + e.label, id: e.id, kind: e.kind,
+                    commit: {verb: vl, args: e.id}});
+      });
+    }
+  } else if (!needsArg) {
+    // No-arg verb: show the template + direct commit
+    items.push({type: 'action', label: vl, desc: 'Run: ' + vl, commit: {verb: vl, args: ''}});
+  } else if (needsArg && !argQ) {
+    // Verb typed, waiting for arg
+    items.push({type: 'section', label: 'Type a unit name…'});
+    var ents3 = terrainQFuzzyEntities('');
+    ents3.forEach(function(e) {
+      items.push({type: 'entity', label: vl + ' ' + e.label, id: e.id, kind: e.kind,
+                  commit: {verb: vl, args: e.id}});
+    });
+  }
+  return items;
+}
+
+function terrainQHideAC() {
+  var el = document.getElementById('terrainQAC');
+  if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+  terrainQACSel = -1;
+  terrainQACItems = [];
+}
+
+function terrainQShowAC(items) {
+  var el = document.getElementById('terrainQAC');
+  if (!el) return;
+  if (!items || items.length === 0) { terrainQHideAC(); return; }
+  terrainQACItems = items.filter(function(it) { return it.type !== 'section' && it.type !== 'nomatch'; });
+  terrainQACSel = -1;
+  var html = '';
+  var flatIdx = 0;
+  items.forEach(function(it) {
+    if (it.type === 'section') {
+      html += '<div class="tqb-section">' + escHtml(it.label) + '</div>';
+    } else if (it.type === 'nomatch') {
+      html += '<div class="tqb-nomatch">' + escHtml(it.label) + '</div>';
+    } else {
+      var fi = flatIdx++;
+      var cls = 'tqb-item" data-fi="' + fi + '"';
+      if (it.type === 'template' || it.type === 'action') {
+        html += '<div class="' + cls + ' onclick="terrainQACClick(' + fi + ')">' +
+          '<span class="tqb-item-verb">' + escHtml(it.verb || '') + '</span>' +
+          '<span class="tqb-item-arg' + (it.arg && it.arg.startsWith('<') ? ' tqb-chip' : '') + '">' + escHtml(it.arg || '') + '</span>' +
+          '<span class="tqb-item-desc">' + escHtml(it.desc || '') + '</span>' +
+          '</div>';
+      } else if (it.type === 'entity') {
+        html += '<div class="' + cls + ' onclick="terrainQACClick(' + fi + ')">' +
+          '<span class="tqb-item-arg">' + escHtml(it.label || it.id) + '</span>' +
+          '<span class="tqb-item-kind">' + escHtml(it.kind || '') + '</span>' +
+          '</div>';
+      } else if (it.type === 'book') {
+        html += '<div class="' + cls + ' onclick="terrainQACClick(' + fi + ')">' +
+          '<span class="tqb-item-verb">' + escHtml(it.verb || '') + '</span>' +
+          '<span class="tqb-item-arg">' + escHtml(it.arg || '') + '</span>' +
+          '<span class="tqb-item-kind">remembered</span>' +
+          '</div>';
+      } else if (it.type === 'synonym') {
+        html += '<div class="' + cls + ' onclick="terrainQACClick(' + fi + ')">' +
+          '<span class="tqb-item-desc">' + escHtml(it.label || '') + '</span>' +
+          '</div>';
+      } else {
+        html += '<div class="' + cls + ' onclick="terrainQACClick(' + fi + ')">' +
+          '<span class="tqb-item-arg">' + escHtml(it.label || '') + '</span>' +
+          '</div>';
+      }
+    }
+  });
+  // Notebook note (R2)
+  if (terrainQBook.length > 0) {
+    html += '<div class="tqb-book-note" onclick="terrainQClearBook()">queries remembered locally (' +
+      terrainQBook.length + ') &middot; clear</div>';
+  }
+  el.innerHTML = html;
+  el.style.display = '';
+}
+
+function terrainQACClick(fi) {
+  var item = terrainQACItems[fi];
+  if (!item) return;
+  if (item.commit) {
+    terrainQCommit(item.commit.verb, item.commit.args);
+  } else if (item.verb) {
+    // Incomplete template: populate bar and focus
+    var inp = document.getElementById('terrainQInput');
+    if (inp) {
+      inp.value = item.verb + ' ';
+      inp.focus();
+      terrainQOnInput();
+    }
+  }
+}
+
+function terrainQACMoveSel(delta) {
+  var items = terrainQACItems;
+  if (!items.length) return;
+  terrainQACSel = Math.max(0, Math.min(items.length - 1, terrainQACSel + delta));
+  // Update visual selection
+  var el = document.getElementById('terrainQAC');
+  if (!el) return;
+  el.querySelectorAll('.tqb-item').forEach(function(row) {
+    var fi = parseInt(row.getAttribute('data-fi') || '-1', 10);
+    row.classList.toggle('tqb-sel', fi === terrainQACSel);
+  });
+}
+
+function terrainQOnInput() {
+  var inp = document.getElementById('terrainQInput');
+  if (!inp) return;
+  var val = inp.value;
+  var cb = document.getElementById('terrainQClearBtn');
+  if (cb) cb.style.display = val ? '' : 'none';
+  var items = terrainQSuggest(val);
+  terrainQShowAC(items);
+}
+
+function terrainQOnKeyDown(ev) {
+  if (ev.key === 'ArrowDown') { ev.preventDefault(); terrainQACMoveSel(1); return; }
+  if (ev.key === 'ArrowUp')   { ev.preventDefault(); terrainQACMoveSel(-1); return; }
+  if (ev.key === 'Enter') {
+    ev.preventDefault();
+    if (terrainQACSel >= 0 && terrainQACItems[terrainQACSel]) {
+      terrainQACClick(terrainQACSel);
+      return;
+    }
+    // Try to parse and commit what's in the bar
+    var inp = document.getElementById('terrainQInput');
+    if (!inp || !inp.value.trim()) return;
+    var parsed = terrainQParse(inp.value);
+    if (parsed.verb) {
+      terrainQCommit(parsed.verb, parsed.argPrefix);
+    }
+    return;
+  }
+}
+
+function terrainQFocus() {
+  var inp = document.getElementById('terrainQInput');
+  if (!inp) return;
+  inp.focus();
+  inp.select();
+  if (!inp.value) {
+    var items = terrainQSuggest('');
+    terrainQShowAC(items);
+  }
+}
+
+// Wire query bar events (idempotent via flag)
+function terrainQSetup() {
+  var inp = document.getElementById('terrainQInput');
+  if (!inp || inp._qSetup) return;
+  inp._qSetup = true;
+  inp.addEventListener('input', terrainQOnInput);
+  inp.addEventListener('keydown', terrainQOnKeyDown);
+  inp.addEventListener('focus', function() {
+    if (!inp.value) {
+      var items = terrainQSuggest('');
+      terrainQShowAC(items);
+    }
+  });
+  inp.addEventListener('blur', function() {
+    // Delay hide so clicks on AC items register
+    setTimeout(function() { terrainQHideAC(); }, 180);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// R2 — localStorage query notebook
+// ═══════════════════════════════════════════════════════════
+var QNAV_BOOK_KEY = 'terrain_qnav_book_v1';
+
+function terrainQBookLoad() {
+  try {
+    var raw = localStorage.getItem(QNAV_BOOK_KEY);
+    terrainQBook = raw ? JSON.parse(raw) : [];
+  } catch(e) { terrainQBook = []; }
+}
+
+function terrainQBookAppend(verb, args) {
+  terrainQBook.push({verb: verb, args: args || '', ts: Date.now()});
+  // Keep last 50 entries
+  if (terrainQBook.length > 50) terrainQBook = terrainQBook.slice(-50);
+  try { localStorage.setItem(QNAV_BOOK_KEY, JSON.stringify(terrainQBook)); } catch(e) {}
+}
+
+function terrainQClearBook() {
+  terrainQBook = [];
+  try { localStorage.removeItem(QNAV_BOOK_KEY); } catch(e) {}
+  terrainQHideAC();
+  setTimeout(function() { terrainQFocus(); }, 10);
+}
+
+// Initialize notebook on load
+terrainQBookLoad();
+// Wire up query bar events (will be called again after DOM ready, idempotent)
+(function() {
+  function trySetup() {
+    var inp = document.getElementById('terrainQInput');
+    if (inp) { terrainQSetup(); return; }
+    setTimeout(trySetup, 100);
+  }
+  trySetup();
+})();
+
+/* ══════════════════════════════════════════════════════════
+   COMMIT C — SEMANTIC LENS + TYPE-AWARE QUESTIONS
+   ══════════════════════════════════════════════════════════ */
+
+// Lens toggle: 'structure' (component groups) ↔ 'meaning' (domain groups)
+// R5: domain-grouped territories use deterministic placement; positions persist.
+function terrainToggleLens() {
+  var btn = document.getElementById('terrainLensBtn');
+  if (terrainLensMode === 'structure') {
+    terrainLensMode = 'meaning';
+    // Save structure groups so we can restore
+    terrainStructureGroups = terrainGroups;
+    // Build domain-based groups
+    terrainDomainGroups = terrainBuildDomainGroups();
+    terrainGroups = terrainDomainGroups;
+    terrainHulls = null; // force hull rebuild
+    if (btn) { btn.classList.add('active'); btn.title = 'Structure view (click to switch)'; }
+  } else {
+    terrainLensMode = 'structure';
+    // Restore structure groups
+    terrainGroups = terrainStructureGroups || terrainGroups;
+    terrainHulls = null;
+    if (btn) { btn.classList.remove('active'); btn.title = 'Semantic lens: group by atlas domain'; }
+  }
+  terrainUpdateStrip();
+  // Trigger hull rebuild + re-render (sim positions preserved — R5 law)
+  if (terrainState && terrainState.alpha <= 0.05) {
+    terrainBuildHulls(terrainState, terrainGroups);
+    terrainRender();
+  } else if (!terrainRAF) {
+    terrainRAF = requestAnimationFrame(terrainTick);
+  }
+}
+
+// Build domain-based territory groups from node.domain.
+// Nodes without domain → "Uncharted" group (honest, never silent).
+function terrainBuildDomainGroups() {
+  var sim = terrainState;
+  if (!sim) return [];
+  var domainMap = {}; // domain → [node.id, ...]
+  var uncharted = [];
+  sim.nodes.forEach(function(n) {
+    if (n.ext) return; // ext nodes not grouped by domain
+    if (n.domain) {
+      if (!domainMap[n.domain]) domainMap[n.domain] = [];
+      domainMap[n.domain].push(n.id);
+    } else {
+      uncharted.push(n.id);
+    }
+  });
+  var groups = [];
+  Object.keys(domainMap).sort().forEach(function(dom) {
+    var ms = {};
+    domainMap[dom].forEach(function(id) { ms[id] = true; });
+    groups.push({id: 'domain_' + dom, label: dom, memberSet: ms});
+  });
+  if (uncharted.length > 0) {
+    var ums = {};
+    uncharted.forEach(function(id) { ums[id] = true; });
+    groups.push({id: 'domain_uncharted', label: 'Uncharted', memberSet: ums});
+  }
+  return groups;
+}
+
+// Compute domain coverage: % of non-ext nodes that have a domain (for lens honesty).
+function terrainDomainCoverage() {
+  var sim = terrainState;
+  if (!sim) return 0;
+  var total = 0, covered = 0;
+  sim.nodes.forEach(function(n) {
+    if (!n.ext) {
+      total++;
+      if (n.domain) covered++;
+    }
+  });
+  return total > 0 ? Math.round(covered * 100 / total) : 0;
+}
+
+// Type inference (§2.4 v2 entry conditions noted; basic inference shipped with domain)
+// Returns {type: 'hub'|'leaf'|'sink'|'external'|'test'|'node', domain: string}
+function terrainNodeType(node, sim) {
+  if (!node) return {type: 'node', domain: ''};
+  if (node.ext) return {type: 'external', domain: ''};
+  var pLow = (node.path || '').toLowerCase();
+  var isTest = pLow.indexOf('_test.go') !== -1 || pLow.indexOf('/test/') !== -1 || pLow.indexOf('test/') === 0;
+  if (isTest) return {type: 'test', domain: node.domain || ''};
+  var maxDeg = sim ? sim.maxDegree : 1;
+  if (node.degIn >= maxDeg * 0.3 && node.degIn > 2) return {type: 'hub', domain: node.domain || ''};
+  if (node.degIn === 0 && node.degOut > 0) return {type: 'leaf', domain: node.domain || ''};
+  if (node.degOut === 0 && node.degIn > 0) return {type: 'sink', domain: node.domain || ''};
+  return {type: 'node', domain: node.domain || ''};
 }
 
 /* ── Start ── */

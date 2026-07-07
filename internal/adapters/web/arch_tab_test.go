@@ -155,3 +155,81 @@ func TestKnowledgeTabNavPosition(t *testing.T) {
 
 	t.Log("knowledge-zone nav position PASS: Debrief < Arsenal < spine < Terrain < Blueprints")
 }
+
+// TestQNavBarInDashboard verifies that index.html ships the QNAV query bar
+// with correct structure:
+//   - Query wrap: id="terrainQueryWrap" (hidden until graph loads)
+//   - Query input: id="terrainQInput" with placeholder text
+//   - Autocomplete: id="terrainQAC" (dropdown, hidden by default)
+//   - Clear button: id="terrainQClearBtn"
+//   - Query bar is positioned between canvas-wrap and status strip
+func TestQNavBarInDashboard(t *testing.T) {
+	htmlBytes, err := os.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatalf("cannot read static/index.html: %v", err)
+	}
+	html := string(htmlBytes)
+
+	// Required IDs
+	for _, id := range []string{"terrainQueryWrap", "terrainQInput", "terrainQAC", "terrainQClearBtn"} {
+		if !strings.Contains(html, `id="`+id+`"`) {
+			t.Errorf("index.html missing #%s", id)
+		}
+	}
+
+	// Query wrap must ship hidden (shown by JS when graph loads)
+	qwPos := strings.Index(html, `id="terrainQueryWrap"`)
+	if qwPos < 0 {
+		t.Fatal("terrainQueryWrap not found")
+	}
+	// Check hidden attribute near terrainQueryWrap
+	qwSnip := html[qwPos:qwPos+80]
+	if !strings.Contains(qwSnip, `style="display:none"`) {
+		t.Error(`terrainQueryWrap must ship with style="display:none"`)
+	}
+
+	// Input must have placeholder text (invitation copy per §2.1)
+	if !strings.Contains(html, `placeholder="Search a file, or pick a question"`) {
+		t.Error(`terrainQInput must have placeholder="Search a file, or pick a question"`)
+	}
+
+	// Query bar must appear between canvas-wrap and status strip
+	canvasWrapPos := strings.Index(html, `id="terrainCanvasWrap"`)
+	queryWrapPos  := strings.Index(html, `id="terrainQueryWrap"`)
+	statusStripPos := strings.Index(html, `id="terrainStatusStrip"`)
+	if canvasWrapPos < 0 || queryWrapPos < 0 || statusStripPos < 0 {
+		t.Fatal("one of terrainCanvasWrap/terrainQueryWrap/terrainStatusStrip not found")
+	}
+	if !(canvasWrapPos < queryWrapPos && queryWrapPos < statusStripPos) {
+		t.Errorf("query bar must appear between canvas-wrap and status-strip: wrap@%d qbar@%d strip@%d",
+			canvasWrapPos, queryWrapPos, statusStripPos)
+	}
+
+	t.Log("QNAV bar assertions PASS: terrainQueryWrap hidden, correct placeholder, correct position")
+}
+
+// TestSemanticLensInDashboard verifies that index.html ships the semantic lens
+// toggle button in the terrain status strip:
+//   - terrainLensBtn: Meaning button for domain-grouped territories (Commit C)
+func TestSemanticLensInDashboard(t *testing.T) {
+	htmlBytes, err := os.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatalf("cannot read static/index.html: %v", err)
+	}
+	html := string(htmlBytes)
+
+	if !strings.Contains(html, `id="terrainLensBtn"`) {
+		t.Error("index.html missing terrainLensBtn for semantic lens toggle")
+	}
+	// Lens button must be inside the terrain-status-strip (not outside)
+	stripPos := strings.Index(html, `id="terrainStatusStrip"`)
+	lensPos  := strings.Index(html, `id="terrainLensBtn"`)
+	if stripPos < 0 || lensPos < 0 {
+		t.Fatal("terrainStatusStrip or terrainLensBtn not found")
+	}
+	if lensPos <= stripPos {
+		t.Error("terrainLensBtn must appear after terrainStatusStrip opening tag")
+	}
+
+	t.Log("semantic lens assertions PASS: terrainLensBtn present inside terrain-status-strip")
+}

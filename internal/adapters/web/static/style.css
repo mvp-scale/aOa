@@ -746,6 +746,132 @@ body {
   display: flex; align-items: center; justify-content: center;
   color: var(--dim); font-size: 14px; pointer-events: none;
 }
+/* ── Query bar: docked above status strip ── */
+.terrain-query-wrap {
+  position: relative; flex-shrink: 0;
+  background: var(--card); border-top: 1px solid var(--border);
+}
+.terrain-query-row {
+  display: flex; align-items: center; height: 34px; padding: 0 12px 0 16px; gap: 8px;
+}
+.tqb-hint {
+  font-size: 10px; color: var(--mute); flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace; letter-spacing: 0.5px;
+  padding: 2px 5px; border: 1px solid var(--border-subtle); border-radius: 3px;
+  user-select: none;
+}
+.tqb-input {
+  flex: 1; background: none; border: none; outline: none;
+  color: var(--text); font-size: 12px;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+}
+.tqb-input::placeholder { color: var(--mute); }
+.tqb-clear {
+  background: none; border: none; color: var(--mute); cursor: pointer;
+  font-size: 12px; padding: 3px 6px; flex-shrink: 0; line-height: 1;
+}
+.tqb-clear:hover { color: var(--text); }
+/* Autocomplete dropdown: opens upward from query bar */
+.tqb-ac {
+  position: absolute; bottom: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--card); border: 1px solid rgba(34,211,238,0.3);
+  border-bottom: none; border-radius: 8px 8px 0 0;
+  max-height: 300px; overflow-y: auto;
+  box-shadow: 0 -6px 24px rgba(0,0,0,0.35);
+}
+.tqb-section {
+  padding: 7px 14px 3px; font-size: 9px; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--mute); font-family: 'JetBrains Mono', monospace;
+}
+.tqb-item {
+  padding: 5px 14px; cursor: pointer; display: flex; align-items: baseline; gap: 8px;
+  font-size: 11.5px; font-family: 'JetBrains Mono', monospace; color: var(--dim);
+  transition: background 0.08s;
+}
+.tqb-item:hover, .tqb-item.tqb-sel { background: rgba(34,211,238,0.09); color: var(--text); }
+.tqb-item-verb { color: var(--cyan); font-weight: 600; min-width: 88px; }
+.tqb-item-arg  { color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tqb-item-kind { color: var(--mute); font-size: 9px; flex-shrink: 0; margin-left: auto; }
+.tqb-item-desc { color: var(--dim); font-size: 10px; flex: 1; }
+/* Slot-fill chip: incomplete template, slot shown as placeholder */
+.tqb-chip { color: var(--mute); font-style: italic; }
+/* Synonym fallback header */
+.tqb-nomatch {
+  padding: 8px 14px; font-size: 11px; color: var(--dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── Answer state: strip annotation + answer breadcrumb chip ── */
+.terrain-answer-bc {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(34,211,238,0.10); border: 1px solid rgba(34,211,238,0.25);
+  border-radius: 4px; padding: 1px 6px 1px 8px; font-size: 10.5px;
+  color: var(--cyan); cursor: default; font-family: 'JetBrains Mono', monospace;
+}
+.terrain-answer-bc-close {
+  background: none; border: none; color: var(--mute); cursor: pointer;
+  font-size: 11px; padding: 0 0 0 2px; line-height: 1;
+}
+.terrain-answer-bc-close:hover { color: var(--text); }
+/* Answer recompute / stale chip */
+.terrain-answer-stale {
+  display: inline-flex; gap: 6px; align-items: center;
+  font-size: 10px; color: var(--yellow, #f59e0b);
+  font-family: 'JetBrains Mono', monospace;
+}
+.terrain-answer-chip {
+  display: inline-block; padding: 1px 6px; border-radius: 3px; cursor: pointer; font-size: 10px;
+  background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.3);
+  color: var(--yellow, #f59e0b); font-family: 'JetBrains Mono', monospace;
+}
+.terrain-answer-chip:hover { background: rgba(251,191,36,0.2); }
+/* Query notebook note */
+.tqb-book-note {
+  padding: 5px 14px 6px; font-size: 9px; color: var(--mute);
+  font-family: 'JetBrains Mono', monospace; cursor: pointer; display: flex; gap: 8px;
+}
+.tqb-book-note:hover { color: var(--dim); }
+/* Panel list rows for hubs/cycles/flagged verbs */
+.tq-list-overlay {
+  position: absolute; top: 10px; right: 10px; width: 280px;
+  background: var(--card); border: 1px solid rgba(34,211,238,0.25);
+  border-radius: 8px; z-index: 25; overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  max-height: calc(100% - 20px); display: flex; flex-direction: column;
+  font-family: 'JetBrains Mono', monospace;
+}
+.tq-list-header {
+  padding: 8px 12px 6px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: var(--text); font-weight: 600; flex-shrink: 0;
+}
+.tq-list-close {
+  background: none; border: none; color: var(--mute); cursor: pointer;
+  font-size: 12px; padding: 2px 4px; line-height: 1;
+}
+.tq-list-close:hover { color: var(--text); }
+.tq-list-body { overflow-y: auto; flex: 1; }
+.tq-list-row {
+  padding: 5px 12px; font-size: 10.5px; color: var(--dim); cursor: pointer;
+  display: flex; align-items: baseline; gap: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.tq-list-row:hover { background: rgba(34,211,238,0.07); color: var(--text); }
+.tq-list-rank { color: var(--mute); min-width: 18px; text-align: right; font-size: 9px; }
+.tq-list-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tq-list-val { color: var(--cyan); font-size: 10px; flex-shrink: 0; }
+.tq-list-footer {
+  padding: 6px 12px; border-top: 1px solid var(--border); font-size: 9px;
+  color: var(--mute); flex-shrink: 0; display: flex; gap: 8px; align-items: center;
+}
+.tq-copy-btn {
+  background: none; border: 1px solid var(--border); border-radius: 3px;
+  color: var(--dim); cursor: pointer; font-size: 9px; padding: 2px 7px;
+  font-family: inherit; margin-left: auto;
+}
+.tq-copy-btn:hover { color: var(--cyan); border-color: rgba(34,211,238,0.3); }
+/* hub badge drawn on canvas — no extra CSS needed */
+
 .terrain-status-strip {
   flex-shrink: 0; height: 36px;
   border-top: 1px solid var(--border); background: var(--card);
@@ -755,6 +881,8 @@ body {
 }
 .terrain-status-live { color: var(--green); }
 .terrain-status-downgraded { color: var(--yellow, #f59e0b); font-style: italic; }
+.terrain-status-answer { color: var(--cyan); }
+.terrain-status-stale { color: var(--yellow, #f59e0b); font-style: italic; }
 @keyframes terrain-pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 .terrain-pulse { animation: terrain-pulse 0.8s ease-out; }
 .terrain-grain-toggle { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0; }
