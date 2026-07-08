@@ -1,5 +1,5 @@
 
-import {React,useState,useEffect,useCallback,memo,createRoot,
+import {React,useState,useEffect,useCallback,useRef,memo,createRoot,
  ReactFlow,Background,Controls,Handle,Position,BaseEdge,EdgeLabelRenderer,useReactFlow,ReactFlowProvider,
  ELK,htm} from "./vendor/bundle.js";
 const html=htm.bind(React.createElement); const elk=new ELK();
@@ -333,6 +333,8 @@ function DSMView({view,onSel,selId}){
   const[winH,setWinH]=useState(window.innerHeight);
   useEffect(()=>{const upd=()=>{setWinW(window.innerWidth);setWinH(window.innerHeight);};
     window.addEventListener("resize",upd);return()=>window.removeEventListener("resize",upd);},[]);
+  const scrollRef=React.useRef(null);
+  const[pendingPin,setPendingPin]=useState(null);
 
   // DEFECT 2: classify items into actors / targets-only / unlinked
   const rowSums=items.map((_,i)=>items.reduce((s,__,j)=>i===j?s:s+((M[i]||[])[j]||0),0));
@@ -394,9 +396,27 @@ function DSMView({view,onSel,selId}){
         (comp.buckets||[]).forEach(b=>{grp[b.label]=(b.members||[]).map(m=>{lbl[m.id]=m.label;return m.id;});});
         setDsmGroups(grp);setDsmUnitLabels(lbl);setUnitGraph(g);setUnitGraphLoading(false);
       }).catch(e=>{setUnitGraphErr(e.message);setUnitGraphLoading(false);});};
-  const toggleGroup=grpLabel=>{
+  const toggleGroup=(grpLabel,evt)=>{
+    if(scrollRef.current&&evt&&evt.currentTarget){
+      const rowEl=evt.currentTarget.closest?evt.currentTarget.closest("tr"):evt.currentTarget;
+      const rowRect=rowEl?rowEl.getBoundingClientRect():null;
+      if(rowRect){
+        const screenY=rowRect.top;
+        setPendingPin({key:"g_"+grpLabel,screenY});}}
     setExpandedGroup(expandedGroup===grpLabel?null:grpLabel);};
 
+  useEffect(()=>{
+    if(!pendingPin||!scrollRef.current)return;
+    const rows=scrollRef.current.querySelectorAll("tbody tr");
+    for(const tr of rows){
+      const th=tr.querySelector("th");
+      if(th&&th.textContent&&th.textContent.includes(pendingPin.key.replace("g_",""))){
+        const rowRect=tr.getBoundingClientRect();
+        const delta=rowRect.top-pendingPin.screenY;
+        if(Math.abs(delta)>0.5)scrollRef.current.scrollTop+=delta;
+        break;}}
+    setPendingPin(null);
+  },[expandedGroup,pendingPin]);
   // Unit edge lookup: build once from unitGraph
   let unitEdgeMap=null,unitToGroup=null;
   if(unitGraph&&dsmGroups){
@@ -489,14 +509,14 @@ function DSMView({view,onSel,selId}){
       ${unitGraphLoading?html`<span style=${{color:T.mute,fontSize:9}}>loading unit data…</span>`:null}
       ${unitGraphErr?html`<span style=${{color:T.yellow,fontSize:9}}>unit expansion unavailable · daemon not running</span>`:null}
     </div>
-    <div style=${{overflow:needsScroll?"auto":"visible",flex:1}}>
+    <div ref=${scrollRef} style=${{overflow:needsScroll?"auto":"visible",flex:1}}>
       <table style=${{borderCollapse:"collapse",tableLayout:"fixed",fontSize:10,color:T.text}}>
         <thead><tr>
           <th style=${{...stickyH,...stickyV,top:0,left:0,zIndex:3,
             width:ROW_HDR_W,minWidth:ROW_HDR_W,height:COL_HDR_H,
             background:T.chrome,borderBottom:`1px solid ${T.border}`,borderRight:`1px solid ${T.border}`}}></th>
           ${flatRows.map((cE,ci)=>html`<th key=${ci}
-            onClick=${()=>{if(cE.isUnit){pickRow(cE);}else{toggleGroup(cE.label);}}}
+            onClick=${(e)=>{if(cE.isUnit){pickRow(cE);}else{toggleGroup(cE.label,e);}}}
             title=${cE.fullLabel||cE.label}
             style=${{...stickyH,top:0,width:cellSz,minWidth:cellSz,maxWidth:cellSz,height:COL_HDR_H,
               textAlign:"center",fontWeight:700,fontSize:8.5,letterSpacing:.3,
@@ -521,7 +541,7 @@ function DSMView({view,onSel,selId}){
           const isExpPar=rE.isExpandedParent;
           const isChild=rE.isUnit&&!!rE.parentLabel&&!rE.isMore;
           return html`<tr key=${ri}>
-            <th onClick=${()=>{if(rE.isMore)return;if(rE.isUnit){pickRow(rE);}else{toggleGroup(rE.label);}}}
+            <th onClick=${(e)=>{if(rE.isMore)return;if(rE.isUnit){pickRow(rE);}else{toggleGroup(rE.label,e);}}}
               title=${rE.fullLabel||rE.label}
               style=${{...stickyV,left:0,
                 width:ROW_HDR_W,minWidth:ROW_HDR_W,maxWidth:ROW_HDR_W,height:cellSz,
