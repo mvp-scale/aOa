@@ -322,6 +322,11 @@ function DSMView({view,onSel,selId}){
   const qp=new URLSearchParams(location.search);
   const[expandedGroup,setExpandedGroup]=useState(qp.get("dsmExpand")||null);
   const[unitGraph,setUnitGraph]=useState(null);
+  // groups: DSM row label -> member unit ids, joined from the component shard's
+  // buckets (the manifest's view entry never carries a groups field — the shard
+  // is the source of truth for membership).
+  const[dsmGroups,setDsmGroups]=useState(null);
+  const[dsmUnitLabels,setDsmUnitLabels]=useState({});
   const[unitGraphErr,setUnitGraphErr]=useState(null);
   const[unitGraphLoading,setUnitGraphLoading]=useState(false);
   const[winW,setWinW]=useState(window.innerWidth);
@@ -340,8 +345,8 @@ function DSMView({view,onSel,selId}){
 
   // Band expansion
   const K=20;
-  const expandedUnitPaths=expandedGroup!==null&&view.groups&&view.groups[expandedGroup]
-    ?view.groups[expandedGroup]:[];
+  const expandedUnitPaths=expandedGroup!==null&&dsmGroups&&dsmGroups[expandedGroup]
+    ?dsmGroups[expandedGroup]:[];
   const visibleUnits=expandedUnitPaths.slice(0,K);
   const moreUnits=expandedUnitPaths.length>K?expandedUnitPaths.length-K:0;
   const extraRows=visibleUnits.length+(moreUnits>0?1:0);
@@ -358,22 +363,28 @@ function DSMView({view,onSel,selId}){
   const cellSz=Math.max(MIN_CELL,idealCell);
   const needsScroll=idealCell<MIN_CELL;
 
-  // Toggle expand / lazy fetch
-  const toggleGroup=grpLabel=>{
-    if(expandedGroup===grpLabel){setExpandedGroup(null);return;}
-    setExpandedGroup(grpLabel);
-    if(!unitGraph&&!unitGraphLoading&&view.groups){
+  // Lazy fetch: fires for ANY expanded state lacking data — click or ?dsmExpand.
+  useEffect(()=>{
+    if(expandedGroup!==null&&!unitGraph&&!unitGraphLoading){fetchUnitData();}
+  },[expandedGroup]);
+  const fetchUnitData=()=>{
       setUnitGraphLoading(true);setUnitGraphErr(null);
-      fetch("/api/arch/graph?grain=unit")
-        .then(r=>r.ok?r.json():Promise.reject(new Error("HTTP "+r.status)))
-        .then(g=>{setUnitGraph(g);setUnitGraphLoading(false);})
-        .catch(e=>{setUnitGraphErr(e.message);setUnitGraphLoading(false);});}};
+      Promise.all([
+        fetch("/api/arch/graph?grain=unit").then(r=>r.ok?r.json():Promise.reject(new Error("HTTP "+r.status))),
+        fetch("/api/arch/local/component").then(r=>r.ok?r.json():Promise.reject(new Error("HTTP "+r.status)))
+      ]).then(([g,comp])=>{
+        const grp={},lbl={};
+        (comp.buckets||[]).forEach(b=>{grp[b.label]=(b.members||[]).map(m=>{lbl[m.id]=m.label;return m.id;});});
+        setDsmGroups(grp);setDsmUnitLabels(lbl);setUnitGraph(g);setUnitGraphLoading(false);
+      }).catch(e=>{setUnitGraphErr(e.message);setUnitGraphLoading(false);});};
+  const toggleGroup=grpLabel=>{
+    setExpandedGroup(expandedGroup===grpLabel?null:grpLabel);};
 
   // Unit edge lookup: build once from unitGraph
   let unitEdgeMap=null,unitToGroup=null;
-  if(unitGraph&&view.groups){
+  if(unitGraph&&dsmGroups){
     unitToGroup={};
-    Object.entries(view.groups).forEach(([grp,paths])=>paths.forEach(p=>{unitToGroup[p]=grp;}));
+    Object.entries(dsmGroups).forEach(([grp,paths])=>paths.forEach(p=>{unitToGroup[p]=grp;}));
     unitEdgeMap={};
     (unitGraph.edges||[]).forEach(e=>{
       if(!unitEdgeMap[e.from])unitEdgeMap[e.from]={};
@@ -381,10 +392,10 @@ function DSMView({view,onSel,selId}){
 
   const getCellVal=(rItem,cItem,rIsUnit,cIsUnit)=>{
     if(rIsUnit&&cIsUnit)return unitEdgeMap?(unitEdgeMap[rItem]?.[cItem]||0):0;
-    if(rIsUnit&&!cIsUnit){if(!unitEdgeMap||!view.groups?.[cItem])return 0;
-      return (view.groups[cItem]||[]).reduce((s,t)=>s+(unitEdgeMap[rItem]?.[t]||0),0);}
-    if(!rIsUnit&&cIsUnit){if(!unitEdgeMap||!view.groups?.[rItem])return 0;
-      return (view.groups[rItem]||[]).reduce((s,f)=>s+(unitEdgeMap[f]?.[cItem]||0),0);}
+    if(rIsUnit&&!cIsUnit){if(!unitEdgeMap||!dsmGroups?.[cItem])return 0;
+      return (dsmGroups[cItem]||[]).reduce((s,t)=>s+(unitEdgeMap[rItem]?.[t]||0),0);}
+    if(!rIsUnit&&cIsUnit){if(!unitEdgeMap||!dsmGroups?.[rItem])return 0;
+      return (dsmGroups[rItem]||[]).reduce((s,f)=>s+(unitEdgeMap[f]?.[cItem]||0),0);}
     const ri=items.indexOf(rItem),ci=items.indexOf(cItem);
     return ri>=0&&ci>=0?(M[ri]||[])[ci]||0:0;};
 
@@ -396,7 +407,7 @@ function DSMView({view,onSel,selId}){
     gnum++;
     if(label===expandedGroup){
       visibleUnits.forEach((upath,ui)=>{
-        const ulabel=upath.split("/").pop();
+        const ulabel=dsmUnitLabels[upath]||upath.replace(/^u_/,"").split("_").pop();
         flatRows.push({key:"u_"+upath,label:ulabel,fullLabel:upath,isUnit:true,unitPath:upath,parentIdx:gi});
         dispNums.push(gnum+"."+(ui+1));});
       if(moreUnits>0){
@@ -441,7 +452,7 @@ function DSMView({view,onSel,selId}){
       <span style=${{fontWeight:600,color:T.text}}>${summaryText}</span>
       ${unitGraphLoading?html`<span style=${{color:T.mute,fontSize:9}}>loading unit data…</span>`:null}
       ${unitGraphErr?html`<span style=${{color:T.yellow,fontSize:9}}>unit expansion unavailable · daemon not running</span>`:null}
-      ${!view.groups?html`<span style=${{color:T.mute,fontSize:9}}>expansion unavailable in mockup mode</span>`:null}
+
     </div>
     <div style=${{overflow:needsScroll?"auto":"visible",flex:1}}>
       <table style=${{borderCollapse:"collapse",tableLayout:"fixed",fontSize:10,color:T.text}}>
@@ -450,7 +461,7 @@ function DSMView({view,onSel,selId}){
             width:ROW_HDR_W,minWidth:ROW_HDR_W,height:COL_HDR_H,
             background:T.chrome,borderBottom:`1px solid ${T.border}`,borderRight:`1px solid ${T.border}`}}></th>
           ${flatRows.map((cE,ci)=>html`<th key=${ci}
-            onClick=${()=>{if(cE.isUnit){pickRow(cE);}else{if(view.groups?.[cE.label])toggleGroup(cE.label);else pickRow(cE);}}}
+            onClick=${()=>{if(cE.isUnit){pickRow(cE);}else{toggleGroup(cE.label);}}}
             title=${cE.fullLabel||cE.label}
             style=${{...stickyH,top:0,width:cellSz,minWidth:cellSz,maxWidth:cellSz,height:COL_HDR_H,
               textAlign:"center",fontWeight:700,fontSize:8.5,letterSpacing:.3,
@@ -463,7 +474,7 @@ function DSMView({view,onSel,selId}){
         </tr></thead>
         <tbody>${flatRows.map((rE,ri)=>{
           const rItem=rE.isUnit?rE.unitPath:rE.label;
-          const canExpand=!rE.isUnit&&view.groups?.[rE.label];
+          const canExpand=!rE.isUnit; // membership resolves lazily on first expand (component shard)
           const isExp=rE.label===expandedGroup&&!rE.isUnit;
           return html`<tr key=${ri}>
             <th onClick=${()=>{if(rE.isMore)return;if(rE.isUnit){pickRow(rE);}else{if(canExpand)toggleGroup(rE.label);else pickRow(rE);}}}
@@ -511,7 +522,7 @@ function DSMView({view,onSel,selId}){
       <span>cell = imports row → column</span>
       <span><span style=${{color:T.red}}>■</span> mutual pair (cycle)</span>
       <span style=${{color:T.mute}}>· diagonal (self)</span>
-      ${view.groups?html`<span style=${{color:T.mute}}>▸ click row header to expand group units</span>`:null}
+      <span style=${{color:T.mute}}>▸ click row header to expand group units</span>
     </div>
   </div>`;}
 // invisible nodes covering edge-label extents so fitView never clips a label
