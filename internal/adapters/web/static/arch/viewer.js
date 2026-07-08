@@ -372,7 +372,7 @@ function DSMView({view,onSel,selId}){
   // Cell size: fit matrix in viewport
   const ROW_HDR_W=160,COL_HDR_H=26,SUMM_H=36,PAD=32;
   const canvasW=Math.max(600,winW-300-PAD);
-  const canvasH=Math.max(400,winH-130-PAD);
+  const canvasH=Math.max(400,winH-130-PAD-208);
   const availW=canvasW-ROW_HDR_W;
   const availH=canvasH-COL_HDR_H-SUMM_H;
   const MIN_CELL=22;
@@ -890,26 +890,27 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows}
     <div style=${{fontSize:9.5,fontWeight:700,letterSpacing:1.2,color:col,marginBottom:7,
       position:"sticky",top:0,background:T.raise,paddingBottom:3}}>${title}</div>
     ${children}</div>`;
-  if(!expanded)return html`<div onClick=${()=>setExpanded(true)}
-    style=${{borderTop:`1px solid ${T.border}`,background:T.chrome,height:26,display:"flex",
-    alignItems:"center",gap:0,flexShrink:0,cursor:"pointer",userSelect:"none"}}>
-    <div style=${{flex:1.4,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",overflow:"hidden"}}>
-      <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.blue,flexShrink:0}}>VIEW</span>
-      <span style=${{fontSize:10.5,color:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${cap}</span>
-    </div>
-    <div style=${{flex:1,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,overflow:"hidden"}}>
-      <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.text,flexShrink:0}}>SELECTION</span>
-      <span style=${{fontSize:10.5,color:sel?T.text:T.mute,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${sel?sel.label:"none — click an element or edge"}</span>
-    </div>
-    <div style=${{flex:.6,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,
-      background:probs.length?"#f8717110":"transparent"}}>
-      <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:probs.length?T.red:T.mute}}>FINDINGS</span>
-      <span style=${{fontSize:10.5,color:probs.length?T.red:T.green}}>${probs.length||"✓"}</span>
-    </div>
-    <span style=${{padding:"0 12px",color:T.mute,fontSize:11}}>⌃</span>
-  </div>`;
   return html`<div style=${{borderTop:`1px solid ${T.border}`,background:T.raise,height:208,
-    display:"flex",flexShrink:0,position:"relative",boxShadow:"0 -6px 16px #0009"}}>
+    display:"flex",flexDirection:"column",flexShrink:0,position:"relative",boxShadow:"0 -6px 16px #0009"}}>
+    <div onClick=${()=>setExpanded(!expanded)}
+      style=${{height:26,flexShrink:0,display:"flex",alignItems:"center",gap:0,cursor:"pointer",userSelect:"none",
+        borderBottom:expanded?`1px solid ${T.border}`:"none",background:T.chrome}}>
+      <div style=${{flex:1.4,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",overflow:"hidden"}}>
+        <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.blue,flexShrink:0}}>VIEW</span>
+        <span style=${{fontSize:10.5,color:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${cap}</span>
+      </div>
+      <div style=${{flex:1,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,overflow:"hidden"}}>
+        <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.text,flexShrink:0}}>SELECTION</span>
+        <span style=${{fontSize:10.5,color:sel?T.text:T.mute,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${sel?sel.label:"click a cell to inspect · click a row header to expand"}</span>
+      </div>
+      <div style=${{flex:.6,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,
+        background:probs.length?"#f8717110":"transparent"}}>
+        <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:probs.length?T.red:T.mute}}>FINDINGS</span>
+        <span style=${{fontSize:10.5,color:probs.length?T.red:T.green}}>${probs.length||"✓"}</span>
+      </div>
+      <span style=${{padding:"0 12px",color:T.mute,fontSize:11}}>${expanded?"⌄":"⌃"}</span>
+    </div>
+    <div style=${{display:expanded?"flex":"none",flex:1,minHeight:0,position:"relative"}}>
     <${Seg} title="VIEW" col=${T.blue} flex=${1}>
       <div style=${{fontSize:12,fontWeight:650,color:T.text,lineHeight:1.45}}>${cap}</div>
       ${VI?html`<div style=${{fontSize:10.5,color:T.dim,lineHeight:1.5,marginTop:6}}>
@@ -966,9 +967,7 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows}
         background:hl(p)?T.cardH:"transparent"}}>${p}</div>`)
       :html`<div style=${{color:T.green,fontSize:11}}>✓ no findings in this view</div>`}
     <//>
-    <button onClick=${()=>setExpanded(false)} title="Collapse"
-      style=${{position:"absolute",top:5,right:8,background:"transparent",border:"none",
-      color:T.mute,cursor:"pointer",fontSize:13}}>⌄</button>
+    </div>
   </div>`;}
 const ETYPE_NAME={sys:"system",ext:"external",container:"container",store:"store",proc:"process"};
 const ETYPE_COLR={sys:T.blue,ext:T.dim,container:T.arch,store:T.green,proc:T.blue};
