@@ -334,14 +334,28 @@ function DSMView({view,onSel,selId}){
   useEffect(()=>{const upd=()=>{setWinW(window.innerWidth);setWinH(window.innerHeight);};
     window.addEventListener("resize",upd);return()=>window.removeEventListener("resize",upd);},[]);
 
-  // Summary sentence (group-grain aggregation)
+  // DEFECT 2: classify items into actors / targets-only / unlinked
+  const rowSums=items.map((_,i)=>items.reduce((s,__,j)=>i===j?s:s+((M[i]||[])[j]||0),0));
+  const colSums=items.map((_,j)=>items.reduce((s,__,i)=>i===j?s:s+((M[i]||[])[j]||0),0));
+  const actorItems=items.filter((_,i)=>rowSums[i]>0);
+  const targetItems=items.filter((_,i)=>rowSums[i]===0&&colSums[i]>0);
+  const unlinkedItems=items.filter((_,i)=>rowSums[i]===0&&colSums[i]===0);
+
+  // Summary sentence — actor/target/unlinked aggregation
   let depTotal=0;const mutPairs=[];let worstMut=null;
-  for(let i=0;i<n;i++)for(let j=0;j<n;j++)depTotal+=(M[i]||[])[j]||0;
-  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
-    const fwd=(M[i]||[])[j],rev=(M[j]||[])[i];
-    if(fwd&&rev){mutPairs.push({a:items[i],b:items[j],fwd,rev});
-      if(!worstMut||fwd+rev>worstMut.fwd+worstMut.rev)worstMut={a:items[i],b:items[j],fwd,rev};}}
-  const summaryText=`${n} modules · ${depTotal.toLocaleString()} dependencies · ${mutPairs.length} mutual pair${mutPairs.length!==1?"s":""}${worstMut?` — worst: ${worstMut.a} ⇄ ${worstMut.b}`:""}`;
+  actorItems.forEach(rLabel=>{
+    const ri=items.indexOf(rLabel);
+    [...actorItems,...targetItems].forEach(cLabel=>{
+      const ci=items.indexOf(cLabel);
+      if(ri!==ci)depTotal+=(M[ri]||[])[ci]||0;
+    });
+  });
+  for(let ii=0;ii<actorItems.length;ii++)for(let jj=ii+1;jj<actorItems.length;jj++){
+    const ai=items.indexOf(actorItems[ii]),aj=items.indexOf(actorItems[jj]);
+    const fwd=(M[ai]||[])[aj],rev=(M[aj]||[])[ai];
+    if(fwd&&rev){mutPairs.push({a:actorItems[ii],b:actorItems[jj],fwd,rev});
+      if(!worstMut||fwd+rev>worstMut.fwd+worstMut.rev)worstMut={a:actorItems[ii],b:actorItems[jj],fwd,rev};}}
+  const summaryText=`${actorItems.length} actors · ${depTotal.toLocaleString()} dependencies · ${mutPairs.length} mutual pair${mutPairs.length!==1?"s":""}${worstMut?` — worst: ${worstMut.a} ⇄ ${worstMut.b}`:""}${targetItems.length>0?` · ${targetItems.length} targets-only`:""}${unlinkedItems.length>0?` · ${unlinkedItems.length} unlinked`:""}`;
 
   // Band expansion
   const K=20;
@@ -350,7 +364,10 @@ function DSMView({view,onSel,selId}){
   const visibleUnits=expandedUnitPaths.slice(0,K);
   const moreUnits=expandedUnitPaths.length>K?expandedUnitPaths.length-K:0;
   const extraRows=visibleUnits.length+(moreUnits>0?1:0);
-  const totalCols=expandedGroup?(n-1+extraRows):n;
+  const actorN=actorItems.length;
+  const targetN=targetItems.length;
+  // DEFECT 1: parent col stays when expanded → actorN + extraRows (not actorN-1+extraRows)
+  const totalCols=actorN+(expandedGroup?extraRows:0)+(targetN>0?1+targetN:0);
 
   // Cell size: fit matrix in viewport
   const ROW_HDR_W=160,COL_HDR_H=26,SUMM_H=36,PAD=32;
@@ -399,23 +416,41 @@ function DSMView({view,onSel,selId}){
     const ri=items.indexOf(rItem),ci=items.indexOf(cItem);
     return ri>=0&&ci>=0?(M[ri]||[])[ci]||0:0;};
 
-  // Build flat rows/cols (symmetric)
+  // Target cell value: group-grain only — targets don't expand
+  const getTargetCellVal=(rE,tLabel)=>{
+    if(rE.isMore)return 0;
+    const ri=rE.isUnit?-1:items.indexOf(rE.label);
+    const ci=items.indexOf(tLabel);
+    return ri>=0&&ci>=0?(M[ri]||[])[ci]||0:0;};
+
+  // DEFECT 1: Build flat rows — parent band row STAYS as first entry when expanded
   const flatRows=[];
   const dispNums=[];
   let gnum=0;
-  items.forEach((label,gi)=>{
+  actorItems.forEach((label)=>{
     gnum++;
-    if(label===expandedGroup){
+    const isExpanded=label===expandedGroup;
+    if(isExpanded){
+      // Parent band row stays — isExpandedParent marks it
+      flatRows.push({key:"g_"+label,label,isUnit:false,idx:items.indexOf(label),isExpandedParent:true});
+      dispNums.push(String(gnum));
       visibleUnits.forEach((upath,ui)=>{
         const ulabel=dsmUnitLabels[upath]||upath.replace(/^u_/,"").split("_").pop();
-        flatRows.push({key:"u_"+upath,label:ulabel,fullLabel:upath,isUnit:true,unitPath:upath,parentIdx:gi});
+        const isLast=ui===visibleUnits.length-1&&moreUnits===0;
+        flatRows.push({key:"u_"+upath,label:ulabel,fullLabel:upath,isUnit:true,unitPath:upath,
+          parentIdx:items.indexOf(label),parentLabel:label,treeGuide:isLast?"└":"├"});
         dispNums.push(gnum+"."+(ui+1));});
       if(moreUnits>0){
-        flatRows.push({key:"u_more_"+label,label:`+${moreUnits} more`,isUnit:true,isMore:true,parentIdx:gi});
+        flatRows.push({key:"u_more_"+label,label:`+${moreUnits} more`,isUnit:true,isMore:true,
+          parentIdx:items.indexOf(label),parentLabel:label});
         dispNums.push(gnum+"+");}
     }else{
-      flatRows.push({key:"g_"+label,label,isUnit:false,idx:gi});
+      flatRows.push({key:"g_"+label,label,isUnit:false,idx:items.indexOf(label)});
       dispNums.push(String(gnum));}});
+
+  // DEFECT 2: target columns — columns-only, no row
+  const flatTargetCols=targetItems.map((label,ti)=>({
+    key:"t_"+label,label,idx:items.indexOf(label),dispNum:`T${ti+1}`}));
 
   const pickCell=(rE,cE)=>{
     const rItem=rE.isUnit?rE.unitPath:rE.label;
@@ -438,6 +473,7 @@ function DSMView({view,onSel,selId}){
       const t=re.isUnit?re.unitPath:re.label;
       fanOut+=getCellVal(item,t,rE.isUnit,re.isUnit);
       fanIn+=getCellVal(t,item,re.isUnit,rE.isUnit);});
+    flatTargetCols.forEach(tc=>{fanOut+=getTargetCellVal(rE,tc.label);});
     onSel({label:rE.fullLabel||rE.label,chip:rE.isUnit?"unit":"group",
       rows:[["fan-out",fanOut+" dependencies"],["fan-in",fanIn+" dependents"]],
       relations:[]},"dsm:"+rE.key);};
@@ -452,7 +488,6 @@ function DSMView({view,onSel,selId}){
       <span style=${{fontWeight:600,color:T.text}}>${summaryText}</span>
       ${unitGraphLoading?html`<span style=${{color:T.mute,fontSize:9}}>loading unit data…</span>`:null}
       ${unitGraphErr?html`<span style=${{color:T.yellow,fontSize:9}}>unit expansion unavailable · daemon not running</span>`:null}
-
     </div>
     <div style=${{overflow:needsScroll?"auto":"visible",flex:1}}>
       <table style=${{borderCollapse:"collapse",tableLayout:"fixed",fontSize:10,color:T.text}}>
@@ -465,37 +500,50 @@ function DSMView({view,onSel,selId}){
             title=${cE.fullLabel||cE.label}
             style=${{...stickyH,top:0,width:cellSz,minWidth:cellSz,maxWidth:cellSz,height:COL_HDR_H,
               textAlign:"center",fontWeight:700,fontSize:8.5,letterSpacing:.3,
-              color:selId==="dsm:"+cE.key?T.blue:cE.isUnit?T.dim:T.text,
+              color:selId==="dsm:"+cE.key?T.blue:cE.isUnit?T.dim:cE.isExpandedParent?T.arch:T.text,
               cursor:cE.isMore?"default":"pointer",
-              background:selId==="dsm:"+cE.key?T.cardH:T.chrome,
-              borderBottom:`1px solid ${T.border}`,
+              background:selId==="dsm:"+cE.key?T.cardH:(cE.isUnit||cE.isExpandedParent)?T.band:T.chrome,
+              borderBottom:`1px solid ${(cE.isUnit||cE.isExpandedParent)?T.arch+"44":T.border}`,
               overflow:"hidden",whiteSpace:"nowrap",userSelect:"none"}}>
             ${cE.isMore?"":dispNums[ci]}</th>`)}
+          ${targetN>0?html`<th key="tdiv" style=${{width:6,minWidth:6,maxWidth:6,height:COL_HDR_H,
+            padding:0,background:T.borderR,borderBottom:`1px solid ${T.border}`}}></th>`:null}
+          ${flatTargetCols.map((tc,ti)=>html`<th key=${"t"+ti} title=${tc.label}
+            style=${{...stickyH,top:0,width:cellSz,minWidth:cellSz,maxWidth:cellSz,height:COL_HDR_H,
+              textAlign:"center",fontWeight:700,fontSize:8.5,letterSpacing:.3,
+              color:T.yellow,cursor:"default",background:T.chrome,
+              borderBottom:`1px solid ${T.border}55`,
+              overflow:"hidden",whiteSpace:"nowrap",userSelect:"none"}}>
+            ${tc.dispNum}</th>`)}
         </tr></thead>
         <tbody>${flatRows.map((rE,ri)=>{
           const rItem=rE.isUnit?rE.unitPath:rE.label;
-          const canExpand=!rE.isUnit; // membership resolves lazily on first expand (component shard)
-          const isExp=rE.label===expandedGroup&&!rE.isUnit;
+          const isExpPar=rE.isExpandedParent;
+          const isChild=rE.isUnit&&!!rE.parentLabel&&!rE.isMore;
           return html`<tr key=${ri}>
-            <th onClick=${()=>{if(rE.isMore)return;if(rE.isUnit){pickRow(rE);}else{if(canExpand)toggleGroup(rE.label);else pickRow(rE);}}}
+            <th onClick=${()=>{if(rE.isMore)return;if(rE.isUnit){pickRow(rE);}else{toggleGroup(rE.label);}}}
               title=${rE.fullLabel||rE.label}
               style=${{...stickyV,left:0,
                 width:ROW_HDR_W,minWidth:ROW_HDR_W,maxWidth:ROW_HDR_W,height:cellSz,
-                textAlign:"right",paddingRight:8,paddingLeft:rE.isUnit?28:8,
+                textAlign:"right",paddingRight:8,paddingLeft:isChild?32:8,
                 fontWeight:rE.isUnit?400:600,fontSize:rE.isUnit?9:10.5,
-                color:selId==="dsm:"+rE.key?T.blue:rE.isUnit?T.dim:T.text,
+                color:selId==="dsm:"+rE.key?T.blue:rE.isUnit?T.dim:isExpPar?T.arch:T.text,
                 cursor:rE.isMore?"default":"pointer",
-                background:selId==="dsm:"+rE.key?T.cardH:T.chrome,
+                background:selId==="dsm:"+rE.key?T.cardH:(isChild||isExpPar)?T.band:T.chrome,
                 whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
-                borderRight:`1px solid ${T.border}`,userSelect:"none"}}>
-              ${rE.isMore?html`<span style=${{color:T.mute}}>${rE.label}</span>`:
-                html`<span style=${{color:T.mute,marginRight:5,fontSize:8,fontWeight:400}}>${dispNums[ri]}</span><span>${rE.label}</span>${canExpand?html`<span style=${{color:T.mute,marginLeft:4,fontSize:8}}>${isExp?"▴":"▸"}</span>`:null}`}
+                borderRight:`1px solid ${(isChild||isExpPar)?T.arch+"44":T.border}`,userSelect:"none"}}>
+              ${rE.isMore
+                ?html`<span style=${{color:T.mute,marginRight:4,fontSize:9}}>└</span><span style=${{color:T.mute}}>${rE.label}</span>`
+                :isChild
+                  ?html`<span style=${{color:T.mute,marginRight:5,fontSize:8,fontWeight:400}}>${dispNums[ri]}</span><span style=${{color:T.mute,marginRight:4,fontSize:9}}>${rE.treeGuide||"├"}</span><span>${rE.label}</span>`
+                  :html`<span style=${{color:T.mute,marginRight:5,fontSize:8,fontWeight:400}}>${dispNums[ri]}</span><span>${rE.label}</span><span style=${{color:T.mute,marginLeft:4,fontSize:8}}>${isExpPar?"▾":"▸"}</span>`}
             </th>
             ${flatRows.map((cE,ci)=>{
               const cItem=cE.isUnit?cE.unitPath:cE.label;
               const isSelfGroup=!rE.isUnit&&!cE.isUnit&&rE.label===cE.label;
               const isSelfUnit=rE.isUnit&&cE.isUnit&&rE.unitPath===cE.unitPath;
               const isDiag=isSelfGroup||isSelfUnit;
+              const isChildBand=(rE.isUnit&&!!rE.parentLabel)||(cE.isUnit&&!!cE.parentLabel);
               if(rE.isMore||cE.isMore)return html`<td key=${ci} style=${{width:cellSz,height:cellSz,
                 border:`1px solid ${T.border}22`,background:"transparent"}}></td>`;
               if(isDiag)return html`<td key=${ci} style=${{width:cellSz,height:cellSz,
@@ -505,24 +553,50 @@ function DSMView({view,onSel,selId}){
               const cv=getCellVal(cItem,rItem,cE.isUnit,rE.isUnit);
               const selKey="dsm:"+rE.key+","+cE.key;
               const isCellSel=selId===selKey;
-              const bg=isCellSel?T.cardH:rv&&cv?T.red+"33":rv?T.blue+"22":"transparent";
+              const bg=isCellSel?T.cardH:rv&&cv?T.red+"33":rv?T.blue+"22":isChildBand?T.band+"88":"transparent";
               const fc=rv&&cv?T.red:rv?T.text:"transparent";
               return html`<td key=${ci} onClick=${()=>pickCell(rE,cE)}
                 title=${rv?`${rE.fullLabel||rE.label} → ${cE.fullLabel||cE.label} · ${rv} imports${cv?" (mutual)":""}`:null}
                 style=${{width:cellSz,height:cellSz,textAlign:"center",
-                  border:`1px solid ${isCellSel?T.blue:T.border+"44"}`,
+                  border:`1px solid ${isCellSel?T.blue:isChildBand?T.arch+"33":T.border+"44"}`,
                   cursor:rv?"pointer":"default",background:bg,color:fc,
                   fontWeight:700,fontSize:cellSz<26?8:9.5,
                   lineHeight:cellSz+"px",overflow:"hidden",userSelect:"none"}}>
                 ${rv||""}</td>`;})}
+            ${targetN>0?html`<td style=${{width:6,minWidth:6,maxWidth:6,height:cellSz,
+              background:T.borderR,border:"none"}}></td>`:null}
+            ${flatTargetCols.map((tc,ti)=>{
+              const tv=getTargetCellVal(rE,tc.label);
+              const selKey="dsm:"+rE.key+","+tc.key;
+              const isTCellSel=selId===selKey;
+              return html`<td key=${"tc"+ti}
+                title=${tv?`${rE.fullLabel||rE.label} → ${tc.label} · ${tv} imports`:null}
+                onClick=${()=>{if(tv&&onSel&&!rE.isMore){onSel({label:(rE.fullLabel||rE.label)+" → "+tc.label,
+                  chip:"dependency",rows:[["from",rE.fullLabel||rE.label],["to",tc.label],["imports",tv]],
+                  relations:[]},selKey);}}}
+                style=${{width:cellSz,height:cellSz,textAlign:"center",
+                  border:`1px solid ${isTCellSel?T.blue:T.border+"33"}`,
+                  cursor:tv?"pointer":"default",
+                  background:isTCellSel?T.cardH:tv?T.yellow+"22":"transparent",
+                  color:tv?T.yellow:"transparent",
+                  fontWeight:700,fontSize:cellSz<26?8:9.5,
+                  lineHeight:cellSz+"px",overflow:"hidden",userSelect:"none"}}>
+                ${tv||""}</td>`;})}
           </tr>`;})}</tbody>
       </table>
+      ${unlinkedItems.length>0?html`<div style=${{marginTop:8,padding:"4px 0",display:"flex",
+        flexWrap:"wrap",gap:6,alignItems:"center"}}>
+        <span style=${{fontSize:9.5,color:T.mute,marginRight:4,flexShrink:0,fontWeight:600}}>UNLINKED (${unlinkedItems.length})</span>
+        ${unlinkedItems.map((label,i)=>html`<span key=${i} style=${{fontSize:9,color:T.mute,
+          background:T.band,borderRadius:3,padding:"1px 6px",border:`1px solid ${T.border}`}}>${label}</span>`)}
+        <span style=${{fontSize:9,color:T.mute,marginLeft:2}}>no dependencies at this grain</span>
+      </div>`:null}
     </div>
     <div style=${{fontSize:9.5,color:T.dim,marginTop:5,flexShrink:0,display:"flex",gap:12,flexWrap:"wrap"}}>
       <span>cell = imports row → column</span>
       <span><span style=${{color:T.red}}>■</span> mutual pair (cycle)</span>
       <span style=${{color:T.mute}}>· diagonal (self)</span>
-      <span style=${{color:T.mute}}>▸ click row header to expand group units</span>
+      <span style=${{color:T.mute}}>▸/▾ row header — expand units</span>
     </div>
   </div>`;}
 // invisible nodes covering edge-label extents so fitView never clips a label
