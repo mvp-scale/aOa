@@ -321,6 +321,7 @@ function DSMView({view,onSel,selId}){
   const n=items.length;
   const qp=new URLSearchParams(location.search);
   const[expandedGroup,setExpandedGroup]=useState(qp.get("dsmExpand")||null);
+  const[extOpen,setExtOpen]=useState(qp.get("extOpen")==="1");
   const[unitGraph,setUnitGraph]=useState(null);
   // groups: DSM row label -> member unit ids, joined from the component shard's
   // buckets (the manifest's view entry never carries a groups field — the shard
@@ -369,7 +370,7 @@ function DSMView({view,onSel,selId}){
   const actorN=actorItems.length;
   const targetN=targetItems.length;
   // DEFECT 1: parent col stays when expanded → actorN + extraRows (not actorN-1+extraRows)
-  const totalCols=actorN+(expandedGroup?extraRows:0)+(targetN>0?1+targetN:0);
+  const totalCols=actorN+(expandedGroup?extraRows:0);
 
   // Cell size: fit matrix in viewport
   const ROW_HDR_W=160,COL_HDR_H=26,SUMM_H=36,PAD=32;
@@ -471,6 +472,18 @@ function DSMView({view,onSel,selId}){
   // DEFECT 2: target columns — columns-only, no row
   const flatTargetCols=targetItems.map((label,ti)=>({
     key:"t_"+label,label,idx:items.indexOf(label),dispNum:`T${ti+1}`}));
+  const extRanked=targetItems.map(tLabel=>{
+    const ci=items.indexOf(tLabel);
+    const importers=[];
+    actorItems.forEach(aLabel=>{
+      const ri=items.indexOf(aLabel);
+      const v=(M[ri]||[])[ci]||0;
+      if(v>0)importers.push({actor:aLabel,count:v});
+    });
+    importers.sort((a,b)=>b.count-a.count);
+    const total=importers.reduce((s,x)=>s+x.count,0);
+    return{label:tLabel,total,importers};
+  }).sort((a,b)=>b.total-a.total);
 
   const pickCell=(rE,cE)=>{
     const rItem=rE.isUnit?rE.unitPath:rE.label;
@@ -526,15 +539,16 @@ function DSMView({view,onSel,selId}){
               borderBottom:`1px solid ${(cE.isUnit||cE.isExpandedParent)?T.arch+"44":T.border}`,
               overflow:"hidden",whiteSpace:"nowrap",userSelect:"none"}}>
             ${cE.isMore?"":dispNums[ci]}</th>`)}
-          ${targetN>0?html`<th key="tdiv" style=${{width:6,minWidth:6,maxWidth:6,height:COL_HDR_H,
-            padding:0,background:T.borderR,borderBottom:`1px solid ${T.border}`}}></th>`:null}
-          ${flatTargetCols.map((tc,ti)=>html`<th key=${"t"+ti} title=${tc.label}
-            style=${{...stickyH,top:0,width:cellSz,minWidth:cellSz,maxWidth:cellSz,height:COL_HDR_H,
-              textAlign:"center",fontWeight:700,fontSize:8.5,letterSpacing:.3,
-              color:T.yellow,cursor:"default",background:T.chrome,
-              borderBottom:`1px solid ${T.border}55`,
-              overflow:"hidden",whiteSpace:"nowrap",userSelect:"none"}}>
-            ${tc.dispNum}</th>`)}
+          ${targetN>0?html`<th key="ext-toggle"
+            onClick=${()=>setExtOpen(!extOpen)}
+            style=${{cursor:"pointer",width:90,minWidth:90,maxWidth:90,height:COL_HDR_H,
+              textAlign:"center",fontWeight:600,fontSize:8,letterSpacing:.3,
+              color:extOpen?T.arch:T.yellow,
+              background:extOpen?T.band:T.chrome,
+              borderBottom:`1px solid ${T.border}`,
+              borderLeft:`2px solid ${T.borderR}`,
+              whiteSpace:"nowrap",userSelect:"none",paddingLeft:4,paddingRight:4}}>
+            ${extOpen?"Externals ▾":`Externals (${targetN}) ▸`}</th>`:null}
         </tr></thead>
         <tbody>${flatRows.map((rE,ri)=>{
           const rItem=rE.isUnit?rE.unitPath:rE.label;
@@ -583,25 +597,10 @@ function DSMView({view,onSel,selId}){
                   fontWeight:700,fontSize:cellSz<26?8:9.5,
                   lineHeight:cellSz+"px",overflow:"hidden",userSelect:"none"}}>
                 ${rv||""}</td>`;})}
-            ${targetN>0?html`<td style=${{width:6,minWidth:6,maxWidth:6,height:cellSz,
-              background:T.borderR,border:"none"}}></td>`:null}
-            ${flatTargetCols.map((tc,ti)=>{
-              const tv=getTargetCellVal(rE,tc.label);
-              const selKey="dsm:"+rE.key+","+tc.key;
-              const isTCellSel=selId===selKey;
-              return html`<td key=${"tc"+ti}
-                title=${tv?`${rE.fullLabel||rE.label} → ${tc.label} · ${tv} imports`:null}
-                onClick=${()=>{if(tv&&onSel&&!rE.isMore){onSel({label:(rE.fullLabel||rE.label)+" → "+tc.label,
-                  chip:"dependency",rows:[["from",rE.fullLabel||rE.label],["to",tc.label],["imports",tv]],
-                  relations:[]},selKey);}}}
-                style=${{width:cellSz,height:cellSz,textAlign:"center",
-                  border:`1px solid ${isTCellSel?T.blue:T.border+"33"}`,
-                  cursor:tv?"pointer":"default",
-                  background:isTCellSel?T.cardH:tv?T.yellow+"22":"transparent",
-                  color:tv?T.yellow:"transparent",
-                  fontWeight:700,fontSize:cellSz<26?8:9.5,
-                  lineHeight:cellSz+"px",overflow:"hidden",userSelect:"none"}}>
-                ${tv||""}</td>`;})}
+            ${targetN>0?html`<td key="ext-cell"
+              style=${{width:90,minWidth:90,maxWidth:90,height:cellSz,
+                borderLeft:`2px solid ${T.borderR}`,
+                background:"transparent"}}></td>`:null}
           </tr>`;})}</tbody>
       </table>
       ${unlinkedItems.length>0?html`<div style=${{marginTop:8,padding:"4px 0",display:"flex",
@@ -612,11 +611,43 @@ function DSMView({view,onSel,selId}){
         <span style=${{fontSize:9,color:T.mute,marginLeft:2}}>no dependencies at this grain</span>
       </div>`:null}
     </div>
+    ${extOpen&&targetN>0?html`<div style=${{
+      position:"absolute",right:0,top:SUMM_H,bottom:208,
+      width:320,background:T.raise,borderLeft:`1px solid ${T.border}`,
+      overflowY:"auto",padding:"12px 14px",zIndex:4,
+      boxShadow:"-6px 0 16px #0006"}}>
+      <div style=${{fontSize:9,fontWeight:700,letterSpacing:1.2,color:T.yellow,marginBottom:10,
+        display:"flex",alignItems:"center",gap:8}}>
+        <span>EXTERNALS · ${targetN} targets</span>
+        <button onClick=${()=>setExtOpen(false)}
+          style=${{marginLeft:"auto",background:"transparent",border:"none",
+          color:T.mute,cursor:"pointer",fontSize:13}}>×</button>
+      </div>
+      <div style=${{fontSize:9,color:T.mute,marginBottom:10,lineHeight:1.5}}>
+        Ranked by import count — what this codebase pulls from outside.
+      </div>
+      ${extRanked.map((ext,i)=>html`<div key=${i} style=${{
+        marginBottom:10,paddingBottom:10,
+        borderBottom:i<extRanked.length-1?`1px solid ${T.border}33`:"none"}}>
+        <div style=${{display:"flex",alignItems:"baseline",gap:8,marginBottom:3}}>
+          <span style=${{fontFamily:"ui-monospace,monospace",fontSize:10,
+            color:T.yellow,fontWeight:600,flex:1,minWidth:0,
+            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
+            title=${ext.label}>${ext.label}</span>
+          <span style=${{fontSize:10,fontWeight:700,color:T.text,flexShrink:0}}>×${ext.total.toLocaleString()}</span>
+        </div>
+        <div style=${{fontSize:9,color:T.mute,paddingLeft:8,lineHeight:1.6}}>
+          ${ext.importers.map((im,j)=>html`<span key=${j} style=${{display:"inline-block",marginRight:8}}>
+            ${im.actor}<span style=${{color:T.dim}}> ×${im.count}</span></span>`)}
+        </div>
+      </div>`)}
+    </div>`:null}
     <div style=${{fontSize:9.5,color:T.dim,marginTop:5,flexShrink:0,display:"flex",gap:12,flexWrap:"wrap"}}>
       <span>cell = imports row → column</span>
       <span><span style=${{color:T.red}}>■</span> mutual pair (cycle)</span>
       <span style=${{color:T.mute}}>· diagonal (self)</span>
       <span style=${{color:T.mute}}>▸/▾ row header — expand units</span>
+      ${targetN>0?html`<span style=${{color:T.yellow}}>Externals (${targetN}) ▸ — click to inspect</span>`:null}
     </div>
   </div>`;}
 // invisible nodes covering edge-label extents so fitView never clips a label
