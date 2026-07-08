@@ -3,7 +3,7 @@
  "sharded": true,
  "generated": {
   "tool": "build_c4_mockup.py",
-  "timestamp": "2026-07-07 07:41 UTC",
+  "timestamp": "2026-07-08 15:18 UTC",
   "inputs": [
    "go list",
    "repo/graphify/*.py imports",
@@ -54,7 +54,7 @@
       "component": {
        "kind": "buckets",
        "title": "Component diagram",
-       "count": "27 packages · 47 dependencies",
+       "count": "27 packages · 48 dependencies",
        "dir": "DOWN",
        "prov": {
         "kind": "derived",
@@ -62,8 +62,8 @@
        },
        "shard": {
         "path": "local/aoa/component.json",
-        "hash": "836b1f94f316",
-        "bytes": 4231
+        "hash": "0adb22c3e1eb",
+        "bytes": 4227
        }
       },
       "dataflow": {
@@ -94,6 +94,21 @@
         "path": "local/aoa/datamodel.json",
         "hash": "721cd47c83dd",
         "bytes": 1399
+       }
+      },
+      "dsm": {
+       "kind": "matrix",
+       "title": "Dependency Structure Matrix",
+       "count": "27 packages · 48 dependencies",
+       "dir": null,
+       "prov": {
+        "kind": "derived",
+        "label": "REAL · derived from code"
+       },
+       "shard": {
+        "path": "local/aoa/dsm.json",
+        "hash": "9153133c6b95",
+        "bytes": 4989
        }
       },
       "deployment": {

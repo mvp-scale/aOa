@@ -316,43 +316,203 @@ function TableView({view,onSel,selId,vid}){
           fontWeight:ci===0?600:400,fontFamily:ci===0?"inherit":"ui-monospace,monospace",
           fontSize:ci===0?12.5:11.5}}>${cell}</td>`)}</tr>`)}</tbody>
     </table></div>`;}
-function MatrixView({view,onSel,selId}){
+function DSMView({view,onSel,selId}){
   const items=view.items||[],M=view.matrix||[];
-  // cell click = the pair record (both directions, MUTUAL flagged); header click = the module's fan profile
-  const pickCell=(i,j)=>{const v=(M[i]||[])[j];if(i===j||!v||!onSel)return;
-    const rv=(M[j]||[])[i];
-    onSel({label:items[i]+" → "+items[j],chip:rv?"mutual":"dependency",
-      rows:[["row → col",items[i]+" → "+items[j]+" · "+v]]
-        .concat(rv?[["col → row",items[j]+" → "+items[i]+" · "+rv],["status","MUTUAL — cycle"]]:[]),
-      relations:[]},"mx:"+i+","+j);};
-  const pickMod=i=>{if(!onSel)return;
-    const outs=(M[i]||[]).reduce((a,v)=>a+(v||0),0);
-    const ins=items.reduce((a,_,r)=>a+((M[r]||[])[i]||0),0);
-    onSel({label:items[i],chip:"module",
-      rows:[["fan-out",outs+" dependencies"],["fan-in",ins+" dependents"]],
-      relations:items.map((it,j)=>({dir:"out",peer:it,verb:"",count:(M[i]||[])[j],
-        viol:!!((M[i]||[])[j]&&(M[j]||[])[i])})).filter(r=>r.count)
-       .concat(items.map((it,j)=>({dir:"in",peer:it,verb:"",count:(M[j]||[])[i],
-        viol:!!((M[i]||[])[j]&&(M[j]||[])[i])})).filter(r=>r.count&&r.peer!==items[i]))
-       .sort((a,b)=>(b.viol?1:0)-(a.viol?1:0))},"mx:"+i);};
-  return html`<div style=${{position:"absolute",inset:0,overflow:"auto",padding:"56px 40px 40px"}}>
-    <table style=${{borderCollapse:"collapse",fontSize:11,color:T.text}}>
-      <thead><tr><th style=${{padding:"6px 10px"}}></th>
-        ${items.map((it,i)=>html`<th key=${i} onClick=${()=>pickMod(i)} style=${{padding:"6px 10px",color:T.dim,fontSize:10,
-          textTransform:"uppercase",letterSpacing:.5,cursor:"pointer",
-          background:selId==="mx:"+i?T.cardH:"transparent"}}>${it}</th>`)}</tr></thead>
-      <tbody>${items.map((row,i)=>html`<tr key=${i}>
-        <th onClick=${()=>pickMod(i)} style=${{padding:"6px 12px",textAlign:"right",color:T.dim,fontSize:10,
-          textTransform:"uppercase",letterSpacing:.5,cursor:"pointer",
-          background:selId==="mx:"+i?T.cardH:"transparent"}}>${row}</th>
-        ${items.map((_,j)=>{const v=(M[i]||[])[j];const cyc=v&&(M[j]||[])[i];
-          return html`<td key=${j} onClick=${()=>pickCell(i,j)} style=${{width:44,height:32,textAlign:"center",
-            border:`1px solid ${selId==="mx:"+i+","+j?T.blue:T.border+"55"}`,
-            cursor:i!==j&&v?"pointer":"default",
-            background:i===j?T.cardH:v?(cyc?T.red+"33":T.blue+"22"):"transparent",
-            color:cyc?T.red:v?T.text:T.mute,fontWeight:v?700:400}}>${i===j?"·":(v||"")}</td>`;})}
-      </tr>`)}</tbody></table>
-    <div style=${{marginTop:14,fontSize:10.5,color:T.dim}}>cell = dependencies row → column · <span style=${{color:T.red}}>red = mutual (cycle)</span></div>
+  const n=items.length;
+  const qp=new URLSearchParams(location.search);
+  const[expandedGroup,setExpandedGroup]=useState(qp.get("dsmExpand")||null);
+  const[unitGraph,setUnitGraph]=useState(null);
+  const[unitGraphErr,setUnitGraphErr]=useState(null);
+  const[unitGraphLoading,setUnitGraphLoading]=useState(false);
+  const[winW,setWinW]=useState(window.innerWidth);
+  const[winH,setWinH]=useState(window.innerHeight);
+  useEffect(()=>{const upd=()=>{setWinW(window.innerWidth);setWinH(window.innerHeight);};
+    window.addEventListener("resize",upd);return()=>window.removeEventListener("resize",upd);},[]);
+
+  // Summary sentence (group-grain aggregation)
+  let depTotal=0;const mutPairs=[];let worstMut=null;
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++)depTotal+=(M[i]||[])[j]||0;
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+    const fwd=(M[i]||[])[j],rev=(M[j]||[])[i];
+    if(fwd&&rev){mutPairs.push({a:items[i],b:items[j],fwd,rev});
+      if(!worstMut||fwd+rev>worstMut.fwd+worstMut.rev)worstMut={a:items[i],b:items[j],fwd,rev};}}
+  const summaryText=`${n} modules · ${depTotal.toLocaleString()} dependencies · ${mutPairs.length} mutual pair${mutPairs.length!==1?"s":""}${worstMut?` — worst: ${worstMut.a} ⇄ ${worstMut.b}`:""}`;
+
+  // Band expansion
+  const K=20;
+  const expandedUnitPaths=expandedGroup!==null&&view.groups&&view.groups[expandedGroup]
+    ?view.groups[expandedGroup]:[];
+  const visibleUnits=expandedUnitPaths.slice(0,K);
+  const moreUnits=expandedUnitPaths.length>K?expandedUnitPaths.length-K:0;
+  const extraRows=visibleUnits.length+(moreUnits>0?1:0);
+  const totalCols=expandedGroup?(n-1+extraRows):n;
+
+  // Cell size: fit matrix in viewport
+  const ROW_HDR_W=160,COL_HDR_H=26,SUMM_H=36,PAD=32;
+  const canvasW=Math.max(600,winW-300-PAD);
+  const canvasH=Math.max(400,winH-130-PAD);
+  const availW=canvasW-ROW_HDR_W;
+  const availH=canvasH-COL_HDR_H-SUMM_H;
+  const MIN_CELL=22;
+  const idealCell=totalCols>0?Math.min(Math.floor(availW/totalCols),Math.floor(availH/totalCols)):28;
+  const cellSz=Math.max(MIN_CELL,idealCell);
+  const needsScroll=idealCell<MIN_CELL;
+
+  // Toggle expand / lazy fetch
+  const toggleGroup=grpLabel=>{
+    if(expandedGroup===grpLabel){setExpandedGroup(null);return;}
+    setExpandedGroup(grpLabel);
+    if(!unitGraph&&!unitGraphLoading&&view.groups){
+      setUnitGraphLoading(true);setUnitGraphErr(null);
+      fetch("/api/arch/graph?grain=unit")
+        .then(r=>r.ok?r.json():Promise.reject(new Error("HTTP "+r.status)))
+        .then(g=>{setUnitGraph(g);setUnitGraphLoading(false);})
+        .catch(e=>{setUnitGraphErr(e.message);setUnitGraphLoading(false);});}};
+
+  // Unit edge lookup: build once from unitGraph
+  let unitEdgeMap=null,unitToGroup=null;
+  if(unitGraph&&view.groups){
+    unitToGroup={};
+    Object.entries(view.groups).forEach(([grp,paths])=>paths.forEach(p=>{unitToGroup[p]=grp;}));
+    unitEdgeMap={};
+    (unitGraph.edges||[]).forEach(e=>{
+      if(!unitEdgeMap[e.from])unitEdgeMap[e.from]={};
+      unitEdgeMap[e.from][e.to]=(unitEdgeMap[e.from][e.to]||0)+1;});}
+
+  const getCellVal=(rItem,cItem,rIsUnit,cIsUnit)=>{
+    if(rIsUnit&&cIsUnit)return unitEdgeMap?(unitEdgeMap[rItem]?.[cItem]||0):0;
+    if(rIsUnit&&!cIsUnit){if(!unitEdgeMap||!view.groups?.[cItem])return 0;
+      return (view.groups[cItem]||[]).reduce((s,t)=>s+(unitEdgeMap[rItem]?.[t]||0),0);}
+    if(!rIsUnit&&cIsUnit){if(!unitEdgeMap||!view.groups?.[rItem])return 0;
+      return (view.groups[rItem]||[]).reduce((s,f)=>s+(unitEdgeMap[f]?.[cItem]||0),0);}
+    const ri=items.indexOf(rItem),ci=items.indexOf(cItem);
+    return ri>=0&&ci>=0?(M[ri]||[])[ci]||0:0;};
+
+  // Build flat rows/cols (symmetric)
+  const flatRows=[];
+  const dispNums=[];
+  let gnum=0;
+  items.forEach((label,gi)=>{
+    gnum++;
+    if(label===expandedGroup){
+      visibleUnits.forEach((upath,ui)=>{
+        const ulabel=upath.split("/").pop();
+        flatRows.push({key:"u_"+upath,label:ulabel,fullLabel:upath,isUnit:true,unitPath:upath,parentIdx:gi});
+        dispNums.push(gnum+"."+(ui+1));});
+      if(moreUnits>0){
+        flatRows.push({key:"u_more_"+label,label:`+${moreUnits} more`,isUnit:true,isMore:true,parentIdx:gi});
+        dispNums.push(gnum+"+");}
+    }else{
+      flatRows.push({key:"g_"+label,label,isUnit:false,idx:gi});
+      dispNums.push(String(gnum));}});
+
+  const pickCell=(rE,cE)=>{
+    const rItem=rE.isUnit?rE.unitPath:rE.label;
+    const cItem=cE.isUnit?cE.unitPath:cE.label;
+    if(rItem===cItem||rE.isMore||cE.isMore)return;
+    const rv=getCellVal(rItem,cItem,rE.isUnit,cE.isUnit);
+    if(!rv||!onSel)return;
+    const cv=getCellVal(cItem,rItem,cE.isUnit,rE.isUnit);
+    onSel({label:(rE.fullLabel||rE.label)+" → "+(cE.fullLabel||cE.label),
+      chip:cv?"mutual":"dependency",
+      rows:[["from",rE.fullLabel||rE.label],["to",cE.fullLabel||cE.label],["imports",rv]]
+        .concat(cv?[["reverse",cv],["status","MUTUAL — cycle"]]:[]),
+      relations:[]},"dsm:"+rE.key+","+cE.key);};
+
+  const pickRow=(rE)=>{
+    if(!onSel||rE.isMore)return;
+    const item=rE.isUnit?rE.unitPath:rE.label;
+    let fanOut=0,fanIn=0;
+    flatRows.forEach(re=>{if(re.key===rE.key||re.isMore)return;
+      const t=re.isUnit?re.unitPath:re.label;
+      fanOut+=getCellVal(item,t,rE.isUnit,re.isUnit);
+      fanIn+=getCellVal(t,item,re.isUnit,rE.isUnit);});
+    onSel({label:rE.fullLabel||rE.label,chip:rE.isUnit?"unit":"group",
+      rows:[["fan-out",fanOut+" dependencies"],["fan-in",fanIn+" dependents"]],
+      relations:[]},"dsm:"+rE.key);};
+
+  const stickyH=needsScroll?{position:"sticky",background:T.chrome,zIndex:2}:{};
+  const stickyV=needsScroll?{position:"sticky",background:T.chrome,zIndex:1}:{};
+
+  return html`<div style=${{position:"absolute",inset:0,overflow:needsScroll?"auto":"hidden",
+    display:"flex",flexDirection:"column",padding:"8px 16px",boxSizing:"border-box"}}>
+    <div style=${{fontSize:11,color:T.dim,marginBottom:6,flexShrink:0,height:SUMM_H,
+      display:"flex",alignItems:"center",gap:10,lineHeight:1.4}}>
+      <span style=${{fontWeight:600,color:T.text}}>${summaryText}</span>
+      ${unitGraphLoading?html`<span style=${{color:T.mute,fontSize:9}}>loading unit data…</span>`:null}
+      ${unitGraphErr?html`<span style=${{color:T.yellow,fontSize:9}}>unit expansion unavailable · daemon not running</span>`:null}
+      ${!view.groups?html`<span style=${{color:T.mute,fontSize:9}}>expansion unavailable in mockup mode</span>`:null}
+    </div>
+    <div style=${{overflow:needsScroll?"auto":"visible",flex:1}}>
+      <table style=${{borderCollapse:"collapse",tableLayout:"fixed",fontSize:10,color:T.text}}>
+        <thead><tr>
+          <th style=${{...stickyH,...stickyV,top:0,left:0,zIndex:3,
+            width:ROW_HDR_W,minWidth:ROW_HDR_W,height:COL_HDR_H,
+            background:T.chrome,borderBottom:`1px solid ${T.border}`,borderRight:`1px solid ${T.border}`}}></th>
+          ${flatRows.map((cE,ci)=>html`<th key=${ci}
+            onClick=${()=>{if(cE.isUnit){pickRow(cE);}else{if(view.groups?.[cE.label])toggleGroup(cE.label);else pickRow(cE);}}}
+            title=${cE.fullLabel||cE.label}
+            style=${{...stickyH,top:0,width:cellSz,minWidth:cellSz,maxWidth:cellSz,height:COL_HDR_H,
+              textAlign:"center",fontWeight:700,fontSize:8.5,letterSpacing:.3,
+              color:selId==="dsm:"+cE.key?T.blue:cE.isUnit?T.dim:T.text,
+              cursor:cE.isMore?"default":"pointer",
+              background:selId==="dsm:"+cE.key?T.cardH:T.chrome,
+              borderBottom:`1px solid ${T.border}`,
+              overflow:"hidden",whiteSpace:"nowrap",userSelect:"none"}}>
+            ${cE.isMore?"":dispNums[ci]}</th>`)}
+        </tr></thead>
+        <tbody>${flatRows.map((rE,ri)=>{
+          const rItem=rE.isUnit?rE.unitPath:rE.label;
+          const canExpand=!rE.isUnit&&view.groups?.[rE.label];
+          const isExp=rE.label===expandedGroup&&!rE.isUnit;
+          return html`<tr key=${ri}>
+            <th onClick=${()=>{if(rE.isMore)return;if(rE.isUnit){pickRow(rE);}else{if(canExpand)toggleGroup(rE.label);else pickRow(rE);}}}
+              title=${rE.fullLabel||rE.label}
+              style=${{...stickyV,left:0,
+                width:ROW_HDR_W,minWidth:ROW_HDR_W,maxWidth:ROW_HDR_W,height:cellSz,
+                textAlign:"right",paddingRight:8,paddingLeft:rE.isUnit?28:8,
+                fontWeight:rE.isUnit?400:600,fontSize:rE.isUnit?9:10.5,
+                color:selId==="dsm:"+rE.key?T.blue:rE.isUnit?T.dim:T.text,
+                cursor:rE.isMore?"default":"pointer",
+                background:selId==="dsm:"+rE.key?T.cardH:T.chrome,
+                whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+                borderRight:`1px solid ${T.border}`,userSelect:"none"}}>
+              ${rE.isMore?html`<span style=${{color:T.mute}}>${rE.label}</span>`:
+                html`<span style=${{color:T.mute,marginRight:5,fontSize:8,fontWeight:400}}>${dispNums[ri]}</span><span>${rE.label}</span>${canExpand?html`<span style=${{color:T.mute,marginLeft:4,fontSize:8}}>${isExp?"▴":"▸"}</span>`:null}`}
+            </th>
+            ${flatRows.map((cE,ci)=>{
+              const cItem=cE.isUnit?cE.unitPath:cE.label;
+              const isSelfGroup=!rE.isUnit&&!cE.isUnit&&rE.label===cE.label;
+              const isSelfUnit=rE.isUnit&&cE.isUnit&&rE.unitPath===cE.unitPath;
+              const isDiag=isSelfGroup||isSelfUnit;
+              if(rE.isMore||cE.isMore)return html`<td key=${ci} style=${{width:cellSz,height:cellSz,
+                border:`1px solid ${T.border}22`,background:"transparent"}}></td>`;
+              if(isDiag)return html`<td key=${ci} style=${{width:cellSz,height:cellSz,
+                textAlign:"center",background:T.band,color:T.mute,fontSize:8,
+                border:`1px solid ${T.border}44`,lineHeight:cellSz+"px",cursor:"default"}}>·</td>`;
+              const rv=getCellVal(rItem,cItem,rE.isUnit,cE.isUnit);
+              const cv=getCellVal(cItem,rItem,cE.isUnit,rE.isUnit);
+              const selKey="dsm:"+rE.key+","+cE.key;
+              const isCellSel=selId===selKey;
+              const bg=isCellSel?T.cardH:rv&&cv?T.red+"33":rv?T.blue+"22":"transparent";
+              const fc=rv&&cv?T.red:rv?T.text:"transparent";
+              return html`<td key=${ci} onClick=${()=>pickCell(rE,cE)}
+                title=${rv?`${rE.fullLabel||rE.label} → ${cE.fullLabel||cE.label} · ${rv} imports${cv?" (mutual)":""}`:null}
+                style=${{width:cellSz,height:cellSz,textAlign:"center",
+                  border:`1px solid ${isCellSel?T.blue:T.border+"44"}`,
+                  cursor:rv?"pointer":"default",background:bg,color:fc,
+                  fontWeight:700,fontSize:cellSz<26?8:9.5,
+                  lineHeight:cellSz+"px",overflow:"hidden",userSelect:"none"}}>
+                ${rv||""}</td>`;})}
+          </tr>`;})}</tbody>
+      </table>
+    </div>
+    <div style=${{fontSize:9.5,color:T.dim,marginTop:5,flexShrink:0,display:"flex",gap:12,flexWrap:"wrap"}}>
+      <span>cell = imports row → column</span>
+      <span><span style=${{color:T.red}}>■</span> mutual pair (cycle)</span>
+      <span style=${{color:T.mute}}>· diagonal (self)</span>
+      ${view.groups?html`<span style=${{color:T.mute}}>▸ click row header to expand group units</span>`:null}
+    </div>
   </div>`;}
 // invisible nodes covering edge-label extents so fitView never clips a label
 // (React Flow fits to NODE bounds only; detour-routed edge labels can fall outside)
@@ -620,9 +780,9 @@ function caption(view,probs,moreFlows){
   if(view.kind==="matrix"){
     const it=view.items||[],M=view.matrix||[];let sum=0;const mut=[];
     for(let i=0;i<it.length;i++)for(let j=0;j<it.length;j++){sum+=(M[i]||[])[j]||0;
-      if(i<j&&(M[i]||[])[j]&&(M[j]||[])[i])mut.push(`${it[i]} ↔ ${it[j]} (${M[i][j]}/${M[j][i]})`);}
-    return `${sum} dependencies · ${it.length} modules · ${mut.length} mutual pair${mut.length===1?"":"s"}`+
-      (mut.length?`: ${mut[0]}`:"");}
+      if(i<j&&(M[i]||[])[j]&&(M[j]||[])[i])mut.push(`${it[i]} ⇄ ${it[j]} (${M[i][j]}/${M[j][i]})`);}
+    return `${it.length} modules · ${sum.toLocaleString()} dependencies · ${mut.length} mutual pair${mut.length===1?"":"s"}`+
+      (mut.length?` — worst: ${mut[0]}`:"");}
   if(view.kind==="table"){
     const rows=view.rows||[];const fl=rows.filter(r=>r.some(c=>String(c).trim().startsWith("⚠")));
     return `${rows.length} rows`+(fl.length?` · ⚠ ${fl.length} flagged — first: ${fl[0][0]}`:" · none flagged");}
@@ -754,8 +914,14 @@ function Footer({view,ov}){
     const ed=[{txt:"dependency · color = source layer",glyph:"━"},{txt:"bundled count",glyph:"×N"}];
     if((view.buckets||[]).some(b=>b.layer==="supporting"))ed.push({txt:"supporting / inferred",glyph:"┄"});
     groups.push({label:"EDGES",items:ed});
-  } else if(view.kind==="table"||view.kind==="matrix"){
-    groups.push({label:"DOCUMENT",items:[{txt:(view.rows?view.rows.length+" rows":((view.items||[]).length+"×"+(view.items||[]).length+" matrix")),glyph:"≣"}]});
+  } else if(view.kind==="matrix"){
+    const nitems=(view.items||[]).length;
+    groups.push({label:"MATRIX",items:[
+      {txt:nitems+"×"+nitems+" DSM",glyph:"⊞"},
+      {txt:"dependency row → col",glyph:"→"},
+      {txt:"mutual pair · cycle",glyph:"↔",c:T.red}]});
+  } else if(view.kind==="table"){
+    groups.push({label:"DOCUMENT",items:[{txt:view.rows?view.rows.length+" rows":"table",glyph:"≣"}]});
   } else if(view.kind==="entity"){
     groups.push({label:"ELEMENTS",items:[{txt:"bucket table",c:T.green,ico:"store"}]});
     groups.push({label:"EDGES",items:[{txt:"contains",glyph:"━"}]});
@@ -811,7 +977,7 @@ const CATALOGS={
     {label:"SBOM (CycloneDX)",status:"planned",note:"document · manifests"}]},
   {grp:"Classical structure",items:[
     {id:"component",label:"Layered Architecture",status:"live",alias:true},
-    {label:"Dependency Matrix (DSM)",status:"planned",note:"matrix renderer"},
+    {id:"dsm",label:"Dependency Matrix (DSM)",status:"live"},
     {label:"Cycle / Tangle Report",status:"planned",note:"SCC pass"}]}],
  graphify:[
   {grp:"C4 Model",tag:"modern",items:[
@@ -1304,7 +1470,7 @@ function Flow(){
         <div style=${{flex:1,position:"relative",minHeight:0}}>
           ${findingsOpen?html`<${FindingsDrawer} findings=${findings} open=${findingsOpen} setOpen=${setFindingsOpen}
             expandedId=${findingsExpandedId} setExpandedId=${setFindingsExpandedId}/>`:null}
-          ${els&&els.htmlView?html`<${view.kind==="table"?TableView:MatrixView} view=${view} onSel=${select} selId=${selId} vid=${level}/>`:null}
+          ${els&&els.htmlView?html`<${view.kind==="table"?TableView:DSMView} view=${view} onSel=${select} selId=${selId} vid=${level}/>`:null}
           ${els&&!els.htmlView?html`<${ReactFlow} key=${estate+"|"+scope+"|"+level+"|"+dir+"|"+den}
             nodes=${els.nodes} edges=${els.edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
             onNodeClick=${onNodeClick} onEdgeClick=${onEdgeClick} onPaneClick=${onPaneClick}

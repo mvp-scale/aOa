@@ -38,6 +38,22 @@ for a,b in edges:
     pkgs[a]["fanout"]+=1; pkgs[b]["fanin"]+=1
 def short(p):
     s=p.lstrip("/"); return s[9:] if s.startswith("internal/") else s
+def pkgpath(p): return p.lstrip("/")
+# ---- DSM: package-grain dependency matrix + groups for band expansion ----
+dsm_items_paths=sorted(pkgs.keys())   # keys like "/internal/adapters/bbolt"
+dsm_n=len(dsm_items_paths)
+dsm_idx={p:i for i,p in enumerate(dsm_items_paths)}
+dsm_mat=[[None]*dsm_n for _ in range(dsm_n)]
+for a,b in edges:
+    if a in dsm_idx and b in dsm_idx:
+        i,j=dsm_idx[a],dsm_idx[b]
+        if i!=j: dsm_mat[i][j]=(dsm_mat[i][j] or 0)+1
+dsm_groups={}
+for p,m in pkgs.items():
+    dsm_groups.setdefault(m["layer"],[]).append(pkgpath(p))
+dsm_total=sum((dsm_mat[i][j] or 0) for i in range(dsm_n) for j in range(dsm_n))
+dsm_items_display=[pkgpath(p) for p in dsm_items_paths]
+print(f"dsm: {dsm_n} packages · {dsm_total} dependencies")
 # ---- overlays (REAL data): concerns = recon bitmask findings per package (dimensions
 # proxy); changed = packages touched in the last 15 commits (git history) ----
 concerns={}
@@ -300,6 +316,10 @@ MODEL={
               "count":"10 elements","prov":PROV_REAL,"nodes":dfd_nodes,"edges":dfd_edges},
     "datamodel":{"kind":"entity","title":"Data Model — aoa.db (bbolt)","dir":"DOWN",
               "count":"6 buckets · from store.go","prov":PROV_REAL,"nodes":dm_nodes,"edges":dm_edges},
+    "dsm":{"kind":"matrix","title":"Dependency Structure Matrix","dir":None,
+              "count":f"{dsm_n} packages · {dsm_total} dependencies",
+              "prov":PROV_REAL,"items":dsm_items_display,"matrix":dsm_mat,
+              "groups":{l:paths for l,paths in dsm_groups.items()}},
     "deployment":{"kind":"buckets","title":"Deployment — build → release → install","dir":"RIGHT",
               "count":"4 environments","prov":PROV_SIM,
               "buckets":dep_buckets,"edges":dep_edges,"palette":"dep","labeled":True}}},
