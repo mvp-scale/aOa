@@ -48,6 +48,13 @@ func (s *Server) handlePeek(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"code parameter required"}`, http.StatusBadRequest)
 		return
 	}
+	// Law 3 (answers are O(answer), never O(corpus)): each code costs a map
+	// lookup + a disk read — cap the batch so a single request stays bounded.
+	const maxCodes = 50
+	if len(codes) > maxCodes {
+		http.Error(w, `{"error":"too many codes: max 50 per request"}`, http.StatusBadRequest)
+		return
+	}
 
 	hits, err := q.Peek(codes)
 	if err != nil {
