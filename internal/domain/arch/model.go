@@ -232,6 +232,13 @@ type GroupOptions struct {
 	// were absent from the fact set (leash violation). The invalid IDs have
 	// already been removed from Overlays; this flag drives warning-finding generation.
 	OverlayHadInvalidIDs bool
+
+	// Grain (rung-2): the footprint anchor grain (footprint.go). Controls how
+	// deep pathPrefixGroup groups. nil → default top-level-dir rule
+	// (byte-identical to the pre-recon grouper, consensus §5 MUST-NOT-CUT).
+	// Provenance stays "derived" (ruling A): a deterministic footprint grain is
+	// as REAL as the rung-2 it refines — only Haiku-touched anchors go "mixed".
+	Grain *Grain
 }
 
 // OverlaySpec is the on-disk schema for .aoa/arch/overlays/<scope>.json.
