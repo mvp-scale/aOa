@@ -136,7 +136,7 @@ func runGrep(cmd *cobra.Command, args []string) error {
 	}
 
 	// 5. Route: stdin pipe → grepStdin (only when no file args)
-	if isStdinPipe() {
+	if shouldReadStdin() {
 		return grepStdin(pattern, matchOpts, outOpts)
 	}
 

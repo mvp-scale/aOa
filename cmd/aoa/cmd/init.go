@@ -19,6 +19,10 @@ import (
 // noGrammarsFlag disables automatic grammar download during init.
 var noGrammarsFlag bool
 
+// refreshGuidanceFlag replaces the CLAUDE.md guidance block and exits —
+// no reindex, no daemon, no grammar work (ruling R-4).
+var refreshGuidanceFlag bool
+
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Index the current project",
@@ -29,10 +33,21 @@ var initCmd = &cobra.Command{
 func init() {
 	initCmd.Flags().BoolVar(&noGrammarsFlag, "no-grammars", false, "Skip automatic grammar download")
 	initCmd.Flags().BoolVar(&updateFlag, "update", false, "Update parsers.json and regenerate grammar config")
+	initCmd.Flags().BoolVar(&refreshGuidanceFlag, "refresh-guidance", false, "Replace the aOa guidance block in CLAUDE.md with the current version and exit (no reindex)")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
 	root := projectRoot()
+
+	// --refresh-guidance: guidance-only path (R-4) — repos init'd before the
+	// pipe repair keep teaching the dead bare-grep pattern until refreshed.
+	if refreshGuidanceFlag {
+		if err := runRefreshGuidance(root); err != nil {
+			return err
+		}
+		fmt.Println("aOa guidance refreshed in CLAUDE.md")
+		return nil
+	}
 	paths := app.NewPaths(root)
 	dbPath := paths.DB
 	projectID := filepath.Base(root)
@@ -590,15 +605,18 @@ const aOaGuidanceEnd = "<!-- /aOa-guidance -->"
 
 const aOaGuidance = `
 <!-- aOa-guidance -->
-## Improved grep — use Bash grep/egrep for all code search
+## Improved grep — use ` + "`aoa grep`" + `/` + "`aoa egrep`" + ` for all code search
 
-All code search MUST go through Bash ` + "`grep`" + `/` + "`egrep`" + `. This applies to you AND any subagents
-you spawn. The built-in Grep/Glob tools bypass the semantic index and require 5-10x more calls.
+All code search MUST go through ` + "`aoa grep`" + ` / ` + "`aoa egrep`" + ` in Bash. This applies to you
+AND any subagents you spawn. The built-in Grep/Glob tools (and bare grep) bypass the
+semantic index and require 5-10x more calls. In Claude Code, agent output is automatic;
+on other agent hosts set ` + "`AOA_AGENT=1`" + `.
 
-### What grep returns
+### What aoa grep returns
 
 ` + "```" + `
-$ grep processTaintBaseEviction
+$ aoa grep processTaintBaseEviction
+aOa: 3 hits | 2 files | 253 lines in ranges
   2dkfzw  pkg/controller/nodelifecycle:nc.processTaintBaseEviction(ctx)[979-1068]:979  @scheduling  #taint #eviction
   2dkg19  pkg/controller/nodelifecycle:nc.doEviction(ctx, taint)[1070-1142]:1070  @scheduling  #eviction #node
   --      pkg/controller/taint:tc.handlePodUpdate(old, cur)[245-312]:245  @scheduling  #taint #pod
@@ -606,10 +624,10 @@ $ grep processTaintBaseEviction
 
 Each line gives you: peek code, full signature, method boundaries ` + "`[start-end]`" + `, @domain, #terms.
 
-### Workflow: grep → peek
+### Workflow: aoa grep → aoa peek
 
 ` + "```" + `
-$ grep processTaintBaseEviction          # find symbols
+$ aoa grep processTaintBaseEviction      # find symbols
 $ aoa peek 2dkfzw 2dkg19                 # read multiple method bodies in one call
 ` + "```" + `
 
@@ -620,9 +638,9 @@ $ aoa peek 2dkfzw 2dkg19                 # read multiple method bodies in one ca
 
 | Task | Command | Example |
 |------|---------|---------|
-| Find symbol | ` + "`grep name`" + ` | ` + "`grep reconcilePod`" + ` |
-| Multi-symbol | ` + "`egrep 'A\\|B\\|C'`" + ` | ` + "`egrep 'health\\|ready\\|alive'`" + ` |
-| Scoped search | ` + "`grep --scope path pat`" + ` | ` + "`grep --scope controller reconcile`" + ` |
+| Find symbol | ` + "`aoa grep name`" + ` | ` + "`aoa grep reconcilePod`" + ` |
+| Multi-symbol | ` + "`aoa egrep 'A\\|B\\|C'`" + ` | ` + "`aoa egrep 'health\\|ready\\|alive'`" + ` |
+| Scoped search | ` + "`aoa grep --scope path pat`" + ` | ` + "`aoa grep --scope controller reconcile`" + ` |
 | Find files | ` + "`aoa locate name`" + ` | ` + "`aoa locate webhook`" + ` |
 | Glob files | ` + "`aoa find glob`" + ` | ` + "`aoa find *_types.go`" + ` |
 | Read methods | ` + "`aoa peek code`" + ` | ` + "`aoa peek a1 b2 c3`" + ` |
@@ -657,15 +675,23 @@ target resolves to package grain only, no peek body available.
 | What are the modules/layers?  | ` + "`aoa arch view component`" + ` |
 | Cycles or tangle?             | ` + "`aoa arch view cycles`" + ` · ` + "`aoa arch findings`" + ` |
 | Path from A to B?             | ` + "`aoa arch derive internal/app internal/adapters/bbolt`" + ` |
-| Why is this unit flagged?     | ` + "`aoa arch facts <unit-id>`" + ` (file:line evidence) |
 | CI gate for new drift?        | ` + "`aoa arch findings --new`" + ` (exit 1 = new findings) |
 
 Workflow: ` + "`arch views`" + ` → orient · ` + "`arch derive A B`" + ` → last hop unit →
-` + "`aoa locate <path>`" + ` → ` + "`grep <symbol>`" + ` → ` + "`aoa peek <code>`" + ` to read the body.
+` + "`aoa locate <path>`" + ` → ` + "`aoa grep <symbol>`" + ` → ` + "`aoa peek <code>`" + ` to read the body.
 Trust ` + "`derived`" + ` provenance (REAL), verify ` + "`mixed`" + `.
-If ` + "`aoa arch`" + ` reports "no facts substrate", fall back to ` + "`grep`" + `/` + "`aoa tree`" + `.
+If ` + "`aoa arch`" + ` reports "no facts substrate", fall back to ` + "`aoa grep`" + `/` + "`aoa tree`" + `.
 <!-- /aOa-guidance -->
 `
+
+// runRefreshGuidance replaces the aOa guidance block in {root}/CLAUDE.md with
+// the current version, preserving all user content (ruling R-4). Idempotent;
+// never reindexes. Backs the ` + "`aoa init --refresh-guidance`" + ` flag so
+// repos init'd before the pipe repair stop teaching the dead bare-grep path.
+func runRefreshGuidance(root string) error {
+	appendClaudeMDGuidance(root)
+	return nil
+}
 
 // appendClaudeMDGuidance writes aOa guidance to the top of CLAUDE.md.
 // On upgrade: strips old guidance block and writes the new one.
@@ -681,10 +707,12 @@ func appendClaudeMDGuidance(root string) {
 		existing, err = os.ReadFile(claudeMD)
 	}
 
-	// Prepend guidance to the top so the agent sees it first.
+	// Prepend guidance to the top so the agent sees it first. Trim the leading
+	// newlines the strip step leaves behind — otherwise every refresh/upgrade
+	// accumulates one blank line (idempotency, ruling R-4).
 	var content string
 	if err == nil {
-		content = aOaGuidance + "\n" + string(existing)
+		content = aOaGuidance + "\n" + strings.TrimLeft(string(existing), "\n")
 	} else {
 		content = aOaGuidance
 	}
