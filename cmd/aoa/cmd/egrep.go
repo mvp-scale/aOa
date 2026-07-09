@@ -181,8 +181,9 @@ func runEgrepIndex(pattern string, useColor bool) error {
 		return err
 	}
 
-	if isShimMode() {
-		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, egrepNoFilename, true, pattern))
+	if useSemanticFormat() {
+		noColor := !useColor || !isStdoutTTY()
+		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, egrepNoFilename, noColor, pattern))
 	} else if isStdoutTTY() && useColor {
 		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, egrepNoFilename, false, pattern))
 	} else {

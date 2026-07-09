@@ -52,11 +52,27 @@ func isStdinPipe() bool {
 	return fi.Mode()&os.ModeCharDevice == 0
 }
 
+// stdinAllowedByMode reports whether the current mode permits implicit
+// stdin consumption. Shim mode ALWAYS permits it — shims fire inside agent
+// Bash subshells (CLAUDECODE=1 present), and their GNU stdin-filter contract
+// is binding (F6a: shim wins over agent mode). Outside shim mode, agent mode
+// forbids it: agent hosts hand tools an open pipe or /dev/null, and a tool
+// blocking on stdin hangs the agent.
+func stdinAllowedByMode() bool {
+	return isShimMode() || !isAgentMode()
+}
+
 // shouldReadStdin reports whether a no-file-arg search may consume stdin
-// (GNU grep filter behavior). Never in agent mode: agent hosts hand tools
-// an open pipe or /dev/null, and a tool blocking on stdin hangs the agent.
+// (GNU grep filter behavior).
 func shouldReadStdin() bool {
-	return isStdinPipe() && !isAgentMode()
+	return isStdinPipe() && stdinAllowedByMode()
+}
+
+// useSemanticFormat reports whether search output uses the semantic agent
+// grammar (header, peek codes, [start-end], @domains) instead of GNU-compat.
+// One selector for grep AND egrep — the guidance teaches both.
+func useSemanticFormat() bool {
+	return isShimMode() || showPeekCodes() || showHints()
 }
 
 // showPeekCodes returns true when peek codes should appear in search output.

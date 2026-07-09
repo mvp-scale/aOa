@@ -85,7 +85,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		summary.shimsOK = createShims(root)
 		summary.statusOK = configureStatusLine(root)
 		seedStatusFile(paths)
-		appendClaudeMDGuidance(root)
+		_ = appendClaudeMDGuidance(root)
 
 		// Read dashboard URL from running daemon.
 		if portData, err := os.ReadFile(paths.PortFile); err == nil {
@@ -159,7 +159,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	summary.shimsOK = createShims(root)
 	summary.statusOK = configureStatusLine(root)
 	seedStatusFile(paths)
-	appendClaudeMDGuidance(root)
+	_ = appendClaudeMDGuidance(root)
 
 	// Auto-start daemon so grep, dashboard, and tailing work immediately.
 	if !client.Ping() {
@@ -689,14 +689,13 @@ If ` + "`aoa arch`" + ` reports "no facts substrate", fall back to ` + "`aoa gre
 // never reindexes. Backs the ` + "`aoa init --refresh-guidance`" + ` flag so
 // repos init'd before the pipe repair stop teaching the dead bare-grep path.
 func runRefreshGuidance(root string) error {
-	appendClaudeMDGuidance(root)
-	return nil
+	return appendClaudeMDGuidance(root)
 }
 
 // appendClaudeMDGuidance writes aOa guidance to the top of CLAUDE.md.
 // On upgrade: strips old guidance block and writes the new one.
 // Creates the file if missing.
-func appendClaudeMDGuidance(root string) {
+func appendClaudeMDGuidance(root string) error {
 	claudeMD := filepath.Join(root, "CLAUDE.md")
 
 	existing, err := os.ReadFile(claudeMD)
@@ -719,7 +718,9 @@ func appendClaudeMDGuidance(root string) {
 
 	if err := os.WriteFile(claudeMD, []byte(content), 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not write aOa guidance to CLAUDE.md: %v\n", err)
+		return err
 	}
+	return nil
 }
 
 // removeClaudeMDGuidance removes the aOa guidance block from CLAUDE.md.

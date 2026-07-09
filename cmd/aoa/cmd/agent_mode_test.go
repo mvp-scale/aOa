@@ -75,3 +75,30 @@ func TestShimMode_Unchanged(t *testing.T) {
 	assert.False(t, isAgentMode(), "shim mode is NOT agent mode — its GNU contract stands")
 	assert.True(t, showPeekCodes(), "shim keeps its existing peek-code default")
 }
+
+// Merge-review finding 1 (F6a): shims fire INSIDE Claude Code Bash subshells,
+// so CLAUDECODE=1 is present when the shim runs. The shim's GNU stdin-filter
+// contract must survive that composition — shim wins over agent mode.
+func TestShimMode_StdinFilterSurvivesAgentHost(t *testing.T) {
+	clearAgentEnv(t)
+	t.Setenv("AOA_SHIM", "1")
+	t.Setenv("CLAUDECODE", "1")
+	assert.True(t, shouldReadStdin() || !isStdinPipe(),
+		"AOA_SHIM=1 must keep GNU stdin-filter behavior even under CLAUDECODE=1 (F6a)")
+	// Direct check of the mode logic (stdin state independent):
+	assert.True(t, stdinAllowedByMode(),
+		"shim mode must exempt the agent-mode stdin guard")
+}
+
+// Merge-review finding 3: egrep must select the same semantic format as grep —
+// the guidance's flagship multi-symbol example is `aoa egrep 'A|B|C'`.
+func TestUseSemanticFormat_AgentMode(t *testing.T) {
+	clearAgentEnv(t)
+	t.Setenv("CLAUDECODE", "1")
+	assert.True(t, useSemanticFormat(),
+		"agent mode must select the semantic grammar for grep AND egrep")
+
+	clearAgentEnv(t)
+	assert.False(t, useSemanticFormat(),
+		"no env → GNU/TTY behavior unchanged")
+}
