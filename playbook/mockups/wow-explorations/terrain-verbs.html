@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>aOa terrain — six verbs, one geography</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { background:#080b10; }
+  body {
+    font-family:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,Consolas,monospace;
+    color:#aeb9c6; width:1680px; padding:14px 16px 18px;
+  }
+  /* ---------- banner ---------- */
+  .banner {
+    border:1px solid #1c2530; background:linear-gradient(180deg,#0d1219,#0a0e14);
+    border-radius:6px; padding:12px 18px 11px; margin-bottom:13px;
+    display:flex; align-items:baseline; gap:18px;
+  }
+  .banner .brand { color:#e8eef5; font-size:15px; font-weight:700; letter-spacing:.4px; white-space:nowrap; }
+  .banner .brand .dot { color:#4b596a; font-weight:400; }
+  .banner .thesis { color:#f0b429; font-size:13px; font-weight:700; letter-spacing:.8px; white-space:nowrap; }
+  .banner .thesis-sub { color:#5f6f81; font-size:11px; font-style:italic; }
+  .banner .meta { margin-left:auto; color:#5f6f81; font-size:10px; text-align:right; line-height:1.5; white-space:nowrap; }
+  .chip {
+    display:inline-block; font-size:8.5px; font-weight:700; letter-spacing:.6px;
+    padding:1px 6px; border-radius:3px; vertical-align:1px;
+  }
+  .chip.real { color:#3fd68f; border:1px solid #1f5c40; background:#0c1f16; }
+  .chip.warn { color:#f0883e; border:1px solid #6b3c1a; background:#231407; }
+  /* ---------- grid ---------- */
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:13px; }
+  .panel {
+    border:1px solid #1c2530; border-radius:6px; background:#0c1017;
+    height:512px; overflow:hidden; display:flex; flex-direction:column;
+  }
+  .phead { padding:9px 13px 7px; border-bottom:1px solid #161e28; }
+  .phead .row1 { display:flex; align-items:baseline; gap:9px; }
+  .verb {
+    font-size:12px; font-weight:800; letter-spacing:1.6px; padding:1px 8px 2px;
+    border-radius:3px; color:#0a0e13;
+  }
+  .q { color:#7d8ea1; font-size:11px; font-style:italic; }
+  .phead .prov { margin-left:auto; }
+  .verdict { margin-top:5px; font-size:11px; color:#d7dee8; }
+  .verdict b { color:#fff; }
+  .pbody { flex:1; display:flex; min-height:0; }
+  .mapwrap { position:relative; width:540px; flex:none; }
+  svg.map { display:block; width:540px; height:396px; margin-top:14px; }
+  /* ---------- side card ---------- */
+  .card {
+    flex:1; border-left:1px solid #161e28; background:#0a0d13;
+    padding:9px 11px; font-size:10px; overflow:hidden; display:flex; flex-direction:column;
+  }
+  .card h4 { font-size:9px; letter-spacing:1.2px; color:#5f6f81; font-weight:700; margin-bottom:6px; }
+  .card h4 .ac { }
+  .kline { display:flex; justify-content:space-between; padding:2px 0; color:#aeb9c6; }
+  .kline .n { color:#e8eef5; }
+  .kline .v { color:#7d8ea1; }
+  .bar { height:3px; background:#141b24; border-radius:2px; margin:1px 0 3px; overflow:hidden; }
+  .bar i { display:block; height:100%; border-radius:2px; }
+  .more { color:#4b596a; font-size:9px; padding-top:3px; }
+  .stamp { color:#54cbe0; font-size:8.8px; }
+  .stampline { padding:1.5px 0; color:#7d8ea1; font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .divider { border-top:1px solid #141b24; margin:7px 0 6px; }
+  .footnote { margin-top:auto; padding-top:6px; color:#4b596a; font-size:8.6px; line-height:1.45; }
+  /* lens chips (overlay) */
+  .lensrow { display:flex; gap:5px; margin-bottom:4px; }
+  .lens { font-size:9px; padding:2px 8px; border-radius:3px; border:1px solid #2a3442; color:#7d8ea1; }
+  .lens.on { background:#3a1410; border-color:#8a3324; color:#ff8f73; font-weight:700; }
+  .lens.off { opacity:.55; border-style:dashed; }
+  .lensnote { color:#4b596a; font-size:8.4px; line-height:1.5; margin-bottom:5px; }
+  .hoprow { display:flex; align-items:baseline; gap:6px; padding:2.5px 0; }
+  .hopn { flex:none; width:13px; height:13px; border-radius:50%; background:#0e3f47; border:1px solid #2ee6ff;
+          color:#2ee6ff; font-size:8.5px; font-weight:700; text-align:center; line-height:13px; }
+  .crumb { color:#e8eef5; font-size:10.5px; margin-bottom:6px; }
+  .crumb .sep { color:#3a4757; }
+  .crumb .hub { color:#2ee6ff; }
+  .callout { border-left:2px solid #d764ff; padding:3px 0 3px 7px; margin:4px 0; }
+  .callout .t { color:#e6b8f7; font-size:9.5px; }
+  .footer {
+    margin-top:13px; display:flex; gap:16px; color:#4b596a; font-size:9.5px;
+    border-top:1px solid #161e28; padding-top:8px;
+  }
+  .footer b { color:#7d8ea1; }
+  /* ---------- legend band ---------- */
+  .legend {
+    margin-top:13px; border:1px solid #1c2530; border-radius:6px; background:#0c1017;
+    padding:12px 16px 13px; display:grid; grid-template-columns:1.1fr 1fr 1.35fr; gap:26px;
+  }
+  .legend h4 { font-size:9px; letter-spacing:1.2px; color:#5f6f81; font-weight:700; margin-bottom:8px; }
+  .lg-row { display:flex; align-items:center; gap:9px; padding:3px 0; font-size:10px; color:#aeb9c6; }
+  .lg-row .k { color:#7d8ea1; min-width:0; }
+  .sw { flex:none; }
+  .verbtab { display:flex; align-items:baseline; gap:8px; padding:2.5px 0; font-size:10px; }
+  .verbtab .vname { flex:none; width:74px; font-weight:800; letter-spacing:1px; font-size:10px; }
+  .verbtab .vq { color:#7d8ea1; }
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <div class="brand">aOa <span class="dot">·</span> terrain</div>
+  <div>
+    <div class="thesis">SIX VERBS · ONE GEOGRAPHY</div>
+    <div class="thesis-sub">the ground never moves; only the question changes</div>
+  </div>
+  <div class="meta">
+    estate: <b style="color:#aeb9c6">scrapy</b> · rev 0188849902b2 · 527 files · 3,042 import deps (1,552 intra · 1,490 ext)<br>
+    grain: subpackage — 19 groups · identical node positions in all six panels · <span class="chip real">REAL · derived</span>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="legend">
+  <div>
+    <h4>ONE GEOGRAPHY — HOW TO READ THE GROUND</h4>
+    <div class="lg-row"><svg class="sw" width="40" height="18"><circle cx="9" cy="9" r="8" fill="#151d28" stroke="#3d4c5f"/><circle cx="30" cy="9" r="4" fill="#151d28" stroke="#3d4c5f"/></svg>
+      <span class="k">node area = files in subpackage (tests ×247 … conftest ×1)</span></div>
+    <div class="lg-row"><svg class="sw" width="40" height="14"><line x1="2" y1="4" x2="38" y2="4" stroke="#2b3644" stroke-width="3.4"/><line x1="2" y1="11" x2="38" y2="11" stroke="#2b3644" stroke-width="1"/></svg>
+      <span class="k">edge width = log(import sites) — heaviest: tests→scrapy ×303</span></div>
+    <div class="lg-row"><svg class="sw" width="40" height="14"><circle cx="9" cy="7" r="6" fill="#151d28" stroke="#3d4c5f" opacity="0.15"/><circle cx="30" cy="7" r="6" fill="#2a2008" stroke="#f0b429"/></svg>
+      <span class="k">dimmed = outside the question · lit = the answer</span></div>
+    <div class="lg-row"><span class="chip real sw">REAL · derived</span>
+      <span class="k">every count and file:line is stamped from the import graph</span></div>
+  </div>
+  <div>
+    <h4>SIX QUESTIONS, SAME MAP</h4>
+    <div class="verbtab"><span class="vname" style="color:#54cbe0">ORIENT</span><span class="vq">what is this system?</span></div>
+    <div class="verbtab"><span class="vname" style="color:#f0b429">FOCUS</span><span class="vq">tell me about THIS</span></div>
+    <div class="verbtab"><span class="vname" style="color:#2ee6ff">TRAVEL</span><span class="vq">how does A reach B?</span></div>
+    <div class="verbtab"><span class="vname" style="color:#ff8f73">OVERLAY</span><span class="vq">same ground, different paint</span></div>
+    <div class="verbtab"><span class="vname" style="color:#d764ff">ANOMALY</span><span class="vq">what looks wrong?</span></div>
+    <div class="verbtab"><span class="vname" style="color:#3fd68f">CHANGE</span><span class="vq">what moved since yesterday?</span></div>
+  </div>
+  <div>
+    <h4>WHY THE GROUND NEVER MOVES</h4>
+    <div style="font-size:10px;color:#7d8ea1;line-height:1.65">
+      Spatial memory is the interface. After one look at ORIENT you know where
+      <span style="color:#dbe4ee">tests</span> lives, that <span style="color:#dbe4ee">utils</span> sits beside it,
+      that <span style="color:#dbe4ee">docs</span> floats at the northern edge. Every later question is answered
+      <i>in place</i>: utils glows amber where utils has always been; the docs bridge is alarming precisely
+      because you can see how far it hangs from the mass. Re-layout would spend that memory; repainting compounds it.
+    </div>
+    <div style="margin-top:8px;font-size:8.6px;color:#4b596a">
+      anchor check — identical coordinates in all six panels: tests(283,192) · utils(357,194) · scrapy(335,245) · docs(222,33)
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <div><b>layout</b> deterministic: degree-ranked radial seed + 300 fixed force iterations — computed once, reused ×6</div>
+  <div><b>data</b> scrapy-graph.json · scrapy-view-component.json · scrapy-findings.json — every count and file:line is real</div>
+  <div style="margin-left:auto">aOa · architecture terrain · 2026-07-09</div>
+</div>
+
+<script>
+/* ============ SHARED GEOGRAPHY — one layout, six paints ============ */
+const NODES = [
+ {id:"commands",x:410.0,y:171.9,r:12.4,m:15},
+ {id:"conftest",x:62.2,y:235.9,r:6.9,m:1},
+ {id:"contracts",x:151.8,y:285.6,r:7.7,m:2},
+ {id:"core",x:232.5,y:245.7,r:14.3,m:24},
+ {id:"docs",x:221.9,y:33.2,r:9.2,m:5},
+ {id:"downloadermiddlewares",x:217.4,y:163.6,r:11.9,m:13},
+ {id:"extensions",x:376.8,y:101.9,r:12.6,m:16},
+ {id:"extras",x:103.5,y:31.7,r:7.7,m:2},
+ {id:"http",x:286.0,y:262.3,r:11.6,m:12},
+ {id:"linkextractors",x:305.2,y:361.5,r:7.7,m:2},
+ {id:"loader",x:75.7,y:137.6,r:6.9,m:1},
+ {id:"pipelines",x:452.5,y:218.8,r:8.8,m:4},
+ {id:"scrapy",x:334.8,y:245.0,r:14.5,m:25},
+ {id:"selector",x:214.9,y:334.8,r:7.7,m:2},
+ {id:"settings",x:430.3,y:283.0,r:7.7,m:2},
+ {id:"spidermiddlewares",x:372.5,y:330.6,r:9.7,m:6},
+ {id:"spiders",x:289.5,y:122.4,r:8.8,m:4},
+ {id:"tests",x:282.9,y:191.5,r:34.9,m:247},
+ {id:"utils",x:357.3,y:193.8,r:17.2,m:41}
+];
+const EDGES = [{"a":"commands","b":"contracts","c":1},{"a":"commands","b":"http","c":5},{"a":"commands","b":"linkextractors","c":1},{"a":"commands","b":"scrapy","c":19},{"a":"commands","b":"settings","c":1},{"a":"commands","b":"utils","c":22},{"a":"conftest","b":"tests","c":3},{"a":"conftest","b":"utils","c":2},{"a":"contracts","b":"http","c":2},{"a":"contracts","b":"scrapy","c":1},{"a":"contracts","b":"utils","c":2},{"a":"core","b":"http","c":10},{"a":"core","b":"pipelines","c":1},{"a":"core","b":"scrapy","c":29},{"a":"core","b":"spiders","c":1},{"a":"core","b":"utils","c":63},{"a":"docs","b":"http","c":1},{"a":"downloadermiddlewares","b":"http","c":6},{"a":"downloadermiddlewares","b":"scrapy","c":18},{"a":"downloadermiddlewares","b":"settings","c":1},{"a":"downloadermiddlewares","b":"spidermiddlewares","c":1},{"a":"downloadermiddlewares","b":"utils","c":38},{"a":"extensions","b":"http","c":1},{"a":"extensions","b":"scrapy","c":24},{"a":"extensions","b":"utils","c":26},{"a":"extras","b":"http","c":1},{"a":"extras","b":"spiders","c":1},{"a":"http","b":"scrapy","c":4},{"a":"http","b":"utils","c":12},{"a":"linkextractors","b":"scrapy","c":1},{"a":"linkextractors","b":"utils","c":4},{"a":"loader","b":"scrapy","c":1},{"a":"loader","b":"selector","c":1},{"a":"pipelines","b":"http","c":5},{"a":"pipelines","b":"scrapy","c":5},{"a":"pipelines","b":"utils","c":23},{"a":"scrapy","b":"commands","c":1},{"a":"scrapy","b":"core","c":1},{"a":"scrapy","b":"http","c":4},{"a":"scrapy","b":"selector","c":1},{"a":"scrapy","b":"settings","c":2},{"a":"scrapy","b":"spiders","c":2},{"a":"scrapy","b":"utils","c":44},{"a":"selector","b":"http","c":1},{"a":"selector","b":"utils","c":3},{"a":"settings","b":"scrapy","c":1},{"a":"settings","b":"utils","c":2},{"a":"spidermiddlewares","b":"http","c":1},{"a":"spidermiddlewares","b":"scrapy","c":4},{"a":"spidermiddlewares","b":"utils","c":6},{"a":"spiders","b":"http","c":4},{"a":"spiders","b":"linkextractors","c":1},{"a":"spiders","b":"scrapy","c":4},{"a":"spiders","b":"selector","c":1},{"a":"spiders","b":"utils","c":11},{"a":"tests","b":"commands","c":4},{"a":"tests","b":"contracts","c":2},{"a":"tests","b":"core","c":23},{"a":"tests","b":"downloadermiddlewares","c":17},{"a":"tests","b":"extensions","c":13},{"a":"tests","b":"http","c":76},{"a":"tests","b":"linkextractors","c":5},{"a":"tests","b":"loader","c":2},{"a":"tests","b":"pipelines","c":6},{"a":"tests","b":"scrapy","c":303},{"a":"tests","b":"selector","c":4},{"a":"tests","b":"settings","c":17},{"a":"tests","b":"spidermiddlewares","c":8},{"a":"tests","b":"spiders","c":41},{"a":"tests","b":"utils","c":278},{"a":"utils","b":"http","c":2},{"a":"utils","b":"scrapy","c":19},{"a":"utils","b":"selector","c":1},{"a":"utils","b":"settings","c":4},{"a":"utils","b":"spiders","c":1}];
+const N = {}; NODES.forEach(n=>N[n.id]=n);
+const SCRAPY_GROUPS = new Set(NODES.map(n=>n.id).filter(id=>!["tests","docs","conftest","extras"].includes(id)));
+const SHORT = {downloadermiddlewares:"downloadermw",spidermiddlewares:"spidermw",linkextractors:"linkext"};
+const lbl = id => SHORT[id]||id;
+
+const svgNS="http://www.w3.org/2000/svg";
+function el(tag,attrs,parent){const e=document.createElementNS(svgNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+function txt(parent,x,y,s,attrs){const t=el("text",Object.assign({x,y},attrs),parent);t.textContent=s;return t;}
+
+/* clip edge line to node circle boundaries */
+function edgeXY(a,b,pad){
+  const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1;
+  const p=pad||2;
+  return {x1:a.x+dx/d*(a.r+p), y1:a.y+dy/d*(a.r+p), x2:b.x-dx/d*(b.r+p), y2:b.y-dy/d*(b.r+p)};
+}
+function ew(c){ return 0.6+Math.log1p(c)*0.55; }
+
+/* base map: same geometry every time; cfg decides paint per node/edge */
+function renderMap(svg,cfg){
+  el("rect",{x:0,y:0,width:545,height:400,fill:"#0b0f15"},svg);
+  // subtle grid dots for "terrain" feel
+  const dots=el("g",{fill:"#131a23"},svg);
+  for(let gx=20;gx<545;gx+=42)for(let gy=18;gy<400;gy+=42)el("circle",{cx:gx,cy:gy,r:1},dots);
+
+  const eg=el("g",{},svg), litEg=el("g",{},svg), ng=el("g",{},svg), ann=el("g",{},svg);
+  EDGES.forEach(e=>{
+    const st=(cfg.edge&&cfg.edge(e))||{};
+    if(st.hide)return;
+    const p=edgeXY(N[e.a],N[e.b]);
+    const line=el("line",{x1:p.x1,y1:p.y1,x2:p.x2,y2:p.y2,
+      stroke:st.stroke||"#2b3644","stroke-width":st.w||ew(e.c),
+      opacity:st.o!==undefined?st.o:0.55,
+      "stroke-dasharray":st.dash||"none"},st.lit?litEg:eg);
+    if(st.glow){
+      el("line",{x1:p.x1,y1:p.y1,x2:p.x2,y2:p.y2,stroke:st.stroke,"stroke-width":(st.w||ew(e.c))+3,
+        opacity:0.18,"stroke-linecap":"round"},litEg);
+    }
+    if(st.label){
+      const mx=(p.x1+p.x2)/2+(st.lox||0), my=(p.y1+p.y2)/2+(st.loy||0);
+      const t=txt(litEg,mx,my,st.label,{fill:st.stroke,"font-size":"8.5px","font-weight":"700",
+        "text-anchor":"middle","paint-order":"stroke",stroke:"#0b0f15","stroke-width":"3px"});
+    }
+    if(st.arrow){ // small direction arrowhead at target end
+      const dx=p.x2-p.x1, dy=p.y2-p.y1, d=Math.hypot(dx,dy)||1, ux=dx/d, uy=dy/d;
+      const ax=p.x2, ay=p.y2, s=4.5;
+      el("path",{d:`M${ax},${ay} L${ax-ux*s-uy*s*0.6},${ay-uy*s+ux*s*0.6} L${ax-ux*s+uy*s*0.6},${ay-uy*s-ux*s*0.6} Z`,
+        fill:st.stroke,opacity:st.o!==undefined?st.o:0.9},litEg);
+    }
+  });
+  NODES.forEach(n=>{
+    const st=(cfg.node&&cfg.node(n))||{};
+    const o=st.o!==undefined?st.o:1;
+    const grp=el("g",{opacity:o},ng);
+    if(st.halo) el("circle",{cx:n.x,cy:n.y,r:n.r+5,fill:"none",stroke:st.halo,"stroke-width":1.4,
+       opacity:0.9,"stroke-dasharray":st.haloDash||"none"},grp);
+    if(st.glowFill) el("circle",{cx:n.x,cy:n.y,r:n.r+8,fill:st.glowFill,opacity:0.13},grp);
+    el("circle",{cx:n.x,cy:n.y,r:n.r,fill:st.fill||"#151d28",stroke:st.stroke||"#3d4c5f","stroke-width":st.sw||1.1},grp);
+    const inside=n.r>=16;
+    const ly = inside? n.y+3 : n.y+n.r+9.5;
+    txt(grp,n.x,ly,lbl(n.id),{fill:st.tfill||(inside?"#dbe4ee":"#93a1b3"),"font-size":inside?"10px":"8.8px",
+      "font-weight":st.tb?"700":"400","text-anchor":"middle","paint-order":"stroke",stroke:"#0b0f15","stroke-width":"2.5px"});
+    if(st.sub!==undefined){
+      txt(grp,n.x,ly+9,st.sub,{fill:st.subFill||"#5f6f81","font-size":"7.8px","text-anchor":"middle",
+        "paint-order":"stroke",stroke:"#0b0f15","stroke-width":"2.5px"});
+    }
+    if(st.badge!==undefined){
+      const bx=n.x+n.r*0.75, by=n.y-n.r*0.75;
+      el("circle",{cx:bx,cy:by,r:7,fill:st.badgeBg||"#3a1410",stroke:st.badgeStroke||"#c33"},grp);
+      txt(grp,bx,by+2.8,String(st.badge),{fill:st.badgeFill||"#ff8f73","font-size":"8px","font-weight":"700","text-anchor":"middle"});
+    }
+  });
+  if(cfg.annotate) cfg.annotate(ann);
+  return svg;
+}
+
+/* ============ per-verb data (all REAL, computed from graph) ============ */
+const FOCUS_IMPORTERS = {tests:278,core:63,scrapy:44,downloadermiddlewares:38,extensions:26,pipelines:23,
+  commands:22,http:12,spiders:11,spidermiddlewares:6,linkextractors:4,selector:3,conftest:2,contracts:2,settings:2};
+const TRAVEL_PATH = ["commands","http","downloadermiddlewares"];
+const FINDING_COUNT = {scrapy:6,utils:6,http:2,settings:2,spiders:2,commands:1,core:1,selector:1,tests:1};
+const MUTUAL_PAIRS = [["commands","scrapy"],["core","scrapy"],["http","scrapy"],["http","utils"],["scrapy","settings"],
+  ["scrapy","spiders"],["scrapy","utils"],["selector","utils"],["settings","utils"],["spiders","utils"]];
+const mutualKey = new Set(MUTUAL_PAIRS.map(p=>p.join("|")));
+const isMutual = e => mutualKey.has([e.a,e.b].sort().join("|"));
+
+/* ============ panel definitions ============ */
+const PANELS = [
+/* ---------------- 1 ORIENT ---------------- */
+{
+ verb:"ORIENT", color:"#54cbe0", q:"what is this system?",
+ verdict:'scrapy: <b>19 subpackages</b> · <b>3,042 deps</b> (1,552 intra · 1,490 ext) — mass sits in <b>tests · utils · scrapy</b>',
+ cfg:{
+   node:n=>({sub:"×"+n.m, tb:n.m>=24, stroke:n.m>=24?"#54cbe0":"#3d4c5f",
+             fill:n.m>=24?"#122733":"#151d28", tfill:n.r>=16?"#dbe4ee":"#9db0c4"}),
+   edge:e=>({o:0.5})
+ },
+ card:c=>{
+   c.innerHTML=`<h4>MASS · MEMBERS PER GROUP</h4>`;
+   const top=[["tests",247],["utils",41],["scrapy",25],["core",24],["extensions",16],["commands",15],["downloadermw",13],["http",12]];
+   top.forEach(([n,v])=>{
+     c.innerHTML+=`<div class="kline"><span class="n">${n}</span><span class="v">×${v}</span></div>
+     <div class="bar"><i style="width:${Math.max(3,v/247*100)}%;background:#2b8fa3"></i></div>`;
+   });
+   c.innerHTML+=`<div class="more">+11 more groups (≤6 members each)</div>
+   <div class="divider"></div>
+   <div class="kline"><span class="n">heaviest flow</span><span class="v">tests → scrapy ×303</span></div>
+   <div class="kline"><span class="n">cycles</span><span class="v">0 (module grain)</span></div>
+   <div class="footnote">REAL · imports (incl. test files) + deterministic grouping — scrapy-graph.json, 527 file nodes aggregated to subpackage</div>`;
+ }
+},
+/* ---------------- 2 FOCUS ---------------- */
+{
+ verb:"FOCUS", color:"#f0b429", q:"tell me about THIS — scrapy/utils selected",
+ verdict:'<b>251 files</b> in <b>15 units</b> import utils — <b>536</b> import sites · top: tests ×278 · core ×63',
+ cfg:{
+   node:n=>{
+     if(n.id==="utils") return {halo:"#f0b429",glowFill:"#f0b429",stroke:"#f0b429",sw:1.8,fill:"#2a2008",tb:1,tfill:"#ffd977"};
+     if(FOCUS_IMPORTERS[n.id]!==undefined)
+       return {stroke:"#8a6d1f",fill:"#1a1810",tfill:"#c8b06a",sub:"×"+FOCUS_IMPORTERS[n.id],subFill:"#f0b429"};
+     return {o:0.15};
+   },
+   edge:e=>{
+     if(e.b==="utils") return {stroke:"#f0b429",o:0.85,lit:1,glow:e.c>=38,arrow:1,
+       label:e.c>=38?"×"+e.c:null,loy:-4};
+     if(e.a==="utils") return {stroke:"#f0b429",o:0.35,lit:1,dash:"3 3"};
+     return {o:0.07};
+   }
+ },
+ card:c=>{
+   c.innerHTML=`<h4 style="color:#f0b429">SELECTED · scrapy/utils</h4>
+   <div class="kline"><span class="n">importing units</span><span class="v">15 of 18</span></div>
+   <div class="kline"><span class="n">importing files</span><span class="v">251</span></div>
+   <div class="kline"><span class="n">import sites</span><span class="v">536</span></div>
+   <div class="divider"></div><h4>TOP IMPORTERS</h4>`;
+   [["tests",278],["core",63],["scrapy",44],["downloadermw",38],["extensions",26]].forEach(([n,v])=>{
+     c.innerHTML+=`<div class="kline"><span class="n">${n}</span><span class="v">×${v}</span></div>
+     <div class="bar"><i style="width:${Math.max(3,v/278*100)}%;background:#b8891f"></i></div>`;
+   });
+   c.innerHTML+=`<div class="more">+10 more units (≤23 sites each)</div>
+   <div class="divider"></div>
+   <div class="stampline"><span class="stamp">tests/…/asyncio_deferred_signal.py:8</span></div>
+   <div class="stampline"><span class="stamp">scrapy/core/downloader/__init__.py:17</span></div>
+   <div class="stampline"><span class="stamp">scrapy/addons.py:7</span></div>
+   <div class="footnote">REAL · every edge above is a stamped import site — dashed = utils' own outbound imports (×26)</div>`;
+ }
+},
+/* ---------------- 3 TRAVEL ---------------- */
+{
+ verb:"TRAVEL", color:"#2ee6ff", q:"how does commands reach downloadermiddlewares?",
+ verdict:'no direct import exists — shortest connection is <b>2 hops</b>, meeting at <b>http</b>',
+ cfg:{
+   node:n=>{
+     const i=TRAVEL_PATH.indexOf(n.id);
+     if(i===0||i===2) return {halo:"#2ee6ff",stroke:"#2ee6ff",sw:1.6,fill:"#0c2830",tb:1,tfill:"#9ff0ff"};
+     if(i===1) return {halo:"#2ee6ff",haloDash:"3 3",stroke:"#2ee6ff",sw:1.4,fill:"#0c2830",tb:1,tfill:"#9ff0ff",sub:"shared hub",subFill:"#2ee6ff"};
+     return {o:0.13};
+   },
+   edge:e=>{
+     if(e.a==="commands"&&e.b==="http") return {stroke:"#2ee6ff",w:2.2,o:0.95,lit:1,glow:1,arrow:1,label:"① ×5",loy:-5,lox:-6};
+     if(e.a==="downloadermiddlewares"&&e.b==="http") return {stroke:"#2ee6ff",w:2.2,o:0.95,lit:1,glow:1,arrow:1,label:"② ×6",loy:-5,lox:-8};
+     return {o:0.06};
+   }
+ },
+ card:c=>{
+   c.innerHTML=`<h4 style="color:#2ee6ff">ROUTE</h4>
+   <div class="crumb">commands <span class="sep">▸</span> <span class="hub">http</span> <span class="sep">◂</span> downloadermw</div>
+   <div class="hoprow"><span class="hopn">1</span><div>commands → http <span style="color:#5f6f81">×5</span><br>
+     <span class="stamp">scrapy/commands/bench.py:11</span></div></div>
+   <div class="hoprow"><span class="hopn">2</span><div>downloadermw → http <span style="color:#5f6f81">×6</span><br>
+     <span class="stamp">scrapy/downloadermiddlewares/cookies.py:10</span></div></div>
+   <div class="divider"></div>
+   <div class="kline"><span class="n">directed path</span><span class="v">none</span></div>
+   <div class="kline"><span class="n">undirected dist</span><span class="v">2 hops</span></div>
+   <div class="kline"><span class="n">meeting point</span><span class="v">http</span></div>
+   <div class="footnote">REAL · BFS over 75 group edges. Arrows show true import direction — both endpoints import http; only tests imports downloadermiddlewares directly.</div>`;
+ }
+},
+/* ---------------- 4 OVERLAY ---------------- */
+{
+ verb:"OVERLAY", color:"#ff8f73", q:"same ground, different paint — findings pressure",
+ verdict:'<b>12 findings</b> — 10 mutual-dep pairs + 2 size budgets · pressure centers on <b>scrapy ⇄ utils</b>',
+ cfg:{
+   node:n=>{
+     const f=FINDING_COUNT[n.id]||0;
+     if(f>=6) return {fill:"#3d130c",stroke:"#ff6b4a",sw:1.6,tb:1,tfill:"#ffb09c",badge:f,glowFill:"#ff6b4a"};
+     if(f>=2) return {fill:"#2c130d",stroke:"#b3492f",tfill:"#e09a86",badge:f};
+     if(f===1) return {fill:"#231410",stroke:"#7a4030",tfill:"#b98d7f",badge:f,badgeBg:"#1c110c",badgeStroke:"#7a4030"};
+     return {o:0.3};
+   },
+   edge:e=>{
+     if(isMutual(e)) return {stroke:"#ff6b4a",o:0.8,lit:1,w:Math.max(1.4,ew(e.c))};
+     return {o:0.1};
+   }
+ },
+ card:c=>{
+   c.innerHTML=`<h4>LENS</h4>
+   <div class="lensrow"><span class="lens on">findings ●</span><span class="lens off">heat ⊘</span><span class="lens off">domains ⊘</span></div>
+   <div class="lensnote">heat: no session data for this repo — tool-observed only<br>domains: 5.4% coverage — candidates only</div>
+   <div class="divider"></div><h4>PRESSURE · FINDINGS PER GROUP</h4>`;
+   [["scrapy",6],["utils",6],["http",2],["settings",2],["spiders",2]].forEach(([n,v])=>{
+     c.innerHTML+=`<div class="kline"><span class="n">${n}</span><span class="v">⚠ ${v}</span></div>
+     <div class="bar"><i style="width:${v/6*100}%;background:#c2492f"></i></div>`;
+   });
+   c.innerHTML+=`<div class="more">+4 more groups at ⚠ 1</div>
+   <div class="divider"></div>
+   <div class="kline"><span class="n">budget: tests</span><span class="v">47 / 40 members</span></div>
+   <div class="kline"><span class="n">budget: utils</span><span class="v">41 / 40 members</span></div>
+   <div class="footnote">REAL · scrapy-findings.json — red edges are the 10 mutual pairs, e.g. scrapy ⇄ utils · scrapy/crawler.py:23</div>`;
+ }
+},
+/* ---------------- 5 ANOMALY ---------------- */
+{
+ verb:"ANOMALY", color:"#d764ff", q:"what looks wrong?",
+ verdict:'<b>docs</b> touches the system through <b>exactly one import</b> — 20 of 75 group-pairs hang on a single edge',
+ cfg:{
+   node:n=>{
+     if(n.id==="docs") return {halo:"#d764ff",glowFill:"#d764ff",stroke:"#d764ff",sw:1.7,fill:"#26102e",tb:1,tfill:"#e6b8f7",sub:"degree 1",subFill:"#d764ff"};
+     if(n.id==="extras") return {halo:"#d764ff",haloDash:"3 3",stroke:"#a24fc4",sw:1.3,fill:"#1e0f24",tfill:"#cfa0e3",sub:"2 lone threads",subFill:"#a24fc4"};
+     if(["http","spiders"].includes(n.id)) return {stroke:"#6b4a7a",tfill:"#a794b3"};
+     return {o:0.16};
+   },
+   edge:e=>{
+     if(e.a==="docs"&&e.b==="http") return {stroke:"#d764ff",w:1.8,o:0.95,lit:1,glow:1,dash:"5 3",label:"only connection",loy:14,lox:36};
+     if(e.a==="extras") return {stroke:"#a24fc4",w:1.2,o:0.8,lit:1,dash:"4 3",label:"×1",loy:-4,lox:e.b==="http"?-10:8};
+     return {o:0.07};
+   },
+   annotate:g=>{
+     txt(g,336,44,"docs ↔ http : 0 shared neighbors",{fill:"#e6b8f7","font-size":"8.5px","paint-order":"stroke",stroke:"#0b0f15","stroke-width":"3px"});
+     txt(g,336,55,"docs/conftest.py:14",{fill:"#54cbe0","font-size":"8px","paint-order":"stroke",stroke:"#0b0f15","stroke-width":"3px"});
+     el("line",{x1:333,y1:48,x2:250,y2:52,stroke:"#6b4a7a","stroke-width":0.8,opacity:0.8},g);
+   }
+ },
+ card:c=>{
+   c.innerHTML=`<h4 style="color:#d764ff">SURPRISES</h4>
+   <div class="callout"><div class="t">docs ↔ http — the only connection</div>
+     <div class="stampline">1 edge · 0 shared neighbors · <span class="stamp">docs/conftest.py:14</span></div></div>
+   <div class="callout"><div class="t">extras hangs by 2 threads from one file</div>
+     <div class="stampline">→ http · <span class="stamp">extras/qpsclient.py:11</span></div>
+     <div class="stampline">→ spiders · <span class="stamp">extras/qpsclient.py:12</span></div></div>
+   <div class="callout"><div class="t">20 single-edge pairs</div>
+     <div class="stampline">e.g. loader → selector · <span class="stamp">scrapy/loader/__init__.py:14</span></div></div>
+   <div class="divider"></div>
+   <div class="kline"><span class="n">isolated groups</span><span class="v">0</span></div>
+   <div class="kline"><span class="n">degree-1 groups</span><span class="v">1 (docs)</span></div>
+   <div class="footnote">REAL · derived from edge counts — a "bridge" is a group-pair carried by exactly one stamped import</div>`;
+ }
+},
+/* ---------------- 6 CHANGE ---------------- */
+{
+ verb:"CHANGE", color:"#3fd68f", q:"what moved since the last revision?",
+ verdict:'<b>1,387 intra-repo dependencies appeared</b> at rev 0188849902b2 — python self-import resolution',
+ cfg:{
+   node:n=>{
+     if(SCRAPY_GROUPS.has(n.id)) return {stroke:"#2a7a55",fill:"#0e2018",tfill:"#8fd4b3"};
+     return {stroke:"#3d4c5f",tfill:"#8494a6"};
+   },
+   edge:e=>{
+     if(SCRAPY_GROUPS.has(e.b)) return {stroke:"#3fd68f",o:0.55,lit:e.c>=44,glow:e.c>=278,
+        label:e.c>=278?"+"+e.c:null,loy:e.c===278?-10:12,lox:e.c===303?-14:8};
+     return {stroke:"#4b596a",o:0.6,dash:"none"};
+   },
+   annotate:g=>{
+     // ghost of the before-state: collapsed ext:scrapy node, struck through
+     const gx=62,gy=345;
+     el("circle",{cx:gx,cy:gy,r:13,fill:"none",stroke:"#44525f","stroke-width":1.2,"stroke-dasharray":"3 3",opacity:0.8},g);
+     el("line",{x1:gx-16,y1:gy-16,x2:gx+16,y2:gy+16,stroke:"#7a4030","stroke-width":1.4,opacity:0.9},g);
+     txt(g,gx,gy+2.5,"ext:",{fill:"#5f6f81","font-size":"7.5px","text-anchor":"middle"},g);
+     txt(g,gx,gy+26,"ext:scrapy (before)",{fill:"#5f6f81","font-size":"8px","text-anchor":"middle"});
+     txt(g,gx,gy+36,"all scrapy.* imports",{fill:"#44525f","font-size":"7.5px","text-anchor":"middle"});
+     txt(g,gx,gy+45,"collapsed here",{fill:"#44525f","font-size":"7.5px","text-anchor":"middle"});
+   }
+ },
+ card:c=>{
+   c.innerHTML=`<h4 style="color:#3fd68f">REV DIFF · before → after</h4>
+   <div class="kline"><span class="n">intra-repo edges</span><span class="v">165 → 1,552 <span style="color:#3fd68f">(+1,387)</span></span></div>
+   <div class="kline"><span class="n">cross-group pairs</span><span class="v">1 → 75 <span style="color:#3fd68f">(+74)</span></span></div>
+   <div class="kline"><span class="n">largest arrival</span><span class="v">tests → scrapy +303</span></div>
+   <div class="kline"><span class="n">2nd largest</span><span class="v">tests → utils +278</span></div>
+   <div class="divider"></div>
+   <div class="kline"><span class="n">pre-existing</span><span class="v">conftest → tests ×3</span></div>
+   <div class="stampline">grey edge on map · <span class="stamp">conftest.py → tests/*</span></div>
+   <div class="divider"></div>
+   <div class="footnote"><b style="color:#7d8ea1">provenance</b> — before-state reconstructed from resolver semantics: prior to the self-import fix, every import of scrapy.* resolved to a single external ext:scrapy node, so all 1,387 edges targeting scrapy/* subpackages were absent from the intra-repo graph. Green = appeared at this rev. REAL · derived.</div>`;
+ }
+}
+];
+
+/* ============ build the sheet ============ */
+const grid=document.getElementById("grid");
+PANELS.forEach(p=>{
+  const panel=document.createElement("div"); panel.className="panel";
+  panel.innerHTML=`<div class="phead">
+    <div class="row1"><span class="verb" style="background:${p.color}">${p.verb}</span>
+      <span class="q">${p.q}</span>
+      <span class="prov"><span class="chip real">REAL · derived</span></span></div>
+    <div class="verdict">${p.verdict}</div></div>`;
+  const body=document.createElement("div"); body.className="pbody";
+  const mw=document.createElement("div"); mw.className="mapwrap";
+  const svg=document.createElementNS(svgNS,"svg");
+  svg.setAttribute("class","map"); svg.setAttribute("viewBox","0 0 545 400");
+  renderMap(svg,p.cfg); mw.appendChild(svg);
+  const card=document.createElement("div"); card.className="card";
+  p.card(card);
+  body.appendChild(mw); body.appendChild(card); panel.appendChild(body);
+  grid.appendChild(panel);
+});
+</script>
+</body>
+</html>
