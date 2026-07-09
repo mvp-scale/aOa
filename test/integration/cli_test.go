@@ -163,7 +163,7 @@ func runAOA(t *testing.T, dir string, args ...string) (stdout, stderr string, ex
 	t.Helper()
 	cmd := exec.Command(aoaBin, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "NO_COLOR=1", "AOA_NO_GRAMMAR_DOWNLOAD=1")
+	cmd.Env = append(os.Environ(), "NO_COLOR=1", "AOA_NO_GRAMMAR_DOWNLOAD=1", "AOA_AGENT=0")
 
 	var outBuf, errBuf strings.Builder
 	cmd.Stdout = &outBuf
@@ -188,7 +188,7 @@ func runAOAWithEnv(t *testing.T, dir string, env []string, args ...string) (stdo
 	t.Helper()
 	cmd := exec.Command(aoaBin, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "NO_COLOR=1", "AOA_NO_GRAMMAR_DOWNLOAD=1")
+	cmd.Env = append(os.Environ(), "NO_COLOR=1", "AOA_NO_GRAMMAR_DOWNLOAD=1", "AOA_AGENT=0")
 	cmd.Env = append(cmd.Env, env...)
 
 	var outBuf, errBuf strings.Builder
