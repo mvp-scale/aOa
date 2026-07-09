@@ -1,6 +1,7 @@
 package arch
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -184,7 +185,7 @@ func TestFootprint_MarshalRoundTrip(t *testing.T) {
 	}
 	// Marshal is deterministic (same bytes twice).
 	data2, _ := MarshalFootprint(fp)
-	if string(data) != string(data2) {
+	if !bytes.Equal(data, data2) {
 		t.Errorf("marshal not byte-stable")
 	}
 }
