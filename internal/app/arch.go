@@ -198,6 +198,55 @@ func loadOverlaySpec(projectRoot, scope string) (*arch.OverlaySpec, error) {
 	return arch.ParseOverlay(data)
 }
 
+// ── Footprint grain (lazy-run, ruling C) ────────────────────────────────────
+
+// loadOrDetectFootprintGrain returns the footprint's primary grain for grouping,
+// lazily running the deterministic detector on first arch use (ruling C).
+//
+// Order:
+//  1. footprint.json exists → parse it, return its grain (cached).
+//  2. absent → run DetectFootprint once, cache it to .aoa/arch/footprint.json,
+//     return its grain.
+//  3. any error → nil grain (byte-identical pre-recon fallback — never blocks a
+//     derive on footprint failure).
+//
+// Idempotent: subsequent derives read the cached footprint until `aoa arch
+// recon` refreshes it. NEVER run at init (hot path stays clean).
+func (a *App) loadOrDetectFootprintGrain() *arch.Grain {
+	fp, err := arch.LoadFootprint(a.ProjectRoot)
+	if err != nil {
+		a.debugf("deriveArch: footprint load: %v (falling back to default grain)", err)
+		return nil
+	}
+	if fp == nil {
+		// Lazy-run once and cache.
+		fp, err = arch.DetectFootprint(a.ProjectRoot)
+		if err != nil {
+			a.debugf("deriveArch: footprint detect: %v (default grain)", err)
+			return nil
+		}
+		if err := arch.SaveFootprint(a.ProjectRoot, fp); err != nil {
+			a.debugf("deriveArch: footprint save: %v (using detected grain, not cached)", err)
+		} else {
+			a.debugf("deriveArch: footprint detected + cached: %s", fp.Summary())
+		}
+	}
+	return fp.PrimaryGrain()
+}
+
+// hasLocalArchManifest reports whether a derived manifest exists for the
+// local scope. Backs the PC1/T45 boot-derive trigger: after `aoa arch recon`
+// invalidates views (DeleteShardsForScope), the arch_shards bucket survives
+// but the manifest is gone — the manifest, not the bucket, is the truthful
+// "views exist" signal. Read-only (db.View); C1 does not apply.
+func (a *App) hasLocalArchManifest() bool {
+	if a.Store == nil {
+		return false
+	}
+	m, err := a.Store.LoadManifest(a.ProjectID, archScope)
+	return err == nil && len(m) > 0
+}
+
 // ── App.deriveArch — main derivation entry point ───────────────────────────
 
 // deriveArch is the compact-time derivation entry point (L19.14 step 9).
@@ -257,6 +306,14 @@ func (a *App) deriveArch() {
 		a.debugf("deriveArch: overlay: %v (continuing without overlay)", overlayErr)
 	}
 
+	// 4b. Footprint grain (consensus 2026-07-08, ruling C — LAZY-RUN): load the
+	// cached footprint; if absent, run the deterministic detector ONCE and cache
+	// it (never at init). The grain drives pathPrefixGroup's grouping depth so
+	// the scrapy §10 failure (subpackages collapsed into one box) is repaired.
+	// Absent/failed footprint → nil grain → byte-identical to the pre-recon
+	// grouper (the MUST-NOT-CUT fallback).
+	grain := a.loadOrDetectFootprintGrain()
+
 	// 5. Build GroupOptions from overlay (leash-validate against known units).
 	var opts *arch.GroupOptions
 	if overlaySpec != nil {
@@ -264,7 +321,10 @@ func (a *App) deriveArch() {
 		opts = &arch.GroupOptions{
 			Overlays:             approved,
 			OverlayHadInvalidIDs: len(invalidIDs) > 0,
+			Grain:                grain,
 		}
+	} else if grain != nil {
+		opts = &arch.GroupOptions{Grain: grain}
 	}
 
 	// 6. Compute refHits from the index (dead-candidate fuel). Non-nil whenever

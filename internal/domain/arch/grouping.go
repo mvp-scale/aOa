@@ -23,14 +23,27 @@ var languageRoots = map[string]bool{
 // Only the FIRST segment is eligible for language-root skipping — this avoids
 // misidentifying real directory names (e.g. "lib" after "src" is skipped once).
 //
-// Examples:
+// The optional grain argument is the footprint's anchor grain (footprint.go).
+// It generalizes the historical `internal` special-case into a data-driven rule:
+//   - grain == nil OR grain.Mode == "segment"  → the DEFAULT top-level-dir rule
+//     (byte-identical to the pre-recon grouper — the consensus §5 MUST-NOT-CUT
+//     fallback guarantee). This includes the built-in `internal` descent, which
+//     remains a code-level default so aOa's own views are unchanged.
+//   - grain.Mode == "descend" (under:P depth:N) → for paths under P, skip that
+//     prefix and group at the Nth segment below it. This is the scrapy fix:
+//     under="scrapy" depth=1 makes scrapy/core/engine.py group as "core".
+//
+// Examples (nil grain):
 //   "internal/domain/arch/model.go"  → "domain"
 //   "internal/adapters/bbolt/store.go" → "adapters"
 //   "cmd/aoa/main.go"               → "cmd"
 //   "ports/storage.go"              → "ports"
 //   "src/lib/util.go"               → "lib"   (src skipped; lib is the real group)
 //   "pkg/controller/ctrl.go"        → "controller" (pkg skipped)
-func pathPrefixGroup(path string) string {
+// Examples (descend under=scrapy depth=1):
+//   "scrapy/core/engine.py"         → "core"
+//   "scrapy/http/request.py"        → "http"
+func pathPrefixGroup(path string, grain *Grain) string {
 	parts := strings.Split(path, "/")
 
 	// Collect non-empty, non-dot, non-filename segments.
@@ -45,6 +58,16 @@ func pathPrefixGroup(path string) string {
 		segs = append(segs, p)
 	}
 
+	// Grain: descend into the anchor prefix when this path lives under it.
+	// A path whose first segment equals grain.Under, with at least depth+1
+	// segments remaining, groups at segs[depth]. Paths NOT under the prefix
+	// (and files directly at the prefix root) fall through to the default rule.
+	if grain != nil && grain.Mode == "descend" && grain.Under != "" && grain.Depth > 0 {
+		if len(segs) > grain.Depth && segs[0] == grain.Under {
+			return segs[grain.Depth]
+		}
+	}
+
 	// Strip at most one leading language root.
 	if len(segs) > 0 && languageRoots[segs[0]] {
 		segs = segs[1:]
@@ -55,6 +78,7 @@ func pathPrefixGroup(path string) string {
 	}
 
 	// If first remaining segment is "internal", descend one more level.
+	// (Built-in default grain — preserved for byte-identical aOa views.)
 	if segs[0] == "internal" && len(segs) > 1 {
 		return segs[1]
 	}
@@ -86,10 +110,11 @@ func slugify(s string) string {
 // name/group/annotate of extracted facts; "mixed" is reserved for applied overlays
 // and ②b subset choices (kickoff-F2 §7 ruling D1, 2026-07-03).
 func Group(units []UnitFact) GroupingResult {
-	// Assign each unit to a group label.
+	// Assign each unit to a group label. nil grain → default top-level-dir
+	// rule (byte-identical to the pre-recon grouper).
 	labelFor := make(map[string]string, len(units)) // unitID → groupLabel
 	for _, u := range units {
-		labelFor[u.ID] = pathPrefixGroup(u.Path)
+		labelFor[u.ID] = pathPrefixGroup(u.Path, nil)
 	}
 
 	// Collect unique group labels and assign stable Part values.
@@ -141,10 +166,17 @@ func Group(units []UnitFact) GroupingResult {
 //
 // Returns: result, provKind ("derived"|"mixed"), warning findings (overlay-leash).
 func GroupWithOptions(units []UnitFact, opts *GroupOptions) (GroupingResult, string, []Finding) {
+	// Footprint grain (footprint.go) drives the rung-2 grouping depth. nil →
+	// default top-level-dir rule (byte-identical fallback, consensus §5).
+	var grain *Grain
+	if opts != nil {
+		grain = opts.Grain
+	}
+
 	// Start with rung-2 (path-prefix) for all units.
 	labelFor := make(map[string]string, len(units))
 	for _, u := range units {
-		labelFor[u.ID] = pathPrefixGroup(u.Path)
+		labelFor[u.ID] = pathPrefixGroup(u.Path, grain)
 	}
 
 	// Rung-3: atlas domain — overrides rung-2 where Domain is set.

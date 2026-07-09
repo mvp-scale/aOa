@@ -359,7 +359,7 @@ func TestGrouping_PathPrefix(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		got := pathPrefixGroup(tc.path)
+		got := pathPrefixGroup(tc.path, nil)
 		assert.Equal(t, tc.label, got, "pathPrefixGroup(%q)", tc.path)
 	}
 }
