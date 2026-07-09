@@ -2,7 +2,9 @@ package arch
 
 import (
 	"bytes"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -102,6 +104,51 @@ func TestDetectFootprint_Aoa(t *testing.T) {
 	// descent stays a code-level default, NOT a footprint descend rule.
 	if a.Grain != nil && a.Grain.Mode == "descend" {
 		t.Errorf("grain = %+v, want segment/nil for root-anchored go repo", a.Grain)
+	}
+}
+
+// TestDetectFootprint_GitIgnoredArtifactsNeverDominate — deploy regression on
+// aOa itself: _tmp_sitter_forest/ (gitignored, 737 vendored grammar sources)
+// dominated the file count and anchored the footprint at a build-artifact dir.
+// Layer 0 §2 says "prefer git ls-files when .git present (drops build
+// artifacts with zero heuristics)" — this test pins that behavior.
+func TestDetectFootprint_GitIgnoredArtifactsNeverDominate(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	root := t.TempDir()
+	files := []string{
+		".gitignore",
+		"go.mod",
+		"cmd/aoa/main.go",
+		"internal/app/app.go",
+		"internal/ports/storage.go",
+	}
+	// A gitignored artifact dir that holds the overwhelming majority of source.
+	for i := 0; i < 20; i++ {
+		files = append(files, fmt.Sprintf("_artifacts/grammar%d/parser.c", i))
+	}
+	mkTree(t, root, files)
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("_artifacts/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"init", "-q"}} {
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	fp, err := DetectFootprint(root)
+	if err != nil {
+		t.Fatalf("DetectFootprint: %v", err)
+	}
+	a := fp.Anchors[0]
+	if a.Path != "" {
+		t.Errorf("anchor path = %q, want \"\" — a gitignored artifact dir must never anchor", a.Path)
+	}
+	if a.Grain != nil && a.Grain.Mode == "descend" {
+		t.Errorf("grain = %+v, want segment/nil — ignored artifacts must not dominate", a.Grain)
 	}
 }
 
@@ -244,11 +291,11 @@ func TestDetectFootprint_NoMarker(t *testing.T) {
 // TestFootprint_MarshalRoundTrip verifies byte-stable JSON with no timestamps.
 func TestFootprint_MarshalRoundTrip(t *testing.T) {
 	fp := &Footprint{
-		Schema:  FootprintSchema,
-		Kind:    "python-app",
-		Engine:  "deterministic",
-		Prov:    "derived",
-		Anchors: []Anchor{{Path: "scrapy", Kind: "python-app", Marker: "setup.py", Confidence: "high", Grain: &Grain{Mode: "descend", Under: "scrapy", Depth: 1}}},
+		Schema:   FootprintSchema,
+		Kind:     "python-app",
+		Engine:   "deterministic",
+		Prov:     "derived",
+		Anchors:  []Anchor{{Path: "scrapy", Kind: "python-app", Marker: "setup.py", Confidence: "high", Grain: &Grain{Mode: "descend", Under: "scrapy", Depth: 1}}},
 		Excluded: []string{"docs", "tests"},
 	}
 	data, err := MarshalFootprint(fp)
