@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -196,7 +197,11 @@ type repoScan struct {
 	frameworkMarkers map[string]bool
 }
 
-// walkRepo performs the single deterministic tree walk (Layer 0 excision inline).
+// walkRepo performs the single deterministic scan (Layer 0 excision inline).
+// Provider order per §2 Layer 0: prefer `git ls-files` when .git is present —
+// tracked + untracked-unignored files, dropping build artifacts (gitignored
+// vendor trees, grammar forests) with zero heuristics. WalkDir is the fallback
+// for non-git roots.
 func walkRepo(root string) (*repoScan, error) {
 	s := &repoScan{
 		root:             root,
@@ -204,6 +209,23 @@ func walkRepo(root string) (*repoScan, error) {
 		topDirCodeFiles:  map[string]int{},
 		excludedDirs:     map[string]bool{},
 		frameworkMarkers: map[string]bool{},
+	}
+
+	if files, ok := gitLsFiles(root); ok {
+		// ls-files never surfaces ignored/dot dirs — record top-level ones so
+		// Excluded stays in parity with the walk provider's output.
+		if entries, err := os.ReadDir(root); err == nil {
+			for _, e := range entries {
+				n := e.Name()
+				if e.IsDir() && (footprintIgnoreDirs[n] || strings.HasPrefix(n, ".")) {
+					s.excludedDirs[n] = true
+				}
+			}
+		}
+		for _, rel := range files {
+			s.noteFile(rel)
+		}
+		return s, nil
 	}
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -235,40 +257,91 @@ func walkRepo(root string) (*repoScan, error) {
 			return nil
 		}
 
-		// A file. Record markers by their containing dir (repo-relative).
-		dir := filepath.Dir(rel)
-		if dir == "." {
-			dir = ""
-		}
-		if _, ok := unitMarkers[name]; ok || isWorkspaceMarker(name) {
-			if s.markers[dir] == nil {
-				s.markers[dir] = map[string]bool{}
-			}
-			s.markers[dir][name] = true
-		}
-		if isFrameworkMarker(name) {
-			s.frameworkMarkers[name] = true
-		}
-
-		// Count source files per top-level dir (for grain decision).
-		// Root-level files bucket under "" — they count toward the dominance
-		// denominator (dominantSubtree) but can never anchor: a filename is
-		// not a subtree (merge-consensus F1).
-		if isSourceFile(name) {
-			top := ""
-			if strings.Contains(filepath.ToSlash(rel), "/") {
-				top = firstSeg(rel)
-			}
-			if !footprintSatelliteDirs[top] && !footprintIgnoreDirs[top] {
-				s.topDirCodeFiles[top]++
-			}
-		}
+		s.noteFile(rel)
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("footprint: walk %s: %w", root, err)
 	}
 	return s, nil
+}
+
+// noteFile processes one repo-relative file path: Layer-0 excision by path
+// segment, marker collection, and per-top-dir source counting. Shared by the
+// git ls-files provider and the WalkDir fallback (which additionally prunes
+// ignored dirs during the walk, making the segment guard redundant there).
+func (s *repoScan) noteFile(rel string) {
+	segs := strings.Split(filepath.ToSlash(rel), "/")
+
+	// Layer 0 by segment: ignore-named or hidden dirs anywhere above the file.
+	// The git provider needs this guard for files that are tracked or
+	// untracked-unignored under such dirs (e.g. a committed vendor/).
+	for i, seg := range segs[:len(segs)-1] {
+		if footprintIgnoreDirs[seg] || strings.HasPrefix(seg, ".") {
+			if i == 0 {
+				s.excludedDirs[seg] = true
+			}
+			return
+		}
+	}
+	if len(segs) > 1 && footprintSatelliteDirs[segs[0]] {
+		s.excludedDirs[segs[0]] = true
+	}
+
+	name := segs[len(segs)-1]
+	dir := ""
+	if len(segs) > 1 {
+		dir = strings.Join(segs[:len(segs)-1], "/")
+	}
+
+	// Record markers by their containing dir (repo-relative).
+	if _, ok := unitMarkers[name]; ok || isWorkspaceMarker(name) {
+		if s.markers[dir] == nil {
+			s.markers[dir] = map[string]bool{}
+		}
+		s.markers[dir][name] = true
+	}
+	if isFrameworkMarker(name) {
+		s.frameworkMarkers[name] = true
+	}
+
+	// Count source files per top-level dir (for grain decision).
+	// Root-level files bucket under "" — they count toward the dominance
+	// denominator (dominantSubtree) but can never anchor: a filename is
+	// not a subtree (merge-consensus F1).
+	if isSourceFile(name) {
+		top := ""
+		if len(segs) > 1 {
+			top = segs[0]
+		}
+		if !footprintSatelliteDirs[top] && !footprintIgnoreDirs[top] {
+			s.topDirCodeFiles[top]++
+		}
+	}
+}
+
+// gitLsFiles returns the repo's in-scope file list — tracked plus
+// untracked-unignored (`git ls-files -co --exclude-standard`) — sorted, when
+// root is a git repo and git is runnable. This is Layer 0's preferred provider
+// (§2): gitignored build artifacts drop out with zero heuristics. ok=false
+// (no .git, git missing, or git error) → caller falls back to WalkDir.
+// Deterministic: output is sorted; no timestamps, no network.
+func gitLsFiles(root string) ([]string, bool) {
+	if _, err := os.Stat(filepath.Join(root, ".git")); err != nil {
+		return nil, false
+	}
+	out, err := exec.Command("git", "-C", root, "ls-files", "-co", "--exclude-standard", "-z").Output()
+	if err != nil {
+		return nil, false
+	}
+	var files []string
+	for _, f := range strings.Split(string(out), "\x00") {
+		if f != "" {
+			files = append(files, f)
+		}
+	}
+	sort.Strings(files)
+	return files, true
 }
 
 // pickUnitAnchor returns the anchor dir, its marker filename, and kind for the
