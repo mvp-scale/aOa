@@ -966,19 +966,22 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 		})
 	}
 
-	// PC1 / T45: boot-time derive — edges present but arch_shards absent.
+	// PC1 / T45: boot-time derive — edges present but no derived views.
 	// Fires when `aoa init` has already written edges to the DB (edges bucket
-	// exists) but this is the first daemon boot for the current binary
-	// (arch_shards bucket absent). Without this trigger, the canonical
-	// `init → daemon → arch views` workflow returns "no data" until a file
-	// edit kicks off the watcher path.
+	// exists) but the local-scope manifest is absent. Two states produce this:
+	// the first daemon boot for the current binary (arch_shards bucket absent
+	// entirely), and the post-`aoa arch recon` invalidation state, where
+	// DeleteShardsForScope removed the shard keys + manifest but the bucket
+	// (and its _version byte) survives — keying on the manifest subsumes both.
+	// Without this trigger, `init → daemon → arch views` (and a recon
+	// re-grain) returns "no data" until a file edit kicks off the watcher path.
 	// Same C4 gate and safeGo/bgWg pattern as the T43 trigger.
 	// Mutually exclusive with T43: T43 fires when edges are absent (Reindex →
-	// edges + shards); PC1 fires when edges are present but shards are absent
+	// edges + shards); PC1 fires when edges are present but views are absent
 	// (direct derive only). archDeriveMu serializes concurrent derives —
 	// no double-fire risk.
 	if r.FileCount > 0 && a.ArchEnabled && a.Store != nil &&
-		a.Store.HasEdgesBucket(a.ProjectID) && !a.Store.HasArchBucket(a.ProjectID) {
+		a.Store.HasEdgesBucket(a.ProjectID) && !a.hasLocalArchManifest() {
 		safeGo(&a.bgWg, "boot-arch-derive", nil, a.deriveArch)
 	}
 

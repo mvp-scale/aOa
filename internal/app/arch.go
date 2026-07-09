@@ -234,6 +234,19 @@ func (a *App) loadOrDetectFootprintGrain() *arch.Grain {
 	return fp.PrimaryGrain()
 }
 
+// hasLocalArchManifest reports whether a derived manifest exists for the
+// local scope. Backs the PC1/T45 boot-derive trigger: after `aoa arch recon`
+// invalidates views (DeleteShardsForScope), the arch_shards bucket survives
+// but the manifest is gone — the manifest, not the bucket, is the truthful
+// "views exist" signal. Read-only (db.View); C1 does not apply.
+func (a *App) hasLocalArchManifest() bool {
+	if a.Store == nil {
+		return false
+	}
+	m, err := a.Store.LoadManifest(a.ProjectID, archScope)
+	return err == nil && len(m) > 0
+}
+
 // ── App.deriveArch — main derivation entry point ───────────────────────────
 
 // deriveArch is the compact-time derivation entry point (L19.14 step 9).
