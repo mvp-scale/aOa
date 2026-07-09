@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>THE DAILY BUILD — aOa edition · the codebase front page</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { background:#d8d2c2; }
+  body { font-family: Georgia, 'Times New Roman', serif; color:#1a1710; }
+  .page { width:1680px; height:1050px; margin:0 auto; background:#f3efe4; padding:20px 28px 16px;
+          position:relative; overflow:hidden;
+          background-image: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.5), rgba(0,0,0,0) 60%); }
+  .mono { font-family: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace; }
+
+  /* ---------- masthead ---------- */
+  .masthead { border-top:3px solid #1a1710; border-bottom:1px solid #1a1710; padding:8px 0 6px; position:relative; }
+  .masthead .row1 { display:flex; justify-content:space-between; align-items:baseline; font-size:11px;
+                    text-transform:uppercase; letter-spacing:.14em; color:#5d5546; }
+  .masthead h1 { text-align:center; font-size:58px; letter-spacing:.02em; font-weight:700; line-height:1.0;
+                 font-variant:small-caps; margin:2px 0 0; }
+  .masthead h1 .thin { font-weight:400; }
+  .masthead .motto { text-align:center; font-style:italic; font-size:13.5px; color:#3d382c; margin-top:2px; }
+  .mastrule { border-bottom:3px double #1a1710; margin-top:7px; }
+
+  .weather { position:absolute; right:0; top:34px; width:250px; border:1px solid #1a1710; background:#ece6d5;
+             padding:6px 9px; font-size:11px; line-height:1.45; }
+  .weather b { font-variant:small-caps; letter-spacing:.06em; font-size:12px; }
+  .edbox { position:absolute; left:0; top:34px; width:250px; padding:6px 0; font-size:11px; line-height:1.5; color:#3d382c; }
+
+  /* ---------- lede ---------- */
+  .lede { display:flex; align-items:center; gap:14px; padding:8px 2px 7px; border-bottom:1px solid #1a1710; }
+  .lede .q { font-variant:small-caps; letter-spacing:.08em; font-size:12px; white-space:nowrap; color:#a3271e; font-weight:700; }
+  .lede .a1 { font-size:16.5px; font-style:italic; line-height:1.3; }
+  .lede .a1 b { font-style:normal; }
+
+  /* stamps */
+  .stamp { display:inline-block; font-family:ui-monospace,Menlo,monospace; font-size:8.5px; letter-spacing:.1em;
+           border:1px solid #1a1710; padding:0 4px; vertical-align:1px; background:#f3efe4; }
+  .stamp.real { color:#1a1710; }
+  .stamp.obs  { color:#7a5c12; border-color:#7a5c12; }
+  .stamp.der  { color:#31556b; border-color:#31556b; }
+  .stamp.warn { color:#a3271e; border-color:#a3271e; }
+  .chip { font-family:ui-monospace,Menlo,monospace; font-size:9.5px; background:#e9e2cf; border:1px solid #b8ae95;
+          padding:0 4px; white-space:nowrap; color:#2c2718; }
+
+  /* ---------- main grid ---------- */
+  .grid { display:grid; grid-template-columns: 564px 338px 330px 336px; gap:0; margin-top:0; height:672px; }
+  .col { padding:10px 14px 0 14px; border-right:1px solid #9c937c; overflow:hidden; }
+  .col:first-child { padding-left:2px; }
+  .col:last-child { border-right:none; padding-right:2px; }
+
+  .kicker { font-variant:small-caps; letter-spacing:.16em; font-size:11px; color:#a3271e; font-weight:700; }
+  .sechead { font-variant:small-caps; letter-spacing:.14em; font-size:12.5px; font-weight:700; border-bottom:2px solid #1a1710;
+             padding-bottom:2px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:baseline; }
+  .sechead .r { font-weight:400; font-size:9.5px; letter-spacing:.05em; color:#5d5546; }
+
+  /* lead story */
+  .lead h2 { font-size:27px; line-height:1.05; margin:3px 0 5px; font-weight:700; }
+  .lead .deck { font-size:13.5px; font-style:italic; line-height:1.32; color:#2c2718; margin-bottom:6px; }
+  .byline { font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#5d5546; border-top:1px solid #9c937c;
+            border-bottom:1px solid #9c937c; padding:3px 0; margin-bottom:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .lead p.body { font-size:12.2px; line-height:1.36; margin-bottom:6px; text-align:justify; }
+  .lead p.body .fl { font-family:ui-monospace,Menlo,monospace; font-size:10px; background:#e9e2cf; padding:0 3px; }
+  .dropcap::first-letter { float:left; font-size:38px; line-height:.82; padding:3px 6px 0 0; font-weight:700; }
+
+  .audit { border:1px solid #1a1710; background:#ece6d5; margin:8px 0 0; padding:7px 10px 8px; }
+  .audit .ahead { font-variant:small-caps; font-size:11px; letter-spacing:.12em; font-weight:700; display:flex; justify-content:space-between; }
+  .audit .ahead .g { color:#5d5546; font-weight:400; letter-spacing:.05em; font-size:9.5px; }
+  .audit table { width:100%; border-collapse:collapse; font-size:10.5px; margin-top:3px; }
+  .audit td { padding:1px 0; border-bottom:1px dotted #b8ae95; vertical-align:baseline; }
+  .audit td.n { text-align:right; font-family:ui-monospace,Menlo,monospace; font-size:10px; width:44px; padding-right:7px; }
+  .audit td.note { text-align:right; font-style:italic; font-size:9.5px; color:#5d5546; white-space:nowrap; padding-left:8px; }
+  .audit .barc { width:110px; padding-right:9px; }
+  .audit .bar { height:6px; background:#a3271e; }
+  .audit .bar.dim { background:#8d8471; }
+  .code { background:#211d14; color:#d8d2c2; font-family:ui-monospace,Menlo,monospace; font-size:9.5px; line-height:1.42;
+          padding:6px 10px; margin-top:6px; white-space:pre; overflow:hidden; }
+  .code .ln { color:#6d6450; display:inline-block; width:30px; }
+  .code .hi { color:#f0c36a; }
+  .code .cm { color:#8fae8a; }
+  .codecap { font-size:9.5px; color:#5d5546; margin-top:3px; font-style:italic; display:flex; justify-content:space-between;}
+
+  /* second column stories */
+  .story2 h3 { font-size:21px; line-height:1.08; margin:2px 0 5px; }
+  .story2 .deck2 { font-size:12.5px; font-style:italic; line-height:1.33; color:#2c2718; margin-bottom:6px; }
+  .story2 p.body { font-size:12px; line-height:1.4; margin-bottom:6px; text-align:justify; }
+  table.rank { width:100%; border-collapse:collapse; font-size:11px; }
+  table.rank td { padding:2px 0; border-bottom:1px dotted #b8ae95; vertical-align:baseline; }
+  table.rank td.n { text-align:right; font-family:ui-monospace,Menlo,monospace; font-size:10.5px; width:36px; padding-right:7px; font-weight:700;}
+  table.rank td.t { font-family:ui-monospace,Menlo,monospace; font-size:10px; }
+  table.rank td.c { text-align:right; }
+  .more { font-size:10px; color:#5d5546; font-style:italic; padding-top:3px; }
+
+  /* attention markets */
+  .mkt { width:100%; border-collapse:collapse; font-size:11.5px; }
+  .mkt td { padding:2.5px 0 2px; border-bottom:1px dotted #b8ae95; vertical-align:middle; }
+  .mkt td.dn { font-family:ui-monospace,Menlo,monospace; font-size:10.5px; width:118px; }
+  .mkt td.hv { text-align:right; font-family:ui-monospace,Menlo,monospace; font-size:10.5px; width:44px; padding-left:6px; font-weight:700;}
+  .mkt .bw { }
+  .mkt .b { height:8px; background:#1a1710; }
+  .caveat { border:1px solid #7a5c12; color:#5c4712; background:#efe7cd; font-size:10px; line-height:1.4; padding:5px 8px; margin-top:8px; }
+  .caveat b { font-variant:small-caps; letter-spacing:.08em; }
+  .opnote { font-size:10.5px; font-style:italic; color:#3d382c; margin-top:7px; line-height:1.4; border-top:1px solid #9c937c; padding-top:5px;}
+  .opnote b { font-variant:small-caps; font-style:normal; letter-spacing:.06em; }
+
+  /* concepts */
+  .pairs { display:flex; flex-wrap:wrap; gap:4px 6px; padding-top:2px; }
+  .pair { font-size:12px; border:1px solid #b8ae95; padding:1px 6px 2px; background:#eee8d7; white-space:nowrap; }
+  .pair .x { font-family:ui-monospace,Menlo,monospace; font-size:9.5px; color:#a3271e; font-weight:700; }
+  .pair.big { font-size:14.5px; font-weight:700; }
+  .pair.mid { font-size:13px; }
+
+  /* ledger */
+  .ledger { width:100%; border-collapse:collapse; font-size:11.5px; margin-top:2px; }
+  .ledger td { padding:2.5px 0; border-bottom:1px dotted #b8ae95; }
+  .ledger td.v { text-align:right; font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:700; }
+
+  /* bottom band */
+  .bottom { display:flex; gap:0; border-top:3px double #1a1710; margin-top:10px; height:196px; }
+  .refusals { width:496px; border-right:1px solid #9c937c; padding:8px 14px 0 2px; }
+  .refusals h4 { font-variant:small-caps; letter-spacing:.14em; font-size:12.5px; border-bottom:2px solid #1a1710; padding-bottom:2px; margin-bottom:6px; display:flex; justify-content:space-between;}
+  .refusals h4 .r { font-weight:400; font-size:9.5px; color:#5d5546; letter-spacing:.05em;}
+  .ref { font-size:11.5px; line-height:1.38; margin-bottom:7px; }
+  .ref b.t { font-variant:small-caps; letter-spacing:.04em; }
+  .ref .why { color:#3d382c; }
+  .wire { flex:1; padding:8px 2px 0 14px; }
+  .wire h4 { font-variant:small-caps; letter-spacing:.14em; font-size:12.5px; border-bottom:2px solid #1a1710; padding-bottom:2px; margin-bottom:6px; display:flex; justify-content:space-between; }
+  .wire h4 .r { font-weight:400; font-size:9.5px; color:#5d5546; letter-spacing:.05em; }
+  .wiregrid { display:grid; grid-template-columns:1fr 1fr; gap:0 22px; }
+  .witem { font-size:11px; line-height:1.35; padding:3px 0; border-bottom:1px dotted #b8ae95; display:flex; gap:6px; align-items:baseline; }
+  .witem .rule-tag { font-family:ui-monospace,Menlo,monospace; font-size:9px; color:#a3271e; font-weight:700; width:46px; flex:none;}
+  .witem .msg { flex:1; }
+  .colophon { text-align:center; font-size:9.5px; color:#5d5546; letter-spacing:.08em; padding-top:6px; border-top:1px solid #9c937c; margin-top:6px; font-variant:small-caps;}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ================= MASTHEAD ================= -->
+  <div class="masthead">
+    <div class="row1">
+      <span>Vol. I · No. 8e370207ccdf</span>
+      <span>Wednesday, July 9, 2026 · morning edition</span>
+      <span>printed from the live daemon · zero prose without a stamp</span>
+    </div>
+    <div class="edbox">
+      <b>THE aOa REPOSITORY</b> · Go, hexagonal<br>
+      226 Go files · 25 internal targets<br>
+      1,781 import edges · 576 external targets<br>
+      <span class="stamp real">REAL · import graph @ rev 8e370207</span>
+    </div>
+    <h1>The Daily Build <span class="thin">·</span> <span class="thin" style="font-size:34px;">aOa edition</span></h1>
+    <div class="motto">“All the claims fit to stamp.” — every line below terminates in file:line, or is refused on page one.</div>
+    <div class="weather">
+      <b>TANGLE WATCH</b> — clear.<br>
+      No cycle or mutual-dependency findings on the wire today.
+      9 findings open: <span style="color:#a3271e">9 warn · 0 error</span>.<br>
+      <span class="stamp real">REAL · /api/arch/findings</span>
+    </div>
+    <div class="mastrule"></div>
+  </div>
+
+  <!-- ================= LEDE / A1 ================= -->
+  <div class="lede">
+    <span class="q">Q: What should I know before I touch this codebase today?</span>
+    <span class="a1">A: <b>One loud finding that isn’t what it looks like</b> — 9 warnings, 0 errors, no tangles;
+      <b>internal/ports</b> anchors 82 of 226 files; and the machine’s attention is on <b>testing</b>, not the code you think.
+      <span class="stamp real">REAL</span> <span class="stamp obs">OBSERVED = this tool’s sessions, not git</span></span>
+  </div>
+
+  <div class="grid">
+
+    <!-- ============ LEAD STORY ============ -->
+    <div class="col lead">
+      <div class="kicker">The lead finding, audited</div>
+      <h2>Detector cries ‘GOD’ at parser adapter; audit finds a library of 509 languages instead</h2>
+      <div class="deck">The <i>god</i> rule fired on <span class="mono" style="font-size:13px;">internal/adapters/treesitter</span> — 530 outbound
+        imports, the widest fan-out on record. The paper pulled all 534 evidence lines: 510 sit in one generated file.</div>
+      <div class="byline">
+        <span>By the GOD detector</span> <span class="stamp warn">WARN</span> <span class="stamp real">REAL</span>
+        <span class="mono">finding fc27fd190a96ffa5</span> <span class="mono">in 4 · out 530</span>
+        <span style="margin-left:auto" class="mono">①headline ②audit ③code — ladder shown flat</span>
+      </div>
+      <p class="body dropcap">The adapter imports <b>530 distinct targets</b> while only 4 packages import it back.
+        The next-widest fan-out in the repo is <span class="fl">internal/domain/arch</span> at 20 — a 26× gap.
+        On raw numbers, this is the god component of the year.</p>
+      <p class="body">But the evidence audit tells a different story: <b>528 of the 530 targets are
+        <span class="fl">go-sitter-forest/*</span> grammar packages</b>, and the file carrying them announces itself as
+        machine-written. This is a table of languages, not a tangle — read before you refactor.</p>
+
+      <div class="audit">
+        <div class="ahead"><span>② The audit — 534 stamped lines, ranked by file</span><span class="g">top 5 of 15 files · +10 more</span></div>
+        <table id="auditTable"></table>
+      </div>
+
+      <div class="code" id="codePane"></div>
+      <div class="codecap"><span>③ the terminal rung: actual source at <span class="mono">languages_forest.go:3–14</span> — the file confesses in its own header.</span><span>+506 more import lines → :522</span></div>
+    </div>
+
+    <!-- ============ SECOND STORY + FOREIGN DESK ============ -->
+    <div class="col story2">
+      <div class="kicker">Architecture desk</div>
+      <h3>All roads run through <span class="mono" style="font-size:18px;">ports</span> — the hexagon is holding</h3>
+      <div class="deck2">82 of 226 Go files — 36% — import <span class="mono" style="font-size:11px;">internal/ports</span>, and from every layer: cmd 5 · internal 71 · test 6.</div>
+      <p class="body">No domain package imports an adapter in today’s edge set; the interface layer is doing its
+        constitutional job. First stamp: <span class="chip">cmd/aoa/cmd/arch.go:29</span>, and 81 more like it.</p>
+      <div class="sechead"><span>Most-imported, internal</span><span class="r">DERIVED from REAL edges · top 6 of 25</span></div>
+      <table class="rank" id="faninTable"></table>
+      <div class="more">+19 more internal targets · rank = importing files, one example stamp each</div>
+
+      <div style="height:12px"></div>
+      <div class="sechead"><span>Foreign desk — external imports</span><span class="r">REAL · top 6 of 576 targets</span></div>
+      <table class="rank" id="extTable"></table>
+      <div class="more">+570 more external targets · <i>testing outranks os, 102–101: this codebase tests more than it breathes.</i></div>
+    </div>
+
+    <!-- ============ ATTENTION MARKETS ============ -->
+    <div class="col">
+      <div class="sechead"><span>Attention markets</span><span class="r">OBSERVED · top 10 of 134 domains</span></div>
+      <table class="mkt" id="mktTable"></table>
+      <div class="more">+124 more domains tracked · 24 core · hits decay ×0.90 per autotune</div>
+      <div class="caveat"><b>Honesty box.</b> “Attention” is what <i>this tool</i> watched AI sessions touch — decayed hit
+        counters, not git history, not authorship, not your team.</div>
+      <div class="opnote"><b>Op-ed.</b> <i>animation</i> at №2 on a Go daemon — the dashboard work is leaving fingerprints.
+        The top of the market is testing (№1, №3): whatever else is true, the sessions are checking their work.</div>
+    </div>
+
+    <!-- ============ CONCEPTS + LEDGER ============ -->
+    <div class="col">
+      <div class="sechead"><span>Concepts in the air</span><span class="r">OBSERVED · learned bigrams</span></div>
+      <div class="pairs" id="pairsBox"></div>
+      <div class="more">555 pairs learned · conversational filler excluded and disclosed: <span class="mono" style="font-size:9.5px;">let·me ×252, me·check ×54, want·me ×47</span></div>
+
+      <div style="height:10px"></div>
+      <div class="sechead"><span>The ledger</span><span class="r">OBSERVED · 15 sessions</span></div>
+      <table class="ledger" id="ledgerTable"></table>
+      <div class="more">Savings vs. unguided baseline, measured by the daemon on its own traffic.</div>
+    </div>
+  </div>
+
+  <!-- ================= BOTTOM BAND ================= -->
+  <div class="bottom">
+    <div class="refusals">
+      <h4><span>Not printed today — refusals</span><span class="r">a claim we can’t stamp doesn’t run</span></h4>
+      <div class="ref"><b class="t">“What changed this week”</b> — <b>REFUSED.</b>
+        <span class="why">This daemon has no git adapter; churn numbers would be invented.
+        The attention column is session observation and is labeled as such — it is not a change log.</span></div>
+      <div class="ref"><b class="t">“Who wrote this code”</b> — <b>REFUSED.</b>
+        <span class="why">No authorship signal is captured. No byline without a source.</span></div>
+      <div class="ref"><b class="t">“Method-level call graph”</b> — <b>REFUSED.</b>
+        <span class="why">Edges are import-grain with file:line; call resolution is not in today’s substrate.</span></div>
+    </div>
+    <div class="wire">
+      <h4><span>The findings wire — everything else the detectors said</span><span class="r">wire complete: 9 of 9 printed (1 above the fold, 8 here) · all WARN · REAL</span></h4>
+      <div class="wiregrid" id="wireBox"></div>
+      <div class="colophon">the daily build · composed from aoa-graph · findings · domains · bigrams · sessions · runway · stats — harvested live @ rev 8e370207ccdf · no numbers were invented in the making of this page</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ======== REAL DATA — harvested from live daemon extracts (top-K slices; totals kept honest) ======== */
+const DATA = {
+  rev: "8e370207ccdf",
+  audit: [ /* treesitter finding fc27fd190a96ffa5 — 534 sources grouped by file; paths under internal/adapters/ */
+    {f:"treesitter/languages_forest.go", n:510, note:"generated file", hot:true},
+    {f:"treesitter/gen_forest.go", n:7, note:"the generator"},
+    {f:"treesitter/downloader.go", n:3, note:""},
+    {f:"treesitter/imports.go", n:2, note:""},
+    {f:"cmd/aoa/cmd/grammar_cgo.go", n:1, note:"first stamp :11"}
+  ],
+  auditTotal: 534, auditFiles: 15,
+  code: [
+    {ln:3,  t:"// Code generated by gen_forest.go; DO NOT EDIT.", cls:"cm"},
+    {ln:4,  t:"// Generated: 2026-02-21T02:04:32Z", cls:"cm"},
+    {ln:5,  t:"// Languages: 509", cls:"hi"},
+    {ln:7,  t:"package treesitter", cls:""},
+    {ln:12, t:'tree_sitter "github.com/tree-sitter/go-tree-sitter"', cls:""},
+    {ln:14, t:'forest_abap "github.com/alexaandru/go-sitter-forest/abap"', cls:"hi"},
+    {ln:15, t:'forest_abl  "github.com/alexaandru/go-sitter-forest/abl"', cls:"hi"}
+  ],
+  fanin: [ /* importing-file counts per internal target, one real example stamp each */
+    {t:"internal/ports", n:82, eg:"cmd/aoa/cmd/arch.go:29"},
+    {t:"adapters/socket", n:26, eg:"cmd/aoa/cmd/arch.go:26"},
+    {t:"domain/index", n:18, eg:"socket/c4_socket_probe_test.go:20"},
+    {t:"adapters/bbolt", n:17, eg:"cmd/aoa/cmd/arch.go:25"},
+    {t:"internal/app", n:13, eg:"cmd/aoa/cmd/arch.go:27"},
+    {t:"adapters/treesitter", n:12, eg:"cmd/grammar_cgo.go:11"}
+  ],
+  externals: [
+    {t:"std/testing", n:102, eg:"arch_findings_test.go:7"},
+    {t:"std/os", n:101, eg:"cmd/aoa/cmd/arch.go:21"},
+    {t:"std/fmt", n:93, eg:"cmd/aoa/cmd/arch.go:20"},
+    {t:"std/path/filepath", n:89, eg:"cmd/aoa/cmd/arch.go:22"},
+    {t:"testify/assert", n:83, eg:"arch_findings_test.go:9"},
+    {t:"std/strings", n:82, eg:"cmd/aoa/cmd/arch.go:23"}
+  ],
+  domains: [ /* live atlas hit counters, decayed */
+    {d:"unit_testing", h:608.7}, {d:"animation", h:596.2}, {d:"integration_testing", h:508.6},
+    {d:"reactive", h:465.4}, {d:"database", h:431.3}, {d:"middleware", h:429.4},
+    {d:"ci_cd", h:404.9}, {d:"error_handling", h:390.3}, {d:"rest_api", h:382.5}, {d:"routing", h:379.0}
+  ],
+  bigrams: [ /* learned concept pairs, count = co-occurrences across sessions */
+    ["react flow",45,"big"],["status line",44,"big"],["data flow",35,"big"],["mvp scale",32,"mid"],
+    ["reference model",28,"mid"],["context details",28,"mid"],["data model",24,"mid"],["lazy start",24,"mid"],
+    ["per view",23,""],["knowledge graph",20,""],["trigram fallback",20,""],["zero results",20,""],
+    ["aoa daemon",19,""],["retail monolith",19,""],["architecture c4",18,""],["board md",18,""],
+    ["role layer",18,""],["import edges",17,""],["real data",17,""],["tree sitter",17,""]
+  ],
+  ledger: [
+    ["Sessions on record","15"],
+    ["Prompts fielded","485"],
+    ["Guided reads","183 / 255 · 72%"],
+    ["Tokens saved (vs unguided)","6,366,615"],
+    ["Time saved","≈ 3.9 h"],
+    ["Cache hit rate","99.98%"],
+    ["Lines shipped","+4,678 / −226"],
+    ["Spend to date","$211.27"]
+  ],
+  wire: [
+    {r:"god", m:"bbolt — in 5 · out 18 · 23 stamps", eg:"cmd/aoa/cmd/arch.go:25"},
+    {r:"god", m:"socket — in 4 · out 17 · 21 stamps", eg:"cmd/aoa/cmd/arch.go:26"},
+    {r:"god", m:"index — in 4 · out 17 · 21 stamps", eg:"c4_socket_probe_test.go:20"},
+    {r:"god", m:"arch — in 3 · out 20 · 23 stamps", eg:"cmd/aoa/cmd/arch.go:28"},
+    {r:"god", m:"analyzer — in 4 · out 13 · 17 stamps", eg:"cmd/dim-dump/main.go:19"},
+    {r:"god", m:"peek — in 3 · out 5 · 8 stamps", eg:"socket/server.go:15"},
+    {r:"budget", m:"group ext:std holds 45 members (limit 40)", eg:"grouping debt, no source line — said so"},
+    {r:"budget", m:"group ‘other’ holds 518 members (limit 40)", eg:"grouping debt, no source line — said so"}
+  ]
+};
+
+/* ---------- render (runs once) ---------- */
+function el(html){ const d=document.createElement('template'); d.innerHTML=html.trim(); return d.content.firstChild; }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+(function(){
+  // audit table
+  const at=document.getElementById('auditTable');
+  const max=DATA.audit[0].n;
+  DATA.audit.forEach(a=>{
+    const w=Math.max(2, Math.round(110*a.n/max));
+    at.appendChild(el(`<tr>
+      <td class="n">×${a.n}</td>
+      <td class="barc"><div class="bar ${a.hot?'':'dim'}" style="width:${w}px"></div></td>
+      <td class="mono" style="font-size:9.5px;">${esc(a.f)}</td>
+      <td class="note">${esc(a.note)}</td>
+    </tr>`));
+  });
+  at.appendChild(el(`<tr><td class="n"></td>
+    <td colspan="3" style="font-style:italic; font-size:10px; color:#5d5546; border-bottom:none; white-space:normal;">
+    verdict: 528 of 530 targets are go-sitter-forest grammars — the “god” is a generated language table.</td></tr>`));
+
+  // code pane
+  const cp=document.getElementById('codePane');
+  cp.textContent='';
+  let html='<span class="cm">$ internal/adapters/treesitter/languages_forest.go</span>\n';
+  DATA.code.forEach(c=>{ html+=`<span class="ln">${c.ln}</span><span class="${c.cls}">${esc(c.t)}</span>\n`; });
+  html+=`<span class="ln">…</span><span class="cm">// +506 more forest_* import lines, through :522</span>`;
+  cp.innerHTML=html;
+
+  // fanin + externals
+  const ft=document.getElementById('faninTable');
+  DATA.fanin.forEach(x=>ft.appendChild(el(`<tr><td class="n">${x.n}</td><td class="t">${esc(x.t)}</td><td class="c"><span class="chip">${esc(x.eg)}</span></td></tr>`)));
+  const et=document.getElementById('extTable');
+  DATA.externals.forEach(x=>et.appendChild(el(`<tr><td class="n">${x.n}</td><td class="t">${esc(x.t)}</td><td class="c"><span class="chip">${esc(x.eg)}</span></td></tr>`)));
+
+  // attention markets
+  const mt=document.getElementById('mktTable'); const hmax=DATA.domains[0].h;
+  DATA.domains.forEach((d,i)=>{
+    const w=Math.round(120*d.h/hmax);
+    mt.appendChild(el(`<tr><td class="dn">${i+1<10?'&nbsp;':''}${i+1} ${esc(d.d)}</td>
+      <td class="bw"><div class="b" style="width:${w}px"></div></td>
+      <td class="hv">${d.h.toFixed(1)}</td></tr>`));
+  });
+
+  // bigram pairs
+  const pb=document.getElementById('pairsBox');
+  DATA.bigrams.forEach(([p,n,c])=>pb.appendChild(el(`<span class="pair ${c}">${esc(p)} <span class="x">×${n}</span></span>`)));
+
+  // ledger
+  const lt=document.getElementById('ledgerTable');
+  DATA.ledger.forEach(([k,v])=>lt.appendChild(el(`<tr><td>${esc(k)}</td><td class="v">${esc(v)}</td></tr>`)));
+
+  // wire
+  const wb=document.getElementById('wireBox');
+  DATA.wire.forEach(w=>wb.appendChild(el(`<div class="witem"><span class="rule-tag">${esc(w.r.toUpperCase())}</span>
+    <span class="msg">${esc(w.m)}</span><span class="chip">${esc(w.eg)}</span></div>`)));
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>aOa · impact ripple — scrapy/utils/python.py</title>
+<style>
+  :root{
+    --bg:#0a0c10; --panel:#0e1117; --panel2:#11151d; --line:#1c2230;
+    --txt:#c9d2e0; --dim:#5c6780; --mut:#6b7690; --faint:#3a4356;
+    --org:#f0883e; --org-hi:#ffb26e; --org-dim:#8a4f24;
+    --test:#5a6d94; --grn:#3fb950; --red:#f85149; --cy:#58c4dc;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1680px;height:1050px;overflow:hidden;background:var(--bg);
+    color:var(--txt);font:12px/1.45 "SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,monospace;}
+  .chip{display:inline-block;border:1px solid var(--line);border-radius:3px;padding:0 6px;
+    font-size:10px;letter-spacing:.04em;color:var(--mut);vertical-align:1px}
+  .chip.real{color:var(--grn);border-color:#1f4428}
+  .chip.loc{color:var(--cy);border-color:#1c3a44;cursor:default}
+  .chip.warn{color:var(--org);border-color:#4a2f14}
+  /* ---------- header ---------- */
+  header{height:58px;border-bottom:1px solid var(--line);display:flex;align-items:center;
+    padding:0 20px;gap:14px;background:var(--panel)}
+  header .brand{font-weight:700;font-size:14px;color:#e8edf5}
+  header .brand span{color:var(--mut);font-weight:400}
+  header .q{font-size:15px;color:#e8edf5;font-weight:600}
+  header .q em{color:var(--org-hi);font-style:normal}
+  header .hright{margin-left:auto;display:flex;gap:8px;align-items:center}
+  /* ---------- verdict strip ---------- */
+  .verdict{height:52px;display:flex;align-items:center;gap:10px;padding:0 20px;
+    border-bottom:1px solid var(--line);background:linear-gradient(180deg,#10141b,#0c0f14)}
+  .verdict .sentence{font-size:14.5px;color:#dfe6f0}
+  .verdict b{color:var(--org-hi)} .verdict .neg{color:var(--grn)}
+  .verdict .ledger{margin-left:auto;color:var(--mut);font-size:11px;white-space:nowrap}
+  .verdict .ledger b{color:var(--txt)}
+  /* ---------- main grid ---------- */
+  main{display:flex;height:940px}
+  .left{width:1075px;display:flex;flex-direction:column;border-right:1px solid var(--line)}
+  .stage{position:relative;height:718px}
+  .stage svg{position:absolute;inset:0}
+  .stagehead{position:absolute;top:10px;left:16px;z-index:2;color:var(--mut);font-size:11px;
+    display:flex;gap:8px;align-items:center}
+  .legend{position:absolute;top:10px;right:16px;z-index:2;font-size:10.5px;color:var(--mut);
+    display:flex;gap:14px;background:rgba(10,12,16,.75);padding:4px 8px;border:1px solid var(--line);border-radius:4px}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+  .refusal{position:absolute;left:16px;bottom:12px;z-index:2;max-width:400px;
+    border:1px dashed #4a2f14;border-radius:4px;padding:7px 10px;background:rgba(14,17,23,.9)}
+  .refusal .rt{color:var(--org);font-size:10px;letter-spacing:.08em;font-weight:700}
+  .refusal p{color:var(--mut);font-size:10.5px;margin-top:3px}
+  .refusal p b{color:var(--txt)}
+  /* ---------- negative space ---------- */
+  .negspace{flex:1;border-top:1px solid var(--line);background:var(--panel);padding:10px 16px 8px;overflow:hidden}
+  .negspace h3{font-size:11px;letter-spacing:.1em;color:var(--grn);font-weight:700}
+  .negspace h3 .chip{margin-left:8px}
+  .negspace .sub{color:var(--mut);font-size:10.5px;margin:2px 0 8px}
+  .neggrid{display:flex;flex-wrap:wrap;gap:4px 6px}
+  .neggrid .f{border:1px solid #1a212e;border-radius:3px;padding:1px 7px;font-size:10px;
+    color:var(--faint);background:#0c0f15}
+  .neggrid .more{color:var(--mut);border-style:dashed}
+  /* ---------- right contract panel ---------- */
+  .right{flex:1;display:flex;flex-direction:column;background:var(--panel);overflow:hidden}
+  .contract{padding:12px 16px 8px;border-bottom:1px solid var(--line)}
+  .contract h2{font-size:11px;letter-spacing:.12em;color:var(--mut);font-weight:700}
+  .contract h2 b{color:var(--org)}
+  .rankrule{color:var(--mut);font-size:10.5px;margin-top:2px}
+  .movers{padding:4px 0 0}
+  .mover{display:flex;align-items:center;gap:8px;padding:4px 16px;border-bottom:1px solid #12161f}
+  .mover .rk{width:16px;color:var(--faint);font-size:10px;text-align:right}
+  .mover .nm{width:188px;color:#dfe6f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mover .nm span{color:var(--mut)}
+  .mover .stamp{width:204px;font-size:10px;color:var(--cy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mover .bar{flex:1;height:7px;background:#141924;border-radius:2px;position:relative;overflow:hidden}
+  .mover .bar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--org-dim),var(--org));border-radius:2px}
+  .mover .w{width:58px;text-align:right;color:var(--org-hi);font-size:10.5px}
+  .mover.dimmed{opacity:.38}
+  .mover.sel{background:#171d29;border-left:2px solid var(--org);padding-left:14px}
+  .moremv{padding:5px 16px;color:var(--mut);font-size:10.5px;border-bottom:1px solid var(--line)}
+  /* ---------- expansion ---------- */
+  .expand{margin:10px 16px;border:1px solid #2a3346;border-radius:5px;background:var(--panel2);overflow:hidden}
+  .expand .eh{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+  .expand .eh .t{color:#e8edf5;font-weight:700}
+  .expand .eh .esc{margin-left:auto;color:var(--mut);font-size:9.5px;letter-spacing:.06em}
+  .expand .claim{padding:7px 12px;color:var(--txt);font-size:11.5px;border-bottom:1px solid var(--line)}
+  .expand .claim b{color:var(--org-hi)}
+  .imps{padding:4px 0}
+  .imp{display:flex;gap:10px;padding:2.5px 12px;font-size:11px}
+  .imp .ln{color:var(--cy);width:330px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .imp .via{color:var(--mut);font-size:10px}
+  .expand .foot{padding:6px 12px;color:var(--mut);font-size:10px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center}
+  /* ---------- package breakdown ---------- */
+  .pkgs{padding:10px 16px 4px;border-top:1px solid var(--line)}
+  .pkgs h3{font-size:10.5px;letter-spacing:.1em;color:var(--mut);font-weight:700;margin-bottom:6px}
+  .pkgs h3 b{color:var(--txt)}
+  .pk{display:flex;align-items:center;gap:8px;padding:2.5px 0;font-size:11px}
+  .pk .n{width:150px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pk .bb{flex:1;height:6px;background:#141924;border-radius:2px;position:relative;overflow:hidden}
+  .pk .bb i{position:absolute;top:0;bottom:0;left:0;border-radius:2px}
+  .pk .bb i.d1{background:var(--org)}
+  .pk .bb i.d2{background:#7a4a1e}
+  .pk .c{width:112px;text-align:right;color:var(--mut);font-size:10px;white-space:nowrap}
+  .pk .c b{color:var(--org-hi)}
+  .pkfoot{color:var(--faint);font-size:9.5px;margin-top:5px}
+  /* ---------- ladder ---------- */
+  .ladder{margin-top:auto;padding:9px 16px;border-top:1px solid var(--line);color:var(--mut);
+    font-size:10.5px;display:flex;gap:6px;align-items:center;background:#0c0f14}
+  .ladder b{color:var(--txt)} .ladder .g{color:var(--org)}
+  /* svg text */
+  text{font-family:"SF Mono","JetBrains Mono",ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">aOa <span>· impact</span></div>
+  <span class="chip">scrapy</span>
+  <div class="q">If I touch <em>scrapy/utils/python.py</em>, what moves?</div>
+  <div class="hright">
+    <span class="chip real">REAL · static imports · incl. tests</span>
+    <span class="chip">rev 0188849902b2</span>
+  </div>
+</header>
+
+<div class="verdict">
+  <div class="sentence">Moving it touches <b>69 files directly</b>, <b>≥215 within depth 2</b> —
+    and <span class="neg">57 files are provably untouched</span> (no import path exists).</div>
+  <div class="ledger">full ledger <b>69</b> d1 + <b>146</b> d2 + <b>151</b> d3–4 + <b>57</b> unreachable = <b>423</b> files · sums exactly</div>
+</div>
+
+<main>
+  <div class="left">
+    <div class="stage">
+      <div class="stagehead">
+        <span>RIPPLE · reverse import reachability from python.py</span>
+        <span class="chip real">REAL</span>
+        <span class="chip">3,042 edges · 424 files scanned</span>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--org)"></i>production file</span>
+        <span><i style="background:var(--test)"></i>test/docs file</span>
+        <span><i style="background:none;border:1px dashed var(--faint);border-radius:0"></i>not drawn (depth ≥3)</span>
+      </div>
+      <svg id="ripple" width="1075" height="718" viewBox="0 0 1075 718"></svg>
+      <div class="refusal">
+        <div class="rt">⚠ CEILING — WHAT THIS DOES NOT CLAIM</div>
+        <p>No call graph: impact = <b>static import reachability only</b>. Scrapy loads
+        components dynamically (<b>load_object</b> via settings) — runtime dispatch is
+        <b>not modeled</b> and may move files this map cannot see.</p>
+      </div>
+    </div>
+    <div class="negspace">
+      <h3>PROVEN UNTOUCHED — 57 FILES <span class="chip real">REAL · exhaustive reverse BFS over 3,042 edges</span></h3>
+      <div class="sub">structurally unreachable via imports — no path of any length reaches python.py from these files · the negative answer is computed, not assumed</div>
+      <div class="neggrid" id="neggrid"></div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="contract">
+      <h2>TOP MOVERS <b>· ranked by onward fan-in</b> — what each would drag with it</h2>
+      <div class="rankrule">weight = files that import the mover itself (its own ripple) · stamp = the line that binds it to python.py</div>
+    </div>
+    <div class="movers" id="movers"></div>
+    <div class="moremv" id="moremv"></div>
+    <div class="expand" id="expand"></div>
+    <div class="pkgs" id="pkgs"></div>
+    <div class="ladder">
+      <span class="g">▶</span><b>3 gestures to code:</b>
+      <span>verdict</span><span class="g">→</span><span>ranked mover</span><span class="g">→</span>
+      <span>file:line</span><span class="g">→</span><span>source</span>
+      <span style="margin-left:auto">expanded state shown · siblings dimmed</span>
+    </div>
+  </div>
+</main>
+
+<script>
+const D = {"rev": "0188849902b2", "target": "scrapy/utils/python.py", "internal": 424, "ring1": [{"p": "scrapy/utils/defer.py", "f": "scrapy/utils/defer.py", "l": 31, "w": 60, "t": false}, {"p": "scrapy/utils/reactor.py", "f": "scrapy/utils/reactor.py", "l": 14, "w": 31, "t": false}, {"p": "scrapy/settings/__init__.py", "f": "scrapy/settings/__init__.py", "l": 15, "w": 23, "t": false}, {"p": "scrapy/commands/__init__.py", "f": "scrapy/commands/__init__.py", "l": 20, "w": 17, "t": false}, {"p": "scrapy/utils/deprecate.py", "f": "scrapy/utils/deprecate.py", "l": 10, "w": 15, "t": false}, {"p": "scrapy/http/request/__init__.py", "f": "scrapy/http/request/__init__.py", "l": 29, "w": 14, "t": false}, {"p": "scrapy/utils/conf.py", "f": "scrapy/utils/conf.py", "l": 14, "w": 12, "t": false}, {"p": "scrapy/utils/request.py", "f": "scrapy/utils/request.py", "l": 20, "w": 10, "t": false}, {"p": "scrapy/responsetypes.py", "f": "scrapy/responsetypes.py", "l": 15, "w": 8, "t": false}, {"p": "scrapy/utils/response.py", "f": "scrapy/utils/response.py", "l": 18, "w": 8, "t": false}, {"p": "scrapy/utils/ssl.py", "f": "scrapy/utils/ssl.py", "l": 18, "w": 6, "t": false}, {"p": "scrapy/http/response/text.py", "f": "scrapy/http/response/text.py", "l": 26, "w": 5, "t": false}, {"p": "scrapy/middleware.py", "f": "scrapy/middleware.py", "l": 14, "w": 5, "t": false}, {"p": "scrapy/extensions/feedexport.py", "f": "scrapy/extensions/feedexport.py", "l": 35, "w": 4, "t": false}, {"p": "scrapy/http/headers.py", "f": "scrapy/http/headers.py", "l": 9, "w": 4, "t": false}, {"p": "scrapy/pipelines/files.py", "f": "scrapy/pipelines/files.py", "l": 38, "w": 4, "t": false}, {"p": "tests/mockserver/http_resources.py", "f": "tests/mockserver/http_resources.py", "l": 14, "w": 4, "t": true}, {"p": "scrapy/contracts/__init__.py", "f": "scrapy/contracts/__init__.py", "l": 13, "w": 3, "t": false}, {"p": "scrapy/core/downloader/handlers/http11.py", "f": "scrapy/core/downloader/handlers/http11.py", "l": 55, "w": 3, "t": false}, {"p": "scrapy/downloadermiddlewares/redirect.py", "f": "scrapy/downloadermiddlewares/redirect.py", "l": 15, "w": 3, "t": false}, {"p": "scrapy/spidermiddlewares/referer.py", "f": "scrapy/spidermiddlewares/referer.py", "l": 18, "w": 3, "t": false}, {"p": "scrapy/utils/signal.py", "f": "scrapy/utils/signal.py", "l": 31, "w": 3, "t": false}, {"p": "tests/mockserver/utils.py", "f": "tests/mockserver/utils.py", "l": 14, "w": 3, "t": true}, {"p": "scrapy/cmdline.py", "f": "scrapy/cmdline.py", "l": 17, "w": 2, "t": false}, {"p": "scrapy/core/downloader/handlers/__init__.py", "f": "scrapy/core/downloader/handlers/__init__.py", "l": 19, "w": 2, "t": false}, {"p": "scrapy/core/downloader/middleware.py", "f": "scrapy/core/downloader/middleware.py", "l": 23, "w": 2, "t": false}, {"p": "scrapy/core/engine.py", "f": "scrapy/core/engine.py", "l": 46, "w": 2, "t": false}, {"p": "scrapy/core/spidermw.py", "f": "scrapy/core/spidermw.py", "l": 30, "w": 2, "t": false}, {"p": "scrapy/downloadermiddlewares/defaultheaders.py", "f": "scrapy/downloadermiddlewares/defaultheaders.py", "l": 12, "w": 2, "t": false}, {"p": "scrapy/downloadermiddlewares/httpproxy.py", "f": "scrapy/downloadermiddlewares/httpproxy.py", "l": 15, "w": 2, "t": false}, {"p": "scrapy/exporters.py", "f": "scrapy/exporters.py", "l": 22, "w": 2, "t": false}, {"p": "scrapy/http/cookies.py", "f": "scrapy/http/cookies.py", "l": 10, "w": 2, "t": false}, {"p": "scrapy/linkextractors/lxmlhtml.py", "f": "scrapy/linkextractors/lxmlhtml.py", "l": 23, "w": 2, "t": false}, {"p": "scrapy/mail.py", "f": "scrapy/mail.py", "l": 23, "w": 2, "t": false}, {"p": "scrapy/pipelines/__init__.py", "f": "scrapy/pipelines/__init__.py", "l": 20, "w": 2, "t": false}, {"p": "scrapy/pipelines/media.py", "f": "scrapy/pipelines/media.py", "l": 29, "w": 2, "t": false}, {"p": "scrapy/spiders/crawl.py", "f": "scrapy/spiders/crawl.py", "l": 22, "w": 2, "t": false}, {"p": "scrapy/utils/iterators.py", "f": "scrapy/utils/iterators.py", "l": 15, "w": 2, "t": false}, {"p": "tests/test_feedexport.py", "f": "tests/test_feedexport.py", "l": 36, "w": 2, "t": true}, {"p": "tests/test_http_request.py", "f": "tests/test_http_request.py", "l": 9, "w": 2, "t": true}, {"p": "scrapy/core/downloader/handlers/_httpx.py", "f": "scrapy/core/downloader/handlers/_httpx.py", "l": 21, "w": 1, "t": false}, {"p": "scrapy/core/scraper.py", "f": "scrapy/core/scraper.py", "l": 40, "w": 1, "t": false}, {"p": "scrapy/downloadermiddlewares/cookies.py", "f": "scrapy/downloadermiddlewares/cookies.py", "l": 14, "w": 1, "t": false}, {"p": "scrapy/downloadermiddlewares/retry.py", "f": "scrapy/downloadermiddlewares/retry.py", "l": 18, "w": 1, "t": false}, {"p": "scrapy/downloadermiddlewares/stats.py", "f": "scrapy/downloadermiddlewares/stats.py", "l": 9, "w": 1, "t": false}, {"p": "scrapy/http/request/form.py", "f": "scrapy/http/request/form.py", "l": 20, "w": 1, "t": false}, {"p": "scrapy/http/request/rpc.py", "f": "scrapy/http/request/rpc.py", "l": 16, "w": 1, "t": false}, {"p": "scrapy/logformatter.py", "f": "scrapy/logformatter.py", "l": 12, "w": 1, "t": false}, {"p": "scrapy/pipelines/images.py", "f": "scrapy/pipelines/images.py", "l": 29, "w": 1, "t": false}, {"p": "scrapy/robotstxt.py", "f": "scrapy/robotstxt.py", "l": 11, "w": 1, "t": false}, {"p": "scrapy/selector/unified.py", "f": "scrapy/selector/unified.py", "l": 8, "w": 1, "t": false}, {"p": "scrapy/extensions/httpcache.py", "f": "scrapy/extensions/httpcache.py", "l": 19, "w": 0, "t": false}, {"p": "tests/test_core_downloader.py", "f": "tests/test_core_downloader.py", "l": 30, "w": 0, "t": true}, {"p": "tests/test_crawl.py", "f": "tests/test_crawl.py", "l": 23, "w": 0, "t": true}, {"p": "tests/test_downloader_handler_twisted_ftp.py", "f": "tests/test_downloader_handler_twisted_ftp.py", "l": 22, "w": 0, "t": true}, {"p": "tests/test_downloadermiddleware.py", "f": "tests/test_downloadermiddleware.py", "l": 17, "w": 0, "t": true}, {"p": "tests/test_downloadermiddleware_cookies.py", "f": "tests/test_downloadermiddleware_cookies.py", "l": 13, "w": 0, "t": true}, {"p": "tests/test_downloadermiddleware_defaultheaders.py", "f": "tests/test_downloadermiddleware_defaultheaders.py", "l": 6, "w": 0, "t": true}, {"p": "tests/test_dupefilters.py", "f": "tests/test_dupefilters.py", "l": 14, "w": 0, "t": true}, {"p": "tests/test_exporters.py", "f": "tests/test_exporters.py", "l": 27, "w": 0, "t": true}, {"p": "tests/test_feedexport_batch.py", "f": "tests/test_feedexport_batch.py", "l": 22, "w": 0, "t": true}, {"p": "tests/test_http_request_form.py", "f": "tests/test_http_request_form.py", "l": 12, "w": 0, "t": true}, {"p": "tests/test_http_request_json.py", "f": "tests/test_http_request_json.py", "l": 10, "w": 0, "t": true}, {"p": "tests/test_http_response_text.py", "f": "tests/test_http_response_text.py", "l": 10, "w": 0, "t": true}, {"p": "tests/test_utils_datatypes.py", "f": "tests/test_utils_datatypes.py", "l": 17, "w": 0, "t": true}, {"p": "tests/test_utils_python.py", "f": "tests/test_utils_python.py", "l": 13, "w": 0, "t": true}, {"p": "tests/test_utils_request.py", "f": "tests/test_utils_request.py", "l": 11, "w": 0, "t": true}, {"p": "tests/test_utils_response.py", "f": "tests/test_utils_response.py", "l": 8, "w": 0, "t": true}, {"p": "tests/test_utils_trackref.py", "f": "tests/test_utils_trackref.py", "l": 8, "w": 0, "t": true}], "ring2": [{"p": "scrapy/http/__init__.py", "via": "scrapy/http/headers.py", "f": "scrapy/http/__init__.py", "l": 8, "w": 102, "t": false}, {"p": "scrapy/crawler.py", "via": "scrapy/core/engine.py", "f": "scrapy/crawler.py", "l": 17, "w": 91, "t": false}, {"p": "scrapy/utils/test.py", "via": "scrapy/utils/reactor.py", "f": "scrapy/utils/test.py", "l": 18, "w": 80, "t": false}, {"p": "tests/utils/decorators.py", "via": "scrapy/utils/defer.py", "f": "tests/utils/decorators.py", "l": 9, "w": 59, "t": true}, {"p": "scrapy/spiders/__init__.py", "via": "scrapy/spiders/crawl.py", "f": "scrapy/spiders/__init__.py", "l": 163, "w": 48, "t": false}, {"p": "scrapy/utils/log.py", "via": "scrapy/settings/__init__.py", "f": "scrapy/utils/log.py", "l": 15, "w": 33, "t": false}, {"p": "scrapy/utils/spider.py", "via": "scrapy/utils/defer.py", "f": "scrapy/utils/spider.py", "l": 8, "w": 26, "t": false}, {"p": "scrapy/utils/asyncio.py", "via": "scrapy/utils/reactor.py", "f": "scrapy/utils/asyncio.py", "l": 16, "w": 26, "t": false}, {"p": "scrapy/utils/decorators.py", "via": "scrapy/utils/defer.py", "f": "scrapy/utils/decorators.py", "l": 12, "w": 20, "t": false}, {"p": "tests/spiders.py", "via": "scrapy/spiders/crawl.py", "f": "tests/spiders.py", "l": 20, "w": 17, "t": true}, {"p": "tests/mockserver/http.py", "via": "tests/mockserver/http_resources.py", "f": "tests/mockserver/http.py", "l": 12, "w": 16, "t": true}, {"p": "scrapy/utils/reactorless.py", "via": "scrapy/utils/reactor.py", "f": "scrapy/utils/reactorless.py", "l": 8, "w": 11, "t": false}, {"p": "scrapy/selector/__init__.py", "via": "scrapy/selector/unified.py", "f": "scrapy/selector/__init__.py", "l": 6, "w": 8, "t": false}, {"p": "tests/utils/__init__.py", "via": "scrapy/utils/defer.py", "f": "tests/utils/__init__.py", "l": 9, "w": 8, "t": true}, {"p": "scrapy/linkextractors/__init__.py", "via": "scrapy/linkextractors/lxmlhtml.py", "f": "scrapy/linkextractors/__init__.py", "l": 128, "w": 7, "t": false}, {"p": "scrapy/http/response/__init__.py", "via": "scrapy/http/headers.py", "f": "scrapy/http/response/__init__.py", "l": 14, "w": 5, "t": false}, {"p": "tests/test_commands.py", "via": "scrapy/cmdline.py", "f": "tests/test_commands.py", "l": 14, "w": 4, "t": true}, {"p": "scrapy/core/downloader/__init__.py", "via": "scrapy/core/downloader/handlers/__init__.py", "f": "scrapy/core/downloader/__init__.py", "l": 14, "w": 4, "t": false}, {"p": "scrapy/core/downloader/contextfactory.py", "via": "scrapy/utils/deprecate.py", "f": "scrapy/core/downloader/contextfactory.py", "l": 26, "w": 4, "t": false}, {"p": "scrapy/utils/project.py", "via": "scrapy/settings/__init__.py", "f": "scrapy/utils/project.py", "l": 9, "w": 3, "t": false}, {"p": "scrapy/signalmanager.py", "via": "scrapy/utils/defer.py", "f": "scrapy/signalmanager.py", "l": 11, "w": 3, "t": false}, {"p": "tests/test_downloader_handlers_http_base.py", "via": "scrapy/utils/defer.py", "f": "tests/test_downloader_handlers_http_base.py", "l": 40, "w": 3, "t": true}, {"p": "scrapy/squeues.py", "via": "scrapy/utils/request.py", "f": "scrapy/squeues.py", "l": 14, "w": 3, "t": false}, {"p": "tests/mockserver/http_base.py", "via": "tests/mockserver/utils.py", "f": "tests/mockserver/http_base.py", "l": 16, "w": 3, "t": true}, {"p": "tests/test_engine.py", "via": "scrapy/core/engine.py", "f": "tests/test_engine.py", "l": 21, "w": 2, "t": true}, {"p": "tests/test_downloadermiddleware_redirect_base.py", "via": "scrapy/downloadermiddlewares/httpproxy.py", "f": "tests/test_downloadermiddleware_redirect_base.py", "l": 7, "w": 2, "t": true}, {"p": "scrapy/http/response/html.py", "via": "scrapy/http/response/text.py", "f": "scrapy/http/response/html.py", "l": 9, "w": 2, "t": false}, {"p": "scrapy/core/downloader/handlers/file.py", "via": "scrapy/responsetypes.py", "f": "scrapy/core/downloader/handlers/file.py", "l": 9, "w": 2, "t": false}, {"p": "scrapy/shell.py", "via": "scrapy/settings/__init__.py", "f": "scrapy/shell.py", "l": 26, "w": 2, "t": false}, {"p": "tests/test_spider.py", "via": "scrapy/settings/__init__.py", "f": "tests/test_spider.py", "l": 12, "w": 2, "t": true}, {"p": "tests/test_scheduler.py", "via": "scrapy/utils/defer.py", "f": "tests/test_scheduler.py", "l": 18, "w": 2, "t": true}, {"p": "scrapy/core/downloader/tls.py", "via": "scrapy/utils/deprecate.py", "f": "scrapy/core/downloader/tls.py", "l": 25, "w": 2, "t": false}, {"p": "scrapy/utils/versions.py", "via": "scrapy/utils/ssl.py", "f": "scrapy/utils/versions.py", "l": 10, "w": 2, "t": false}, {"p": "scrapy/commands/check.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/check.py", "l": 10, "w": 1, "t": false}, {"p": "scrapy/commands/edit.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/edit.py", "l": 10, "w": 1, "t": false}, {"p": "scrapy/commands/startproject.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/startproject.py", "l": 12, "w": 1, "t": false}, {"p": "scrapy/contracts/default.py", "via": "scrapy/contracts/__init__.py", "f": "scrapy/contracts/default.py", "l": 8, "w": 1, "t": false}, {"p": "scrapy/core/http2/stream.py", "via": "scrapy/http/headers.py", "f": "scrapy/core/http2/stream.py", "l": 16, "w": 1, "t": false}, {"p": "scrapy/downloadermiddlewares/robotstxt.py", "via": "scrapy/http/request/__init__.py", "f": "scrapy/downloadermiddlewares/robotstxt.py", "l": 16, "w": 1, "t": false}, {"p": "scrapy/http/request/json_request.py", "via": "scrapy/http/request/__init__.py", "f": "scrapy/http/request/json_request.py", "l": 15, "w": 1, "t": false}, {"p": "tests/test_pipeline_media.py", "via": "scrapy/http/request/__init__.py", "f": "tests/test_pipeline_media.py", "l": 12, "w": 1, "t": true}, {"p": "scrapy/http/response/json.py", "via": "scrapy/http/response/text.py", "f": "scrapy/http/response/json.py", "l": 8, "w": 1, "t": false}, {"p": "scrapy/http/response/xml.py", "via": "scrapy/http/response/text.py", "f": "scrapy/http/response/xml.py", "l": 9, "w": 1, "t": false}, {"p": "scrapy/extension.py", "via": "scrapy/middleware.py", "f": "scrapy/extension.py", "l": 11, "w": 1, "t": false}, {"p": "scrapy/core/downloader/handlers/datauri.py", "via": "scrapy/responsetypes.py", "f": "scrapy/core/downloader/handlers/datauri.py", "l": 9, "w": 1, "t": false}, {"p": "scrapy/core/downloader/handlers/ftp.py", "via": "scrapy/responsetypes.py", "f": "scrapy/core/downloader/handlers/ftp.py", "l": 44, "w": 1, "t": false}, {"p": "scrapy/downloadermiddlewares/httpcompression.py", "via": "scrapy/responsetypes.py", "f": "scrapy/downloadermiddlewares/httpcompression.py", "l": 11, "w": 1, "t": false}, {"p": "tests/test_robotstxt_interface.py", "via": "scrapy/robotstxt.py", "f": "tests/test_robotstxt_interface.py", "l": 3, "w": 1, "t": true}, {"p": "scrapy/downloadermiddlewares/httpauth.py", "via": "scrapy/settings/__init__.py", "f": "scrapy/downloadermiddlewares/httpauth.py", "l": 16, "w": 1, "t": false}, {"p": "tests/test_crawler.py", "via": "scrapy/settings/__init__.py", "f": "tests/test_crawler.py", "l": 27, "w": 1, "t": true}, {"p": "tests/test_settings/__init__.py", "via": "scrapy/settings/__init__.py", "f": "tests/test_settings/__init__.py", "l": 11, "w": 1, "t": true}, {"p": "scrapy/addons.py", "via": "scrapy/utils/conf.py", "f": "scrapy/addons.py", "l": 7, "w": 1, "t": false}, {"p": "scrapy/extensions/memusage.py", "via": "scrapy/utils/defer.py", "f": "scrapy/extensions/memusage.py", "l": 20, "w": 1, "t": false}, {"p": "tests/test_spider_start.py", "via": "scrapy/utils/defer.py", "f": "tests/test_spider_start.py", "l": 9, "w": 1, "t": true}, {"p": "scrapy/core/http2/protocol.py", "via": "scrapy/utils/deprecate.py", "f": "scrapy/core/http2/protocol.py", "l": 37, "w": 1, "t": false}, {"p": "scrapy/downloadermiddlewares/downloadtimeout.py", "via": "scrapy/utils/deprecate.py", "f": "scrapy/downloadermiddlewares/downloadtimeout.py", "l": 13, "w": 1, "t": false}, {"p": "scrapy/downloadermiddlewares/useragent.py", "via": "scrapy/utils/deprecate.py", "f": "scrapy/downloadermiddlewares/useragent.py", "l": 9, "w": 1, "t": false}, {"p": "scrapy/spiders/feed.py", "via": "scrapy/utils/iterators.py", "f": "scrapy/spiders/feed.py", "l": 16, "w": 1, "t": false}, {"p": "scrapy/extensions/telnet.py", "via": "scrapy/utils/reactor.py", "f": "scrapy/extensions/telnet.py", "l": 23, "w": 1, "t": false}, {"p": "scrapy/dupefilters.py", "via": "scrapy/utils/request.py", "f": "scrapy/dupefilters.py", "l": 10, "w": 1, "t": false}, {"p": "tests/mockserver/proxy_echo.py", "via": "tests/mockserver/http_resources.py", "f": "tests/mockserver/proxy_echo.py", "l": 6, "w": 1, "t": true}, {"p": "scrapy/__main__.py", "via": "scrapy/cmdline.py", "f": "scrapy/__main__.py", "l": 2, "w": 0, "t": false}, {"p": "scrapy/commands/bench.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/bench.py", "l": 10, "w": 0, "t": false}, {"p": "scrapy/commands/crawl.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/crawl.py", "l": 5, "w": 0, "t": false}, {"p": "scrapy/commands/fetch.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/fetch.py", "l": 9, "w": 0, "t": false}, {"p": "scrapy/commands/genspider.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/genspider.py", "l": 11, "w": 0, "t": false}, {"p": "scrapy/commands/list.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/list.py", "l": 5, "w": 0, "t": false}, {"p": "scrapy/commands/parse.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/parse.py", "l": 13, "w": 0, "t": false}, {"p": "scrapy/commands/runspider.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/runspider.py", "l": 8, "w": 0, "t": false}, {"p": "scrapy/commands/settings.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/settings.py", "l": 5, "w": 0, "t": false}, {"p": "scrapy/commands/shell.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/shell.py", "l": 13, "w": 0, "t": false}, {"p": "scrapy/commands/version.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/version.py", "l": 5, "w": 0, "t": false}, {"p": "scrapy/commands/view.py", "via": "scrapy/commands/__init__.py", "f": "scrapy/commands/view.py", "l": 4, "w": 0, "t": false}, {"p": "tests/test_command_parse.py", "via": "scrapy/commands/__init__.py", "f": "tests/test_command_parse.py", "l": 9, "w": 0, "t": true}, {"p": "tests/test_contracts.py", "via": "scrapy/contracts/__init__.py", "f": "tests/test_contracts.py", "l": 6, "w": 0, "t": true}, {"p": "tests/test_downloader_handlers.py", "via": "scrapy/core/downloader/handlers/__init__.py", "f": "tests/test_downloader_handlers.py", "l": 14, "w": 0, "t": true}, {"p": "tests/test_downloader_handler_httpx.py", "via": "scrapy/core/downloader/handlers/_httpx.py", "f": "tests/test_downloader_handler_httpx.py", "l": 11, "w": 0, "t": true}, {"p": "scrapy/core/downloader/handlers/http.py", "via": "scrapy/core/downloader/handlers/http11.py", "f": "scrapy/core/downloader/handlers/http.py", "l": 4, "w": 0, "t": false}, {"p": "tests/test_downloader_handler_twisted_http11.py", "via": "scrapy/core/downloader/handlers/http11.py", "f": "tests/test_downloader_handler_twisted_http11.py", "l": 11, "w": 0, "t": true}, {"p": "tests/test_spidermiddleware.py", "via": "scrapy/core/spidermw.py", "f": "tests/test_spidermiddleware.py", "l": 11, "w": 0, "t": true}, {"p": "tests/test_downloadermiddleware_httpproxy.py", "via": "scrapy/downloadermiddlewares/httpproxy.py", "f": "tests/test_downloadermiddleware_httpproxy.py", "l": 5, "w": 0, "t": true}, {"p": "tests/test_downloadermiddleware_redirect.py", "via": "scrapy/downloadermiddlewares/redirect.py", "f": "tests/test_downloadermiddleware_redirect.py", "l": 6, "w": 0, "t": true}, {"p": "tests/test_downloadermiddleware_redirect_metarefresh.py", "via": "scrapy/downloadermiddlewares/redirect.py", "f": "tests/test_downloadermiddleware_redirect_metarefresh.py", "l": 9, "w": 0, "t": true}, {"p": "tests/test_downloadermiddleware_retry.py", "via": "scrapy/downloadermiddlewares/retry.py", "f": "tests/test_downloadermiddleware_retry.py", "l": 7, "w": 0, "t": true}, {"p": "tests/test_downloadermiddleware_stats.py", "via": "scrapy/downloadermiddlewares/stats.py", "f": "tests/test_downloadermiddleware_stats.py", "l": 3, "w": 0, "t": true}, {"p": "tests/test_feedexport_storages.py", "via": "scrapy/extensions/feedexport.py", "f": "tests/test_feedexport_storages.py", "l": 18, "w": 0, "t": true}, {"p": "tests/test_feedexport_uri_params.py", "via": "scrapy/extensions/feedexport.py", "f": "tests/test_feedexport_uri_params.py", "l": 10, "w": 0, "t": true}, {"p": "tests/test_http_cookies.py", "via": "scrapy/http/cookies.py", "f": "tests/test_http_cookies.py", "l": 6, "w": 0, "t": true}, {"p": "tests/test_downloadermiddleware_robotstxt.py", "via": "scrapy/http/request/__init__.py", "f": "tests/test_downloadermiddleware_robotstxt.py", "l": 14, "w": 0, "t": true}, {"p": "tests/test_pqueues.py", "via": "scrapy/http/request/__init__.py", "f": "tests/test_pqueues.py", "l": 8, "w": 0, "t": true}, {"p": "tests/test_linkextractors.py", "via": "scrapy/linkextractors/lxmlhtml.py", "f": "tests/test_linkextractors.py", "l": 12, "w": 0, "t": true}, {"p": "tests/test_logformatter.py", "via": "scrapy/logformatter.py", "f": "tests/test_logformatter.py", "l": 10, "w": 0, "t": true}, {"p": "scrapy/extensions/statsmailer.py", "via": "scrapy/mail.py", "f": "scrapy/extensions/statsmailer.py", "l": 14, "w": 0, "t": false}, {"p": "tests/test_mail.py", "via": "scrapy/mail.py", "f": "tests/test_mail.py", "l": 12, "w": 0, "t": true}, {"p": "tests/test_middleware.py", "via": "scrapy/middleware.py", "f": "tests/test_middleware.py", "l": 9, "w": 0, "t": true}, {"p": "tests/test_pipelines.py", "via": "scrapy/pipelines/__init__.py", "f": "tests/test_pipelines.py", "l": 10, "w": 0, "t": true}, {"p": "tests/test_pipeline_files.py", "via": "scrapy/pipelines/files.py", "f": "tests/test_pipeline_files.py", "l": 26, "w": 0, "t": true}, {"p": "tests/test_pipeline_images.py", "via": "scrapy/pipelines/files.py", "f": "tests/test_pipeline_images.py", "l": 17, "w": 0, "t": true}, {"p": "tests/test_downloadermiddleware_httpcompression.py", "via": "scrapy/responsetypes.py", "f": "tests/test_downloadermiddleware_httpcompression.py", "l": 16, "w": 0, "t": true}, {"p": "tests/test_responsetypes.py", "via": "scrapy/responsetypes.py", "f": "tests/test_responsetypes.py", "l": 11, "w": 0, "t": true}, {"p": "tests/AsyncCrawlerProcess/dns_resolver_deprecated.py", "via": "scrapy/settings/__init__.py", "f": "tests/AsyncCrawlerProcess/dns_resolver_deprecated.py", "l": 5, "w": 0, "t": true}, {"p": "tests/CrawlerProcess/dns_resolver_deprecated.py", "via": "scrapy/settings/__init__.py", "f": "tests/CrawlerProcess/dns_resolver_deprecated.py", "l": 5, "w": 0, "t": true}, {"p": "tests/test_addons.py", "via": "scrapy/settings/__init__.py", "f": "tests/test_addons.py", "l": 8, "w": 0, "t": true}, {"p": "tests/test_http2_client_protocol.py", "via": "scrapy/settings/__init__.py", "f": "tests/test_http2_client_protocol.py", "l": 26, "w": 0, "t": true}, {"p": "tests/test_spiderloader/__init__.py", "via": "scrapy/settings/__init__.py", "f": "tests/test_spiderloader/__init__.py", "l": 16, "w": 0, "t": true}, {"p": "tests/test_spidermiddleware_referer.py", "via": "scrapy/settings/__init__.py", "f": "tests/test_spidermiddleware_referer.py", "l": 11, "w": 0, "t": true}, {"p": "tests/test_utils_conf.py", "via": "scrapy/settings/__init__.py", "f": "tests/test_utils_conf.py", "l": 8, "w": 0, "t": true}, {"p": "scrapy/core/downloader/handlers/http2.py", "via": "scrapy/utils/defer.py", "f": "scrapy/core/downloader/handlers/http2.py", "l": 19, "w": 0, "t": false}, {"p": "scrapy/extensions/closespider.py", "via": "scrapy/utils/defer.py", "f": "scrapy/extensions/closespider.py", "l": 21, "w": 0, "t": false}, {"p": "tests/AsyncCrawlerProcess/asyncio_deferred_signal.py", "via": "scrapy/utils/defer.py", "f": "tests/AsyncCrawlerProcess/asyncio_deferred_signal.py", "l": 8, "w": 0, "t": true}, {"p": "tests/AsyncCrawlerRunner/custom_loop_different.py", "via": "scrapy/utils/defer.py", "f": "tests/AsyncCrawlerRunner/custom_loop_different.py", "l": 5, "w": 0, "t": true}, {"p": "tests/AsyncCrawlerRunner/custom_loop_same.py", "via": "scrapy/utils/defer.py", "f": "tests/AsyncCrawlerRunner/custom_loop_same.py", "l": 5, "w": 0, "t": true}, {"p": "tests/AsyncCrawlerRunner/multi_parallel.py", "via": "scrapy/utils/defer.py", "f": "tests/AsyncCrawlerRunner/multi_parallel.py", "l": 5, "w": 0, "t": true}, {"p": "tests/AsyncCrawlerRunner/multi_seq.py", "via": "scrapy/utils/defer.py", "f": "tests/AsyncCrawlerRunner/multi_seq.py", "l": 5, "w": 0, "t": true}, {"p": "tests/AsyncCrawlerRunner/simple.py", "via": "scrapy/utils/defer.py", "f": "tests/AsyncCrawlerRunner/simple.py", "l": 5, "w": 0, "t": true}, {"p": "tests/AsyncCrawlerRunner/simple_default_reactor.py", "via": "scrapy/utils/defer.py", "f": "tests/AsyncCrawlerRunner/simple_default_reactor.py", "l": 5, "w": 0, "t": true}, {"p": "tests/CrawlerProcess/asyncio_deferred_signal.py", "via": "scrapy/utils/defer.py", "f": "tests/CrawlerProcess/asyncio_deferred_signal.py", "l": 8, "w": 0, "t": true}, {"p": "tests/CrawlerProcess/sleeping.py", "via": "scrapy/utils/defer.py", "f": "tests/CrawlerProcess/sleeping.py", "l": 7, "w": 0, "t": true}, {"p": "tests/test_extension_telnet.py", "via": "scrapy/utils/defer.py", "f": "tests/test_extension_telnet.py", "l": 11, "w": 0, "t": true}, {"p": "tests/test_resolver.py", "via": "scrapy/utils/defer.py", "f": "tests/test_resolver.py", "l": 8, "w": 0, "t": true}, {"p": "tests/test_spidermiddleware_process_start.py", "via": "scrapy/utils/defer.py", "f": "tests/test_spidermiddleware_process_start.py", "l": 6, "w": 0, "t": true}, {"p": "tests/test_utils_decorators.py", "via": "scrapy/utils/defer.py", "f": "tests/test_utils_decorators.py", "l": 10, "w": 0, "t": true}, {"p": "tests/test_utils_defer.py", "via": "scrapy/utils/defer.py", "f": "tests/test_utils_defer.py", "l": 12, "w": 0, "t": true}, {"p": "tests/test_utils_signal.py", "via": "scrapy/utils/defer.py", "f": "tests/test_utils_signal.py", "l": 13, "w": 0, "t": true}, {"p": "tests/test_utils_deprecate.py", "via": "scrapy/utils/deprecate.py", "f": "tests/test_utils_deprecate.py", "l": 8, "w": 0, "t": true}, {"p": "tests/test_utils_iterators.py", "via": "scrapy/utils/iterators.py", "f": "tests/test_utils_iterators.py", "l": 10, "w": 0, "t": true}, {"p": "conftest.py", "via": "scrapy/utils/reactor.py", "f": "conftest.py", "l": 10, "w": 0, "t": true}, {"p": "tests/AsyncCrawlerProcess/asyncio_enabled_no_reactor.py", "via": "scrapy/utils/reactor.py", "f": "tests/AsyncCrawlerProcess/asyncio_enabled_no_reactor.py", "l": 3, "w": 0, "t": true}, {"p": "tests/AsyncCrawlerProcess/asyncio_enabled_reactor.py", "via": "scrapy/utils/reactor.py", "f": "tests/AsyncCrawlerProcess/asyncio_enabled_reactor.py", "l": 3, "w": 0, "t": true}, {"p": "tests/AsyncCrawlerProcess/reactorless_reactor.py", "via": "scrapy/utils/reactor.py", "f": "tests/AsyncCrawlerProcess/reactorless_reactor.py", "l": 2, "w": 0, "t": true}, {"p": "tests/AsyncCrawlerRunner/reactorless_reactor.py", "via": "scrapy/utils/reactor.py", "f": "tests/AsyncCrawlerRunner/reactorless_reactor.py", "l": 6, "w": 0, "t": true}, {"p": "tests/CrawlerProcess/asyncio_enabled_no_reactor.py", "via": "scrapy/utils/reactor.py", "f": "tests/CrawlerProcess/asyncio_enabled_no_reactor.py", "l": 3, "w": 0, "t": true}, {"p": "tests/CrawlerProcess/asyncio_enabled_reactor.py", "via": "scrapy/utils/reactor.py", "f": "tests/CrawlerProcess/asyncio_enabled_reactor.py", "l": 4, "w": 0, "t": true}, {"p": "tests/CrawlerRunner/change_reactor.py", "via": "scrapy/utils/reactor.py", "f": "tests/CrawlerRunner/change_reactor.py", "l": 21, "w": 0, "t": true}, {"p": "tests/CrawlerRunner/custom_loop_different.py", "via": "scrapy/utils/reactor.py", "f": "tests/CrawlerRunner/custom_loop_different.py", "l": 6, "w": 0, "t": true}, {"p": "tests/CrawlerRunner/custom_loop_same.py", "via": "scrapy/utils/reactor.py", "f": "tests/CrawlerRunner/custom_loop_same.py", "l": 6, "w": 0, "t": true}, {"p": "tests/CrawlerRunner/ip_address.py", "via": "scrapy/utils/reactor.py", "f": "tests/CrawlerRunner/ip_address.py", "l": 7, "w": 0, "t": true}, {"p": "tests/CrawlerRunner/multi_parallel.py", "via": "scrapy/utils/reactor.py", "f": "tests/CrawlerRunner/multi_parallel.py", "l": 6, "w": 0, "t": true}, {"p": "tests/CrawlerRunner/multi_seq.py", "via": "scrapy/utils/reactor.py", "f": "tests/CrawlerRunner/multi_seq.py", "l": 7, "w": 0, "t": true}, {"p": "tests/CrawlerRunner/simple.py", "via": "scrapy/utils/reactor.py", "f": "tests/CrawlerRunner/simple.py", "l": 6, "w": 0, "t": true}, {"p": "tests/test_command_shell.py", "via": "scrapy/utils/reactor.py", "f": "tests/test_command_shell.py", "l": 18, "w": 0, "t": true}, {"p": "tests/test_utils_reactor.py", "via": "scrapy/utils/reactor.py", "f": "tests/test_utils_reactor.py", "l": 5, "w": 0, "t": true}, {"p": "tests/test_zz_resources.py", "via": "scrapy/utils/reactor.py", "f": "tests/test_zz_resources.py", "l": 11, "w": 0, "t": true}, {"p": "tests/test_request_dict.py", "via": "scrapy/utils/request.py", "f": "tests/test_request_dict.py", "l": 5, "w": 0, "t": true}, {"p": "tests/test_scheduler_base.py", "via": "scrapy/utils/request.py", "f": "tests/test_scheduler_base.py", "l": 13, "w": 0, "t": true}, {"p": "tests/test_feedexport_postprocess.py", "via": "tests/test_feedexport.py", "f": "tests/test_feedexport_postprocess.py", "l": 16, "w": 0, "t": true}], "d3plus": 151, "maxdepth": 4, "closure": 366, "unreachScrapy": ["scrapy/core/__init__.py", "scrapy/core/downloader/handlers/_base_http.py", "scrapy/core/downloader/handlers/base.py", "scrapy/core/downloader/handlers/s3.py", "scrapy/exceptions.py", "scrapy/extensions/__init__.py", "scrapy/extensions/debug.py", "scrapy/extensions/postprocessing.py", "scrapy/interfaces.py", "scrapy/item.py", "scrapy/link.py", "scrapy/pqueues.py", "scrapy/resolver.py", "scrapy/settings/default_settings.py", "scrapy/signals.py", "scrapy/utils/__init__.py", "scrapy/utils/_compression.py", "scrapy/utils/_deps_compat.py", "scrapy/utils/asyncgen.py", "scrapy/utils/benchserver.py", "scrapy/utils/boto.py", "scrapy/utils/console.py", "scrapy/utils/curl.py", "scrapy/utils/datatypes.py", "scrapy/utils/display.py", "scrapy/utils/engine.py", "scrapy/utils/ftp.py", "scrapy/utils/gz.py", "scrapy/utils/httpobj.py", "scrapy/utils/job.py", "scrapy/utils/misc.py", "scrapy/utils/ossignal.py", "scrapy/utils/sitemap.py", "scrapy/utils/template.py", "scrapy/utils/trackref.py", "scrapy/utils/url.py"], "unreachOtherN": 21, "unreachOtherSample": ["docs/_ext/scrapydocs.py", "docs/_ext/scrapyfixautodoc.py", "docs/conf.py", "docs/utils/linkfix.py", "extras/qps-bench-server.py", "tests/__init__.py", "tests/keys/__init__.py", "tests/mocks/dummydbm.py"], "defer": {"path": "scrapy/utils/defer.py", "n": 60, "imps": [{"p": "scrapy/commands/parse.py", "f": "scrapy/commands/parse.py", "l": 18}, {"p": "scrapy/commands/shell.py", "f": "scrapy/commands/shell.py", "l": 17}, {"p": "scrapy/core/downloader/__init__.py", "f": "scrapy/core/downloader/__init__.py", "l": 24}, {"p": "scrapy/core/downloader/handlers/__init__.py", "f": "scrapy/core/downloader/handlers/__init__.py", "l": 12}, {"p": "scrapy/core/downloader/handlers/ftp.py", "f": "scrapy/core/downloader/handlers/ftp.py", "l": 45}, {"p": "scrapy/core/downloader/handlers/http11.py", "f": "scrapy/core/downloader/handlers/http11.py", "l": 52}, {"p": "scrapy/core/downloader/handlers/http2.py", "f": "scrapy/core/downloader/handlers/http2.py", "l": 19}, {"p": "scrapy/core/downloader/middleware.py", "f": "scrapy/core/downloader/middleware.py", "l": 17}]}};
+
+/* ---------------- ripple SVG ---------------- */
+(function(){
+  const W=1075,H=718,cx=470,cy=376;
+  const R1=150,R2=262,R3=315;
+  const GA=137.508*Math.PI/180; // golden angle spread
+  const A0=-Math.PI/2 + 0.38;   // start off vertical so no node sits under band labels
+  const svg=[];
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+  // ring guides
+  svg.push(`<circle cx="${cx}" cy="${cy}" r="${R1}" fill="none" stroke="#1c2230" stroke-width="1"/>`);
+  svg.push(`<circle cx="${cx}" cy="${cy}" r="${R2}" fill="none" stroke="#1c2230" stroke-width="1"/>`);
+  svg.push(`<circle cx="${cx}" cy="${cy}" r="${R3}" fill="none" stroke="#3a4356" stroke-width="1" stroke-dasharray="3 5"/>`);
+
+  // ring band labels
+  svg.push(`<rect x="${cx-160}" y="${cy-R1-19}" width="320" height="15" fill="#0a0c10" opacity=".85"/>`);
+  svg.push(`<text x="${cx}" y="${cy-R1-8}" text-anchor="middle" font-size="10" fill="#f0883e" letter-spacing="1">DEPTH 1 · 69 DIRECT IMPORTERS — every edge stamped</text>`);
+  svg.push(`<rect x="${cx-200}" y="${cy-R2-19}" width="400" height="15" fill="#0a0c10" opacity=".85"/>`);
+  svg.push(`<text x="${cx}" y="${cy-R2-8}" text-anchor="middle" font-size="10" fill="#c98a4e" letter-spacing="1">DEPTH 2 · +146 NEW FILES — lower bound: rings drawn to depth 2 only</text>`);
+  svg.push(`<text x="${cx}" y="${cy-R3-10}" text-anchor="middle" font-size="10" fill="#6b7690" letter-spacing="1">DEPTH ≥3 NOT DRAWN — +151 more files reach python.py (max depth 4 · full closure 366)</text>`);
+
+  // node positions
+  const pos={};
+  function place(list,R,jitter){
+    list.forEach((n,i)=>{
+      const a=A0 + i*GA;
+      const r=R + (jitter? ((i*7)%3-1)*7 : 0);
+      pos[n.p]={x:cx+r*Math.cos(a), y:cy+r*Math.sin(a), a:a};
+    });
+  }
+  place(D.ring1,R1,false);
+  place(D.ring2,R2,true);
+
+  const LABELED=new Set(D.ring1.slice(0,12).map(n=>n.p));
+  const L2=new Set(D.ring2.filter(n=>!n.t).slice(0,5).map(n=>n.p));
+
+  // edges: ring2 -> via ring1 (faint, drawn first)
+  D.ring2.forEach(n=>{
+    const a=pos[n.p], b=pos[n.via]; if(!a||!b) return;
+    svg.push(`<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${n.t?'#232a3a':'#2c2418'}" stroke-width="0.7"/>`);
+  });
+  // edges: ring1 -> center
+  D.ring1.forEach(n=>{
+    const a=pos[n.p]; if(!a) return;
+    const hot=LABELED.has(n.p);
+    const w=hot? Math.min(2.2, .8+n.w/40) : .8;
+    const col=n.t? '#33405c' : (hot? '#a05a20':'#4a3518');
+    svg.push(`<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${cx}" y2="${cy}" stroke="${col}" stroke-width="${w}"/>`);
+  });
+
+  // ring2 dots
+  D.ring2.forEach(n=>{
+    const p=pos[n.p];
+    svg.push(`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.4" fill="${n.t?'#44557e':'#b06a2c'}"/>`);
+    if(L2.has(n.p)){
+      const right=Math.cos(p.a)>=0;
+      svg.push(`<text x="${(p.x+(right?7:-7)).toFixed(1)}" y="${(p.y+3).toFixed(1)}" font-size="9.5" fill="#8a93a8" text-anchor="${right?'start':'end'}">${esc(n.p.split('/').pop())}</text>`);
+    }
+  });
+  // ring1 dots + labels
+  D.ring1.forEach(n=>{
+    const p=pos[n.p];
+    const hot=LABELED.has(n.p);
+    svg.push(`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${hot?4.2:3}" fill="${n.t?'#5a6d94':(hot?'#f0883e':'#c9752f')}" ${hot?'stroke="#ffb26e" stroke-width="1"':''}/>`);
+  });
+  // hot labels with greedy radial collision resolution
+  // seed with the two band-caption boxes so labels never sit on them
+  const placed=[{x:cx-160,y:cy-R1-19,w:320,h:15},{x:cx-200,y:cy-R2-19,w:400,h:15}];
+  D.ring1.filter(n=>LABELED.has(n.p)).forEach(n=>{
+    const p=pos[n.p];
+    const segs=n.p.replace('scrapy/','').replace('__init__.py','').split('/').filter(Boolean);
+    const nm=segs.slice(-2).join('/')+(n.p.endsWith('__init__.py')?'/':'');
+    const s=Math.sin(p.a), c=Math.cos(p.a);
+    let tx,ty,anc,px,py;
+    if(s<-0.82){ tx=p.x; ty=p.y+18; anc='middle'; px=-c; py=-s; }      // top: label inward
+    else if(s>0.82){ tx=p.x; ty=p.y+17; anc='middle'; px=c; py=s; }    // bottom: label outward
+    else { tx=p.x+(c>=0?8:-8); ty=p.y+3.5; anc=c>=0?'start':'end'; px=c; py=s; }
+    const raw=`${nm} ×${n.w}`;
+    const wpx=raw.length*6.4+8;
+    for(let k=0;k<8;k++){
+      const lx=anc==='middle'? tx-wpx/2 : (anc==='start'? tx-3 : tx-wpx+3);
+      const box={x:lx,y:ty-10,w:wpx,h:14};
+      const hit=placed.some(b=> box.x<b.x+b.w && b.x<box.x+box.w && box.y<b.y+b.h && b.y<box.y+box.h);
+      if(!hit){ placed.push(box); break; }
+      tx+=px*15; ty+=py*15;
+      if(k===7) placed.push(box);
+    }
+    const lx=anc==='middle'? tx-wpx/2 : (anc==='start'? tx-3 : tx-wpx+3);
+    svg.push(`<rect x="${lx.toFixed(1)}" y="${(ty-10).toFixed(1)}" width="${wpx.toFixed(0)}" height="13" rx="2" fill="#0a0c10" opacity=".82"/>`);
+    svg.push(`<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" font-size="10.5" fill="#e8edf5" text-anchor="${anc}">${esc(nm)} <tspan fill="#ffb26e">×${n.w}</tspan></text>`);
+  });
+
+  // center node
+  svg.push(`<circle cx="${cx}" cy="${cy}" r="30" fill="#1a1208" stroke="#f0883e" stroke-width="2"/>`);
+  svg.push(`<circle cx="${cx}" cy="${cy}" r="38" fill="none" stroke="#f0883e" stroke-width="1" opacity=".35"/>`);
+  svg.push(`<text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="11" font-weight="700" fill="#ffb26e">python.py</text>`);
+  svg.push(`<text x="${cx}" y="${cy+11}" text-anchor="middle" font-size="8.5" fill="#8a93a8">scrapy/utils</text>`);
+
+  // counts note (honest +N) — bottom-right corner, out of the rings
+  svg.push(`<text x="${W-16}" y="${H-56}" text-anchor="end" font-size="9.5" fill="#6b7690">ring 1 — 12 labeled · +57 more direct importers drawn as dots · 21 of 69 are tests</text>`);
+  svg.push(`<text x="${W-16}" y="${H-42}" text-anchor="end" font-size="9.5" fill="#6b7690">ring 2 — each dot linked to the ring-1 file that pulls it in · 86 of 146 are tests</text>`);
+  svg.push(`<text x="${W-16}" y="${H-28}" text-anchor="end" font-size="9.5" fill="#6b7690">node position is arbitrary · distance from center = import depth</text>`);
+
+  document.getElementById('ripple').innerHTML=svg.join('');
+})();
+
+/* ---------------- top movers ---------------- */
+(function(){
+  const el=document.getElementById('movers');
+  const top=D.ring1.slice(0,10);
+  const max=top[0].w;
+  const SEL='scrapy/utils/defer.py';
+  el.innerHTML=top.map((n,i)=>{
+    const cls = n.p===SEL? 'mover sel' : 'mover'+(i>0?' dimmed':'');
+    const nm=n.p.replace('scrapy/','');
+    return `<div class="${cls}">
+      <div class="rk">${i+1}</div>
+      <div class="nm">${nm}</div>
+      <div class="stamp">${n.f}:${n.l}</div>
+      <div class="bar"><i style="width:${Math.max(4,100*n.w/max)}%"></i></div>
+      <div class="w">×${n.w}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('moremv').textContent=`+${D.ring1.length-10} more direct importers — full list carries the same file:line stamps`;
+})();
+
+/* ---------------- expansion (after-click state) ---------------- */
+(function(){
+  const e=D.defer;
+  const el=document.getElementById('expand');
+  el.innerHTML=`
+    <div class="eh"><span class="t">utils/defer.py</span>
+      <span class="chip loc">imports python.py @ scrapy/utils/defer.py:31</span>
+      <span class="esc">ESC · 1 OF 1 EXPANDED</span></div>
+    <div class="claim">If <b>defer.py</b> moves, <b>${e.n} more files move</b> — the real lines that bind them:</div>
+    <div class="imps">${e.imps.slice(0,6).map(x=>
+      `<div class="imp"><span class="ln">${x.f}:${x.l}</span><span class="via">imports utils/defer</span></div>`).join('')}
+    </div>
+    <div class="foot"><span>+${e.n-6} more importers</span>
+      <span class="chip real">REAL</span>
+      <span style="margin-left:auto">click any stamp → source line</span></div>`;
+})();
+
+/* ---------------- package breakdown (aggregated live from the two rings) ---------------- */
+(function(){
+  const grp=p=>{
+    if(p.startsWith('tests')||p==='conftest.py') return 'tests/';
+    if(p.startsWith('docs')) return 'docs/';
+    const seg=p.split('/');
+    return seg.length>2? seg[0]+'/'+seg[1]+'/' : 'scrapy/ (root)';
+  };
+  const agg={};
+  D.ring1.forEach(n=>{const g=grp(n.p);(agg[g]=agg[g]||{d1:0,d2:0}).d1++;});
+  D.ring2.forEach(n=>{const g=grp(n.p);(agg[g]=agg[g]||{d1:0,d2:0}).d2++;});
+  const rows=Object.entries(agg).map(([g,v])=>({g,...v,tot:v.d1+v.d2}))
+    .sort((a,b)=>b.tot-a.tot);
+  const top=rows.slice(0,7);
+  const rest=rows.slice(7);
+  const restTot=rest.reduce((s,r)=>s+r.tot,0);
+  const max=top[0].tot;
+  const el=document.getElementById('pkgs');
+  el.innerHTML=`<h3>WHERE THE RIPPLE LANDS <b>· by package · depth ≤2 only</b></h3>`+
+    top.map(r=>`<div class="pk">
+      <div class="n">${r.g}</div>
+      <div class="bb"><i class="d2" style="width:${(100*r.tot/max).toFixed(1)}%"></i><i class="d1" style="width:${(100*r.d1/max).toFixed(1)}%"></i></div>
+      <div class="c"><b>${r.d1}</b> direct · ${r.d2} d2</div>
+    </div>`).join('')+
+    `<div class="pkfoot">+${rest.length} more packages (${restTot} files) · bright = direct importers, dark = depth-2 · counts sum to 69 + 146</div>`;
+})();
+
+/* ---------------- negative space ---------------- */
+(function(){
+  const el=document.getElementById('neggrid');
+  const show=D.unreachScrapy.slice(0,30);
+  el.innerHTML = show.map(p=>`<span class="f">${p.replace('scrapy/','')}</span>`).join('')
+    + `<span class="f more">+${D.unreachScrapy.length-30+D.unreachOtherN} more (incl. ${D.unreachOtherN} tests/docs)</span>`;
+})();
+</script>
+</body>
+</html>

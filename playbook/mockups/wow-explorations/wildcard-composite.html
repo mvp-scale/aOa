@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>aOa — Attention Debt (wildcard composite)</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#10161d; --panel2:#0d1319; --line:#1c2632; --line2:#243141;
+    --tx:#c9d5e1; --dim:#7d8ea0; --faint:#54657a;
+    --real:#2fbf8f; --mixed:#c9a34a; --warn:#d99a3d; --bad:#e06c5c; --sel:#3d7bd9;
+    --named:#3fae8c; --alias:#c9a34a; --silent:#e06c5c;
+    --mono:ui-monospace,'SF Mono','Cascadia Code',Menlo,Consolas,monospace;
+    --sans:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:13px}
+  body{width:1680px;height:1050px;overflow:hidden;display:flex;flex-direction:column}
+  .chip{display:inline-block;border:1px solid var(--line2);border-radius:3px;padding:0 6px;
+        font-family:var(--mono);font-size:10px;line-height:16px;color:var(--dim);vertical-align:1px}
+  .chip.real{color:var(--real);border-color:rgba(47,191,143,.45)}
+  .chip.mixed{color:var(--mixed);border-color:rgba(201,163,74,.45)}
+  .chip.warn{color:var(--warn);border-color:rgba(217,154,61,.45)}
+  .chip.bad{color:var(--bad);border-color:rgba(224,108,92,.5)}
+  .loc{font-family:var(--mono);font-size:10.5px;color:#8fb4dd;background:#131c27;
+       border:1px solid #223349;border-radius:3px;padding:0 5px;line-height:17px;display:inline-block;white-space:nowrap}
+  .loc .ln{color:#5f7fa5}
+  .mono{font-family:var(--mono)}
+
+  /* ── top bar ─────────────────────────────── */
+  #topbar{height:44px;display:flex;align-items:center;gap:14px;padding:0 20px;
+          border-bottom:1px solid var(--line);background:#0c1117;flex:none}
+  #topbar .brand{font-weight:700;font-size:15px;color:#e8eef5}
+  #topbar .brand span{color:var(--dim);font-weight:400}
+  #topbar .crumb{color:var(--dim)}
+  #topbar .crumb b{color:#e2eaf2;font-weight:600}
+  #topbar .right{margin-left:auto;display:flex;gap:8px;align-items:center;color:var(--faint);font-family:var(--mono);font-size:10.5px}
+
+  /* ── verdict header ──────────────────────── */
+  #verdict{flex:none;padding:12px 20px 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0d1219,#0b0f14)}
+  #verdict .q{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.4px;margin-bottom:5px}
+  #verdict .q b{color:#9fb3c8;font-weight:600}
+  #verdict .a1{font-size:17.5px;color:#eef4fa;font-weight:600;line-height:1.35;max-width:1560px}
+  #verdict .a1 .hit{color:var(--bad)}
+  #verdict .a1 .ok{color:var(--real)}
+  #verdict .a1 .u{font-family:var(--mono);font-size:15.5px;color:#ffd9d2;background:rgba(224,108,92,.10);
+                  border:1px solid rgba(224,108,92,.35);border-radius:3px;padding:0 5px}
+  #verdict .totals{margin-top:7px;font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+  #verdict .totals b{color:var(--dim);font-weight:600}
+
+  /* ── main grid ───────────────────────────── */
+  #main{flex:1;display:flex;gap:12px;padding:12px 20px;min-height:0}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;min-height:0}
+  .phead{flex:none;display:flex;align-items:baseline;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)}
+  .phead .t{font-family:var(--mono);font-size:11px;font-weight:700;color:#a9bbce;letter-spacing:.6px}
+  .phead .s{font-size:11px;color:var(--faint)}
+  .phead .rr{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--faint)}
+
+  /* board */
+  #board{width:872px;flex:none}
+  table{border-collapse:collapse;width:100%;table-layout:fixed}
+  td{overflow:hidden}
+  th{font-family:var(--mono);font-size:9.5px;color:var(--faint);text-align:left;font-weight:600;
+     letter-spacing:.7px;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:6px 8px;border-bottom:1px solid #141c26;vertical-align:middle}
+  tr.sel td{background:rgba(61,123,217,.10);border-top:1px solid rgba(61,123,217,.5);border-bottom:1px solid rgba(61,123,217,.5)}
+  td.rk{color:var(--faint);font-family:var(--mono);font-size:10px;width:24px}
+  td.unit{width:216px}
+  td.unit .p{font-family:var(--mono);font-size:12px;color:#dce6f0;white-space:nowrap}
+  td.unit .p .pre{color:var(--faint)}
+  td.load{width:196px}
+  .bar{height:7px;border-radius:2px;background:#182230;position:relative;overflow:hidden;margin-top:3px}
+  .bar i{position:absolute;left:0;top:0;bottom:0;background:#3d6ea8;border-radius:2px}
+  .bar.talkbar i{background:#3fae8c}
+  .bar.talkbar.zero i{background:transparent}
+  .ln1{font-family:var(--mono);font-size:10.5px;color:var(--dim);white-space:nowrap}
+  .ln1 b{color:#c2d2e2;font-weight:600}
+  td.tension{width:170px}
+  td.tension .none{color:#3b4a5c;font-family:var(--mono);font-size:10px}
+  .fbadge{display:inline-block;font-family:var(--mono);font-size:10px;color:var(--warn);
+          border:1px solid rgba(217,154,61,.4);background:rgba(217,154,61,.07);border-radius:3px;padding:1px 6px;white-space:nowrap}
+  td.talk{width:190px}
+  .pair{font-family:var(--mono);font-size:10px;color:#8fcdb6;white-space:nowrap}
+  .pair.alias{color:var(--alias)}
+  .pair.zero{color:var(--bad)}
+  td.vd{width:86px;text-align:right}
+  .v{display:inline-block;font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.5px;
+     border-radius:3px;padding:2px 7px;border:1px solid}
+  .v.silent{color:#ffb3a8;border-color:rgba(224,108,92,.6);background:rgba(224,108,92,.12)}
+  .v.alias{color:#e8c877;border-color:rgba(201,163,74,.5);background:rgba(201,163,74,.08)}
+  .v.aliasq{color:#e8c877;border-color:rgba(201,163,74,.5);border-style:dashed;background:transparent}
+  .v.named{color:#7fd6b8;border-color:rgba(63,174,140,.45);background:rgba(63,174,140,.07)}
+  #board .pfoot{flex:none;padding:7px 12px;border-top:1px solid var(--line);font-family:var(--mono);
+                font-size:10px;color:var(--faint);display:flex;gap:14px}
+  #board .pfoot b{color:var(--dim)}
+
+  /* right column */
+  #rcol{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0}
+  #esc{flex:none}
+  #esc .body{padding:10px 12px 11px}
+  #esc .sentence{font-size:13.5px;color:#e6edf4;line-height:1.4;margin-bottom:9px}
+  #esc .sentence b{color:#ffd9d2}
+  .sect{font-family:var(--mono);font-size:9.5px;color:var(--faint);letter-spacing:.8px;font-weight:700;margin:9px 0 5px}
+  .sect:first-child{margin-top:0}
+  .imp{display:flex;align-items:center;gap:8px;padding:3px 0;font-family:var(--mono);font-size:11px}
+  .imp .from{color:var(--faint);font-size:10px;width:172px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .imp .peek{margin-left:auto;flex:none;white-space:nowrap;color:#5f87b8;font-size:10px;border:1px solid #22405e;border-radius:3px;padding:0 6px;line-height:16px}
+  .scan{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+  .scan .tk{font-family:var(--mono);font-size:10.5px;color:var(--bad);border:1px solid rgba(224,108,92,.35);
+            border-radius:3px;padding:1px 7px;background:rgba(224,108,92,.05)}
+  .refusal{margin-top:8px;border-left:2px solid var(--mixed);background:rgba(201,163,74,.06);
+           padding:6px 9px;font-size:11px;color:#cbb98a;line-height:1.45}
+  .refusal b{color:#e8d5a0}
+  .correction{margin-top:7px;font-size:11px;color:var(--dim);line-height:1.45;border-top:1px dashed var(--line2);padding-top:7px}
+  .correction .pair{font-size:10.5px}
+  #esc .gest{margin-top:9px;font-family:var(--mono);font-size:10px;color:var(--faint)}
+  #esc .gest b{color:#8fb4dd}
+
+  #rrow{flex:1;display:flex;gap:12px;min-height:0}
+  #quad{width:372px;flex:none}
+  #quad svg{display:block}
+  #inverse{flex:1;min-width:0}
+  #inverse .body{padding:9px 12px}
+  .inv{padding:5px 0;border-bottom:1px solid #141c26}
+  .inv:last-of-type{border-bottom:none}
+  .inv .l1{display:flex;align-items:baseline;gap:8px}
+  .inv .cnt{font-family:var(--mono);font-size:13px;font-weight:700;color:#7fd6b8;width:38px;flex:none;text-align:right}
+  .inv .up{font-family:var(--mono);font-size:11px;color:#dce6f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .inv .up i{font-style:normal;color:var(--faint);font-size:10px}
+  .inv .fan{margin-left:auto;flex:none;font-family:var(--mono);font-size:10px;color:var(--faint)}
+  .inv .fan b{color:var(--dim)}
+  .inv .l2{font-family:var(--mono);font-size:10px;color:#8fcdb6;padding-left:46px;margin-top:1px}
+  #inverse .note{margin-top:7px;font-size:10.5px;color:var(--faint);line-height:1.5;border-top:1px dashed var(--line2);padding-top:6px}
+  #inverse .note .mono{color:var(--dim)}
+
+  /* footer join bar */
+  #joinbar{flex:none;height:56px;border-top:1px solid var(--line);background:#0c1117;
+           display:flex;align-items:center;gap:0;padding:0 20px;font-size:10.5px}
+  .jseg{display:flex;flex-direction:column;gap:2px;padding:0 16px;border-right:1px solid var(--line)}
+  .jseg:first-child{padding-left:0}
+  .jseg:last-child{border-right:none;margin-left:auto;padding-right:0;align-items:flex-end}
+  .jseg .k{font-family:var(--mono);font-size:9px;color:var(--faint);letter-spacing:.8px;font-weight:700}
+  .jseg .d{color:var(--dim);font-family:var(--mono);font-size:10px}
+  .jseg .d .chip{font-size:9px;line-height:14px}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="brand">aOa <span>· knowledge join</span></div>
+  <div class="crumb"><span class="mono" style="color:var(--real)">●</span> aoa-go (go) &nbsp;›&nbsp; <b>Attention Debt</b></div>
+  <span class="chip real">LOAD · TENSION REAL</span>
+  <span class="chip mixed">TALK MIXED · name-match</span>
+  <div class="right">
+    <span>rev 8e370207ccdf</span><span>·</span><span>grain file→unit</span><span>·</span><span>joined 2026-07-09</span>
+  </div>
+</div>
+
+<div id="verdict">
+  <div class="q">Q — <b>What is this code leaning on that no session has ever talked about?</b> &nbsp;&nbsp;join: import edges × findings × learned bigrams × atlas domains × session window</div>
+  <div class="a1">Half of aOa's 12 most load-bearing units are <span class="hit">never named directly</span> in 555 learned concept
+    pairs — <span class="hit">2 have no alias at all</span>. Top blind spot: <span class="u">internal/domain/analyzer</span>
+    — god component (in 4 · out 13), 8 stamped import sites, <span class="hit">0 mentions</span> across 507 prompts.
+    The talk goes elsewhere: <span class="ok">status ×44 · recon ×31 · peek ×25</span>.</div>
+  <div class="totals"><b>833</b> nodes · <b>228</b> internal import edges (+1,553 external, each file:line) ·
+    <b>9</b> findings · <b>555</b> learned pairs · <b>134</b> domains · <b>507</b> prompts · <b>15</b> sessions (Mar 6 → Jul 9 2026)</div>
+</div>
+
+<div id="main">
+
+  <!-- ────────── the board ────────── -->
+  <div id="board" class="panel">
+    <div class="phead">
+      <div class="t">LOAD vs TALK — top 12 units by structural load</div>
+      <div class="s">every LOAD chip is a real importing line</div>
+      <div class="rr">rank = distinct importer units ↓, then import sites ↓</div>
+    </div>
+    <div style="flex:1;overflow:hidden">
+      <table id="btab">
+        <colgroup>
+          <col style="width:26px"><col style="width:212px"><col style="width:196px">
+          <col style="width:168px"><col style="width:184px"><col style="width:86px">
+        </colgroup>
+        <thead><tr>
+          <th>#</th><th>UNIT</th><th>LOAD <span style="color:#3b4a5c">imports · REAL</span></th>
+          <th>TENSION <span style="color:#3b4a5c">findings</span></th>
+          <th>TALK <span style="color:#3b4a5c">learned pairs · MIXED</span></th><th style="text-align:right">VERDICT</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="pfoot">
+      <span><b>+13 more</b> units at fan-in ≤ 2 (25 total)</span>
+      <span>LOAD max <b>15</b> importers (ports)</span>
+      <span>TALK max <b>44</b> pair-hits (status)</span>
+      <span style="margin-left:auto">click a row → answer panel ▸</span>
+    </div>
+  </div>
+
+  <!-- ────────── right column ────────── -->
+  <div id="rcol">
+
+    <!-- escalation: rendered after-click state -->
+    <div id="esc" class="panel">
+      <div class="phead">
+        <div class="t" style="color:#8fb4dd">ANSWER — internal/domain/analyzer</div>
+        <div class="s">selected row 6 · gesture 2 of 3</div>
+        <div class="rr">finding 383f23804dafad7e</div>
+      </div>
+      <div class="body">
+        <div class="sentence"><b>analyzer</b> is load-bearing — 4 importer units across 8 import sites, flagged
+          <b>god component (in 4 · out 13)</b> — yet <b>0 of 555</b> learned pairs name it, and the alias scan found nothing.</div>
+
+        <div style="display:flex;gap:18px">
+          <div style="flex:1.15">
+            <div class="sect">IMPORTERS — all 4, stamped <span class="chip real" style="margin-left:4px">REAL</span></div>
+            <div class="imp"><span class="loc">internal/app/app.go<span class="ln">:26</span></span><span class="from">internal/app</span><span class="peek">peek ▸</span></div>
+            <div class="imp"><span class="loc">internal/adapters/recon/engine.go<span class="ln">:18</span></span><span class="from">internal/adapters/recon</span><span class="peek">peek ▸</span></div>
+            <div class="imp"><span class="loc">cmd/dim-dump/main.go<span class="ln">:19</span></span><span class="from">cmd/dim-dump</span><span class="peek">peek ▸</span></div>
+            <div class="imp"><span class="loc">…/treesitter/debug_ignored_test.go<span class="ln">:7</span></span><span class="from">internal/adapters/treesitter</span><span class="peek">peek ▸</span></div>
+            <div class="sect" style="margin-top:10px">FINDING</div>
+            <div><span class="fbadge">⚠ god component: analyzer (in 4 · out 13)</span>
+              <span class="ln1" style="margin-left:6px">warn · 17 sources · rule=god</span></div>
+          </div>
+          <div style="flex:1">
+            <div class="sect">ALIAS SCAN — 555 pairs <span class="chip mixed" style="margin-left:4px">MIXED</span></div>
+            <div class="scan">
+              <span class="tk">analyzer ×0</span><span class="tk">analysis ×0</span>
+              <span class="tk">analyze ×0</span><span class="tk">rules ×0</span>
+            </div>
+            <div class="refusal"><b>Claim of absence, bounded:</b> silence is measured over 555 pairs learned by this
+              tool from 507 prompts (Mar 6 – Jul 9 2026) — <b>not git history</b>, not other tools' sessions.</div>
+            <div class="correction">The alias pass is why you can trust SILENT: <b>treesitter</b> also scores 0 direct —
+              but <span class="pair alias">tree:sitter ×17</span> exists, so it is corrected to ALIAS-ONLY, not SILENT.
+              Corrections are shown, never hidden.</div>
+          </div>
+        </div>
+        <div class="gest">ladder&nbsp; <b>1</b> click row → <b>2</b> this answer → <b>3</b> peek any file:line — code in ≤3 gestures</div>
+      </div>
+    </div>
+
+    <div id="rrow">
+      <!-- quadrant -->
+      <div id="quad" class="panel">
+        <div class="phead">
+          <div class="t">THE QUADRANT</div>
+          <div class="s">load ↑ vs session language →</div>
+        </div>
+        <div style="flex:1;padding:4px 6px 6px" id="quadbox"></div>
+      </div>
+
+      <!-- inverse card -->
+      <div id="inverse" class="panel">
+        <div class="phead">
+          <div class="t">WHERE THE TALK GOES</div>
+          <div class="s">heaviest session language, lowest load</div>
+        </div>
+        <div class="body">
+          <div class="inv"><div class="l1"><span class="cnt">×44</span><span class="up">internal/domain/status</span><span class="fan">fan-in <b>2</b> · 2 sites</span></div>
+            <div class="l2">status:line ×44</div></div>
+          <div class="inv"><div class="l1"><span class="cnt">×31</span><span class="up">recon <i>· not active (build.sh)</i></span><span class="fan">fan-in <b>3</b> · 3 sites</span></div>
+            <div class="l2">pre:recon ×15 · arch:recon ×9 · scrapy:recon ×7</div></div>
+          <div class="inv"><div class="l1"><span class="cnt">×25</span><span class="up">internal/peek</span><span class="fan">fan-in <b>3</b> · 3 sites</span></div>
+            <div class="l2">grep:peek ×8 · aoa:peek ×7 · peek:code ×6 · +1</div></div>
+          <div class="inv"><div class="l1"><span class="cnt">×19</span><span class="up">internal/domain/arch</span><span class="fan">fan-in <b>3</b> · 7 sites</span></div>
+            <div class="l2">aoa:arch ×10 · arch:recon ×9</div></div>
+          <div class="note">Loudest raw pair overall is <span class="mono">let:me ×252</span> — conversational filler,
+            excluded by the unit-token rule (shown for honesty). Attention here is what <span class="mono">this tool observed</span>
+            in its own sessions, not change history.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="joinbar">
+  <div class="jseg"><span class="k">LOAD</span><span class="d">distinct importer units · 228 internal import edges, each {file,line} <span class="chip real">REAL</span></span></div>
+  <div class="jseg"><span class="k">TENSION</span><span class="d">daemon findings (9) · sources stamped <span class="chip real">REAL</span></span></div>
+  <div class="jseg"><span class="k">TALK</span><span class="d">learned pairs where token = unit basename <span class="chip mixed">MIXED · name-match, not ownership</span></span></div>
+  <div class="jseg"><span class="k">ALIAS</span><span class="d">split-token + atlas-domain variants, misses shown <span class="chip mixed">MIXED</span></span></div>
+  <div class="jseg"><span class="k">WINDOW</span><span class="d">507 prompts · 15 sessions · Mar 6 → Jul 9 2026 · observed by this tool, not git</span></div>
+</div>
+
+<script>
+/* ══ REAL DATA — harvested live from the aOa daemon extracts (see data/) ══
+   LOAD/imp: data/aoa-graph.json (unit-grain aggregation of 1,781 file-grain edges)
+   TENSION:  data/aoa-findings.json
+   TALK:     data/aoa-bigrams.json (555 learned pairs)                        */
+const BOARD=[
+ {u:"internal/ports",          in:15,sites:82,find:null,               fsrc:0, talk:11,pairs:[["domain:ports",11]],                       alias:[],v:"NAMED",
+  imp:"internal/app/activity_test.go:13"},
+ {u:"internal/adapters/bbolt", in:5, sites:17,find:"god (in 5 · out 18)",fsrc:23,talk:0, pairs:[],                                        alias:[["aoa:db",4]],v:"ALIAS-ONLY",
+  imp:"internal/app/app.go:20"},
+ {u:"internal/adapters/socket",in:4, sites:26,find:"god (in 4 · out 17)",fsrc:21,talk:0, pairs:[],                                        alias:[["aoa:daemon",19]],v:"ALIAS?",
+  imp:"internal/app/app.go:24"},
+ {u:"internal/domain/index",   in:4, sites:18,find:"god (in 4 · out 17)",fsrc:21,talk:10,pairs:[["trigram:index",8]],more:1,               alias:[],v:"NAMED",
+  imp:"internal/app/app.go:30"},
+ {u:"internal/adapters/treesitter",in:4,sites:12,find:"god (in 4 · out 530)",fsrc:534,talk:0,pairs:[],                                    alias:[["tree:sitter",17]],v:"ALIAS-ONLY",
+  imp:"cmd/aoa/cmd/grammar_cgo.go:11"},
+ {u:"internal/domain/analyzer",in:4, sites:8, find:"god (in 4 · out 13)",fsrc:17,talk:0, pairs:[],                                        alias:[],v:"SILENT",sel:true,
+  imp:"internal/app/app.go:26"},
+ {u:"internal/domain/arch",    in:3, sites:7, find:"god (in 3 · out 20)",fsrc:23,talk:19,pairs:[["aoa:arch",10],["arch:recon",9]],        alias:[],v:"NAMED",
+  imp:"internal/app/arch.go:28"},
+ {u:"atlas",                   in:3, sites:6, find:null,               fsrc:0, talk:0, pairs:[],                                          alias:[["supply:domains",5]],amore:1,v:"ALIAS-ONLY",
+  imp:"internal/domain/enricher/enricher_test.go:6"},
+ {u:"recon",                   in:3, sites:3, find:null,               fsrc:0, talk:31,pairs:[["pre:recon",15],["arch:recon",9]],         alias:[],v:"NAMED",
+  imp:"internal/app/dim_engine.go:17"},
+ {u:"internal/peek",           in:3, sites:3, find:"god (in 3 · out 5)",fsrc:8, talk:25,pairs:[["grep:peek",8],["aoa:peek",7]],           alias:[],v:"NAMED",
+  imp:"internal/adapters/socket/server.go:15"},
+ {u:"internal/domain/learner", in:2, sites:7, find:null,               fsrc:0, talk:0, pairs:[],                                          alias:[],v:"SILENT",note:"learner/learning/learned ×0",
+  imp:"internal/app/activity_test.go:12"},
+ {u:"internal/domain/enricher",in:2, sites:6, find:null,               fsrc:0, talk:11,pairs:[["enricher:resolution",6]],more:2,           alias:[],v:"NAMED",
+  imp:"internal/app/activity_test.go:11"},
+];
+const LOADMAX=15, TALKMAX=44;
+
+const tb=document.querySelector('#btab tbody');
+BOARD.forEach((r,i)=>{
+  const tr=document.createElement('tr'); if(r.sel)tr.className='sel';
+  const segs=r.u.split('/'); const base=segs.pop(); const pre=segs.length?segs.join('/')+'/':'';
+  const aliasTot=r.alias.reduce((a,x)=>a+x[1],0);
+  let talkHtml;
+  if(r.talk>0){
+    talkHtml=`<div class="ln1"><b>${r.talk}</b> pair-hits</div>
+      <div class="bar talkbar"><i style="width:${Math.max(4,r.talk/TALKMAX*100)}%"></i></div>
+      <div class="pair">${r.pairs.map(p=>p[0]+' ×'+p[1]).join(' · ')}${r.more?' · +'+r.more:''}</div>`;
+  }else if(r.alias.length){
+    talkHtml=`<div class="ln1"><b style="color:var(--alias)">0 direct</b> / 555</div>
+      <div class="bar talkbar zero"></div>
+      <div class="pair alias">alias ${r.alias.map(p=>p[0]+' ×'+p[1]).join(' · ')}${r.amore?' · +'+r.amore:''}</div>`;
+  }else{
+    talkHtml=`<div class="ln1"><b style="color:var(--bad)">0 / 555</b> pairs</div>
+      <div class="bar talkbar zero"></div>
+      <div class="pair zero">${r.note||'no alias found'}</div>`;
+  }
+  const vcls=r.v==='SILENT'?'silent':(r.v==='NAMED'?'named':(r.v==='ALIAS?'?'aliasq':'alias'));
+  let [lf,ll]=r.imp.split(':');
+  const fseg=lf.split('/');
+  if(lf.length>26&&fseg.length>2) lf='…/'+fseg.slice(-2).join('/');
+  tr.innerHTML=`
+    <td class="rk">${i+1}</td>
+    <td class="unit"><div class="p"><span class="pre">${pre}</span>${base}</div></td>
+    <td class="load">
+      <div class="ln1"><b>${r.in}</b> importers · <b>${r.sites}</b> sites</div>
+      <div class="bar"><i style="width:${r.in/LOADMAX*100}%"></i></div>
+      <div style="margin-top:2px"><span class="loc">${lf}<span class="ln">:${ll}</span></span></div>
+    </td>
+    <td class="tension">${r.find?`<span class="fbadge">⚠ ${r.find}</span><div class="ln1" style="margin-top:2px;color:var(--faint)">${r.fsrc} sources</div>`:`<span class="none">— none</span>`}</td>
+    <td class="talk">${talkHtml}</td>
+    <td class="vd"><span class="v ${vcls}">${r.v}</span></td>`;
+  tb.appendChild(tr);
+});
+
+/* ── quadrant scatter ── */
+(function(){
+  const W=356,H=352,padL=34,padR=10,padT=18,padB=30;
+  const pts=BOARD.map(r=>({n:r.u.split('/').pop(),load:r.in,
+    talk:r.talk+r.alias.reduce((a,x)=>a+x[1],0),v:r.v}));
+  const xmax=Math.sqrt(45), ymax=15;
+  const X=t=>padL+Math.sqrt(t)/xmax*(W-padL-padR);
+  const Y=l=>H-padB-(l/ymax)*(H-padT-padB);
+  const col=v=>v==='SILENT'?'#e06c5c':(v==='NAMED'?'#3fae8c':'#c9a34a');
+  let s=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  // zone split lines: talk=1 boundary, load=4 boundary
+  const xs=X(0.5), ys=Y(3.5);
+  s+=`<rect x="${padL}" y="${padT}" width="${xs-padL}" height="${ys-padT}" fill="rgba(224,108,92,.06)"/>`;
+  s+=`<line x1="${xs}" y1="${padT}" x2="${xs}" y2="${H-padB}" stroke="#243141" stroke-dasharray="3 3"/>`;
+  s+=`<line x1="${padL}" y1="${ys}" x2="${W-padR}" y2="${ys}" stroke="#243141" stroke-dasharray="3 3"/>`;
+  s+=`<text x="${padL+5}" y="${padT+11}" fill="#e06c5c" font-size="9" font-weight="700" font-family="monospace">BLIND SPOT</text>`;
+  s+=`<text x="${W-padR-5}" y="${padT+11}" fill="#3fae8c" font-size="9" font-weight="700" font-family="monospace" text-anchor="end">NAMED LOAD</text>`;
+  s+=`<text x="${W-padR-5}" y="${H-padB-6}" fill="#54657a" font-size="9" font-weight="700" font-family="monospace" text-anchor="end">CHATTER</text>`;
+  s+=`<text x="${padL+5}" y="${H-padB-6}" fill="#3b4a5c" font-size="9" font-family="monospace">quiet</text>`;
+  // axes
+  s+=`<line x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}" stroke="#1c2632"/>`;
+  s+=`<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H-padB}" stroke="#1c2632"/>`;
+  s+=`<text x="${(padL+W)/2}" y="${H-6}" fill="#54657a" font-size="9" font-family="monospace" text-anchor="middle">mentions incl. alias (√ scale) →</text>`;
+  s+=`<text x="10" y="${(padT+H-padB)/2}" fill="#54657a" font-size="9" font-family="monospace" text-anchor="middle" transform="rotate(-90 10 ${(padT+H-padB)/2})">fan-in ↑</text>`;
+  [0,5,10,15].forEach(v=>{s+=`<text x="${padL-4}" y="${Y(v)+3}" fill="#3b4a5c" font-size="8" font-family="monospace" text-anchor="end">${v}</text>`});
+  [0,5,15,30,44].forEach(v=>{s+=`<text x="${X(v)}" y="${H-padB+11}" fill="#3b4a5c" font-size="8" font-family="monospace" text-anchor="middle">${v}</text>`});
+  // label offsets to avoid collisions [dx,dy,anchor]
+  const off={ports:[7,-6,'start'],bbolt:[7,-6,'start'],socket:[4,-9,'start'],index:[-7,-7,'end'],
+             treesitter:[0,17,'middle'],analyzer:[8,-5,'start'],arch:[5,14,'start'],atlas:[-6,12,'end'],
+             recon:[7,-6,'start'],peek:[3,15,'start'],learner:[8,-4,'start'],enricher:[7,11,'start']};
+  pts.forEach(p=>{
+    const c=col(p.v),x=X(p.talk),y=Y(p.load);
+    const hollow=p.v==='ALIAS?'||p.v==='ALIAS-ONLY';
+    s+=`<circle cx="${x}" cy="${y}" r="4.5" fill="${hollow?'none':c}" stroke="${c}" stroke-width="1.6"/>`;
+    const o=off[p.n]||[7,3,'start'];
+    s+=`<text x="${x+o[0]}" y="${y+o[1]}" fill="#9fb3c8" font-size="9.5" font-family="monospace" text-anchor="${o[2]}">${p.n}</text>`;
+  });
+  s+=`</svg>`;
+  document.getElementById('quadbox').innerHTML=s;
+})();
+</script>
+</body>
+</html>

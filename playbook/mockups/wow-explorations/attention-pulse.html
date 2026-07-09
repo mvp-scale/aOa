@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>aOa · attention pulse — what the tool has watched</title>
+<style>
+  :root{
+    --bg:#08090d; --panel:#0d1016; --panel2:#10141c; --line:#1b2130; --line2:#232c40;
+    --ink:#c9d2e0; --dim:#5d6a80; --faint:#3a4458;
+    --amber:#f0a132; --amber-dim:#9a6a1e; --heat:#ff7847; --heat2:#ffb37e;
+    --cyan:#59c2d6; --green:#5fbf7a; --red:#e0596a; --violet:#9d8cff;
+    --mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{width:1680px;height:1050px;overflow:hidden;background:var(--bg);color:var(--ink);
+    font-family:var(--mono);font-size:12px;-webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column}
+
+  /* ---------- header ---------- */
+  header{height:44px;display:flex;align-items:center;gap:14px;padding:0 18px;
+    border-bottom:1px solid var(--line);background:#0a0c11}
+  .brand{font-size:15px;font-weight:700;color:#fff;letter-spacing:.02em}
+  .brand span{color:var(--dim);font-weight:400}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);
+    border-radius:4px;padding:2px 8px;font-size:10.5px;color:var(--dim);background:var(--panel)}
+  .chip b{color:var(--ink);font-weight:600}
+  .dotg{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
+  .prov{font-size:9px;letter-spacing:.12em;border-radius:3px;padding:2px 6px;font-weight:700}
+  .prov.observed{color:var(--heat2);border:1px solid #5a3a24;background:#241610}
+  .prov.real{color:#63e2b7;border:1px solid #1f4a3a;background:#0d211a}
+  .prov.mixed{color:#e7c46a;border:1px solid #4d3d1a;background:#221b0c}
+  .hq{margin-left:auto;color:var(--dim);font-size:12px}
+  .hq b{color:#fff}
+
+  /* ---------- verdict ---------- */
+  .verdict{padding:11px 18px 10px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0d1016,#0a0c11)}
+  .verdict .sent{font-size:16.5px;color:#e8edf5;line-height:1.4}
+  .verdict .sent b{color:var(--heat2);font-weight:700}
+  .verdict .sent .num{color:#fff;font-weight:700}
+  .verdict .sub{margin-top:4px;font-size:10.5px;color:var(--dim)}
+  .verdict .sub em{font-style:normal;color:var(--heat2)}
+
+  /* ---------- main grid ---------- */
+  .main{display:grid;grid-template-columns:648px 1fr 448px;gap:0;flex:1;min-height:0}
+  .panel{border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+  .panel:last-child{border-right:none}
+  .ph{display:flex;align-items:baseline;gap:8px;padding:9px 14px 7px;border-bottom:1px solid var(--line)}
+  .ph .t{font-size:11px;font-weight:700;letter-spacing:.14em;color:#eef2f8}
+  .ph .q{color:var(--dim);font-size:10.5px}
+  .ph .right{margin-left:auto;display:flex;gap:6px;align-items:center}
+  .caveat{font-size:9px;color:#8a6a4a;letter-spacing:.04em}
+
+  /* ---------- constellation ---------- */
+  #constWrap{position:relative;flex:1;overflow:hidden}
+  #constSvg{position:absolute;left:0;top:0}
+  .fillerStrip{border-top:1px solid var(--line);padding:8px 14px;background:var(--panel)}
+  .fillerStrip .lbl{font-size:9px;letter-spacing:.1em;color:var(--faint);margin-bottom:4px}
+  .fillerStrip .row{display:flex;flex-wrap:wrap;gap:5px}
+  .fpill{border:1px dashed #2a3245;border-radius:3px;padding:1px 6px;font-size:10px;color:var(--faint)}
+  .fpill b{color:var(--dim);font-weight:600}
+  /* escalation inset */
+  .inset{position:absolute;top:10px;right:10px;width:238px;background:#12161f;
+    border:1px solid #3d2f18;border-radius:6px;box-shadow:0 8px 28px rgba(0,0,0,.55);padding:10px 12px;z-index:5}
+  .inset .ttl{font-size:11px;color:#fff;font-weight:700;margin-bottom:2px}
+  .inset .ttl .tok{color:var(--amber)}
+  .inset .meta{font-size:9.5px;color:var(--dim);margin-bottom:7px}
+  .inset .pr{display:flex;justify-content:space-between;font-size:10.5px;padding:2.5px 0;border-top:1px solid #1a2030}
+  .inset .pr .p{color:var(--ink)} .inset .pr .p i{font-style:normal;color:var(--amber)}
+  .inset .pr .c{color:var(--heat2);font-weight:700}
+  .inset .note{margin-top:7px;font-size:9px;color:#8a6a4a;line-height:1.35}
+  .inset .below{font-size:9px;color:var(--faint);padding-top:3px}
+
+  /* ---------- domains ---------- */
+  .domList{flex:1;overflow:hidden;padding:8px 14px 0}
+  .drow{display:grid;grid-template-columns:18px 128px 1fr 52px;gap:8px;align-items:center;padding:4.5px 0}
+  .drow .rk{color:var(--faint);font-size:10px;text-align:right}
+  .drow .nm{color:var(--ink);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .drow .nm .tier{font-size:8px;color:var(--faint);margin-left:4px;letter-spacing:.08em}
+  .drow .bar{height:8px;background:#141926;border-radius:2px;position:relative;overflow:hidden}
+  .drow .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;
+    background:linear-gradient(90deg,#7a4a1e,var(--heat));opacity:.92}
+  .drow .hv{color:var(--heat2);font-size:10.5px;text-align:right;font-weight:600}
+  .drow.top1 .nm{color:#fff;font-weight:700}
+  .dterms{margin:2px 0 6px 26px;padding:7px 10px;border:1px solid #2c2210;background:#151209;border-radius:5px}
+  .dterms .cap{font-size:9px;color:#a3823f;letter-spacing:.08em;margin-bottom:5px}
+  .dterms .tchips{display:flex;flex-wrap:wrap;gap:5px}
+  .tchip{border:1px solid #3d3115;border-radius:3px;padding:1.5px 7px;font-size:10px;color:#d9c48a;background:#1a150a}
+  .tchip b{color:#f3dfa5;font-weight:700}
+  .more{color:var(--faint);font-size:10px;padding:6px 0 0 26px}
+  .coolCap{padding:14px 0 2px 26px;font-size:9px;letter-spacing:.1em;color:var(--faint)}
+  .drow.cool .nm{color:#7d8aa3}
+  .drow.cool .bar i{background:#2e3a52;opacity:.8}
+  .drow.cool .hv{color:#7d8aa3;font-weight:400}
+  .drow.cool .rk{font-size:9px}
+  .decay{border-top:1px solid var(--line);padding:8px 14px;font-size:9.5px;color:#8a6a4a;line-height:1.45;background:var(--panel)}
+  .decay b{color:#c9a05e}
+
+  /* ---------- sessions + value ---------- */
+  .vstrip{display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--line)}
+  .vcell{padding:10px 12px 8px;border-right:1px solid var(--line)}
+  .vcell:last-child{border-right:none}
+  .vcell .n{font-size:21px;font-weight:700;color:#fff;letter-spacing:-.01em}
+  .vcell .n.gr{color:var(--green)} .vcell .n.am{color:var(--amber)}
+  .vcell .l{font-size:9px;color:var(--dim);letter-spacing:.08em;margin-top:2px}
+  .vsub{display:flex;gap:14px;padding:6px 12px;border-bottom:1px solid var(--line);font-size:10px;color:var(--dim);background:var(--panel)}
+  .vsub b{color:var(--ink)}
+  .sessHead{display:grid;grid-template-columns:64px 62px 34px 86px 1fr 46px;gap:8px;padding:7px 14px 4px;
+    font-size:8.5px;color:var(--faint);letter-spacing:.1em}
+  .sess{overflow:hidden;padding:0 14px}
+  .srow{display:grid;grid-template-columns:64px 62px 34px 86px 1fr 46px;gap:8px;align-items:center;
+    padding:6.2px 0;border-top:1px solid #12161f}
+  .srow .sv{font-size:10px;color:#9fd6b1;text-align:right}
+  .srow .sv.zero{color:var(--faint)}
+  .scale{flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;padding:8px 14px 10px;align-content:start}
+  .scale .sc{border:1px solid var(--line2);border-radius:4px;padding:6px 9px;background:var(--panel2)}
+  .scale .sc .n{font-size:14px;font-weight:700;color:#e8edf5}
+  .scale .sc .l{font-size:8.5px;color:var(--dim);letter-spacing:.06em;margin-top:1px}
+  .scaleCap{padding:10px 14px 0;font-size:9px;letter-spacing:.1em;color:var(--faint)}
+  .srow .sid{color:var(--cyan);font-size:10px}
+  .srow .sdt{color:var(--dim);font-size:10px}
+  .srow .sdt.zero{color:#7a5a3a;font-style:italic}
+  .srow .spr{color:var(--ink);font-size:10px;text-align:right}
+  .gr-wrap{height:7px;background:#141926;border-radius:2px;position:relative}
+  .gr-wrap i{position:absolute;left:0;top:0;bottom:0;background:var(--cyan);opacity:.75;border-radius:2px}
+  .gr-wrap.none i{background:#2a3245}
+  .sv-wrap{height:9px;background:#101623;border-radius:2px;position:relative}
+  .sv-wrap i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#1f5c38,var(--green));border-radius:2px}
+
+  /* ---------- structure band ---------- */
+  .band{border-top:1px solid var(--line);height:168px;flex:0 0 168px;display:flex;flex-direction:column;overflow:hidden}
+  .bandBody{flex:1;display:flex;gap:0;min-height:0}
+  .unitCloud{flex:1;padding:10px 14px 6px;display:flex;flex-wrap:wrap;gap:7px;align-content:flex-start;overflow:hidden}
+  .unit{position:relative;border:1px solid var(--line2);border-radius:4px;padding:3px 8px 2px;background:var(--panel2);height:22px;white-space:nowrap}
+  .unit .ln{font-size:11px;color:var(--ink);font-weight:600}
+  .unit .pt{font-size:8px;color:var(--faint)}
+  .unit .hx{position:absolute;top:-7px;right:-6px;font-size:8.5px;font-weight:700;color:#ffd3ad;
+    background:#3a1f10;border:1px solid #6b3a1c;border-radius:8px;padding:0 5px}
+  .unit.h3{border-color:#8a4a24;box-shadow:0 0 14px rgba(255,120,71,.28);background:#1b120c}
+  .unit.h3 .ln{color:#ffcfa8}
+  .unit.h2{border-color:#5d3a20;box-shadow:0 0 9px rgba(255,120,71,.16);background:#161009}
+  .unit.h2 .ln{color:#f0b98a}
+  .unit.h1{border-color:#3d2c1c;background:#120e0a}
+  .unit.h1 .ln{color:#d9a877}
+  .unit.amb{border-style:dashed}
+  .unit .ambTag{font-size:7.5px;color:#8a6a4a;margin-left:4px;letter-spacing:.05em}
+  .refusal{width:436px;border-left:1px solid var(--line);padding:10px 14px;background:#0d0f14}
+  .refusal .rt{font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--red);margin-bottom:5px}
+  .refusal p{font-size:10.5px;color:#9aa5b8;line-height:1.5}
+  .refusal p b{color:#d5dce8}
+  .refusal .k{color:var(--heat2)}
+  .refusal .cmd{margin-top:7px;font-size:10px;color:var(--faint)}
+  .refusal .cmd code{color:var(--cyan);background:#0c1622;padding:1px 5px;border-radius:3px;border:1px solid #16283a}
+
+  /* ---------- footer ---------- */
+  footer{height:26px;flex:0 0 26px;display:flex;align-items:center;gap:18px;padding:0 18px;border-top:1px solid var(--line);
+    font-size:9.5px;color:var(--faint);background:#0a0c11}
+  footer .warm{color:#8a6a4a}
+  footer .right{margin-left:auto}
+
+  svg text{font-family:var(--mono)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">aOa <span>· attention pulse</span></div>
+  <div class="chip"><span class="dotg"></span><b>aOa-go</b><span>go · 731 files indexed</span></div>
+  <div class="chip">rev <b>8e370207ccdf</b></div>
+  <span class="prov observed">OBSERVED · LEARNER</span>
+  <span class="prov real">VALUE · REAL</span>
+  <div class="hq">Q: <b>what are we actually working on — and what has it cost &amp; saved?</b></div>
+</header>
+
+<div class="verdict">
+  <div class="sent" id="verdictSent"></div>
+  <div class="sub">attention observed by <em>this tool's sessions</em> — not git history, not team activity · 507 prompts · 555 learned pairs · 8,177 keywords · working memory decays ×0.90 every 50 prompts</div>
+</div>
+
+<div class="main">
+
+  <!-- WORKING SET -->
+  <section class="panel">
+    <div class="ph">
+      <span class="t">WORKING SET</span>
+      <span class="q">concept pairs the sessions actually orbited</span>
+      <span class="right"><span class="caveat">top 34 of 555 pairs · rank = co-hit count</span><span class="prov observed">OBSERVED</span></span>
+    </div>
+    <div id="constWrap">
+      <svg id="constSvg"></svg>
+      <div class="inset">
+        <div class="ttl">token <span class="tok">graph</span> — selected</div>
+        <div class="meta">appears in 4 learned pairs · ×41 co-hits total</div>
+        <div class="pr"><span class="p">knowledge·<i>graph</i></span><span class="c">×20</span></div>
+        <div class="pr"><span class="p">call·<i>graph</i></span><span class="c">×10</span></div>
+        <div class="pr"><span class="p">dependency·<i>graph</i></span><span class="c">×7</span></div>
+        <div class="pr"><span class="p">architectural·<i>graph</i></span><span class="c">×4</span></div>
+        <div class="below">3 of these sit below the map's top-34 cut</div>
+        <div class="note">learned from prompt + AI text in real sessions — a co-hit is two tokens seen adjacent, decayed with everything else.</div>
+      </div>
+    </div>
+    <div class="fillerStrip">
+      <div class="lbl">FILTERED FROM MAP — 177 conversational pairs (shown honestly, not hidden) · +344 concept pairs below cut</div>
+      <div class="row" id="fillerRow"></div>
+    </div>
+  </section>
+
+  <!-- DOMAIN DRIFT -->
+  <section class="panel">
+    <div class="ph">
+      <span class="t">DOMAIN DRIFT</span>
+      <span class="q">where the atlas heat sits</span>
+      <span class="right"><span class="caveat">24 core of 134</span><span class="prov observed">OBSERVED</span></span>
+    </div>
+    <div class="domList" id="domList"></div>
+    <div class="decay"><b>decayed counters, not lifetime totals</b> — every 50 prompts all hits multiply by 0.90; what you see is recency-weighted attention. <b>animation at #2 in a Go daemon</b> is the mockup sprint talking, and that is exactly the point.</div>
+  </section>
+
+  <!-- SESSION PULSE + VALUE -->
+  <section class="panel">
+    <div class="ph">
+      <span class="t">SESSION PULSE · VALUE</span>
+      <span class="q">15 sessions observed</span>
+      <span class="right"><span class="prov real">REAL</span></span>
+    </div>
+    <div class="vstrip">
+      <div class="vcell"><div class="n gr">6.37M</div><div class="l">TOKENS SAVED · GUIDED READS</div></div>
+      <div class="vcell"><div class="n gr">3.9h</div><div class="l">SEARCH TIME SAVED</div></div>
+      <div class="vcell"><div class="n am">72%</div><div class="l">READS GUIDED · 183 OF 255</div></div>
+    </div>
+    <div class="vsub">
+      <span>cache hit <b>99.98%</b></span>
+      <span>api cost <b>$211.27</b></span>
+      <span>lines <b style="color:var(--green)">+4,678</b> / <b style="color:var(--red)">−226</b></span>
+      <span>ctx <b>26%</b> of 1M</span>
+    </div>
+    <div class="sessHead"><span>SESSION</span><span>START</span><span style="text-align:right">PRMPT</span><span>GUIDED RATIO</span><span>TOKENS SAVED</span><span></span></div>
+    <div class="sess" id="sessList"></div>
+    <div class="scaleCap">LEARNER SCALE — everything it is holding right now</div>
+    <div class="scale">
+      <div class="sc"><div class="n">8,177</div><div class="l">KEYWORDS</div></div>
+      <div class="sc"><div class="n">555</div><div class="l">CONCEPT PAIRS</div></div>
+      <div class="sc"><div class="n">545</div><div class="l">ATLAS TERMS HOT</div></div>
+      <div class="sc"><div class="n">21</div><div class="l">FILE HEAT COUNTERS</div></div>
+      <div class="sc"><div class="n">731</div><div class="l">FILES INDEXED</div></div>
+      <div class="sc"><div class="n">28,773</div><div class="l">INDEX TOKENS</div></div>
+    </div>
+    <div class="decay">3 sessions carry <b>t₀ = Go zero time</b> — start unrecorded, kept and flagged rather than dropped. savings = tokens a full-file Read would have cost minus what the guided read returned.</div>
+  </section>
+</div>
+
+<!-- STRUCTURE × ATTENTION -->
+<div class="band">
+  <div class="ph">
+    <span class="t">STRUCTURE × ATTENTION</span>
+    <span class="q">32 units (833 nodes · 1,781 edges) · halo = unit name matched in learned pairs</span>
+    <span class="right"><span class="caveat">name-match, not file heat</span><span class="prov mixed">MIXED</span></span>
+  </div>
+  <div class="bandBody">
+    <div class="unitCloud" id="unitCloud"></div>
+    <div class="refusal">
+      <div class="rt">REFUSED — NO FILE-HEAT HALOS</div>
+      <p>the learner holds per-file heat for <b>21 files</b> (decayed read/search counters), but that map is <b>not in this extract</b> — so no file heat is drawn. halos above are <span class="k">unit names matched inside learned pairs</span>, stamped MIXED. <b>aoa ×168</b> and <b>claude ×97</b> collide with tool vocabulary — dashed = discount.</p>
+      <div class="cmd">to draw the real thing: <code>aoa pulse --files</code> → file:line heat, REAL</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>generated 2026-07-09 · daemon live · rev-pinned 8e370207ccdf</span>
+  <span class="warm">every count on this screen is a stored learner value — nothing interpolated, nothing modeled</span>
+  <span class="right">OBSERVED = this tool's sessions only · REAL = session ledger + API meter · MIXED = derived by name-match</span>
+</footer>
+
+<script>
+const D = {"pairs": [["claude:code", 46], ["react:flow", 45], ["status:line", 44], ["data:flow", 35], ["mvp:scale", 32], ["context:details", 28], ["reference:model", 28], ["data:model", 24], ["lazy:start", 24], ["pre:existing", 22], ["knowledge:graph", 20], ["trigram:fallback", 20], ["aoa:daemon", 19], ["retail:monolith", 19], ["zero:results", 19], ["architecture:c4", 18], ["board:md", 18], ["c4:html", 18], ["role:layer", 18], ["file:line", 17], ["import:edges", 17], ["real:data", 17], ["tree:sitter", 17], ["claude:md", 16], ["conversation:text", 16], ["deck:gl", 16], ["blind:judge", 15], ["nav:hero", 15], ["pre:recon", 15], ["red:team", 15], ["report:md", 15], ["stats:grid", 15], ["finish:line", 14], ["py:def", 14]],
+ "fillerTop": [["let:me", 252], ["instead:of", 74], ["we:re", 74], ["me:check", 54], ["want:me", 47], ["corey:aoa", 43]],
+ "domains": [{"name": "unit_testing", "hits": 608.7}, {"name": "animation", "hits": 596.2}, {"name": "integration_testing", "hits": 508.6}, {"name": "reactive", "hits": 465.4}, {"name": "database", "hits": 431.3}, {"name": "middleware", "hits": 429.4}, {"name": "ci_cd", "hits": 404.9}, {"name": "error_handling", "hits": 390.3}, {"name": "rest_api", "hits": 382.5}, {"name": "routing", "hits": 379.0}, {"name": "debugging", "hits": 375.2}, {"name": "grpc", "hits": 372.5}, {"name": "orm", "hits": 369.1}, {"name": "streaming", "hits": 364.5}],
+ "domainTopTerms": [["structure", 2270], ["patterns", 1074], ["fixtures", 779], ["coverage", 638], ["assertions", 209], ["mocking", 163]],
+ "sessions": [{"id": "48e19992", "date": "Jul 09", "zero": false, "prompts": 0, "ratio": 0, "saved": 0}, {"id": "702dab14", "date": "Jul 03", "zero": false, "prompts": 2, "ratio": 0, "saved": 0}, {"id": "db3b2c3f", "date": "t₀ —", "zero": true, "prompts": 0, "ratio": 0.2, "saved": 223979}, {"id": "a1ff23e2", "date": "t₀ —", "zero": true, "prompts": 0, "ratio": 0, "saved": 223703}, {"id": "3a5bfe0f", "date": "t₀ —", "zero": true, "prompts": 0, "ratio": 0.68, "saved": 219699}, {"id": "9b24a5f8", "date": "Jun 16", "zero": false, "prompts": 43, "ratio": 0.76, "saved": 118191}, {"id": "0c2ddc8d", "date": "t₀ —", "zero": true, "prompts": 43, "ratio": 0.83, "saved": 693631}, {"id": "c3a28562", "date": "t₀ —", "zero": true, "prompts": 111, "ratio": 0.48, "saved": 536947}, {"id": "9a910065", "date": "May 02", "zero": false, "prompts": 79, "ratio": 0.73, "saved": 372249}, {"id": "7e2ffaa8", "date": "Apr 01", "zero": false, "prompts": 22, "ratio": 0.86, "saved": 1050695}, {"id": "b7967744", "date": "Mar 23", "zero": false, "prompts": 4, "ratio": 0, "saved": 953910}, {"id": "087173f2", "date": "Mar 23", "zero": false, "prompts": 65, "ratio": 0.87, "saved": 953910}, {"id": "14fa5bc4", "date": "Mar 06", "zero": false, "prompts": 57, "ratio": 1, "saved": 423115}, {"id": "75c1251f", "date": "Mar 06", "zero": false, "prompts": 36, "ratio": 0.74, "saved": 358985}, {"id": "dcfd079e", "date": "Mar 06", "zero": false, "prompts": 23, "ratio": 0.82, "saved": 237601}],
+ "units": [{"leaf": "status", "path": "internal/domain/status", "files": 2, "halo": 44, "amb": false}, {"leaf": "test", "path": "test", "files": 6, "halo": 40, "amb": false}, {"leaf": "app", "path": "internal/app", "files": 39, "halo": 35, "amb": false}, {"leaf": "recon", "path": "internal/adapters/recon", "files": 3, "halo": 31, "amb": false}, {"leaf": "peek", "path": "internal/peek", "files": 2, "halo": 25, "amb": false}, {"leaf": "integration", "path": "test/integration", "files": 4, "halo": 22, "amb": false}, {"leaf": "arch", "path": "internal/domain/arch", "files": 17, "halo": 19, "amb": false}, {"leaf": "enricher", "path": "internal/domain/enricher", "files": 3, "halo": 11, "amb": false}, {"leaf": "ports", "path": "internal/ports", "files": 2, "halo": 11, "amb": false}, {"leaf": "index", "path": "internal/domain/index", "files": 15, "halo": 10, "amb": false}, {"leaf": "web", "path": "internal/adapters/web", "files": 14, "halo": 10, "amb": false}, {"leaf": "cmd", "path": "cmd/aoa/cmd", "files": 42, "halo": 7, "amb": false}, {"leaf": "aoa", "path": "cmd/aoa", "files": 1, "halo": 168, "amb": true}, {"leaf": "claude", "path": "internal/adapters/claude", "files": 2, "halo": 97, "amb": true}, {"leaf": "treesitter", "path": "internal/adapters/treesitter", "files": 16, "halo": 0}, {"leaf": "bbolt", "path": "internal/adapters/bbolt", "files": 11, "halo": 0}, {"leaf": "learner", "path": "internal/domain/learner", "files": 11, "halo": 0}, {"leaf": "analyzer", "path": "internal/domain/analyzer", "files": 9, "halo": 0}, {"leaf": "socket", "path": "internal/adapters/socket", "files": 5, "halo": 0}, {"leaf": "tailer", "path": "internal/adapters/tailer", "files": 3, "halo": 0}, {"leaf": "hints", "path": "internal/domain/hints", "files": 3, "halo": 0}, {"leaf": "ahocorasick", "path": "internal/adapters/ahocorasick", "files": 2, "halo": 0}, {"leaf": "fsnotify", "path": "internal/adapters/fsnotify", "files": 2, "halo": 0}, {"leaf": "facts", "path": "internal/domain/facts", "files": 2, "halo": 0}]
+};
+const UNITS_MORE = 8; // 32 total, showing 24
+
+/* ---------- verdict sentence ---------- */
+document.getElementById('verdictSent').innerHTML =
+  'This repo’s recent life is the <b>visualization push</b> — ' +
+  '<b>react·flow ×45</b>, <b>status·line ×44</b>, <b>knowledge·graph ×20</b> lead ' +
+  '<span class="num">555</span> learned pairs · <span class="num">15</span> sessions observed · ' +
+  'guided reads saved <span class="num">6.37M tokens</span> (~<span class="num">3.9h</span>) at <span class="num">$211.27</span> metered.';
+
+/* ---------- filler strip ---------- */
+document.getElementById('fillerRow').innerHTML =
+  D.fillerTop.map(([p,c])=>`<span class="fpill">${p.replace(':','·')} <b>×${c}</b></span>`).join('') +
+  `<span class="fpill">+171 more filler</span>`;
+
+/* ---------- constellation (deterministic force layout) ---------- */
+(function(){
+  const wrap=document.getElementById('constWrap');
+  const W=wrap.clientWidth||646, H=wrap.clientHeight||486, PAD=34;
+  const svgEl=document.getElementById('constSvg');
+  svgEl.setAttribute('width',W); svgEl.setAttribute('height',H);
+  svgEl.setAttribute('viewBox','0 0 '+W+' '+H);
+  const nodes={}, edges=[];
+  D.pairs.forEach(([p,c])=>{
+    const [a,b]=p.split(':');
+    [a,b].forEach(t=>{ if(!nodes[t]) nodes[t]={id:t,w:0}; nodes[t].w+=c; });
+    edges.push({a,b,c});
+  });
+  const N=Object.values(nodes);
+  // deterministic seed: golden-angle spiral
+  N.forEach((n,i)=>{
+    const ang=i*2.39996, r=30+11.5*Math.sqrt(i)*3.1;
+    n.x=W/2+r*Math.cos(ang)*1.25; n.y=H/2+r*Math.sin(ang)*0.85;
+  });
+  const idx={}; N.forEach((n,i)=>idx[n.id]=i);
+  // force iterations
+  for(let it=0; it<420; it++){
+    const t=1-it/420;
+    // repulsion
+    for(let i=0;i<N.length;i++) for(let j=i+1;j<N.length;j++){
+      const a=N[i],b=N[j];
+      let dx=(a.x-b.x)/1.85, dy=a.y-b.y;
+      let d2=dx*dx+dy*dy; if(d2<1)d2=1;
+      const f=Math.min(11, 7000/d2)*t;
+      const d=Math.sqrt(d2);
+      a.x+=1.85*f*dx/d; a.y+=f*dy/d; b.x-=1.85*f*dx/d; b.y-=f*dy/d;
+    }
+    // springs
+    edges.forEach(e=>{
+      const a=N[idx[e.a]], b=N[idx[e.b]];
+      const dx=b.x-a.x, dy=b.y-a.y, d=Math.max(1,Math.hypot(dx,dy));
+      const target=78;
+      const f=0.055*(d-target)*t;
+      a.x+=f*dx/d; a.y+=f*dy/d; b.x-=f*dx/d; b.y-=f*dy/d;
+    });
+    // gravity + clamp + inset wall (top-right card region is forbidden)
+    N.forEach(n=>{
+      n.x+=(W/2-n.x)*0.012*t; n.y+=(H/2-n.y)*0.02*t;
+      n.x=Math.max(PAD+30,Math.min(W-PAD-30,n.x));
+      n.y=Math.max(PAD,Math.min(H-PAD,n.y));
+      const IX=W-310, IY=292;
+      if(n.x>IX && n.y<IY){
+        const dxw=n.x-IX, dyw=IY-n.y;
+        if(dxw<dyw) n.x=IX-2; else n.y=IY+2;
+      }
+    });
+  }
+  const maxW=Math.max(...N.map(n=>n.w));
+  const fs=n=>10+(n.w/maxW)*6.5;
+  const chipW=n=>n.id.length*(fs(n)*0.62)+16;
+  const maxC=Math.max(...edges.map(e=>e.c));
+  let svg='';
+  // edges
+  edges.forEach(e=>{
+    const a=N[idx[e.a]], b=N[idx[e.b]];
+    const w=0.7+2.6*(e.c/maxC);
+    const hot=e.c>=28;
+    svg+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${hot?'#c96a2e':'#3a4458'}" stroke-width="${w}" opacity="${hot?0.85:0.55}"/>`;
+    if(e.c>=20){
+      const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+      svg+=`<rect x="${mx-13}" y="${my-8}" width="26" height="13" rx="3" fill="#08090d" stroke="#2a2013" stroke-width="1"/>`+
+           `<text x="${mx}" y="${my+2}" text-anchor="middle" font-size="9" fill="#f0a132" font-weight="700">×${e.c}</text>`;
+    }
+  });
+  // nodes as chips
+  N.forEach(n=>{
+    const f=fs(n), cw=chipW(n), ch=f+9;
+    const isSel=n.id==='graph';
+    const hot=n.w>=40;
+    const fill=isSel?'#241305':(hot?'#1b120c':'#10141c');
+    const stroke=isSel?'#f0a132':(hot?'#8a4a24':'#2a3245');
+    const tcol=isSel?'#ffd9a0':(hot?'#ffcfa8':(n.w>=20?'#d9b98a':'#aab6c8'));
+    if(isSel) svg+=`<circle cx="${n.x}" cy="${n.y}" r="${cw/2+14}" fill="none" stroke="#f0a132" stroke-width="1" opacity=".35" stroke-dasharray="3 3"/>`;
+    svg+=`<rect x="${n.x-cw/2}" y="${n.y-ch/2}" width="${cw}" height="${ch}" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="${isSel?1.6:1.1}"/>`+
+         `<text x="${n.x}" y="${n.y+f*0.34}" text-anchor="middle" font-size="${f}" fill="${tcol}" font-weight="${hot||isSel?700:500}">${n.id}</text>`;
+  });
+  document.getElementById('constSvg').innerHTML=svg;
+})();
+
+/* ---------- domains ---------- */
+(function(){
+  const el=document.getElementById('domList');
+  const max=D.domains[0].hits;
+  let html='';
+  D.domains.forEach((d,i)=>{
+    const pct=(d.hits/max*100).toFixed(1);
+    html+=`<div class="drow${i===0?' top1':''}">
+      <span class="rk">${i+1}</span>
+      <span class="nm">${d.name}<span class="tier">CORE</span></span>
+      <span class="bar"><i style="width:${pct}%"></i></span>
+      <span class="hv">${d.hits.toFixed(1)}</span></div>`;
+    if(i===0){
+      html+=`<div class="dterms"><div class="cap">TERM HITS INSIDE unit_testing — float 608.67, decayed ×0.90 per autotune</div><div class="tchips">`+
+        D.domainTopTerms.map(([t,c])=>`<span class="tchip">${t} <b>${c}</b></span>`).join('')+
+        `</div></div>`;
+    }
+  });
+  html+=`<div class="more">+120 more domains between these and the floor — honest cut at 14</div>`;
+  html+=`<div class="coolCap">COOLEST OF 134 — what the tool is barely watching</div>`;
+  const cool=[["io",87.8,134],["dns",100.1,133],["computer_vision",108.3,132],["encryption",116.0,131],["blockchain",130.8,130]];
+  cool.sort((a,b)=>a[2]-b[2]).forEach(c=>{
+    html+=`<div class="drow cool">
+      <span class="rk">${c[2]}</span>
+      <span class="nm">${c[0]}<span class="tier">CTX</span></span>
+      <span class="bar"><i style="width:${(c[1]/max*100).toFixed(1)}%"></i></span>
+      <span class="hv">${c[1].toFixed(1)}</span></div>`;
+  });
+  el.innerHTML=html;
+})();
+
+/* ---------- sessions ---------- */
+(function(){
+  const el=document.getElementById('sessList');
+  const max=Math.max(...D.sessions.map(s=>s.saved));
+  const fmt=v=>v===0?'0':(v>=1e6?(v/1e6).toFixed(2)+'M':Math.round(v/1e3)+'k');
+  el.innerHTML=D.sessions.map(s=>{
+    const w=(s.saved/max*100).toFixed(1);
+    return `<div class="srow">
+      <span class="sid">${s.id}</span>
+      <span class="sdt${s.zero?' zero':''}">${s.date}</span>
+      <span class="spr">${s.prompts}</span>
+      <span class="gr-wrap${s.ratio===0?' none':''}"><i style="width:${(s.ratio*100).toFixed(0)}%"></i></span>
+      <span class="sv-wrap"><i style="width:${w}%"></i></span>
+      <span class="sv${s.saved===0?' zero':''}">${fmt(s.saved)}</span>
+    </div>`;
+  }).join('');
+})();
+
+/* ---------- structure band ---------- */
+(function(){
+  const el=document.getElementById('unitCloud');
+  const cls=h=>h>=40?'h3':(h>=19?'h2':(h>0?'h1':''));
+  const shown=D.units.slice(0,19);
+  el.innerHTML=shown.map(u=>{
+    const c=cls(u.halo)+(u.amb?' amb':'');
+    return `<span class="unit ${c}">
+      <span class="ln">${u.leaf}${u.amb?'<span class="ambTag">AMBIG</span>':''}</span>
+      <span class="pt"> ${u.path} · ${u.files}f</span>
+      ${u.halo>0?`<span class="hx">×${u.halo}</span>`:''}
+    </span>`;
+  }).join('') + `<span class="unit" style="border-style:dotted"><span class="ln" style="color:var(--faint)">+13 more</span><span class="pt"> quiet units — no name-match, no claim</span></span>`;
+})();
+</script>
+</body>
+</html>

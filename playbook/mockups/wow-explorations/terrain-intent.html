@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>aOa · terrain — what breaks if I change scrapy/utils?</title>
+<style>
+  :root{
+    --bg:#0a0d11; --panel:#10141a; --panel2:#141a22; --line:#1d2632;
+    --txt:#c7d2de; --dim:#5b6b7d; --faint:#38465a;
+    --amber:#f59e0b; --amber-hi:#fbbf24; --amber-dk:#7c4a03;
+    --cyan:#22d3ee; --red:#f87171; --green:#34d399;
+    --mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1680px;height:1050px;overflow:hidden;background:var(--bg);color:var(--txt);
+    font-family:var(--mono);font-size:12px;-webkit-font-smoothing:antialiased}
+  b{font-weight:600}
+
+  /* ---------- header ---------- */
+  header{height:42px;display:flex;align-items:center;gap:14px;padding:0 18px;
+    border-bottom:1px solid var(--line);background:var(--panel)}
+  .brand{font-size:14px;font-weight:700;letter-spacing:.02em;color:#e8eef5}
+  .brand span{color:var(--dim);font-weight:400}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border:1px solid var(--line);
+    border-radius:3px;font-size:10px;letter-spacing:.06em;color:var(--dim)}
+  .chip .dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+  .chip.real{color:var(--green);border-color:#1d3d33;font-weight:600}
+  .hstats{color:var(--dim);font-size:11px}
+  .hstats b{color:var(--txt)}
+  header .right{margin-left:auto;color:var(--faint);font-size:10px}
+
+  /* ---------- intent bar (hero) ---------- */
+  .intentwrap{padding:14px 18px 10px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .intentbar{display:flex;align-items:center;height:52px;border:1px solid #2b3b52;border-radius:6px;
+    background:#0c1016;box-shadow:0 0 0 1px #16202e,0 0 26px rgba(34,211,238,.06);padding:0 16px;gap:12px}
+  .intentbar .glyph{color:var(--cyan);font-size:18px}
+  .qtext{font-size:19px;color:#eef4fa;letter-spacing:.01em;white-space:nowrap}
+  .qtext .hot{color:var(--amber-hi)}
+  .caret{display:inline-block;width:9px;height:22px;background:var(--cyan);vertical-align:-4px;
+    margin-left:2px;opacity:.9}
+  .match{margin-left:auto;text-align:right;line-height:1.5;white-space:nowrap}
+  .match .verb{color:var(--cyan);font-size:11px;font-weight:600;letter-spacing:.08em}
+  .match .how{color:var(--dim);font-size:10px}
+  .presets{display:flex;gap:8px;margin-top:8px;align-items:center}
+  .preset{padding:3px 10px;border:1px solid var(--line);border-radius:12px;font-size:10px;
+    color:var(--dim);letter-spacing:.05em}
+  .preset.on{border-color:var(--amber-dk);color:var(--amber-hi);background:rgba(245,158,11,.08)}
+  .preset.off{opacity:.45}
+  .presets .note{margin-left:auto;color:var(--faint);font-size:10px}
+
+  /* ---------- layout ---------- */
+  main{display:flex;height:calc(1050px - 42px - 105px)}
+  .mapcol{flex:1;position:relative;background:
+    radial-gradient(ellipse 900px 600px at 42% 46%, #0e1319 0%, var(--bg) 70%)}
+  svg{display:block}
+  aside{width:492px;border-left:1px solid var(--line);background:var(--panel);
+    display:flex;flex-direction:column;overflow:hidden}
+
+  /* ---------- context menu ---------- */
+  .ctx{position:absolute;width:368px;background:#151b24;border:1px solid #2b3b52;border-radius:6px;
+    box-shadow:0 12px 40px rgba(0,0,0,.65),0 0 0 1px #0a0d11;z-index:5;font-size:11px}
+  .ctx .row span:first-child+span, .ctx .row .verb{white-space:nowrap}
+  .ctx .head{padding:9px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+  .ctx .head b{color:var(--cyan);font-size:12px}
+  .ctx .head .sub{color:var(--dim)}
+  .ctx .row{display:flex;align-items:baseline;gap:8px;padding:8px 12px;border-bottom:1px solid #171e28;color:var(--txt)}
+  .ctx .row:last-child{border-bottom:none}
+  .ctx .row .k{color:var(--dim);margin-left:auto;white-space:nowrap}
+  .ctx .row.active{background:rgba(245,158,11,.1);border-left:2px solid var(--amber);padding-left:10px}
+  .ctx .row.active .verb{color:var(--amber-hi);font-weight:600}
+  .ctx .row.active .k{color:var(--amber)}
+  .ctx .row.disabled{color:var(--faint)}
+  .ctx .row.disabled .k{color:var(--faint);font-style:italic}
+  .gnum{display:inline-flex;width:15px;height:15px;border-radius:50%;border:1px solid var(--cyan);
+    color:var(--cyan);font-size:9px;align-items:center;justify-content:center;flex:none}
+
+  /* ---------- map footer ---------- */
+  .mapfoot{position:absolute;left:0;right:0;bottom:0;display:flex;gap:18px;align-items:center;
+    padding:8px 16px;border-top:1px solid var(--line);background:rgba(10,13,17,.88);font-size:10px;color:var(--dim)}
+  .leg{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:14px;height:3px;border-radius:2px}
+  .mapfoot .honest{margin-left:auto;color:var(--faint)}
+
+  /* ---------- answer card ---------- */
+  .acard{display:flex;flex-direction:column;height:100%}
+  .acard .eyebrow{padding:10px 16px 0;font-size:9px;letter-spacing:.14em;color:var(--dim)}
+  .acard .eyebrow b{color:var(--amber)}
+  .acard .q{padding:4px 16px 0;color:var(--dim);font-size:11px}
+  .acard .q em{color:#e8eef5;font-style:normal}
+  .a1{padding:10px 16px 12px;border-bottom:1px solid var(--line)}
+  .a1 .sentence{font-size:15.5px;line-height:1.5;color:#e9eff6}
+  .a1 .sentence b{color:var(--amber-hi)}
+  .a1 .sub{margin-top:6px;color:var(--dim);font-size:11px}
+  .verdict{display:inline-block;margin-top:9px;padding:3px 10px;border-radius:3px;font-size:10px;
+    font-weight:700;letter-spacing:.1em;color:#0a0d11;background:var(--amber)}
+  .verdict.small{background:none;color:var(--dim);border:1px solid var(--line);font-weight:400;margin-left:6px}
+
+  .sect{padding:9px 16px 4px;font-size:9px;letter-spacing:.14em;color:var(--dim);display:flex}
+  .sect .more{margin-left:auto;color:var(--faint);letter-spacing:.03em}
+  .rows{padding:0 10px}
+  .rrow{display:flex;align-items:center;gap:9px;padding:6px 6px;border-radius:4px}
+  .rrow.dimmed{opacity:.38}
+  .rrow .rank{color:var(--faint);width:12px;text-align:right;flex:none}
+  .rrow .unit{width:150px;flex:none;color:#dce6f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rrow .bar{height:5px;border-radius:2px;background:linear-gradient(90deg,var(--amber-dk),var(--amber));flex:none}
+  .rrow .n{color:var(--amber-hi);width:92px;flex:none;text-align:right;white-space:nowrap}
+  .rrow .n span{color:var(--dim);font-size:10px}
+  .stampline{padding:0 6px 5px 27px;margin-top:-4px}
+  .stamp{display:inline-block;padding:1px 6px;border:1px solid #2a3a50;border-radius:3px;
+    background:#0d1218;color:#8fb8d8;font-size:10px}
+  .stampline .tgt{color:var(--faint);font-size:10px}
+  .plusmore{padding:4px 16px 8px;color:var(--faint);font-size:10.5px;border-bottom:1px solid var(--line)}
+
+  /* escalation */
+  .esc{margin:10px 12px 0;border:1px solid #4a2c33;border-radius:6px;background:rgba(248,113,113,.05)}
+  .esc .ehead{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #33222a}
+  .esc .ehead .warn{color:var(--red);font-weight:700;font-size:11px;letter-spacing:.05em}
+  .esc .ehead .cnt{margin-left:auto;color:var(--dim);font-size:10px}
+  .esc .esent{padding:8px 12px 2px;color:#e3d4d6;font-size:11.5px;line-height:1.5}
+  .esc .esent b{color:var(--red)}
+  .esc .cut{padding:5px 12px 8px;color:var(--dim);font-size:10.5px;line-height:1.45}
+  .esc .cut b{color:#e9eff6}
+  .evi{padding:2px 12px 9px;display:flex;flex-direction:column;gap:4px}
+  .evi .eline{display:flex;gap:8px;align-items:center;color:var(--dim);font-size:10.5px}
+  .evi .eline .arrow{color:var(--faint)}
+  .evi .plus{color:var(--faint);font-size:10px;padding-top:2px}
+
+  /* hit surface */
+  .hits{padding:8px 16px 10px;border-bottom:1px solid var(--line)}
+  .hits .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+  .hchip{padding:2px 8px;border:1px solid var(--line);border-radius:3px;font-size:10px;color:var(--txt);background:#0d1218}
+  .hchip b{color:var(--amber-hi);font-weight:600}
+  .hchip.faded{color:var(--faint);border-style:dashed;background:none}
+
+  /* footer of card */
+  .cfoot{margin-top:auto;padding:10px 16px 12px;border-top:1px solid var(--line);background:var(--panel2);
+    display:flex;flex-direction:column;gap:7px}
+  .prov{display:flex;gap:8px;align-items:center;font-size:10px}
+  .prov .real{color:var(--green);font-weight:700;letter-spacing:.08em}
+  .prov .rev{color:var(--dim)}
+  .refusal{font-size:10.5px;color:#b9a06a;line-height:1.45}
+  .refusal b{color:#e0c07a}
+  .gestures{display:flex;gap:10px;align-items:center;color:var(--dim);font-size:10px}
+  .gestures .g{display:flex;align-items:center;gap:5px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">aOa <span>· terrain</span></div>
+  <div class="chip"><span class="dot"></span>scrapy · py</div>
+  <div class="chip real">REAL · import edges</div>
+  <div class="hstats"><b>424</b> internal files · <b>3,042</b> import edges · rev <b>0188849902b2</b></div>
+  <div class="right">nothing configured · indexed live · 2026-07-09</div>
+</header>
+
+<div class="intentwrap">
+  <div class="intentbar">
+    <span class="glyph">⌕</span>
+    <span class="qtext">what breaks if I change <span class="hot">scrapy/utils</span>?<span class="caret"></span></span>
+    <div class="match">
+      <div class="verb">MATCHED · impact → dependents-of(scrapy/utils)</div>
+      <div class="how">deterministic verb matcher · no LLM · answered from graph edges in-page</div>
+    </div>
+  </div>
+  <div class="presets">
+    <span class="preset on">impact ✓</span>
+    <span class="preset">issues</span>
+    <span class="preset">what's-here</span>
+    <span class="preset off">handoff — needs C17</span>
+    <span class="note">presets pre-fill a verb — the map answers, you never leave the canvas</span>
+  </div>
+</div>
+
+<main>
+  <div class="mapcol">
+    <svg id="map" width="1188" height="861"></svg>
+
+    <!-- right-click context menu, rendered open on the epicenter -->
+    <div class="ctx" id="ctx">
+      <div class="head"><b>scrapy/utils</b><span class="sub">· 41 files · unit</span>
+        <span style="margin-left:auto;color:var(--green);font-size:9px;letter-spacing:.08em">REAL</span></div>
+      <div class="row active"><span class="gnum">1</span><span class="verb">what breaks here?</span>
+        <span class="k">dependents · 15 units · 251 files</span></div>
+      <div class="row"><span style="width:15px"></span><span>what does it need?</span>
+        <span class="k">deps · 5 units · 27 imports</span></div>
+      <div class="row"><span style="width:15px"></span><span>findings here</span>
+        <span class="k">6 · 5 mutual + 1 budget</span></div>
+      <div class="row"><span style="width:15px"></span><span>references (name grep)</span>
+        <span class="k">ranked · /api/refs</span></div>
+      <div class="row disabled"><span style="width:15px"></span><span>runtime callers</span>
+        <span class="k">unavailable — no call graph</span></div>
+    </div>
+
+    <div class="mapfoot">
+      <span class="leg" style="white-space:nowrap"><span class="sw" style="background:var(--amber)"></span>imports utils · width = sites</span>
+      <span class="leg" style="white-space:nowrap"><span class="sw" style="height:0;border-top:2px dashed var(--red);background:none"></span>reverse ×19</span>
+      <span class="leg" style="white-space:nowrap"><span class="sw" style="background:#233042"></span>other imports</span>
+      <span class="leg" style="white-space:nowrap"><span style="width:10px;height:10px;border:1.5px solid var(--cyan);border-radius:50%"></span>epicenter</span>
+      <span class="honest" style="white-space:nowrap">19 internal units · 103 external targets not drawn · dots = files, to scale</span>
+    </div>
+  </div>
+
+  <aside>
+    <div class="acard">
+      <div class="eyebrow">ANSWER · <b>IMPACT</b> · COMPUTED FROM 3,042 STAMPED IMPORT EDGES</div>
+      <div class="q">Q · <em>what breaks if I change scrapy/utils?</em></div>
+      <div class="a1">
+        <div class="sentence"><b>251 files in 15 units</b> import scrapy/utils directly — <b>536</b> stamped import sites. Transitive import reach: <b>360 of 424 files (85%)</b>.</div>
+        <div class="verdict">HIGH BLAST · 85% REACH</div><span class="verdict small">rank rule: import sites, desc</span>
+      </div>
+
+      <div class="sect">TOP 5 DEPENDENT UNITS <span class="more">ranked by import sites</span></div>
+      <div class="rows" id="ranked"></div>
+      <div class="plusmore">+10 more units · 87 sites — smallest: scrapy/settings ×2, conftest.py ×2</div>
+
+      <div class="esc">
+        <div class="ehead"><span class="warn">⚠ ESCALATION — ECHO RISK</span><span class="cnt">1 of 1 · expanded</span></div>
+        <div class="esent">utils imports <b>scrapy back ×19</b> — mutual lock <b>scrapy ⇄ utils (44 / 19)</b>. A change here can echo through the package root.</div>
+        <div class="evi">
+          <div class="eline"><span class="stamp">scrapy/utils/_download_handlers.py:17</span><span class="arrow">→</span>scrapy/__init__.py</div>
+          <div class="eline"><span class="stamp">scrapy/utils/conf.py:11</span><span class="arrow">→</span>scrapy/exceptions.py</div>
+          <div class="eline"><span class="stamp">scrapy/utils/datatypes.py:16</span><span class="arrow">→</span>scrapy/exceptions.py</div>
+          <div class="eline"><span class="stamp">scrapy/utils/defer.py:29</span><span class="arrow">→</span>scrapy/exceptions.py</div>
+          <div class="plus">+15 more reverse imports · 16 utils files carry them</div>
+        </div>
+        <div class="cut">cheapest cut: <b>14 of the 19</b> reverse imports target <b>scrapy/exceptions.py</b> — move exceptions below utils and the lock mostly dissolves.</div>
+      </div>
+
+      <div class="hits" style="border-bottom:none">
+        <div class="sect" style="padding:2px 0 0">HIT SURFACE INSIDE UTILS <span class="more">40 of 41 files imported from outside</span></div>
+        <div class="chips">
+          <span class="hchip">test.py <b>×80</b></span>
+          <span class="hchip">python.py <b>×60</b></span>
+          <span class="hchip">defer.py <b>×57</b></span>
+          <span class="hchip">misc.py <b>×45</b></span>
+          <span class="hchip">log.py <b>×31</b></span>
+          <span class="hchip faded">+35 more · 263 sites</span>
+        </div>
+      </div>
+
+      <div class="cfoot">
+        <div class="prov"><span class="real">REAL</span><span class="rev">import edges at rev 0188849902b2 · every count re-derivable from stamped lines</span></div>
+        <div class="refusal"><b>refused:</b> runtime callers — no call graph in this index. Blast radius above is <b>import reach, not runtime reach</b>; test count (×278) includes test files, labeled as such.</div>
+        <div class="gestures">
+          <span class="g"><span class="gnum">1</span>type intent</span>·
+          <span class="g"><span class="gnum">2</span>pick a row</span>·
+          <span class="g"><span class="gnum">3</span>file:line opens code</span>
+          <span style="margin-left:auto;color:var(--faint)">answer is rev-pinned · paste the URL in the PR</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+// ===== REAL DATA — aggregated from data/scrapy-graph.json (file grain, rev 0188849902b2) =====
+// units: internal file-grain nodes grouped at scrapy/<pkg> depth-1 (matches footprint anchor grain).
+// blast = import sites INTO scrapy/utils from that unit. ext = import sites to external targets (not drawn).
+const UNITS=[
+ {"id":"tests","files":247,"x":322.4,"y":274.2,"blast":278},
+ {"id":"scrapy/utils","files":41,"x":393.9,"y":386.5,"blast":0,"epicenter":true},
+ {"id":"scrapy","files":25,"x":463.7,"y":342.9,"blast":44},
+ {"id":"scrapy/core","files":24,"x":501.8,"y":60,"blast":63},
+ {"id":"scrapy/extensions","files":16,"x":254.6,"y":60,"blast":26},
+ {"id":"scrapy/commands","files":15,"x":231.6,"y":451.2,"blast":22},
+ {"id":"scrapy/downloadermiddlewares","files":13,"x":92.9,"y":383.2,"blast":38},
+ {"id":"scrapy/http","files":12,"x":495.8,"y":218.6,"blast":12},
+ {"id":"scrapy/spidermiddlewares","files":6,"x":213.0,"y":580,"blast":6},
+ {"id":"docs","files":5,"x":910,"y":60,"blast":0},
+ {"id":"scrapy/pipelines","files":4,"x":633.9,"y":60,"blast":23},
+ {"id":"scrapy/spiders","files":4,"x":665.1,"y":308.1,"blast":11},
+ {"id":"extras","files":2,"x":910,"y":203.0,"blast":0},
+ {"id":"scrapy/contracts","files":2,"x":99.8,"y":167.0,"blast":2},
+ {"id":"scrapy/linkextractors","files":2,"x":498,"y":592,"blast":4},
+ {"id":"scrapy/selector","files":2,"x":667.2,"y":470.3,"blast":3},
+ {"id":"scrapy/settings","files":2,"x":338.5,"y":580,"blast":2},
+ {"id":"(root)","files":1,"x":90,"y":580,"blast":2},
+ {"id":"scrapy/loader","files":1,"x":793.4,"y":580,"blast":0}];
+// aggregated unit-pair import counts (75 pairs total; all drawn)
+const EDGES=[["tests","scrapy",303],["tests","scrapy/utils",278],["tests","scrapy/http",76],
+["scrapy/core","scrapy/utils",63],["scrapy","scrapy/utils",44],["tests","scrapy/spiders",41],
+["scrapy/downloadermiddlewares","scrapy/utils",38],["scrapy/core","scrapy",29],
+["scrapy/extensions","scrapy/utils",26],["scrapy/extensions","scrapy",24],
+["scrapy/pipelines","scrapy/utils",23],["tests","scrapy/core",23],["scrapy/commands","scrapy/utils",22],
+["scrapy/commands","scrapy",19],["scrapy/utils","scrapy",19],["scrapy/downloadermiddlewares","scrapy",18],
+["tests","scrapy/settings",17],["tests","scrapy/downloadermiddlewares",17],["tests","scrapy/extensions",13],
+["scrapy/http","scrapy/utils",12],["scrapy/spiders","scrapy/utils",11],["scrapy/core","scrapy/http",10],
+["tests","scrapy/spidermiddlewares",8],["scrapy/downloadermiddlewares","scrapy/http",6],
+["scrapy/spidermiddlewares","scrapy/utils",6],["tests","scrapy/pipelines",6],
+["scrapy/commands","scrapy/http",5],["scrapy/pipelines","scrapy",5],["scrapy/pipelines","scrapy/http",5],
+["tests","scrapy/linkextractors",5],["scrapy","scrapy/http",4],["scrapy/http","scrapy",4],
+["scrapy/linkextractors","scrapy/utils",4],["scrapy/spidermiddlewares","scrapy",4],
+["scrapy/spiders","scrapy",4],["scrapy/spiders","scrapy/http",4],["scrapy/utils","scrapy/settings",4],
+["tests","scrapy/commands",4],["tests","scrapy/selector",4],["(root)","tests",3],
+["scrapy/selector","scrapy/utils",3],["(root)","scrapy/utils",2],["scrapy","scrapy/spiders",2],
+["scrapy/contracts","scrapy/http",2],["scrapy/contracts","scrapy/utils",2],["scrapy","scrapy/settings",2],
+["scrapy/settings","scrapy/utils",2],["scrapy/utils","scrapy/http",2],["tests","scrapy/contracts",2],
+["tests","scrapy/loader",2],["docs","scrapy/http",1],["extras","scrapy/http",1],
+["extras","scrapy/spiders",1],["scrapy","scrapy/selector",1],["scrapy","scrapy/commands",1],
+["scrapy/commands","scrapy/linkextractors",1],["scrapy/commands","scrapy/contracts",1],
+["scrapy/commands","scrapy/settings",1],["scrapy/contracts","scrapy",1],["scrapy/core","scrapy/spiders",1],
+["scrapy/core","scrapy/pipelines",1],["scrapy","scrapy/core",1],
+["scrapy/downloadermiddlewares","scrapy/settings",1],["scrapy/downloadermiddlewares","scrapy/spidermiddlewares",1],
+["scrapy/extensions","scrapy/http",1],["scrapy/linkextractors","scrapy",1],["scrapy/loader","scrapy",1],
+["scrapy/loader","scrapy/selector",1],["scrapy/selector","scrapy/http",1],["scrapy/settings","scrapy",1],
+["scrapy/spidermiddlewares","scrapy/http",1],["scrapy/spiders","scrapy/linkextractors",1],
+["scrapy/spiders","scrapy/selector",1],["scrapy/utils","scrapy/selector",1],["scrapy/utils","scrapy/spiders",1]];
+// top-5 dependents: [unit, sites, files, stamp, target, targetCount]
+const TOP5=[
+ ["tests",278,154,"tests/spiders.py:22","utils/test.py",79],
+ ["scrapy/core",63,18,"scrapy/core/downloader/__init__.py:24","utils/defer.py",9],
+ ["scrapy",44,19,"scrapy/addons.py:8","utils/misc.py",9],
+ ["scrapy/downloadermiddlewares",38,13,"…middlewares/cookies.py:12","utils/decorators.py",13],
+ ["scrapy/extensions",26,12,"…extensions/closespider.py:15","utils/asyncio.py",5]];
+
+// ===== render (runs once) =====
+const svg=document.getElementById('map');
+const W=1188,H=861,PADT=30,PADB=60;
+// scale precomputed layout (1000x640) into canvas
+const sx=v=>60+v*(W-190)/1000, sy=v=>PADT+30+v*(H-PADT-PADB-90)/640;
+const U={}; UNITS.forEach(u=>{u.px=sx(u.x);u.py=sy(u.y);U[u.id]=u;});
+const R=u=>10+Math.sqrt(u.files)*2.6;
+const maxBlast=278;
+const NS='http://www.w3.org/2000/svg';
+function el(n,at,parent){const e=document.createElementNS(NS,n);for(const k in at)e.setAttribute(k,at[k]);(parent||svg).appendChild(e);return e;}
+
+// defs: glow filters
+const defs=el('defs',{});
+defs.innerHTML=`
+ <filter id="glowA" x="-80%" y="-80%" width="260%" height="260%">
+   <feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+ </filter>
+ <filter id="glowC" x="-80%" y="-80%" width="260%" height="260%">
+   <feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+ </filter>`;
+
+const gEdges=el('g',{}), gBlast=el('g',{}), gNodes=el('g',{}), gLabels=el('g',{});
+function edgePath(a,b,curve){
+  const dx=b.px-a.px, dy=b.py-a.py, d=Math.hypot(dx,dy);
+  const mx=(a.px+b.px)/2 - dy/d*(curve||0), my=(a.py+b.py)/2 + dx/d*(curve||0);
+  return `M${a.px},${a.py} Q${mx},${my} ${b.px},${b.py}`;
+}
+// dim edges first
+EDGES.forEach(([f,t,c])=>{
+  const a=U[f],b=U[t]; if(!a||!b)return;
+  const isBlast = t==='scrapy/utils' && f!=='scrapy/utils';
+  const isRev = f==='scrapy/utils'&&t==='scrapy';
+  if(isBlast||isRev)return;
+  el('path',{d:edgePath(a,b,14),stroke:'#1c2733',fill:'none',
+    'stroke-width':Math.max(.7,Math.sqrt(c)*.42),opacity:.5},gEdges);
+});
+// blast edges into utils
+EDGES.forEach(([f,t,c])=>{
+  if(!(t==='scrapy/utils'&&f!=='scrapy/utils'))return;
+  const a=U[f],b=U[t];
+  const w=1+Math.sqrt(c)*.62, op=.35+.65*(c/maxBlast);
+  el('path',{d:edgePath(a,b,18),stroke:'#f59e0b',fill:'none','stroke-width':w,
+    opacity:op,filter:'url(#glowA)','stroke-linecap':'round'},gBlast);
+  // arrowhead near utils
+  const dx=b.px-a.px,dy=b.py-a.py,dd=Math.hypot(dx,dy),r=R(b)+7;
+  const ax=b.px-dx/dd*r, ay=b.py-dy/dd*r, ang=Math.atan2(dy,dx);
+  const p=(o)=>`${ax-Math.cos(ang-o)*8},${ay-Math.sin(ang-o)*8}`;
+  el('path',{d:`M${ax},${ay} L${p(.4)} L${p(-.4)} Z`,fill:'#f59e0b',opacity:op},gBlast);
+});
+// reverse edge utils -> scrapy (dashed red)
+(()=>{const a=U['scrapy/utils'],b=U['scrapy'];
+  el('path',{d:edgePath(a,b,-26),stroke:'#f87171',fill:'none','stroke-width':2,
+   'stroke-dasharray':'5 4',opacity:.85,filter:'url(#glowA)'},gBlast);
+  const t=el('text',{x:b.px+R(b)+10,y:b.py-6,fill:'#f87171','font-size':'10',
+   'font-family':'inherit','text-anchor':'start'},gLabels);
+  t.textContent='×19 back — mutual lock';})();
+
+// nodes with file-dot texture
+function mulberry(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+UNITS.forEach((u,ui)=>{
+  const r=R(u), blast=u.blast>0, epi=!!u.epicenter;
+  const dim=!blast&&!epi;
+  const g=el('g',{opacity:dim?0.22:1},gNodes);
+  if(blast){
+    const heat=.25+.75*(u.blast/maxBlast);
+    el('circle',{cx:u.px,cy:u.py,r:r+5,fill:'none',stroke:'#f59e0b',
+      'stroke-width':1.4,opacity:heat,filter:'url(#glowA)'},g);
+  }
+  if(epi){
+    el('circle',{cx:u.px,cy:u.py,r:r+10,fill:'none',stroke:'#22d3ee','stroke-width':1,'stroke-dasharray':'2 3',opacity:.9},g);
+    el('circle',{cx:u.px,cy:u.py,r:r+4,fill:'none',stroke:'#22d3ee','stroke-width':1.8,filter:'url(#glowC)'},g);
+  }
+  el('circle',{cx:u.px,cy:u.py,r:r,fill:epi?'#0e2229':(blast?'#191510':'#10151c'),
+    stroke:epi?'#22d3ee':(blast?'#8a5a10':'#243040'),'stroke-width':epi?1.2:1},g);
+  // file dots
+  const rnd=mulberry(ui*7919+13), nd=Math.min(u.files,72);
+  for(let i=0;i<nd;i++){
+    const a=rnd()*Math.PI*2, rr=Math.sqrt(rnd())*(r-5);
+    el('circle',{cx:u.px+Math.cos(a)*rr,cy:u.py+Math.sin(a)*rr,r:1.1,
+      fill:epi?'#67e8f9':(blast?'#d9a441':'#3a4a5e'),opacity:.75},g);
+  }
+  // label
+  const name=u.id.replace('scrapy/','');
+  const lt=el('text',{x:u.px,y:u.py+r+13,'text-anchor':'middle','font-size':epi?'12':'11',
+    'font-family':'inherit',fill:epi?'#22d3ee':(blast?'#e8c987':'#41506a'),
+    'font-weight':(epi||u.blast>40)?'600':'400',opacity:dim?.9:1},gLabels);
+  lt.textContent=name;
+  if(blast){
+    const ct=el('text',{x:u.px,y:u.py+r+25,'text-anchor':'middle','font-size':'9.5',
+      'font-family':'inherit',fill:'#f59e0b',opacity:.9},gLabels);
+    ct.textContent='×'+u.blast;
+  }
+  if(epi){
+    const et=el('text',{x:u.px,y:u.py+r+27,'text-anchor':'middle','font-size':'9',
+      'font-family':'inherit',fill:'#22d3ee','letter-spacing':'.2em'},gLabels);
+    et.textContent='EPICENTER · 41 FILES';
+  }
+});
+
+// position context menu near the epicenter (offset down-right, leader line back to the node)
+const eu=U['scrapy/utils'];
+const ctx=document.getElementById('ctx');
+const mx=Math.round(eu.px+165), my=Math.round(eu.py+62);
+ctx.style.left=mx+'px'; ctx.style.top=my+'px';
+el('line',{x1:eu.px+R(eu)*0.75,y1:eu.py+R(eu)*0.75,x2:mx+4,y2:my+16,
+  stroke:'#22d3ee','stroke-width':1,'stroke-dasharray':'2 3',opacity:.7},gLabels);
+el('circle',{cx:eu.px+R(eu)*0.75,cy:eu.py+R(eu)*0.75,r:2.5,fill:'#22d3ee'},gLabels);
+
+// ranked rows in answer card
+const rank=document.getElementById('ranked');
+TOP5.forEach((r,i)=>{
+  const [unit,sites,files,stamp,tgt,tc]=r;
+  const row=document.createElement('div');row.className='rrow'+(i>0?'':'');
+  const bw=Math.max(8,Math.round(120*sites/278));
+  row.innerHTML=`<span class="rank">${i+1}</span><span class="unit">${unit}</span>
+    <span class="bar" style="width:${bw}px"></span>
+    <span class="n">×${sites} <span>· ${files}f</span></span>`;
+  rank.appendChild(row);
+  const st=document.createElement('div');st.className='stampline';
+  st.innerHTML=`<span class="stamp">${stamp}</span> <span class="tgt">→ ${tgt} (×${tc} from this unit)</span>`;
+  rank.appendChild(st);
+});
+</script>
+</body>
+</html>

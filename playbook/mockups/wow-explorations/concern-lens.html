@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>aOa · concern lens — where does a concern live?</title>
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#11141a; --panel2:#0e1116; --line:#232a34; --line2:#2e3742;
+    --tx:#cfd6df; --dim:#7d8794; --dimmer:#586270; --white:#eef2f7;
+    --ser:#e39044; --http:#58a6e0; --proc:#5bc98d;
+    --real:#3ddc84; --warn:#e0b058; --refuse:#e06a6a;
+    --mono:"SF Mono",ui-monospace,"Cascadia Code",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--tx);font-family:var(--mono);font-size:12px}
+  body{width:1680px;height:1050px;overflow:hidden;display:flex;flex-direction:column}
+
+  /* ---------- top chrome ---------- */
+  .topbar{height:44px;display:flex;align-items:center;gap:14px;padding:0 18px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  .brand{font-weight:700;color:var(--white);font-size:14px;letter-spacing:.02em}
+  .brand span{color:var(--dim);font-weight:400}
+  .crumb{color:var(--dim)}
+  .crumb b{color:var(--tx);font-weight:600}
+  .badge{border:1px solid;border-radius:3px;padding:1px 7px;font-size:10px;letter-spacing:.08em;font-weight:700}
+  .badge.real{color:var(--real);border-color:rgba(61,220,132,.45)}
+  .badge.grain{color:var(--warn);border-color:rgba(224,176,88,.4)}
+  .topbar .right{margin-left:auto;color:var(--dimmer);font-size:11px}
+  .topbar .right b{color:var(--dim);font-weight:600}
+
+  .a1{padding:10px 18px 11px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#10131a, #0d1015)}
+  .a1 .q{font-size:11px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px}
+  .a1 .q b{color:var(--white);letter-spacing:0;text-transform:none;font-size:13px;margin-right:8px}
+  .a1 .sentence{font-size:13.5px;color:var(--white);line-height:1.45}
+  .a1 .sentence .c-ser{color:var(--ser);font-weight:700}
+  .a1 .sentence .c-http{color:var(--http);font-weight:700}
+  .a1 .sentence .c-proc{color:var(--proc);font-weight:700}
+  .a1 .sentence .n{color:var(--tx);font-weight:600}
+  .a1 .sentence .dim{color:var(--dim)}
+
+  /* ---------- main grid ---------- */
+  .main{flex:1;display:grid;grid-template-columns:352px 352px 352px 1fr;gap:12px;padding:12px 18px;min-height:0}
+  .main>*{min-width:0}
+  .col{background:var(--panel);border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .col .chead{padding:10px 12px 8px;border-bottom:1px solid var(--line)}
+  .rung{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid var(--line2);color:var(--dim);font-size:9.5px;margin-right:7px;vertical-align:1px}
+  .cname{font-size:14px;font-weight:700;color:var(--white)}
+  .cname .at{opacity:.6;font-weight:400}
+  .tierchip{font-size:9px;letter-spacing:.1em;border:1px solid var(--line2);color:var(--dim);border-radius:3px;padding:1px 5px;margin-left:8px;vertical-align:2px}
+  .attn{float:right;font-size:10px;color:var(--dimmer);text-align:right;line-height:1.3;margin-top:1px}
+  .attn b{color:var(--dim)}
+  .verdict{margin-top:7px;font-size:11.5px;color:var(--tx);line-height:1.45}
+  .verdict b{color:var(--white)}
+  .verdict .share{color:var(--dim)}
+  .termrow{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
+  .tchip{font-size:10px;color:var(--dim);border:1px solid var(--line);background:var(--panel2);border-radius:3px;padding:1px 6px}
+  .tchip b{color:var(--tx);font-weight:600}
+  .divnote{margin-top:7px;font-size:10px;color:var(--warn);opacity:.85;line-height:1.4;border-left:2px solid rgba(224,176,88,.4);padding-left:7px}
+
+  .rows{flex:1;padding:8px 8px 6px;display:flex;flex-direction:column;justify-content:space-between;gap:6px;min-height:0}
+  .urow{position:relative;border:1px solid var(--line);border-radius:5px;background:var(--panel2);padding:8px 9px 8px 9px;flex:1;display:flex;flex-direction:column;justify-content:center}
+  .urow.sel{border-color:var(--ser);box-shadow:0 0 0 1px rgba(227,144,68,.35)}
+  .urow .l1{display:flex;align-items:baseline;gap:7px}
+  .rank{color:var(--dimmer);font-size:10px;width:14px}
+  .uname{color:var(--white);font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .urefs{margin-left:auto;font-size:11px;color:var(--tx);white-space:nowrap}
+  .urefs b{font-weight:700;color:var(--white)}
+  .ufiles{color:var(--dimmer);font-size:10px;white-space:nowrap}
+  .bartrack{height:3px;background:#1a2028;border-radius:2px;margin:5px 0 5px 21px;overflow:hidden}
+  .bar{height:100%;border-radius:2px}
+  .l3{display:flex;align-items:center;gap:6px;margin-left:21px;min-width:0}
+  .terms-mini{font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .terms-mini b{color:var(--tx);font-weight:600}
+  .ovl{margin-left:auto;display:flex;gap:3px;flex:none}
+  .dot{width:6px;height:6px;border-radius:50%;opacity:.9}
+  .stamp{display:block;margin-left:21px;margin-top:5px;font-size:10px;color:var(--dim);background:#141922;border:1px solid var(--line);border-radius:3px;padding:2px 7px;max-width:calc(100% - 21px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stamp .fl{color:#9ab8d8}
+  .seltag{flex:none;font-size:9px;color:var(--ser);border:1px solid rgba(227,144,68,.5);border-radius:3px;padding:1px 5px;background:#171310;margin-left:6px}
+  .more{padding:6px 12px 9px;font-size:10.5px;color:var(--dimmer);border-top:1px solid var(--line)}
+  .more b{color:var(--dim)}
+
+  /* ---------- right rail ---------- */
+  .rail{display:flex;flex-direction:column;gap:12px;min-height:0}
+  .panelbox{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .pb-head{padding:9px 12px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+  .pb-head b{color:var(--white);letter-spacing:0;text-transform:none;font-size:12.5px}
+  .esc{border-color:rgba(227,144,68,.5)}
+  .esc .pb-head{border-bottom-color:rgba(227,144,68,.3)}
+  .esc-sentence{padding:10px 12px;font-size:12.5px;line-height:1.5;color:var(--white);border-bottom:1px solid var(--line)}
+  .esc-sentence .k{color:var(--ser);font-weight:700}
+  .esc-sentence .dim{color:var(--dim)}
+  .evrows{padding:6px 8px}
+  .ev{display:flex;gap:8px;align-items:baseline;padding:4px 4px;border-bottom:1px dashed #1b212b}
+  .ev:last-child{border-bottom:none}
+  .ev .fl{flex:none;font-size:10.5px;color:#9ab8d8;width:118px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ev .tt{flex:none;font-size:9px;letter-spacing:.06em;border-radius:2px;padding:0 4px;border:1px solid var(--line2);color:var(--dim);width:52px;text-align:center}
+  .ev .code{flex:1;min-width:0;font-size:10.5px;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ev .code i{color:#8fae7e;font-style:normal}
+  .esc-foot{padding:7px 12px;border-top:1px solid var(--line);font-size:10.5px;color:var(--dim);background:var(--panel2)}
+  .esc-foot b{color:var(--tx)}
+
+  .refuse{border-color:rgba(224,106,106,.45)}
+  .refuse .pb-head{border-bottom-color:rgba(224,106,106,.3);color:var(--refuse)}
+  .refuse .pb-head b{color:var(--white)}
+  .qline{padding:9px 12px 4px;font-size:12px;color:var(--dim)}
+  .qline .qq{color:var(--white);background:#161b23;border:1px solid var(--line2);border-radius:3px;padding:2px 8px}
+  .rv{padding:7px 12px;font-size:12.5px;line-height:1.5}
+  .rv .no{color:var(--refuse);font-weight:700;letter-spacing:.06em}
+  .rv .dim{color:var(--dim)}
+  .rv b{color:var(--white)}
+  .nearest{padding:2px 12px 11px;display:flex;gap:6px;flex-wrap:wrap}
+  .nearchip{font-size:10.5px;border:1px solid var(--line2);border-radius:3px;padding:2px 8px;color:var(--tx);background:var(--panel2)}
+  .nearchip b{color:var(--white)}
+  .nearchip span{color:var(--dimmer)}
+  .rfoot{padding:6px 12px 9px;font-size:10px;color:var(--dimmer);border-top:1px solid var(--line);line-height:1.45}
+  .rfoot .fl{color:#9ab8d8}
+
+  .shared .srow{display:flex;align-items:center;gap:8px;padding:4px 12px}
+  .shared .srow .sn{width:128px;flex:none;font-size:11px;color:var(--white);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .shared .band{flex:1;display:flex;height:9px;border-radius:2px;overflow:hidden;background:#1a2028}
+  .shared .seg{height:100%}
+  .shared .sc{flex:none;width:120px;font-size:9.5px;color:var(--dimmer);text-align:right;white-space:nowrap}
+  .shared .note{padding:5px 12px 9px;font-size:10px;color:var(--dimmer);line-height:1.4}
+
+  .method{flex:1;display:flex;flex-direction:column}
+  .method ul{list-style:none;padding:8px 12px}
+  .method li{font-size:10.5px;color:var(--dim);line-height:1.5;padding:3px 0 3px 14px;position:relative}
+  .method li:before{content:"·";position:absolute;left:2px;color:var(--dimmer)}
+  .method li b{color:var(--tx)}
+  .method li .cav{color:var(--warn)}
+
+  /* ---------- footer ---------- */
+  .foot{height:32px;border-top:1px solid var(--line);background:var(--panel2);display:flex;align-items:center;gap:18px;padding:0 18px;font-size:10.5px;color:var(--dimmer)}
+  .foot .ladder{color:var(--dim)}
+  .foot .ladder b{color:var(--tx)}
+  .foot .right{margin-left:auto}
+  .legend-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 4px 0 10px;vertical-align:-1px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">aOa <span>· concern lens</span></div>
+  <div class="crumb"><b>aoa-go</b> · Go · 32 units · 247 Go files scanned</div>
+  <span class="badge real">REAL</span>
+  <span class="badge grain">NAME-REF GRAIN</span>
+  <div class="right">semantic atlas × import graph join · rev <b>8e370207ccdf</b> · derived live</div>
+</div>
+
+<div class="a1">
+  <div class="q"><b>Where does a concern live?</b> 3 concerns probed · atlas terms joined against source, per unit — candidates, not owners</div>
+  <div class="sentence" id="a1s"></div>
+</div>
+
+<div class="main">
+  <div class="col" id="col-serialization"></div>
+  <div class="col" id="col-http"></div>
+  <div class="col" id="col-process"></div>
+
+  <div class="rail">
+    <div class="panelbox esc">
+      <div class="pb-head"><span class="rung">2</span><b>internal/adapters/bbolt</b> &nbsp;expanded · @serialization — evidence</div>
+      <div class="esc-sentence">
+        bbolt is the <span class="k">binary</span> side of serialization — <b>49 of 113</b> repo-wide
+        “binary” references land in this one unit <span class="dim">(43% · everywhere else the wire is JSON)</span>.
+        141 refs · 11 files · json 83 · binary 49 · schema 9.
+      </div>
+      <div class="evrows" id="evrows"></div>
+      <div class="esc-foot"><span class="rung">3</span>open code: <b>Read internal/adapters/bbolt/store.go:25</b> — gesture 3 of 3</div>
+    </div>
+
+    <div class="panelbox refuse">
+      <div class="pb-head">no coverage — <b>refusal, rendered honestly</b></div>
+      <div class="qline">probe: <span class="qq">where does “billing” live?</span></div>
+      <div class="rv">
+        <span class="no">REFUSED</span> — <b>0</b> name references in 247 Go files at rev 8e370207 · not guessing a unit.
+        The atlas knows the concept — <b>billing</b> is a term of <b>@subscription</b> — this codebase just doesn’t do it.
+      </div>
+      <div class="nearest" id="nearest"></div>
+      <div class="rfoot">term source: <span class="fl">atlas/v1/14-domain-specific.json:29</span> · chip numbers = session attention</div>
+    </div>
+
+    <div class="panelbox shared">
+      <div class="pb-head">shared units — <b>one unit, several concerns</b> · band = mix of refs</div>
+      <div id="sharedrows"></div>
+      <div class="note">cmd/aoa/cmd and internal/app serve all three — the wiring layers.</div>
+    </div>
+
+    <div class="panelbox method">
+      <div class="pb-head">method — what these numbers are (and are not)</div>
+      <ul>
+        <li><b>evidence</b> = word-boundary matches of the concern’s 7 atlas terms in Go source — <span class="cav">name references, not call semantics</span>; ranked units are <b>candidates</b>, not owners</li>
+        <li><b>attention</b> = observed by this tool in AI sessions — <span class="cav">not git history</span>; disagreements with code are shown, not hidden</li>
+        <li>re-derivable at rev <b>8e370207ccdf</b>; every claim terminates in a file:line</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <div class="ladder"><b>①</b> concern → ranked units&nbsp;&nbsp;<b>②</b> unit → stamped evidence&nbsp;&nbsp;<b>③</b> file:line → code&nbsp;&nbsp;· 3 gestures, no prose</div>
+  <div>
+    overlap dots = unit also ranks in
+    <span class="legend-dot" style="background:var(--ser)"></span>serialization
+    <span class="legend-dot" style="background:var(--http)"></span>http
+    <span class="legend-dot" style="background:var(--proc)"></span>process
+  </div>
+  <div class="right">data: live daemon harvest 2026-07-09 · aoa-domains.json + aoa-graph.json + source grep join · zero network</div>
+</div>
+
+<script>
+const DATA = {"concerns": [{"name": "serialization", "atlasHits": 238.9, "tier": "context", "sessionTermHits": {"conversion": 292, "csv": 478, "json": 183, "schema": 58, "xml": 605, "yaml": 1079}, "totalRefs": 1752, "unitCount": 27, "units": [{"unit": "internal/adapters/socket", "refs": 339, "files": 5, "terms": {"json": 339}, "samples": [{"file": "internal/adapters/socket/protocol.go", "line": 1, "term": "json", "text": "// Package socket implements a JSON-over-Unix-socket protocol for the aOa daemon."}]}, {"unit": "internal/adapters/web", "refs": 215, "files": 14, "terms": {"json": 209, "schema": 4, "yaml": 2}, "samples": [{"file": "internal/adapters/web/arch_handler.go", "line": 10, "term": "json", "text": "\"encoding/json\""}]}, {"unit": "internal/domain/arch", "refs": 170, "files": 17, "terms": {"json": 140, "schema": 22, "yaml": 7, "xml": 1}, "samples": [{"file": "internal/domain/arch/grouping.go", "line": 267, "term": "schema", "text": "// Returns an error if the $schema field is not \"aoa.arch-overlay/v1\"."}]}, {"unit": "cmd/aoa/cmd", "refs": 167, "files": 42, "terms": {"json": 139, "binary": 24, "yaml": 2, "conversion": 1, "schema": 1}, "samples": [{"file": "cmd/aoa/cmd/arch.go", "line": 19, "term": "json", "text": "\"encoding/json\""}]}, {"unit": "internal/adapters/bbolt", "refs": 141, "files": 11, "terms": {"json": 83, "binary": 49, "schema": 9}, "samples": [{"file": "internal/adapters/bbolt/arch.go", "line": 77, "term": "json", "text": "// SaveShards atomically writes a batch of rendered shard JSON blobs."}], "sel": true}], "top5Share": 59, "codeTermTotals": {"json": 1499, "binary": 113, "yaml": 69, "schema": 46, "xml": 12, "conversion": 9, "csv": 4}, "divnote": "sessions attended yaml (1,079) over json (183) — the code says json (1,499). attention ≠ code; both shown.", "verdictTail": "heaviest: adapters/socket — 339 refs, every one “json”: the wire protocol."}, {"name": "http", "atlasHits": 175.3, "tier": "context", "sessionTermHits": {"caching": 497, "client": 257, "cookies": 749, "headers": 92, "protocol": 28, "proxy": 207, "server": 91}, "totalRefs": 355, "unitCount": 14, "units": [{"unit": "internal/adapters/socket", "refs": 112, "files": 5, "terms": {"server": 53, "client": 52, "protocol": 7}, "samples": [{"file": "internal/adapters/socket/protocol.go", "line": 61, "term": "client", "text": "// Request is the wire format for client-to-server messages."}]}, {"unit": "internal/adapters/web", "refs": 91, "files": 14, "terms": {"server": 74, "client": 14, "headers": 2, "caching": 1}, "samples": [{"file": "internal/adapters/web/server.go", "line": 164, "term": "client", "text": "// If the client's If-None-Match header matches the current revision, returns 304."}]}, {"unit": "cmd/aoa/cmd", "refs": 67, "files": 42, "terms": {"client": 59, "server": 4, "protocol": 3, "proxy": 1}, "samples": [{"file": "cmd/aoa/cmd/arch.go", "line": 5, "term": "client", "text": "// archClient: shared daemon-first → direct-RO-fallback client helper."}]}, {"unit": "internal/app", "refs": 28, "files": 39, "terms": {"server": 26, "caching": 1, "proxy": 1}, "samples": [{"file": "internal/app/app.go", "line": 239, "term": "server", "text": "Server    *socket.Server"}]}, {"unit": "internal/domain/index", "refs": 12, "files": 15, "terms": {"server": 10, "caching": 1, "client": 1}, "samples": [{"file": "internal/domain/index/search.go", "line": 1182, "term": "caching", "text": "// compileGlob converts a glob pattern to a compiled regex, caching the result."}]}], "top5Share": 84, "codeTermTotals": {"server": 195, "client": 135, "protocol": 11, "headers": 7, "proxy": 4, "caching": 3}, "divnote": "sessions attended cookies (749) — code has zero “cookies”. There is no cookie code to find; the term stays at 0.", "verdictTail": "a split concern: server-words live in adapters/web (74), client-words in cmd/aoa/cmd (59), the socket carries both."}, {"name": "process", "atlasHits": 150.5, "tier": "context", "sessionTermHits": {"environment": 29, "ipc": 68, "isolation": 93, "lifecycle": 154, "management": 249, "scheduling": 199, "signals": 72}, "totalRefs": 82, "unitCount": 15, "units": [{"unit": "internal/app", "refs": 39, "files": 39, "terms": {"signals": 23, "scheduling": 11, "lifecycle": 3, "management": 1, "isolation": 1}, "samples": [{"file": "internal/app/app.go", "line": 294, "term": "signals", "text": "learnWordIdx int // cycles through learn attrib words for Search/Read signals"}]}, {"unit": "internal/domain/arch", "refs": 8, "files": 17, "terms": {"scheduling": 8}, "samples": [{"file": "internal/domain/arch/service_test.go", "line": 106, "term": "scheduling", "text": "{ID: \"m_a\", Label: \"A\", Path: \"internal/app/a.go\", Domain: \"scheduling\"},"}]}, {"unit": "cmd/aoa/cmd", "refs": 7, "files": 42, "terms": {"scheduling": 3, "management": 2, "signals": 1, "environment": 1}, "samples": [{"file": "cmd/aoa/cmd/daemon.go", "line": 188, "term": "signals", "text": "// It opens the database, starts the socket server, and blocks until a signal"}]}, {"unit": "test/integration", "refs": 5, "files": 4, "terms": {"environment": 3, "lifecycle": 2}, "samples": [{"file": "test/integration/cli_test.go", "line": 574, "term": "lifecycle", "text": "// V-08: Daemon lifecycle — thorough state machine testing"}]}, {"unit": "internal/ports", "refs": 4, "files": 2, "terms": {"lifecycle": 2, "signals": 2}, "samples": [{"file": "internal/ports/session.go", "line": 253, "term": "lifecycle", "text": "// EventSystemMeta is a session lifecycle or metadata event"}]}], "top5Share": 77, "codeTermTotals": {"signals": 39, "scheduling": 23, "lifecycle": 10, "environment": 6, "management": 3, "isolation": 1}, "divnote": null, "verdictTail": "one owner-shaped candidate: internal/app holds 58% of every “signals” reference in the repo (23 of 39)."}], "totalUnits": 32, "rev": "8e370207ccdf"};
+
+const EVIDENCE = [
+  {file:"internal/adapters/bbolt/store.go", line:25,  term:"binary", text:"formatV1 byte = 1 // Binary posting lists + gob"},
+  {file:"internal/adapters/bbolt/store.go", line:248, term:"binary", text:"// Supports both v0 (JSON) and v1 (binary/gob) formats transparently."},
+  {file:"internal/adapters/bbolt/encoding.go", line:1, term:"binary", text:"// Binary encoding for search index blobs."},
+  {file:"internal/adapters/bbolt/edges.go", line:24,  term:"binary", text:"binary.BigEndian.PutUint32(key, fileID)"},
+  {file:"internal/adapters/bbolt/arch.go", line:77,   term:"json",   text:"// SaveShards atomically writes a batch of rendered shard JSON blobs."},
+  {file:"internal/adapters/bbolt/arch.go", line:10,   term:"schema", text:"// archShardsVersion is the C3 schema version for the arch_shards bucket."}
+];
+
+const NEAREST = [
+  {name:"ecommerce", hits:261.5}, {name:"payment", hits:208.1}, {name:"subscription", hits:149.7}
+];
+
+// units appearing in 2+ concerns — refs per concern, from the full (untrimmed) join
+const SHARED = [
+  {unit:"internal/adapters/socket", refs:{serialization:339, http:112}},
+  {unit:"internal/adapters/web",    refs:{serialization:215, http:91}},
+  {unit:"cmd/aoa/cmd",              refs:{serialization:167, http:67, process:7}},
+  {unit:"internal/domain/arch",     refs:{serialization:170, process:8}},
+  {unit:"internal/app",             refs:{serialization:105, http:28, process:39}}
+];
+
+const COLORS = {serialization:"var(--ser)", http:"var(--http)", process:"var(--proc)"};
+const RGBA   = {serialization:"rgba(227,144,68,", http:"rgba(88,166,224,", process:"rgba(91,201,141,"};
+
+// ---- A1 sentence ----
+document.getElementById("a1s").innerHTML =
+  '<span class="c-ser">serialization</span> concentrates in <span class="n">adapters/socket</span> — 339 refs, all “json” <span class="dim">(the wire protocol)</span> · ' +
+  '<span class="c-http">http</span> splits <span class="n">socket ⇄ web ⇄ cli</span> <span class="dim">(protocol 63% in socket)</span> · ' +
+  '<span class="c-proc">process</span> lifecycle lives in <span class="n">internal/app</span> <span class="dim">(58% of every “signals” reference)</span>';
+
+// ---- overlap map: unit -> concerns it appears in (from full join) ----
+const overlap = {};
+SHARED.forEach(s => { overlap[s.unit] = Object.keys(s.refs); });
+
+function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML;}
+function shortUnit(u){return u.replace(/^internal\//,"");}
+
+DATA.concerns.forEach((c, ci) => {
+  const col = document.getElementById("col-" + c.name);
+  const color = COLORS[c.name], rgba = RGBA[c.name];
+  const shown = c.units.slice(0,5);
+  const shownRefs = shown.reduce((a,u)=>a+u.refs,0);
+  const maxRefs = shown[0].refs;
+
+  // header
+  const termChips = Object.entries(c.codeTermTotals)
+    .map(([t,n]) => `<span class="tchip"><b>${t}</b> ${n.toLocaleString()}</span>`).join("");
+  let h = `<div class="chead">
+    <div class="attn">atlas @${c.name} · ${c.tier} tier<br>session attention <b>${c.atlasHits}</b> <span title="observed by this tool">†</span></div>
+    <div><span class="rung">1</span><span class="cname" style="color:${color}"><span class="at">@</span>${c.name}</span><span class="tierchip">${c.tier.toUpperCase()}</span></div>
+    <div class="verdict"><b>${c.unitCount} candidate units</b> · ${c.totalRefs.toLocaleString()} term references
+      <span class="share">· top-5 hold ${Math.round(100*shownRefs/c.totalRefs)}%</span><br>${esc(c.verdictTail)}</div>
+    <div class="termrow">${termChips}</div>
+    ${c.divnote ? `<div class="divnote">${esc(c.divnote)}</div>` : ""}
+  </div>`;
+
+  // rows
+  h += `<div class="rows">`;
+  shown.forEach((u, i) => {
+    const dots = (overlap[u.unit]||[]).filter(n => n !== c.name)
+      .map(n => `<span class="dot" style="background:${COLORS[n]}" title="also ranks in ${n}"></span>`).join("");
+    const tmini = Object.entries(u.terms).slice(0,3)
+      .map(([t,n]) => `${t} <b>${n}</b>`).join(" · ");
+    const s = u.samples[0];
+    h += `<div class="urow${u.sel ? " sel" : ""}">
+      <div class="l1"><span class="rank">${i+1}</span><span class="uname">${esc(shortUnit(u.unit))}</span>
+        <span class="urefs"><b>${u.refs}</b> refs</span><span class="ufiles">· ${u.files}f</span>${u.sel ? `<span class="seltag">SELECTED →</span>` : ""}</div>
+      <div class="bartrack"><div class="bar" style="width:${Math.max(3,Math.round(100*u.refs/maxRefs))}%;background:linear-gradient(90deg, ${rgba}.9), ${rgba}.45))"></div></div>
+      <div class="l3"><span class="terms-mini">${tmini}${Object.keys(u.terms).length>3 ? ` <span style="color:var(--dimmer)">+${Object.keys(u.terms).length-3}</span>` : ""}</span>
+        <span class="ovl">${dots}</span></div>
+      <span class="stamp"><span class="fl">${esc(s.file)}:${s.line}</span> · ${esc(s.text.length>58 ? s.text.slice(0,58)+"…" : s.text)}</span>
+    </div>`;
+  });
+  h += `</div>`;
+  h += `<div class="more">+<b>${c.unitCount-5} more units</b> · ${(c.totalRefs-shownRefs).toLocaleString()} refs — every one reachable, none hidden</div>`;
+  col.innerHTML = h;
+});
+
+// ---- evidence rows ----
+document.getElementById("evrows").innerHTML = EVIDENCE.map(e => {
+  const fl = e.file.replace("internal/adapters/bbolt/","") + ":" + e.line;
+  return `<div class="ev"><span class="fl" title="${esc(e.file)}:${e.line}">${esc(fl)}</span><span class="tt">${e.term}</span><span class="code">${esc(e.text)}</span></div>`;
+}).join("");
+
+// ---- nearest chips ----
+document.getElementById("nearest").innerHTML =
+  `<span style="font-size:10.5px;color:var(--dim);padding:2px 0">nearest →</span>` +
+  NEAREST.map(n => `<span class="nearchip"><b>@${n.name}</b> <span>${n.hits}</span></span>`).join("");
+
+// ---- shared units rows ----
+document.getElementById("sharedrows").innerHTML = SHARED.map(sh => {
+  const tot = Object.values(sh.refs).reduce((a,b)=>a+b,0);
+  const segs = Object.entries(sh.refs).map(([cn,r]) =>
+    `<span class="seg" style="width:${(100*r/tot).toFixed(1)}%;background:${COLORS[cn]}" title="${cn}: ${r} refs"></span>`).join("");
+  const lab = Object.entries(sh.refs).map(([cn,r]) =>
+    `<span style="color:${COLORS[cn]}">${r}</span>`).join(" · ");
+  return `<div class="srow"><span class="sn">${esc(shortUnit(sh.unit))}</span><span class="band">${segs}</span><span class="sc">${lab} · Σ${tot}</span></div>`;
+}).join("");
+</script>
+</body>
+</html>

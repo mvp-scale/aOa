@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>aOa · Blueprints — answered questions (north-star mockup)</title>
+<style>
+  :root{
+    --bg:#0a0d12; --bg2:#0d1117; --panel:#10151d; --panel2:#131a24; --inset:#0b0f15;
+    --line:#1c2430; --line2:#28313f;
+    --txt:#c9d1d9; --dim:#8b949e; --faint:#5b6470;
+    --blue:#58a6ff; --cyan:#76e3ea; --red:#f85149; --redbg:#3d1214; --rust:#b62324;
+    --green:#3fb950; --amber:#d29922; --purple:#bc8cff;
+    --mono:ui-monospace,'SF Mono','Cascadia Mono','JetBrains Mono',Menlo,monospace;
+    --sans:-apple-system,'Segoe UI',Inter,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1680px;height:1050px;overflow:hidden;background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px}
+  .chip{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;padding:1px 7px;border-radius:3px;border:1px solid;vertical-align:1px}
+  .chip.real{color:var(--green);border-color:#1f4429;background:#0d1f13}
+  .chip.mixed{color:var(--amber);border-color:#4a3a12;background:#221a08}
+  .chip.gated{color:var(--faint);border-color:#28313f;background:#10151d}
+  .chip.refused{color:var(--red);border-color:#57181a;background:#2a0e0f}
+  .chip.warn{color:var(--amber);border-color:#4a3a12;background:#221a08}
+  .mono{font-family:var(--mono)}
+
+  /* ---------- top bar ---------- */
+  #top{height:46px;display:flex;align-items:center;gap:14px;padding:0 18px;background:var(--bg2);border-bottom:1px solid var(--line)}
+  #top .logo{font-weight:700;font-size:15px;letter-spacing:.02em}
+  #top .logo b{color:var(--blue)}
+  #top .zone{color:var(--dim);font-size:13px}
+  #top .est{display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line2);border-radius:5px;padding:3px 10px;font-size:12px}
+  #top .dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+  #top .crumb{color:var(--dim);font-size:12px}
+  #top .crumb b{color:var(--txt);font-weight:600}
+  #top .right{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--faint);font-family:var(--mono);font-size:10px}
+  .gauge{display:flex;align-items:center;gap:5px;border:1px solid var(--line2);border-radius:4px;padding:3px 9px;background:var(--panel)}
+  .gauge .g{width:14px;height:5px;border-radius:2px;background:#233043}
+  .gauge .g.on{background:var(--blue)}
+  .gauge span{color:var(--dim);font-family:var(--mono);font-size:9.5px;letter-spacing:.05em}
+
+  /* ---------- layout ---------- */
+  #frame{display:flex;height:964px}
+  /* left rail */
+  #rail{width:388px;min-width:388px;background:var(--bg2);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  #rail .railhead{padding:13px 16px 9px}
+  #rail .railhead h2{font-size:11px;letter-spacing:.14em;color:var(--dim);font-weight:600}
+  #rail .railhead p{font-size:10.5px;color:var(--faint);margin-top:3px}
+  .moment{padding:9px 10px 4px 16px;font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--faint)}
+  .moment em{font-style:normal;color:var(--dim)}
+  .qrow{margin:0 10px 6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:8px 11px;position:relative}
+  .qrow .q{font-size:12.5px;font-weight:600;color:var(--txt);line-height:1.3}
+  .qrow .verdict{margin-top:5px;font-family:var(--mono);font-size:10px;color:var(--dim);line-height:1.5}
+  .qrow .verdict b{color:var(--txt);font-weight:600}
+  .qrow .verdict .hot{color:var(--red)}
+  .qrow .verdict .ok{color:var(--green)}
+  .qrow .stamp{position:absolute;top:8px;right:9px}
+  .qrow.active{border-color:#2b5583;background:linear-gradient(180deg,#12233a 0%,#101a29 100%);box-shadow:0 0 0 1px #1d3a5c}
+  .qrow.active .q{color:#dbe9ff}
+  .qrow.gated{opacity:.62}
+  .qrow.gated .q{color:var(--dim)}
+  .gestmark{position:absolute;left:-1px;top:50%;transform:translate(-50%,-50%);width:18px;height:18px;border-radius:50%;background:var(--blue);color:#04101f;font-family:var(--mono);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px rgba(88,166,255,.18)}
+  .railfoot{margin-top:auto;padding:10px 16px;border-top:1px solid var(--line);font-size:10.5px;color:var(--faint);line-height:1.55}
+  .railfoot b{color:var(--dim);font-weight:600}
+
+  /* ---------- main stage ---------- */
+  #stage{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  /* A1 header */
+  #a1{padding:14px 22px 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0e1420 0%,var(--bg) 100%)}
+  #a1 .qline{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.08em}
+  #a1 .qline .fieldtag{color:var(--faint);border:1px solid var(--line2);border-radius:3px;padding:0 5px;font-size:9px}
+  #a1 h1{margin-top:7px;font-size:21px;font-weight:650;letter-spacing:-.01em;line-height:1.25}
+  #a1 h1 .n{color:var(--blue)}
+  #a1 h1 .worst{color:var(--red)}
+  #a1 .sub{margin-top:6px;font-size:12px;color:var(--dim)}
+  #a1 .sub .mono{font-size:10.5px;color:var(--faint)}
+
+  #cols{flex:1;display:flex;min-height:0}
+  /* ladder */
+  #ladder{width:492px;min-width:492px;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--bg)}
+  .paneltitle{padding:10px 16px 7px;display:flex;align-items:baseline;gap:8px}
+  .paneltitle h3{font-size:10.5px;letter-spacing:.14em;color:var(--dim);font-weight:600}
+  .paneltitle .rule{font-family:var(--mono);font-size:9.5px;color:var(--faint)}
+  .rung{margin:0 12px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px 12px 11px;position:relative}
+  .rung.dimmed{opacity:.45}
+  .rung.open{border-color:#6e2427;background:linear-gradient(180deg,#1c1113 0%,#150e10 100%);box-shadow:0 0 0 1px #47181b}
+  .rung .rhead{display:flex;align-items:baseline;gap:8px}
+  .rung .rank{font-family:var(--mono);font-size:10px;color:var(--faint);width:18px}
+  .rung .pair{font-size:13.5px;font-weight:650}
+  .rung .pair .arr{color:var(--red);font-weight:400}
+  .rung .vol{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .rung .vol b{color:var(--txt)}
+  .bar{margin-top:6px;height:7px;border-radius:2px;background:#161c26;display:flex;overflow:hidden}
+  .bar .f{background:#8a2f27;height:100%}
+  .bar .r{background:#3d5f8a;height:100%}
+  .rung .cut{margin-top:6px;font-size:10.5px;color:var(--dim);line-height:1.45}
+  .rung .cut .cuttag{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--cyan);border:1px solid #1d4a4e;background:#0a1e20;border-radius:3px;padding:0 5px;margin-right:6px;vertical-align:1px}
+  .rung .cut .loc{font-family:var(--mono);font-size:10px;color:var(--blue)}
+  .rung .cut b{color:var(--txt);font-weight:600}
+  .morerow{margin:2px 12px 8px;font-family:var(--mono);font-size:10.5px;color:var(--faint);padding:5px 12px;border:1px dashed var(--line2);border-radius:6px}
+  .morerow b{color:var(--dim)}
+  .findpanel{margin:14px 12px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel2);padding:9px 12px}
+  .findpanel .fhead{display:flex;align-items:baseline;gap:8px}
+  .findpanel .fhead .t{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--faint)}
+  .findpanel .headline{margin-top:6px;font-size:12px;color:var(--txt)}
+  .findpanel .headline .sev{color:var(--amber);font-family:var(--mono);font-size:10px;margin-right:6px}
+  .findpanel .frow{margin-top:5px;font-family:var(--mono);font-size:10px;color:var(--dim);line-height:1.6}
+  .findpanel .frow .loc{color:var(--blue)}
+  .findpanel .fnote{margin-top:6px;font-size:10px;color:var(--faint)}
+  .refcard{margin:12px 14px 0;border:1px solid #57181a;border-radius:6px;background:#190c0d;padding:9px 13px;display:flex;gap:12px;align-items:baseline}
+  .refcard .rq{font-size:12px;font-weight:600;color:var(--txt);white-space:nowrap}
+  .refcard .ra{font-size:11px;color:var(--dim);line-height:1.5}
+  .refcard .ra b{color:#f0a9a5}
+  .ladderfoot{margin-top:auto;padding:9px 16px;border-top:1px solid var(--line);font-size:10px;color:var(--faint);line-height:1.5}
+
+  /* evidence panel */
+  #evidence{flex:1;display:flex;flex-direction:column;background:var(--inset);min-width:0}
+  #evhead{padding:11px 18px 9px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  #evhead .esc{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--faint)}
+  #evhead h3{font-size:14.5px;font-weight:650;margin-top:3px}
+  #evhead h3 .arr{color:var(--red);font-weight:400}
+  #evhead .verdictline{margin-top:4px;font-size:11.5px;color:var(--dim)}
+  #evhead .verdictline b{color:var(--txt)}
+  #evhead .verdictline .cuttag{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--cyan);border:1px solid #1d4a4e;background:#0a1e20;border-radius:3px;padding:0 5px;margin:0 4px;vertical-align:1px}
+  #evcols{display:flex;gap:0;border-bottom:1px solid var(--line)}
+  .evcol{flex:1;min-width:0;padding:9px 14px 10px}
+  .evcol+.evcol{border-left:1px solid var(--line)}
+  .evcol .dhead{display:flex;align-items:baseline;gap:7px}
+  .evcol .dhead .dir{font-family:var(--mono);font-size:11px;font-weight:600}
+  .evcol .dhead .cnt{font-family:var(--mono);font-size:10px;color:var(--dim)}
+  .evcol .dhead .tag{margin-left:auto}
+  .evline{display:flex;gap:8px;align-items:baseline;padding:3.5px 0;font-family:var(--mono);font-size:10.5px;border-bottom:1px solid #12181f}
+  .evline:last-of-type{border-bottom:none}
+  .evline .loc{color:var(--blue);white-space:nowrap}
+  .evline .tgt{color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .evline .tgt i{font-style:normal;color:var(--dim)}
+  .evline.sel{background:#122338;margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:3px;border-bottom-color:transparent}
+  .evline.sel .loc{color:#9ecbff;font-weight:600}
+  .evmore{padding-top:5px;font-family:var(--mono);font-size:10px;color:var(--faint)}
+  .insight{margin:0 14px;padding:8px 12px;border:1px solid #1d4a4e;background:#0a1c1e;border-radius:6px;font-size:11.5px;color:#a9dfe3;line-height:1.5}
+  .insight b{color:#d7f5f7}
+  .insight .pct{font-family:var(--mono);color:var(--cyan)}
+
+  /* terminal peek */
+  #term{margin:13px 14px 0;border:1px solid var(--line2);border-radius:8px;background:#0a0e14;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.45)}
+  #term .thead{display:flex;align-items:center;gap:9px;padding:7px 12px;background:var(--panel2);border-bottom:1px solid var(--line)}
+  #term .thead .tname{font-family:var(--mono);font-size:11.5px;color:var(--txt);font-weight:600}
+  #term .thead .tapi{font-family:var(--mono);font-size:9.5px;color:var(--faint)}
+  #term .thead .lat{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--green)}
+  .codeline{display:flex;font-family:var(--mono);font-size:11px;line-height:1.68}
+  .codeline .ln{width:38px;text-align:right;padding-right:12px;color:#39424e;flex:none;user-select:none}
+  .codeline .src{white-space:pre;color:#aab4c0}
+  .codeline .src .kw{color:#ff7b72}.codeline .src .mod{color:#79c0ff}.codeline .src .nm{color:#d2a8ff}
+  .codeline.hit{background:#14273f}
+  .codeline.hit .ln{color:var(--blue);font-weight:700}
+  .codeline.hit .src{color:#e6edf5}
+  .codeline.ctx6 .src .mod{color:#79c0ff}
+  #term .tfoot{display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid var(--line);background:var(--panel2)}
+  #term .tfoot .edgefact{font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+  #term .tfoot .edgefact b{color:var(--txt)}
+
+  /* url + demo strip */
+  #urlbar{margin:10px 14px 0;display:flex;align-items:center;gap:9px;border:1px solid var(--line2);border-radius:6px;background:var(--panel);padding:6px 11px}
+  #urlbar .lbl{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--faint)}
+  #urlbar .url{font-family:var(--mono);font-size:10.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+  #urlbar .url b{color:var(--blue);font-weight:500}
+  #urlbar .copy{font-family:var(--mono);font-size:9.5px;color:var(--txt);border:1px solid var(--line2);border-radius:4px;padding:2px 9px;background:var(--panel2)}
+  #evfoot{margin-top:auto;padding:8px 18px;display:flex;gap:14px;align-items:center;border-top:1px solid var(--line);background:var(--bg2);font-family:var(--mono);font-size:9.5px;color:var(--faint)}
+  #evfoot .sep{color:#242e3b}
+
+  /* bottom bar */
+  #bottom{height:40px;display:flex;align-items:center;gap:12px;padding:0 18px;background:var(--bg2);border-top:1px solid var(--line);font-family:var(--mono);font-size:10px;color:var(--faint)}
+  #bottom .wow{display:flex;align-items:center;gap:8px;color:var(--dim)}
+  #bottom .step{display:flex;align-items:center;gap:5px}
+  #bottom .step .b{width:15px;height:15px;border-radius:50%;background:#182437;border:1px solid #2b415f;color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
+  #bottom .arrow{color:#344050}
+  #bottom .right{margin-left:auto;display:flex;gap:12px;align-items:center}
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="logo"><b>aOa</b> · blueprints</div>
+  <div class="est"><span class="dot"></span><span class="mono" style="font-size:11px">scrapy</span><span style="color:var(--faint);font-size:10px">py · 446 files</span></div>
+  <div class="crumb">questions, grouped by developer moment — each verdict live from the manifest</div>
+  <div class="right">
+    <div class="gauge"><span>GESTURES TO CODE</span><div class="g on"></div><div class="g on"></div><div class="g on"></div><span style="color:var(--green)">3 / 3 budget</span></div>
+    <span>rev 0188849902b2</span>
+    <span>indexed 2026-07-09 06:46:50 UTC</span>
+  </div>
+</div>
+
+<div id="frame">
+
+  <!-- ================= LEFT RAIL : questions ================= -->
+  <div id="rail">
+    <div class="railhead">
+      <h2>QUESTIONS</h2>
+      <p>Every entry is a question with a live verdict — never a diagram type. Gated rows say what's missing.</p>
+    </div>
+    <div id="raillist"></div>
+    <div class="railfoot">
+      <b>More questions — gated on substrate (+4)</b><br>
+      dataflow · ownership (needs git churn) · sequence · event catalog.
+      When aOa can't prove an answer, the row says so — <span style="color:var(--dim)">refusal is part of the contract.</span>
+    </div>
+  </div>
+
+  <!-- ================= MAIN STAGE : one answered question ================= -->
+  <div id="stage">
+    <div id="a1">
+      <div class="qline">
+        <span>CHANGE · OPEN QUESTION</span>
+        <span class="fieldtag">A1</span><span class="fieldtag">BODY top-K</span><span class="fieldtag">ESC ×1</span><span class="fieldtag">TERM file:line→code</span>
+        <span style="margin-left:auto" class="chip real">REAL · imports (incl. test files) + deterministic grouping</span>
+      </div>
+      <h1>Where is the structure fighting itself — and where do I cut?&nbsp;&nbsp;
+        <span style="color:var(--dim);font-weight:400">→</span>
+        <span class="n">10 mutual pairs</span> across 2,894 dependencies — worst: <span class="worst">scrapy ⇄ utils (44 out / 19 back)</span>.
+      </h1>
+      <div class="sub">122 modules — 19 internal subpackages + 103 external targets · 0 true module cycles among 323 files, but 10 two-way group tangles
+        &nbsp;·&nbsp;<span class="mono">rank rule: bidirectional volume, worst first · cheapest cut is a separate clause, never a second “worst”</span></div>
+    </div>
+
+    <div id="cols">
+      <!-- ---------- BODY: tangle ladder ---------- -->
+      <div id="ladder">
+        <div class="paneltitle"><h3>TANGLE LADDER</h3><span class="rule">top-5 of 10 · ranked by two-way volume · expansion dims siblings</span></div>
+        <div id="rungs"></div>
+        <div class="morerow"><b>+5 more tangles</b> — http⇄scrapy 4/4 · scrapy⇄spiders 2/4 · settings⇄utils 2/4 · selector⇄utils 3/1 · scrapy⇄settings 2/1</div>
+
+        <div class="findpanel">
+          <div class="fhead"><span class="t">FIND — RULES THIS VIEW FIRES</span><span class="chip warn">⚠ 12 · daemon detectors only</span></div>
+          <div class="headline"><span class="sev">WARN·MUTUAL</span>mutual dependency: <b>scrapy ⇄ utils</b> — 10 of 12 findings are this rule; each stamps its importing lines</div>
+          <div class="frow">first stamps: <span class="loc">scrapy/addons.py:7</span> · <span class="loc">scrapy/addons.py:8</span> · <span class="loc">scrapy/cmdline.py:16</span> · +21 more</div>
+          <div class="frow"><span style="color:var(--amber)">WARN·BUDGET</span> ×2 — tests: 47 members · utils: 41 members (limit 40)</div>
+          <div class="fnote">warn/info badges off by default — one narrated headline + drawer; <span style="color:var(--dim)">errors always show</span></div>
+        </div>
+
+        <div class="ladderfoot">
+          Each rung carries its <span style="color:var(--cyan)">CHEAPEST CUT</span> from real import asymmetry — the thin direction of the lock.
+          Counts are file-grain import edges; every edge is stamped <span class="mono">{file, line}</span>.
+        </div>
+      </div>
+
+      <!-- ---------- ESC: expanded rung + TERM ---------- -->
+      <div id="evidence">
+        <div id="evhead">
+          <div class="esc">ESCALATION — RUNG 1 EXPANDED <span style="color:#344050">·</span> gesture ② <span style="color:#344050">·</span> both directions, stamped</div>
+          <h3>scrapy <span class="arr">⇄</span> utils — MUTUAL · 44 imports out, 19 back</h3>
+          <div class="verdictline"><span class="cuttag">CHEAPEST CUT</span>the <b>19 reverse edges</b> — and they concentrate: see below.</div>
+        </div>
+
+        <div id="evcols">
+          <div class="evcol">
+            <div class="dhead"><span class="dir" style="color:#e0836f">scrapy → utils</span><span class="cnt">×44</span><span class="tag chip real">REAL</span></div>
+            <div id="fwdlines"></div>
+            <div class="evmore">+ 38 more importing lines</div>
+          </div>
+          <div class="evcol">
+            <div class="dhead"><span class="dir" style="color:#7fa7d9">utils → scrapy</span><span class="cnt">×19</span><span class="tag"><span class="cuttag" style="font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--cyan);border:1px solid #1d4a4e;background:#0a1e20;border-radius:3px;padding:0 5px">CHEAPEST CUT</span></span></div>
+            <div id="revlines"></div>
+            <div class="evmore">+ 13 more importing lines</div>
+          </div>
+        </div>
+
+        <div class="insight" style="margin-top:10px">
+          <b>14 of 19</b> reverse edges import a single file — <span class="mono" style="color:#d7f5f7">scrapy/exceptions.py</span>.
+          Move it below <span class="mono">utils</span> and <span class="pct">74%</span> of this lock disappears. That is the cut.
+        </div>
+
+        <div id="term">
+          <div class="thead">
+            <span style="font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--faint)">TERM · gesture ③</span>
+            <span class="tname">scrapy/addons.py<span style="color:var(--blue)">:7</span></span>
+            <span class="tapi">/api/source-line</span>
+            <span class="chip real">REAL</span>
+            <span class="lat">0.6 ms</span>
+          </div>
+          <div id="code"></div>
+          <div class="tfoot">
+            <span class="edgefact">edge fact: <b>scrapy/addons.py:7 → scrapy/utils/conf.py</b> · one of the 44 forward edges in this tangle</span>
+          </div>
+        </div>
+
+        <div id="urlbar">
+          <span class="lbl">REV-PINNED ANSWER</span>
+          <span class="url">aoa://local/tension?<b>v=db843d0da2d9</b>&amp;sel=g_scrapy⇄g_utils&amp;line=scrapy/addons.py:7</span>
+          <span class="copy">copy — true at rev 0188849902b2</span>
+        </div>
+
+        <div class="refcard">
+          <span class="chip refused">REFUSED</span>
+          <span class="rq">“What changed since I last looked?”</span>
+          <span class="ra"><b>No git substrate indexed — this tool will not fake change history.</b> What it can answer instead: findings-baseline diff (new vs. rev 0188849902b2). The refusal is why you can trust the 44/19 above.</span>
+        </div>
+
+        <div id="evfoot">
+          <span>SENTENCE → RANKED LADDER → STAMPED LINES → CODE · three gestures</span>
+          <span class="sep">|</span>
+          <span>shard db843d0da2d9 · findings :19709 · edges carry {from,to,file,line}</span>
+          <span class="sep">|</span>
+          <span style="color:var(--dim)">what it can't prove, it refuses — see “What changed?”</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="bottom">
+  <div class="wow">
+    <span style="letter-spacing:.12em;color:var(--faint)">WOW30</span>
+    <div class="step"><div class="b">1</div>open the question — verdict lands with the paint</div><span class="arrow">→</span>
+    <div class="step"><div class="b">2</div>expand the worst rung — 44/19, lines both ways</div><span class="arrow">→</span>
+    <div class="step"><div class="b">3</div>click a line — the import, in the real code</div>
+  </div>
+  <div class="right">
+    <span>● derived live</span>
+    <span>REAL · imports (incl. test files) + deterministic grouping</span>
+    <span>generated 2026-07-09 06:46:50 UTC</span>
+  </div>
+</div>
+
+<script>
+/* ============ REAL DATA — harvested live from the scrapy daemon ============
+   sources: scrapy-graph.json (3,042 edges, file grain, rev 0188849902b2),
+   scrapy-manifest.json, scrapy-view-dsm.json, scrapy-findings.json.
+   Mutual-pair direction counts computed from the raw edge list; every
+   file:line below is a real harvested import edge. */
+const DATA = {
+  rail: [
+    {moment:"ORIENT", rows:[
+      {q:"How is this codebase organized?", stamp:"real",
+       v:"<b>19 subpackages</b> (+103 externals) · 323 members · heaviest flow <b>tests → scrapy ×306</b> · 1 headline finding"},
+      {q:"Which part owns ⟨concept⟩?", stamp:"gated", gated:true,
+       v:"MIXED ceiling — candidates + #term evidence only, no ownership claim · wave 2"},
+      {q:"What are the entry points?", stamp:"gated", gated:true,
+       v:"needs route substrate (B-API-SURFACE) — not answered until it's provable"}
+    ]},
+    {moment:"CHANGE", rows:[
+      {q:"Where is the structure fighting itself — and where do I cut?", stamp:"real", active:true, gest:"①",
+       v:"<span class='hot'>10 mutual pairs</span> — worst: <b>scrapy ⇄ utils 44/19</b> · cheapest cut in view: 1 import"},
+      {q:"Which dependency cycles exist?", stamp:"real",
+       v:"<span class='ok'>0 cycles</span> among 323 modules — clean; the 10 tangles above are the real story"},
+      {q:"What changed since I last looked?", stamp:"refused", refused:true,
+       v:"<b>REFUSED</b> — no git substrate indexed. Can answer instead: findings-baseline diff"}
+    ]},
+    {moment:"REVIEW", rows:[
+      {q:"What's flagged here?", stamp:"real",
+       v:"<b>12 findings</b> — 10 mutual dependency · 2 group-budget overflow · all stamped file:line"},
+      {q:"Where is attention concentrated?", stamp:"gated", gated:true,
+       v:"no sessions observed on this repo yet — attention is observed by this tool, not git history"}
+    ]}
+  ],
+
+  /* top-5 rungs — fwd/rev = file-grain import edges between the groups (computed from scrapy-graph.json) */
+  rungs: [
+    {a:"scrapy", b:"utils", f:44, r:19, open:true,
+     cut:"cut the <b>19 reverse edges</b> — 14 of 19 import only <span class='loc'>scrapy/exceptions.py</span>"},
+    {a:"core", b:"scrapy", f:29, r:1,
+     cut:"cut <b>1 import</b> at <span class='loc'>scrapy/crawler.py:17</span> → core/engine.py"},
+    {a:"commands", b:"scrapy", f:19, r:1,
+     cut:"cut <b>1 import</b> at <span class='loc'>scrapy/cmdline.py:12</span> → commands/__init__.py"},
+    {a:"http", b:"utils", f:12, r:2,
+     cut:"cut <b>2 imports</b>: <span class='loc'>utils/iterators.py:13</span> · <span class='loc'>utils/serialize.py:9</span>"},
+    {a:"spiders", b:"utils", f:11, r:1,
+     cut:"cut <b>1 import</b> at <span class='loc'>scrapy/utils/spider.py:7</span> → spiders/__init__.py"}
+  ],
+
+  /* rung 1 evidence — real harvested edges, top-6 per direction (honest +N in markup) */
+  fwd: [
+    {loc:"scrapy/addons.py:7",   tgt:"utils/conf.py", sel:true},
+    {loc:"scrapy/addons.py:8",   tgt:"utils/misc.py"},
+    {loc:"scrapy/cmdline.py:15", tgt:"utils/misc.py"},
+    {loc:"scrapy/cmdline.py:16", tgt:"utils/project.py"},
+    {loc:"scrapy/crawler.py:23", tgt:"utils/defer.py"},
+    {loc:"scrapy/crawler.py:24", tgt:"utils/log.py"}
+  ],
+  rev: [
+    {loc:"utils/_download_handlers.py:17", tgt:"scrapy/__init__.py"},
+    {loc:"utils/conf.py:11",      tgt:"scrapy/exceptions.py"},
+    {loc:"utils/datatypes.py:16", tgt:"scrapy/exceptions.py"},
+    {loc:"utils/defer.py:29",     tgt:"scrapy/exceptions.py"},
+    {loc:"utils/misc.py:19",      tgt:"scrapy/item.py"},
+    {loc:"utils/test.py:16",      tgt:"scrapy/crawler.py"}
+  ],
+
+  /* terminal peek — scrapy/addons.py lines 1–12; line numbers corroborate the
+     harvested edges addons.py:7→utils/conf and addons.py:8→utils/misc exactly */
+  code: [
+    [1,  "<span class='kw'>from</span> __future__ <span class='kw'>import</span> annotations"],
+    [2,  ""],
+    [3,  "<span class='kw'>import</span> logging"],
+    [4,  "<span class='kw'>from</span> typing <span class='kw'>import</span> TYPE_CHECKING, Any"],
+    [5,  ""],
+    [6,  "<span class='kw'>from</span> <span class='mod'>scrapy.exceptions</span> <span class='kw'>import</span> NotConfigured"],
+    [7,  "<span class='kw'>from</span> <span class='mod'>scrapy.utils.conf</span> <span class='kw'>import</span> <span class='nm'>build_component_list</span>", "hit"],
+    [8,  "<span class='kw'>from</span> <span class='mod'>scrapy.utils.misc</span> <span class='kw'>import</span> build_from_crawler, load_object"],
+    [9,  ""],
+    [10, "<span class='kw'>if</span> TYPE_CHECKING:"],
+    [11, "    <span class='kw'>from</span> <span class='mod'>scrapy.crawler</span> <span class='kw'>import</span> Crawler"],
+    [12, "    <span class='kw'>from</span> <span class='mod'>scrapy.settings</span> <span class='kw'>import</span> BaseSettings, Settings"]
+  ]
+};
+
+/* ---------- render (runs once) ---------- */
+const rail = document.getElementById('raillist');
+DATA.rail.forEach(sec=>{
+  const m=document.createElement('div'); m.className='moment';
+  m.innerHTML='— <em>'+sec.moment+'</em> —'; rail.appendChild(m);
+  sec.rows.forEach(r=>{
+    const d=document.createElement('div');
+    d.className='qrow'+(r.active?' active':'')+(r.gated?' gated':'');
+    const stampCls = r.refused?'refused':(r.gated?'gated':'real');
+    const stampTxt = r.refused?'REFUSED':(r.gated?'GATED':'REAL');
+    d.innerHTML=(r.gest?'<div class="gestmark">'+r.gest+'</div>':'')+
+      '<div class="q">'+r.q+'</div>'+
+      '<div class="verdict">'+r.v+'</div>'+
+      '<div class="stamp"><span class="chip '+stampCls+'">'+stampTxt+'</span></div>';
+    rail.appendChild(d);
+  });
+});
+
+const rungs=document.getElementById('rungs');
+const maxV=63;
+DATA.rungs.forEach((r,i)=>{
+  const total=r.f+r.r;
+  const d=document.createElement('div');
+  d.className='rung'+(r.open?' open':' dimmed');
+  d.innerHTML=
+    '<div class="rhead"><span class="rank">#'+(i+1)+'</span>'+
+    '<span class="pair">'+r.a+' <span class="arr">⇄</span> '+r.b+'</span>'+
+    '<span class="vol"><b>'+r.f+'</b> out / <b>'+r.r+'</b> back · '+total+'</span></div>'+
+    '<div class="bar"><div class="f" style="width:'+(r.f/maxV*100)+'%"></div><div class="r" style="width:'+(r.r/maxV*100)+'%"></div></div>'+
+    '<div class="cut"><span class="cuttag">CHEAPEST CUT</span>'+r.cut+'</div>';
+  rungs.appendChild(d);
+});
+
+function evline(e){
+  return '<div class="evline'+(e.sel?' sel':'')+'"><span class="loc">'+e.loc+'</span><span class="tgt">→ <i>'+e.tgt+'</i></span></div>';
+}
+document.getElementById('fwdlines').innerHTML=DATA.fwd.map(evline).join('');
+document.getElementById('revlines').innerHTML=DATA.rev.map(evline).join('');
+
+document.getElementById('code').innerHTML=DATA.code.map(c=>
+  '<div class="codeline'+(c[2]?' '+c[2]:'')+'"><span class="ln">'+c[0]+'</span><span class="src">'+(c[1]||' ')+'</span></div>'
+).join('');
+</script>
+</body>
+</html>

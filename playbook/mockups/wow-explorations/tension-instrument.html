@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>aOa · tension instrument — scrapy</title>
+<style>
+  :root{
+    --bg:#090c11; --panel:#0f141b; --panel2:#121924; --line:#1c2531; --line2:#27303e;
+    --txt:#c7d3e0; --dim:#5f6f81; --dimmer:#42505f;
+    --red:#e2565f; --red-deep:#7e2d34; --red-bg:#2a1418;
+    --teal:#37c99a; --teal-deep:#17493a; --amber:#d9a13d;
+    --blue:#5b9bd5;
+    --mono:"SF Mono","JetBrains Mono","Cascadia Code",Consolas,ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--txt);font-family:var(--mono);font-size:12px;width:1680px;height:1050px;overflow:hidden}
+  body{display:flex;flex-direction:column}
+  .chip{display:inline-block;padding:1px 7px;border-radius:3px;font-size:10px;letter-spacing:.4px;vertical-align:1px}
+  .chip.real{border:1px solid var(--teal-deep);color:var(--teal);background:rgba(55,201,154,.06)}
+  .chip.warn{border:1px solid #5d4a1e;color:var(--amber);background:rgba(217,161,61,.07)}
+  .chip.file{border:1px solid var(--line2);color:#9db4cc;background:#141b25;font-size:10.5px;cursor:default}
+  .chip.file b{color:#d8e4f0;font-weight:600}
+  .chip.file span{color:var(--dim)}
+  .dim{color:var(--dim)} .dimmer{color:var(--dimmer)}
+  .red{color:var(--red)} .teal{color:var(--teal)} .amber{color:var(--amber)}
+
+  /* ---------- header ---------- */
+  #hdr{height:44px;display:flex;align-items:center;gap:14px;padding:0 18px;border-bottom:1px solid var(--line);background:#0b0f15}
+  #hdr .mark{font-size:14px;color:#e8eef5;font-weight:600}
+  #hdr .mark span{color:var(--dim);font-weight:400}
+  #hdr .est{border:1px solid var(--line2);border-radius:4px;padding:2px 10px;color:#9fe8c9;background:#0e1a18;font-size:11px}
+  #hdr .right{margin-left:auto;display:flex;gap:14px;align-items:center;color:var(--dim);font-size:10.5px}
+
+  /* ---------- hero verdict ---------- */
+  #hero{padding:16px 20px 13px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0d1219,#0a0e14)}
+  #hero .v{font-size:19.5px;line-height:1.45;color:#e8eef7;max-width:1560px}
+  #hero .v .n{color:#fff;font-weight:700}
+  #hero .v .pair{color:var(--red);font-weight:700}
+  #hero .v .cut{color:var(--teal);font-weight:600}
+  #hero .sub{margin-top:7px;font-size:10.5px;color:var(--dim)}
+  #hero .sub b{color:#8fa2b8;font-weight:600}
+
+  /* ---------- body grid ---------- */
+  #body{display:grid;grid-template-columns:962px 1fr;gap:0;flex:1;min-height:0}
+  .col{overflow:hidden}
+  #left{border-right:1px solid var(--line);padding:12px 16px 8px 18px;display:flex;flex-direction:column}
+  #right{padding:12px 16px 8px;display:flex;flex-direction:column;gap:8px;min-height:0}
+  #right .panel{padding:9px 13px}
+
+  .ptitle{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+  .ptitle h2{font-size:11px;letter-spacing:1.4px;color:#8fa2b8;font-weight:600}
+  .ptitle .q{color:var(--dim);font-size:10.5px;font-style:italic}
+
+  /* ---------- gauge ladder ---------- */
+  #ladder{flex:1;display:flex;flex-direction:column;gap:7px}
+  .row{display:grid;grid-template-columns:20px 128px 380px 128px 1fr;align-items:center;flex:1;
+       border:1px solid var(--line);border-radius:5px;background:var(--panel);padding:6px 10px 6px 8px;min-height:64px}
+  .row.sel{border-color:#6e3237;background:linear-gradient(90deg,#171017,var(--panel) 55%);box-shadow:0 0 0 1px #4c2429 inset}
+  .row .rank{color:var(--dimmer);font-size:10px;text-align:center}
+  .row .mod{font-size:13.5px;color:#e2eaf3;font-weight:600}
+  .row .mod small{display:block;color:var(--dim);font-weight:400;font-size:9.5px;margin-top:2px}
+  .row .mod.r{text-align:right}
+  .gauge{position:relative;height:52px}
+  .bar{position:absolute;left:14px;right:14px;border-radius:2px}
+  .bar .lab{position:absolute;font-size:10.5px;color:#dfe8f2;top:50%;transform:translateY(-50%);white-space:nowrap}
+  .bar.fwd{background:linear-gradient(90deg,#54242b,#a03a43)}
+  .bar.rev{background:linear-gradient(90deg,#3c4a5c,#22303f)}
+  .bar.fwd::after{content:"";position:absolute;right:-13px;top:50%;transform:translateY(-50%);
+    border-left:13px solid #a03a43;border-top:9px solid transparent;border-bottom:9px solid transparent}
+  .bar.rev::before{content:"";position:absolute;left:-13px;top:50%;transform:translateY(-50%);
+    border-right:13px solid #3c4a5c;border-top:9px solid transparent;border-bottom:9px solid transparent}
+  .scis{position:absolute;font-size:13px;color:var(--teal);transform:translateY(-50%);text-shadow:0 0 6px rgba(55,201,154,.5)}
+  .cutcell{padding-left:14px;border-left:1px dashed var(--line2);margin-left:10px;height:52px;display:flex;flex-direction:column;justify-content:center;gap:3px}
+  .cutcell .cc1{font-size:10.5px}
+  .cutcell .cc1 b{font-weight:700}
+  .cutcell .cost-1 b{color:var(--teal)} .cutcell .cost-lo b{color:var(--amber)} .cutcell .cost-hi b{color:var(--red)}
+  .cutcell .chips{display:flex;gap:5px;flex-wrap:wrap}
+  #ladder .foot{margin-top:2px;color:var(--dim);font-size:10px;display:flex;gap:16px}
+
+  /* ---------- right panels ---------- */
+  .panel{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px 13px}
+  .panel h3{font-size:10.5px;letter-spacing:1.3px;color:#8fa2b8;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .panel h3 .gest{margin-left:auto;color:var(--dimmer);font-weight:400;letter-spacing:.3px;font-size:9.5px}
+
+  /* escalation */
+  #esc{border-color:#5a2b30;background:linear-gradient(180deg,#151016,var(--panel) 60%)}
+  #esc .head{font-size:15px;color:#eef3f9;margin-bottom:4px}
+  #esc .head .pair{color:var(--red);font-weight:700}
+  #esc .claim{font-size:12.5px;line-height:1.5;color:#cfdae6;margin:4px 0 8px}
+  #esc .claim b{color:#fff}
+  #esc .claim .t{color:var(--teal);font-weight:600}
+  .conc{margin:6px 0 9px}
+  .conc .crow{display:grid;grid-template-columns:172px 1fr 30px;gap:8px;align-items:center;margin:3px 0}
+  .conc .crow .f{font-size:10.5px;color:#aebfd2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .conc .crow .b{height:9px;border-radius:2px;background:linear-gradient(90deg,#7e2d34,#c9505a)}
+  .conc .crow.rest .b{background:#2c3a4a}
+  .conc .crow .n{text-align:right;color:#dfe8f2;font-size:10.5px}
+  .evd{border-top:1px solid var(--line);padding-top:7px;margin-top:2px}
+  .evd .lbl{font-size:9.5px;color:var(--dim);letter-spacing:1px;margin-bottom:5px}
+  .evd .chips{display:flex;flex-wrap:wrap;gap:5px}
+  .evd .more{color:var(--dim);font-size:10.5px;align-self:center}
+  #esc .followup{margin-top:8px;padding:7px 9px;border:1px solid var(--teal-deep);border-radius:4px;background:rgba(23,73,58,.12);font-size:11.5px;color:#bfe9d8;line-height:1.45}
+  #esc .followup b{color:var(--teal)}
+
+  /* minimap */
+  #mini .wrap{display:flex;gap:12px;align-items:flex-start}
+  #mini table{border-collapse:collapse}
+  #mini td{width:13px;height:13px;border:1px solid #151b24;background:#0c1017}
+  #mini td.collab{border:none!important;background:none!important;color:var(--dimmer);font-size:8px;text-align:center;height:12px}
+  #mini td.diag{background:#151a22}
+  #mini td.mut{outline:1px solid #8a3a41;outline-offset:-2px}
+  #mini td.hot{outline:2px solid var(--teal);outline-offset:-2px;box-shadow:0 0 8px rgba(55,201,154,.45)}
+  #mini .rowlab{font-size:8.5px;color:var(--dim);text-align:right;padding-right:5px;white-space:nowrap;border:none!important;background:none!important;width:auto;height:13px}
+  #mini .legend{font-size:10px;color:var(--dim);line-height:1.65;max-width:230px}
+  #mini .legend .sw{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+  #mini .foot{margin-top:6px;font-size:10px;color:var(--dim)}
+
+  /* clean state */
+  #clean{border-color:#1c3a31;background:linear-gradient(180deg,#0c1512,var(--panel) 65%)}
+  #clean .v{font-size:12.5px;color:#d6e6de;line-height:1.5}
+  #clean .v b{color:var(--teal)}
+  #clean .flows{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0 6px}
+  #clean .fl{border:1px solid #1e3c33;background:#0d1a16;border-radius:3px;padding:2px 8px;font-size:10px;color:#9fceba}
+  #clean .fl b{color:#d5efe3}
+  #clean .teach{font-size:10.5px;color:#7e9a8d;line-height:1.5;border-top:1px solid #16241f;padding-top:6px;margin-top:2px}
+
+  /* footer */
+  #foot{height:34px;flex:none;border-top:1px solid var(--line);display:flex;align-items:center;gap:22px;padding:0 18px;background:#0b0f15;color:var(--dim);font-size:10.5px;white-space:nowrap;overflow:hidden}
+  #foot .steps b{color:#aebfd2}
+  #foot .steps .arrow{color:var(--dimmer);padding:0 4px}
+  #foot .right{margin-left:auto}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <div class="mark">aOa <span>· tension instrument</span></div>
+  <div class="est">● scrapy <span style="color:#3f6b5c">py · 446 files</span></div>
+  <span class="chip real">REAL · imports (incl. test files) + deterministic grouping</span>
+  <span class="chip warn">⚠ 12 findings</span>
+  <div class="right">
+    <span>Q: where is the structure fighting itself — and where do I cut?</span>
+    <span class="dimmer">generated 2026-07-09 06:46:50 UTC</span>
+  </div>
+</div>
+
+<div id="hero">
+  <div class="v">
+    <span class="n">0</span> hard cycles across 323 modules — but <span class="n">10</span> two-way tangles among 19 subpackages.
+    Worst: <span class="pair">scrapy ⇄ utils</span> <span class="n">(44 / 19)</span>.
+    <span class="cut">Five tangles fall to a single deleted import</span> — e.g. commands ⇄ scrapy at <span style="color:#9db4cc">scrapy/cmdline.py:12</span>.
+  </div>
+  <div class="sub">
+    <b>2,894 dependencies</b> · 122 modules (19 internal + 103 externals) &nbsp;·&nbsp;
+    “cycle” = file-grain import loop (none found) &nbsp;·&nbsp; “tangle” = two packages importing each other &nbsp;·&nbsp;
+    worst = highest bidirectional volume &nbsp;·&nbsp; cheapest cut = the thinner direction, stamped below
+  </div>
+</div>
+
+<div id="body">
+  <div class="col" id="left">
+    <div class="ptitle">
+      <h2>TANGLE LADDER — 10 OF 10, RANKED BY TWO-WAY VOLUME</h2>
+      <span class="q">each gauge: forward flow vs back-flow · ✂ marks the cheaper direction to sever</span>
+    </div>
+    <div id="ladder"></div>
+  </div>
+
+  <div class="col" id="right">
+    <div class="panel" id="esc">
+      <h3><span class="red">▸ SELECTED TANGLE</span> <span class="gest">gesture 2 of 3 · click a file:line chip to open the import</span></h3>
+      <div class="head"><span class="pair">scrapy ⇄ utils</span> — MUTUAL · <b>44</b> forward / <b>19</b> back</div>
+      <div class="claim">
+        Cheapest cut: the <b>19 reverse edges</b> — and <span class="t">14 of them terminate in one file: scrapy/exceptions.py</span>.
+        The framework’s worst tangle is mostly a single leaf-shaped file living in the wrong place.
+      </div>
+      <div class="conc" id="conc"></div>
+      <div class="evd">
+        <div class="lbl">REVERSE EDGES · utils → scrapy · every line REAL</div>
+        <div class="chips" id="revchips"></div>
+      </div>
+      <div class="evd">
+        <div class="lbl">FORWARD EDGES · scrapy → utils · first of 44</div>
+        <div class="chips" id="fwdchips"></div>
+      </div>
+      <div class="followup">
+        <b>If you cut here:</b> extract <b>exceptions.py</b> to a leaf module → back-flow drops 19 → 5 and the
+        worst tangle in a 446-file framework loses its lock. Verify: <span style="color:#9fe8c9">grep "from scrapy.exceptions" scrapy/utils/</span>
+      </div>
+    </div>
+
+    <div class="panel" id="mini">
+      <h3>MATRIX MINIMAP — THE SAME FACTS AS A 19×19 GRID <span class="gest">escalation target, not the landing page</span></h3>
+      <div class="wrap">
+        <table id="grid"></table>
+        <div class="legend">
+          <div><span class="sw" style="background:#a03a43"></span>mutual pair (both cells lit)</div>
+          <div><span class="sw" style="background:#26313f"></span>one-way dependency</div>
+          <div><span class="sw" style="outline:2px solid var(--teal);outline-offset:-2px;background:#0c1017"></span>selected: scrapy⇄utils, cells r13c19 / r19c13</div>
+          <div style="margin-top:6px" class="dimmer">intensity = import count (log scale) · row → col</div>
+        </div>
+      </div>
+      <div class="foot">19×19 internal shown · <b class="dim">103 target-only externals hidden</b> · derived shard local/dsm</div>
+    </div>
+
+    <div class="panel" id="clean">
+      <h3 style="white-space:nowrap"><span class="teal">✓ ZERO TENSION</span> — aOa itself (Go · hexagonal) <span class="gest">clean state teaches, never a checkmark</span></h3>
+      <div class="v"><b>0 tangles</b> across 227 internal package edges (1,781 incl. externals) — every arrow one-way, into interfaces:</div>
+      <div class="flows" id="cleanflows"></div>
+      <div class="teach">The clean verdict names the discipline holding — <b style="color:#9fceba">dependencies terminate in internal/ports</b> — so a reviewer knows what to protect, not just that today is fine.</div>
+    </div>
+  </div>
+</div>
+
+<div id="foot">
+  <div class="steps"><b>1</b> verdict <span class="arrow">→</span> <b>2</b> pick a tangle <span class="arrow">→</span> <b>3</b> file:line → code · budget 3</div>
+  <div>pure import facts — no heat, no history claims</div>
+  <div class="right">provenance ceiling REAL · when this surface cannot prove a claim it refuses and says what it can answer</div>
+</div>
+
+<script id="data" type="application/json">{"pairs":[{"a":"scrapy","b":"utils","ab":44,"ba":19,"thinEdges":[{"file":"scrapy/utils/_download_handlers.py","line":17,"to":"scrapy/__init__.py"},{"file":"scrapy/utils/_download_handlers.py","line":18,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/conf.py","line":11,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/datatypes.py","line":16,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/decorators.py","line":10,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/defer.py","line":29,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/deprecate.py","line":9,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/iterators.py","line":12,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/log.py","line":14,"to":"scrapy/__init__.py"},{"file":"scrapy/utils/misc.py","line":18,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/misc.py","line":19,"to":"scrapy/item.py"},{"file":"scrapy/utils/project.py","line":8,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/python.py","line":18,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/request.py","line":17,"to":"scrapy/__init__.py"},{"file":"scrapy/utils/signal.py","line":23,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/sitemap.py","line":17,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/ssl.py","line":13,"to":"scrapy/exceptions.py"},{"file":"scrapy/utils/test.py","line":16,"to":"scrapy/crawler.py"},{"file":"scrapy/utils/test.py","line":17,"to":"scrapy/exceptions.py"}],"thinConc":[["scrapy/exceptions.py",14],["scrapy/__init__.py",3],["scrapy/item.py",1]]},{"a":"core","b":"scrapy","ab":29,"ba":1,"thinEdges":[{"file":"scrapy/crawler.py","line":17,"to":"scrapy/core/engine.py"}],"thinConc":[["scrapy/core/engine.py",1]]},{"a":"commands","b":"scrapy","ab":19,"ba":1,"thinEdges":[{"file":"scrapy/cmdline.py","line":12,"to":"scrapy/commands/__init__.py"}],"thinConc":[["scrapy/commands/__init__.py",1]]},{"a":"http","b":"utils","ab":12,"ba":2,"thinEdges":[{"file":"scrapy/utils/iterators.py","line":13,"to":"scrapy/http/__init__.py"},{"file":"scrapy/utils/serialize.py","line":9,"to":"scrapy/http/__init__.py"}],"thinConc":[["scrapy/http/__init__.py",2]]},{"a":"spiders","b":"utils","ab":11,"ba":1,"thinEdges":[{"file":"scrapy/utils/spider.py","line":7,"to":"scrapy/spiders/__init__.py"}],"thinConc":[["scrapy/spiders/__init__.py",1]]},{"a":"http","b":"scrapy","ab":4,"ba":4,"thinEdges":[{"file":"scrapy/__init__.py","line":10,"to":"scrapy/http/__init__.py"},{"file":"scrapy/logformatter.py","line":11,"to":"scrapy/http/__init__.py"},{"file":"scrapy/responsetypes.py","line":13,"to":"scrapy/http/__init__.py"},{"file":"scrapy/shell.py","line":25,"to":"scrapy/http/__init__.py"}],"thinConc":[["scrapy/http/__init__.py",4]]},{"a":"spiders","b":"scrapy","ab":4,"ba":2,"thinEdges":[{"file":"scrapy/__init__.py","line":13,"to":"scrapy/spiders/__init__.py"},{"file":"scrapy/shell.py","line":27,"to":"scrapy/spiders/__init__.py"}],"thinConc":[["scrapy/spiders/__init__.py",2]]},{"a":"utils","b":"settings","ab":4,"ba":2,"thinEdges":[{"file":"scrapy/settings/__init__.py","line":14,"to":"scrapy/utils/misc.py"},{"file":"scrapy/settings/__init__.py","line":15,"to":"scrapy/utils/python.py"}],"thinConc":[["scrapy/utils/misc.py",1],["scrapy/utils/python.py",1]]},{"a":"selector","b":"utils","ab":3,"ba":1,"thinEdges":[{"file":"scrapy/utils/iterators.py","line":14,"to":"scrapy/selector/__init__.py"}],"thinConc":[["scrapy/selector/__init__.py",1]]},{"a":"scrapy","b":"settings","ab":2,"ba":1,"thinEdges":[{"file":"scrapy/settings/__init__.py","line":12,"to":"scrapy/exceptions.py"}],"thinConc":[["scrapy/exceptions.py",1]]}],"worstForward":[{"file":"scrapy/addons.py","line":7,"to":"scrapy/utils/conf.py"},{"file":"scrapy/addons.py","line":8,"to":"scrapy/utils/misc.py"},{"file":"scrapy/cmdline.py","line":15,"to":"scrapy/utils/misc.py"},{"file":"scrapy/cmdline.py","line":16,"to":"scrapy/utils/project.py"},{"file":"scrapy/cmdline.py","line":17,"to":"scrapy/utils/python.py"},{"file":"scrapy/cmdline.py","line":18,"to":"scrapy/utils/reactor.py"},{"file":"scrapy/crawler.py","line":23,"to":"scrapy/utils/defer.py"},{"file":"scrapy/crawler.py","line":24,"to":"scrapy/utils/log.py"},{"file":"scrapy/crawler.py","line":31,"to":"scrapy/utils/misc.py"},{"file":"scrapy/crawler.py","line":32,"to":"scrapy/utils/ossignal.py"},{"file":"scrapy/crawler.py","line":33,"to":"scrapy/utils/reactor.py"},{"file":"scrapy/crawler.py","line":42,"to":"scrapy/utils/reactorless.py"},{"file":"scrapy/dupefilters.py","line":9,"to":"scrapy/utils/job.py"},{"file":"scrapy/dupefilters.py","line":10,"to":"scrapy/utils/request.py"},{"file":"scrapy/exporters.py","line":22,"to":"scrapy/utils/python.py"},{"file":"scrapy/exporters.py","line":23,"to":"scrapy/utils/serialize.py"},{"file":"scrapy/extension.py","line":12,"to":"scrapy/utils/conf.py"},{"file":"scrapy/item.py","line":15,"to":"scrapy/utils/trackref.py"},{"file":"scrapy/logformatter.py","line":12,"to":"scrapy/utils/python.py"},{"file":"scrapy/logformatter.py","line":13,"to":"scrapy/utils/request.py"},{"file":"scrapy/mail.py","line":22,"to":"scrapy/utils/misc.py"},{"file":"scrapy/mail.py","line":23,"to":"scrapy/utils/python.py"},{"file":"scrapy/mail.py","line":24,"to":"scrapy/utils/reactorless.py"},{"file":"scrapy/middleware.py","line":11,"to":"scrapy/utils/defer.py"},{"file":"scrapy/middleware.py","line":12,"to":"scrapy/utils/deprecate.py"},{"file":"scrapy/middleware.py","line":13,"to":"scrapy/utils/misc.py"},{"file":"scrapy/middleware.py","line":14,"to":"scrapy/utils/python.py"},{"file":"scrapy/pqueues.py","line":7,"to":"scrapy/utils/misc.py"},{"file":"scrapy/resolver.py","line":16,"to":"scrapy/utils/datatypes.py"},{"file":"scrapy/responsetypes.py","line":14,"to":"scrapy/utils/misc.py"},{"file":"scrapy/responsetypes.py","line":15,"to":"scrapy/utils/python.py"},{"file":"scrapy/robotstxt.py","line":11,"to":"scrapy/utils/python.py"},{"file":"scrapy/shell.py","line":28,"to":"scrapy/utils/conf.py"},{"file":"scrapy/shell.py","line":29,"to":"scrapy/utils/console.py"},{"file":"scrapy/shell.py","line":30,"to":"scrapy/utils/datatypes.py"},{"file":"scrapy/shell.py","line":31,"to":"scrapy/utils/defer.py"},{"file":"scrapy/shell.py","line":32,"to":"scrapy/utils/misc.py"},{"file":"scrapy/shell.py","line":33,"to":"scrapy/utils/response.py"},{"file":"scrapy/signalmanager.py","line":10,"to":"scrapy/utils/__init__.py"},{"file":"scrapy/signalmanager.py","line":11,"to":"scrapy/utils/defer.py"},{"file":"scrapy/spiderloader.py","line":12,"to":"scrapy/utils/misc.py"},{"file":"scrapy/spiderloader.py","line":13,"to":"scrapy/utils/spider.py"},{"file":"scrapy/squeues.py","line":14,"to":"scrapy/utils/request.py"},{"file":"scrapy/statscollectors.py","line":11,"to":"scrapy/utils/decorators.py"}],"mini":{"items":["commands","contracts","core","docs","downloadermiddlewares","extensions","extras","http","linkextractors","loader","pipelines","root","scrapy","selector","settings","spidermiddlewares","spiders","tests","utils"],"matrix":[[0,1,0,0,0,0,0,5,1,0,0,0,19,0,1,0,0,0,22],[0,0,0,0,0,0,0,2,0,0,0,0,1,0,0,0,0,0,2],[0,0,0,0,0,0,0,10,0,0,1,0,29,0,0,0,1,0,63],[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,6,0,0,0,0,18,0,1,1,0,0,38],[0,0,0,0,0,0,0,1,0,0,0,0,24,0,0,0,0,0,26],[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,12],[0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,4],[0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0],[0,0,0,0,0,0,0,5,0,0,0,0,5,0,0,0,0,0,23],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,2],[1,0,1,0,0,0,0,4,0,0,0,0,0,1,2,0,2,0,44],[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,3],[0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,2],[0,0,0,0,0,0,0,1,0,0,0,0,4,0,0,0,0,0,6],[0,0,0,0,0,0,0,4,1,0,0,0,4,1,0,0,0,0,11],[4,2,23,0,17,13,0,76,5,2,6,0,306,4,18,8,41,0,278],[0,0,0,0,0,0,0,2,0,0,0,0,19,1,4,0,1,0,0]]},"clean":{"nodes":833,"edges":1781,"internalEdges":227,"mutual":0,"top":[{"a":"cmd","b":"internal/adapters/socket","n":18},{"a":"cmd","b":"internal/app","n":13},{"a":"internal/domain/index","b":"internal/ports","n":13},{"a":"internal/adapters/bbolt","b":"internal/ports","n":9},{"a":"internal/adapters/web","b":"internal/ports","n":8},{"a":"internal/domain/learner","b":"internal/ports","n":7}]}}</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+
+/* ---------- ladder ---------- */
+const ladder = document.getElementById('ladder');
+const W = 44;                                                      // max count = honest linear scale anchor
+const th = n => Math.max(6, Math.round(4 + Math.sqrt(n) * 2.7));   // bar thickness px
+const bw = n => Math.round(26 + 300 * (n / W));                    // bar length px, linear in count
+
+D.pairs.forEach((p, i) => {
+  const sel = i === 0;
+  const cost = p.ba;
+  const costCls = cost === 1 ? 'cost-1' : (cost <= 4 ? 'cost-lo' : 'cost-hi');
+  const chips = sel
+    ? `<span class="dim" style="font-size:10px">▸ evidence in SELECTED TANGLE panel →</span>`
+    : p.thinEdges.slice(0, 1).map(e => `<span class="chip file"><b>${e.file}</b><span>:${e.line}</span></span>`).join('')
+      + (p.thinEdges.length > 1 ? `<span class="dim" style="font-size:10px;align-self:center">+${p.thinEdges.length-1} more</span>` : '');
+  const fh = th(p.ab), rh = th(p.ba);
+  const fw = bw(p.ab), rw = bw(p.ba);
+  const tie = p.ab === p.ba ? ' <span class="dim">(tie)</span>' : '';
+  const row = document.createElement('div');
+  row.className = 'row' + (sel ? ' sel' : '');
+  row.innerHTML = `
+    <div class="rank">${i+1}</div>
+    <div class="mod">${p.a}<small>${p.ab} import${p.ab>1?'s':''} out →</small></div>
+    <div class="gauge">
+      <div class="bar fwd" style="top:${13 - fh/2}px;height:${fh}px;left:14px;width:${fw}px">
+        <div class="lab" style="left:8px">${p.ab} →</div>
+      </div>
+      <div class="bar rev" style="top:${39 - rh/2}px;height:${rh}px;left:auto;right:14px;width:${rw}px">
+        <div class="lab" style="left:8px">← ${p.ba}</div>
+      </div>
+      <div class="scis" style="top:39px;right:${14 + rw + 22}px">✂</div>
+    </div>
+    <div class="mod r">${p.b}<small>← ${p.ba} back</small></div>
+    <div class="cutcell ${costCls}">
+      <div class="cc1">cut: <b>${cost} import${cost>1?'s':''}</b> <span class="dim">severs the loop</span>${tie}</div>
+      <div class="chips">${chips}</div>
+    </div>`;
+  ladder.appendChild(row);
+});
+const lf = document.createElement('div');
+lf.className = 'foot';
+lf.innerHTML = `<span>10 of 10 tangles shown — nothing hidden at this grain</span>
+  <span>tests → scrapy ×306 is one-way (heaviest flow in the repo) — heavy ≠ tangled</span>`;
+ladder.appendChild(lf);
+
+/* ---------- escalation: concentration bars ---------- */
+const conc = document.getElementById('conc');
+const cmax = D.pairs[0].thinConc[0][1];
+const concRows = [...D.pairs[0].thinConc];
+const shown = concRows.reduce((s, c) => s + c[1], 0);
+if (shown < D.pairs[0].ba) concRows.push(['(1 other file)', D.pairs[0].ba - shown]);
+concRows.forEach(([f, n], i) => {
+  const r = document.createElement('div');
+  r.className = 'crow' + (i > 0 ? ' rest' : '');
+  r.innerHTML = `<div class="f">${f}</div><div class="b" style="width:${Math.round(100*n/cmax)}%"></div><div class="n">${n}</div>`;
+  conc.appendChild(r);
+});
+
+/* ---------- escalation: chips ---------- */
+const rev = D.pairs[0].thinEdges;
+document.getElementById('revchips').innerHTML =
+  rev.slice(0, 5).map(e => `<span class="chip file"><b>${e.file}</b><span>:${e.line}</span></span>`).join('')
+  + `<span class="more">+${rev.length - 5} more</span>`;
+document.getElementById('fwdchips').innerHTML =
+  D.worstForward.slice(0, 3).map(e => `<span class="chip file"><b>${e.file}</b><span>:${e.line}</span></span>`).join('')
+  + `<span class="more">+${44 - 3} more</span>`;
+
+/* ---------- minimap ---------- */
+const items = D.mini.items, M = D.mini.matrix;
+const mutual = new Set();
+D.pairs.forEach(p => { mutual.add(p.a + '|' + p.b); mutual.add(p.b + '|' + p.a); });
+const selA = D.pairs[0].a, selB = D.pairs[0].b;
+const grid = document.getElementById('grid');
+let maxv = 0; M.forEach(r => r.forEach(v => { if (v > maxv) maxv = v; }));
+const hdrTr = document.createElement('tr');
+hdrTr.innerHTML = `<td class="rowlab"></td>` + items.map((_, c) => `<td class="collab">${c+1}</td>`).join('');
+grid.appendChild(hdrTr);
+items.forEach((ri, r) => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td class="rowlab">${r+1} ${ri}</td>`;
+  items.forEach((ci, c) => {
+    const td = document.createElement('td');
+    const v = M[r][c];
+    if (r === c) td.className = 'diag';
+    else if (v > 0) {
+      const isMut = mutual.has(ri + '|' + ci) && M[c][r] > 0;
+      const t = Math.log(1 + v) / Math.log(1 + maxv);
+      td.style.background = isMut
+        ? `rgba(${120 + Math.round(90*t)},${44 + Math.round(20*t)},${52},${0.55 + 0.45*t})`
+        : `rgba(70,95,125,${0.18 + 0.62*t})`;
+      if (isMut) td.className = 'mut';
+      if ((ri === selA && ci === selB) || (ri === selB && ci === selA)) td.className += ' hot';
+    }
+    tr.appendChild(td);
+  });
+  grid.appendChild(tr);
+});
+
+/* ---------- clean-state flows ---------- */
+document.getElementById('cleanflows').innerHTML = D.clean.top
+  .filter(f => f.b === 'internal/ports')
+  .map(f => `<span class="fl"><b>${f.a.replace('internal/','')}</b> → ports <b>×${f.n}</b></span>`)
+  .join('') +
+  `<span class="fl" style="border-style:dashed;color:var(--dim)">+ cmd → socket ×18, cmd → app ×13 …</span>`;
+</script>
+</body>
+</html>

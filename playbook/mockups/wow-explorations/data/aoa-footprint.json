@@ -1,0 +1,25 @@
+{
+  "$schema": "aoa.arch-footprint/v1",
+  "kind": "go-app",
+  "engine": "deterministic",
+  "prov": "derived",
+  "anchors": [
+    {
+      "path": "",
+      "kind": "go-app",
+      "marker": "go.mod",
+      "confidence": "high"
+    }
+  ],
+  "excluded": [
+    ".aoa",
+    ".claude",
+    ".context",
+    ".git",
+    ".github",
+    ".vscode",
+    "docs",
+    "scripts",
+    "test"
+  ]
+}

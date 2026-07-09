@@ -1,0 +1,27 @@
+{
+  "$schema": "aoa.arch-footprint/v1",
+  "kind": "python-app",
+  "engine": "deterministic",
+  "prov": "derived",
+  "anchors": [
+    {
+      "path": "scrapy",
+      "kind": "python-app",
+      "marker": "pyproject.toml",
+      "confidence": "high",
+      "grain": {
+        "mode": "descend",
+        "under": "scrapy",
+        "depth": 1
+      }
+    }
+  ],
+  "excluded": [
+    ".aoa",
+    ".git",
+    ".github",
+    "docs",
+    "extras",
+    "tests"
+  ]
+}

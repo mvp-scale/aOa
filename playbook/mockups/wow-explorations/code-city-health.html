@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>aOa — System Poster</title>
+<style>
+:root{
+  --bg:#0a0e14; --panel:#0f1520; --panel2:#121a28; --line:#1e2a3d; --line2:#2a3a54;
+  --tx:#c9d6e8; --dim:#6b7d96; --faint:#465a73;
+  --cy:#4dd8e6; --cyd:#1a4a55; --amber:#e8a33d; --red:#e05d44; --vio:#a78bfa; --grn:#5fbf77;
+  --mono:'SF Mono',ui-monospace,Menlo,Consolas,'DejaVu Sans Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:1680px;height:1050px;background:var(--bg);color:var(--tx);font-family:var(--mono);font-size:12px;overflow:hidden}
+.wrap{padding:18px 24px 12px;height:100%;display:flex;flex-direction:column}
+/* header */
+.hdr{margin-bottom:12px}
+.hdr-top{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+.brand{font-size:13px;letter-spacing:3px;color:var(--cy);font-weight:700}
+.brand b{color:var(--tx);font-weight:700}
+.chip{display:inline-block;border:1px solid var(--line2);border-radius:3px;padding:1px 7px;font-size:10px;color:var(--dim);letter-spacing:.5px}
+.chip.real{color:var(--grn);border-color:#2a4a35}
+.hero{font-size:19px;line-height:1.45;color:#e8f0fa;max-width:1560px}
+.hero .ok{color:var(--grn)} .hero .hot{color:var(--amber)} .hero .cyx{color:var(--cy)}
+.hero .stamp{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:3px;padding:0 5px;vertical-align:2px}
+.sub{margin-top:6px;font-size:11.5px;color:var(--dim)}
+.sub b{color:var(--tx);font-weight:600}
+/* layout */
+.cols{flex:1;display:flex;gap:16px;min-height:0}
+.left{width:1080px;display:flex;flex-direction:column;gap:10px}
+.rail{flex:1;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.ptitle{font-size:10px;letter-spacing:2px;color:var(--faint);margin-bottom:8px;display:flex;justify-content:space-between;align-items:baseline}
+.ptitle .q{color:var(--dim);letter-spacing:0;font-size:10.5px;text-transform:none}
+/* city map */
+#city{flex:1;display:flex;flex-direction:column;gap:4px;position:relative}
+.band{display:flex;gap:4px;min-height:0}
+.zlab{width:118px;flex:none;display:flex;flex-direction:column;justify-content:center;border-right:2px solid var(--line);padding-right:8px}
+.zlab .zn{font-size:10px;letter-spacing:1.5px;color:var(--dim)}
+.zlab .zc{font-size:10px;color:var(--faint)}
+.brow{flex:1;display:flex;gap:4px}
+.dist{position:relative;border:1px solid var(--line2);border-radius:4px;background:linear-gradient(180deg,#141d2d,#101724);padding:6px 8px;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between}
+.dist .nm{font-size:11.5px;font-weight:700;color:#dce8f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dist .path{font-size:9px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dist .mass{font-size:20px;font-weight:700;color:#8fa8c8;line-height:1}
+.dist .mass small{font-size:9px;font-weight:400;color:var(--faint)}
+.dist .io{font-size:9.5px;color:var(--dim);white-space:nowrap}
+.dist.god{border-color:#8a5a20;background:linear-gradient(180deg,#2a1f0e,#1c150a)}
+.dist.god .mass{color:var(--amber)}
+.dist.god.worst{border-color:#a04028;background:linear-gradient(180deg,#341407,#200e06)}
+.dist.god.worst .mass{color:var(--red)}
+.dist.gravity{border-color:var(--cyd);box-shadow:0 0 14px rgba(77,216,230,.22) inset,0 0 10px rgba(77,216,230,.12);background:linear-gradient(180deg,#0d2530,#0a1b24)}
+.dist.gravity .mass{color:var(--cy)}
+.dist.pinned{outline:2px solid var(--cy);outline-offset:1px}
+.dist.mute{background:linear-gradient(180deg,#10151d,#0d1118);border-color:#1a2432}
+.dist.mute .nm{color:#7d8fa0}
+.badge{position:absolute;top:5px;right:6px;font-size:8.5px;letter-spacing:.5px;padding:0 4px;border-radius:2px}
+.badge.g{color:var(--amber);border:1px solid #8a5a20;background:#241a08}
+.badge.w{color:var(--red);border:1px solid #a04028;background:#2a0f06}
+.badge.gr{color:var(--cy);border:1px solid var(--cyd);background:#082028}
+.badge.pin{color:#06222a;background:var(--cy);border:1px solid var(--cy);font-weight:700}
+.vert{padding:4px 2px;flex-direction:column;align-items:center;justify-content:space-between}
+.vnm{writing-mode:vertical-rl;font-size:9.5px;font-weight:700;color:#9db4cf;overflow:hidden;max-height:76%;white-space:nowrap}
+.dist.god .vnm{color:#e0b46a}
+.vmass{font-size:10.5px;color:#8fa8c8;font-weight:700}
+.dist.god .vmass{color:var(--amber)}
+/* short horizontal bands */
+.short{flex-direction:row;align-items:center;gap:8px;justify-content:flex-start;padding:4px 8px}
+.short .nm{flex:none}
+.short .mass{font-size:14px;margin-left:auto;white-space:nowrap}
+.short .io{margin-left:2px}
+.short .path{max-width:34%}
+.short .badge{position:static;margin-left:6px;flex:none}
+.short.tiny{gap:4px;padding:4px 6px}
+.short.tiny .mass{font-size:11px}
+/* treesitter callout */
+.callout{position:absolute;z-index:5;width:336px;background:#1a1208;border:1px solid #8a5a20;border-radius:5px;padding:7px 9px;font-size:10px;line-height:1.5;color:#d8b06a;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+.callout .cstamp{color:var(--dim);border:1px solid var(--line);border-radius:2px;padding:0 4px;font-size:9px}
+.callout:before{content:'';position:absolute;left:26px;bottom:-8px;border:8px solid transparent;border-top-color:#8a5a20;border-bottom:0}
+/* flows */
+.flows{height:168px;flex:none}
+.frow{display:flex;align-items:center;gap:10px;padding:3px 0;border-bottom:1px dashed #17202e}
+.frow:last-of-type{border-bottom:0}
+.frow .rk{width:14px;color:var(--faint);font-size:10px}
+.frow .fp{width:430px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frow .fp b{color:#dce8f5;font-weight:600}
+.frow .fp .arr{color:var(--cy)}
+.fbar{flex:1;height:8px;background:#131c2b;border-radius:2px;overflow:hidden}
+.fbar i{display:block;height:100%;background:linear-gradient(90deg,#1e5f6e,var(--cy));border-radius:2px}
+.frow .fn{width:36px;text-align:right;color:var(--cy);font-weight:700}
+.frow .fs{width:230px;color:var(--dim);font-size:10px;text-align:right;white-space:nowrap;overflow:hidden}
+.more{color:var(--faint);font-size:10px;margin-top:4px}
+/* pressure rail */
+.prow{display:flex;align-items:center;gap:8px;padding:3.5px 0;border-bottom:1px dashed #17202e;font-size:11px}
+.prow:last-of-type{border-bottom:0}
+.prow .pn{width:78px;color:#eadbc0;font-weight:600;white-space:nowrap;overflow:hidden}
+.prow .pio{width:82px;color:var(--dim);font-size:10px;white-space:nowrap}
+.pbar{flex:1;height:7px;background:#131c2b;border-radius:2px;overflow:hidden}
+.pbar i{display:block;height:100%;background:linear-gradient(90deg,#7a4a18,var(--amber));border-radius:2px}
+.pbar i.r{background:linear-gradient(90deg,#7a2a18,var(--red))}
+.prow .ps{width:196px;text-align:right;color:var(--dim);font-size:9px;white-space:nowrap;overflow:hidden}
+.note{font-size:10px;color:var(--faint);line-height:1.5;margin-top:6px;border-top:1px solid var(--line);padding-top:6px}
+.note b{color:var(--dim)}
+/* district card */
+.card{border-color:var(--cy);box-shadow:0 0 0 1px rgba(77,216,230,.25),0 8px 24px rgba(0,0,0,.45)}
+.card .ct{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.card .cn{font-size:13px;font-weight:700;color:var(--cy)}
+.card .sent{font-size:11.5px;line-height:1.5;color:#dce8f5;margin-bottom:7px}
+.card .sent .g{color:var(--amber)}
+.kv{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px}
+.kv span{border:1px solid var(--line2);border-radius:3px;padding:1px 6px;font-size:10px;color:var(--dim)}
+.kv span.src{color:#a8c0dc}
+.imp{font-size:10.5px;line-height:1.75;color:var(--dim)}
+.imp .fl{color:#a8c0dc}
+.imp .ln{color:var(--cy)}
+.esc{margin-top:7px;display:inline-block;border:1px solid var(--cy);color:var(--cy);border-radius:4px;padding:3px 10px;font-size:10.5px;background:#0a2028}
+.gest{font-size:9.5px;color:var(--faint);margin-top:6px}
+/* attention */
+.refusal{border:1px dashed #6d5aa8;border-radius:4px;padding:6px 8px;font-size:10.5px;line-height:1.5;color:#b9a8e8;background:#171226;margin-bottom:8px}
+.refusal b{color:var(--vio)}
+.drow{display:flex;align-items:center;gap:8px;padding:2px 0;font-size:10.5px}
+.drow .dn{width:128px;color:#c4b5f0;white-space:nowrap;overflow:hidden}
+.dbar{flex:1;height:6px;background:#161226;border-radius:2px;overflow:hidden}
+.dbar i{display:block;height:100%;background:linear-gradient(90deg,#4a3a80,var(--vio))}
+.drow .dv{width:44px;text-align:right;color:var(--dim);font-size:10px}
+.sess{margin-top:7px;font-size:10.5px;color:var(--dim);line-height:1.6}
+.sess b{color:var(--tx)}
+/* footer */
+.foot{margin-top:10px;font-size:10px;color:var(--faint);display:flex;gap:18px;align-items:baseline}
+.foot b{color:var(--dim)}
+</style></head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="hdr-top">
+      <span class="brand">aOa<b> · SYSTEM POSTER</b></span>
+      <span class="chip">rev 8e370207ccdf</span>
+      <span class="chip">grain: file→package</span>
+      <span class="chip real">PROV: REAL · derived</span>
+      <span class="chip">footprint: go-app · go.mod · high</span>
+      <span class="chip">Q: where is the mass, the pressure, the work?</span>
+    </div>
+    <div class="hero" id="hero"></div>
+    <div class="sub" id="sub"></div>
+  </div>
+  <div class="cols">
+    <div class="left">
+      <div class="panel" style="flex:1;display:flex;flex-direction:column">
+        <div class="ptitle"><span>CITY · AREA = SOURCE FILES (REAL COUNTS)</span><span class="q">color = findings pressure · cyan = dependency gravity · bands floored at legible height (marked ≈)</span></div>
+        <div id="city"></div>
+      </div>
+      <div class="panel flows">
+        <div class="ptitle"><span>HEAVIEST CROSS-PACKAGE FLOWS</span><span class="q">rank = import-edge count · one representative importing line each</span></div>
+        <div id="flows"></div>
+      </div>
+    </div>
+    <div class="rail">
+      <div class="panel">
+        <div class="ptitle"><span>PRESSURE · GOD COMPONENTS</span><span class="q">daemon findings, ranked by out-degree</span></div>
+        <div id="pressure"></div>
+        <div class="note" id="pnote"></div>
+      </div>
+      <div class="panel card">
+        <div class="ptitle"><span>DISTRICT — PINNED FROM MAP ①</span><span class="q">the after-click state</span></div>
+        <div id="card"></div>
+      </div>
+      <div class="panel" style="flex:1">
+        <div class="ptitle"><span>ATTENTION · TOOL-OBSERVED</span><span class="q">not git history</span></div>
+        <div id="attn"></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">
+    <span><b>sources:</b> /api/arch/graph (1,781 stamped edges) · /api/arch/findings (9) · /api/domains · /api/sessions — harvested live from the aOa daemon</span>
+    <span><b>every number on this poster is computed from those extracts; none typed by hand</b></span>
+  </div>
+</div>
+<script>
+const DATA = {"rev": "8e370207ccdf", "grain": "file", "totals": {"files": 232, "tests": 104, "packages": 34, "edges": 1781, "internal": 228, "external": 1553, "extTargets": 576, "findings": 9, "flows": 68, "mutual": 0}, "footprint": {"kind": "go-app", "marker": "go.mod", "confidence": "high", "prov": "derived"}, "zones": [{"zone": "ENTRY \u00b7 cmd", "total": 44, "districts": [{"path": "cmd/aoa/cmd", "label": "cmd", "files": 42, "i": 1, "o": 53, "x": 194}, {"path": "cmd/aoa", "label": "aoa", "files": 1, "i": 0, "o": 1, "x": 1}, {"path": "cmd/dim-dump", "label": "dim-dump", "files": 1, "i": 0, "o": 3, "x": 4}]}, {"zone": "ORCHESTRATION \u00b7 app", "total": 39, "districts": [{"path": "internal/app", "label": "app", "files": 39, "i": 13, "o": 76, "x": 191}]}, {"zone": "ADAPTERS", "total": 58, "districts": [{"path": "internal/adapters/treesitter", "label": "treesitter", "files": 16, "i": 12, "o": 6, "x": 569, "god": {"msg": "god component: treesitter (in 4 \u00b7 out 530)", "stamp": {"file": "cmd/aoa/cmd/grammar_cgo.go", "line": 11}, "nsrc": 534}}, {"path": "internal/adapters/web", "label": "web", "files": 14, "i": 2, "o": 11, "x": 83}, {"path": "internal/adapters/bbolt", "label": "bbolt", "files": 11, "i": 17, "o": 9, "x": 65, "god": {"msg": "god component: bbolt (in 5 \u00b7 out 18)", "stamp": {"file": "cmd/aoa/cmd/arch.go", "line": 25}, "nsrc": 23}}, {"path": "internal/adapters/socket", "label": "socket", "files": 5, "i": 26, "o": 8, "x": 30, "god": {"msg": "god component: socket (in 4 \u00b7 out 17)", "stamp": {"file": "cmd/aoa/cmd/arch.go", "line": 26}, "nsrc": 21}}, {"path": "internal/adapters/recon", "label": "recon", "files": 3, "i": 1, "o": 7, "x": 10}, {"path": "internal/adapters/tailer", "label": "tailer", "files": 3, "i": 2, "o": 0, "x": 21}, {"path": "internal/adapters/claude", "label": "claude", "files": 2, "i": 1, "o": 4, "x": 11}, {"path": "internal/adapters/fsnotify", "label": "fsnotify", "files": 2, "i": 1, "o": 0, "x": 13}, {"path": "internal/adapters/ahocorasick", "label": "ahocorasick", "files": 2, "i": 1, "o": 0, "x": 4}]}, {"zone": "DOMAIN", "total": 62, "districts": [{"path": "internal/domain/arch", "label": "arch", "files": 17, "i": 7, "o": 0, "x": 73, "god": {"msg": "god component: arch (in 3 \u00b7 out 20)", "stamp": {"file": "cmd/aoa/cmd/arch.go", "line": 28}, "nsrc": 23}}, {"path": "internal/domain/index", "label": "index", "files": 15, "i": 18, "o": 14, "x": 56, "god": {"msg": "god component: index (in 4 \u00b7 out 17)", "stamp": {"file": "internal/app/app.go", "line": 30}, "nsrc": 21}}, {"path": "internal/domain/learner", "label": "learner", "files": 11, "i": 7, "o": 7, "x": 29}, {"path": "internal/domain/analyzer", "label": "analyzer", "files": 9, "i": 8, "o": 2, "x": 25, "god": {"msg": "god component: analyzer (in 4 \u00b7 out 13)", "stamp": {"file": "cmd/dim-dump/main.go", "line": 19}, "nsrc": 17}}, {"path": "internal/domain/enricher", "label": "enricher", "files": 3, "i": 6, "o": 1, "x": 9}, {"path": "internal/domain/hints", "label": "hints", "files": 3, "i": 1, "o": 5, "x": 9}, {"path": "internal/domain/facts", "label": "facts", "files": 2, "i": 3, "o": 2, "x": 7}, {"path": "internal/domain/status", "label": "status", "files": 2, "i": 2, "o": 2, "x": 9}]}, {"zone": "CONTRACT", "total": 5, "districts": [{"path": "internal/ports", "label": "ports", "files": 2, "i": 82, "o": 0, "x": 2}, {"path": "internal/peek", "label": "peek", "files": 2, "i": 3, "o": 0, "x": 5, "god": {"msg": "god component: peek (in 3 \u00b7 out 5)", "stamp": {"file": "internal/adapters/socket/server.go", "line": 15}, "nsrc": 8}}, {"path": "atlas", "label": "atlas", "files": 1, "i": 6, "o": 0, "x": 1}]}, {"zone": "TESTS", "total": 13, "districts": [{"path": "test", "label": "test", "files": 6, "i": 0, "o": 14, "x": 29}, {"path": "test/integration", "label": "integration", "files": 4, "i": 0, "o": 1, "x": 28}, {"path": "test/migration", "label": "migration", "files": 2, "i": 0, "o": 2, "x": 16}, {"path": "test/fixtures/learner", "label": "learner", "files": 1, "i": 0, "o": 0, "x": 3}]}, {"zone": "TOOLING", "total": 11, "districts": [{"path": "playbook/generators", "label": "generators", "files": 5, "i": 0, "o": 0, "x": 21}, {"path": "scripts", "label": "scripts", "files": 2, "i": 0, "o": 0, "x": 13}, {"path": "compliance/claude-session", "label": "claude-session", "files": 1, "i": 0, "o": 0, "x": 9}, {"path": "compliance/claude-statusline", "label": "claude-statusline", "files": 1, "i": 0, "o": 0, "x": 11}, {"path": "hooks", "label": "hooks", "files": 1, "i": 1, "o": 0, "x": 1}, {"path": "recon", "label": "recon", "files": 1, "i": 3, "o": 0, "x": 1}]}], "flowsTop": [{"frm": "cmd/aoa/cmd", "to": "internal/adapters/socket", "n": 18, "file": "cmd/aoa/cmd/arch.go", "line": 26}, {"frm": "internal/app", "to": "internal/ports", "n": 18, "file": "internal/app/app.go", "line": 33}, {"frm": "cmd/aoa/cmd", "to": "internal/app", "n": 13, "file": "cmd/aoa/cmd/arch.go", "line": 27}, {"frm": "internal/domain/index", "to": "internal/ports", "n": 13, "file": "internal/domain/index/content.go", "line": 10}, {"frm": "internal/app", "to": "internal/domain/index", "n": 10, "file": "internal/app/app.go", "line": 30}], "god": [{"pkg": "internal/adapters/treesitter", "msg": "god component: treesitter (in 4 \u00b7 out 530)", "file": "cmd/aoa/cmd/grammar_cgo.go", "line": 11, "nsrc": 534}, {"pkg": "internal/domain/arch", "msg": "god component: arch (in 3 \u00b7 out 20)", "file": "cmd/aoa/cmd/arch.go", "line": 28, "nsrc": 23}, {"pkg": "internal/adapters/bbolt", "msg": "god component: bbolt (in 5 \u00b7 out 18)", "file": "cmd/aoa/cmd/arch.go", "line": 25, "nsrc": 23}, {"pkg": "internal/adapters/socket", "msg": "god component: socket (in 4 \u00b7 out 17)", "file": "cmd/aoa/cmd/arch.go", "line": 26, "nsrc": 21}, {"pkg": "internal/domain/index", "msg": "god component: index (in 4 \u00b7 out 17)", "file": "internal/app/app.go", "line": 30, "nsrc": 21}, {"pkg": "internal/domain/analyzer", "msg": "god component: analyzer (in 4 \u00b7 out 13)", "file": "cmd/dim-dump/main.go", "line": 19, "nsrc": 17}, {"pkg": "internal/peek", "msg": "god component: peek (in 3 \u00b7 out 5)", "file": "internal/adapters/socket/server.go", "line": 15, "nsrc": 8}], "budget": [{"msg": "budget overflow: ext:std has 45 members (limit 40)", "subj": "g_ext_std"}, {"msg": "budget overflow: other has 518 members (limit 40)", "subj": "g_other"}], "tsTargets": 528, "tsExtEdges": 569, "portsIn": 82, "portsFrom": 15, "bbolt": {"src": ["arch.go", "edges.go", "encoding.go", "findings.go", "store.go", "telemetry.go"], "tst": 5, "inEdges": 17, "inPkgs": 5, "importers": [{"file": "cmd/aoa/cmd/arch.go", "line": 25}, {"file": "cmd/aoa/cmd/arch_recon.go", "line": 17}, {"file": "cmd/aoa/cmd/init.go", "line": 11}, {"file": "cmd/aoa/cmd/reset.go", "line": 10}], "moreImp": 13, "god": "god component: bbolt (in 5 \u00b7 out 18)", "stamp": {"file": "cmd/aoa/cmd/arch.go", "line": 25}}, "attention": {"sessions": 15, "prompts": 507, "reads": 255, "guided": 183, "guidedPct": 72, "tokSavedM": 6.37, "hoursSaved": 3.9, "fileHits": 21, "domains": [{"name": "unit_testing", "hits": 608.7}, {"name": "animation", "hits": 596.2}, {"name": "integration_testing", "hits": 508.6}, {"name": "reactive", "hits": 465.4}, {"name": "database", "hits": 431.3}, {"name": "middleware", "hits": 429.4}, {"name": "ci_cd", "hits": 404.9}, {"name": "error_handling", "hits": 390.3}], "domTotal": 134, "domCore": 24}};
+const T = DATA.totals;
+
+/* hero */
+document.getElementById('hero').innerHTML =
+  `<span class="ok">The hexagon holds:</span> 0 mutual pairs across ${T.packages} packages — pressure is <span class="hot">concentration, not cycles</span>. ` +
+  `${DATA.god.length} god components, worst <span class="hot">treesitter</span> (out&nbsp;530 — ${DATA.tsTargets} distinct external targets: the 28-language grammar surface) <span class="stamp">${DATA.god[0].file}:${DATA.god[0].line}</span> · ` +
+  `everything drains to <span class="cyx">internal/ports</span> (fan-in ×${DATA.portsIn} from ${DATA.portsFrom} packages).`;
+document.getElementById('sub').innerHTML =
+  `<b>${T.files}</b> source files (<b>${T.tests}</b> tests, ${Math.round(100*T.tests/T.files)}%) · <b>${T.edges.toLocaleString()}</b> import edges — ${T.internal} internal / ${T.external.toLocaleString()} external → ${T.extTargets} distinct targets · <b>${T.findings}</b> findings · ${T.flows} cross-package flows`;
+
+/* city */
+const city = document.getElementById('city');
+const MAPH = city ? 640 : 640;
+const MINB = 44, scalable = [], floored = [];
+DATA.zones.forEach(z => (z.total * 2.9 < MINB ? floored : scalable).push(z));
+const flooredH = floored.length * MINB;
+const scaleTotal = scalable.reduce((a,z)=>a+z.total,0);
+const pxPerFile = (MAPH - flooredH - (DATA.zones.length-1)*4) / scaleTotal;
+DATA.zones.forEach(z => {
+  const h = Math.max(MINB, Math.round(z.total * pxPerFile));
+  const short = z.total * pxPerFile < 62;
+  const approx = z.total * pxPerFile < MINB;
+  const band = document.createElement('div');
+  band.className = 'band'; band.style.height = h + 'px';
+  const rowTotal = z.districts.reduce((a,d)=>a+d.files,0);
+  let cells = '';
+  z.districts.forEach(d => {
+    const wpx = d.files / rowTotal * 938;
+    const narrow = !short && wpx < 62;
+    let cls = 'dist';
+    if (d.god) cls += d.path==='internal/adapters/treesitter' ? ' god worst' : ' god';
+    else if (d.path==='internal/ports') cls += ' gravity';
+    else if (z.zone==='TESTS'||z.zone==='TOOLING') cls += ' mute';
+    if (d.path==='internal/adapters/bbolt') cls += ' pinned';
+    let badge = '';
+    if (d.path==='internal/adapters/bbolt') badge = '<span class="badge pin">① PINNED</span>';
+    else if (d.god && !narrow) badge = `<span class="badge ${d.path==='internal/adapters/treesitter'?'w':'g'}">▲ GOD</span>`;
+    else if (d.path==='internal/ports') badge = `<span class="badge gr">GRAVITY ×${d.i}</span>`;
+    if (narrow) {
+      cells += `<div class="${cls} vert" style="flex:${d.files} ${d.files} 0">
+        <div class="vnm">${d.label}</div><div class="vmass">${d.files}</div></div>`;
+    } else if (short) {
+      const tiny = wpx < 120;
+      cells += `<div class="${cls} short${tiny?' tiny':''}" style="flex:${d.files} ${d.files} 0">
+        <span class="nm">${tiny?d.label.slice(0,9):d.label}</span>${tiny?'':`<span class="path">${d.path}</span>`}
+        <span class="mass">${d.files}${tiny?'':'<small> files</small>'}</span>
+        ${wpx>300?`<span class="io">in ${d.i} · out ${d.o} · ext ${d.x}</span>`:''}${badge}</div>`;
+    } else {
+      cells += `<div class="${cls}" style="flex:${d.files} ${d.files} 0">${badge}
+        <div><div class="nm">${d.label}</div><div class="path">${d.path}</div></div>
+        <div><span class="mass">${d.files}<small> files</small></span></div>
+        <div class="io">in ${d.i} · out ${d.o} · ext ${d.x}</div></div>`;
+    }
+  });
+  band.innerHTML = `<div class="zlab"><div class="zn">${z.zone}${approx?' ≈':''}</div><div class="zc">${z.total} files · ${z.districts.length} pkg${z.districts.length>1?'s':''}</div></div><div class="brow">${cells}</div>`;
+  city.appendChild(band);
+});
+/* treesitter callout — position after layout */
+const co = document.createElement('div');
+co.className = 'callout';
+co.innerHTML = `<b>out 530 ≠ tangle.</b> ${DATA.tsExtEdges} external import edges to <b>${DATA.tsTargets} distinct targets</b> — the compiled-in 28-language grammar surface, not domain coupling. <span class="cstamp">${DATA.god[0].file}:${DATA.god[0].line}</span> +${DATA.god[0].nsrc} sources`;
+city.appendChild(co);
+requestAnimationFrame(()=>{
+  const worst = city.querySelector('.dist.worst');
+  if (worst) {
+    const r = worst.getBoundingClientRect(), cr = city.getBoundingClientRect();
+    co.style.left = (r.left - cr.left + 36) + 'px';
+    co.style.top  = (r.top - cr.top - co.offsetHeight - 12) + 'px';
+  }
+});
+
+/* flows */
+const fmax = DATA.flowsTop[0].n;
+document.getElementById('flows').innerHTML = DATA.flowsTop.map((f,i)=>
+  `<div class="frow"><span class="rk">${i+1}</span>
+   <span class="fp"><b>${f.frm}</b> <span class="arr">→</span> <b>${f.to}</b></span>
+   <span class="fbar"><i style="width:${f.n/fmax*100}%"></i></span>
+   <span class="fn">×${f.n}</span><span class="fs">${f.file}:${f.line}</span></div>`).join('') +
+  `<div class="more">+${T.flows-5} more flows · 0 mutual pairs at package grain — no two-way tangle to cut</div>`;
+
+/* pressure */
+const omax = 530;
+document.getElementById('pressure').innerHTML = DATA.god.map(g=>{
+  const m = g.msg.match(/in (\d+) · out (\d+)/);
+  const out = +m[2], logw = Math.max(6, Math.log(out+1)/Math.log(531)*100);
+  return `<div class="prow"><span class="pn">${g.pkg.split('/').pop()}</span>
+    <span class="pio">in ${m[1]} · out ${out}</span>
+    <span class="pbar"><i class="${out>100?'r':''}" style="width:${logw}%"></i></span>
+    <span class="ps">${g.file}:${g.line} +${g.nsrc}</span></div>`;
+}).join('');
+document.getElementById('pnote').innerHTML =
+  `bar = log scale (treesitter would flatten it linear) · <b>+${DATA.budget.length} budget findings</b> — ${DATA.budget.map(b=>b.msg.replace('budget overflow: ','')).join(' · ')} — both target <b>external groups</b>, so no internal district is colored by them.`;
+
+/* district card */
+const B = DATA.bbolt;
+document.getElementById('card').innerHTML = `
+  <div class="ct"><span class="cn">internal/adapters/bbolt</span><span class="chip">persistence adapter</span></div>
+  <div class="sent"><span class="g">▲ ${B.god}</span> — ${B.src.length}+${B.tst} files · imported by ${B.inPkgs} packages over ×${B.inEdges} edges. Stamp: <b>${B.stamp.file}:${B.stamp.line}</b></div>
+  <div class="kv">${B.src.map(s=>`<span class="src">${s}</span>`).join('')}<span>+${B.tst} tests</span></div>
+  <div class="imp">${B.importers.map(x=>`<span class="fl">${x.file}</span>:<span class="ln">${x.line}</span>`).join(' · ')} <span style="color:var(--faint)">+${B.moreImp} more importers</span></div>
+  <div class="esc">↳ escalate: peek store.go symbols (rung 5)</div>
+  <div class="gest">gesture ladder: hover map (0) → pin district (1) → stamp (2) → code (3)</div>`;
+
+/* attention */
+const A = DATA.attention;
+const dmax = A.domains[0].hits;
+document.getElementById('attn').innerHTML = `
+  <div class="refusal"><b>GLOW LAYER: REFUSED.</b> Attention exists only at aggregate grain in this extract (${A.fileHits} file hits · ${A.sessions} sessions). Painting per-district heat would be a guess — so it isn't painted.</div>
+  ${A.domains.map(d=>`<div class="drow"><span class="dn">${d.name}</span><span class="dbar"><i style="width:${d.hits/dmax*100}%"></i></span><span class="dv">${d.hits.toFixed(0)}</span></div>`).join('')}
+  <div class="more">+${A.domTotal-8} more domains · ${A.domCore} core — hits decay ×0.90 per autotune</div>
+  <div class="sess">what the sessions did say: <b>${A.sessions}</b> sessions · <b>${A.prompts}</b> prompts · <b>${A.reads}</b> file reads, <b>${A.guided}</b> guided (${A.guidedPct}%) · <b>${A.tokSavedM}M</b> tokens saved ≈ <b>${A.hoursSaved}h</b> — observed by this tool, not change history.</div>`;
+</script>
+</body></html>
