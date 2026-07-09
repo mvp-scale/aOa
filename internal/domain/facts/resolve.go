@@ -272,7 +272,24 @@ func resolvePython(e ports.ImportEdge, spec string, fileSet map[string]bool) (po
 	}
 
 	if dots == 0 {
-		// Absolute import: ext:<top-level-package>
+		// Absolute import: probe the repo FIRST — a Python repo importing its
+		// own top-level package by absolute name (`from scrapy.http import …`)
+		// is intra-repo, and stamping it "ext:" erases every cross-subpackage
+		// dependency (the scrapy §10 empty-DSM root cause). Same probe ladder
+		// as the relative branch: <p>.py then <p>/__init__.py, rooted at the
+		// repo root. src-layout roots (src/<pkg>/…) are NOT probed — those
+		// repos keep the ext: classification (honest v1 line, no guessing).
+		p := strings.ReplaceAll(spec, ".", "/")
+		if fileSet[p+".py"] {
+			out.ImportPath = p + ".py"
+			return out, true
+		}
+		if fileSet[p+"/__init__.py"] {
+			out.ImportPath = p + "/__init__.py"
+			return out, true
+		}
+
+		// No repo match: ext:<top-level-package>
 		top := spec
 		if i := strings.Index(spec, "."); i >= 0 {
 			top = spec[:i]

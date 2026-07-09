@@ -133,6 +133,44 @@ func TestResolvePython_Absolute(t *testing.T) {
 	assert.Contains(t, paths, "ext:requests")
 }
 
+// TestResolvePython_AbsoluteSelfPackage — the scrapy §10 root cause: a Python
+// repo importing its OWN top-level package by absolute name (`import scrapy`,
+// `from scrapy.http import Request`) must resolve intra-repo, not "ext:scrapy".
+// This is the "Python root detection" enhancement the F1 resolver deferred.
+// Probe ladder mirrors the relative branch: <p>.py then <p>/__init__.py.
+func TestResolvePython_AbsoluteSelfPackage(t *testing.T) {
+	manifests := Manifests{GoModules: map[string]string{}}
+	fileSet := map[string]bool{
+		"scrapy/__init__.py":      true,
+		"scrapy/cmdline.py":       true,
+		"scrapy/http/__init__.py": true,
+		"tests/test_http.py":      true,
+	}
+
+	edges := []ports.ImportEdge{
+		// import scrapy — package __init__ probe
+		{FromFile: "tests/test_http.py", ImportPath: "scrapy", StartLine: 1},
+		// from scrapy.http import Request — subpackage __init__ probe
+		{FromFile: "tests/test_http.py", ImportPath: "scrapy.http", StartLine: 2},
+		// from scrapy.cmdline import execute — module-file probe
+		{FromFile: "scrapy/http/__init__.py", ImportPath: "scrapy.cmdline", StartLine: 3},
+		// a genuinely external absolute import stays ext:
+		{FromFile: "tests/test_http.py", ImportPath: "requests", StartLine: 4},
+	}
+	result := Resolve(edges, fileSet, manifests)
+
+	require.Equal(t, 4, len(result.Resolved))
+	assert.Empty(t, result.Unresolved)
+	paths := make([]string, 0, len(result.Resolved))
+	for _, e := range result.Resolved {
+		paths = append(paths, e.ImportPath)
+	}
+	assert.Contains(t, paths, "scrapy/__init__.py", "import scrapy → own package")
+	assert.Contains(t, paths, "scrapy/http/__init__.py", "scrapy.http → own subpackage")
+	assert.Contains(t, paths, "scrapy/cmdline.py", "scrapy.cmdline → own module file")
+	assert.Contains(t, paths, "ext:requests", "non-repo absolute import stays external")
+}
+
 func TestResolvePython_RelativeSingle(t *testing.T) {
 	manifests := Manifests{GoModules: map[string]string{}}
 	fileSet := map[string]bool{
