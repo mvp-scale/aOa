@@ -105,6 +105,89 @@ func TestDetectFootprint_Aoa(t *testing.T) {
 	}
 }
 
+// TestDetectFootprint_SingleRootFile_NeverAnchorsFilename — merge-consensus F1:
+// firstSeg("main.go") is "main.go", so a root-level source file used to land in
+// topDirCodeFiles as a phantom "dir" and could become the dominant subtree —
+// footprint.json then recorded a FILENAME as the anchor path. Root-level files
+// must count toward the dominance denominator but never anchor.
+func TestDetectFootprint_SingleRootFile_NeverAnchorsFilename(t *testing.T) {
+	root := t.TempDir()
+	mkTree(t, root, []string{
+		"go.mod",
+		"main.go",
+	})
+
+	fp, err := DetectFootprint(root)
+	if err != nil {
+		t.Fatalf("DetectFootprint: %v", err)
+	}
+	if len(fp.Anchors) != 1 {
+		t.Fatalf("anchors = %d, want 1", len(fp.Anchors))
+	}
+	a := fp.Anchors[0]
+	if a.Path != "" {
+		t.Errorf("anchor path = %q, want \"\" (repo root) — a filename must never anchor", a.Path)
+	}
+	if a.Grain != nil && a.Grain.Mode == "descend" {
+		t.Errorf("grain = %+v, want segment/nil — no subtree to descend into", a.Grain)
+	}
+}
+
+// TestDetectFootprint_RootHeavyFlatRepo_NoDescend guards the fix's own failure
+// direction: when most source lives at the repo root and only a minority sits
+// in a subdir, the subdir must NOT be declared dominant (root files count in
+// the denominator). Views keep default segment grain — byte-identical.
+func TestDetectFootprint_RootHeavyFlatRepo_NoDescend(t *testing.T) {
+	root := t.TempDir()
+	mkTree(t, root, []string{
+		"setup.py",
+		"alpha.py", "beta.py", "gamma.py", "delta.py",
+		"epsilon.py", "zeta.py", "eta.py", "theta.py",
+		"utils/a.py",
+		"utils/b.py",
+	})
+
+	fp, err := DetectFootprint(root)
+	if err != nil {
+		t.Fatalf("DetectFootprint: %v", err)
+	}
+	a := fp.Anchors[0]
+	if a.Grain != nil && a.Grain.Mode == "descend" {
+		t.Errorf("grain = %+v, want segment/nil — utils/ holds a minority of the code", a.Grain)
+	}
+}
+
+// TestDetectFootprint_RootConftestPlusPackage_Descends is the real scrapy shape:
+// a couple of root-level files (conftest.py) plus one dominant package dir.
+// The root files must not stop the descend.
+func TestDetectFootprint_RootConftestPlusPackage_Descends(t *testing.T) {
+	root := t.TempDir()
+	mkTree(t, root, []string{
+		"pyproject.toml",
+		"conftest.py",
+		"scrapy/__init__.py",
+		"scrapy/core/engine.py",
+		"scrapy/core/scheduler.py",
+		"scrapy/http/request.py",
+		"scrapy/http/response.py",
+		"scrapy/utils/misc.py",
+		"scrapy/utils/log.py",
+		"scrapy/settings/default.py",
+	})
+
+	fp, err := DetectFootprint(root)
+	if err != nil {
+		t.Fatalf("DetectFootprint: %v", err)
+	}
+	a := fp.Anchors[0]
+	if a.Path != "scrapy" {
+		t.Errorf("anchor path = %q, want scrapy", a.Path)
+	}
+	if a.Grain == nil || a.Grain.Mode != "descend" || a.Grain.Under != "scrapy" {
+		t.Errorf("grain = %+v, want descend under=scrapy — root conftest must not block dominance", a.Grain)
+	}
+}
+
 // TestDetectFootprint_GoModAtDepth exercises 1b: a single go.mod one level down
 // (e.g. a repo where the module lives under app/). Anchor roots there, and grain
 // descends into it.

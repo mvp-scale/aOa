@@ -251,10 +251,13 @@ func walkRepo(root string) (*repoScan, error) {
 		}
 
 		// Count source files per top-level dir (for grain decision).
+		// Root-level files bucket under "" — they count toward the dominance
+		// denominator (dominantSubtree) but can never anchor: a filename is
+		// not a subtree (merge-consensus F1).
 		if isSourceFile(name) {
-			top := firstSeg(rel)
-			if top == "" {
-				top = "" // root-level file
+			top := ""
+			if strings.Contains(filepath.ToSlash(rel), "/") {
+				top = firstSeg(rel)
 			}
 			if !footprintSatelliteDirs[top] && !footprintIgnoreDirs[top] {
 				s.topDirCodeFiles[top]++
@@ -307,19 +310,19 @@ func (s *repoScan) pickUnitAnchor() (dir, marker, kind string) {
 // across multiple top-level dirs (aOa → internal/, cmd/, ports/), in which case
 // the root anchor keeps default (segment) grain and views stay byte-identical.
 //
-// Rule: a single in-scope top-level code dir → that dir. Two or more, one of
-// which holds ≥80% of in-scope source files → that dominant dir. Otherwise "".
+// Rule: one top-level code dir holding ≥80% of ALL in-scope source files
+// (root-level files included in the denominator) → that dominant dir.
+// Otherwise "" — multi-dir layouts (aOa) and root-heavy flat repos keep the
+// default segment grain, byte-identical views.
 func (s *repoScan) dominantSubtree() string {
 	total := 0
 	best := ""
 	bestN := 0
-	nDirs := 0
 	for dir, n := range s.topDirCodeFiles {
-		if dir == "" {
-			continue // root-level files don't form an anchor
-		}
 		total += n
-		nDirs++
+		if dir == "" {
+			continue // root-level files count in total but never anchor (F1)
+		}
 		if n > bestN || (n == bestN && dir < best) {
 			bestN, best = n, dir
 		}
@@ -327,13 +330,10 @@ func (s *repoScan) dominantSubtree() string {
 	if total == 0 || best == "" {
 		return ""
 	}
-	if nDirs == 1 {
-		return best // pure scrapy shape — everything under one dir
-	}
 	if float64(bestN) >= 0.80*float64(total) {
 		return best // one dir dominates the code
 	}
-	return "" // multi-dir layout (aOa) → default grain
+	return "" // spread layout (aOa) or root-heavy flat repo → default grain
 }
 
 // refineKind applies Layer 1c framework markers to sharpen kind (never boundary).
