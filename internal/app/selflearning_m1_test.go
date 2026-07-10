@@ -38,3 +38,25 @@ func TestM1_AwaySummary_FeedsLearner(t *testing.T) {
 	assert.Equal(t, promptBefore, a.promptN,
 		"observe=false: capturing AwaySummary must NOT increment promptN or fire autotune off-cadence")
 }
+
+// TestM1_AITitle_FeedsLearner: the AI-generated conversation title is pure intent
+// (a one-line summary of what the session is about) and today has no case — dropped.
+// RED until M1.2 routes it through the funnel.
+func TestM1_AITitle_FeedsLearner(t *testing.T) {
+	a := newTestAppWithStore(t)
+	promptBefore := a.promptN
+
+	ev := ports.SessionEvent{
+		Kind:      ports.EventAITitle,
+		TurnID:    "t2",
+		Timestamp: time.Now(),
+		AITitle:   "Refactor authentication middleware and caching layer",
+	}
+	a.onSessionEvent(ev)
+
+	state := a.Learner.State()
+	assert.Greater(t, len(state.KeywordHits), 0,
+		"AI title keywords must reach the learner (currently dropped — no case)")
+	assert.Equal(t, promptBefore, a.promptN,
+		"observe=false: capturing AITitle must NOT increment promptN")
+}

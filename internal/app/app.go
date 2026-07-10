@@ -1781,6 +1781,14 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			a.Learner.ProcessBigrams(ev.AwaySummary)
 			a.processConversationSignal(ev.AwaySummary, false)
 		}
+
+	case ports.EventAITitle:
+		// M1.2: the AI-generated conversation title is a compact intent summary of
+		// what the session is about — high signal per byte. Same funnel, observe=false.
+		if ev.AITitle != "" {
+			a.Learner.ProcessBigrams(ev.AITitle)
+			a.processConversationSignal(ev.AITitle, false)
+		}
 	}
 
 	a.mu.Unlock() // explicit unlock — IO follows
