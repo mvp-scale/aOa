@@ -108,9 +108,12 @@ type SessionEvent struct {
 	// PermissionMode is the per-message permission mode (user events only).
 	PermissionMode string
 
-	// Origin tags injected events. Real user input has Origin == nil; injected
-	// events carry {kind: "task-notification" | ...}. Used to filter out
-	// non-real-user events from learner intent counts.
+	// Origin tags the event source, copied verbatim from the envelope.
+	// Pre-2.1.19x: absent (nil) on typed prompts, set on injected events.
+	// 2.1.19x+: set on every user event — {kind:"human"} marks typed input;
+	// injected events carry other kinds (task-notification, coordinator,
+	// peer, ...). Discrimination lives in ports.SessionEvent.IsRealUser —
+	// never a nil check (L20 drift, 2026-07-10).
 	Origin map[string]any
 
 	// ToolUseResult is the structured per-tool result at envelope level,

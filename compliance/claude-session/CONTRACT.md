@@ -1,7 +1,7 @@
 # Claude Code Session Integration Contract
 
 **Status:** active
-**Current observed version:** 2.1.181
+**Current observed version:** 2.1.193 (targeted re-observation of the user-origin drift; full field sweep last done at 2.1.181)
 **Last validated:** 2026-06-18
 
 This document is the integration contract between aOa and Claude Code's
@@ -124,6 +124,7 @@ Fields observed at v2.1.126 across recognized types (`user`, `assistant`, `syste
 | `messageCount`            | [DROPPED]   | —                                        | per-session message count (system only) |
 | `permissionMode`          | [DROPPED]   | —                                        | per-message permission mode (user only) |
 | `promptSource`            | [DROPPED]   | —                                        | (v2.1.172) how the prompt entered the turn ("typed" / queued / ...) — user only |
+| `origin`                  | [CONSUMED]  | `origin` (object, `kind` read)           | **SEMANTICS CHANGED ~v2.1.19x**: was set only on injected events (task-notification); now stamped on EVERY user event with `kind:"human"` on typed prompts. `IsRealUser()` accepts nil (old logs) OR kind=="human"; all other kinds filtered. The nil-check era silently zeroed prompt counts/feed (L20 drift, fixed 2026-07-10) |
 | `level`                   | [DROPPED]   | —                                        | (v2.1.172) severity level for system events ("info") — system only |
 | `slug`                    | [DROPPED]   | —                                        | (v2.1.172) human-readable session slug — user/assistant/attachment |
 | `agentId`                 | [DROPPED]   | —                                        | (v2.1.178) links a top-level event to a spawned subagent; value = subagent file shortid — user/assistant/attachment. HIGH-value L18 attribution link |

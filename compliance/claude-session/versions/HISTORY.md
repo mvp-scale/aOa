@@ -255,3 +255,16 @@ flags drift:
 3. For each change, write 1-2 lines explaining the *what* and the *likely why*.
 4. Keep entries terse — this file should be skimmable, not exhaustive. Send
    the reader to `versions/v{X}-observed/observations.md` for detail.
+
+## ~v2.1.19x (observed at 2.1.193, 2026-07-10)
+
+- `origin` is now stamped on every user event — `{kind:"human"}` on typed
+  prompts, `{kind:"task-notification"}` on injected ones. Previously (through
+  2.1.181) typed prompts carried NO origin, and aOa discriminated real input
+  by `Origin == nil` — so this change silently filtered every real prompt:
+  promptN froze, bigrams/learner starved, the conversation feed and Debrief
+  went dark, while assistant/usage attribution kept flowing. Detected by the
+  owner with a one-word tracer ("Bye.") that never reached Debrief.
+- Also newly seen on user events at 2.1.193: `permissionMode` values in the
+  wild ("auto"), `promptSource:"typed"` confirmed. Full field sweep at
+  2.1.193 still pending (L20.1); this entry records the targeted fix only.

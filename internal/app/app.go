@@ -1282,9 +1282,10 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			a.processConversationSignal(ev.Text, false)
 			break
 		}
-		// Filter injected events (task-notifications, etc.) — they carry an
-		// `origin` tag and would otherwise contaminate user-prompt counts and
-		// bigram extraction. Real user input has Origin == nil.
+		// Filter injected events (task-notifications, etc.) so they don't
+		// contaminate user-prompt counts and bigram extraction. Typed prompts
+		// are origin nil (pre-2.1.19x logs) or kind "human" (current) — the
+		// discrimination lives in IsRealUser, never a nil check here (L20).
 		if !ev.IsRealUser() {
 			break
 		}
