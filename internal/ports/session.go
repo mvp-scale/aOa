@@ -132,9 +132,10 @@ type SessionEvent struct {
 	// PermissionMode is the per-message permission mode (user events only).
 	PermissionMode string
 
-	// Origin tags injected events. Non-nil with `kind` set on injected events
-	// (task-notification, etc.). Real user input has Origin == nil.
-	// Consumers should check `IsRealUser()` before counting as user prompt.
+	// Origin tags the event source. Pre-v2.1.19x: nil on typed prompts,
+	// set only on injected events (task-notification, etc.). v2.1.19x+:
+	// set on every user event — kind "human" marks typed input. Consumers
+	// must use `IsRealUser()`, never a nil check.
 	Origin map[string]any
 
 	// MessageCount is the per-session message count (system events).
@@ -182,8 +183,21 @@ type SessionEvent struct {
 // IsRealUser returns true when this event represents real user input (a typed
 // prompt) rather than an injected event such as a task-notification. Consumers
 // counting user-prompt activity (intent counters, bigrams) should gate on this.
+//
+// Contract history (L20): through v2.1.181 typed prompts carried NO origin —
+// "Origin == nil" was the discriminator. v2.1.19x stamps origin on every user
+// event, with kind "human" on typed input; injected events carry other kinds
+// (task-notification, ...). Both generations must pass: nil (old logs,
+// backfill) and kind=="human" (current).
 func (e *SessionEvent) IsRealUser() bool {
-	return e.Kind == EventUserInput && e.Origin == nil
+	if e.Kind != EventUserInput {
+		return false
+	}
+	if e.Origin == nil {
+		return true // pre-v2.1.19x: typed prompts carried no origin
+	}
+	kind, _ := e.Origin["kind"].(string)
+	return kind == "human"
 }
 
 // ToolResultDetail is the structured per-tool result emitted at envelope
