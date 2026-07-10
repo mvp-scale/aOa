@@ -166,6 +166,10 @@ type GraphEdge struct {
 	Count int    `json:"count,omitempty"` // unit grain: aggregated import count
 	File  string `json:"file,omitempty"`  // G7: source file for this edge
 	Line  uint32 `json:"line,omitempty"`  // G7: import statement line
+	// Prov marks non-import edges. Empty = import-derived (REAL, file:line-stamped).
+	// "mixed" = learned affinity (a dedup-elected term→domain cohit binding two
+	// units the import graph does not connect) — inference-grade, no file:line.
+	Prov string `json:"prov,omitempty"`
 }
 
 // GraphPayload is the substrate knowledge graph response for /api/arch/graph.

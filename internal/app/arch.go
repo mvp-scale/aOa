@@ -619,10 +619,22 @@ func (q *archQuerier) Graph(scope string, grain string) ([]byte, error) {
 	needUnitGrain := grain == "unit" || len(edges) > edgeBudget
 
 	var idx *ports.Index
+	// Seam C: a rev-pinned snapshot of the learner's dedup-elected term→domain
+	// affinities, read under the same App.mu as the index clone. Off the O(1) search
+	// hot path; feeds MIXED-provenance learned edges into the unit-grain graph only.
+	var cohitSnap map[string]uint32
 	if needUnitGrain {
 		// MUST Clone: q.app.Index is live; Reindex/WarmCaches write it under mu.
 		q.app.mu.Lock()
 		idx = q.app.Index.Clone()
+		if q.app.Learner != nil {
+			if st := q.app.Learner.State(); st != nil && len(st.CohitTermDomain) > 0 {
+				cohitSnap = make(map[string]uint32, len(st.CohitTermDomain))
+				for k, v := range st.CohitTermDomain {
+					cohitSnap[k] = v
+				}
+			}
+		}
 		q.app.mu.Unlock()
 
 		// D: Derive file-level domains at Graph() time using the same deterministic
@@ -645,7 +657,52 @@ func (q *archQuerier) Graph(scope string, grain string) ([]byte, error) {
 		downgraded = fmt.Sprintf("file→unit (%d edges over budget)", len(edges))
 	}
 	payload := BuildGraphPayload(edges, idx, rev, grain, downgraded)
+	payload = mergeLearnedEdges(payload, idx, cohitSnap)
 	return json.Marshal(payload)
+}
+
+// mergeLearnedEdges folds Seam-C learned affinity edges into a unit-grain payload,
+// skipping any that duplicate an import edge (the import graph "already shows" it)
+// and any whose endpoints are not both real nodes. The merged edge slice is
+// re-sorted for byte-determinism. No-op when there is no learned signal.
+func mergeLearnedEdges(payload ports.GraphPayload, idx *ports.Index, cohitTermDomain map[string]uint32) ports.GraphPayload {
+	if idx == nil || len(cohitTermDomain) == 0 {
+		return payload
+	}
+	learned := learnedAffinityEdges(idx, cohitTermDomain)
+	if len(learned) == 0 {
+		return payload
+	}
+
+	nodeIDs := make(map[string]bool, len(payload.Nodes))
+	for _, n := range payload.Nodes {
+		nodeIDs[n.ID] = true
+	}
+	importPair := make(map[[2]string]bool, len(payload.Edges))
+	for _, e := range payload.Edges {
+		importPair[[2]string{e.From, e.To}] = true
+	}
+
+	for _, le := range learned {
+		if !nodeIDs[le.From] || !nodeIDs[le.To] {
+			continue // both endpoints must be real graph nodes
+		}
+		if importPair[[2]string{le.From, le.To}] || importPair[[2]string{le.To, le.From}] {
+			continue // the import graph already shows this relationship
+		}
+		payload.Edges = append(payload.Edges, le)
+	}
+
+	sort.Slice(payload.Edges, func(i, j int) bool {
+		if payload.Edges[i].From != payload.Edges[j].From {
+			return payload.Edges[i].From < payload.Edges[j].From
+		}
+		if payload.Edges[i].To != payload.Edges[j].To {
+			return payload.Edges[i].To < payload.Edges[j].To
+		}
+		return payload.Edges[i].Prov < payload.Edges[j].Prov
+	})
+	return payload
 }
 
 // BuildGraphPayload assembles a ports.GraphPayload from raw import edges.
@@ -653,6 +710,99 @@ func (q *archQuerier) Graph(scope string, grain string) ([]byte, error) {
 // grain="unit": package-directory aggregation (idx may be nil).
 // downgraded carries the server-side SIZE GUARD message when non-empty.
 // Exported so cliArchQuerier (cmd/aoa) can call it without duplicating logic.
+// learnedAffinityEdges derives MIXED-provenance graph edges from the learner's
+// dedup-elected term→domain affinities (Seam C — the linkage that turns accumulated
+// cohits into substrate). For each cohit "term:domain" that dedup has elected as a
+// project-specific winner, it binds the unit(s) that CONTAIN the term (a symbol whose
+// Tags include the term) to the unit(s) that CARRY the domain (FileMeta.Domain ==
+// "@domain"), when the import graph does not already connect them. These edges are
+// inference-grade (Prov="mixed"), never REAL — off the O(1) search hot path.
+//
+// learnedAffinityMinCohit gates the join to dedup-scale affinities only (aligned
+// with learner.DedupMinTotal). Below this, a term→domain pairing is noise, not a
+// project-specific winner, and must not shape the substrate.
+const learnedAffinityMinCohit = 100
+
+func learnedAffinityEdges(idx *ports.Index, cohitTermDomain map[string]uint32) []ports.GraphEdge {
+	if idx == nil || len(cohitTermDomain) == 0 {
+		return nil
+	}
+
+	// domain (bare, no "@") → set of units that carry it (FileMeta.Domain).
+	domainUnits := make(map[string]map[string]bool)
+	for _, fm := range idx.Files {
+		if fm == nil || fm.Domain == "" {
+			continue
+		}
+		u := unitSlug(filepath.Dir(fm.Path))
+		d := strings.TrimPrefix(fm.Domain, "@")
+		if domainUnits[d] == nil {
+			domainUnits[d] = make(map[string]bool)
+		}
+		domainUnits[d][u] = true
+	}
+
+	// term → set of units that contain it (a symbol whose Tags include the term).
+	termUnits := make(map[string]map[string]bool)
+	for ref, meta := range idx.Metadata {
+		if meta == nil || len(meta.Tags) == 0 {
+			continue
+		}
+		fm := idx.Files[ref.FileID]
+		if fm == nil {
+			continue
+		}
+		u := unitSlug(filepath.Dir(fm.Path))
+		for _, term := range meta.Tags {
+			if termUnits[term] == nil {
+				termUnits[term] = make(map[string]bool)
+			}
+			termUnits[term][u] = true
+		}
+	}
+
+	// For each dedup-scale cohit term:domain, bind term-owning units → domain-carrying
+	// units. Dedup edges to a stable, deterministic set.
+	seen := make(map[[2]string]bool)
+	var out []ports.GraphEdge
+	for key, count := range cohitTermDomain {
+		if count < learnedAffinityMinCohit {
+			continue
+		}
+		i := strings.Index(key, ":")
+		if i <= 0 || i >= len(key)-1 {
+			continue
+		}
+		term, domain := key[:i], key[i+1:]
+		froms := termUnits[term]
+		tos := domainUnits[domain]
+		if len(froms) == 0 || len(tos) == 0 {
+			continue
+		}
+		for from := range froms {
+			for to := range tos {
+				if from == to {
+					continue // within-unit affinity is not an edge
+				}
+				k := [2]string{from, to}
+				if seen[k] {
+					continue
+				}
+				seen[k] = true
+				out = append(out, ports.GraphEdge{From: from, To: to, Prov: "mixed"})
+			}
+		}
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].From != out[j].From {
+			return out[i].From < out[j].From
+		}
+		return out[i].To < out[j].To
+	})
+	return out
+}
+
 func BuildGraphPayload(edges []ports.ImportEdge, idx *ports.Index, rev, grain, downgraded string) ports.GraphPayload {
 	if grain == "unit" || downgraded != "" {
 		return buildUnitGrainGraph(edges, idx, rev, downgraded)
