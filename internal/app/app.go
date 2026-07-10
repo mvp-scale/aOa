@@ -1774,6 +1774,13 @@ func (a *App) onSessionEvent(ev ports.SessionEvent) {
 			tb := a.ensureTurnBuilder(ev.TurnID, ts, ev.Model)
 			tb.DurationMs = ev.DurationMs
 		}
+		// M1.1: AwaySummary (resume-summary text) is a labeled-valuable intent signal.
+		// Route it through the same funnel AIThinking/AIResponse use — observe=false so
+		// it never bumps promptN or fires autotune off-cadence.
+		if ev.AwaySummary != "" {
+			a.Learner.ProcessBigrams(ev.AwaySummary)
+			a.processConversationSignal(ev.AwaySummary, false)
+		}
 	}
 
 	a.mu.Unlock() // explicit unlock — IO follows
