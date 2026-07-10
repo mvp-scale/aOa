@@ -723,7 +723,41 @@ func mergeLearnedEdges(payload ports.GraphPayload, idx *ports.Index, cohitTermDo
 // project-specific winner, and must not shape the substrate.
 const learnedAffinityMinCohit = 100
 
+// learnedAffinityMaxUnitFraction is the "commonplace → useless" cutoff, relocating
+// the disabled autotune Step 1 (term in >30% of indexed files = noise) to the join,
+// which owns idx. A term that tags MORE than this fraction of the project's units
+// carries no discriminating signal (TF-IDF intuition) and mints no learned edges,
+// regardless of cohit strength. 0.30 mirrors Step 1's original threshold; tune via
+// the sandbox sweep.
+const learnedAffinityMaxUnitFraction = 0.30
+
+// learnedAffinityMinUnitsForCommonplace guards the fraction filter against the
+// small-denominator problem: in a tiny project every term looks "common" (1 of 3
+// units = 33%). Below this many units there isn't enough spread to call anything
+// commonplace, so the filter is not applied. Tunable via the sandbox sweep.
+const learnedAffinityMinUnitsForCommonplace = 5
+
+// affinityThresholds are the tunable knobs of the join, exposed so the sandbox can
+// sweep them and define the right values against real/synthetic data.
+type affinityThresholds struct {
+	MinCohit               uint32  // dedup-scale floor on the winner cohit
+	MaxUnitFraction        float64 // commonplace cutoff (term spread across units)
+	MinUnitsForCommonplace int     // small-denominator guard for the fraction filter
+}
+
+func defaultAffinityThresholds() affinityThresholds {
+	return affinityThresholds{
+		MinCohit:               learnedAffinityMinCohit,
+		MaxUnitFraction:        learnedAffinityMaxUnitFraction,
+		MinUnitsForCommonplace: learnedAffinityMinUnitsForCommonplace,
+	}
+}
+
 func learnedAffinityEdges(idx *ports.Index, cohitTermDomain map[string]uint32) []ports.GraphEdge {
+	return learnedAffinityEdgesTuned(idx, cohitTermDomain, defaultAffinityThresholds())
+}
+
+func learnedAffinityEdgesTuned(idx *ports.Index, cohitTermDomain map[string]uint32, thr affinityThresholds) []ports.GraphEdge {
 	if idx == nil || len(cohitTermDomain) == 0 {
 		return nil
 	}
@@ -761,12 +795,22 @@ func learnedAffinityEdges(idx *ports.Index, cohitTermDomain map[string]uint32) [
 		}
 	}
 
+	// Total distinct units — the denominator for the commonplace ("too spread to be
+	// a signal") filter that stands in for the disabled autotune Step 1.
+	allUnits := make(map[string]bool)
+	for _, fm := range idx.Files {
+		if fm != nil {
+			allUnits[unitSlug(filepath.Dir(fm.Path))] = true
+		}
+	}
+	totalUnits := len(allUnits)
+
 	// For each dedup-scale cohit term:domain, bind term-owning units → domain-carrying
 	// units. Dedup edges to a stable, deterministic set.
 	seen := make(map[[2]string]bool)
 	var out []ports.GraphEdge
 	for key, count := range cohitTermDomain {
-		if count < learnedAffinityMinCohit {
+		if count < thr.MinCohit {
 			continue
 		}
 		i := strings.Index(key, ":")
@@ -777,6 +821,13 @@ func learnedAffinityEdges(idx *ports.Index, cohitTermDomain map[string]uint32) [
 		froms := termUnits[term]
 		tos := domainUnits[domain]
 		if len(froms) == 0 || len(tos) == 0 {
+			continue
+		}
+		// Commonplace filter (relocated Step 1): a term spread across too large a
+		// fraction of units is noise, not signal — skip it entirely. Only applied
+		// once there are enough units for the fraction to mean something.
+		if totalUnits >= thr.MinUnitsForCommonplace &&
+			float64(len(froms))/float64(totalUnits) > thr.MaxUnitFraction {
 			continue
 		}
 		for from := range froms {
