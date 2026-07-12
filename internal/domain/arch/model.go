@@ -37,6 +37,10 @@ type DepFact struct {
 	Count    int    // number of import statements backing this edge
 	File     string // G7: representative file containing an import
 	Line     uint32 // G7: representative line
+	// Kind is the ontology concept token for this edge (e.g. "imports", "calls").
+	// Additive; zero-value "" is treated as "imports" for backward compatibility.
+	// TODO: not persistence-migration-safe yet (bbolt buckets predate this field).
+	Kind string `json:"kind,omitempty"`
 }
 
 // Prov records provenance of a shard.
