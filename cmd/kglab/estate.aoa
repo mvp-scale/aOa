@@ -1,0 +1,26 @@
+# estate.aoa — the AUTHORING STRUCTURE (what a human writes)
+# This declares the TARGET architecture for the sample graph.
+# Read it top-to-bottom: name, which view to render, and the allowed edges.
+
+estate sample
+
+view component            # how to see it: component | dsm | cycles
+
+# TARGET — the edges that SHOULD exist (the "where-we-need-to-be").
+# Anything in the real code that is NOT allowed here shows up as a VIOLATION.
+allow  m_cmd_aoa        -> m_app
+allow  m_cmd_aoa        -> m_adapters_socket
+allow  m_app            -> m_domain_searcher
+allow  m_app            -> m_domain_indexer
+allow  m_app            -> m_adapters_bbolt
+allow  m_app            -> m_ports_storage
+allow  m_domain_searcher-> m_ports_storage
+allow  m_domain_indexer -> m_ports_storage
+allow  m_adapters_bbolt -> m_ports_storage
+allow  m_adapters_socket-> m_ports_storage
+allow  m_cmd_aoa        -> m_ports_storage   # declared, but not built yet -> MISSING
+
+# The 3 domain cycle edges are deliberately NOT allowed -> they will VIOLATE:
+forbid m_domain_searcher -> m_domain_learner   # no cycles in domain
+forbid m_domain_learner  -> m_domain_enricher
+forbid m_domain_enricher -> m_domain_searcher
