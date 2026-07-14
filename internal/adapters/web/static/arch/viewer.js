@@ -193,7 +193,7 @@ const ElkEdge=memo(function ElkEdge({id,data,style,markerEnd}){
         color:T.text,pointerEvents:"all",zIndex:5,cursor:"pointer"}}>${data.label.text}
         ${m?html`<${HoverCard} title=${m.s+" → "+m.t}
           rows=${[["flow",m.verb],["volume",m.count?"×"+m.count:""],[m.tag?"violation":"",m.tag||""]]}
-          hint="click → relation detail"/>`:null}
+          hint="click to inspect"/>`:null}
       </div>
     <//>`:null}
   <//>`;});
@@ -257,7 +257,7 @@ function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting
   // map, not a wall of red.
   const sf=data._showFindings;
   const god=sf&&data._god,dead=sf&&data._dead,cyc=sf&&data._cyc,over=sf&&data._over;
-  return html`<div style=${{width:"100%",height:"100%",
+  return html`<div class=${hvc(data.id)} style=${{width:"100%",height:"100%",
     background:fromCapsule?c+"2a":T.band,
     border:`${fromCapsule?"4px":"1.5px"} ${dash?"dashed":"solid"} ${god?T.red:c}`,
     borderRadius:fromCapsule?8:4,boxSizing:"border-box",
@@ -277,6 +277,7 @@ function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting
       <span style=${{marginLeft:"auto",fontSize:10.5,color:fromCapsule?c:T.dim,fontWeight:fromCapsule?700:400}}>${data.members.length}${fromCapsule?" members":""}</span>
       ${fromCapsule?html`<span title="collapse" style=${{fontSize:12,color:c,marginLeft:6,fontWeight:700}}>▴</span>`:null}
     </div>
+    <${HoverCard} title=${data.label} rows=${[["members",data.members.length]]} hint="click to inspect"/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function SoloNode({data}){const c=data.col;const dash=data.layer==="supporting";
@@ -289,7 +290,7 @@ function SoloNode({data}){const c=data.col;const dash=data.layer==="supporting";
       <span style=${{fontSize:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:1.1,whiteSpace:"nowrap"}}>${data.label}</span>
       <span style=${{fontSize:12.5,fontWeight:600,marginLeft:6,whiteSpace:"nowrap"}}>${data.member.label}</span>
     </div>
-    <${HoverCard} title=${data.member.label} rows=${data.member.stats?Object.entries(data.member.stats):[["layer",data.label],["detail",data.member.sub]]} hint="click → details"/>
+    <${HoverCard} title=${data.member.label} rows=${data.member.stats?Object.entries(data.member.stats):[["layer",data.label],["detail",data.member.sub]]} hint="click to inspect"/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function MemberNode({data}){const c=data.col;
@@ -308,7 +309,7 @@ function MemberNode({data}){const c=data.col;
     </div>
     <${HoverCard} title=${data.label} rows=${(data.stats?Object.entries(data.stats):[["detail",data.sub]]).concat([
       [data.concerns?"findings":"",data.concerns?data.concerns+" recon findings":""],
-      [data.changed?"recent":"",data.changed?"touched in last 15 commits":""]])} hint="click → details"/>
+      [data.changed?"recent":"",data.changed?"touched in last 15 commits":""]])} hint="click to inspect"/>
   </div>`;}
 function TableView({view,onSel,selId,vid}){
   // row click = select: the dock shows the full record (long prose cells live there untruncated)
@@ -688,7 +689,8 @@ function CapsuleNode({data}){
   if(data.expanded){
     return html`<${BucketNode} data=${data}/>`;
   }
-  return html`<div style=${{width:"100%",height:"100%",background:T.band,
+  const cnt=data.memberCount!==undefined?data.memberCount:data.members&&data.members.length||0;
+  return html`<div class=${hvc(data.id)} style=${{width:"100%",height:"100%",background:T.band,
     border:`1.5px ${dash?"dashed":"solid"} ${ext?T.mute:c}`,borderRadius:4,boxSizing:"border-box",
     cursor:"pointer",display:"flex",alignItems:"center",gap:7,padding:"7px 12px",
     boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none"}}>
@@ -697,8 +699,9 @@ function CapsuleNode({data}){
     <span style=${{fontSize:11,fontWeight:700,color:ext?T.mute:c,textTransform:"uppercase",letterSpacing:1.1,
       whiteSpace:"nowrap",flex:1,overflow:"hidden",textOverflow:"ellipsis"}}>${data.label}</span>
     <span style=${{fontSize:10.5,fontWeight:700,color:ext?T.mute:T.dim,flexShrink:0,
-      background:T.chrome,borderRadius:8,padding:"1px 6px"}}>${data.memberCount!==undefined?data.memberCount:data.members&&data.members.length||0}</span>
+      background:T.chrome,borderRadius:8,padding:"1px 6px"}}>${cnt}</span>
     <span style=${{fontSize:9,color:T.mute,flexShrink:0}}>▸</span>
+    <${HoverCard} title=${data.label} rows=${[["members",cnt]]} hint="click to inspect"/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function labelSpacers(laidById){const sp=[];let i=0;
@@ -992,6 +995,12 @@ function findingsClause(view,probs){
   const tag=(view.edges||[]).find(e=>e.tag);
   return tag?` · ⚠ ${tag.tag}: ${(tag.label||"").slice(0,48)}`
     :(probs&&probs.length?` · ⚠ ${probs.length} finding${probs.length>1?"s":""}`:"");}
+// Dock SELECTION empty-state text (calm default, THE FIX §"ambient cue"): canvas views
+// (buckets/simple) get the map's invitation; table/matrix keep their cell/row-header text
+// since those views have no clickable canvas elements.
+const emptySelText=view=>(view.kind==="buckets"||view.kind==="simple")
+  ?"click any element to inspect →"
+  :"click a cell to inspect · click a row header to expand";
 function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows,showFindings}){
   const VI=VIEW_INTENT[vid]||null;
   // A3 calm default: the caption is calm by itself; the ⚠ findings tail is appended here, the
@@ -1015,7 +1024,7 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows,
       </div>
       <div style=${{flex:1,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,overflow:"hidden"}}>
         <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.text,flexShrink:0}}>SELECTION</span>
-        <span style=${{fontSize:10.5,color:sel?T.text:T.mute,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${sel?sel.label:"click a cell to inspect · click a row header to expand"}</span>
+        <span style=${{fontSize:10.5,color:sel?T.text:T.mute,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${sel?sel.label:emptySelText(view)}</span>
       </div>
       ${showFindings?html`<div style=${{flex:.6,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,
         background:probs.length?"#f8717110":"transparent"}}>
@@ -1073,7 +1082,7 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows,
           </div>
           <div style=${{fontSize:9.5,color:T.mute,marginTop:4}}>⧉ copies a command your agent can run — facts, derive, or read at file:line.</div>
         </div>`:null}
-      <//>`:html`<div style=${{color:T.mute,fontSize:11,marginTop:28,textAlign:"center"}}>none — click an element or edge</div>`}
+      <//>`:html`<div style=${{color:T.mute,fontSize:11,marginTop:28,textAlign:"center"}}>${emptySelText(view)}</div>`}
     <//>
     ${showFindings?html`<${Seg} title=${"FINDINGS · "+probs.length} col=${probs.length?T.red:T.mute} flex=${1}
       wash=${probs.length?"#f8717108":null}>
@@ -1470,6 +1479,11 @@ function Flow(){
   const[last,setLast]=useState({});
   const[autoDir,setAutoDir]=useState(null);
   const dir=dirOv||autoDir||"DOWN";
+  // A capsule click both selects the group AND expands it (toggleCapsule below). Expanding
+  // flips expandedGroups, a dep of this effect, which unconditionally wipes sel/selId on ANY
+  // dep change (view change clears selection) — including this one. Stash the record here so
+  // it can be re-applied once the relayout below finishes and the group re-renders expanded.
+  const pendingCapsuleSel=React.useRef(null);
   useEffect(()=>{let on=true;const d=SP[den];
     setEls(null);setSelRaw(null);setSelId(null);   // view change clears selection but PRESERVES dock expansion; remount canvas with the new layout
     const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov,{capsuleMode:true,expandedGroups,showFindings}):layoutSimple(view,dd,d,showFindings);
@@ -1502,7 +1516,10 @@ function Flow(){
       if(dirOv){e=await run(dirOv);dd=dirOv;}
       else{const a=await run("DOWN"),b=await run("RIGHT");
         if(fitScale(a)>=fitScale(b)){e=a;dd="DOWN";}else{e=b;dd="RIGHT";}}
-      if(on){setEls(e);setAutoDir(dd);setLast(l=>({...l,[estate+":"+scope+":"+level]:Date.now()}));}
+      if(on){setEls(e);setAutoDir(dd);setLast(l=>({...l,[estate+":"+scope+":"+level]:Date.now()}));
+        const pr=pendingCapsuleSel.current;
+        if(pr){pendingCapsuleSel.current=null;
+          if(e.nodes&&e.nodes.some(nd=>nd.id===pr.id))select(pr.rec,pr.id);}}
     }catch(err){showFatal("VIEW LOAD FAILED · "+(err&&err.message||err));}})();
     return()=>{on=false;};},[estate,scope,level,dirOv,den,ov,expandedGroups,showFindings]);
   // test hook: ?auto=<view>:<ms> simulates a user click after ms (verifies the CLICK path, not URL load)
@@ -1513,15 +1530,21 @@ function Flow(){
   const[sel,setSelRaw]=useState(null);
   const[selId,setSelId]=useState(null);
   const[expanded,setExpanded]=useState(false);
+  // Selecting a node/group highlights every edge touching it, both directions (owner-observed
+  // delight, gin's BINDING) — an edge is "connected" if it IS the clicked id, or its source/target
+  // is; clearing (id=null) never matches a real source/target so all edges de-highlight.
   const mark=id=>setEls(e=>{if(!e||!e.nodes)return e;let ch=false;
     const nodes=e.nodes.map(n=>{const want=n.id===id;
       if(!!n.data._sel===want)return n;ch=true;return {...n,data:{...n.data,_sel:want}};});
-    const edges=(e.edges||[]).map(ed=>{const want=ed.id===id;
+    const edges=(e.edges||[]).map(ed=>{const want=ed.id===id||ed.source===id||ed.target===id;
       if(!!(ed.data&&ed.data._sel)===want)return ed;ch=true;return {...ed,data:{...ed.data,_sel:want}};});
     return ch?{...e,nodes,edges}:e;});
   const select=useCallback((rec,id)=>{setSelRaw(rec);setSelId(rec?id:null);
     if(rec)setExpanded(true);mark(rec?id:null);},[]);
   const clearSel=useCallback(()=>select(null,null),[select]);
+  // pending selection: applied once the target view's elements are on screen
+  // (seeded by ?sel= for screenshots; driven by journey steps at runtime)
+  const[pendingSel,setPendingSel]=useState(q.get("sel"));
   const nameOf=useCallback(id2=>{if(view.kind==="buckets"){const b=(view.buckets||[]).find(x=>x.id===id2);if(b)return b.label;}
     const n2=(view.nodes||[]).find(x=>x.id===id2);return n2?n2.label:id2;},[view]);
   const relationsFor=useCallback(id2=>((view.edges||[]).filter(e=>e.source===id2||e.target===id2)
@@ -1531,25 +1554,37 @@ function Flow(){
   const onNodeClick=useCallback((_,n)=>{if(!n.data)return;
     if(n.data.drillTo){setLevel(n.data.drillTo);setDirOv(null);return;}
     if(n.type==="spacer")return;
-    // Capsule toggle: click expands/collapses the group (R5: in-place, no global relayout)
-    if(n.type==="capsule"&&isCapsuleView){toggleCapsule(n.id);return;}
     const d=n.data,m=(n.type==="solo"?d.member:d)||{};
     const rows=(m.stats?Object.entries(m.stats):[]).concat(m.sub?[["detail",m.sub]]:[]);
     if(d.layer||d.lay)rows.unshift(["layer",d.layer||d.lay]);
     if(d.tech)rows.push(["tech",d.tech]);
     if(m.concerns)rows.push(["findings",m.concerns+" recon findings"]);
     if(m.changed)rows.push(["recent","touched in last 15 commits"]);
-    const chip=n.type==="bucket"?"group":n.type==="entity"?"entity":n.type==="member"?"member":(ETYPE_NAME[d.type]||"element");
+    const isGroup=n.type==="bucket"||n.type==="capsule";
+    const chip=isGroup?"group":n.type==="entity"?"entity":n.type==="member"?"member":(ETYPE_NAME[d.type]||"element");
     // AGENT row: B1 — paths not unit IDs (Facts() substring-matches paths, not u_... IDs)
     let agent=null;
-    if(n.type==="bucket"||n.type==="solo"){
+    if(isGroup||n.type==="solo"){
       const path=(d.path||(d.id||"").replace(/^g_/,"").replace(/_/g,"/"));
       agent={cmd:"aoa arch facts "+path,path};}
     else if(n.type==="member"&&m.id){
       const path=(m.path||m.id.replace(/^[gu]_/,"").replace(/_/g,"/"));
       agent={cmd:"aoa tree "+path+" -d 2",path};}
-    select({label:m.label||d.label,chip,rows,relations:relationsFor(n.id),
-      members:n.type==="bucket"?(d.members||[]):null,agent},n.id);},[select,relationsFor,isCapsuleView]);
+    const rec={label:m.label||d.label,chip,rows,relations:relationsFor(n.id),
+      members:isGroup?(d.members||[]):null,agent};
+    select(rec,n.id);
+    // Capsule click SELECTS (ring + dock, same grammar as any other node) AND expands the
+    // group in place (R5: no global relayout) — the capsule surface IS the expand affordance,
+    // so both fire on the one click. toggleCapsule() flips expandedGroups, which is a dep of
+    // the view-layout effect above; that effect unconditionally clears sel/selId on ANY dep
+    // change (view change clears selection), wiping the select() call just made above. Stash
+    // the record in pendingCapsuleSel so the layout effect re-applies it once the relayout
+    // finishes and the group re-renders as an expanded "bucket" node with the same id (see the
+    // effect's on-complete branch above — NOT the generic pendingSel/?sel= mechanism, which
+    // fires eagerly on stale pre-relayout elements and would immediately re-toggle the capsule
+    // back closed).
+    if(n.type==="capsule"&&isCapsuleView){pendingCapsuleSel.current={id:n.id,rec};toggleCapsule(n.id);}
+  },[select,relationsFor,isCapsuleView,toggleCapsule]);
   const onEdgeClick=useCallback((_,ed)=>{const mt=ed.data&&ed.data.meta;if(!mt)return;
     const rows=[["from",mt.s],["to",mt.t]];
     if(mt.verb)rows.push(["flow",mt.verb]);
@@ -1560,9 +1595,6 @@ function Flow(){
     if(rev)rows.push(["mutual",mt.t+" → "+mt.s+(rev.count?" ×"+rev.count:"")+" — cycle"]);
     select({label:mt.s+" → "+mt.t,chip:mt.tag?"violation":"relation",rows,relations:[]},ed.id);},[select,view]);
   const onPaneClick=useCallback(()=>clearSel(),[clearSel]);
-  // pending selection: applied once the target view's elements are on screen
-  // (seeded by ?sel= for screenshots; driven by journey steps at runtime)
-  const[pendingSel,setPendingSel]=useState(q.get("sel"));
   useEffect(()=>{if(!pendingSel||!els||!els.nodes)return;
     const n=els.nodes.find(x=>x.id===pendingSel);
     if(n)onNodeClick(null,n);
