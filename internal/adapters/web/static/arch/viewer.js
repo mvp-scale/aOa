@@ -1280,7 +1280,7 @@ function Footer({view,ov}){
         ${it.ico?html`<${Ico} k=${it.ico} c=${it.c} s=${11}/>`:html`<b style=${{color:it.c||T.text,fontWeight:700}}>${it.glyph}</b>`}
         ${it.txt}</span>`)}
     <//>`)}
-    <span style=${{marginLeft:"auto",color:T.mute,flexShrink:0}}>generated ${MODEL.generated.timestamp} · always current</span>
+    <span style=${{marginLeft:"auto",color:T.mute,flexShrink:0}}>generated ${MODEL.generated.timestamp}</span>
   </div>`;}
 
 // The model catalog — industry-standard families, each item with render status:
@@ -1330,7 +1330,7 @@ const STATUS={live:{dot:"●",col:T.green,lbl:"derived live"},
               sim:{dot:"◌",col:T.yellow,lbl:"simulated · sourceable"},
               planned:{dot:"○",col:T.mute,lbl:"planned · extractor gated"}};
 
-const ago=t=>{const s=(Date.now()-t)/1000;return s<5?"now":s<60?Math.floor(s)+"s ago":Math.floor(s/60)+"m ago";};
+const ago=t=>{const s=(Date.now()-t)/1000;return s<5?"now":s<60?Math.floor(s)+"s ago":s<3600?Math.floor(s/60)+"m ago":Math.floor(s/3600)+"h ago";};
 // narrateOne: converts a Finding to a plain-language headline per §4.2 patterns.
 // rank=0 (top finding) gets full sentence; higher ranks get shorter diagnostics.
 function narrateOne(f,rank){
@@ -1538,6 +1538,11 @@ function Flow(){
   const[dirOv,setDirOv]=useState(q.get("dir")||null);
   const[den,setDen]=useState(q.get("density")||"compact");
   const[els,setEls]=useState(null);
+  // A6: freshness chip reads MODEL.generated live (module-scope MODEL is reassigned + re-rendered
+  // by the manifest poll below), so no threading is needed — this tick JUST forces a re-render
+  // between polls so the displayed age advances (12s ago → 1m ago → 1h ago) instead of freezing.
+  const[,setGenTick]=useState(0);
+  useEffect(()=>{const iv=setInterval(()=>setGenTick(t=>t+1),30000);return()=>clearInterval(iv);},[]);
   const SC=ESTATES[estate].scopes;
   const sys=SC[scope]||SC[firstScope(estate)];
   const view=sys.views[level]||sys.views[Object.keys(sys.views)[0]]||null;
@@ -1815,6 +1820,19 @@ function Flow(){
   // outline (never the alarm red the findings themselves use), so the toolbar itself never shouts.
   const rbtn=a=>({background:"transparent",border:`1px solid ${a?T.dim:T.border}`,
     color:a?T.text:T.mute,borderRadius:7,padding:"5px 11px",fontSize:12,cursor:"pointer",fontWeight:550});
+  // A6: goal-line — the one question this view answers, at-a-glance (dock VIEW segment keeps the
+  // full question+caption; header shows question only — owner ruling: no empty placeholders).
+  const VI=VIEW_INTENT[level]||null;
+  // A6: LIVE freshness chip — honest "code as of <age>" reusing the same generated.timestamp the
+  // footer already carries (serve-time, injected fresh on every 200 poll response). Green dot only
+  // under ~2 minutes old; otherwise neutral — never a fake "live" claim (owner ruling).
+  // Server emits "YYYY-MM-DD HH:MM:SS UTC" (arch_handler.go time.Now().UTC().Format), which sits
+  // outside the ECMA-262-guaranteed ISO 8601 subset — normalize to a strict ISO string
+  // ("YYYY-MM-DDTHH:MM:SSZ") before parsing so freshness works on every engine, not just V8.
+  const genTs=(MODEL.generated&&MODEL.generated.timestamp)||"";
+  const genIso=genTs.replace(" ","T").replace(/ ?UTC$/,"Z");
+  const genMs=Date.parse(genIso);
+  const genFresh=Number.isFinite(genMs)&&(Date.now()-genMs)<120000;
   return html`<div style=${{height:"100vh",display:"flex",flexDirection:"column",background:T.bg,
     font:"13px -apple-system,Segoe UI,Inter,Roboto,sans-serif",color:T.text}}>
     ${!EMBED&&html`<div style=${{padding:"9px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10,background:T.chrome}}>
@@ -1828,10 +1846,15 @@ function Flow(){
         <span style=${{fontSize:12.5,color:T.blue,fontWeight:650,whiteSpace:"nowrap"}}>${sys.label}</span>
         <span style=${{color:T.mute}}>▸</span>
         <span title=${view.title} style=${{fontSize:12.5,color:T.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${view.title}</span>
+        ${VI&&VI.question?html`<span title=${VI.question} style=${{fontSize:11,color:T.mute,whiteSpace:"nowrap",
+          overflow:"hidden",textOverflow:"ellipsis",flexShrink:2,minWidth:0}}>${VI.question}</span>`:null}
         ${view.prov?html`<span title=${view.prov.label} style=${(pk=>({fontSize:9,fontWeight:700,letterSpacing:.5,whiteSpace:"nowrap",cursor:"help",flexShrink:0,
           color:pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan,
           border:`1px solid ${pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan}`,
           borderRadius:5,padding:"1px 7px"}))(view.prov.kind)}>${view.prov.kind==="derived"?"REAL":view.prov.kind==="simulated"?"SIMULATED":"MIXED"}</span>`:null}
+        ${Number.isFinite(genMs)?html`<span title=${"generated "+MODEL.generated.timestamp} style=${{fontSize:9,fontWeight:700,letterSpacing:.5,whiteSpace:"nowrap",cursor:"help",flexShrink:0,
+          color:genFresh?T.green:T.mute,border:`1px solid ${genFresh?T.green:T.border}`,
+          borderRadius:5,padding:"1px 7px"}}>${genFresh?"● ":"○ "}current · code as of ${ago(genMs)}</span>`:null}
         ${showFindings&&els&&els.problems&&els.problems.length?html`<span title="Show findings"
           onClick=${()=>setExpanded(true)}
           style=${{fontSize:9.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:5,
