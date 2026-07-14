@@ -43,11 +43,11 @@ const T={bg:"#0a0a0c",chrome:"#121215",raise:"#18181b",card:"#161618",cardH:"#20
  dim:"#8b8b96",mute:"#55555f",green:"#34d399",blue:"#60a5fa",purple:"#c084fc",cyan:"#22d3ee",
  yellow:"#fbbf24",red:"#f87171",arch:"#fb923c",neutral:"#94a3b8"};
 let PALETTES={
- aoa:{cmd:T.purple,app:T.blue,adapters:T.arch,domain:T.green,ports:T.red,atlas:T.cyan,supporting:T.neutral},
- gf:{cli:T.purple,serve:T.blue,ingest:T.cyan,pipeline:T.green,render:T.yellow,infra:T.arch,supporting:T.neutral},
+ aoa:{cmd:T.purple,app:T.blue,adapters:T.arch,domain:T.green,ports:T.dim,atlas:T.cyan,supporting:T.neutral},
+ gf:{cli:T.purple,serve:T.blue,ingest:T.cyan,pipeline:T.green,render:T.dim,infra:T.arch,supporting:T.neutral},
  dep:{dev:T.blue,ci:T.purple,registry:T.arch,user:T.green},
  retail:{order:T.arch,inventory:T.cyan,customer:T.purple,shared:T.neutral},
- mc:{aws:T.yellow,gcp:T.blue,shared:T.neutral}};
+ mc:{aws:T.arch,gcp:T.blue,shared:T.neutral}};
 let ESTATES=MODEL.estates; // L19.20: let — poll updates on 200 before re-render
 const firstScope=e=>Object.keys(ESTATES[e].scopes)[0];
 const firstView=(e,sc)=>Object.keys(ESTATES[e].scopes[sc].views)[0];
@@ -101,7 +101,8 @@ VIEW_INTENT=(_vs&&_vs.views)||{};
 // pull named palettes from view-standards if present (falls back to built-in)
 if(_vs&&_vs.global&&_vs.global.palette&&_vs.global.palette.named_palettes){
   const np=_vs.global.palette.named_palettes;
-  const CMAP={purple:T.purple,blue:T.blue,arch:T.arch,green:T.green,red:T.red,cyan:T.cyan,yellow:T.yellow,neutral:T.neutral,dim:T.dim};
+  // red/yellow are RESERVED (violations/warnings) — no palette entry may claim them.
+  const CMAP={purple:T.purple,blue:T.blue,arch:T.arch,green:T.green,cyan:T.cyan,neutral:T.neutral,dim:T.dim};
   Object.entries(np).forEach(([pid,pm])=>{PALETTES[pid]={};
     Object.entries(pm).forEach(([layer,cname])=>{PALETTES[pid][layer]=CMAP[cname]||T.neutral;});});}}
 catch(err){showFatal("STANDARDS LOAD FAILED · "+(err&&err.message||err));}
@@ -129,6 +130,25 @@ function dynamicCatalog(sv){
         status:(v.prov&&v.prov.kind==="simulated")?"sim":"live"};}
     return {label:it.label,status:"planned",note:it.note||"not yet derived for this system",vid0:(it.vid||[])[0]};})}));}
 const snap=v=>Math.round(v/8)*8;
+// ROLE_IP: the 6-role spine (roles.go roleFor(), LOCKED glossary v1) — industry-standard
+// glyphs (Lucide silhouettes hand-adapted from 24x24 to this file's 14x14/1.3-stroke house
+// style), checked FIRST so any role-stamped bucket/member renders its role's icon regardless
+// of legacy layer name. Never invented: hexagon=Lucide "hexagon", iface=Lucide "circle-dot"
+// (glossary's boundary/interface/lollipop-socket glyph — concentric rings read as a socket/port
+// at 14px; a literal lollipop-and-socket blobbed into an illegible smudge at this size), plug=
+// Lucide "plug", cylinder=Lucide "database", cloud=Lucide "cloud" (== legacy IP.ext, reused),
+// gear=Lucide "settings" cog (circle + 8 teeth, unlike legacy IP.supporting's plain dial).
+const ROLE_IP={
+ hexagon:'<polygon points="7,1.5 12,4.2 12,9.8 7,12.5 2,9.8 2,4.2" fill="none"/>',
+ iface:'<circle cx="7" cy="7" r="3.4" fill="none"/><circle cx="7" cy="7" r="1" fill="none"/>',
+ plug:'<line x1="5" y1="4.8" x2="5" y2="1.5"/><line x1="9" y1="4.8" x2="9" y2="1.5"/><path d="M3.3 4.8h7.4v2.7a3.7 3.7 0 0 1-3.7 3.7 3.7 3.7 0 0 1-3.7-3.7z" fill="none"/><line x1="7" y1="11.2" x2="7" y2="13.3"/>',
+ cylinder:'<ellipse cx="7" cy="3.5" rx="4" ry="1.6" fill="none"/><path d="M3 3.5v7a4 1.6 0 0 0 8 0v-7" fill="none"/><path d="M3 7a4 1.6 0 0 0 8 0" fill="none"/>',
+ cloud:'<path d="M4 10a2.2 2.2 0 0 1 .2-4.3 3 3 0 0 1 5.8-.4 2.2 2.2 0 0 1 .2 4.7z" fill="none"/>',
+ gear:'<circle cx="7" cy="7" r="2.9" fill="none"/><circle cx="7" cy="7" r="1.1" fill="none"/>'+
+  '<line x1="7" y1="2.4" x2="7" y2="3.7"/><line x1="7" y1="10.3" x2="7" y2="11.6"/>'+
+  '<line x1="2.4" y1="7" x2="3.7" y2="7"/><line x1="10.3" y1="7" x2="11.6" y2="7"/>'+
+  '<line x1="3.75" y1="3.75" x2="4.67" y2="4.67"/><line x1="10.25" y1="10.25" x2="9.33" y2="9.33"/>'+
+  '<line x1="10.25" y1="3.75" x2="9.33" y2="4.67"/><line x1="3.75" y1="10.25" x2="4.67" y2="9.33"/>'};
 const IP={
  cmd:'<polyline points="3,4 7,7 3,10" fill="none"/><line x1="7" y1="10" x2="11" y2="10"/>',
  app:'<circle cx="7" cy="7" r="2"/><circle cx="7" cy="2" r="1"/><circle cx="7" cy="12" r="1"/><circle cx="2" cy="7" r="1"/><circle cx="12" cy="7" r="1"/><line x1="7" y1="3" x2="7" y2="5"/><line x1="7" y1="9" x2="7" y2="11"/><line x1="3" y1="7" x2="5" y2="7"/><line x1="9" y1="7" x2="11" y2="7"/>',
@@ -154,7 +174,7 @@ const IP={
  proc:'<circle cx="7" cy="7" r="2"/>'};
 function Ico({k,c,s}){return html`<svg width=${s||16} height=${s||16} viewBox="0 0 14 14"
   stroke=${c} stroke-width="1.3" fill="none" style=${{flexShrink:0}}
-  dangerouslySetInnerHTML=${{__html:IP[k]||IP.supporting}}/>`;}
+  dangerouslySetInnerHTML=${{__html:ROLE_IP[k]||IP[k]||IP.supporting}}/>`;}
 
 const ElkEdge=memo(function ElkEdge({id,data,style,markerEnd}){
   if(!data||!data.section) return null;
@@ -667,7 +687,7 @@ function CapsuleNode({data}){
     cursor:"pointer",display:"flex",alignItems:"center",gap:7,padding:"7px 12px",
     boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
-    <${Ico} k=${ext?"ext":data.ico||data.layer} c=${ext?T.mute:c} s=${14}/>
+    <${Ico} k=${data.ico||data.layer} c=${ext?T.mute:c} s=${14}/>
     <span style=${{fontSize:11,fontWeight:700,color:ext?T.mute:c,textTransform:"uppercase",letterSpacing:1.1,
       whiteSpace:"nowrap",flex:1,overflow:"hidden",textOverflow:"ellipsis"}}>${data.label}</span>
     <span style=${{fontSize:10.5,fontWeight:700,color:ext?T.mute:T.dim,flexShrink:0,
@@ -740,18 +760,25 @@ async function layoutSimple(view,dir,d){
       return r;}),problems};}
 
 // Color is meaning: same layer name => same color, app-wide. Resolution order:
-// view palette -> canonical layer pin -> stable name hash. Red/yellow are RESERVED
-// (violations / warnings) and never appear in the rotation.
+// canonical role pin (always wins for the 6-role spine) -> view palette ->
+// stable name hash. Red/yellow are RESERVED (violations / warnings) and never
+// appear in the rotation.
 const CYCLE=[T.arch,T.cyan,T.purple,T.green,T.blue,T.neutral];
 const LAYER_PIN={core:T.blue,channel:T.purple,integration:T.arch,data:T.green,
   external:T.dim,supporting:T.neutral,platform:T.cyan,edge:T.cyan};
+// CANON_ROLES: the 6-role spine (roles.go roleFor()) — a palette must never
+// repaint these; only non-canonical/empty layers may fall back to a palette
+// entry or the hash probe.
+const CANON_ROLES=new Set(["core","edge","integration","data","external","supporting"]);
 const lhash=s=>{let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h;};
-// Per-view color map: palette/pinned names are absolute; hashed names probe to a free
-// color on collision so one view never shows two layers in the same color.
+// Per-view color map: canonical roles are absolute (LAYER_PIN); remaining
+// palette/pinned names are absolute; hashed names probe to a free color on
+// collision so one view never shows two layers in the same color.
 const viewLayerColors=view=>{const pal=PALETTES[view.palette||"aoa"]||{};
   const used=new Set(),map={};
   const layers=[...new Set((view.buckets||[]).map(b=>b.layer))];
-  layers.forEach(l=>{const c=pal[l]||LAYER_PIN[l];if(c){map[l]=c;used.add(c);}});
+  layers.forEach(l=>{const c=CANON_ROLES.has(l)?LAYER_PIN[l]:(pal[l]||LAYER_PIN[l]);
+    if(c){map[l]=c;used.add(c);}});
   layers.forEach(l=>{if(map[l])return;
     let i=lhash(l||"")%CYCLE.length,n=0;
     while(n<CYCLE.length&&used.has(CYCLE[i])){i=(i+1)%CYCLE.length;n++;}
@@ -765,7 +792,10 @@ function mergeExternalBuckets(buckets){
   const external=buckets.filter(b=>b.id.startsWith("g_ext_"));
   if(!external.length)return[buckets,null];
   const allExtMembers=external.flatMap(b=>b.members||[]);
-  const extCapsule={id:"g_EXTERNALS",layer:"supporting",boundary:true,
+  // Dominant-role icon (80/20): every folded bucket is already role="external" (roles.go),
+  // so the majority vote over member layers is unanimous — no new role-plumbing needed to
+  // support a real mixed-role vote; wire one in only if a future merge point mixes roles.
+  const extCapsule={id:"g_EXTERNALS",layer:"external",boundary:true,ico:"cloud",
     label:"EXTERNALS",members:allExtMembers,
     memberCount:allExtMembers.length,part:99,
     _external:true};
@@ -1024,22 +1054,37 @@ const ETYPE_NAME={sys:"system",ext:"external",container:"container",store:"store
 const ETYPE_COLR={sys:T.blue,ext:T.dim,container:T.arch,store:T.green,proc:T.blue};
 // In-context legend: pinned to the canvas corner so color meaning sits where you look.
 // Derived from what is actually on screen — same resolution the nodes use, by construction.
+// Collapse state persists across views/reloads (module-level cache + localStorage) — a reader
+// who dismisses it once shouldn't have it pop back open on the next view switch.
+let _legendCollapsed=(()=>{try{return localStorage.getItem("aoa:legendCollapsed")==="1";}catch{return false;}})();
 function CanvasLegend({view}){
+  const[collapsed,setCollapsed]=useState(_legendCollapsed);
   let items=[];
   if(view.kind==="buckets"){
     const seen=new Set();
     (view.buckets||[]).forEach(b=>{if(!seen.has(b.layer)){seen.add(b.layer);
-      items.push({txt:b.layer,c:layerColor(view,b.layer)});}});}
+      items.push({txt:b.layer,c:layerColor(view,b.layer),ico:b.ico});}});}
   else if(view.kind==="simple"){
     const seen=new Set();
     (view.nodes||[]).forEach(n=>{if(!seen.has(n.type)){seen.add(n.type);
       items.push({txt:ETYPE_NAME[n.type]||n.type,c:ETYPE_COLR[n.type]||T.dim});}});}
-  if(items.length<2)return null;
+  if(!items.length)return null;
+  // Buckets views deserve their legend even with a single role (R: house rulings); non-bucket
+  // (simple) views keep the old "not worth a legend for one color" bar.
+  if(view.kind!=="buckets"&&items.length<2)return null;
+  const toggle=()=>{const next=!collapsed;setCollapsed(next);_legendCollapsed=next;
+    try{localStorage.setItem("aoa:legendCollapsed",next?"1":"0");}catch{}};
+  if(collapsed)return html`<div onClick=${toggle} title="show legend" style=${{position:"absolute",top:10,right:14,
+    zIndex:6,width:22,height:22,borderRadius:11,background:"#18181bf0",border:`1px solid ${T.borderR}`,
+    display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:T.mute,fontSize:10}}>▸</div>`;
   return html`<div style=${{position:"absolute",top:10,right:14,zIndex:6,background:"#18181bf0",
-    border:`1px solid ${T.borderR}`,borderRadius:8,padding:"8px 13px",
+    border:`1px solid ${T.borderR}`,borderRadius:8,padding:"8px 22px 8px 13px",
     display:"flex",flexDirection:"column",gap:5}}>
-    ${items.map((it,i)=>html`<div key=${i} style=${{display:"flex",alignItems:"center",gap:8,fontSize:12,color:T.dim}}>
-      <span style=${{width:11,height:11,borderRadius:3,background:it.c+"30",border:`1.5px solid ${it.c}`,flexShrink:0}}></span>
+    <span onClick=${toggle} title="hide legend" style=${{position:"absolute",top:6,right:6,fontSize:10,
+      color:T.mute,cursor:"pointer",lineHeight:1}}>▾</span>
+    ${items.map((it,i)=>html`<div key=${i} style=${{display:"flex",alignItems:"center",gap:7,fontSize:12,color:T.dim}}>
+      <span style=${{width:9,height:9,borderRadius:2,background:it.c+"30",border:`1.5px solid ${it.c}`,flexShrink:0}}></span>
+      ${it.ico?html`<${Ico} k=${it.ico} c=${it.c} s=${12}/>`:null}
       ${it.txt}</div>`)}
   </div>`;}
 function Footer({view,ov}){

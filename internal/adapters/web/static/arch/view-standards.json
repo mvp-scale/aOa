@@ -24,7 +24,7 @@
     "hover_test": "the same question-test applies to the hover tier: supporting means it enhances the view's answer. Anything that does not belongs in drill or nowhere.",
     "hover_stats": "hover content is 3-4 NAMED stats per element ({\"stats\":{\"stores\":\"≈2,300\"}}), names a reader recognizes — never schema-speak like type/detail/status. Plain 'sub' is the legacy fallback.",
     "palette": {
-      "rule": "color is meaning: the same layer name gets the same color everywhere in the app. Resolution: view palette -> canonical pin -> stable name hash. Never assigned per-view by order of appearance.",
+      "rule": "color is meaning: the same layer name gets the same color everywhere in the app. Resolution: canonical role pin (always wins for the 6-role spine: core/edge/integration/data/external/supporting) -> view palette -> stable name hash. A palette must never repaint a canonical role. Never assigned per-view by order of appearance.",
       "canonical_layers": {
         "core": "blue",
         "channel": "purple",
@@ -41,11 +41,11 @@
       },
       "legend": "every diagram carries an in-context legend (canvas corner) mapping the colors actually on screen; the footer legend stays for edges and provenance",
       "named_palettes": {
-        "aoa": {"cmd":"purple","app":"blue","adapters":"arch","domain":"green","ports":"red","atlas":"cyan","supporting":"neutral"},
-        "gf": {"cli":"purple","serve":"blue","ingest":"cyan","pipeline":"green","render":"yellow","infra":"arch","supporting":"neutral"},
+        "aoa": {"cmd":"purple","app":"blue","adapters":"arch","domain":"green","ports":"dim","atlas":"cyan","supporting":"neutral"},
+        "gf": {"cli":"purple","serve":"blue","ingest":"cyan","pipeline":"green","render":"dim","infra":"arch","supporting":"neutral"},
         "dep": {"dev":"blue","ci":"purple","registry":"arch","user":"green"},
         "retail": {"order":"arch","inventory":"cyan","customer":"purple","shared":"neutral"},
-        "mc": {"aws":"yellow","gcp":"blue","shared":"neutral"}
+        "mc": {"aws":"arch","gcp":"blue","shared":"neutral"}
       }
     },
     "drill": "the bottom dock — three FIXED segments, always present: VIEW (the view's record: derived caption — the answer to its question — plus question · pass · source) | SELECTION (the clicked element/edge: stat table + relations table, violations first) | FINDINGS (diagnostics; selection-related rows highlight). Persistent: 26px collapsed bar <-> 208px expanded, never unmounts; view change clears selection but keeps expansion. The nav rail is navigation ONLY and never reflows.",

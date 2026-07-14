@@ -181,12 +181,13 @@ func runEgrepIndex(pattern string, useColor bool) error {
 		return err
 	}
 
-	if useSemanticFormat() {
+	switch {
+	case useSemanticFormat():
 		noColor := !useColor || !isStdoutTTY()
 		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, egrepNoFilename, noColor, pattern))
-	} else if isStdoutTTY() && useColor {
+	case isStdoutTTY() && useColor:
 		fmt.Print(formatSearchResult(result, opts.CountOnly, opts.Quiet, egrepNoFilename, false, pattern))
-	} else {
+	default:
 		fmt.Print(formatGrepCompat(result, egrepLineNumber, egrepNoFilename, egrepFilesMatch, egrepCountOnly, egrepQuiet))
 	}
 
