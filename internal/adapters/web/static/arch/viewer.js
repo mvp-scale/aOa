@@ -274,10 +274,11 @@ function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting
       ${cyc?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:4,padding:"0 4px"}}>⟳ CYCLE</span>`:null}
       ${dead?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>ORPHAN</span>`:null}
       ${over?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>${data._over} · COLLAPSED</span>`:null}
-      <span style=${{marginLeft:"auto",fontSize:10.5,color:fromCapsule?c:T.dim,fontWeight:fromCapsule?700:400}}>${data.members.length}${fromCapsule?" members":""}</span>
-      ${fromCapsule?html`<span title="collapse" style=${{fontSize:12,color:c,marginLeft:6,fontWeight:700}}>▴</span>`:null}
+      <span style=${{marginLeft:"auto",fontSize:10.5,color:fromCapsule?c:T.dim,fontWeight:fromCapsule?700:400}}>${(data._allMembers||data.members).length}${fromCapsule?" members":""}</span>
+      ${fromCapsule?html`<span data-expand-chip="1" title="collapse" style=${{fontSize:11,color:c,marginLeft:6,
+        fontWeight:700,border:`1px solid ${c}66`,borderRadius:4,padding:"1px 5px"}}>▴</span>`:null}
     </div>
-    <${HoverCard} title=${data.label} rows=${[["members",data.members.length]]} hint="click to inspect"/>
+    <${HoverCard} title=${data.label} rows=${[["members",(data._allMembers||data.members).length]]} hint="click to inspect"/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function SoloNode({data}){const c=data.col;const dash=data.layer==="supporting";
@@ -294,6 +295,12 @@ function SoloNode({data}){const c=data.col;const dash=data.layer==="supporting";
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function MemberNode({data}){const c=data.col;
+  // Decision 3 (A7 consensus): the fold row is a quiet placeholder, not a real member — no
+  // icon/badges, dashed border, centered — reads as "more exists here" not "another item".
+  if(data._foldMore){
+    return html`<div style=${{background:"transparent",border:`1px dashed ${T.border}`,borderRadius:6,
+      width:data.w,height:data.h,boxSizing:"border-box",color:T.mute,display:"flex",alignItems:"center",
+      justifyContent:"center",cursor:"pointer",fontSize:10.5,fontWeight:600}}>${data.label} ▾</div>`;}
   return html`<div class=${hvc(data.id)} style=${{background:T.card,border:`1px solid ${T.border}`,borderLeft:`3px solid ${c}`,
     borderRadius:6,padding:data.wrap?"4px 10px":"5px 10px",width:data.w,height:data.h,boxSizing:"border-box",color:T.text,
     display:"flex",alignItems:"center",cursor:"pointer",boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none"}}>
@@ -702,8 +709,9 @@ function CapsuleNode({data}){
       whiteSpace:"nowrap",flex:1,overflow:"hidden",textOverflow:"ellipsis"}}>${data.label}</span>
     <span style=${{fontSize:10.5,fontWeight:700,color:ext?T.mute:T.dim,flexShrink:0,
       background:T.chrome,borderRadius:8,padding:"1px 6px"}}>${cnt}</span>
-    <span style=${{fontSize:9,color:T.mute,flexShrink:0}}>▸</span>
-    <${HoverCard} title=${data.label} rows=${[["members",cnt]]} hint="click to inspect"/>
+    <span data-expand-chip="1" title="expand" style=${{fontSize:9,fontWeight:700,color:T.dim,flexShrink:0,
+      border:`1px solid ${T.border}`,borderRadius:4,padding:"1px 5px"}}>▸</span>
+    <${HoverCard} title=${data.label} rows=${[["members",cnt]]} hint="click to select · ▸ to expand"/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function labelSpacers(laidById){const sp=[];let i=0;
@@ -804,7 +812,14 @@ function mergeExternalBuckets(buckets){
   const internal=buckets.filter(b=>!b.id.startsWith("g_ext_"));
   const external=buckets.filter(b=>b.id.startsWith("g_ext_"));
   if(!external.length)return[buckets,null];
-  const allExtMembers=external.flatMap(b=>b.members||[]);
+  // Each g_ext_* bucket arrives Go-side sorted WITHIN itself (fan-in desc then label,
+  // render_component.go:53), but flatMap only concatenates bucket-by-bucket — it does NOT
+  // interleave by weight ACROSS the merge. Re-sort the merged list by the same "in N" fan-in
+  // label Go stamps on every member (A7 punch: load-bearing externals like std ×N must top
+  // EXTERNALS, not whichever bucket happened to sort first — e.g. collections/copy noise).
+  const finOf=m=>{const mm=/in (\d+)/.exec((m&&m.sub)||"");return mm?parseInt(mm[1],10):0;};
+  const allExtMembers=external.flatMap(b=>b.members||[])
+    .sort((a,b)=>finOf(b)-finOf(a)||String((a&&a.label)||"").localeCompare(String((b&&b.label)||"")));
   // Dominant-role icon (80/20): every folded bucket is already role="external" (roles.go),
   // so the majority vote over member layers is unanimous — no new role-plumbing needed to
   // support a real mixed-role vote; wire one in only if a future merge point mixes roles.
@@ -869,6 +884,30 @@ async function layoutBuckets(view,dir,d,ov,opts){
     elkEdges=sorted.slice(0,FIRST_PAINT_K);}
   B.forEach(b=>{if(!capsuleMode&&(b.members||[]).length>40){b._over=b.members.length;
     b.members=b.members.slice(0,23).concat([{id:b.id+"_more",label:"+"+(b._over-23)+" more…",sub:"over budget"}]);}});
+  // Decision 3 (A7 consensus): inside an EXPLICITLY expanded capsule group, render only the
+  // top-N members by weight — members already arrive Go-side ranked by fan-in desc
+  // (render_component.go), so this is a pure slice, no client-side re-ranking needed. Budgets:
+  // EXTERNALS (reference material) ~2, internal groups ~5-7. b._allMembers preserves the FULL
+  // ranked list so the dock's SELECTION segment can still show more than the canvas budget when
+  // the group (or its "+N more" fold row, via onNodeClick) is selected.
+  // A7 punch (regression lens): this must NEVER mutate the bucket object in place. view.buckets
+  // is a persistent reference reused across renders/toggles — in-place mutation left a
+  // collapse-after-expand permanently stuck showing the truncated count (CapsuleNode's badge)
+  // and corrupted the view's own caption() member total, because collapsing only flips
+  // expandedGroups and never restored the original members. Swap in a fresh copy (in B and
+  // bById) instead: the original bucket is untouched, so collapsing simply drops the copy and
+  // the next expand starts from the true, full member list again. This also makes the
+  // DOWN/RIGHT dual layout pass (fitScale trial) naturally idempotent — each call re-derives B
+  // from the still-pristine view.buckets, so no re-truncation guard is needed.
+  B.forEach((b,bi)=>{
+    if(!(capsuleMode&&expandedSet&&expandedSet.has(b.id)))return;
+    const budget=b._external?2:6;
+    const total=(b.members||[]).length;
+    if(total<=budget)return;
+    const nb={...b,_allMembers:b.members,
+      members:b.members.slice(0,budget).concat([{id:b.id+"_more",
+        label:"+"+(total-budget)+" more",sub:"",_foldMore:true,_parentId:b.id}])};
+    B[bi]=nb;bById[b.id]=nb;});
   B.forEach(b=>{
     // Capsule mode: collapsed buckets use header-only height; EXTERNALS capsule always collapsed
     if(capsuleMode&&!expandedSet.has(b.id)){
@@ -1096,7 +1135,7 @@ function BottomDock({vid,view,sel,selId,clearSel,probs,findings,onFindingClick,h
     ${children}</div>`;
   return html`<div style=${{borderTop:`1px solid ${T.border}`,background:T.raise,height:208,
     display:"flex",flexDirection:"column",flexShrink:0,position:"relative",boxShadow:"0 -6px 16px #0009"}}>
-    <div onClick=${()=>setExpanded(!expanded)}
+    <div onClick=${()=>setExpanded(sel?!expanded:false)}
       style=${{height:26,flexShrink:0,display:"flex",alignItems:"center",gap:0,cursor:"pointer",userSelect:"none",
         borderBottom:expanded?`1px solid ${T.border}`:"none",background:T.chrome}}>
       <div style=${{flex:1.4,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",overflow:"hidden"}}>
@@ -1108,7 +1147,11 @@ function BottomDock({vid,view,sel,selId,clearSel,probs,findings,onFindingClick,h
       </div>
       <div style=${{flex:1,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,overflow:"hidden"}}>
         <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.text,flexShrink:0}}>SELECTION</span>
-        <span style=${{fontSize:10.5,color:sel?T.text:T.mute,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${sel?sel.label:emptySelText(view)}</span>
+        ${sel
+          ?html`<span style=${{fontSize:10.5,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${sel.label}</span>`
+          // CTA as a pressable-looking chip (bordered, calm) — not plain gray hint text (owner flagged twice).
+          :html`<span style=${{fontSize:9.5,color:T.dim,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",
+            textOverflow:"ellipsis",border:`1px solid ${T.border}`,borderRadius:5,padding:"1px 8px"}}>${emptySelText(view)}</span>`}
       </div>
       ${showFindings?html`<div style=${{flex:.6,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,
         background:dockCount?"#f8717110":"transparent"}}>
@@ -1183,21 +1226,28 @@ function BottomDock({vid,view,sel,selId,clearSel,probs,findings,onFindingClick,h
           </div>
           <div style=${{fontSize:9.5,color:T.mute,marginTop:4}}>⧉ copies a command your agent can run — facts, derive, or read at file:line.</div>
         </div>`:null}
-      <//>`:html`<div style=${{color:T.mute,fontSize:11,marginTop:28,textAlign:"center"}}>${emptySelText(view)}</div>`}
+      <//>`:html`<div style=${{color:T.mute,fontSize:11,marginTop:28,textAlign:"center"}}>
+        <span style=${{fontSize:11,color:T.dim,fontWeight:600,border:`1px solid ${T.border}`,borderRadius:6,
+          padding:"5px 14px",display:"inline-block"}}>${emptySelText(view)}</span>
+      </div>`}
     <//>
     ${showFindings?html`<${Seg} title=${"FINDINGS · "+dockCount} col=${dockCount?T.red:T.mute} flex=${1}
       wash=${dockCount?"#f8717108":null}>
       ${sortedFindingRows
         ?(sortedFindingRows.length?sortedFindingRows.map((fr,i)=>{const m=rowSelected(fr.match);
+            // Punch (4): selected row gets its own accent — not just a background tint — so it
+            // stays distinguishable from every other (already-red-bordered) finding row.
             return html`<div key=${fr.finding.id||i} onClick=${()=>onFindingClick&&onFindingClick(fr.match)}
               style=${{fontSize:10.5,lineHeight:1.5,marginBottom:6,cursor:"pointer",
-                color:m?T.text:T.dim,borderLeft:`2px solid ${T.red}`,paddingLeft:9,
+                color:m?T.text:T.dim,borderLeft:`2px solid ${T.red}`,
+                borderRight:m?`3px solid ${T.blue}`:"3px solid transparent",paddingLeft:9,
                 background:m?T.cardH:"transparent"}}>
               <b style=${{color:T.red,fontWeight:700}}>${fr.finding.rule}</b> · ${fr.finding.message}
               <span style=${{color:T.mute}}> · ${fr.match.label}</span></div>`;})
           :html`<div style=${{color:T.green,fontSize:11}}>✓ no findings in this view</div>`)
         :(probs.length?sortedProbs.map((p,i)=>html`<div key=${i} style=${{fontSize:10.5,lineHeight:1.5,marginBottom:6,
-            color:hl(p)?T.text:T.dim,borderLeft:`2px solid ${T.red}`,paddingLeft:9,
+            color:hl(p)?T.text:T.dim,borderLeft:`2px solid ${T.red}`,
+            borderRight:hl(p)?`3px solid ${T.blue}`:"3px solid transparent",paddingLeft:9,
             background:hl(p)?T.cardH:"transparent"}}>${p}</div>`)
           :html`<div style=${{color:T.green,fontSize:11}}>✓ no findings in this view</div>`)}
     <//>`:null}
@@ -1600,7 +1650,10 @@ function Flow(){
   // it can be re-applied once the relayout below finishes and the group re-renders expanded.
   const pendingCapsuleSel=React.useRef(null);
   useEffect(()=>{let on=true;const d=SP[den];
-    setEls(null);setSelRaw(null);setSelId(null);setHighlightMemberId(null);   // view change clears selection but PRESERVES dock expansion; remount canvas with the new layout
+    // Decision 2 (A7 consensus, supersedes the old A5 note here): view change clears the
+    // selection AND collapses the dock — an expanded dock with no selection is exactly the
+    // "empty expanded panel" the house ruling forbids, so expansion cannot outlive its selection.
+    setEls(null);setSelRaw(null);setSelId(null);setHighlightMemberId(null);setExpanded(false);   // remount canvas with the new layout
     const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov,{capsuleMode:true,expandedGroups,showFindings}):layoutSimple(view,dd,d,showFindings);
     // Auto direction: lay out BOTH ways, keep whichever fits the viewport at the larger scale
     const fitScale=r=>{const xs=r.nodes.map(n=>n.position.x),ys=r.nodes.map(n=>n.position.y),
@@ -1655,13 +1708,21 @@ function Flow(){
   // delight, gin's BINDING) — an edge is "connected" if it IS the clicked id, or its source/target
   // is; clearing (id=null) never matches a real source/target so all edges de-highlight.
   const mark=id=>setEls(e=>{if(!e||!e.nodes)return e;let ch=false;
-    const nodes=e.nodes.map(n=>{const want=n.id===id;
+    // Decision 1 (A7 consensus): glow the clicked node AND its first-degree connections —
+    // both the touching edges (existing) and the NODES at their other end (new — a click used
+    // to only bold the edges, leaving the neighbor node visually unselected).
+    const neighbors=new Set();
+    if(id)(e.edges||[]).forEach(ed=>{if(ed.source===id)neighbors.add(ed.target);
+      if(ed.target===id)neighbors.add(ed.source);});
+    const nodes=e.nodes.map(n=>{const want=n.id===id||neighbors.has(n.id);
       if(!!n.data._sel===want)return n;ch=true;return {...n,data:{...n.data,_sel:want}};});
     const edges=(e.edges||[]).map(ed=>{const want=ed.id===id||ed.source===id||ed.target===id;
       if(!!(ed.data&&ed.data._sel)===want)return ed;ch=true;return {...ed,data:{...ed.data,_sel:want}};});
     return ch?{...e,nodes,edges}:e;});
+  // Decision 2 (A7 consensus): selecting always fills the dock, deselecting always settles it
+  // back to the 26px bar — symmetric, so an "empty expanded panel" can never rest on screen.
   const select=useCallback((rec,id)=>{setSelRaw(rec);setSelId(rec?id:null);
-    if(rec)setExpanded(true);mark(rec?id:null);},[]);
+    setExpanded(!!rec);mark(rec?id:null);},[]);
   const clearSel=useCallback(()=>{select(null,null);setHighlightMemberId(null);},[select]);
   // pending selection: applied once the target view's elements are on screen
   // (seeded by ?sel= for screenshots; driven by journey steps at runtime)
@@ -1672,8 +1733,16 @@ function Flow(){
     .map(e=>({dir:e.source===id2?"out":"in",peer:nameOf(e.source===id2?e.target:e.source),
       verb:e.label||"",count:e.count,viol:!!(e.tag||e._viol)}))
     .sort((a,b)=>(b.viol?1:0)-(a.viol?1:0))),[view,nameOf]);
-  const onNodeClick=useCallback((_,n)=>{if(!n.data)return;
+  const onNodeClick=useCallback((ev,n)=>{if(!n.data)return;
     if(n.type==="spacer")return;
+    // Decision 3 (A7 consensus): the "+N more" fold row is a placeholder, not a real member —
+    // clicking it reveals the rest by selecting the OWNING group (dock fills with the full
+    // ranked list, up to its own cap) instead of doing a normal member selection. Zero canvas
+    // relayout: this is a pure select(), no expandedGroups/toggleCapsule involved.
+    if(n.data._foldMore){
+      const bn=els&&els.nodes&&els.nodes.find(x=>x.id===n.data._parentId);
+      if(bn)onNodeClick(ev,bn);
+      return;}
     const d=n.data,m=(n.type==="solo"?d.member:d)||{};
     const rows=(m.stats?Object.entries(m.stats):[]).concat(m.sub?[["detail",m.sub]]:[]);
     if(d.layer||d.lay)rows.unshift(["layer",d.layer||d.lay]);
@@ -1690,21 +1759,25 @@ function Flow(){
     else if(n.type==="member"&&m.id){
       const path=(m.path||m.id.replace(/^[gu]_/,"").replace(/_/g,"/"));
       agent={cmd:"aoa tree "+path+" -d 2",path};}
+    // d._allMembers (Decision 3): the group's FULL ranked member list, preserved when the
+    // canvas render was budgeted — the dock shows more than the canvas budget from this.
     const rec={label:m.label||d.label,chip,rows,relations:relationsFor(n.id),
-      members:isGroup?(d.members||[]):null,agent,drillTo:d.drillTo||null};
+      members:isGroup?(d._allMembers||d.members||[]):null,agent,drillTo:d.drillTo||null};
+    // Decision 1 (A7 consensus): click ONLY selects (glow + dock) — the map never relays out on
+    // a body click. Expansion is the SEPARATE, explicit ▸/▴ chip gesture, detected below via
+    // the data-expand-chip marker (node.data can't carry a toggleCapsule callback — it's built
+    // in the async ELK layout pass, outside this component's closure).
     select(rec,n.id);
-    // Capsule click SELECTS (ring + dock, same grammar as any other node) AND expands the
-    // group in place (R5: no global relayout) — the capsule surface IS the expand affordance,
-    // so both fire on the one click. toggleCapsule() flips expandedGroups, which is a dep of
-    // the view-layout effect above; that effect unconditionally clears sel/selId on ANY dep
-    // change (view change clears selection), wiping the select() call just made above. Stash
-    // the record in pendingCapsuleSel so the layout effect re-applies it once the relayout
-    // finishes and the group re-renders as an expanded "bucket" node with the same id (see the
-    // effect's on-complete branch above — NOT the generic pendingSel/?sel= mechanism, which
-    // fires eagerly on stale pre-relayout elements and would immediately re-toggle the capsule
-    // back closed).
-    if(n.type==="capsule"&&isCapsuleView){pendingCapsuleSel.current={id:n.id,rec};toggleCapsule(n.id);}
-  },[select,relationsFor,isCapsuleView,toggleCapsule]);
+    const isExpandChip=isCapsuleView&&ev&&ev.target&&ev.target.closest&&ev.target.closest("[data-expand-chip]");
+    if(isExpandChip&&(n.type==="capsule"||n.type==="bucket")){
+      // toggleCapsule() flips expandedGroups, a dep of the view-layout effect above, which
+      // unconditionally clears sel/selId on ANY dep change (view change clears selection) —
+      // wiping the select() call just made. Stash the record so the layout effect re-applies
+      // it once the relayout finishes and the group re-renders under the same id (expanded
+      // "bucket" or re-collapsed "capsule") — NOT the generic pendingSel/?sel= mechanism, which
+      // fires eagerly on stale pre-relayout elements and would immediately re-toggle it back.
+      pendingCapsuleSel.current={id:n.id,rec};toggleCapsule(n.id);}
+  },[select,relationsFor,isCapsuleView,toggleCapsule,els]);
   const onEdgeClick=useCallback((_,ed)=>{const mt=ed.data&&ed.data.meta;if(!mt)return;
     const rows=[["from",mt.s],["to",mt.t]];
     if(mt.verb)rows.push(["flow",mt.verb]);

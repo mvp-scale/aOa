@@ -59,11 +59,11 @@ const T={bg:"#0a0a0c",chrome:"#121215",raise:"#18181b",card:"#161618",cardH:"#20
  dim:"#8b8b96",mute:"#55555f",green:"#34d399",blue:"#60a5fa",purple:"#c084fc",cyan:"#22d3ee",
  yellow:"#fbbf24",red:"#f87171",arch:"#fb923c",neutral:"#94a3b8"};
 let PALETTES={
- aoa:{cmd:T.purple,app:T.blue,adapters:T.arch,domain:T.green,ports:T.red,atlas:T.cyan,supporting:T.neutral},
- gf:{cli:T.purple,serve:T.blue,ingest:T.cyan,pipeline:T.green,render:T.yellow,infra:T.arch,supporting:T.neutral},
+ aoa:{cmd:T.purple,app:T.blue,adapters:T.arch,domain:T.green,ports:T.dim,atlas:T.cyan,supporting:T.neutral},
+ gf:{cli:T.purple,serve:T.blue,ingest:T.cyan,pipeline:T.green,render:T.dim,infra:T.arch,supporting:T.neutral},
  dep:{dev:T.blue,ci:T.purple,registry:T.arch,user:T.green},
  retail:{order:T.arch,inventory:T.cyan,customer:T.purple,shared:T.neutral},
- mc:{aws:T.yellow,gcp:T.blue,shared:T.neutral}};
+ mc:{aws:T.arch,gcp:T.blue,shared:T.neutral}};
 let ESTATES=MODEL.estates; // L19.20: let — poll updates on 200 before re-render
 const firstScope=e=>Object.keys(ESTATES[e].scopes)[0];
 const firstView=(e,sc)=>Object.keys(ESTATES[e].scopes[sc].views)[0];
@@ -117,7 +117,8 @@ VIEW_INTENT=(_vs&&_vs.views)||{};
 // pull named palettes from view-standards if present (falls back to built-in)
 if(_vs&&_vs.global&&_vs.global.palette&&_vs.global.palette.named_palettes){
   const np=_vs.global.palette.named_palettes;
-  const CMAP={purple:T.purple,blue:T.blue,arch:T.arch,green:T.green,red:T.red,cyan:T.cyan,yellow:T.yellow,neutral:T.neutral,dim:T.dim};
+  // red/yellow are RESERVED (violations/warnings) — no palette entry may claim them (A1/A7 fix).
+  const CMAP={purple:T.purple,blue:T.blue,arch:T.arch,green:T.green,cyan:T.cyan,neutral:T.neutral,dim:T.dim};
   Object.entries(np).forEach(([pid,pm])=>{PALETTES[pid]={};
     Object.entries(pm).forEach(([layer,cname])=>{PALETTES[pid][layer]=CMAP[cname]||T.neutral;});});}}
 catch(err){showFatal("STANDARDS LOAD FAILED · "+(err&&err.message||err));}

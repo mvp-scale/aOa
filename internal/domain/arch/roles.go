@@ -26,6 +26,9 @@ func roleFor(label string) (layer, ico string) {
 		"middleware", "transport", "rpc", "web", "driver", "connector",
 		"integration", "consumer", "producer", "publisher", "subscriber"):
 		return "integration", "plug"
+	// "iface" is the canonical key here — the LOCKED glossary's boundary/interface/
+	// lollipop-socket glyph (viewer.js ROLE_IP.iface renders it as a concentric-ring
+	// "socket" icon). Not renamed to "lollipop"/"socket": no payoff, just churn.
 	case matchAny(l, "port", "interface", "iface", "contract", "schema", "proto",
 		"api", "openapi", "route", "controller", "endpoint", "resolver", "spec"):
 		return "edge", "iface"
