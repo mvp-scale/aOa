@@ -94,6 +94,8 @@ func RenderComponent(in RenderInput) (*Shard, error) {
 		}
 		buckets = append(buckets, Bucket{
 			ID:      gm.ID,
+			Layer:   gm.Layer,
+			Ico:     gm.Ico,
 			Label:   truncate(gm.Label, 30), // node budget: ≤30 chars
 			Part:    gm.Part,
 			Members: members,

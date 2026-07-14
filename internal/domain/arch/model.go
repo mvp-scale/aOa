@@ -161,6 +161,8 @@ type GroupMeta struct {
 	ID    string // stable slug e.g. "g_domain"
 	Label string // display label e.g. "domain"
 	Part  int    // band/layer order (lower = higher in diagram)
+	Layer string // canonical role/layer (core|edge|integration|data|external|supporting) → color pin
+	Ico   string // icon key (hexagon|iface|plug|cylinder|cloud|gear)
 }
 
 // RenderInput is the bundle passed to every renderer.

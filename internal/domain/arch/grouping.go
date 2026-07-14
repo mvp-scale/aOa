@@ -132,10 +132,13 @@ func Group(units []UnitFact) GroupingResult {
 	groupIdx := make(map[string]int, len(labels)) // label → index in groups slice
 	for i, lbl := range labels {
 		id := fmt.Sprintf("g_%s", slugify(lbl))
+		layer, ico := roleFor(lbl)
 		groups[i] = GroupMeta{
 			ID:    id,
 			Label: lbl,
 			Part:  i,
+			Layer: layer,
+			Ico:   ico,
 		}
 		groupIdx[lbl] = i
 	}
@@ -245,10 +248,13 @@ func buildGroupingFromLabels(units []UnitFact, labelFor map[string]string) Group
 	groupIdx := make(map[string]int, len(labels))
 	for i, lbl := range labels {
 		id := fmt.Sprintf("g_%s", slugify(lbl))
+		layer, ico := roleFor(lbl)
 		groups[i] = GroupMeta{
 			ID:    id,
 			Label: lbl,
 			Part:  i,
+			Layer: layer,
+			Ico:   ico,
 		}
 		groupIdx[lbl] = i
 	}
