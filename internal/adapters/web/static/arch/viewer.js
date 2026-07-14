@@ -225,7 +225,7 @@ function BoxNode({data}){
       ${drill?html`<span style=${{marginLeft:"auto",fontSize:10,color:col,border:`1px solid ${col}`,borderRadius:5,padding:"0 5px"}}>open ▸</span>`:null}
     </div>
     <${HoverCard} title=${data.label} rows=${(data.stats?Object.entries(data.stats):[["type",NAME[t]||t],["detail",data.sub]]).concat(mock?[["status","inferred · sourceable"]]:[])}
-      hint=${drill?"click → opens "+data.drillTo+" view":"click → details"}/>
+      hint=${drill?"click to select · Deep dive opens "+data.drillTo+" view":"click → details"}/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
   </div>`;}
 function EntityNode({data}){
@@ -300,11 +300,13 @@ function MemberNode({data}){const c=data.col;
     <div style=${{display:"flex",alignItems:"center",gap:6,width:"100%"}}>
       <${Ico} k=${data.lay} c=${c} s=${12}/>
       <span style=${{fontSize:data.wrap?10.5:11.5,fontWeight:600,whiteSpace:data.wrap?"normal":"nowrap",lineHeight:1.25}}>${data.label}</span>
-      ${(data.showC||data.showH)?html`<span style=${{marginLeft:"auto",display:"flex",gap:3,flexShrink:0}}>
+      ${(data.showC||data.showH||data.showFinding)?html`<span style=${{marginLeft:"auto",display:"flex",gap:3,flexShrink:0}}>
         ${data.showC?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,
           borderRadius:7,padding:"0 4px",lineHeight:"12px"}}>⚠${data.concerns>99?"99+":data.concerns}</span>`:null}
         ${data.showH?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,
           borderRadius:7,padding:"0 4px",lineHeight:"12px"}}>Δ</span>`:null}
+        ${data.showFinding?html`<span title="daemon finding" style=${{fontSize:8.5,fontWeight:700,color:T.red,
+          border:`1px solid ${T.red}`,borderRadius:7,padding:"0 4px",lineHeight:"12px"}}>⚠</span>`:null}
       </span>`:null}
     </div>
     <${HoverCard} title=${data.label} rows=${(data.stats?Object.entries(data.stats):[["detail",data.sub]]).concat([
@@ -949,7 +951,7 @@ const DK={th:{fontSize:8.5,fontWeight:700,letterSpacing:.8,textTransform:"upperc
 function DockTable({cols,rows}){
   return html`<table style=${{borderCollapse:"collapse",width:"100%"}}>
     <thead><tr>${cols.map((c,i)=>html`<th key=${i} style=${DK.th}>${c}</th>`)}</tr></thead>
-    <tbody>${rows.map((r,ri)=>html`<tr key=${ri}>${r.map((cell,ci)=>html`<td key=${ci}
+    <tbody>${rows.map((r,ri)=>html`<tr key=${ri} style=${r._hl?{background:T.cardH}:null}>${r.map((cell,ci)=>html`<td key=${ci}
       style=${{...DK.td,color:r._viol?T.red:ci===0?T.dim:T.text,
         fontFamily:ci>0&&String(cell).match(/^[≈×~\\d]/)?"ui-monospace,monospace":"inherit"}}>${cell}</td>`)}</tr>`)}
   </tbody></table>`;}
@@ -1001,13 +1003,92 @@ function findingsClause(view,probs){
 const emptySelText=view=>(view.kind==="buckets"||view.kind==="simple")
   ?"click any element to inspect →"
   :"click a cell to inspect · click a row header to expand";
-function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows,showFindings}){
+// A5 SELECTION action row — ⧉ Copy: a compact plain-text record of the selection, pasteable
+// anywhere. Kept deliberately terse (label/role/members/relations) — this is a clipboard
+// payload, not the prompt (see genElementPrompt below).
+function selRecordText(sel){
+  const lines=[sel.label+(sel.chip?" ("+sel.chip+")":"")];
+  if(sel.members&&sel.members.length)
+    lines.push("members: "+sel.members.slice(0,40).map(m=>m.label).join(", "));
+  if(sel.relations&&sel.relations.length){
+    const ins=sel.relations.filter(r=>r.dir==="in").map(r=>r.peer);
+    const outs=sel.relations.filter(r=>r.dir==="out").map(r=>r.peer);
+    if(ins.length)lines.push("in ← "+ins.join(", "));
+    if(outs.length)lines.push("out → "+outs.join(", "));
+  }
+  return lines.join("\n");}
+// A5 SELECTION action row — ✎ Prompt agent: composes an EDITABLE prompt (system/scope context
+// + selection identity/role/members/relations + a task placeholder) for the developer to paste
+// into their own agent. Parallel to genPrompt() (view-authoring prompt above) — not a rewrite of
+// it, this is a different flow (per-element, not per-view) that happens to reuse the same
+// VIEW_INTENT question framing.
+function genElementPrompt(estateId,scopeLabel,vid,sel){
+  const VI=VIEW_INTENT[vid];
+  const lines=["You are working in the \""+estateId+"\" estate · \""+scopeLabel+"\" system, view \""+vid+"\"."];
+  if(VI)lines.push("This view answers: "+VI.question);
+  lines.push("","Selected element: "+sel.label+(sel.chip?" ("+sel.chip+")":""));
+  if(sel.members&&sel.members.length)
+    lines.push("Members: "+sel.members.slice(0,40).map(m=>m.label).join(", "));
+  if(sel.relations&&sel.relations.length){
+    lines.push("Relations:");
+    sel.relations.forEach(r=>lines.push("  "+(r.dir==="out"?"→":"←")+" "+r.peer+
+      (r.verb?" ("+r.verb+")":"")+(r.count?" ×"+r.count:"")));}
+  lines.push("","[TASK: describe what you want the agent to do with this element]");
+  return lines.join("\n");}
+function PromptComposer({text,onClose}){
+  const[val,setVal]=useState(text);
+  // position:fixed (viewport-anchored), not absolute within the SELECTION segment — that
+  // column is only ~182px tall (208px dock minus the 26px collapsed bar) and a usable
+  // multi-line textarea does not fit there; a small centered overlay avoids clipping/overflow.
+  return html`<div onClick=${onClose} style=${{position:"fixed",inset:0,background:"#000000c0",
+    zIndex:50,display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div onClick=${e=>e.stopPropagation()} style=${{width:440,maxWidth:"92%",background:T.raise,
+      border:`1px solid ${T.borderR}`,borderRadius:8,padding:14,boxShadow:"0 12px 40px #000a"}}>
+      <div style=${{fontSize:9,fontWeight:700,letterSpacing:1,color:T.mute,marginBottom:8}}>PROMPT FOR AGENT · edit before copying</div>
+      <textarea value=${val} onChange=${e=>setVal(e.target.value)}
+        style=${{width:"100%",height:180,background:T.card,color:T.text,border:`1px solid ${T.border}`,
+        borderRadius:6,padding:8,fontSize:11,fontFamily:"ui-monospace,monospace",resize:"vertical",boxSizing:"border-box"}}/>
+      <div style=${{display:"flex",gap:8,marginTop:10,justifyContent:"flex-end"}}>
+        <button onClick=${onClose} style=${{background:"transparent",border:`1px solid ${T.border}`,color:T.dim,
+          borderRadius:6,padding:"5px 12px",fontSize:11,cursor:"pointer"}}>close</button>
+        <button onClick=${()=>navigator.clipboard.writeText(val)} style=${{background:T.card,border:`1px solid ${T.blue}`,
+          color:T.blue,borderRadius:6,padding:"5px 12px",fontSize:11,cursor:"pointer",fontWeight:600}}>copy prompt</button>
+      </div>
+    </div>
+  </div>`;}
+function BottomDock({vid,view,sel,selId,clearSel,probs,findings,onFindingClick,highlightMemberId,
+  expanded,setExpanded,moreFlows,showFindings,estate,scopeLabel,setLevel,setDirOv}){
   const VI=VIEW_INTENT[vid]||null;
-  // A3 calm default: the caption is calm by itself; the ⚠ findings tail is appended here, the
-  // caller, only when the Findings lens is on (caption()/findingsClause() split above).
-  const cap=caption(view,moreFlows||0)+(showFindings?findingsClause(view,probs):"");
   const hl=p=>sel&&sel.label&&String(p).includes(String(sel.label).slice(0,24));
   const sortedProbs=sel?[...probs].sort((a,b)=>(hl(b)?1:0)-(hl(a)?1:0)):probs;
+  // A5 (3a): buckets/simple/entity kinds get the daemon-derived structured FINDINGS list
+  // (rule · message · subject, clickable); table/matrix keep their own local shape (probs) —
+  // the scan-a-row/mutual-pair detection there has no canvas subject to select.
+  const isCanvasKind=view.kind==="buckets"||view.kind==="simple"||view.kind==="entity";
+  const findingRows=isCanvasKind?(findings||[]):null;
+  const dockCount=findingRows?findingRows.length:probs.length;
+  // A3 calm default: the caption is calm by itself; the ⚠ findings tail is appended here, the
+  // caller, only when the Findings lens is on (caption()/findingsClause() split above). A5: the
+  // tail must agree with the FINDINGS segment it sits above — both are gated on dockCount
+  // (daemon-derived) instead of two different detectors disagreeing in the same dock. "simple"
+  // keeps its more informative violating-edge label when dockCount confirms the daemon actually
+  // flagged something in THIS scope; otherwise (e.g. a local edge tag with zero matching daemon
+  // findings for the current scope) it falls silent like the FINDINGS segment does, instead of
+  // showing a warning the segment below immediately contradicts.
+  const countTail=view.kind==="buckets"||view.kind==="entity"
+    ?(dockCount?` · ⚠ ${dockCount} finding${dockCount>1?"s":""}`:"")
+    :view.kind==="simple"
+    ?(dockCount?(()=>{const tag=(view.edges||[]).find(e=>e.tag);
+        return tag?` · ⚠ ${tag.tag}: ${(tag.label||"").slice(0,48)}`
+          :` · ⚠ ${dockCount} finding${dockCount>1?"s":""}`;})():"")
+    :findingsClause(view,probs);
+  const cap=caption(view,moreFlows||0)+(showFindings?countTail:"");
+  const rowSelected=match=>{if(!match)return false;
+    if(match.kind==="member")return selId===match.memberId||highlightMemberId===match.memberId;
+    return selId===(match.bucketId||match.nodeId);};
+  const sortedFindingRows=findingRows
+    ?[...findingRows].sort((a,b)=>(rowSelected(b.match)?1:0)-(rowSelected(a.match)?1:0)):null;
+  const[promptOpen,setPromptOpen]=useState(false);
   const Seg=({title,col,flex,wash,children})=>html`<div style=${{flex,minWidth:0,padding:"9px 16px",
     borderRight:`1px solid ${T.border}`,overflowY:"auto",position:"relative",background:wash||"transparent"}}>
     <div style=${{fontSize:9.5,fontWeight:700,letterSpacing:1.2,color:col,marginBottom:7,
@@ -1020,16 +1101,19 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows,
         borderBottom:expanded?`1px solid ${T.border}`:"none",background:T.chrome}}>
       <div style=${{flex:1.4,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",overflow:"hidden"}}>
         <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.blue,flexShrink:0}}>VIEW</span>
-        <span style=${{fontSize:10.5,color:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${cap}</span>
+        ${VI?html`<span style=${{fontSize:9.5,color:T.mute,whiteSpace:"nowrap",overflow:"hidden",
+          textOverflow:"ellipsis",flexShrink:2,minWidth:0}}>${VI.question}</span>`:null}
+        <span style=${{fontSize:10.5,color:T.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",
+          textOverflow:"ellipsis",flexShrink:1}}>${cap}</span>
       </div>
       <div style=${{flex:1,minWidth:0,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,overflow:"hidden"}}>
         <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.text,flexShrink:0}}>SELECTION</span>
         <span style=${{fontSize:10.5,color:sel?T.text:T.mute,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${sel?sel.label:emptySelText(view)}</span>
       </div>
       ${showFindings?html`<div style=${{flex:.6,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,
-        background:probs.length?"#f8717110":"transparent"}}>
-        <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:probs.length?T.red:T.mute}}>FINDINGS</span>
-        <span style=${{fontSize:10.5,color:probs.length?T.red:T.green}}>${probs.length||"✓"}</span>
+        background:dockCount?"#f8717110":"transparent"}}>
+        <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:dockCount?T.red:T.mute}}>FINDINGS</span>
+        <span style=${{fontSize:10.5,color:dockCount?T.red:T.green}}>${dockCount||"✓"}</span>
       </div>`:null}
       <span style=${{padding:"0 12px",color:T.mute,fontSize:11}}>${expanded?"⌄":"⌃"}</span>
     </div>
@@ -1045,12 +1129,26 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows,
     <//>
     <${Seg} title="SELECTION" col=${T.text} flex=${1.6}>
       ${sel?html`<${React.Fragment}>
-        <div style=${{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+        ${promptOpen?html`<${PromptComposer} text=${genElementPrompt(estate,scopeLabel,vid,sel)}
+          onClose=${()=>setPromptOpen(false)}/>`:null}
+        <div style=${{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
           <span style=${{fontSize:13,fontWeight:700,color:T.text}}>${sel.label}</span>
           ${sel.chip?html`<span style=${{fontSize:8.5,fontWeight:700,letterSpacing:.6,color:T.dim,
             border:`1px solid ${T.border}`,borderRadius:4,padding:"0 5px",textTransform:"uppercase"}}>${sel.chip}</span>`:null}
           <button onClick=${clearSel} title="Clear selection"
             style=${{marginLeft:"auto",background:"transparent",border:"none",color:T.mute,cursor:"pointer",fontSize:13}}>×</button>
+        </div>
+        <div style=${{display:"flex",alignItems:"center",gap:4,marginBottom:9}}>
+          <span onClick=${()=>navigator.clipboard.writeText(selRecordText(sel))} title="Copy a plain-text record of this selection"
+            style=${{fontSize:10,color:T.mute,cursor:"pointer",border:`1px solid ${T.border}`,borderRadius:5,
+            padding:"2px 7px",display:"flex",alignItems:"center",gap:4}}>⧉ Copy</span>
+          <span onClick=${()=>setPromptOpen(true)} title="Compose an editable agent prompt from this selection"
+            style=${{fontSize:10,color:T.mute,cursor:"pointer",border:`1px solid ${T.border}`,borderRadius:5,
+            padding:"2px 7px",display:"flex",alignItems:"center",gap:4}}>✎ Prompt agent</span>
+          ${sel.drillTo?html`<span onClick=${()=>{setLevel(sel.drillTo);setDirOv&&setDirOv(null);}}
+            title=${"Open "+sel.drillTo+" view"}
+            style=${{fontSize:10,color:T.mute,cursor:"pointer",border:`1px solid ${T.border}`,borderRadius:5,
+            padding:"2px 7px",display:"flex",alignItems:"center",gap:4}}>⤤ Deep dive</span>`:null}
         </div>
         <div style=${{display:"flex",gap:24,alignItems:"flex-start"}}>
           <div style=${{flex:1,minWidth:0}}>
@@ -1069,7 +1167,10 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows,
                 const dups=arr.filter(x=>x.label===m.label).length>1;
                 const pathQual=dups?(()=>{const p=(m.sub||m.id||"").replace(/^[gu]_/,"").replace(/_/g,"/");
                   const segs=p.split("/");return segs.length>1?"("+segs.slice(0,-1).pop()+")":"";})():"";
-                return [m.label+(pathQual?" "+pathQual:""),m.stats?Object.values(m.stats)[0]:(m.sub||"")];})}/>
+                // A5 (3a): a FINDINGS-row click on a member-grain subject selects the parent
+                // group and marks highlightMemberId — that row reads as "this one" here.
+                return Object.assign([m.label+(pathQual?" "+pathQual:""),m.stats?Object.values(m.stats)[0]:(m.sub||"")],
+                  {_hl:highlightMemberId===m.id});})}/>
           </div>`:null}
         </div>
         ${sel.agent?html`<div style=${{marginTop:10,paddingTop:8,borderTop:`1px solid ${T.border}33`}}>
@@ -1084,12 +1185,21 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows,
         </div>`:null}
       <//>`:html`<div style=${{color:T.mute,fontSize:11,marginTop:28,textAlign:"center"}}>${emptySelText(view)}</div>`}
     <//>
-    ${showFindings?html`<${Seg} title=${"FINDINGS · "+probs.length} col=${probs.length?T.red:T.mute} flex=${1}
-      wash=${probs.length?"#f8717108":null}>
-      ${probs.length?sortedProbs.map((p,i)=>html`<div key=${i} style=${{fontSize:10.5,lineHeight:1.5,marginBottom:6,
-        color:hl(p)?T.text:T.dim,borderLeft:`2px solid ${T.red}`,paddingLeft:9,
-        background:hl(p)?T.cardH:"transparent"}}>${p}</div>`)
-      :html`<div style=${{color:T.green,fontSize:11}}>✓ no findings in this view</div>`}
+    ${showFindings?html`<${Seg} title=${"FINDINGS · "+dockCount} col=${dockCount?T.red:T.mute} flex=${1}
+      wash=${dockCount?"#f8717108":null}>
+      ${sortedFindingRows
+        ?(sortedFindingRows.length?sortedFindingRows.map((fr,i)=>{const m=rowSelected(fr.match);
+            return html`<div key=${fr.finding.id||i} onClick=${()=>onFindingClick&&onFindingClick(fr.match)}
+              style=${{fontSize:10.5,lineHeight:1.5,marginBottom:6,cursor:"pointer",
+                color:m?T.text:T.dim,borderLeft:`2px solid ${T.red}`,paddingLeft:9,
+                background:m?T.cardH:"transparent"}}>
+              <b style=${{color:T.red,fontWeight:700}}>${fr.finding.rule}</b> · ${fr.finding.message}
+              <span style=${{color:T.mute}}> · ${fr.match.label}</span></div>`;})
+          :html`<div style=${{color:T.green,fontSize:11}}>✓ no findings in this view</div>`)
+        :(probs.length?sortedProbs.map((p,i)=>html`<div key=${i} style=${{fontSize:10.5,lineHeight:1.5,marginBottom:6,
+            color:hl(p)?T.text:T.dim,borderLeft:`2px solid ${T.red}`,paddingLeft:9,
+            background:hl(p)?T.cardH:"transparent"}}>${p}</div>`)
+          :html`<div style=${{color:T.green,fontSize:11}}>✓ no findings in this view</div>`)}
     <//>`:null}
     </div>
   </div>`;}
@@ -1485,7 +1595,7 @@ function Flow(){
   // it can be re-applied once the relayout below finishes and the group re-renders expanded.
   const pendingCapsuleSel=React.useRef(null);
   useEffect(()=>{let on=true;const d=SP[den];
-    setEls(null);setSelRaw(null);setSelId(null);   // view change clears selection but PRESERVES dock expansion; remount canvas with the new layout
+    setEls(null);setSelRaw(null);setSelId(null);setHighlightMemberId(null);   // view change clears selection but PRESERVES dock expansion; remount canvas with the new layout
     const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov,{capsuleMode:true,expandedGroups,showFindings}):layoutSimple(view,dd,d,showFindings);
     // Auto direction: lay out BOTH ways, keep whichever fits the viewport at the larger scale
     const fitScale=r=>{const xs=r.nodes.map(n=>n.position.x),ys=r.nodes.map(n=>n.position.y),
@@ -1530,6 +1640,12 @@ function Flow(){
   const[sel,setSelRaw]=useState(null);
   const[selId,setSelId]=useState(null);
   const[expanded,setExpanded]=useState(false);
+  // A5: when a FINDINGS row for a member-grain subject is clicked, the parent GROUP is
+  // selected (selId becomes the bucket id) but the specific member row inside the dock's
+  // member table still needs to read as "this one" — tracked separately from selId because
+  // a direct canvas click on a member node selects the member itself (selId===member id),
+  // while a finding-row click on a member subject selects the owning group instead (spec 3a).
+  const[highlightMemberId,setHighlightMemberId]=useState(null);
   // Selecting a node/group highlights every edge touching it, both directions (owner-observed
   // delight, gin's BINDING) — an edge is "connected" if it IS the clicked id, or its source/target
   // is; clearing (id=null) never matches a real source/target so all edges de-highlight.
@@ -1541,7 +1657,7 @@ function Flow(){
     return ch?{...e,nodes,edges}:e;});
   const select=useCallback((rec,id)=>{setSelRaw(rec);setSelId(rec?id:null);
     if(rec)setExpanded(true);mark(rec?id:null);},[]);
-  const clearSel=useCallback(()=>select(null,null),[select]);
+  const clearSel=useCallback(()=>{select(null,null);setHighlightMemberId(null);},[select]);
   // pending selection: applied once the target view's elements are on screen
   // (seeded by ?sel= for screenshots; driven by journey steps at runtime)
   const[pendingSel,setPendingSel]=useState(q.get("sel"));
@@ -1552,7 +1668,6 @@ function Flow(){
       verb:e.label||"",count:e.count,viol:!!(e.tag||e._viol)}))
     .sort((a,b)=>(b.viol?1:0)-(a.viol?1:0))),[view,nameOf]);
   const onNodeClick=useCallback((_,n)=>{if(!n.data)return;
-    if(n.data.drillTo){setLevel(n.data.drillTo);setDirOv(null);return;}
     if(n.type==="spacer")return;
     const d=n.data,m=(n.type==="solo"?d.member:d)||{};
     const rows=(m.stats?Object.entries(m.stats):[]).concat(m.sub?[["detail",m.sub]]:[]);
@@ -1571,7 +1686,7 @@ function Flow(){
       const path=(m.path||m.id.replace(/^[gu]_/,"").replace(/_/g,"/"));
       agent={cmd:"aoa tree "+path+" -d 2",path};}
     const rec={label:m.label||d.label,chip,rows,relations:relationsFor(n.id),
-      members:isGroup?(d.members||[]):null,agent};
+      members:isGroup?(d.members||[]):null,agent,drillTo:d.drillTo||null};
     select(rec,n.id);
     // Capsule click SELECTS (ring + dock, same grammar as any other node) AND expands the
     // group in place (R5: no global relayout) — the capsule surface IS the expand affordance,
@@ -1595,6 +1710,20 @@ function Flow(){
     if(rev)rows.push(["mutual",mt.t+" → "+mt.s+(rev.count?" ×"+rev.count:"")+" — cycle"]);
     select({label:mt.s+" → "+mt.t,chip:mt.tag?"violation":"relation",rows,relations:[]},ed.id);},[select,view]);
   const onPaneClick=useCallback(()=>clearSel(),[clearSel]);
+  // A5: organic canvas clicks always clear any finding-driven member highlight — only a
+  // FINDINGS row click (below) should leave highlightMemberId set.
+  const handleCanvasNodeClick=useCallback((e,n)=>{setHighlightMemberId(null);onNodeClick(e,n);},[onNodeClick]);
+  // A5 (3a): a FINDINGS row click selects its subject on canvas — reuses the exact same
+  // select()/onNodeClick mechanics a real click uses. Group-grain subjects select the
+  // group node directly; member-grain subjects select the PARENT group (per spec) and mark
+  // highlightMemberId so the dock's member table can highlight the specific row.
+  const onFindingRowClick=useCallback(match=>{
+    if(!match||!els||!els.nodes)return;
+    const targetId=match.kind==="node"?match.nodeId:match.bucketId;
+    const n=els.nodes.find(x=>x.id===targetId);
+    if(n)onNodeClick(null,n);
+    setHighlightMemberId(match.kind==="member"?match.memberId:null);
+  },[els,onNodeClick]);
   useEffect(()=>{if(!pendingSel||!els||!els.nodes)return;
     const n=els.nodes.find(x=>x.id===pendingSel);
     if(n)onNodeClick(null,n);
@@ -1630,10 +1759,51 @@ function Flow(){
   const[findingsOpen,setFindingsOpen]=useState(q.get("findingsOpen")==="1");
   const[findingsExpandedId,setFindingsExpandedId]=useState(null);
   useEffect(()=>{let on=true;
-    fetch("/api/arch/findings").then(r=>r.ok?r.json():[]).then(d=>{if(on)setFindings(Array.isArray(d)?d:[]);}).catch(()=>{});
-    return()=>{on=false;};},[]);
+    fetch("/api/arch/findings?scope="+encodeURIComponent(scope)).then(r=>r.ok?r.json():[])
+      .then(d=>{if(on)setFindings(Array.isArray(d)?d:[]);}).catch(()=>{});
+    return()=>{on=false;};},[scope]);
   const topFinding=findings.find(f=>f.severity==="error")||findings.find(f=>f.new)||findings[0]||null;
   const hasNewFindings=findings.some(f=>f.new);
+  // A5 (3a/3b): resolve each daemon finding's subject(s) against the CURRENT view's own
+  // element ids — a bucket-kind view's Member.ID *is* the unit fact ID (render_component.go),
+  // the exact same id space Finding.Subjects uses (detect.go), so this is a pure client-side
+  // lookup: no server-side subject index needed. Computed at render time off `view`+`findings`
+  // (NOT baked into the async ELK layout pass) so a findings fetch that resolves after layout
+  // never needs a relayout to become visible/clickable.
+  const resolveSubject=useCallback(subj=>{
+    if(view.kind==="buckets"){
+      const grp=(view.buckets||[]).find(b=>b.id===subj);
+      if(grp)return{kind:"group",bucketId:grp.id,label:grp.label};
+      const owner=(view.buckets||[]).find(b=>(b.members||[]).some(m=>m.id===subj));
+      if(owner){const mem=owner.members.find(m=>m.id===subj);
+        return{kind:"member",bucketId:owner.id,memberId:mem.id,label:mem.label};}
+      return null;}
+    const n=(view.nodes||[]).find(x=>x.id===subj);
+    return n?{kind:"node",nodeId:n.id,label:n.label}:null;},[view]);
+  // One row per finding (not per subject) — a cycle finding can carry many subjects; the
+  // dock shows "rule · message · subject" once, anchored to the first subject that resolves
+  // inside the current view.
+  const viewFindings=React.useMemo(()=>{
+    if(view.kind==="table"||view.kind==="matrix")return[];
+    const out=[];
+    findings.forEach(f=>{
+      if(f.scope&&f.scope!==scope)return;
+      for(const subj of f.subjects||[]){
+        const match=resolveSubject(subj);
+        if(match){out.push({finding:f,match});break;}}});
+    return out;},[findings,scope,view,resolveSubject]);
+  // A5 (3b): member-grain finding subjects present in this view — drives the small ⚠ marker
+  // on MemberNode. Independent of the legacy ov.concerns overlay toggle (separate mechanism).
+  const findingSubjectIds=React.useMemo(()=>{
+    if(!showFindings||view.kind!=="buckets")return null;
+    const s=new Set();
+    findings.forEach(f=>{if(f.scope&&f.scope!==scope)return;(f.subjects||[]).forEach(x=>s.add(x));});
+    return s;},[findings,scope,showFindings,view]);
+  const displayNodes=React.useMemo(()=>{
+    if(!els||!els.nodes)return null;
+    if(!findingSubjectIds||!findingSubjectIds.size)return els.nodes;
+    return els.nodes.map(n=>n.type==="member"&&findingSubjectIds.has(n.id)
+      ?{...n,data:{...n.data,showFinding:true}}:n);},[els,findingSubjectIds]);
   // manual navigation leaves journey mode — the journey owns scope/view only while followed
   const go=useCallback(id=>{setJr(null);setLevel(id);setDirOv(null);},[]);
   const goScope=useCallback(sid=>{setJr(null);setScope(sid);setLevel(firstView(estate,sid));setDirOv(null);},[estate]);
@@ -1736,8 +1906,8 @@ function Flow(){
             expandedId=${findingsExpandedId} setExpandedId=${setFindingsExpandedId}/>`:null}
           ${els&&els.htmlView?html`<${view.kind==="table"?TableView:DSMView} view=${view} onSel=${select} selId=${selId} vid=${level}/>`:null}
           ${els&&!els.htmlView?html`<${ReactFlow} key=${estate+"|"+scope+"|"+level+"|"+dir+"|"+den}
-            nodes=${els.nodes} edges=${els.edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
-            onNodeClick=${onNodeClick} onEdgeClick=${onEdgeClick} onPaneClick=${onPaneClick}
+            nodes=${displayNodes||els.nodes} edges=${els.edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
+            onNodeClick=${handleCanvasNodeClick} onEdgeClick=${onEdgeClick} onPaneClick=${onPaneClick}
             fitView fitViewOptions=${{padding:0.12}}
             minZoom=${0.1} proOptions=${{hideAttribution:true}}>
             <${Background} color=${T.border} gap=${24} size=${1}/>
@@ -1745,9 +1915,12 @@ function Flow(){
           <//>`:null}
           ${els&&!els.htmlView&&(view._loaded||!view.shard)?html`<${CanvasLegend} view=${view}/>`:null}
         </div>
-        <${BottomDock} vid=${level} view=${view} sel=${sel} clearSel=${clearSel}
-          probs=${els&&els.problems||[]} expanded=${expanded} setExpanded=${setExpanded}
-          moreFlows=${els&&els.moreFlows||0} showFindings=${showFindings}/>
+        <${BottomDock} vid=${level} view=${view} sel=${sel} selId=${selId} clearSel=${clearSel}
+          probs=${els&&els.problems||[]} findings=${viewFindings} onFindingClick=${onFindingRowClick}
+          highlightMemberId=${highlightMemberId}
+          expanded=${expanded} setExpanded=${setExpanded}
+          moreFlows=${els&&els.moreFlows||0} showFindings=${showFindings}
+          estate=${estate} scopeLabel=${sys.label} setLevel=${setLevel} setDirOv=${setDirOv}/>
         ${els&&(view._loaded||!view.shard)?html`<${Footer} view=${view} ov=${ov}/>`:null}
       </div>
     </div></div>`;}
