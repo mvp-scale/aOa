@@ -114,6 +114,85 @@ func TestDeterminism_Component(t *testing.T) {
 	checkAndUpdateGolden(t, "testdata/golden_component.json", b1)
 }
 
+// TestRenderComponent_BucketsInferredTrue is the A3 suppression precondition:
+// every bucket in the component shard must carry inferred:true today, since
+// no declared-layer input path exists yet (roleFor() heuristics are the only
+// source of Layer/Part). The viewer relies on this field to permanently
+// suppress prescriptive band-violation findings on inferred layers.
+func TestRenderComponent_BucketsInferredTrue(t *testing.T) {
+	in := makeFixture()
+
+	s, err := RenderComponent(in)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, s.Buckets, "fixture must produce at least one bucket")
+	for _, b := range s.Buckets {
+		assert.True(t, b.Inferred, "bucket %s must be Inferred=true (no declared-layer path exists yet)", b.ID)
+	}
+
+	// Round-trip through JSON to prove the field actually serializes onto
+	// the shard the viewer consumes (not just the in-memory struct).
+	raw, err := MarshalShard(s)
+	require.NoError(t, err)
+	var decoded struct {
+		Buckets []struct {
+			ID       string `json:"id"`
+			Inferred bool   `json:"inferred"`
+		} `json:"buckets"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+	require.NotEmpty(t, decoded.Buckets)
+	for _, b := range decoded.Buckets {
+		assert.True(t, b.Inferred, "bucket %s must serialize inferred:true in the JSON shard", b.ID)
+	}
+}
+
+// TestBucket_InferredFalseSurvivesSerialization is a regression test for the
+// A3 review punch: Go's `omitempty` on a bool drops the field entirely when
+// the value is false, which would silently defeat the viewer's strict
+// `sp.inferred===false && tp.inferred===false` band-violation gate the
+// moment a future declared-layer (V2) bucket sets Inferred:false. Bucket.Inferred
+// must NOT carry `omitempty` so both true and false values always serialize.
+func TestBucket_InferredFalseSurvivesSerialization(t *testing.T) {
+	s := &Shard{
+		Kind: "buckets",
+		Buckets: []Bucket{
+			{ID: "b_declared", Label: "declared", Part: 0, Inferred: false, Members: []Member{}},
+		},
+	}
+
+	raw, err := MarshalShard(s)
+	require.NoError(t, err)
+
+	var decoded struct {
+		Buckets []map[string]interface{} `json:"buckets"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &decoded))
+	require.Len(t, decoded.Buckets, 1)
+
+	v, ok := decoded.Buckets[0]["inferred"]
+	require.True(t, ok, "inferred key must be present in JSON even when Inferred=false (no omitempty)")
+	assert.Equal(t, false, v, "inferred must serialize as literal false, not be dropped")
+}
+
+// TestRenderComponent_CalmCaptionNeverMentionsFindings is the A3 "calm like a map" house ruling
+// proven at the shard level: the fixture plants 8 findings (see makeFixture), so shard.Count
+// would previously read "...⚠ 8 findings". The caption must now be calm — no alarm fragment —
+// with the findings tail isolated in the separate FindingsClause field the viewer appends only
+// when its Findings lens is on.
+func TestRenderComponent_CalmCaptionNeverMentionsFindings(t *testing.T) {
+	in := makeFixture()
+	require.NotEmpty(t, in.Findings, "fixture must plant findings for this test to be meaningful")
+
+	s, err := RenderComponent(in)
+	require.NoError(t, err)
+
+	assert.NotContains(t, s.Count, "⚠", "A3: calm caption must never carry a findings glyph")
+	assert.NotContains(t, s.Count, "finding", "A3: calm caption must never mention findings")
+	assert.Contains(t, s.FindingsClause, fmt.Sprintf("%d finding", len(in.Findings)),
+		"the findings count must live in the separate FindingsClause field")
+}
+
 func TestDeterminism_DSM(t *testing.T) {
 	in := makeFixture()
 

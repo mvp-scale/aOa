@@ -297,7 +297,7 @@ func TestDeriveCaption_Entity(t *testing.T) {
 		Kind:  "entity",
 		Nodes: []Node{{ID: "n1"}, {ID: "n2"}, {ID: "n3"}},
 	}
-	caption := DeriveCaption(s, nil)
+	caption, _ := DeriveCaption(s, nil)
 	assert.Contains(t, caption, "3", "entity caption must include node count")
 }
 
@@ -306,18 +306,22 @@ func TestDeriveCaption_Simple(t *testing.T) {
 		Kind:  "simple",
 		Nodes: []Node{{ID: "n1"}, {ID: "n2"}},
 	}
-	caption := DeriveCaption(s, nil)
+	caption, _ := DeriveCaption(s, nil)
 	assert.Contains(t, caption, "2", "simple caption must include node count")
 }
 
+// A3: DeriveCaption splits the calm caption from the findings clause (house ruling "calm like a
+// map") — the caption itself must NEVER mention findings; the clause is a separate return value
+// the caller appends only when its Findings lens is on.
 func TestDeriveCaption_Simple_WithFindings(t *testing.T) {
 	s := &Shard{
 		Kind:  "simple",
 		Nodes: []Node{{ID: "n1"}},
 	}
 	findings := []Finding{{Rule: "test", Severity: "warn"}}
-	caption := DeriveCaption(s, findings)
-	assert.Contains(t, caption, "1 findings", "findings suffix must be appended")
+	caption, findingsClause := DeriveCaption(s, findings)
+	assert.NotContains(t, caption, "finding", "A3: calm caption must never mention findings")
+	assert.Contains(t, findingsClause, "1 findings", "findings suffix must be in the separate clause")
 }
 
 // ---------------------------------------------------------------------------

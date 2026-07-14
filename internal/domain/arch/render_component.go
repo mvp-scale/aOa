@@ -93,12 +93,13 @@ func RenderComponent(in RenderInput) (*Shard, error) {
 			members = []Member{}
 		}
 		buckets = append(buckets, Bucket{
-			ID:      gm.ID,
-			Layer:   gm.Layer,
-			Ico:     gm.Ico,
-			Label:   truncate(gm.Label, 30), // node budget: ≤30 chars
-			Part:    gm.Part,
-			Members: members,
+			ID:       gm.ID,
+			Layer:    gm.Layer,
+			Ico:      gm.Ico,
+			Label:    truncate(gm.Label, 30), // node budget: ≤30 chars
+			Part:     gm.Part,
+			Inferred: gm.Inferred,
+			Members:  members,
 		})
 	}
 
@@ -126,7 +127,7 @@ func RenderComponent(in RenderInput) (*Shard, error) {
 		Buckets: buckets,
 		Edges:   shardEdges,
 	}
-	shard.Count = DeriveCaption(shard, in.Findings)
+	shard.Count, shard.FindingsClause = DeriveCaption(shard, in.Findings)
 	return shard, nil
 }
 

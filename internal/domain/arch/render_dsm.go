@@ -97,6 +97,6 @@ func RenderDSM(in RenderInput) (*Shard, error) {
 		Items:  items,
 		Matrix: matrix,
 	}
-	shard.Count = DeriveCaption(shard, in.Findings)
+	shard.Count, shard.FindingsClause = DeriveCaption(shard, in.Findings)
 	return shard, nil
 }

@@ -139,6 +139,10 @@ func Group(units []UnitFact) GroupingResult {
 			Part:  i,
 			Layer: layer,
 			Ico:   ico,
+			// Inferred: roleFor() is the only Layer/Part source today — no declared-layer
+			// input path exists yet, so this is unconditionally true until a V2 declared
+			// contract lands. Suppresses prescriptive band-violation findings client-side.
+			Inferred: true,
 		}
 		groupIdx[lbl] = i
 	}
@@ -255,6 +259,9 @@ func buildGroupingFromLabels(units []UnitFact, labelFor map[string]string) Group
 			Part:  i,
 			Layer: layer,
 			Ico:   ico,
+			// Inferred: see comment in Group() above — always true until a declared-layer
+			// input path exists.
+			Inferred: true,
 		}
 		groupIdx[lbl] = i
 	}

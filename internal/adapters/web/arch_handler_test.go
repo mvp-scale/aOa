@@ -249,7 +249,7 @@ func TestArchManifest_EmptyWhenNoShards(t *testing.T) {
 // TestArchManifest_SynthesizesEstatesShape ensures /api/arch/manifest transforms the
 // flat Go manifest into the estates-shaped structure the viewer expects.
 func TestArchManifest_SynthesizesEstatesShape(t *testing.T) {
-	shardJSON := []byte(`{"kind":"buckets","title":"Component","count":"12 units","prov":{"kind":"derived","label":"derived"}}`)
+	shardJSON := []byte(`{"kind":"buckets","title":"Component","count":"12 units","findingsClause":" · ⚠ 3 findings","prov":{"kind":"derived","label":"derived"}}`)
 	q := &mockArchQuerier{
 		manifest: &ports.ArchManifest{
 			Scope: "local",
@@ -292,6 +292,11 @@ func TestArchManifest_SynthesizesEstatesShape(t *testing.T) {
 	assert.Equal(t, "buckets", compView["kind"])
 	assert.Equal(t, "Component", compView["title"])
 	assert.Equal(t, "12 units", compView["count"])
+	// A3 review punch: prove FindingsClause actually threads from the shard
+	// header through buildEstatesManifest into the estates-manifest JSON the
+	// viewer consumes — not just present on the Go-side shardHeader struct.
+	assert.Equal(t, " · ⚠ 3 findings", compView["findingsClause"],
+		"findingsClause must thread through buildEstatesManifest into the estates-manifest JSON")
 
 	// Shard path must be "local/component" (for the viewer's BASE+path fetch)
 	shard, ok := compView["shard"].(map[string]interface{})

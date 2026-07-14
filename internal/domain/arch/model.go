@@ -60,11 +60,16 @@ type Prov struct {
 // are absent from JSON output (not null), keeping outputs small and
 // kind-clearly-shaped.
 type Shard struct {
-	Kind    string `json:"kind"`
-	Title   string `json:"title"`
-	Count   string `json:"count"`
-	Dir     string `json:"dir,omitempty"`
-	Prov    Prov   `json:"prov"`
+	Kind  string `json:"kind"`
+	Title string `json:"title"`
+	Count string `json:"count"` // A3: the CALM caption — never carries a findings tail
+	// FindingsClause is the "· ⚠ N findings"-shaped suffix DeriveCaption used to bake into Count.
+	// Split out (A3 house ruling: calm like a map) so goldens/captions stay stable at derive time
+	// and the viewer appends it only when the showFindings lens is on. Empty when there's nothing
+	// to report.
+	FindingsClause string `json:"findingsClause,omitempty"`
+	Dir            string `json:"dir,omitempty"`
+	Prov           Prov   `json:"prov"`
 
 	// buckets kind
 	Buckets []Bucket    `json:"buckets,omitempty"`
@@ -90,6 +95,7 @@ type Bucket struct {
 	Part     int      `json:"part"`
 	Boundary *bool    `json:"boundary,omitempty"`
 	Ico      string   `json:"ico,omitempty"`
+	Inferred bool     `json:"inferred"` // true when Layer/Part is inferred rather than declared — viewer suppresses band-violation findings when either endpoint is inferred. No omitempty: false is a real, meaningful value (future V2 declared-layer path) and Go's omitempty on bool drops false-valued fields entirely, which would silently defeat the viewer's strict sp.inferred===false gate.
 	Members  []Member `json:"members"`
 }
 
@@ -158,11 +164,12 @@ type GroupingResult struct {
 
 // GroupMeta holds display info for a single group bucket.
 type GroupMeta struct {
-	ID    string // stable slug e.g. "g_domain"
-	Label string // display label e.g. "domain"
-	Part  int    // band/layer order (lower = higher in diagram)
-	Layer string // canonical role/layer (core|edge|integration|data|external|supporting) → color pin
-	Ico   string // icon key (hexagon|iface|plug|cylinder|cloud|gear)
+	ID       string // stable slug e.g. "g_domain"
+	Label    string // display label e.g. "domain"
+	Part     int    // band/layer order (lower = higher in diagram)
+	Layer    string // canonical role/layer (core|edge|integration|data|external|supporting) → color pin
+	Ico      string // icon key (hexagon|iface|plug|cylinder|cloud|gear)
+	Inferred bool   // true when Layer/Part was inferred (roleFor heuristics) rather than declared by a V2 contract; always true today since no declared-layer input path exists yet — gates prescriptive findings (e.g. band violations) client-side
 }
 
 // RenderInput is the bundle passed to every renderer.

@@ -175,6 +175,9 @@ type shardHeader struct {
 	Title string   `json:"title"`
 	Count string   `json:"count"`
 	Prov  provJSON `json:"prov"`
+	// FindingsClause: A3 calm-default split — the "· ⚠ N findings" tail DeriveCaption used to
+	// bake into Count. Kept separate so the viewer appends it only when its Findings lens is on.
+	FindingsClause string `json:"findingsClause,omitempty"`
 }
 
 type provJSON struct {
@@ -208,9 +211,10 @@ func buildEstatesManifest(m *ports.ArchManifest, q ports.ArchQuerier, label, tec
 		shardPath := m.Scope + "/" + ve.ID
 
 		views[ve.ID] = map[string]interface{}{
-			"kind":  hdr.Kind,
-			"title": hdr.Title,
-			"count": hdr.Count,
+			"kind":           hdr.Kind,
+			"title":          hdr.Title,
+			"count":          hdr.Count,
+			"findingsClause": hdr.FindingsClause,
 			"prov": map[string]interface{}{
 				"kind":  hdr.Prov.Kind,
 				"label": hdr.Prov.Label,

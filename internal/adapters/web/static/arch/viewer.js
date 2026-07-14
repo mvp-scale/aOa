@@ -251,12 +251,18 @@ function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting
   // reader can answer "which group is open, what members does it contain, what does it import"
   // from a static screenshot alone.
   const fromCapsule=data._fromCapsule;
+  // A3 calm default: _god/_cyc/_dead/_over are still DETECTED upstream (layoutBuckets) so counts
+  // stay accurate, but the alarm PAINT (red border/glow, CYCLE/ORPHAN/COLLAPSED badges, dead-dim)
+  // only renders when the Findings lens (showFindings) is on — a stranger sees a calm role-colored
+  // map, not a wall of red.
+  const sf=data._showFindings;
+  const god=sf&&data._god,dead=sf&&data._dead,cyc=sf&&data._cyc,over=sf&&data._over;
   return html`<div style=${{width:"100%",height:"100%",
     background:fromCapsule?c+"2a":T.band,
-    border:`${fromCapsule?"4px":"1.5px"} ${dash?"dashed":"solid"} ${data._god?T.red:c}`,
+    border:`${fromCapsule?"4px":"1.5px"} ${dash?"dashed":"solid"} ${god?T.red:c}`,
     borderRadius:fromCapsule?8:4,boxSizing:"border-box",
-    opacity:data._dead?0.45:1,cursor:"pointer",
-    boxShadow:fromCapsule?`0 0 0 3px ${c}88, 0 0 32px ${c}55`:data._sel?`0 0 0 2px ${T.blue}`:data._god?`0 0 0 2px ${T.red}55, 0 0 22px ${T.red}44`:"none"}}>
+    opacity:dead?0.45:1,cursor:"pointer",
+    boxShadow:fromCapsule?`0 0 0 3px ${c}88, 0 0 32px ${c}55`:data._sel?`0 0 0 2px ${T.blue}`:god?`0 0 0 2px ${T.red}55, 0 0 22px ${T.red}44`:"none"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
     <div style=${{display:"flex",alignItems:"center",gap:7,padding:"7px 12px",height:data.head,boxSizing:"border-box",
       background:fromCapsule?c+"40":"transparent",
@@ -265,9 +271,9 @@ function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting
       <${Ico} k=${data.ico||data.layer} c=${c} s=${fromCapsule?16:14}/>
       <span style=${{fontSize:fromCapsule?13:11,fontWeight:700,color:c,textTransform:"uppercase",letterSpacing:1.1}}>${data.label}</span>
       ${fromCapsule?html`<span style=${{fontSize:9.5,fontWeight:700,color:c,border:`1.5px solid ${c}`,borderRadius:4,padding:"1px 6px",letterSpacing:.5,marginLeft:2}}>OPEN</span>`:null}
-      ${data._cyc?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:4,padding:"0 4px"}}>⟳ CYCLE</span>`:null}
-      ${data._dead?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>ORPHAN</span>`:null}
-      ${data._over?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>${data._over} · COLLAPSED</span>`:null}
+      ${cyc?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:4,padding:"0 4px"}}>⟳ CYCLE</span>`:null}
+      ${dead?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>ORPHAN</span>`:null}
+      ${over?html`<span style=${{fontSize:8.5,fontWeight:700,color:T.yellow,border:`1px solid ${T.yellow}`,borderRadius:4,padding:"0 4px"}}>${data._over} · COLLAPSED</span>`:null}
       <span style=${{marginLeft:"auto",fontSize:10.5,color:fromCapsule?c:T.dim,fontWeight:fromCapsule?700:400}}>${data.members.length}${fromCapsule?" members":""}</span>
       ${fromCapsule?html`<span title="collapse" style=${{fontSize:12,color:c,marginLeft:6,fontWeight:700}}>▴</span>`:null}
     </div>
@@ -732,7 +738,7 @@ function rfEdge(e,laidById,col,nameOf){
     markerEnd:{type:"arrowclosed",color:col(e),width:13,height:13},
     style:{stroke:col(e),strokeWidth:2,opacity:.85}};}
 
-async function layoutSimple(view,dir,d){
+async function layoutSimple(view,dir,d,showFindings){
   const ent=view.kind==="entity";
   const sizes={};
   view.nodes.forEach(n=>{
@@ -754,7 +760,9 @@ async function layoutSimple(view,dir,d){
       width:sizes[n.id].w,height:sizes[n.id].h,
       data:{...n,w:sizes[n.id].w,h:sizes[n.id].h}})).concat(labelSpacers(laidById)),
     edges:view.edges.map(e=>{const r=rfEdge(e,laidById,()=>T.dim,id2=>(nById[id2]||{}).label||id2);
-      if(e._viol){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3"};
+      // A3 calm default: violation is still DETECTED (e._viol, problems[] above) but the red/dashed
+      // PAINT only shows when the Findings lens is on — a stranger sees a plain map, not alarms.
+      if(e._viol&&showFindings){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3"};
         r.markerEnd={...r.markerEnd,color:T.red};
         if(r.data.label)r.data.label.text="⚠ "+r.data.label.text;}
       return r;}),problems};}
@@ -803,6 +811,7 @@ function mergeExternalBuckets(buckets){
 async function layoutBuckets(view,dir,d,ov,opts){
   ov=ov||{};opts=opts||{};
   const capsuleMode=!!opts.capsuleMode;
+  const showFindings=!!opts.showFindings;
   const expandedSet=capsuleMode?(opts.expandedGroups||new Set()):null;
   // EXTERNALS fold: merge g_ext_* into one capsule (R3)
   const[internalBuckets,extCapsule]=mergeExternalBuckets(view.buckets);
@@ -824,7 +833,12 @@ async function layoutBuckets(view,dir,d,ov,opts){
     const k=e.source+"\x00"+e.target;if(edgeSeen.has(k))return false;edgeSeen.add(k);return true;});
   elkEdges.forEach(e=>{if(deg[e.source])deg[e.source].o++;if(deg[e.target])deg[e.target].i++;
     const sp=bById[e.source],tp=bById[e.target];
-    if(sp&&tp&&sp.part>tp.part){e._viol=true;problems.push("band violation: "+nameOfBucket(e.source)+" → "+nameOfBucket(e.target));}
+    // A3 rule (4): band violations are PERMANENTLY suppressed on inferred layers — not gated by
+    // showFindings, killed outright. roleFor() heuristics are the only Layer/Part source today
+    // (Bucket.inferred is always true from Go), so this never fires until a real declared-layer
+    // (V2) contract sets inferred:false on both endpoints. Prescriptive findings must never come
+    // from a descriptive/inferred layer — that's what made gin look broken (false alarms).
+    if(sp&&tp&&sp.part>tp.part&&sp.inferred===false&&tp.inferred===false){e._viol=true;problems.push("band violation: "+nameOfBucket(e.source)+" → "+nameOfBucket(e.target));}
     if(e.tag){e._viol=true;problems.push(e.tag+": "+nameOfBucket(e.source)+" → "+nameOfBucket(e.target));}});
   B.forEach(b=>{const dg=deg[b.id];
     if(dg.i+dg.o===0&&B.length>1){b._dead=true;problems.push("orphan: "+b.label+" — no connections");}
@@ -885,7 +899,7 @@ async function layoutBuckets(view,dir,d,ov,opts){
     if(b._collapsed){
       nodes.push({id:b.id,type:"capsule",position:bp,width:b.w,height:b.h,
         style:{width:b.w,height:b.h},zIndex:0,draggable:false,selectable:false,
-        data:{...b,head:d.head,col,expanded:false}});
+        data:{...b,head:d.head,col,expanded:false,_showFindings:showFindings}});
       return;}
     if(b.solo){
       nodes.push({id:b.id,type:"solo",position:bp,width:b.w,height:b.h,
@@ -894,16 +908,20 @@ async function layoutBuckets(view,dir,d,ov,opts){
       return;}
     nodes.push({id:b.id,type:"bucket",position:bp,width:b.w,height:b.h,
       style:{width:b.w,height:b.h},zIndex:0,draggable:false,selectable:false,
-      data:{...b,head:d.head,col,_fromCapsule:capsuleMode&&!b._collapsed}});
+      data:{...b,head:d.head,col,_fromCapsule:capsuleMode&&!b._collapsed,_showFindings:showFindings}});
     b.members.forEach((m,i)=>{const c2=i%b.cols,row=Math.floor(i/b.cols);
       nodes.push({id:m.id,type:"member",draggable:false,selectable:false,zIndex:10,
         width:b.iw,height:b.ih,
         position:{x:bp.x+d.px+c2*(b.iw+d.gx),y:bp.y+d.head+d.py+row*(b.ih+d.gy)},
+        // Member ⚠/Δ badges are sub-toggles UNDER the Findings lens (consensus doc CONTROLS) —
+        // they only show when showFindings is on, even if ov.concerns/ov.changed are set via URL.
         data:{...m,lay:b.layer,col,w:b.iw,h:b.ih,wrap:b.wrap,
-          showC:!!(ov.concerns&&m.concerns>0),showH:!!(ov.changed&&m.changed)}});});});
+          showC:!!(showFindings&&ov.concerns&&m.concerns>0),showH:!!(showFindings&&ov.changed&&m.changed)}});});});
   const bcol={};B.forEach(b=>bcol[b.id]=colOf(b.layer));
   const edges2=elkEdges.map(e=>{const r=rfEdge(e,laidById,ee=>bcol[ee.source]||T.dim,id2=>nameOfBucket(id2));
-    if(e._viol){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3",opacity:.95};
+    // A3 calm default: violation is still DETECTED (e._viol, problems[] above) but the red/dashed
+    // PAINT only shows when the Findings lens is on.
+    if(e._viol&&showFindings){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3",opacity:.95};
       r.markerEnd={...r.markerEnd,color:T.red};
       if(r.data.label)r.data.label.text="⚠ "+r.data.label.text;}
     // Expanded group: its flows drawn full-weight (§4 brief "edges fully drawn");
@@ -933,16 +951,19 @@ function DockTable({cols,rows}){
         fontFamily:ci>0&&String(cell).match(/^[≈×~\\d]/)?"ui-monospace,monospace":"inherit"}}>${cell}</td>`)}</tr>`)}
   </tbody></table>`;}
 // The caption: the view ANSWERS its own question, derived at render time from data
-// already on screen — counts, heaviest edge, mutual pairs, flagged rows, findings.
-function caption(view,probs,moreFlows){
-  const fin=probs&&probs.length?` · ⚠ ${probs.length} finding${probs.length>1?"s":""}`:"";
+// already on screen — counts, heaviest edge, mutual pairs, flagged rows. A3 calm default:
+// caption() itself NEVER mentions findings — it always reads as one calm sentence (house
+// ruling "calm like a map"). The findings tail is a separate clause (findingsClause below)
+// the CALLER appends only when the Findings lens (showFindings) is on — this is presentation
+// gating only, the shard/goldens are untouched.
+function caption(view,moreFlows){
   if(view.kind==="buckets"){
     const B=view.buckets||[],members=B.reduce((a,b)=>a+(b.members||[]).length,0);
     const he=(view.edges||[]).reduce((m,e)=>((e.count||0)>(m.count||0)?e:m),{});
     const bn=id=>{const b=B.find(x=>x.id===id);return b?b.label:id;};
     const mf=moreFlows?` · +${moreFlows} more flows — click groups to reveal`:"";
     return `${B.length} groups · ${members} members`+
-      (he.id?` — heaviest: ${bn(he.source)} → ${bn(he.target)} ×${he.count}`:"")+mf+fin;}
+      (he.id?` — heaviest: ${bn(he.source)} → ${bn(he.target)} ×${he.count}`:"")+mf;}
   if(view.kind==="matrix"){
     const it=view.items||[],M=view.matrix||[];let sum=0;const mut=[];
     for(let i=0;i<it.length;i++)for(let j=0;j<it.length;j++){sum+=(M[i]||[])[j]||0;
@@ -950,20 +971,32 @@ function caption(view,probs,moreFlows){
     return `${it.length} modules · ${sum.toLocaleString()} dependencies · ${mut.length} mutual pair${mut.length===1?"":"s"}`+
       (mut.length?` — worst: ${mut[0]}`:"");}
   if(view.kind==="table"){
-    const rows=view.rows||[];const fl=rows.filter(r=>r.some(c=>String(c).trim().startsWith("⚠")));
-    return `${rows.length} rows`+(fl.length?` · ⚠ ${fl.length} flagged — first: ${fl[0][0]}`:" · none flagged");}
+    return `${(view.rows||[]).length} rows`;}
   if(view.kind==="entity"){
     const deg={};(view.edges||[]).forEach(e=>{deg[e.source]=(deg[e.source]||0)+1;deg[e.target]=(deg[e.target]||0)+1;});
     const top=Object.entries(deg).sort((a,b)=>b[1]-a[1])[0];
     const nm=id=>{const n=(view.nodes||[]).find(x=>x.id===id);return n?n.label:id;};
     return `${(view.nodes||[]).length} entities · ${(view.edges||[]).length} relationships`+
-      (top?` — spine: ${nm(top[0])} (${top[1]} relations)`:"")+fin;}
+      (top?` — spine: ${nm(top[0])} (${top[1]} relations)`:"");}
+  return `${(view.nodes||[]).length} elements · ${(view.edges||[]).length} labeled flows`;}
+// findingsClause: the ⚠-tail caption() used to carry inline. Appended by the caller ONLY when
+// showFindings is on. Table kind keeps its own "⚠ N flagged" shape (row-scanned, not probs-based);
+// default/simple keeps its tag-based shape; buckets/entity share the generic "N findings" shape.
+function findingsClause(view,probs){
+  if(view.kind==="matrix")return""; // matrix caption already ends on "mutual pairs" — no separate clause
+  if(view.kind==="table"){
+    const rows=view.rows||[];const fl=rows.filter(r=>r.some(c=>String(c).trim().startsWith("⚠")));
+    return fl.length?` · ⚠ ${fl.length} flagged — first: ${fl[0][0]}`:" · none flagged";}
+  if(view.kind==="buckets"||view.kind==="entity")
+    return probs&&probs.length?` · ⚠ ${probs.length} finding${probs.length>1?"s":""}`:"";
   const tag=(view.edges||[]).find(e=>e.tag);
-  return `${(view.nodes||[]).length} elements · ${(view.edges||[]).length} labeled flows`+
-    (tag?` · ⚠ ${tag.tag}: ${(tag.label||"").slice(0,48)}`:fin);}
-function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows}){
+  return tag?` · ⚠ ${tag.tag}: ${(tag.label||"").slice(0,48)}`
+    :(probs&&probs.length?` · ⚠ ${probs.length} finding${probs.length>1?"s":""}`:"");}
+function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows,showFindings}){
   const VI=VIEW_INTENT[vid]||null;
-  const cap=caption(view,probs,moreFlows||0);
+  // A3 calm default: the caption is calm by itself; the ⚠ findings tail is appended here, the
+  // caller, only when the Findings lens is on (caption()/findingsClause() split above).
+  const cap=caption(view,moreFlows||0)+(showFindings?findingsClause(view,probs):"");
   const hl=p=>sel&&sel.label&&String(p).includes(String(sel.label).slice(0,24));
   const sortedProbs=sel?[...probs].sort((a,b)=>(hl(b)?1:0)-(hl(a)?1:0)):probs;
   const Seg=({title,col,flex,wash,children})=>html`<div style=${{flex,minWidth:0,padding:"9px 16px",
@@ -984,11 +1017,11 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows}
         <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:T.text,flexShrink:0}}>SELECTION</span>
         <span style=${{fontSize:10.5,color:sel?T.text:T.mute,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${sel?sel.label:"click a cell to inspect · click a row header to expand"}</span>
       </div>
-      <div style=${{flex:.6,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,
+      ${showFindings?html`<div style=${{flex:.6,padding:"0 16px",display:"flex",gap:7,alignItems:"center",borderLeft:`1px solid ${T.border}`,
         background:probs.length?"#f8717110":"transparent"}}>
         <span style=${{fontSize:8.5,fontWeight:700,letterSpacing:1,color:probs.length?T.red:T.mute}}>FINDINGS</span>
         <span style=${{fontSize:10.5,color:probs.length?T.red:T.green}}>${probs.length||"✓"}</span>
-      </div>
+      </div>`:null}
       <span style=${{padding:"0 12px",color:T.mute,fontSize:11}}>${expanded?"⌄":"⌃"}</span>
     </div>
     <div style=${{display:expanded?"flex":"none",flex:1,minHeight:0,position:"relative"}}>
@@ -1016,8 +1049,9 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows}
           </div>
           ${(sel.relations&&sel.relations.length)?html`<div style=${{flex:1.2,minWidth:0}}>
             <${DockTable} cols=${["dir","peer","flow"]}
-              rows=${sel.relations.map(r=>Object.assign([r.dir==="out"?"→":"←",r.peer,
-                (r.viol?"⚠ ":"")+(r.verb||"")+(r.count?" ×"+r.count:"")],{_viol:r.viol}))}/>
+              rows=${sel.relations.map(r=>{const v=r.viol&&showFindings; // A3: violation red styling is opt-in
+                return Object.assign([r.dir==="out"?"→":"←",r.peer,
+                (v?"⚠ ":"")+(r.verb||"")+(r.count?" ×"+r.count:"")],{_viol:v});})}/>
           </div>`:null}
           ${(sel.members&&sel.members.length)?html`<div style=${{flex:1.2,minWidth:0}}>
             <${DockTable} cols=${["member ("+sel.members.length+")","detail"]}
@@ -1041,13 +1075,13 @@ function BottomDock({vid,view,sel,clearSel,probs,expanded,setExpanded,moreFlows}
         </div>`:null}
       <//>`:html`<div style=${{color:T.mute,fontSize:11,marginTop:28,textAlign:"center"}}>none — click an element or edge</div>`}
     <//>
-    <${Seg} title=${"FINDINGS · "+probs.length} col=${probs.length?T.red:T.mute} flex=${1}
+    ${showFindings?html`<${Seg} title=${"FINDINGS · "+probs.length} col=${probs.length?T.red:T.mute} flex=${1}
       wash=${probs.length?"#f8717108":null}>
       ${probs.length?sortedProbs.map((p,i)=>html`<div key=${i} style=${{fontSize:10.5,lineHeight:1.5,marginBottom:6,
         color:hl(p)?T.text:T.dim,borderLeft:`2px solid ${T.red}`,paddingLeft:9,
         background:hl(p)?T.cardH:"transparent"}}>${p}</div>`)
       :html`<div style=${{color:T.green,fontSize:11}}>✓ no findings in this view</div>`}
-    <//>
+    <//>`:null}
     </div>
   </div>`;}
 const ETYPE_NAME={sys:"system",ext:"external",container:"container",store:"store",proc:"process"};
@@ -1403,6 +1437,16 @@ function Flow(){
   </div>`;
   const[ov,setOv]=useState(()=>{const o=(q.get("ov")||"").split(",");
     return {concerns:o.includes("concerns"),changed:o.includes("changed")};});
+  // showFindings: THE calm-default master gate (A3). Default OFF — a stranger opens a view and
+  // sees a role-colored map, not a wall of alarms. Single source of truth for every alarm surface:
+  // canvas red/dashed edge paint, bucket ribbons/badges, header ⚠ pill, banner, dock concern-row,
+  // caption findings-clause. Detection stays computed underneath either way — this only gates paint.
+  // Persisted like the legend's localStorage idiom; ?findings=1 bookmarks it on (open question 5).
+  const[showFindings,setShowFindings]=useState(()=>{
+    if(q.get("findings")==="1")return true;
+    try{return localStorage.getItem("aoa:showFindings")==="1";}catch{return false;}});
+  const toggleShowFindings=useCallback(()=>{
+    setShowFindings(v=>{const next=!v;try{localStorage.setItem("aoa:showFindings",next?"1":"0");}catch{}return next;});},[]);
   // Capsule expand state — persisted in localStorage (R5: stable base map)
   // test hook: ?expandedGroups=g_domain,g_app pre-expands groups for screenshot verification
   // Accepts IDs with or without "g_" prefix; also matches on label (case-insensitive).
@@ -1428,7 +1472,7 @@ function Flow(){
   const dir=dirOv||autoDir||"DOWN";
   useEffect(()=>{let on=true;const d=SP[den];
     setEls(null);setSelRaw(null);setSelId(null);   // view change clears selection but PRESERVES dock expansion; remount canvas with the new layout
-    const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov,{capsuleMode:true,expandedGroups}):layoutSimple(view,dd,d);
+    const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov,{capsuleMode:true,expandedGroups,showFindings}):layoutSimple(view,dd,d,showFindings);
     // Auto direction: lay out BOTH ways, keep whichever fits the viewport at the larger scale
     const fitScale=r=>{const xs=r.nodes.map(n=>n.position.x),ys=r.nodes.map(n=>n.position.y),
       xe=r.nodes.map(n=>n.position.x+(n.width||208)),ye=r.nodes.map(n=>n.position.y+(n.height||64));
@@ -1460,7 +1504,7 @@ function Flow(){
         if(fitScale(a)>=fitScale(b)){e=a;dd="DOWN";}else{e=b;dd="RIGHT";}}
       if(on){setEls(e);setAutoDir(dd);setLast(l=>({...l,[estate+":"+scope+":"+level]:Date.now()}));}
     }catch(err){showFatal("VIEW LOAD FAILED · "+(err&&err.message||err));}})();
-    return()=>{on=false;};},[estate,scope,level,dirOv,den,ov,expandedGroups]);
+    return()=>{on=false;};},[estate,scope,level,dirOv,den,ov,expandedGroups,showFindings]);
   // test hook: ?auto=<view>:<ms> simulates a user click after ms (verifies the CLICK path, not URL load)
   useEffect(()=>{const auto=q.get("auto");
     if(auto){const[lv,ms]=auto.split(":");const t=setTimeout(()=>setLevel(lv),parseInt(ms||"800",10));
@@ -1565,6 +1609,10 @@ function Flow(){
     setScope(sc);setLevel(firstView(eid,sc));setDirOv(null);},[]);
   const btn=a=>({background:a?T.cardH:"transparent",border:`1px solid ${a?T.blue:T.border}`,
     color:a?T.text:T.dim,borderRadius:7,padding:"5px 11px",fontSize:12,cursor:"pointer",fontWeight:550});
+  // A3 house ruling: the Findings lens is discoverable but QUIET — even lit, it stays a muted
+  // outline (never the alarm red the findings themselves use), so the toolbar itself never shouts.
+  const rbtn=a=>({background:"transparent",border:`1px solid ${a?T.dim:T.border}`,
+    color:a?T.text:T.mute,borderRadius:7,padding:"5px 11px",fontSize:12,cursor:"pointer",fontWeight:550});
   return html`<div style=${{height:"100vh",display:"flex",flexDirection:"column",background:T.bg,
     font:"13px -apple-system,Segoe UI,Inter,Roboto,sans-serif",color:T.text}}>
     ${!EMBED&&html`<div style=${{padding:"9px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10,background:T.chrome}}>
@@ -1582,7 +1630,7 @@ function Flow(){
           color:pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan,
           border:`1px solid ${pk==="derived"?T.green:pk==="simulated"?T.yellow:T.cyan}`,
           borderRadius:5,padding:"1px 7px"}))(view.prov.kind)}>${view.prov.kind==="derived"?"REAL":view.prov.kind==="simulated"?"SIMULATED":"MIXED"}</span>`:null}
-        ${els&&els.problems&&els.problems.length?html`<span title="Show findings"
+        ${showFindings&&els&&els.problems&&els.problems.length?html`<span title="Show findings"
           onClick=${()=>setExpanded(true)}
           style=${{fontSize:9.5,fontWeight:700,color:T.red,border:`1px solid ${T.red}`,borderRadius:5,
           padding:"1px 7px",whiteSpace:"nowrap",cursor:"pointer",flexShrink:0}}>⚠ ${els.problems.length}</span>`:null}
@@ -1593,15 +1641,19 @@ function Flow(){
       </div>`}
     <div style=${{padding:"3px 18px",borderBottom:`1px solid ${T.border}`,fontSize:10.5,color:T.dim,
       display:"flex",alignItems:"center",gap:10,background:T.chrome}}>
-      <span style=${{minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}
-        title=${view.count+(view.prov?" · "+view.prov.label:"")}>
-        ${view.count}${view.prov?html`<span style=${{color:T.mute}}> · ${view.prov.label}</span>`:null}
-      </span>
+      ${((fc)=>html`<span style=${{minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}
+        title=${view.count+fc+(view.prov?" · "+view.prov.label:"")}>
+        ${view.count}${fc}${view.prov?html`<span style=${{color:T.mute}}> · ${view.prov.label}</span>`:null}
+      </span>`)(showFindings&&view.findingsClause||"")}
       <div style=${{marginLeft:"auto",display:"flex",gap:7,alignItems:"center",flexShrink:0}}>
-        <button style=${btn(ov.concerns)} onClick=${()=>setOv({...ov,concerns:!ov.concerns})}
-          title="Recon findings per package (bitmask)">⚠ Findings</button>
-        <button style=${btn(ov.changed)} onClick=${()=>setOv({...ov,changed:!ov.changed})}
-          title="Touched in last 15 commits (git)">Δ Changed</button>
+        <button style=${rbtn(showFindings)} onClick=${toggleShowFindings}
+          title="Findings lens — band violations, cycles, orphans, god components (off by default: calm map first)">Findings</button>
+        ${showFindings?html`<${React.Fragment}>
+          <button style=${btn(ov.concerns)} onClick=${()=>setOv({...ov,concerns:!ov.concerns})}
+            title="Recon findings per package (bitmask)">⚠ Members</button>
+          <button style=${btn(ov.changed)} onClick=${()=>setOv({...ov,changed:!ov.changed})}
+            title="Touched in last 15 commits (git)">Δ Changed</button>
+        <//>`:null}
         <span style=${{width:6}}></span>
         <button style=${btn(den==="compact")} onClick=${()=>setDen("compact")}>Compact</button>
         <button style=${btn(den==="comfort")} onClick=${()=>setDen("comfort")}>Comfort</button>
@@ -1612,7 +1664,7 @@ function Flow(){
         <button style=${btn(dirOv==="RIGHT")} onClick=${()=>setDirOv("RIGHT")} title="Left–Right">→</button>
       </div>
     </div>
-    ${topFinding?html`<div onClick=${()=>setFindingsOpen(true)}
+    ${showFindings&&topFinding?html`<div onClick=${()=>setFindingsOpen(true)}
       style=${{padding:"4px 18px",borderBottom:`1px solid ${T.border}`,fontSize:11,
         background:hasNewFindings?"#fbbf2408":T.chrome,cursor:"pointer",
         display:"flex",alignItems:"center",gap:8,
@@ -1663,7 +1715,7 @@ function Flow(){
         </div>
         <${BottomDock} vid=${level} view=${view} sel=${sel} clearSel=${clearSel}
           probs=${els&&els.problems||[]} expanded=${expanded} setExpanded=${setExpanded}
-          moreFlows=${els&&els.moreFlows||0}/>
+          moreFlows=${els&&els.moreFlows||0} showFindings=${showFindings}/>
         ${els&&(view._loaded||!view.shard)?html`<${Footer} view=${view} ov=${ov}/>`:null}
       </div>
     </div></div>`;}

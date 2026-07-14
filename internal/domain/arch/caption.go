@@ -5,17 +5,19 @@ import (
 	"strings"
 )
 
-// DeriveCaption computes the human-readable count string for a shard's manifest entry.
-// This is a Go port of build_c4_mockup.py:901-926 for all five shard kinds.
+// DeriveCaption computes the human-readable count string for a shard's manifest entry, split
+// into a CALM caption (never mentions findings — house ruling "calm like a map") and a separate
+// findingsClause the caller may append only when its Findings lens is on. This is a Go port of
+// build_c4_mockup.py:901-926 for all five shard kinds, with the A3 calm-default split applied.
 //
-// Format per kind:
+// Format per kind (caption, findingsClause):
 //
-//	buckets: "N groups · M members — heaviest: A → B ×k"
-//	matrix:  "S dependencies · N modules · P mutual pairs: first"
-//	table:   "N rows · ⚠ F flagged — first: X"
-//	entity:  "N entities"
-//	simple:  "N nodes"
-func DeriveCaption(s *Shard, findings []Finding) string {
+//	buckets: "N groups · M members — heaviest: A → B ×k", " · ⚠ F findings"
+//	matrix:  "S dependencies · N modules · P mutual pairs: first", ""
+//	table:   "N rows", " · ⚠ F flagged — first: X"
+//	entity:  "N entities", ""
+//	simple:  "N nodes", ""
+func DeriveCaption(s *Shard, findings []Finding) (caption, findingsClause string) {
 	findingsSuffix := ""
 	if count := len(findings); count > 0 {
 		findingsSuffix = fmt.Sprintf(" · ⚠ %d findings", count)
@@ -23,22 +25,22 @@ func DeriveCaption(s *Shard, findings []Finding) string {
 
 	switch s.Kind {
 	case "buckets":
-		return deriveBucketsCaption(s) + findingsSuffix
+		return deriveBucketsCaption(s), findingsSuffix
 
 	case "matrix":
-		return deriveMatrixCaption(s) + findingsSuffix
+		return deriveMatrixCaption(s), findingsSuffix
 
 	case "table":
-		return deriveTableCaption(s) + findingsSuffix
+		return deriveTableCaption(s), findingsSuffix
 
 	case "entity":
-		return deriveEntityCaption(s) + findingsSuffix
+		return deriveEntityCaption(s), findingsSuffix
 
 	case "simple":
-		return deriveSimpleCaption(s) + findingsSuffix
+		return deriveSimpleCaption(s), findingsSuffix
 
 	default:
-		return fmt.Sprintf("%s shard%s", s.Kind, findingsSuffix)
+		return fmt.Sprintf("%s shard", s.Kind), findingsSuffix
 	}
 }
 
