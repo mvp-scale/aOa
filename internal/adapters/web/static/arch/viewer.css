@@ -12,3 +12,6 @@ html,body,#root{margin:0;height:100%;background:#0a0a0c}
 .hv.force .hovercard{visibility:visible;transition-delay:0s}
 .react-flow__edge{cursor:pointer}
 .react-flow__edge:hover .react-flow__edge-path{stroke-width:3!important;opacity:1!important}
+/* A8 punch: never let the browser's native focus ring paint on a node — the _sel box-shadow
+   glow (see BoxNode/EntityNode/BucketNode/etc in viewer.js) is the sole focus affordance. */
+.react-flow__node:focus,.react-flow__node:focus-visible{outline:none}

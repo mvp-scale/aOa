@@ -184,13 +184,16 @@ const ElkEdge=memo(function ElkEdge({id,data,style,markerEnd}){
   const m=data.meta;
   return html`<${React.Fragment}>
     <${BaseEdge} id=${id} path=${d} markerEnd=${markerEnd}
-      style=${data._sel?{...style,strokeWidth:3,opacity:1}:style}/>
+      style=${data._sel?{...style,strokeWidth:3,opacity:1,transition:"opacity 150ms ease, stroke-width 150ms ease"}
+        :data._dim?{...style,opacity:(style&&style.opacity||1)*0.8,transition:"opacity 150ms ease"}
+        :{...style,transition:"opacity 150ms ease"}}/>
     ${data.label?html`<${EdgeLabelRenderer}>
       <div className=${"nodrag nopan"+(m?" hv":"")} style=${{position:"absolute",
         transform:`translate(${data.label.x}px,${data.label.y}px)`,
         background:T.bg,border:`1px solid ${data._sel?T.blue:T.border}`,borderRadius:5,
         padding:"0 5px",height:16,lineHeight:"15px",fontSize:10.5,fontWeight:600,
-        color:T.text,pointerEvents:"all",zIndex:5,cursor:"pointer"}}>${data.label.text}
+        color:T.text,opacity:data._dim?0.8:1,transition:"opacity 150ms ease",
+        pointerEvents:"all",zIndex:5,cursor:"pointer"}}>${data.label.text}
         ${m?html`<${HoverCard} title=${m.s+" → "+m.t}
           rows=${[["flow",m.verb],["volume",m.count?"×"+m.count:""],[m.tag?"violation":"",m.tag||""]]}
           hint="click to inspect"/>`:null}
@@ -217,7 +220,8 @@ function BoxNode({data}){
   const NAME={sys:"system",ext:"external",container:"container",store:"store",proc:"process"};
   return html`<div class=${hvc(data.id)} style=${{background:T.card,border:`1.5px ${mock?"dashed":"solid"} ${col}`,
     borderRadius:t==="store"?18:t==="proc"?12:8,padding:"9px 13px",width:data.w-2,height:data.h-2,boxSizing:"border-box",
-    color:T.text,cursor:"pointer",boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none"}}>
+    color:T.text,cursor:"pointer",opacity:data._dim?0.8:1,transition:"opacity 150ms ease, box-shadow 150ms ease",
+    boxShadow:data._sel?`0 0 0 2px ${T.blue}, 0 0 10px ${T.blue}77`:"none"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
     <div style=${{display:"flex",alignItems:"center",gap:8,height:"100%",opacity:mock?0.88:1}}>
       <${Ico} k=${data.icon} c=${col} s=${17}/>
@@ -231,7 +235,8 @@ function BoxNode({data}){
 function EntityNode({data}){
   const c=T.green;
   return html`<div class=${hvc(data.id)} style=${{width:data.w-2,cursor:"pointer",
-    boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none",borderRadius:6}}>
+    opacity:data._dim?0.8:1,transition:"opacity 150ms ease, box-shadow 150ms ease",
+    boxShadow:data._sel?`0 0 0 2px ${T.blue}, 0 0 10px ${T.blue}77`:"none",borderRadius:6}}>
     <div style=${{background:T.card,border:`1.5px solid ${c}`,borderRadius:6,
       boxSizing:"border-box",color:T.text,overflow:"hidden"}}>
       <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
@@ -257,12 +262,15 @@ function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting
   // map, not a wall of red.
   const sf=data._showFindings;
   const god=sf&&data._god,dead=sf&&data._dead,cyc=sf&&data._cyc,over=sf&&data._over;
-  return html`<div class=${hvc(data.id)} style=${{width:"100%",height:"100%",
+  return html`<div class=${hvc(data.id)} style=${{width:"100%",height:"100%",position:"relative",
     background:fromCapsule?c+"2a":T.band,
     border:`${fromCapsule?"4px":"1.5px"} ${dash?"dashed":"solid"} ${god?T.red:c}`,
     borderRadius:fromCapsule?8:4,boxSizing:"border-box",
+    // hex-alpha fills (c+"2a" etc.) double-fade under opacity, so dim uses filter:brightness
+    // instead — keeps the recession visually consistent with the solid-background node types.
+    filter:data._dim?"brightness(.8)":"none",transition:"filter 150ms ease, box-shadow 150ms ease",
     opacity:dead?0.45:1,cursor:"pointer",
-    boxShadow:fromCapsule?`0 0 0 3px ${c}88, 0 0 32px ${c}55`:data._sel?`0 0 0 2px ${T.blue}`:god?`0 0 0 2px ${T.red}55, 0 0 22px ${T.red}44`:"none"}}>
+    boxShadow:fromCapsule?`0 0 0 3px ${c}88, 0 0 32px ${c}55`:data._sel?`0 0 0 2px ${T.blue}, 0 0 10px ${T.blue}77`:god?`0 0 0 2px ${T.red}55, 0 0 22px ${T.red}44`:"none"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
     <div style=${{display:"flex",alignItems:"center",gap:7,padding:"7px 12px",height:data.head,boxSizing:"border-box",
       background:fromCapsule?c+"40":"transparent",
@@ -280,11 +288,37 @@ function BucketNode({data}){const c=data.col;const dash=data.layer==="supporting
     </div>
     <${HoverCard} title=${data.label} rows=${[["members",(data._allMembers||data.members).length]]} hint="click to inspect"/>
     <${Handle} type="source" position=${Position.Bottom} style=${{opacity:0}}/><${Handle} type="source" position=${Position.Right} style=${{opacity:0}}/>
+    ${data._foldOpen&&data._allMembers?html`<${FoldOverlay} data=${data} c=${c}/>`:null}
+  </div>`;}
+// A8 FIX 2a: the "+N more" fold row's in-node scrollable reveal — a pure CSS overlay (max-height
+// + overflow-y:auto) anchored inside the already-ELK-sized bucket box, so opening/closing it never
+// changes b.w/b.h and never triggers an ELK relayout. Lists everything past the canvas budget
+// (data._allMembers minus the already-rendered truncated + fold row, i.e. from data.members.length-1
+// onward) with a "show less ▴" row that folds it back via the live _closeFold closure.
+function FoldOverlay({data,c}){
+  const shown=(data.members||[]).length-1; // members = budget items + 1 fold row
+  const rest=(data._allMembers||[]).slice(shown);
+  // nowheel: without it, scrolling this list bubbles to the ReactFlow pane and zooms/pans the
+  // canvas instead of scrolling the overlay (react-flow's documented escape-hatch class, same
+  // family as nodrag/nopan already used on edge labels elsewhere in this file).
+  return html`<div class="nodrag nopan nowheel" style=${{position:"absolute",left:6,right:6,top:data.head+2,
+    maxHeight:220,overflowY:"auto",background:T.bg,border:`1px solid ${c}77`,borderRadius:6,
+    padding:"2px 0",zIndex:5,boxShadow:"0 10px 28px rgba(0,0,0,.5)"}}>
+    ${rest.map((m,i)=>html`<div key=${m.id||i} style=${{display:"flex",alignItems:"center",gap:8,
+      padding:"5px 10px",fontSize:11,color:T.text,borderBottom:`1px solid ${T.border}22`}}>
+      <span style=${{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>${m.label}</span>
+      ${m.sub?html`<span style=${{fontSize:9.5,color:T.mute,flexShrink:0}}>${m.sub}</span>`:null}
+    </div>`)}
+    <div onClick=${ev=>{ev.stopPropagation();data._closeFold&&data._closeFold();}}
+      style=${{textAlign:"center",padding:"7px 0 5px",fontSize:10.5,fontWeight:600,color:T.mute,cursor:"pointer"}}>
+      show less ▴
+    </div>
   </div>`;}
 function SoloNode({data}){const c=data.col;const dash=data.layer==="supporting";
   return html`<div class=${hvc(data.member.id)} style=${{background:T.band,border:`1.5px ${dash?"dashed":"solid"} ${c}`,
     borderRadius:4,padding:"8px 12px",width:data.w-2,height:data.h-2,boxSizing:"border-box",color:T.text,
-    cursor:"pointer",boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none"}}>
+    cursor:"pointer",opacity:data._dim?0.8:1,transition:"opacity 150ms ease, box-shadow 150ms ease",
+    boxShadow:data._sel?`0 0 0 2px ${T.blue}, 0 0 10px ${T.blue}77`:"none"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
     <div style=${{display:"flex",alignItems:"center",gap:7}}>
       <${Ico} k=${data.ico||data.layer} c=${c} s=${14}/>
@@ -303,7 +337,9 @@ function MemberNode({data}){const c=data.col;
       justifyContent:"center",cursor:"pointer",fontSize:10.5,fontWeight:600}}>${data.label} ▾</div>`;}
   return html`<div class=${hvc(data.id)} style=${{background:T.card,border:`1px solid ${T.border}`,borderLeft:`3px solid ${c}`,
     borderRadius:6,padding:data.wrap?"4px 10px":"5px 10px",width:data.w,height:data.h,boxSizing:"border-box",color:T.text,
-    display:"flex",alignItems:"center",cursor:"pointer",boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none"}}>
+    display:"flex",alignItems:"center",cursor:"pointer",opacity:data._dim?0.8:1,
+    transition:"opacity 150ms ease, box-shadow 150ms ease",
+    boxShadow:data._sel?`0 0 0 2px ${T.blue}, 0 0 10px ${T.blue}77`:"none"}}>
     <div style=${{display:"flex",alignItems:"center",gap:6,width:"100%"}}>
       <${Ico} k=${data.lay} c=${c} s=${12}/>
       <span style=${{fontSize:data.wrap?10.5:11.5,fontWeight:600,whiteSpace:data.wrap?"normal":"nowrap",lineHeight:1.25}}>${data.label}</span>
@@ -702,7 +738,8 @@ function CapsuleNode({data}){
   return html`<div class=${hvc(data.id)} style=${{width:"100%",height:"100%",background:T.band,
     border:`1.5px ${dash?"dashed":"solid"} ${ext?T.mute:c}`,borderRadius:4,boxSizing:"border-box",
     cursor:"pointer",display:"flex",alignItems:"center",gap:7,padding:"7px 12px",
-    boxShadow:data._sel?`0 0 0 2px ${T.blue}`:"none"}}>
+    opacity:data._dim?0.8:1,transition:"opacity 150ms ease, box-shadow 150ms ease",
+    boxShadow:data._sel?`0 0 0 2px ${T.blue}, 0 0 10px ${T.blue}77`:"none"}}>
     <${Handle} type="target" position=${Position.Top} style=${{opacity:0}}/><${Handle} type="target" position=${Position.Left} style=${{opacity:0}}/>
     <${Ico} k=${data.ico||data.layer} c=${ext?T.mute:c} s=${14}/>
     <span style=${{fontSize:11,fontWeight:700,color:ext?T.mute:c,textTransform:"uppercase",letterSpacing:1.1,
@@ -983,16 +1020,25 @@ async function layoutBuckets(view,dir,d,ov,opts){
 //   SELECTION (the clicked element/edge: stat table + relations table, violations first)
 //   CONCERNS (this view's diagnostics; rows touching the selection highlight)
 // Persistent: 26px collapsed bar <-> 208px expanded. Never unmounts; the nav rail never reflows.
+// A8 FIX 2b (owner: dock member table "hard to read" — breathing room + scannable numerals):
+// padding/lineHeight bumped up from the original 3px/1.45 for legibility at the dense house
+// aesthetic's edge.
 const DK={th:{fontSize:8.5,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",color:T.mute,
-    textAlign:"left",padding:"2px 10px 4px 0",borderBottom:`1px solid ${T.border}`},
-  td:{fontSize:11,color:T.text,padding:"3px 10px 3px 0",borderBottom:`1px solid ${T.border}55`,
-    verticalAlign:"top",lineHeight:1.45}};
-function DockTable({cols,rows}){
+    textAlign:"left",padding:"2px 10px 5px 0",borderBottom:`1px solid ${T.border}`},
+  td:{fontSize:11.5,color:T.text,padding:"5px 10px 5px 0",borderBottom:`1px solid ${T.border}55`,
+    verticalAlign:"top",lineHeight:1.6}};
+// rightCols: optional array of booleans (by column index) forcing a real right-aligned numeral
+// column (header + cells) — opt-in per caller so existing tables keep their prior layout; the
+// member table (A8 FIX 2b) is the first to use it for its fan-in weight column.
+function DockTable({cols,rows,rightCols}){
+  const isNum=cell=>String(cell).match(/^[≈×~\\d]/);
+  const isRight=ci=>!!(rightCols&&rightCols[ci]);
   return html`<table style=${{borderCollapse:"collapse",width:"100%"}}>
-    <thead><tr>${cols.map((c,i)=>html`<th key=${i} style=${DK.th}>${c}</th>`)}</tr></thead>
+    <thead><tr>${cols.map((c,i)=>html`<th key=${i} style=${{...DK.th,textAlign:isRight(i)?"right":"left"}}>${c}</th>`)}</tr></thead>
     <tbody>${rows.map((r,ri)=>html`<tr key=${ri} style=${r._hl?{background:T.cardH}:null}>${r.map((cell,ci)=>html`<td key=${ci}
       style=${{...DK.td,color:r._viol?T.red:ci===0?T.dim:T.text,
-        fontFamily:ci>0&&String(cell).match(/^[≈×~\\d]/)?"ui-monospace,monospace":"inherit"}}>${cell}</td>`)}</tr>`)}
+        textAlign:isRight(ci)?"right":"left",
+        fontFamily:ci>0&&isNum(cell)?"ui-monospace,monospace":"inherit"}}>${cell}</td>`)}</tr>`)}
   </tbody></table>`;}
 // The caption: the view ANSWERS its own question, derived at render time from data
 // already on screen — counts, heaviest edge, mutual pairs, flagged rows. A3 calm default:
@@ -1204,15 +1250,21 @@ function BottomDock({vid,view,sel,selId,clearSel,probs,findings,onFindingClick,h
                 (v?"⚠ ":"")+(r.verb||"")+(r.count?" ×"+r.count:"")],{_viol:v});})}/>
           </div>`:null}
           ${(sel.members&&sel.members.length)?html`<div style=${{flex:1.2,minWidth:0}}>
-            <${DockTable} cols=${["member ("+sel.members.length+")","detail"]}
-              rows=${sel.members.slice(0,24).map((m,_i,arr)=>{
+            <${DockTable} cols=${["member ("+sel.members.length+")","fan-in"]} rightCols=${[false,true]}
+              rows=${sel.members.map((m,_i,arr)=>{
                 // Disambiguate duplicate labels: qualify with path segment from member ID
                 const dups=arr.filter(x=>x.label===m.label).length>1;
                 const pathQual=dups?(()=>{const p=(m.sub||m.id||"").replace(/^[gu]_/,"").replace(/_/g,"/");
                   const segs=p.split("/");return segs.length>1?"("+segs.slice(0,-1).pop()+")":"";})():"";
+                // A8 FIX 2b: the raw detail text is "in N" (fan-in count, render_component.go)
+                // for internal groups — the column header now says fan-in, so show the bare,
+                // right-aligned numeral instead of repeating "in" on every row; anything that
+                // isn't that exact shape (e.g. "over budget") passes through unchanged.
+                const rawDetail=m.stats?Object.values(m.stats)[0]:(m.sub||"");
+                const fanIn=typeof rawDetail==="string"&&rawDetail.match(/^in\s+(\d+)$/);
                 // A5 (3a): a FINDINGS-row click on a member-grain subject selects the parent
                 // group and marks highlightMemberId — that row reads as "this one" here.
-                return Object.assign([m.label+(pathQual?" "+pathQual:""),m.stats?Object.values(m.stats)[0]:(m.sub||"")],
+                return Object.assign([m.label+(pathQual?" "+pathQual:""),fanIn?fanIn[1]:rawDetail],
                   {_hl:highlightMemberId===m.id});})}/>
           </div>`:null}
         </div>
@@ -1653,7 +1705,7 @@ function Flow(){
     // Decision 2 (A7 consensus, supersedes the old A5 note here): view change clears the
     // selection AND collapses the dock — an expanded dock with no selection is exactly the
     // "empty expanded panel" the house ruling forbids, so expansion cannot outlive its selection.
-    setEls(null);setSelRaw(null);setSelId(null);setHighlightMemberId(null);setExpanded(false);   // remount canvas with the new layout
+    setEls(null);setSelRaw(null);setSelId(null);setHighlightMemberId(null);setExpanded(false);setExpandedFold(null);   // remount canvas with the new layout
     const run=dd=>view.kind==="buckets"?layoutBuckets(view,dd,d,ov,{capsuleMode:true,expandedGroups,showFindings}):layoutSimple(view,dd,d,showFindings);
     // Auto direction: lay out BOTH ways, keep whichever fits the viewport at the larger scale
     const fitScale=r=>{const xs=r.nodes.map(n=>n.position.x),ys=r.nodes.map(n=>n.position.y),
@@ -1698,6 +1750,9 @@ function Flow(){
   const[sel,setSelRaw]=useState(null);
   const[selId,setSelId]=useState(null);
   const[expanded,setExpanded]=useState(false);
+  // A8 FIX 2a: which bucket's "+N more" fold is showing its in-node scrollable overlay of the
+  // remaining externals (id of the owning group, or null). Pure UI state — never touches ELK.
+  const[expandedFold,setExpandedFold]=useState(null);
   // A5: when a FINDINGS row for a member-grain subject is clicked, the parent GROUP is
   // selected (selId becomes the bucket id) but the specific member row inside the dock's
   // member table still needs to read as "this one" — tracked separately from selId because
@@ -1714,16 +1769,28 @@ function Flow(){
     const neighbors=new Set();
     if(id)(e.edges||[]).forEach(ed=>{if(ed.source===id)neighbors.add(ed.target);
       if(ed.target===id)neighbors.add(ed.source);});
-    const nodes=e.nodes.map(n=>{const want=n.id===id||neighbors.has(n.id);
-      if(!!n.data._sel===want)return n;ch=true;return {...n,data:{...n.data,_sel:want}};});
-    const edges=(e.edges||[]).map(ed=>{const want=ed.id===id||ed.source===id||ed.target===id;
-      if(!!(ed.data&&ed.data._sel)===want)return ed;ch=true;return {...ed,data:{...ed.data,_sel:want}};});
+    // Symmetric focus (A8 ruling, owner verbatim): everything NOT in the neighborhood dims
+    // ~20% while the neighborhood itself brightens — universal across every color, hue never
+    // changes. dim is simply "id is set AND this element isn't wanted" — falls back to false
+    // for everyone when id is null (deselect), restoring uniform weight for free.
+    const nodes=e.nodes.map(n=>{const want=n.id===id||neighbors.has(n.id);const dim=!!id&&!want;
+      if(!!n.data._sel===want&&!!n.data._dim===dim)return n;ch=true;return {...n,data:{...n.data,_sel:want,_dim:dim}};});
+    const edges=(e.edges||[]).map(ed=>{const want=ed.id===id||ed.source===id||ed.target===id;const dim=!!id&&!want;
+      if(!!(ed.data&&ed.data._sel)===want&&!!(ed.data&&ed.data._dim)===dim)return ed;ch=true;return {...ed,data:{...ed.data,_sel:want,_dim:dim}};});
     return ch?{...e,nodes,edges}:e;});
   // Decision 2 (A7 consensus): selecting always fills the dock, deselecting always settles it
   // back to the 26px bar — symmetric, so an "empty expanded panel" can never rest on screen.
   const select=useCallback((rec,id)=>{setSelRaw(rec);setSelId(rec?id:null);
     setExpanded(!!rec);mark(rec?id:null);},[]);
-  const clearSel=useCallback(()=>{select(null,null);setHighlightMemberId(null);},[select]);
+  // A8 punch (correctness lens): clearing selection must also drop the DOM's native focus —
+  // React Flow's node wrapper is a focusable (tabIndex=0) div, and without an explicit blur()
+  // the browser's own focus ring lingers on the just-deselected node even after _sel/_dim
+  // reset to uniform weight, contradicting "Esc/deselect restores everything." The _sel
+  // box-shadow glow (see BoxNode/EntityNode/etc above) is the only focus affordance we want.
+  const clearSel=useCallback(()=>{
+    if(document.activeElement&&document.activeElement!==document.body&&document.activeElement.blur)
+      document.activeElement.blur();
+    select(null,null);setHighlightMemberId(null);setExpandedFold(null);},[select]);
   // pending selection: applied once the target view's elements are on screen
   // (seeded by ?sel= for screenshots; driven by journey steps at runtime)
   const[pendingSel,setPendingSel]=useState(q.get("sel"));
@@ -1735,11 +1802,14 @@ function Flow(){
     .sort((a,b)=>(b.viol?1:0)-(a.viol?1:0))),[view,nameOf]);
   const onNodeClick=useCallback((ev,n)=>{if(!n.data)return;
     if(n.type==="spacer")return;
-    // Decision 3 (A7 consensus): the "+N more" fold row is a placeholder, not a real member —
-    // clicking it reveals the rest by selecting the OWNING group (dock fills with the full
-    // ranked list, up to its own cap) instead of doing a normal member selection. Zero canvas
-    // relayout: this is a pure select(), no expandedGroups/toggleCapsule involved.
+    // Decision 3 (A7 consensus) + A8 FIX 2a: the "+N more" fold row is a placeholder, not a
+    // real member — clicking it (a) toggles an in-node scrollable overlay of the remaining
+    // members open right on the canvas, so the owner can reach all 45+ externals without
+    // leaving the map, and (b) still selects the OWNING group so the dock's full ranked list
+    // stays in sync. Both are pure state flips — zero canvas relayout, no expandedGroups/
+    // toggleCapsule/ELK invocation involved.
     if(n.data._foldMore){
+      setExpandedFold(f=>f===n.data._parentId?null:n.data._parentId);
       const bn=els&&els.nodes&&els.nodes.find(x=>x.id===n.data._parentId);
       if(bn)onNodeClick(ev,bn);
       return;}
@@ -1879,9 +1949,19 @@ function Flow(){
     return s;},[findings,scope,showFindings,view]);
   const displayNodes=React.useMemo(()=>{
     if(!els||!els.nodes)return null;
-    if(!findingSubjectIds||!findingSubjectIds.size)return els.nodes;
-    return els.nodes.map(n=>n.type==="member"&&findingSubjectIds.has(n.id)
-      ?{...n,data:{...n.data,showFinding:true}}:n);},[els,findingSubjectIds]);
+    if((!findingSubjectIds||!findingSubjectIds.size)&&!expandedFold)return els.nodes;
+    return els.nodes.map(n=>{
+      let nn=n;
+      if(findingSubjectIds&&findingSubjectIds.size&&n.type==="member"&&findingSubjectIds.has(n.id))
+        nn={...nn,data:{...nn.data,showFinding:true}};
+      // A8 FIX 2a: the bucket whose "+N more" fold is open gets bumped ABOVE the member/fold
+      // node siblings (zIndex 10, set at layout time) so its in-node scrollable overlay of the
+      // remaining members paints on top instead of underneath them — pure display-layer state,
+      // no ELK relayout. _closeFold is a live closure (this memo runs in the component's own
+      // render, not the async ELK pass) so BucketNode's "show less" row can fold it back.
+      if(expandedFold&&n.id===expandedFold&&(n.type==="bucket"||n.type==="capsule"))
+        nn={...nn,zIndex:50,data:{...nn.data,_foldOpen:true,_closeFold:()=>setExpandedFold(null)}};
+      return nn;});},[els,findingSubjectIds,expandedFold]);
   // manual navigation leaves journey mode — the journey owns scope/view only while followed
   const go=useCallback(id=>{setJr(null);setLevel(id);setDirOv(null);},[]);
   const goScope=useCallback(sid=>{setJr(null);setScope(sid);setLevel(firstView(estate,sid));setDirOv(null);},[estate]);
