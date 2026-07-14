@@ -6077,24 +6077,30 @@ function terrainNodeType(node, sim) {
 /* ── Start ── */
 // Probe /api/arch/manifest to decide whether to show the knowledge zone.
 // 200 → reveal spine + Terrain + Blueprints buttons and seed the terrain sim.
-// 404/error → all three stay hidden (lean builds, C4-off daemons).
-safeFetch('/api/arch/manifest').then(function(d) {
-  cache.arch = d;
-  var spine = document.getElementById('navSpine');
-  var btnT = document.getElementById('navTabTerrain');
-  var btnB = document.getElementById('navTabBlueprints');
-  if (spine) spine.style.display = '';
-  if (btnT) btnT.style.display = '';
-  if (btnB) btnB.style.display = '';
-  // Honor deep-link to knowledge tabs now that their nav buttons are visible.
-  // (boot-time hash read skipped these — see comment near hashTab above.)
-  var _kHash = location.hash.replace('#', '');
-  if (_kHash === 'terrain' || _kHash === 'blueprints') {
-    switchTab(_kHash);
-  }
-  terrainManifestRev = terrainGetManifestRev(d);
-  terrainInit();
-}).catch(function() {});
+// Retries with backoff: a daemon restart (slice deploys bounce it) must not
+// leave an open tab permanently missing Terrain/Blueprints until manual reload.
+// Persistent 404 (lean builds, C4-off daemons) stops retrying after the cap.
+(function probeKnowledgeZone(attempt) {
+  safeFetch('/api/arch/manifest').then(function(d) {
+    cache.arch = d;
+    var spine = document.getElementById('navSpine');
+    var btnT = document.getElementById('navTabTerrain');
+    var btnB = document.getElementById('navTabBlueprints');
+    if (spine) spine.style.display = '';
+    if (btnT) btnT.style.display = '';
+    if (btnB) btnB.style.display = '';
+    // Honor deep-link to knowledge tabs now that their nav buttons are visible.
+    // (boot-time hash read skipped these — see comment near hashTab above.)
+    var _kHash = location.hash.replace('#', '');
+    if (_kHash === 'terrain' || _kHash === 'blueprints') {
+      switchTab(_kHash);
+    }
+    terrainManifestRev = terrainGetManifestRev(d);
+    terrainInit();
+  }).catch(function() {
+    if (attempt < 10) setTimeout(function() { probeKnowledgeZone(attempt + 1); }, Math.min(2000 * (attempt + 1), 6000));
+  });
+})(0);
 
 /* ══════════════════════════════════════════════════════════
    COMMIT D — CLICK-FIRST CONTEXT MENUS + FIRST-VISIT OVERLAY
