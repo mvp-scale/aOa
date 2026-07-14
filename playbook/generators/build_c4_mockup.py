@@ -429,6 +429,13 @@ print(f"contract: manifest {mbytes/1024:.1f}KB + {n_shards} shards (largest {big
 # This generator is a consumer of that file, not its owner.
 # V2: VIEW_INTENT is now fetched at runtime from /api/arch/standards — no build-time injection.
 JS=open("internal/adapters/web/static/arch/viewer.js").read()
+# PA4 / T56 (V1-A checkpoint F-3): this mockup is a LEGACY, FROZEN design
+# artifact. It is not go:embedded and not served by the aoa binary (only
+# internal/adapters/web/static/arch is embedded — see embed_arch.go); the
+# fork-guard test (arch_forkguard_test.go TestViewerForkGuard) only asserts
+# that it stays unreachable through the real server, not that it is byte-
+# identical to viewer.js. Re-run this generator to refresh it; do not hand-
+# edit the embedded JS below.
 HTML="""<!doctype html><html><head><meta charset="utf-8"><title>aOa — Architecture</title>
 <link rel="stylesheet" href="https://esm.sh/@xyflow/react@12.3.5/dist/style.css">
 <style>html,body,#root{margin:0;height:100%;background:#0a0a0c}

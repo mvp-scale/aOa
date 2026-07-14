@@ -118,9 +118,10 @@ func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts
 	rev := factsHash(units, deps)
 
 	manifest = Manifest{
-		Scope: scope,
-		Rev:   rev,
-		Views: viewEntries,
+		Scope:         scope,
+		Rev:           rev,
+		SchemaVersion: ArchSchemaVersion,
+		Views:         viewEntries,
 	}
 	return
 }

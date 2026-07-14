@@ -492,3 +492,40 @@ func TestManifestGolden(t *testing.T) {
 	sort.Strings(sorted)
 	assert.Equal(t, sorted, ids, "manifest views must be sorted alphabetically by ID")
 }
+
+// ---------------------------------------------------------------------------
+// T64/T65 — schema version stamping + DerivedAt purity (PA2/PA3)
+// ---------------------------------------------------------------------------
+
+// TestService_RenderAll_StampsSchemaVersion asserts RenderAll always stamps
+// the current ArchSchemaVersion into the returned manifest, and that this is
+// deterministic (a fixed constant, unlike DerivedAt — see below) across two
+// independent calls on identical input.
+func TestService_RenderAll_StampsSchemaVersion(t *testing.T) {
+	svc := &Service{}
+	in := makeFixture()
+
+	_, m1, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	require.NoError(t, err)
+	_, m2, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, ArchSchemaVersion, m1.SchemaVersion, "RenderAll must stamp the current schema version")
+	assert.Equal(t, m1.SchemaVersion, m2.SchemaVersion, "SchemaVersion is a fixed constant — must not vary across renders")
+	assert.NotZero(t, ArchSchemaVersion, "ArchSchemaVersion must be a real version, not the zero value old/absent manifests carry")
+}
+
+// TestService_RenderAll_LeavesDerivedAtEmpty asserts RenderAll — a pure,
+// dependency-free domain function — never stamps a wall-clock timestamp.
+// Only the app layer (deriveArch) sets DerivedAt, once, at actual persist
+// time (T65); stamping it here would break the T4 byte-stability contract
+// this package tests everywhere else (TestService_RenderAll_Determinism).
+func TestService_RenderAll_LeavesDerivedAtEmpty(t *testing.T) {
+	svc := &Service{}
+	in := makeFixture()
+
+	_, m, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	require.NoError(t, err)
+
+	assert.Empty(t, m.DerivedAt, "RenderAll must not stamp DerivedAt — that would make it non-deterministic (T4)")
+}

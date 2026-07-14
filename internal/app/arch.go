@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/corey/aoa/internal/domain/arch"
 	"github.com/corey/aoa/internal/ports"
@@ -234,17 +235,33 @@ func (a *App) loadOrDetectFootprintGrain() *arch.Grain {
 	return fp.PrimaryGrain()
 }
 
-// hasLocalArchManifest reports whether a derived manifest exists for the
-// local scope. Backs the PC1/T45 boot-derive trigger: after `aoa arch recon`
-// invalidates views (DeleteShardsForScope), the arch_shards bucket survives
-// but the manifest is gone — the manifest, not the bucket, is the truthful
-// "views exist" signal. Read-only (db.View); C1 does not apply.
+// hasLocalArchManifest reports whether a CURRENT derived manifest exists for
+// the local scope. Backs the PC1/T45 boot-derive trigger: after `aoa arch
+// recon` invalidates views (DeleteShardsForScope), the arch_shards bucket
+// survives but the manifest is gone — the manifest, not the bucket, is the
+// truthful "views exist" signal. Read-only (db.View); C1 does not apply.
+//
+// T64: presence alone is not enough — a manifest can be present but stamped
+// by an OLDER binary whose shard/JSON shape has since changed (the checkpoint
+// V1-A red-team blocker: a restart alone never re-derives because a manifest
+// exists). So this also parses just the schemaVersion field and requires it
+// to match the running binary's arch.ArchSchemaVersion; a missing/old/corrupt
+// version is treated as "no current manifest" and fires a re-derive.
 func (a *App) hasLocalArchManifest() bool {
 	if a.Store == nil {
 		return false
 	}
 	m, err := a.Store.LoadManifest(a.ProjectID, archScope)
-	return err == nil && len(m) > 0
+	if err != nil || len(m) == 0 {
+		return false
+	}
+	var probe struct {
+		SchemaVersion int `json:"schemaVersion"`
+	}
+	if err := json.Unmarshal(m, &probe); err != nil {
+		return false // corrupt manifest — treat as absent, force a re-derive
+	}
+	return probe.SchemaVersion == arch.ArchSchemaVersion
 }
 
 // ── App.deriveArch — main derivation entry point ───────────────────────────
@@ -343,6 +360,15 @@ func (a *App) deriveArch() {
 		a.debugf("deriveArch: RenderAll: %v", err)
 		return
 	}
+
+	// T65: stamp DerivedAt HERE — the actual derive/persist moment — not at
+	// serve time. RenderAll itself must stay pure/deterministic (T4 byte-
+	// stability across two calls on identical input), so the wall-clock stamp
+	// is applied by the caller, once, right before persisting. The handler
+	// then serves this value verbatim instead of re-stamping time.Now() on
+	// every request (the F-2 red-team finding: a serve-time stamp made
+	// week-old shards claim "current · code as of now").
+	manifest.DerivedAt = time.Now().UTC().Format("2006-01-02 15:04:05 UTC")
 
 	// 8. Persist — all writes outside a.mu (C1 compliant).
 

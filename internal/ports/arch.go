@@ -87,6 +87,14 @@ type ArchManifest struct {
 	// Rev is a 12-char hash derived from the combined facts input (units + deps).
 	// Stable across re-renders of the same input; changes when facts change.
 	Rev string `json:"rev"`
+	// SchemaVersion is the shard/manifest JSON shape version stamped at derive
+	// time (T64). Mirrors arch.ArchSchemaVersion — used by daemon boot logic to
+	// detect and re-derive stale (pre-upgrade) shards.
+	SchemaVersion int `json:"schemaVersion"`
+	// DerivedAt is the UTC timestamp captured when this manifest was rendered
+	// and persisted (T65), NOT when it was served. Empty for manifests that
+	// were never persisted.
+	DerivedAt string `json:"derivedAt,omitempty"`
 	// Views is the ordered list of rendered views (component, dsm, cycles, …).
 	// Ordered by view ID (alphabetical) for byte-stability.
 	Views []ArchViewEntry `json:"views"`

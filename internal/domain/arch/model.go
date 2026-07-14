@@ -210,13 +210,32 @@ type CodeSymbol struct {
 	Parent    string
 }
 
+// ArchSchemaVersion is the shard/manifest JSON shape version, stamped into
+// every Manifest by Service.RenderAll (T64). Bump it whenever Bucket/Shard/
+// Manifest JSON shape changes in a way that a running daemon's cached shards
+// would no longer match. App-layer boot logic (hasLocalArchManifest) compares
+// a persisted manifest's SchemaVersion against this constant and forces a
+// re-derive on mismatch — including the zero value, which old (pre-T64)
+// manifests carry since the field did not exist yet.
+const ArchSchemaVersion = 1
+
 // Manifest is the top-level catalog of all rendered shards for one scope.
-// Byte-stable: all slices sorted by ID; no timestamps inside.
-// Rev is a 12-char hash of the sorted unit+dep inputs — changes when facts change.
+// Byte-stable across two RenderAll calls on identical input: all slices
+// sorted by ID; SchemaVersion is a fixed constant so it never breaks
+// determinism. DerivedAt is the one exception — it is a wall-clock stamp,
+// so RenderAll (pure/deterministic) leaves it at its zero value; the app
+// layer (deriveArch) sets it once, right before persisting, so it reflects
+// the actual derive/persist moment rather than a later serve-time read (T65).
 type Manifest struct {
-	Scope string      `json:"scope"`
-	Rev   string      `json:"rev"`
-	Views []ViewEntry `json:"views"`
+	Scope string `json:"scope"`
+	Rev   string `json:"rev"`
+	// SchemaVersion is stamped by Service.RenderAll from ArchSchemaVersion (T64).
+	SchemaVersion int `json:"schemaVersion"`
+	// DerivedAt is a UTC timestamp ("2006-01-02 15:04:05 UTC") set by the app
+	// layer at persist time, not by RenderAll (T65). Empty when the manifest
+	// came straight out of RenderAll and was never persisted.
+	DerivedAt string      `json:"derivedAt,omitempty"`
+	Views     []ViewEntry `json:"views"`
 }
 
 // ViewEntry is one rendered-view entry in the Manifest.

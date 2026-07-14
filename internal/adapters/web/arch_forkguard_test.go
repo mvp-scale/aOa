@@ -40,10 +40,31 @@ func repoRoot(t *testing.T) string {
 // TestViewerForkGuard asserts that:
 // (a) viewer.js no longer contains the __VIEW_INTENT__ build-time placeholder
 //     (V2: intent is now fetched at runtime from /api/arch/standards).
-// (b) The architecture mockup at playbook/mockups/architecture-c4.html was
-//     generated from internal/adapters/web/static/arch/viewer.js — verified by
-//     checking that the first and last 512 bytes of viewer.js appear verbatim
-//     in the mockup (T16 first half).
+// (b) The mockup at playbook/mockups/architecture-c4.html can never be
+//     mistaken for a live view of the product.
+//
+// PA4/T56 (V1-A checkpoint F-3, MAJOR): the previous version of check (b)
+// compared only the first/last 512 bytes of viewer.js against the mockup.
+// The mockup embeds viewer.js VERBATIM in full (build_c4_mockup.py: `HTML.
+// replace("__JS__", JS)`), so a byte-for-byte comparison is possible and was
+// considered — but the live checkpoint probe (2026-07-14) found the mockup
+// had already drifted by ~38,000 bytes (113,760 vs viewer.js's 151,764) while
+// the 512-byte-window guard stayed green throughout, proving the window
+// check was hollow. Re-running the Python generator on every viewer.js change
+// just to keep a byte-diff green was rejected as disproportionate for a
+// documentation artifact that ships in no binary (it also re-derives shard
+// data from the live repo, not just the JS embed — a much heavier step than
+// this guard should force on unrelated viewer.js changes).
+//
+// The 80/20 call (least-work, still honest): DEMOTE the mockup formally.
+// It is a frozen design reference, not a live view — this guard now proves
+// that fact structurally (the mockup is not go:embedded and is unreachable
+// through the real aoa web server; only internal/adapters/web/static/arch is
+// embedded, see embed_arch.go) instead of pretending to prove byte parity it
+// was never actually enforcing. Byte drift from viewer.js is measured and
+// logged (visible, not silent) but does not fail the build. Absence of the
+// mockup file itself DOES fail — per the checkpoint ruling, "absent mockup =
+// fail, not skip": once retained as an intentional artifact it must stay put.
 func TestViewerForkGuard(t *testing.T) {
 	root := repoRoot(t)
 
@@ -65,48 +86,55 @@ func TestViewerForkGuard(t *testing.T) {
 			"  viewer.js: %s", placeholder, viewerJSPath)
 	}
 
-	// (b) Fork-guard: first and last 512 bytes of viewer.js must appear verbatim in the mockup.
-	// This proves the mockup was generated from (and has not drifted from) viewer.js.
-	const window = 512
-
-	// Read the mockup
+	// (b) Absence check, not equality check (see doc comment above).
+	// The mockup is a retained, intentional artifact — missing it fails.
 	mockupBytes, err := os.ReadFile(mockupPath)
 	if err != nil {
-		t.Skipf("mockup not yet generated (run the generator once to create it): %v", err)
+		t.Fatalf("legacy mockup missing at %s: %v\n"+
+			"PA4: the mockup is an intentionally retained frozen design artifact — "+
+			"restore it or update this guard if it is being formally removed.", mockupPath, err)
 	}
 	mockup := string(mockupBytes)
 
-	// The mockup must contain <script type="module"> wrapping the inlined JS
+	// The mockup must contain <script type="module"> wrapping the inlined JS.
 	if !strings.Contains(mockup, `<script type="module">`) {
 		t.Fatal("mockup does not contain <script type=\"module\"> — unexpected format")
 	}
 
-	// Check the first window bytes of viewer.js appear in the mockup
-	head := viewerJS
-	if len(head) > window {
-		head = head[:window]
+	// The mockup must never become reachable through the real aoa web server.
+	// Only internal/adapters/web/static/arch is go:embedded (embed_arch.go);
+	// if playbook/ ever appears there, the frozen mockup could be served as
+	// if it were a live view — exactly what this guard exists to prevent.
+	embedSrcPath := filepath.Join(root, "internal", "adapters", "web", "embed_arch.go")
+	embedSrc, err := os.ReadFile(embedSrcPath)
+	if err != nil {
+		t.Fatalf("cannot read %s: %v", embedSrcPath, err)
 	}
-	if !strings.Contains(mockup, head) {
-		t.Fatalf("mockup does not contain the first %d bytes of viewer.js — sources have diverged.\n"+
-			"Fix: regenerate the mockup with the playbook generator.\n"+
-			"  viewer.js: %s\n  mockup: %s\n  first %d bytes: %q",
-			window, viewerJSPath, mockupPath, window, head)
-	}
-
-	// Check the last window bytes of viewer.js appear in the mockup
-	tail := viewerJS
-	if len(tail) > window {
-		tail = tail[len(tail)-window:]
-	}
-	if !strings.Contains(mockup, tail) {
-		t.Fatalf("mockup does not contain the last %d bytes of viewer.js — sources have diverged.\n"+
-			"Fix: regenerate the mockup with the playbook generator.\n"+
-			"  viewer.js: %s\n  mockup: %s\n  last %d bytes: %q",
-			window, viewerJSPath, mockupPath, window, tail)
+	if strings.Contains(string(embedSrc), "playbook") {
+		t.Fatalf("%s now references playbook/ — the frozen mockup must never become servable "+
+			"through the live aoa binary; if this is intentional, update TestViewerForkGuard's "+
+			"absence-check rationale", embedSrcPath)
 	}
 
-	t.Logf("Fork-guard PASS: mockup embeds JS derived from viewer.js (%d bytes, head+tail %d-byte windows both present)",
-		len(viewerJS), window)
+	// Divergence is measured and logged — visible, not silent, but not
+	// build-blocking for a documentation artifact (see doc comment above).
+	start := strings.Index(mockup, `<script type="module">`)
+	if start >= 0 {
+		start += len(`<script type="module">`)
+		end := strings.Index(mockup[start:], "</script>")
+		if end >= 0 {
+			embedded := mockup[start : start+end]
+			if embedded != viewerJS {
+				t.Logf("PA4 informational: mockup's embedded JS has diverged from viewer.js "+
+					"(embedded %d bytes vs viewer.js %d bytes) — expected for a frozen artifact; "+
+					"run playbook/generators/build_c4_mockup.py to refresh it", len(embedded), len(viewerJS))
+			} else {
+				t.Logf("PA4 informational: mockup's embedded JS is currently byte-identical to viewer.js")
+			}
+		}
+	}
+
+	t.Logf("Fork-guard PASS: mockup is a retained artifact, structurally unreachable through the live aoa server (PA4 demotion)")
 }
 
 // TestT16BundleBudget asserts the vendor bundle budget and no-CDN-import constraints (T16 second half).

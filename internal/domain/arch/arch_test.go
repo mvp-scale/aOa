@@ -193,6 +193,26 @@ func TestRenderComponent_CalmCaptionNeverMentionsFindings(t *testing.T) {
 		"the findings count must live in the separate FindingsClause field")
 }
 
+// TestRenderComponent_CaptionUsesLabelsNotSlugs is the PA8 gate (V1-A
+// checkpoint F-8, MODERATE): the "heaviest: A → B" caption must show plain
+// bucket labels (e.g. "app", "adapters") the same way the dock does, never
+// the internal group-ID slug (e.g. "g_app", "g_ext_std") ShardEdge.Source/
+// Target actually carry.
+func TestRenderComponent_CaptionUsesLabelsNotSlugs(t *testing.T) {
+	in := makeFixture()
+
+	s, err := RenderComponent(in)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, s.Edges, "fixture must plant cross-group edges for this test to be meaningful")
+	require.Contains(t, s.Count, "heaviest:", "fixture's heaviest edge must be present in the caption")
+
+	assert.NotContains(t, s.Count, "g_", "caption must not leak internal bucket-ID slugs (e.g. \"g_app\")")
+	// Fixture's heaviest cross-group edge is app → adapters ×4 (golden_component.json).
+	assert.Contains(t, s.Count, "heaviest: app → adapters ×4",
+		"caption must show plain bucket labels, matching the dock's display text")
+}
+
 func TestDeterminism_DSM(t *testing.T) {
 	in := makeFixture()
 

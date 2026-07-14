@@ -47,8 +47,13 @@ func DeriveCaption(s *Shard, findings []Finding) (caption, findingsClause string
 func deriveBucketsCaption(s *Shard) string {
 	nGroups := len(s.Buckets)
 	nMembers := 0
+	// PA8/T-4 checkpoint F-8: ShardEdge.Source/Target hold internal bucket IDs
+	// (e.g. "g_ext_std"), not display text — the header caption must show the
+	// same plain-noun labels the dock uses (e.g. "ext:std"), never the slug.
+	labelByID := make(map[string]string, len(s.Buckets))
 	for _, b := range s.Buckets {
 		nMembers += len(b.Members)
+		labelByID[b.ID] = b.Label
 	}
 
 	// Find heaviest edge (highest count).
@@ -57,7 +62,7 @@ func deriveBucketsCaption(s *Shard) string {
 	for _, e := range s.Edges {
 		if e.Count > maxCount {
 			maxCount = e.Count
-			heavy = fmt.Sprintf("%s → %s ×%d", e.Source, e.Target, e.Count)
+			heavy = fmt.Sprintf("%s → %s ×%d", bucketLabel(labelByID, e.Source), bucketLabel(labelByID, e.Target), e.Count)
 		}
 	}
 
@@ -66,6 +71,16 @@ func deriveBucketsCaption(s *Shard) string {
 		base += " — heaviest: " + heavy
 	}
 	return base
+}
+
+// bucketLabel resolves a bucket ID to its display label. Falls back to the
+// raw ID only if the shard's own bucket list somehow lacks it (defensive;
+// should not happen for a self-consistent shard).
+func bucketLabel(labelByID map[string]string, id string) string {
+	if label, ok := labelByID[id]; ok {
+		return label
+	}
+	return id
 }
 
 func deriveMatrixCaption(s *Shard) string {

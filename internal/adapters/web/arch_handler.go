@@ -146,6 +146,10 @@ func (s *Server) handleArchManifest(w http.ResponseWriter, r *http.Request) {
 
 // emptyEstatesManifest returns a valid estates manifest with no views yet.
 // label is the project root basename (PF7); tech is the dominant language (may be "").
+// No manifest has ever been derived in this state, so there is no DerivedAt
+// to serve honestly — time.Now() here just marks "checked now, nothing
+// derived" and carries no staleness-masking risk (T65 only concerns a
+// PERSISTED manifest's age, which this path by definition does not have).
 func emptyEstatesManifest(label, tech string) map[string]interface{} {
 	return map[string]interface{}{
 		"schema":  "aoa.archmodel/v1",
@@ -226,11 +230,21 @@ func buildEstatesManifest(m *ports.ArchManifest, q ports.ArchQuerier, label, tec
 		}
 	}
 
+	// T65: serve the DERIVE-time stamp (captured once by deriveArch, right
+	// before persisting), never a fresh time.Now() here — a serve-time stamp
+	// is what let week-old shards claim "current · code as of now" (F-2).
+	// Fall back to time.Now() only when a manifest predates T65 (DerivedAt
+	// empty) so the chip still renders something rather than a blank field.
+	ts := m.DerivedAt
+	if ts == "" {
+		ts = time.Now().UTC().Format("2006-01-02 15:04:05 UTC")
+	}
+
 	return map[string]interface{}{
 		"schema":  "aoa.archmodel/v1",
 		"sharded": true,
 		"generated": map[string]interface{}{
-			"timestamp": time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
+			"timestamp": ts,
 		},
 		"estates": map[string]interface{}{
 			"local": map[string]interface{}{

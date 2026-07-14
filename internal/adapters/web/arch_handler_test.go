@@ -338,6 +338,52 @@ func TestArchManifest_LabelDerivedFromProjectRoot(t *testing.T) {
 		"scope label must match estate label")
 }
 
+// TestArchManifest_FreshnessTimestampStable is the PA3/T65 gate (V1-A
+// checkpoint F-2, MAJOR): generated.timestamp must reflect the manifest's
+// DERIVE-time stamp, not a fresh time.Now() computed on every request. Two
+// GETs against the SAME manifest (no re-derive between them) must return the
+// identical timestamp. Before this fix, arch_handler.go stamped time.Now()
+// at serve time — the exact "current · code as of now" claim the checkpoint's
+// live probe proved false for week-old shards.
+func TestArchManifest_FreshnessTimestampStable(t *testing.T) {
+	q := &mockArchQuerier{
+		manifest: &ports.ArchManifest{
+			Scope:     "local",
+			Rev:       "abc123def456",
+			DerivedAt: "2026-01-01 00:00:00 UTC", // fixed derive-time stamp, deliberately in the past
+			Views: []ports.ArchViewEntry{
+				{ID: "component", Key: "local/component@abc123def456", Hash: "abc123def456", Caption: "12 units", Prov: "derived"},
+			},
+		},
+		views: map[string][]byte{
+			"local/component": []byte(`{"kind":"buckets","title":"Component","count":"12 units","prov":{"kind":"derived","label":"derived"}}`),
+		},
+	}
+	ts := setupArchServer(t, q)
+	defer ts.Close()
+
+	getTimestamp := func() string {
+		resp, err := http.Get(ts.URL + "/api/arch/manifest")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		var result map[string]interface{}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+		generated, ok := result["generated"].(map[string]interface{})
+		require.True(t, ok, "manifest must have a generated field")
+		gts, ok := generated["timestamp"].(string)
+		require.True(t, ok, "generated.timestamp must be a string")
+		return gts
+	}
+
+	first := getTimestamp()
+	second := getTimestamp()
+
+	assert.Equal(t, "2026-01-01 00:00:00 UTC", first,
+		"generated.timestamp must equal the manifest's DerivedAt, not a serve-time stamp")
+	assert.Equal(t, first, second,
+		"generated.timestamp must be identical across two GETs with no re-derive in between (T65)")
+}
+
 // --- /api/arch/{path} shard tests ---
 
 // TestArchShard_ReturnsBytesVerbatim ensures /api/arch/{scope}/{id} returns the
