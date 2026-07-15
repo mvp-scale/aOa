@@ -46,6 +46,10 @@ type storeBackend interface {
 	// buckets, C3 versioned). SaveFindings/LoadFindings are now part of ports.ArchStore.
 	// All write methods are C1-compliant — must never be called while App.mu is held.
 	ports.ArchStore
+	// FactStore (FDN-1/FDN-3): the universal facts substrate — raw dep facts,
+	// compactor output (units + DepAdjacency), and compact-time findings.
+	// All write methods are C1-compliant — must never be called while App.mu is held.
+	ports.FactStore
 	// Healthy reports whether the backend is operational.
 	Healthy() bool
 	// Recovered reports whether the backend rebuilt itself from a corrupt state
@@ -373,6 +377,28 @@ type App struct {
 	// archDeriveMu serializes deriveArch runs (flush-trigger vs Reindex-trigger)
 	// so a stale-generation render can never overwrite a fresher manifest.
 	archDeriveMu sync.Mutex
+
+	// factsMu serializes the facts substrate's compact-and-persist writes
+	// (ReplaceAllFacts/PutResolved/PutFindings) across all four call sites
+	// that produce them — compactAndPersistFacts (doFlushEdgeBatch's
+	// incremental path), and the bulk paths in WarmCaches/Reindex/
+	// boot-facts-recompact's Reindex — mirroring archDeriveMu's own
+	// serialize-whole-writes pattern (FDN-3 review punch: without this, two
+	// overlapping compactions — e.g. back-to-back debounce flushes, or a
+	// boot-time recompact racing a live watcher flush — could interleave and
+	// let a stale compaction's write land after a fresher one's).
+	// compactAndPersistFacts additionally re-reads facts_raw AFTER acquiring
+	// this lock (not before), so among overlapping *incremental* compactions
+	// the last one to acquire the lock is also the last one to read —
+	// guaranteeing it reflects the newest raw facts, the same
+	// read-fresh-inside-the-critical-section guarantee deriveArch gives
+	// arch shards. This does not perfectly resolve the cross-strategy race
+	// against a concurrent full Reindex (which recomputes from a fresh disk
+	// parse, not from facts_raw, so "freshest" isn't reducible to lock
+	// acquisition order there) — that residual gap is accepted for now
+	// (low impact: nothing yet renders from FactStore ahead of FDN-4) rather
+	// than introducing a generation-counter scheme this task doesn't need.
+	factsMu sync.Mutex
 }
 
 // Config holds initialization parameters for the App.
@@ -883,12 +909,24 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 		// Pure function — freshIdx is local, no lock needed here.
 		var resolvedEdges []ports.ImportEdge
 		var unresolvedEdges []ports.ImportEdge
+		// FDN-3 (board #29): compactor output for the bulk-build path — computed
+		// directly from the in-memory raw edges (no factlog/JSONL round trip;
+		// see internal/app/facts.go's package doc for why the bulk path bypasses
+		// the store-read compactAndPersistFacts uses for the incremental path).
+		var rawFactsByFile map[string][]ports.Fact
+		var factUnits []ports.Fact
+		var factAdj *ports.DepAdjacency
+		var factFindings []ports.Fact
 		if a.ArchEnabled && len(edges) > 0 {
 			manifests := facts.ReadManifests(a.ProjectRoot)
 			fileSet := buildFileSet(freshIdx)
 			rr := facts.Resolve(edges, fileSet, manifests)
 			resolvedEdges = rr.Resolved
 			unresolvedEdges = rr.Unresolved
+
+			rawFacts := buildRawFacts(edges)
+			rawFactsByFile = groupFactsByFile(rawFacts)
+			factUnits, factAdj, factFindings = facts.CompactWithManifests(rawFacts, fileSet, manifests)
 		}
 
 		// L19.10: compute path→fileID grouping before the lock swap (freshIdx is local).
@@ -931,6 +969,23 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 						a.debugf("WarmCaches: SaveUnresolved: %v", err)
 					}
 				}
+
+				// FDN-3: facts substrate — bulk write raw + resolved + findings
+				// in one pass (§3 compaction cadence: "writes raw + resolved in
+				// one tx" for the index-build path). Serialized by a.factsMu —
+				// see its doc comment — against compactAndPersistFacts/Reindex's
+				// own facts writes, closing the review punch's ordering gap.
+				a.factsMu.Lock()
+				if err := a.Store.ReplaceAllFacts(a.ProjectID, rawFactsByFile); err != nil {
+					a.debugf("WarmCaches: ReplaceAllFacts: %v", err)
+				}
+				if err := a.Store.PutResolved(a.ProjectID, factUnits, factAdj); err != nil {
+					a.debugf("WarmCaches: PutResolved: %v", err)
+				}
+				if err := a.Store.PutFindings(a.ProjectID, factFindings); err != nil {
+					a.debugf("WarmCaches: PutFindings: %v", err)
+				}
+				a.factsMu.Unlock()
 			}
 		}
 	}
@@ -978,11 +1033,40 @@ func (a *App) WarmCaches(logFn func(string)) WarmResult {
 	// Same C4 gate and safeGo/bgWg pattern as the T43 trigger.
 	// Mutually exclusive with T43: T43 fires when edges are absent (Reindex →
 	// edges + shards); PC1 fires when edges are present but views are absent
-	// (direct derive only). archDeriveMu serializes concurrent derives —
-	// no double-fire risk.
+	// (direct derive only).
+	// Also gated by hasFreshFacts(): when facts are stale, boot-facts-recompact
+	// below fires a full Reindex, which itself re-derives arch at the end
+	// (app.go Reindex's "arch-derive" safeGo) — so PC1 firing too would be a
+	// redundant concurrent derive + an extra full Reindex parse pass on the
+	// very same boot. archDeriveMu would serialize the two derives to a
+	// correct end state, but the duplicate work is a real, reachable
+	// regression for any pre-facts-substrate project upgrading straight to
+	// this binary (edges bucket present, arch manifest AND facts both
+	// stale). Requiring hasFreshFacts() here lets boot-facts-recompact
+	// subsume PC1 in that case; PC1 alone still covers the (now common)
+	// case where facts are fresh but the arch manifest/shards are missing
+	// (e.g. after `aoa arch recon`).
 	if r.FileCount > 0 && a.ArchEnabled && a.Store != nil &&
-		a.Store.HasEdgesBucket(a.ProjectID) && !a.hasLocalArchManifest() {
+		a.Store.HasEdgesBucket(a.ProjectID) && !a.hasLocalArchManifest() && a.hasFreshFacts() {
 		safeGo(&a.bgWg, "boot-arch-derive", nil, a.deriveArch)
+	}
+
+	// FDN-3: boot-time facts recompact — populated index + edges bucket
+	// present (so T43 above did NOT already fire a Reindex) but the facts
+	// substrate's last compaction (if any) does not match FactsSchemaVersion
+	// (D14/t64 mirror, hasFreshFacts). Covers the upgrade-boot case where an
+	// existing project's edges bucket predates the facts substrate: a
+	// lightweight recompact-from-raw-buckets would incorrectly stamp "fresh"
+	// over an empty facts_raw (never populated pre-upgrade), so this fires a
+	// full Reindex — the same derive-everything path T43 uses — instead.
+	// Mutually exclusive with T43 (opposite HasEdgesBucket condition).
+	if r.FileCount > 0 && a.ArchEnabled && a.Store != nil &&
+		a.Store.HasEdgesBucket(a.ProjectID) && !a.hasFreshFacts() {
+		safeGo(&a.bgWg, "boot-facts-recompact", nil, func() {
+			if _, err := a.Reindex(); err != nil {
+				a.debugf("boot-facts-recompact: Reindex: %v", err)
+			}
+		})
 	}
 
 	r.TotalTime = time.Since(totalStart).Seconds()
@@ -1089,12 +1173,16 @@ func (a *App) doFlushEdgeBatch() {
 		a.mu.Unlock()
 		return
 	}
-	batch := a.edgePendingBatch
+	rawBatch := a.edgePendingBatch
 	projectID := a.edgePendingProjID
 	a.edgePendingBatch = nil // reset; next window starts fresh
 	// Snapshot fileSet for §2.4 resolver — Index is under a.mu, so capture
 	// it here before releasing the lock.
 	fileSet := buildFileSet(a.Index)
+	// FDN-3: fileID→path snapshot for ReplaceFactsForFile below (keyed by
+	// path, unlike SaveEdgesBatch's fileID keying) — taken under the same
+	// lock as fileSet, before a.Index can move.
+	idToPath := buildIDToPath(a.Index)
 	projectRoot := a.ProjectRoot
 	archEnabled := a.ArchEnabled
 	a.mu.Unlock() // release before IO (C1)
@@ -1102,9 +1190,13 @@ func (a *App) doFlushEdgeBatch() {
 	// §2.4 resolver: resolve raw ImportPath specs to canonical form before
 	// persisting — mirrors the WarmCaches/Reindex path so the watcher write
 	// path produces byte-identical rows (T41, PC1 one choke-point).
+	// rawBatch (pre-resolution) is kept for the facts substrate below — raw
+	// facts carry the literal spec, never the resolved/canonical form (§2.1,
+	// matching buildRawFacts' contract in WarmCaches/Reindex).
+	batch := rawBatch
 	var unresolvedEdges []ports.ImportEdge
 	if archEnabled {
-		batch, unresolvedEdges = resolveEdgeBatch(batch, fileSet, projectRoot)
+		batch, unresolvedEdges = resolveEdgeBatch(rawBatch, fileSet, projectRoot)
 	}
 
 	// db.Update happens here, outside a.mu — C1 compliant.
@@ -1118,11 +1210,34 @@ func (a *App) doFlushEdgeBatch() {
 		}
 	}
 
+	// FDN-3: per-file raw-fact swap (D11/D12 incremental cadence) — one
+	// ReplaceFactsForFile per touched file in this debounce window, keyed by
+	// path (unknown/already-removed fileIDs are skipped: nothing more to
+	// attribute a fact to). compactAndPersistFacts below re-reads the FULL
+	// raw fact set from the store and recomputes resolved+findings, so this
+	// step only needs to keep facts_raw/facts_byfile current per file.
+	if archEnabled {
+		for fileID, edges := range rawBatch {
+			path, ok := idToPath[fileID]
+			if !ok || path == "" {
+				continue
+			}
+			if err := a.Store.ReplaceFactsForFile(projectID, path, buildRawFacts(edges)); err != nil {
+				a.debugf("doFlushEdgeBatch: ReplaceFactsForFile(%s): %v", path, err)
+			}
+		}
+	}
+
 	// C2+C1: trigger arch re-derive after each debounce flush (one render per window).
 	// Runs in a background goroutine — never under a.mu, never in the watcher critical
 	// section. archEnabled is already snapshotted outside the lock above.
+	// FDN-3: bundles the facts recompact (compactAndPersistFacts) into the same
+	// background pass as deriveArch — one goroutine per debounce window, not two.
 	if archEnabled {
-		safeGo(&a.bgWg, "arch-derive", nil, a.deriveArch)
+		safeGo(&a.bgWg, "arch-derive", nil, func() {
+			a.compactAndPersistFacts(projectID, projectRoot, fileSet)
+			a.deriveArch()
+		})
 	}
 }
 
@@ -3282,12 +3397,23 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 	// §2.4 resolver (L19.9): classify raw edges before grouping/persisting.
 	var resolvedEdges []ports.ImportEdge
 	var unresolvedEdges []ports.ImportEdge
+	// FDN-3 (board #29): compactor output for the bulk-build path — same
+	// direct in-memory route WarmCaches' fresh-build branch uses (no
+	// factlog/JSONL round trip).
+	var rawFactsByFile map[string][]ports.Fact
+	var factUnits []ports.Fact
+	var factAdj *ports.DepAdjacency
+	var factFindings []ports.Fact
 	if a.ArchEnabled && len(edges) > 0 {
 		manifests := facts.ReadManifests(a.ProjectRoot)
 		fileSet := buildFileSet(idx)
 		rr := facts.Resolve(edges, fileSet, manifests)
 		resolvedEdges = rr.Resolved
 		unresolvedEdges = rr.Unresolved
+
+		rawFacts := buildRawFacts(edges)
+		rawFactsByFile = groupFactsByFile(rawFacts)
+		factUnits, factAdj, factFindings = facts.CompactWithManifests(rawFacts, fileSet, manifests)
 	}
 
 	// L19.10: build path→fileID map from the fresh index (no lock needed —
@@ -3329,6 +3455,22 @@ func (a *App) Reindex() (socket.ReindexResult, error) {
 				a.debugf("Reindex: SaveUnresolved: %v", err)
 			}
 		}
+
+		// FDN-3: facts substrate — bulk write raw + resolved + findings in one
+		// pass (§3 compaction cadence: "writes raw + resolved in one tx").
+		// Serialized by a.factsMu (see its doc comment) against
+		// compactAndPersistFacts/WarmCaches' own facts writes.
+		a.factsMu.Lock()
+		if err := a.Store.ReplaceAllFacts(projectID, rawFactsByFile); err != nil {
+			a.debugf("Reindex: ReplaceAllFacts: %v", err)
+		}
+		if err := a.Store.PutResolved(projectID, factUnits, factAdj); err != nil {
+			a.debugf("Reindex: PutResolved: %v", err)
+		}
+		if err := a.Store.PutFindings(projectID, factFindings); err != nil {
+			a.debugf("Reindex: PutFindings: %v", err)
+		}
+		a.factsMu.Unlock()
 	}
 
 	// Re-scan dimensional analysis in the background after full reindex

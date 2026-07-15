@@ -320,6 +320,44 @@ func importEdgeToFact(e ports.ImportEdge, subject string) ports.Fact {
 	}
 }
 
+// buildRawFacts converts a flat []ports.ImportEdge (raw, pre-resolution — the
+// same shape BuildIndexWithFacts/WarmCaches/Reindex already collect) into raw
+// FactDep facts using the same factSubjectForFile/importEdgeToFact mapping
+// the parse-pass sink uses (buildIndexCore), so the bulk-build facts path
+// (FDN-3) and the sink-based dual-run path (FDN-2) produce byte-identical
+// raw facts for the same input. Subject is computed once per distinct
+// FromFile (cheap path math, but no need to repeat it per edge).
+func buildRawFacts(edges []ports.ImportEdge) []ports.Fact {
+	if len(edges) == 0 {
+		return nil
+	}
+	facts := make([]ports.Fact, 0, len(edges))
+	subjectCache := make(map[string]string, len(edges))
+	for _, e := range edges {
+		subj, ok := subjectCache[e.FromFile]
+		if !ok {
+			ext := strings.TrimPrefix(filepath.Ext(e.FromFile), ".")
+			subj = factSubjectForFile(e.FromFile, ext)
+			subjectCache[e.FromFile] = subj
+		}
+		facts = append(facts, importEdgeToFact(e, subj))
+	}
+	return facts
+}
+
+// groupFactsByFile buckets raw facts by their Source.File — the shape
+// ports.FactStore.ReplaceAllFacts/ReplaceFactsForFile expect.
+func groupFactsByFile(facts []ports.Fact) map[string][]ports.Fact {
+	if len(facts) == 0 {
+		return nil
+	}
+	out := make(map[string][]ports.Fact)
+	for _, f := range facts {
+		out[f.Source.File] = append(out[f.Source.File], f)
+	}
+	return out
+}
+
 // groupEdgesByFile maps a flat []ports.ImportEdge slice into a map from fileID
 // to the edges belonging to that file. It derives fileID from idx.Files by
 // matching the edge's FromFile (relative path) against FileMeta.Path.
@@ -372,6 +410,21 @@ func buildFileSet(idx *ports.Index) map[string]bool {
 		s[fm.Path] = true
 	}
 	return s
+}
+
+// buildIDToPath returns a fileID -> path snapshot from idx.Files. Used by
+// doFlushEdgeBatch to translate the fileID-keyed watcher edge batch into
+// paths for ports.FactStore.ReplaceFactsForFile, which — unlike EdgeStore's
+// SaveEdgesBatch — is keyed by path, not fileID.
+func buildIDToPath(idx *ports.Index) map[uint32]string {
+	if idx == nil || len(idx.Files) == 0 {
+		return nil
+	}
+	m := make(map[uint32]string, len(idx.Files))
+	for id, fm := range idx.Files {
+		m[id] = fm.Path
+	}
+	return m
 }
 
 // gitTrackedFiles uses "git ls-files" to enumerate files that are tracked

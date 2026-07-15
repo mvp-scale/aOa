@@ -129,7 +129,7 @@ func TestResolvePython_Absolute(t *testing.T) {
 		paths = append(paths, e.ImportPath)
 	}
 	assert.Contains(t, paths, "ext:numpy")
-	assert.Contains(t, paths, "ext:os")      // top-level of os.path
+	assert.Contains(t, paths, "ext:os") // top-level of os.path
 	assert.Contains(t, paths, "ext:requests")
 }
 
@@ -257,8 +257,8 @@ func TestResolveJS_BareSpecifier(t *testing.T) {
 func TestResolveJS_RelativeFound(t *testing.T) {
 	manifests := Manifests{GoModules: map[string]string{}}
 	fileSet := map[string]bool{
-		"src/index.ts":      true,
-		"src/utils.ts":      true,
+		"src/index.ts":       true,
+		"src/utils.ts":       true,
 		"src/components.tsx": true,
 	}
 
@@ -281,8 +281,8 @@ func TestResolveJS_RelativeFound(t *testing.T) {
 func TestResolveJS_RelativeIndex(t *testing.T) {
 	manifests := Manifests{GoModules: map[string]string{}}
 	fileSet := map[string]bool{
-		"src/app.ts":            true,
-		"src/lib/index.ts":      true,
+		"src/app.ts":       true,
+		"src/lib/index.ts": true,
 	}
 
 	edges := []ports.ImportEdge{

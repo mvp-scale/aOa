@@ -235,10 +235,48 @@ func decodeDepEdges(data []byte) ([]ports.DepEdge, error) {
 	return edges, nil
 }
 
+// putFactsForFileTx is the shared per-file swap body used by both
+// ReplaceFactsForFile (one file, its own tx) and ReplaceAllFacts (every
+// file, one tx). Prior facts for path are located via the facts_byfile
+// index and deleted before the new set is written; empty facts is a pure
+// delete. Caller owns the surrounding db.Update transaction.
+func putFactsForFileTx(rawB, byFileB *bolt.Bucket, path string, facts []ports.Fact) error {
+	fileKey := []byte(path)
+	if prev := byFileB.Get(fileKey); prev != nil {
+		cp := append([]byte(nil), prev...)
+		if oldKeys, derr := decodeKeyList(cp); derr == nil {
+			for _, k := range oldKeys {
+				if err := rawB.Delete(k); err != nil {
+					return fmt.Errorf("delete stale raw key for %q: %w", path, err)
+				}
+			}
+		}
+		// A corrupt key-list index is non-fatal: new facts still get
+		// written below; any orphaned rows are pure cache garbage,
+		// cleared by the next full rebuild (facts are re-derivable).
+	}
+
+	if len(facts) == 0 {
+		return byFileB.Delete(fileKey)
+	}
+
+	newKeys := make([][]byte, 0, len(facts))
+	for i, f := range facts {
+		key := factRawKey(path, f.Source.Line, i)
+		data, merr := json.Marshal(f)
+		if merr != nil {
+			return fmt.Errorf("marshal fact %d for %q: %w", i, path, merr)
+		}
+		if err := rawB.Put(key, data); err != nil {
+			return fmt.Errorf("put fact %d for %q: %w", i, path, err)
+		}
+		newKeys = append(newKeys, key)
+	}
+	return byFileB.Put(fileKey, encodeKeyList(newKeys))
+}
+
 // ReplaceFactsForFile atomically swaps all raw facts attributed to one file
-// (§4.1's incremental unit of work). Prior facts for path are located via
-// the facts_byfile index and deleted before the new set is written; empty
-// facts is a pure delete. Implements ports.FactStore.
+// (§4.1's incremental unit of work). Implements ports.FactStore.
 // C1: caller must NOT hold App.mu.
 func (s *Store) ReplaceFactsForFile(projectID, path string, facts []ports.Fact) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
@@ -254,39 +292,51 @@ func (s *Store) ReplaceFactsForFile(projectID, path string, facts []ports.Fact) 
 		if err != nil {
 			return err
 		}
-
-		fileKey := []byte(path)
-		if prev := byFileB.Get(fileKey); prev != nil {
-			cp := append([]byte(nil), prev...)
-			if oldKeys, derr := decodeKeyList(cp); derr == nil {
-				for _, k := range oldKeys {
-					if err := rawB.Delete(k); err != nil {
-						return fmt.Errorf("ReplaceFactsForFile: delete stale raw key for %q: %w", path, err)
-					}
-				}
-			}
-			// A corrupt key-list index is non-fatal: new facts still get
-			// written below; any orphaned rows are pure cache garbage,
-			// cleared by the next full rebuild (facts are re-derivable).
+		if err := putFactsForFileTx(rawB, byFileB, path, facts); err != nil {
+			return fmt.Errorf("ReplaceFactsForFile: %w", err)
 		}
+		return nil
+	})
+}
 
-		if len(facts) == 0 {
-			return byFileB.Delete(fileKey)
+// ReplaceAllFacts atomically clears facts_raw + facts_byfile for the project
+// and writes every file's facts in one tx (bulk counterpart to
+// ReplaceFactsForFile, mirroring EdgeStore.ReplaceAllEdges). Used by
+// full-build paths (WarmCaches, Reindex) so stale rows from a previous build
+// never linger. Implements ports.FactStore. C1: caller must NOT hold App.mu.
+func (s *Store) ReplaceAllFacts(projectID string, fileFacts map[string][]ports.Fact) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		proj, err := tx.CreateBucketIfNotExists([]byte(projectID))
+		if err != nil {
+			return err
 		}
-
-		newKeys := make([][]byte, 0, len(facts))
-		for i, f := range facts {
-			key := factRawKey(path, f.Source.Line, i)
-			data, merr := json.Marshal(f)
-			if merr != nil {
-				return fmt.Errorf("ReplaceFactsForFile: marshal fact %d for %q: %w", i, path, merr)
+		if proj.Bucket(bucketFactsRaw) != nil {
+			if err := proj.DeleteBucket(bucketFactsRaw); err != nil {
+				return fmt.Errorf("ReplaceAllFacts: delete facts_raw: %w", err)
 			}
-			if err := rawB.Put(key, data); err != nil {
-				return fmt.Errorf("ReplaceFactsForFile: put fact %d for %q: %w", i, path, err)
-			}
-			newKeys = append(newKeys, key)
 		}
-		return byFileB.Put(fileKey, encodeKeyList(newKeys))
+		if proj.Bucket(bucketFactsByFile) != nil {
+			if err := proj.DeleteBucket(bucketFactsByFile); err != nil {
+				return fmt.Errorf("ReplaceAllFacts: delete facts_byfile: %w", err)
+			}
+		}
+		rawB, err := ensureFactsBucket(proj, bucketFactsRaw)
+		if err != nil {
+			return err
+		}
+		byFileB, err := ensureFactsBucket(proj, bucketFactsByFile)
+		if err != nil {
+			return err
+		}
+		for path, facts := range fileFacts {
+			if len(facts) == 0 {
+				continue // nothing to write against a freshly-cleared bucket
+			}
+			if err := putFactsForFileTx(rawB, byFileB, path, facts); err != nil {
+				return fmt.Errorf("ReplaceAllFacts: %w", err)
+			}
+		}
+		return nil
 	})
 }
 
@@ -371,8 +421,80 @@ func (s *Store) PutResolved(projectID string, units []ports.Fact, adj *ports.Dep
 		if err := metaB.Put([]byte("counts"), []byte(counts)); err != nil {
 			return fmt.Errorf("PutResolved: meta counts: %w", err)
 		}
+		if err := metaB.Put([]byte("schema_version"), []byte(strconv.Itoa(factsCompactSchemaVersion))); err != nil {
+			return fmt.Errorf("PutResolved: meta schema_version: %w", err)
+		}
 		return nil
 	})
+}
+
+// factsCompactSchemaVersion mirrors domain/facts.FactsSchemaVersion, kept as
+// a literal (not an import) so this adapter stays domain-independent
+// (hexagonal law, CLAUDE.md: adapters depend on ports, not domain
+// packages). Bump in lockstep with facts.FactsSchemaVersion whenever the
+// compactor's output shape changes.
+const factsCompactSchemaVersion = 1
+
+// PutFindings writes compact-time detector output (FDN-3, D27): FactFinding
+// facts keyed by rule\x00subject (§3 bucket layout), overwriting the entire
+// fact_findings bucket wholesale — findings are recomputed fresh every
+// compaction (internal/domain/facts/detect.go), never merged with a prior
+// run's stale rows. Implements ports.FactStore. C1: caller must NOT hold
+// App.mu.
+func (s *Store) PutFindings(projectID string, findings []ports.Fact) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		proj, err := tx.CreateBucketIfNotExists([]byte(projectID))
+		if err != nil {
+			return err
+		}
+		if proj.Bucket(bucketFactFindings) != nil {
+			if err := proj.DeleteBucket(bucketFactFindings); err != nil {
+				return fmt.Errorf("PutFindings: delete fact_findings: %w", err)
+			}
+		}
+		b, err := ensureFactsBucket(proj, bucketFactFindings)
+		if err != nil {
+			return err
+		}
+		for _, f := range findings {
+			rule := f.Attrs["rule"]
+			key := []byte(rule + "\x00" + f.Subject)
+			data, merr := json.Marshal(f)
+			if merr != nil {
+				return fmt.Errorf("PutFindings: marshal %q/%q: %w", rule, f.Subject, merr)
+			}
+			if err := b.Put(key, data); err != nil {
+				return fmt.Errorf("PutFindings: put %q/%q: %w", rule, f.Subject, err)
+			}
+		}
+		return nil
+	})
+}
+
+// FactsMeta returns facts_meta's recorded keys (schema_version,
+// compacted_at, counts) as a string map, or nil if this project has never
+// been compacted. Implements ports.FactStore.
+func (s *Store) FactsMeta(projectID string) (map[string]string, error) {
+	var result map[string]string
+	err := s.db.View(func(tx *bolt.Tx) error {
+		proj := tx.Bucket([]byte(projectID))
+		if proj == nil {
+			return nil
+		}
+		b := openFactsBucket(proj, bucketFactsMeta)
+		if b == nil {
+			return nil
+		}
+		result = make(map[string]string)
+		return b.ForEach(func(k, v []byte) error {
+			if isMetaKey(k) {
+				return nil
+			}
+			result[string(k)] = string(v)
+			return nil
+		})
+	})
+	return result, err
 }
 
 // collectFactsBucket appends every Fact value in b (a single-Fact-per-key

@@ -208,8 +208,31 @@ type FactStore interface {
 	// PutResolved writes compactor output: unit records + adjacency. Overwrites.
 	PutResolved(projectID string, units []Fact, adj *DepAdjacency) error
 
+	// PutFindings writes compact-time detector output (FDN-3, D27):
+	// FactFinding facts keyed by (rule, subject). Overwrites the entire
+	// findings bucket wholesale — findings are recomputed fresh every
+	// compaction (internal/domain/facts/detect.go), never merged with a
+	// prior run's stale output.
+	PutFindings(projectID string, findings []Fact) error
+
+	// ReplaceAllFacts atomically clears the raw-facts substrate (facts_raw +
+	// facts_byfile) for the project and writes the provided file->facts map
+	// in one bbolt tx. Bulk counterpart to ReplaceFactsForFile, mirroring
+	// EdgeStore.ReplaceAllEdges: used by full-build paths (WarmCaches,
+	// Reindex) so stale per-file rows from a previous build never linger.
+	// Passing nil or empty fileFacts still clears the bucket.
+	// C1: caller must NOT hold App.mu.
+	ReplaceAllFacts(projectID string, fileFacts map[string][]Fact) error
+
 	FactsByKind(projectID string, kind FactKind) ([]Fact, error)
 	FactsForSubject(projectID, subject string) ([]Fact, error)
+
+	// FactsMeta returns the compactor's last-recorded metadata
+	// (schema_version, compacted_at, counts, ...) as a string map, or nil if
+	// this project has never been compacted. Read-only; used for the
+	// D14-style boot freshness check (mirrors ArchStore.LoadManifest's
+	// schemaVersion probe, internal/app/arch.go hasLocalArchManifest).
+	FactsMeta(projectID string) (map[string]string, error)
 
 	// O(1) bucket get + one posting-list decode each (§3.2, §5).
 	Dependencies(projectID, unit string) ([]DepEdge, error) // unit → its imports

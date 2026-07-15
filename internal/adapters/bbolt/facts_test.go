@@ -239,6 +239,118 @@ func TestFactStore_DoesNotCollideWithEdgeStoreOrFindings(t *testing.T) {
 }
 
 // =============================================================================
+// FDN-3 (board #29): PutFindings / ReplaceAllFacts / FactsMeta
+// =============================================================================
+
+func TestPutFindings_WriteThenReadByKind(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	findings := []ports.Fact{
+		{Kind: ports.FactFinding, Subject: "go:leaf", Attrs: map[string]string{"rule": "orphan"}, Prov: ports.ProvDerived},
+		{Kind: ports.FactFinding, Subject: "go:hub", Attrs: map[string]string{"rule": "god_unit"}, Prov: ports.ProvDerived},
+	}
+	require.NoError(t, store.PutFindings("proj-1", findings))
+
+	got, err := store.FactsByKind("proj-1", ports.FactFinding)
+	require.NoError(t, err)
+	assert.Len(t, got, 2)
+}
+
+func TestPutFindings_OverwritesWholesale(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	require.NoError(t, store.PutFindings("proj-1", []ports.Fact{
+		{Kind: ports.FactFinding, Subject: "go:a", Attrs: map[string]string{"rule": "orphan"}, Prov: ports.ProvDerived},
+	}))
+	require.NoError(t, store.PutFindings("proj-1", []ports.Fact{
+		{Kind: ports.FactFinding, Subject: "go:b", Attrs: map[string]string{"rule": "orphan"}, Prov: ports.ProvDerived},
+	}))
+
+	got, err := store.FactsByKind("proj-1", ports.FactFinding)
+	require.NoError(t, err)
+	require.Len(t, got, 1, "second PutFindings replaces the first wholesale, not merges")
+	assert.Equal(t, "go:b", got[0].Subject)
+}
+
+func TestPutFindings_DistinctRulesSameSubjectDoNotCollide(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	require.NoError(t, store.PutFindings("proj-1", []ports.Fact{
+		{Kind: ports.FactFinding, Subject: "go:a", Attrs: map[string]string{"rule": "orphan"}, Prov: ports.ProvDerived},
+		{Kind: ports.FactFinding, Subject: "go:a", Attrs: map[string]string{"rule": "god_unit"}, Prov: ports.ProvDerived},
+	}))
+
+	got, err := store.FactsByKind("proj-1", ports.FactFinding)
+	require.NoError(t, err)
+	assert.Len(t, got, 2, "rule\\x00subject key keeps distinct rules for one subject distinct")
+}
+
+func TestReplaceAllFacts_WritesEveryFileInOneTx(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	fileFacts := map[string][]ports.Fact{
+		"a.go": {{Kind: ports.FactDep, Subject: "go:a", Source: ports.FactSource{File: "a.go", Line: 1}, Prov: ports.ProvDerived}},
+		"b.go": {{Kind: ports.FactDep, Subject: "go:b", Source: ports.FactSource{File: "b.go", Line: 1}, Prov: ports.ProvDerived}},
+	}
+	require.NoError(t, store.ReplaceAllFacts("proj-1", fileFacts))
+
+	got, err := store.FactsByKind("proj-1", ports.FactDep)
+	require.NoError(t, err)
+	assert.Len(t, got, 2)
+}
+
+func TestReplaceAllFacts_ClearsStaleFilesFromPriorBuild(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	require.NoError(t, store.ReplaceAllFacts("proj-1", map[string][]ports.Fact{
+		"stale.go": {{Kind: ports.FactDep, Subject: "go:stale", Source: ports.FactSource{File: "stale.go", Line: 1}, Prov: ports.ProvDerived}},
+	}))
+	// Second build no longer has stale.go (deleted/renamed between builds).
+	require.NoError(t, store.ReplaceAllFacts("proj-1", map[string][]ports.Fact{
+		"fresh.go": {{Kind: ports.FactDep, Subject: "go:fresh", Source: ports.FactSource{File: "fresh.go", Line: 1}, Prov: ports.ProvDerived}},
+	}))
+
+	got, err := store.FactsByKind("proj-1", ports.FactDep)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "go:fresh", got[0].Subject)
+}
+
+func TestReplaceAllFacts_NilClearsBucket(t *testing.T) {
+	store, _ := newTestStore(t)
+
+	require.NoError(t, store.ReplaceAllFacts("proj-1", map[string][]ports.Fact{
+		"a.go": {{Kind: ports.FactDep, Subject: "go:a", Source: ports.FactSource{File: "a.go", Line: 1}, Prov: ports.ProvDerived}},
+	}))
+	require.NoError(t, store.ReplaceAllFacts("proj-1", nil))
+
+	got, err := store.FactsByKind("proj-1", ports.FactDep)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestFactsMeta_NilBeforeFirstCompact(t *testing.T) {
+	store, _ := newTestStore(t)
+	meta, err := store.FactsMeta("proj-1")
+	require.NoError(t, err)
+	assert.Nil(t, meta)
+}
+
+func TestFactsMeta_StampedByPutResolved(t *testing.T) {
+	store, _ := newTestStore(t)
+	require.NoError(t, store.PutResolved("proj-1",
+		[]ports.Fact{{Kind: ports.FactUnit, Subject: "go:a", Prov: ports.ProvDerived}},
+		&ports.DepAdjacency{}))
+
+	meta, err := store.FactsMeta("proj-1")
+	require.NoError(t, err)
+	require.NotNil(t, meta)
+	assert.Equal(t, "1", meta["schema_version"])
+	assert.NotEmpty(t, meta["compacted_at"])
+	assert.NotEmpty(t, meta["counts"])
+}
+
+// =============================================================================
 // Benchmarks
 // =============================================================================
 

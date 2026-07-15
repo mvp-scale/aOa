@@ -107,6 +107,31 @@ func (n *noopStore) LoadFindings(_ string, _ string) ([]ports.Finding, error) {
 	return nil, nil
 }
 
+// FactStore no-ops (FDN-1/FDN-3) — C1: write methods must never be called
+// while App.mu is held.
+func (n *noopStore) ReplaceFactsForFile(_, _ string, _ []ports.Fact) error { return nil }
+func (n *noopStore) PutResolved(_ string, _ []ports.Fact, _ *ports.DepAdjacency) error {
+	return nil
+}
+func (n *noopStore) PutFindings(_ string, _ []ports.Fact) error { return nil }
+func (n *noopStore) ReplaceAllFacts(_ string, _ map[string][]ports.Fact) error {
+	return nil
+}
+func (n *noopStore) FactsByKind(_ string, _ ports.FactKind) ([]ports.Fact, error) {
+	return nil, nil
+}
+func (n *noopStore) FactsForSubject(_, _ string) ([]ports.Fact, error) { return nil, nil }
+func (n *noopStore) FactsMeta(_ string) (map[string]string, error)     { return nil, nil }
+func (n *noopStore) Dependencies(_, _ string) ([]ports.DepEdge, error) { return nil, nil }
+func (n *noopStore) Dependents(_, _ string) ([]ports.DepEdge, error)   { return nil, nil }
+func (n *noopStore) SaveBaseline(_, _ string, _ *ports.FactBaseline) error {
+	return nil
+}
+func (n *noopStore) LoadBaseline(_, _ string) (*ports.FactBaseline, error) {
+	return nil, nil
+}
+func (n *noopStore) DeleteProjectFacts(_ string) error { return nil }
+
 // ── lockGuardStore ─────────────────────────────────────────────────────────
 //
 // lockGuardStore wraps a storeBackend and asserts the C1 invariant on every
