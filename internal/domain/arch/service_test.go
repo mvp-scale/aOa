@@ -62,10 +62,12 @@ func TestService_RenderAll_ViewsPresent(t *testing.T) {
 		assert.NotEmpty(t, v.Key, "manifest view %q must have key", v.ID)
 		assert.NotEmpty(t, v.Hash, "manifest view %q must have hash", v.ID)
 		assert.Len(t, v.Hash, 12, "content hash must be 12 chars")
-		if v.ID == "context" {
-			// VP-1: context view is contractually always MIXED — external
-			// system naming is heuristic even when the edge facts are real.
-			assert.Equal(t, "mixed", v.Prov, "context view provenance must always be mixed (D2 honesty)")
+		if v.ID == "context" || v.ID == "capability" {
+			// VP-1/VP-2: context and capability views are contractually always
+			// MIXED — context's external naming and capability's footprint
+			// app-base seeding are both heuristic, never a raw derived fact
+			// (D2 honesty).
+			assert.Equal(t, "mixed", v.Prov, "view %q provenance must always be mixed (D2 honesty)", v.ID)
 			continue
 		}
 		assert.Equal(t, "derived", v.Prov, "path-prefix grouping must be derived (D1 ruling)")

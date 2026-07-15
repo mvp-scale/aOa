@@ -247,6 +247,18 @@ func (a *App) loadOrDetectFootprintGrain() *arch.Grain {
 // exists). So this also parses just the schemaVersion field and requires it
 // to match the running binary's arch.ArchSchemaVersion; a missing/old/corrupt
 // version is treated as "no current manifest" and fires a re-derive.
+//
+// T64b (VP-2 gap, caddy-lab checkpoint red-team): a schema-version match is
+// STILL not enough. Adding a new mandatory view (e.g. VP-2's "capability")
+// does not bump ArchSchemaVersion — that constant is reserved for JSON
+// *shape* changes, not view-set additions (see its doc comment) — so a
+// manifest derived by a binary one view older than the running one can sit
+// at the CURRENT schema version forever, surviving every restart, on any
+// project whose facts happen to already be fresh and whose files never
+// change again (exactly what a static clone in a lab directory looks like).
+// This is the same class of bug T64 fixed for shape drift, just for view-set
+// drift instead — so this also requires every arch.MandatoryViewIDs() entry
+// to be present; a manifest missing one is treated as stale.
 func (a *App) hasLocalArchManifest() bool {
 	if a.Store == nil {
 		return false
@@ -257,11 +269,26 @@ func (a *App) hasLocalArchManifest() bool {
 	}
 	var probe struct {
 		SchemaVersion int `json:"schemaVersion"`
+		Views         []struct {
+			ID string `json:"id"`
+		} `json:"views"`
 	}
 	if err := json.Unmarshal(m, &probe); err != nil {
 		return false // corrupt manifest — treat as absent, force a re-derive
 	}
-	return probe.SchemaVersion == arch.ArchSchemaVersion
+	if probe.SchemaVersion != arch.ArchSchemaVersion {
+		return false
+	}
+	present := make(map[string]bool, len(probe.Views))
+	for _, v := range probe.Views {
+		present[v.ID] = true
+	}
+	for _, want := range arch.MandatoryViewIDs() {
+		if !present[want] {
+			return false // missing a view the current binary always renders
+		}
+	}
+	return true
 }
 
 // ── App.deriveArch — main derivation entry point ───────────────────────────

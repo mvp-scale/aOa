@@ -7,6 +7,45 @@ import (
 	"sort"
 )
 
+// viewDef pairs a view ID with the render function that produces its Shard.
+type viewDef struct {
+	id string
+	fn func(RenderInput) (*Shard, error)
+}
+
+// mandatoryViewDefs are the views RenderAll always registers, regardless of
+// optional inputs (unlike "code", which is present only when symbolIndex !=
+// nil). This is the single source of truth for both RenderAll's render loop
+// and MandatoryViewIDs' app-layer freshness contract below — one list, so
+// adding a view here can never silently diverge from what the boot-freshness
+// check expects to find.
+var mandatoryViewDefs = []viewDef{
+	{"capability", RenderCapability},
+	{"component", RenderComponent},
+	{"context", RenderContext},
+	{"cycles", RenderCycles},
+	{"dsm", RenderDSM},
+}
+
+// MandatoryViewIDs returns the view IDs RenderAll always renders (excludes
+// the conditional "code" view). The app layer's boot-freshness check
+// (hasLocalArchManifest) uses this to detect a persisted manifest that is
+// missing a view the CURRENT binary would always render — e.g. right after
+// a new view type is added to mandatoryViewDefs. That case does not bump
+// ArchSchemaVersion (reserved for JSON *shape* changes, not view-set
+// additions — see ArchSchemaVersion's doc comment), so the schema-version
+// gate alone lets a stale manifest missing the new view survive indefinitely
+// across restarts (root cause: labs serving pre-phase shards forever once a
+// new view ships, VP-2 gap on the same class of bug T64/PA2 fixed for shape
+// drift). Order matches mandatoryViewDefs; callers should compare as sets.
+func MandatoryViewIDs() []string {
+	ids := make([]string, len(mandatoryViewDefs))
+	for i, vd := range mandatoryViewDefs {
+		ids[i] = vd.id
+	}
+	return ids
+}
+
 // Service orchestrates the arch domain: it accepts pre-loaded unit and dep facts,
 // runs detectors + grouping + renderers, and returns serialized shards + manifest.
 //
@@ -66,23 +105,11 @@ func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts
 	}
 
 	// 4. Render each view.
-	type renderFn func(RenderInput) (*Shard, error)
-	viewDefs := []struct {
-		id string
-		fn renderFn
-	}{
-		{"component", RenderComponent},
-		{"context", RenderContext},
-		{"cycles", RenderCycles},
-		{"dsm", RenderDSM},
-	}
+	viewDefs := append([]viewDef(nil), mandatoryViewDefs...)
 	// Code view (②b, L19.23): registered only when symbol data is present.
 	// Nil symbolIndex → view absent from manifest (never a phantom shard).
 	if symbolIndex != nil {
-		viewDefs = append(viewDefs, struct {
-			id string
-			fn renderFn
-		}{"code", RenderCode})
+		viewDefs = append(viewDefs, viewDef{"code", RenderCode})
 	}
 
 	shards = make(map[string][]byte, len(viewDefs))

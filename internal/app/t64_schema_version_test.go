@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/corey/aoa/internal/adapters/bbolt"
@@ -157,4 +158,131 @@ func TestT64_CurrentSchemaVersion_NoSpuriousReDerive(t *testing.T) {
 	require.NoError(t, json.Unmarshal(got, &m))
 	assert.Equal(t, "sentinelnorederive", m.Rev,
 		"T64: a manifest already at the current schema version must not be spuriously re-derived on boot")
+}
+
+// TestT64b_ViewSetIncomplete_TriggersReDerive: a manifest at the CURRENT
+// schema version but missing one of arch.MandatoryViewIDs() (the real-world
+// VP-2 gap — the caddy-lab checkpoint red-team: a daemon boots on a binary
+// that adds a new mandatory view; the persisted manifest's SchemaVersion
+// still matches because adding a view doesn't bump it, so the schema-version
+// gate alone lets the stale, view-incomplete manifest survive every restart
+// forever). Boot must detect the missing view and re-derive anyway.
+func TestT64b_ViewSetIncomplete_TriggersReDerive(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	seedDBPath := filepath.Join(t.TempDir(), "t64b_incomplete_seed.db")
+	seedStore, err := bbolt.NewStore(seedDBPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = seedStore.Close() })
+
+	seedApp := newBurstTestApp(t, tmpDir, seedStore)
+	seedApp.ArchEnabled = true
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte("package main\n\nimport \"fmt\"\n\nfunc Hello() { fmt.Println(\"hello\") }\n"), 0644))
+	seedApp.WarmCaches(func(string) {})
+	seedApp.bgWg.Wait()
+
+	dbPath := filepath.Join(t.TempDir(), "t64b_incomplete.db")
+	store, err := bbolt.NewStore(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+
+	require.NoError(t, store.SaveIndex("test", seedApp.Index.Clone()))
+	require.NoError(t, store.SaveEdgesForFile("test", 1, edgesForDeriveTest()))
+
+	// Seed the FACTS substrate directly at the CURRENT FactsSchemaVersion —
+	// unlike the T64 tests above, this isolates the completeness check from
+	// FDN-3's boot-facts-recompact (which would otherwise fire unconditionally
+	// on a fresh store with no facts_meta, forcing a full Reindex that would
+	// mask what this test is actually about). With facts already fresh,
+	// hasFreshFacts() is true, so FDN-3 stays silent and only the manifest's
+	// view-completeness (not its schema version, already current) decides
+	// whether PC1 fires.
+	units, adj := factsFromResolvedEdges(edgesForDeriveTest())
+	require.NoError(t, store.PutResolved("test", units, adj))
+
+	// A manifest at the CURRENT schema version, but only carrying "component"
+	// — missing every other view.MandatoryViewIDs entry (capability, context,
+	// cycles, dsm as of this test). A sentinel Rev proves whether a re-derive
+	// actually happened.
+	require.Equal(t, 1, arch.ArchSchemaVersion, "test fixture assumes ArchSchemaVersion==1 — update the fixture if the constant changes")
+	incompleteManifest := []byte(`{"scope":"local","rev":"deadbeefincomplete","schemaVersion":1,"views":[{"id":"component","key":"local/component@deadbeefincomplete","hash":"deadbeefincomplete","caption":"stale","prov":"derived"}]}`)
+	require.NoError(t, store.SaveManifest("test", "local", incompleteManifest))
+
+	// Sanity: every mandatory view except "component" is genuinely absent.
+	require.Contains(t, arch.MandatoryViewIDs(), "component")
+	require.Greater(t, len(arch.MandatoryViewIDs()), 1, "pre-condition: more than one mandatory view must exist for this test to mean anything")
+
+	a2 := newBurstTestApp(t, tmpDir, store)
+	a2.ArchEnabled = true
+	a2.WarmCaches(func(string) {})
+	a2.bgWg.Wait()
+
+	got, err := store.LoadManifest("test", "local")
+	require.NoError(t, err)
+	require.NotEmpty(t, got)
+
+	var m arch.Manifest
+	require.NoError(t, json.Unmarshal(got, &m))
+	assert.NotEqual(t, "deadbeefincomplete", m.Rev,
+		"T64b: boot must overwrite a view-incomplete manifest with a freshly derived one, even when SchemaVersion already matches")
+
+	gotIDs := make([]string, 0, len(m.Views))
+	for _, v := range m.Views {
+		gotIDs = append(gotIDs, v.ID)
+	}
+	for _, want := range arch.MandatoryViewIDs() {
+		assert.Contains(t, gotIDs, want, "T64b: re-derived manifest must contain every mandatory view")
+	}
+}
+
+// TestT64b_ViewSetComplete_NoSpuriousReDerive: a manifest already carrying
+// every arch.MandatoryViewIDs() entry at the current schema version must not
+// be touched by boot — the completeness check must not fire spuriously on
+// the common (already-fresh) case.
+func TestT64b_ViewSetComplete_NoSpuriousReDerive(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	seedDBPath := filepath.Join(t.TempDir(), "t64b_complete_seed.db")
+	seedStore, err := bbolt.NewStore(seedDBPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = seedStore.Close() })
+
+	seedApp := newBurstTestApp(t, tmpDir, seedStore)
+	seedApp.ArchEnabled = true
+	// Deliberately import-free (mirrors TestT64_CurrentSchemaVersion_NoSpuriousReDerive):
+	// zero on-disk edges makes deriveArch's len(edges)==0 guard bail without
+	// touching the manifest, isolating this test's assertion from
+	// boot-facts-recompact's separate Reindex path.
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte("package main\n"), 0644))
+	seedApp.WarmCaches(func(string) {})
+	seedApp.bgWg.Wait()
+
+	dbPath := filepath.Join(t.TempDir(), "t64b_complete.db")
+	store, err := bbolt.NewStore(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+
+	require.NoError(t, store.SaveIndex("test", seedApp.Index.Clone()))
+	require.NoError(t, store.SaveEdgesForFile("test", 1, edgesForDeriveTest()))
+
+	require.Equal(t, 1, arch.ArchSchemaVersion, "test fixture assumes ArchSchemaVersion==1 — update the fixture if the constant changes")
+	views := make([]string, 0)
+	for _, id := range arch.MandatoryViewIDs() {
+		views = append(views, `{"id":"`+id+`","key":"local/`+id+`@sentinelnorederive","hash":"sentinelnorederive","caption":"current","prov":"derived"}`)
+	}
+	completeManifest := []byte(`{"scope":"local","rev":"sentinelnorederive","schemaVersion":1,"views":[` + strings.Join(views, ",") + `]}`)
+	require.NoError(t, store.SaveManifest("test", "local", completeManifest))
+
+	a2 := newBurstTestApp(t, tmpDir, store)
+	a2.ArchEnabled = true
+	a2.WarmCaches(func(string) {})
+	a2.bgWg.Wait()
+
+	got, err := store.LoadManifest("test", "local")
+	require.NoError(t, err)
+
+	var m arch.Manifest
+	require.NoError(t, json.Unmarshal(got, &m))
+	assert.Equal(t, "sentinelnorederive", m.Rev,
+		"T64b: a manifest already carrying every mandatory view at the current schema version must not be spuriously re-derived on boot")
 }
