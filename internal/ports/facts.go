@@ -96,3 +96,127 @@ type EdgeStore interface {
 type FactParser interface {
 	ParseFileToMetaAndFacts(path string, source []byte) ([]*SymbolMeta, []ImportEdge, error)
 }
+
+// ---------------------------------------------------------------------------
+// FDN-1 (board #27): the universal facts substrate, lifted near-verbatim from
+// playbook/integration/01-facts-substrate.md §1/§3 (D1-D8). Additive only —
+// nothing above this line is touched. FactParser above pre-dates this spec
+// (D25: reconciliation of UnitFact/DepFact with ports.Fact is FDN-4 work, not
+// this one) and is deliberately left alone; a widened FactParser returning
+// []Fact is out of scope for FDN-1.
+// ---------------------------------------------------------------------------
+
+// FactKind enumerates the eight fact kinds (D1). String-typed for stable
+// JSONL serialization and forward compatibility — unknown kinds are
+// skippable on read (01-facts-substrate.md:50-63).
+type FactKind string
+
+const (
+	FactUnit    FactKind = "unit"    // a module/package/component (the node grain)
+	FactDep     FactKind = "dep"     // import/include/require edge (the keystone)
+	FactRoute   FactKind = "route"   // HTTP/RPC endpoint exposure (Phase ③)
+	FactSchema  FactKind = "schema"  // entity/table/migration shape (Phase ③)
+	FactDeploy  FactKind = "deploy"  // container/k8s/compose topology (Phase ③)
+	FactOwner   FactKind = "owner"   // CODEOWNERS / git authorship (Phase ③)
+	FactDelta   FactKind = "delta"   // change vs a baseline ref (§4)
+	FactFinding FactKind = "finding" // detector output: cycle, god, orphan (§4.4)
+)
+
+// Provenance is the honesty stamp from the scope-line ADR ladder (D2):
+// .context/decisions/2026-06-11-core-competence-and-scope-line.md — layer 1
+// derive=REAL, layer 2 infer=MIXED, layer 3 declare/ingest.
+type Provenance string
+
+const (
+	ProvDerived  Provenance = "derived"  // REAL — tree-sitter / git / manifest
+	ProvInferred Provenance = "inferred" // MIXED — agent named/grouped, never added
+	ProvDeclared Provenance = "declared" // human declaration (.aoa/arch.yaml)
+	ProvObserved Provenance = "observed" // ingested external truth (APM etc.)
+)
+
+// FactSource is the audit pointer (D3). Every fact carries one; this is what
+// makes evidence packs auditable (ENHANCEMENT-GUIDE §2).
+type FactSource struct {
+	File   string `json:"f"`           // repo-relative path
+	Line   uint32 `json:"l"`           // 1-based; 0 = whole-file fact
+	Commit string `json:"c,omitempty"` // short hash at emission time
+}
+
+// Fact is the universal record (D4). Subject/Object are canonical IDs
+// (`<ns>:<path>`, D7). Attrs is small and bounded (≤8 keys); large payloads
+// are a design error.
+type Fact struct {
+	Kind    FactKind          `json:"k"`
+	Subject string            `json:"s"`
+	Object  string            `json:"o,omitempty"`
+	Attrs   map[string]string `json:"a,omitempty"`
+	Source  FactSource        `json:"src"`
+	Prov    Provenance        `json:"p"`
+	TS      int64             `json:"t,omitempty"` // unix seconds, set at emission
+}
+
+// DepEdge is one resolved unit-grain edge with evidence count.
+type DepEdge struct {
+	Unit  string // the other endpoint
+	Count uint16 // number of file-grain import sites backing this edge
+}
+
+// DepAdjacency is the compactor's resolved graph (forward + reverse).
+type DepAdjacency struct {
+	Fwd map[string][]DepEdge
+	Rev map[string][]DepEdge
+}
+
+// BaselineEdge is a sorted, deduped (subject, object) pair frozen into a
+// FactBaseline.
+type BaselineEdge struct{ S, O string }
+
+// FactBaseline is a frozen snapshot for delta/conformance (§4.2, the ArchUnit
+// pattern).
+type FactBaseline struct {
+	Ref       string // git ref or user-chosen name
+	Commit    string // resolved short hash
+	CreatedAt int64
+	Units     []string
+	Edges     []BaselineEdge // sorted, deduped: subject, object
+	Findings  []string       // stable finding keys (rule|subject)
+}
+
+// FactSink receives facts during the parse pass. Implementations MUST be
+// O(1) amortized per call and must never block the parse loop (buffered
+// append; flush happens off the hot path). Adapter: internal/adapters/factlog
+// (JSONL writer).
+type FactSink interface {
+	Emit(f Fact)
+	Flush() error
+}
+
+// FactStore is the durable, queryable substrate (§3). Adapter:
+// internal/adapters/bbolt (same DB file, new sub-buckets). All methods are
+// project-scoped, mirroring ports.Storage (storage.go:12-56). Writes are
+// transactional.
+//
+// C3 bucket contract (same standing rule as EdgeStore above): every fact
+// bucket carries a `_version` byte, checked on open; a version mismatch
+// drops and re-creates the bucket (facts are re-derivable cache, D10).
+type FactStore interface {
+	// ReplaceFactsForFile atomically swaps all raw facts attributed to one
+	// file (the incremental unit of work, §4.1). Empty facts slice is a pure
+	// delete.
+	ReplaceFactsForFile(projectID, path string, facts []Fact) error
+
+	// PutResolved writes compactor output: unit records + adjacency. Overwrites.
+	PutResolved(projectID string, units []Fact, adj *DepAdjacency) error
+
+	FactsByKind(projectID string, kind FactKind) ([]Fact, error)
+	FactsForSubject(projectID, subject string) ([]Fact, error)
+
+	// O(1) bucket get + one posting-list decode each (§3.2, §5).
+	Dependencies(projectID, unit string) ([]DepEdge, error) // unit → its imports
+	Dependents(projectID, unit string) ([]DepEdge, error)   // who imports unit
+
+	SaveBaseline(projectID, name string, b *FactBaseline) error
+	LoadBaseline(projectID, name string) (*FactBaseline, error) // nil,nil if absent
+
+	DeleteProjectFacts(projectID string) error // wired into `aoa remove` / `aoa reset`
+}

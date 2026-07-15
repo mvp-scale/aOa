@@ -173,9 +173,9 @@ type tokenRefKey = string
 // Map keys must be strings in JSON, so TokenRef keys are encoded as "fileID:line"
 // and uint32 file IDs are encoded as decimal strings.
 type indexJSON struct {
-	Tokens   map[string][]ports.TokenRef    `json:"tokens"`
+	Tokens   map[string][]ports.TokenRef       `json:"tokens"`
 	Metadata map[tokenRefKey]*ports.SymbolMeta `json:"metadata"`
-	Files    map[string]*ports.FileMeta     `json:"files"`
+	Files    map[string]*ports.FileMeta        `json:"files"`
 }
 
 // indexFormat returns the format version of the index bucket.
@@ -542,6 +542,15 @@ func (s *Store) ListSessionSummaries(projectID string) ([]*ports.SessionSummary,
 // Idempotent: deleting a nonexistent project is not an error.
 func (s *Store) DeleteProject(projectID string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
+		// FDN-1: explicit facts-substrate cleanup, wired into the project
+		// cleanup path. Redundant with the DeleteBucket below (which already
+		// recursively removes every nested bucket, facts included) but keeps
+		// the fact substrate's own lifecycle documented at its call site.
+		if proj := tx.Bucket([]byte(projectID)); proj != nil {
+			if err := deleteFactsBuckets(proj); err != nil {
+				return err
+			}
+		}
 		if err := tx.DeleteBucket([]byte(projectID)); err == bolt.ErrBucketNotFound {
 			return nil // idempotent
 		} else {
