@@ -61,7 +61,7 @@
   },
   "views": {
     "context": {
-      "question": "Who and what does this system talk to, and why?",
+      "question": "How does this system fit the outside world?",
       "reader_leaves_knowing": "the system's place in the world: every external actor/system and the purpose of each relationship",
       "vital": [
         "system identity",
@@ -75,7 +75,7 @@
       "pass": "a reader can name every external dependency and state why it exists"
     },
     "container": {
-      "question": "What are the deployable/runnable pieces and how do they communicate?",
+      "question": "What capabilities live in this repo, and how do they talk?",
       "reader_leaves_knowing": "each container, its responsibility, and every inter-container channel",
       "vital": [
         "container identity",
@@ -86,6 +86,20 @@
         "channel protocol/port"
       ],
       "pass": "a reader can list the runnable units and trace any request path between them"
+    },
+    "capability": {
+      "question": "What capabilities live in this repo, and how do they talk?",
+      "reader_leaves_knowing": "each capability, the units inside it, and every cross-capability edge — the live derivation of the C4 container diagram (ruling: capability map ≈ C4 Container)",
+      "vital": [
+        "capability identity",
+        "member identity",
+        "cross-capability edges (verb)"
+      ],
+      "hover": [
+        "member fan-in/detail",
+        "edge count"
+      ],
+      "pass": "a reader can name each capability, what lives in it, and how capabilities depend on each other"
     },
     "component": {
       "question": "How is this container organized internally, and what depends on what?",
@@ -215,7 +229,7 @@
       "pass": "a reader can sketch the schema's spine from the diagram alone"
     },
     "glossary": {
-      "question": "What does each term of art mean here, precisely?",
+      "question": "What do the words in this codebase mean?",
       "reader_leaves_knowing": "the canonical definition and owner of every term that has caused or could cause confusion",
       "vital": [
         "term",
@@ -226,7 +240,7 @@
       "pass": "a reader can resolve a disputed term without asking anyone"
     },
     "techportfolio": {
-      "question": "What technologies are we standing on, and where is the risk?",
+      "question": "What's the stack — languages, frameworks, services?",
       "reader_leaves_knowing": "the technology inventory with lifecycle status and where each is used",
       "vital": [
         "technology",
@@ -237,7 +251,7 @@
       "pass": "a reader can name the riskiest technology and what depends on it"
     },
     "sbom": {
-      "question": "What components are inside, at what version, from where?",
+      "question": "What is this built from, exactly?",
       "reader_leaves_knowing": "the component inventory with versions and provenance",
       "vital": [
         "component",
@@ -248,7 +262,7 @@
       "pass": "a reader can answer 'are we exposed to X@version' from the table alone"
     },
     "change": {
-      "question": "Where is churn combining with complexity to create risk?",
+      "question": "Where is change concentrating right now, and is it risky?",
       "reader_leaves_knowing": "which units are both frequently changing and structurally complex — the units most likely to regress next",
       "vital": [
         "unit",
@@ -260,7 +274,7 @@
       "pass": "a reader can name the single riskiest unit and explain why from the row alone"
     },
     "api-contract": {
-      "question": "What HTTP endpoints does this system expose, and what handles them?",
+      "question": "What does this expose, and what's the contract?",
       "reader_leaves_knowing": "every registered route, its HTTP method, and the handler that serves it",
       "vital": [
         "method",

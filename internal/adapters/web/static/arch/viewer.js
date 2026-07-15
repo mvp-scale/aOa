@@ -64,12 +64,15 @@ const VIEWFAM={context:["C4 Model","System Context"],container:["C4 Model","Cont
 // every system; items the system has render live/sim, the rest stay listed as planned.
 const STD_CATALOG=[
  {grp:"C4 Model",tag:"modern",items:[
-   {vid:["context"],label:"System Context"},
-   {vid:["container"],label:"Container"},
+   {vid:["context"],label:"System Context",aka:"C4 L1 / Context Diagram"},
+   {vid:["capability","container"],label:"Capability Map",aka:"C4 Container Diagram"},
    {vid:["component","domains"],label:"Component"},
    {vid:["deployment"],label:"Deployment"},
    {vid:["sequence"],label:"Dynamic (sequence)",note:"needs call-edge resolution"},
    {vid:["code"],label:"Code (L4)",note:"symbol table · not drawn by design — needs call-edge resolution"}]},
+ {grp:"Interfaces & Change",items:[
+   {vid:["api-contract"],label:"API Contract",aka:"API Surface / OpenAPI"},
+   {vid:["change"],label:"Change Map",aka:"Hotspots / churn×complexity"}]},
  {grp:"Flows & Behavior",items:[
    {vid:["dataflow"],label:"Data Flow (DFD)"},
    {vid:["trust"],label:"Trust Boundaries (STRIDE)",note:"DFD overlay · rule-pack"},
@@ -78,8 +81,8 @@ const STD_CATALOG=[
    {vid:["datamodel"],label:"Data Model / ER"},
    {vid:["glossary"],label:"Glossary",note:"atlas seed + writer"}]},
  {grp:"Technology & Ops",items:[
-   {vid:["techportfolio"],label:"Technology Portfolio",note:"config scan"},
-   {vid:["sbom"],label:"SBOM (CycloneDX)",note:"document · manifests"}]},
+   {vid:["techportfolio"],label:"Tech Stack",aka:"Technology Portfolio",note:"config scan"},
+   {vid:["sbom"],label:"SBOM",aka:"Software Bill of Materials / CycloneDX",note:"document · manifests"}]},
  {grp:"Classical structure",items:[
    {vid:["component","domains"],label:"Layered Architecture",alias:true},
    {vid:["dsm"],label:"Dependency Matrix (DSM)",note:"matrix renderer"},
@@ -126,9 +129,9 @@ function dynamicCatalog(sv){
       return {label:it.label,status:"planned",note:"symbol table · not drawn by design — needs call-edge resolution"};}
     const hit=(it.vid||[]).find(v=>sv.views&&sv.views[v]);
     if(hit){const v=sv.views[hit];
-      return {id:hit,label:it.label,alias:it.alias,
+      return {id:hit,label:it.label,alias:it.alias,aka:it.aka,
         status:(v.prov&&v.prov.kind==="simulated")?"sim":"live"};}
-    return {label:it.label,status:"planned",note:it.note||"not yet derived for this system",vid0:(it.vid||[])[0]};})}));}
+    return {label:it.label,aka:it.aka,status:"planned",note:it.note||"not yet derived for this system",vid0:(it.vid||[])[0]};})}));}
 const snap=v=>Math.round(v/8)*8;
 // ROLE_IP: the 6-role spine (roles.go roleFor(), LOCKED glossary v1) — industry-standard
 // glyphs (Lucide silhouettes hand-adapted from 24x24 to this file's 14x14/1.3-stroke house
@@ -1385,49 +1388,10 @@ function Footer({view,ov}){
     <span style=${{marginLeft:"auto",color:T.mute,flexShrink:0}}>generated ${MODEL.generated.timestamp}</span>
   </div>`;}
 
-// The model catalog — industry-standard families, each item with render status:
-// live = derived from real data now · sim = simulated, sourceable · planned = gated on an extractor
-// Per-system catalogs — each system's views stay contained within it
-const CATALOGS={
- aoa:[
-  {grp:"C4 Model",tag:"modern",items:[
-    {id:"context",label:"System Context",status:"live"},
-    {id:"container",label:"Container",status:"live"},
-    {id:"component",label:"Component",status:"live"},
-    {id:"deployment",label:"Deployment",status:"sim",note:"sourceable · CI/IaC"},
-    {label:"Dynamic (sequence)",status:"planned",note:"needs call-edge resolution"},
-    {label:"Code (L4)",status:"planned",note:"symbol table · not drawn by design"}]},
-  {grp:"Flows & Behavior",items:[
-    {id:"dataflow",label:"Data Flow (DFD)",status:"live"},
-    {label:"Trust Boundaries (STRIDE)",status:"planned",note:"DFD overlay · rule-pack"},
-    {label:"State Machine",status:"planned",note:"needs state extraction"}]},
-  {grp:"Journeys",tag:"streaming",items:[
-    {label:"Query path · A → B",status:"planned",note:"capture along the flow · call edges"},
-    {label:"Indexing path · watch → persist",status:"planned",note:"capture along the flow"}]},
-  {grp:"Data",items:[
-    {id:"datamodel",label:"Data Model / ER",status:"live"},
-    {label:"Glossary",status:"planned",note:"atlas seed + writer"}]},
-  {grp:"Technology & Ops",items:[
-    {label:"Technology Portfolio",status:"planned",note:"config scan"},
-    {label:"SBOM (CycloneDX)",status:"planned",note:"document · manifests"}]},
-  {grp:"Classical structure",items:[
-    {id:"component",label:"Layered Architecture",status:"live",alias:true},
-    {id:"dsm",label:"Dependency Matrix (DSM)",status:"live"},
-    {label:"Cycle / Tangle Report",status:"planned",note:"SCC pass"}]}],
- graphify:[
-  {grp:"C4 Model",tag:"modern",items:[
-    {label:"System Context",status:"planned",note:"not yet derived for this system"},
-    {label:"Container",status:"planned",note:"not yet derived for this system"},
-    {id:"component",label:"Component",status:"live"},
-    {label:"Deployment",status:"planned",note:"sourceable · CI config"}]},
-  {grp:"Flows & Behavior",items:[
-    {label:"Data Flow (DFD)",status:"planned",note:"not yet derived for this system"}]},
-  {grp:"Data",items:[
-    {label:"Data Model / ER",status:"planned",note:"not yet derived for this system"}]},
-  {grp:"Classical structure",items:[
-    {id:"component",label:"Layered Architecture",status:"live",alias:true},
-    {label:"Cycle / Tangle Report",status:"planned",note:"SCC pass"}]}]};
-const FIRST={aoa:"context",graphify:"component"};
+// SUR-1: CATALOGS/FIRST (per-system hardcoded catalogs) were dead code — never read by any
+// render path — and had drifted from reality (e.g. techportfolio/sbom marked "planned" after
+// they went live). STD_CATALOG + dynamicCatalog() above is the one real source of truth; every
+// system's catalog is derived from its manifest, never hand-maintained per estate.
 const STATUS={live:{dot:"●",col:T.green,lbl:"derived live"},
               sim:{dot:"◌",col:T.yellow,lbl:"simulated · sourceable"},
               planned:{dot:"○",col:T.mute,lbl:"planned · extractor gated"}};
@@ -1583,7 +1547,7 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
       const renderItem=(it,ix)=>{const st=STATUS[it.status];const active=it.id&&it.id===level&&!it.alias;
         const aliasActive=it.id&&it.id===level&&it.alias;
         const clickable=!!it.id;
-        return html`<div key=${ix} class="vrow" onClick=${clickable?()=>go(it.id):null}
+        return html`<div key=${ix} class=${"vrow"+(it.aka?" hv":"")} onClick=${clickable?()=>go(it.id):null}
           style=${{display:"flex",alignItems:"flex-start",gap:8,padding:"5px 14px 5px 29px",
             cursor:clickable?"pointer":"default",
             background:(active||aliasActive)?"#60a5fa14":"transparent",
@@ -1594,6 +1558,7 @@ function Sidebar({estate,scopes,simEstate,scope,goScope,level,go,open,setOpen,co
               color:clickable?T.text:T.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${it.label}</div>
             ${it.note?html`<div style=${{fontSize:9.5,color:T.mute}}>${it.note}</div>`:null}
           </div>
+          ${it.aka?html`<${HoverCard} title=${it.label} rows=${[["aka",it.aka]]}/>`:null}
           ${it.id&&last&&last[estate+":"+scope+":"+it.id]?html`<span class="ago" style=${{fontSize:8.5,color:T.mute,lineHeight:"17px",flexShrink:0}}>${ago(last[estate+":"+scope+":"+it.id])}</span>`:null}
           ${it.status==="planned"&&estate!=="local"&&it.vid0?html`<span title="Copy AI-generation prompt for this view"
             onClick=${ev=>{ev.stopPropagation();
