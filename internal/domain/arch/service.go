@@ -72,6 +72,7 @@ func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts
 		fn renderFn
 	}{
 		{"component", RenderComponent},
+		{"context", RenderContext},
 		{"cycles", RenderCycles},
 		{"dsm", RenderDSM},
 	}
