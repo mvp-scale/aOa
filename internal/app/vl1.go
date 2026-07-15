@@ -39,7 +39,7 @@ func buildVLInputs(root string, idx *ports.Index, enr *enricher.Enricher) *arch.
 	return &arch.VLInputs{
 		Components:    components,
 		Technologies:  buildTechnologies(idx, components),
-		GlossaryTerms: harvestGlossary(enr),
+		GlossaryTerms: harvestGlossary(enr, idx),
 	}
 }
 
@@ -136,15 +136,30 @@ func buildTechnologies(idx *ports.Index, components []arch.Component) []arch.Tec
 	return out
 }
 
-// harvestGlossary converts internal/domain/glossary.Harvest's atlas-term
-// candidates into arch.GlossaryEntry. Returns nil when enr is nil (no atlas
-// loaded — headless/test contexts) rather than erroring; the Glossary view
-// renders its honest "0 terms" empty state in that case.
-func harvestGlossary(enr *enricher.Enricher) []arch.GlossaryEntry {
+// harvestGlossary converts internal/domain/glossary's atlas-term candidates
+// into arch.GlossaryEntry, filtered down to the sliver of the atlas'
+// universal vocabulary that this project actually uses (VL-1.p1): a term
+// only survives when at least one of its keywords is evidenced in idx.Tokens
+// (the project's indexed tokens), so two different projects' glossaries
+// differ instead of both dumping the same ~938-term atlas.
+//
+// Falls back to the full, unfiltered Harvest when idx is nil (headless/test
+// contexts, mirrors buildRefHits/buildTechnologies' idx-may-be-nil contract)
+// or idx.Tokens is empty (fresh/unindexed project — nothing to intersect
+// against yet, so filtering would silently hide the whole view rather than
+// degrade gracefully). Returns nil when enr is nil (no atlas loaded) rather
+// than erroring; the Glossary view renders its honest "0 terms" empty state
+// in that case.
+func harvestGlossary(enr *enricher.Enricher, idx *ports.Index) []arch.GlossaryEntry {
 	if enr == nil {
 		return nil
 	}
-	harvested := glossary.Harvest(enr.DomainDefs())
+	var harvested []glossary.Entry
+	if idx == nil || len(idx.Tokens) == 0 {
+		harvested = glossary.Harvest(enr.DomainDefs())
+	} else {
+		harvested = glossary.HarvestFiltered(enr.DomainDefs(), idx)
+	}
 	out := make([]arch.GlossaryEntry, len(harvested))
 	for i, e := range harvested {
 		out[i] = arch.GlossaryEntry{Term: e.Term, Domain: e.Domain, Definition: e.Definition}
