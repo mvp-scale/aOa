@@ -31,6 +31,10 @@ type symbolExtractorFunc func(root *tree_sitter.Node, source []byte) []Symbol
 // this exact signature — no adapter closures needed on the import side.
 type importExtractorFunc func(root *tree_sitter.Node, source []byte, filePath string) []ports.ImportEdge
 
+// routeExtractorFunc is the uniform shape every registered route extractor
+// presents to extractRoutes (VL-3, board #37, routes.go).
+type routeExtractorFunc func(root *tree_sitter.Node, source []byte, filePath string) []ports.RouteEdge
+
 // symbolExtractors maps a detected language name to its symbol extractor.
 // Languages absent from this map fall back to extractGeneric (rule-table
 // driven) — unchanged behavior from the previous switch's default arm.
@@ -59,4 +63,12 @@ var importExtractors = map[string]importExtractorFunc{
 	"javascript": extractImportsJS,
 	"typescript": extractImportsJS,
 	"tsx":        extractImportsJS,
+}
+
+// routeExtractors maps a detected language name to its route extractor
+// (VL-3, board #37). Languages absent from this map produce no routes.
+// Go only for v1 ("Go stacks first" per the work order: net/http mux + gin
+// idioms, both handled by extractRoutesGo's method-name classification).
+var routeExtractors = map[string]routeExtractorFunc{
+	"go": extractRoutesGo,
 }

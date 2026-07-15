@@ -309,7 +309,12 @@ func (s *repoScan) noteFile(rel string) {
 	// Root-level files bucket under "" — they count toward the dominance
 	// denominator (dominantSubtree) but can never anchor: a filename is
 	// not a subtree (merge-consensus F1).
-	if isSourceFile(name) {
+	//
+	// Test files are excluded: every real file typically grows a same-named
+	// test twin (a_test.go, a.test.ts, …), so counting twins double-weights
+	// ordinary growth and can flip the 80% dominance threshold on churn that
+	// adds no new architecture (aOa self-detection flake, VL-3).
+	if isSourceFile(name) && !isTestFile(name) {
 		top := ""
 		if len(segs) > 1 {
 			top = segs[0]
@@ -476,6 +481,24 @@ func isSourceFile(name string) bool {
 		".rs", ".java", ".c", ".h", ".cpp", ".hpp", ".cc", ".cxx", ".cs", ".rb",
 		".php", ".swift", ".kt", ".scala", ".ex", ".exs", ".erl", ".hs", ".ml",
 		".clj", ".lua", ".dart", ".sh":
+		return true
+	}
+	return false
+}
+
+// isTestFile reports whether name is a test file by common cross-language
+// naming convention (a same-named twin of a real source file). Test twins are
+// excluded from the dominance count (dominantSubtree) so ordinary growth —
+// which adds a test file alongside every real file — never asymmetrically
+// tips which top-level dir "dominates" the repo.
+func isTestFile(name string) bool {
+	base := strings.TrimSuffix(name, filepath.Ext(name))
+	switch {
+	case strings.HasSuffix(name, "_test.go"),
+		strings.HasSuffix(name, "_test.py"),
+		strings.HasSuffix(base, ".test"),
+		strings.HasSuffix(base, ".spec"),
+		strings.HasSuffix(base, "_spec"):
 		return true
 	}
 	return false

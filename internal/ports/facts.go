@@ -16,6 +16,34 @@ type ImportEdge struct {
 	StartLine  uint32 // 1-based line number in FromFile (G7)
 }
 
+// RouteEdge records one HTTP route-registration call site found in a source
+// file (VL-3, board #37 — the FIRST use of the `route` fact kind, D1).
+// Method/Path/Handler are read straight off the AST call site via a
+// syntactic method-name match (GET/POST/.../HandleFunc/Handle) — the same
+// honesty tier as ImportEdge's raw spec: no type resolution, so a
+// same-named method on an unrelated receiver would also match (documented
+// v1 scope). Handler is the raw expression text of the call's second
+// argument, best-effort (may be a closure literal, a bound method value,
+// etc.) — not resolved to a symbol.
+type RouteEdge struct {
+	FromFile  string // relative file path — never absolute (G7)
+	Framework string // "gin" | "net/http"
+	Method    string // "GET" | "POST" | ... | "" (net/http Handle/HandleFunc carry no verb)
+	Path      string // route pattern, unquoted
+	Handler   string // raw handler expression text, best-effort
+	StartLine uint32 // 1-based line number of the call in FromFile (G7 provenance)
+}
+
+// RouteExtractor is an optional Parser capability (VL-3, board #37):
+// extracts HTTP route-registration calls from a source file. Implemented by
+// internal/adapters/treesitter.Parser (Go only for v1: net/http mux + gin
+// idioms). Callers MUST type-assert:
+// `if re, ok := parser.(ports.RouteExtractor); ok { ... }`.
+// Returns nil, nil for unsupported languages/empty files — not an error.
+type RouteExtractor interface {
+	ExtractRoutes(path string, source []byte) ([]RouteEdge, error)
+}
+
 // EdgeStore persists and retrieves import edges keyed by file.
 // All methods are project-scoped (projectID). Implementations must be C1-compliant:
 // no db.Update while App.mu is held — callers must write outside the mutex.

@@ -259,6 +259,17 @@
       "hover": [],
       "pass": "a reader can name the single riskiest unit and explain why from the row alone"
     },
+    "api-contract": {
+      "question": "What HTTP endpoints does this system expose, and what handles them?",
+      "reader_leaves_knowing": "every registered route, its HTTP method, and the handler that serves it",
+      "vital": [
+        "method",
+        "path",
+        "handler"
+      ],
+      "hover": [],
+      "pass": "a reader can name every exposed endpoint and its handler from the table alone"
+    },
     "dsm": {
       "question": "Where are the mutual dependencies?",
       "reader_leaves_knowing": "the dependency density and every cycle-forming (red) cell",

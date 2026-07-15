@@ -29,6 +29,7 @@ var mandatoryViewDefs = []viewDef{
 	{"techportfolio", RenderTechStack},
 	{"glossary", RenderGlossary},
 	{"change", RenderChangeMap},
+	{"api-contract", RenderAPIContract},
 }
 
 // MandatoryViewIDs returns the view IDs RenderAll always renders (excludes
@@ -118,6 +119,7 @@ func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts
 		in.Technologies = vlIn.Technologies
 		in.GlossaryTerms = vlIn.GlossaryTerms
 		in.ChurnEntries = vlIn.ChurnEntries
+		in.Routes = vlIn.Routes
 	}
 
 	// 4. Render each view.

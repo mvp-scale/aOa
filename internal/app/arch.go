@@ -419,6 +419,11 @@ func (a *App) deriveArch() {
 	// commit-depth/time-window bound rationale).
 	vlIn.ChurnEntries = buildChurnEntries(a.ProjectRoot, units, idx)
 
+	// 6e. Build VL-3 inputs (board #37): API Contract. Dedicated re-parse of
+	// Go files (net/http mux + gin idioms) — see vl3.go's package doc for
+	// why this doesn't ride the main index-build parse pass.
+	vlIn.Routes = buildRouteEntries(a.ProjectRoot, idx, a.Parser)
+
 	// 7. RenderAll: pure domain computation — no I/O, no mu needed.
 	svc := &arch.Service{}
 	shards, manifest, findings, err := svc.RenderAll(archScope, units, deps, opts, refHits, symIndex, vlIn)

@@ -212,6 +212,14 @@ type RenderInput struct {
 	// mandatory view). Populated by the app layer from a bounded git-log
 	// read joined with indexed symbol counts (complexity proxy).
 	ChurnEntries []ChurnEntry
+
+	// Routes carries HTTP route-registration rows for the API Contract
+	// (view id "api-contract") view (VL-3, board #37 — the first `route`-
+	// kind fact, D1). Nil/empty → the view renders its honest "0 routes"
+	// empty state (never a phantom shard — "api-contract" is a mandatory
+	// view). Populated by the app layer from the treesitter route
+	// extractor (net/http mux + gin idioms, Go only for v1).
+	Routes []RouteEntry
 }
 
 // Component is one detected dependency/component entry from a manifest
@@ -268,6 +276,23 @@ type GlossaryEntry struct {
 	Definition string
 }
 
+// RouteEntry is one row in the API Contract (view id "api-contract") view:
+// an HTTP route-registration call found by the treesitter route extractor
+// (VL-3, board #37 — the first `route`-kind fact, D1). Method/Path/Handler
+// are read straight off the AST call site (REAL/derived, D2) via a
+// syntactic method-name match (GET/POST/.../HandleFunc/Handle) — the same
+// honesty tier as ImportEdge's literal spec: no type resolution, so a
+// same-named method on an unrelated receiver would also match (documented
+// v1 scope, not silently hidden).
+type RouteEntry struct {
+	Method    string // "GET" | "POST" | ... | "" (net/http Handle/HandleFunc carry no verb)
+	Path      string
+	Handler   string // raw handler expression text, best-effort
+	Framework string // "gin" | "net/http"
+	File      string // G7 source pointer
+	Line      uint32 // G7 source pointer
+}
+
 // VLInputs bundles the view-library-specific data sources RenderAll
 // optionally threads into RenderInput (VL-1: Components/Technologies/
 // GlossaryTerms). Grouped into one struct — rather than three more
@@ -281,6 +306,8 @@ type VLInputs struct {
 	GlossaryTerms []GlossaryEntry
 	// ChurnEntries carries VL-2's git-churn × complexity rows (board #36).
 	ChurnEntries []ChurnEntry
+	// Routes carries VL-3's HTTP route-registration rows (board #37).
+	Routes []RouteEntry
 }
 
 // CodeSymbolIndex is a symbol data bundle for the code renderer (②b, L19.23).

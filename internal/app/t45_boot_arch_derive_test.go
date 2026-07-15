@@ -222,6 +222,21 @@ func TestT45_OverlayLeash_AppLevel(t *testing.T) {
 	require.NotEmpty(t, manifest.Views,
 		"T45/overlay: manifest must have at least one view")
 	for _, ve := range manifest.Views {
+		// api-contract (VL-3, board #37) is unrelated to unit grouping/
+		// overlays entirely — its facts come straight from an AST call-site
+		// scan of route registrations, never from GroupWithOptions. Forcing
+		// it to "mixed" here would be a dishonest signal (D2: provenance
+		// reflects THAT view's own derivation confidence, not an unrelated
+		// subsystem's). Every other mandatory view either derives its Prov
+		// from in.GroupProv (component/dsm/cycles) or is unconditionally
+		// "mixed" already (sbom/glossary/change/techportfolio/context/
+		// capability) — api-contract is the first unconditionally
+		// "derived" view, which is what this exception documents.
+		if ve.ID == "api-contract" {
+			assert.Equal(t, "derived", ve.Prov,
+				"T45/overlay: api-contract prov is independent of the overlay leash")
+			continue
+		}
 		assert.Equal(t, "mixed", ve.Prov,
 			"T45/overlay: view %q prov must be 'mixed' when overlay had invalid IDs", ve.ID)
 	}

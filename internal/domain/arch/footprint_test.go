@@ -338,6 +338,36 @@ func TestRefineFootprint_Seam(t *testing.T) {
 	}
 }
 
+// TestDetectFootprint_TestFilesExcludedFromDominance guards the dominance ratio
+// against test-file inflation: every real file typically gets a same-named
+// _test.go twin, so counting twins toward topDirCodeFiles double-weights normal
+// growth and can flip the 80% dominance threshold on churn that adds no new
+// architecture. "big" has 5 real files + 5 test twins (10 raw, would be 83% of
+// 12 and wrongly dominate); "small" has 2 real files. Non-test-only counting
+// keeps big at 5/7 (~71%), under threshold — no descend.
+func TestDetectFootprint_TestFilesExcludedFromDominance(t *testing.T) {
+	root := t.TempDir()
+	mkTree(t, root, []string{
+		"go.mod",
+		"big/a.go", "big/a_test.go",
+		"big/b.go", "big/b_test.go",
+		"big/c.go", "big/c_test.go",
+		"big/d.go", "big/d_test.go",
+		"big/e.go", "big/e_test.go",
+		"small/x.go",
+		"small/y.go",
+	})
+
+	fp, err := DetectFootprint(root)
+	if err != nil {
+		t.Fatalf("DetectFootprint: %v", err)
+	}
+	a := fp.Anchors[0]
+	if a.Grain != nil && a.Grain.Mode == "descend" {
+		t.Errorf("grain = %+v, want segment/nil — big/ only dominates once its _test.go twins are double-counted", a.Grain)
+	}
+}
+
 // TestDetectFootprint_AoaSelf_NoDescend is the byte-identical guarantee at the
 // footprint level: detecting aOa's OWN repo must NOT produce a descend grain.
 // aOa's architecture is spread across internal/, cmd/, ports/, atlas/ — no

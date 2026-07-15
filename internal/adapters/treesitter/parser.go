@@ -166,6 +166,26 @@ func (p *Parser) ParseFileToMetaAndFacts(filePath string, source []byte) ([]*por
 	return metas, edges, nil
 }
 
+// ExtractRoutes extracts HTTP route-registration calls from a source file
+// (VL-3, board #37 — implements ports.RouteExtractor). A dedicated parse
+// pass, deliberately separate from ParseFileToMetaAndFacts: routes are
+// derived at arch-derive time (internal/app/vl3.go), not on the main
+// index-build hot path, so there is no existing tree to share here (see
+// vl3.go's package doc for the full rationale). Returns nil, nil for
+// unsupported languages or empty files — not an error.
+func (p *Parser) ExtractRoutes(filePath string, source []byte) ([]ports.RouteEdge, error) {
+	tree, langName, err := p.ParseToTree(filePath, source)
+	if err != nil {
+		return nil, err
+	}
+	if tree == nil {
+		return nil, nil
+	}
+	defer tree.Close()
+
+	return extractRoutes(tree.RootNode(), source, filePath, langName), nil
+}
+
 // SupportsExtension returns true if the parser recognizes this file extension.
 func (p *Parser) SupportsExtension(ext string) bool {
 	_, ok := p.extToLang[strings.ToLower(ext)]
