@@ -8,9 +8,19 @@ import (
 	"testing"
 
 	"github.com/corey/aoa/internal/adapters/treesitter"
+	"github.com/corey/aoa/internal/ports"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// fakeFactSink is a minimal ports.FactSink test double that just records
+// every emitted Fact in memory (FDN-2, board #28).
+type fakeFactSink struct {
+	facts []ports.Fact
+}
+
+func (s *fakeFactSink) Emit(f ports.Fact) { s.facts = append(s.facts, f) }
+func (s *fakeFactSink) Flush() error      { return nil }
 
 func TestBuildIndex_Counts(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -119,6 +129,79 @@ func TestBuildIndexWithFacts_VarOnlyFileHasEdges(t *testing.T) {
 	}
 	assert.Contains(t, paths, "os")
 	assert.Contains(t, paths, "fmt")
+}
+
+// TestBuildIndexWithFactsAndSink_DualRun verifies the FDN-2 dual-run
+// contract: every ports.ImportEdge returned to the caller is ALSO emitted as
+// a raw ports.Fact through the sink, with Object empty (unresolved) and the
+// literal specifier preserved in Attrs["spec"] (§1.2 "Rules").
+func TestBuildIndexWithFactsAndSink_DualRun(t *testing.T) {
+	tmpDir := t.TempDir()
+	parser := treesitter.NewParser()
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmpDir, "main.go"),
+		[]byte("package main\n\nimport (\n\t\"os\"\n\t\"fmt\"\n)\n\nfunc Main() { _ = os.Args; _ = fmt.Sprintf }\n"),
+		0644,
+	))
+
+	sink := &fakeFactSink{}
+	idx, result, edges, err := BuildIndexWithFactsAndSink(tmpDir, parser, true, sink)
+	require.NoError(t, err)
+	require.NotNil(t, idx)
+
+	// Legacy ImportEdge path is unaffected by the sink's presence.
+	assert.Equal(t, 2, result.EdgeCount)
+	require.Len(t, edges, 2)
+
+	// Dual-run: one Fact per edge, same count.
+	require.Len(t, sink.facts, 2)
+	specs := make([]string, len(sink.facts))
+	for i, f := range sink.facts {
+		specs[i] = f.Attrs["spec"]
+		assert.Equal(t, ports.FactDep, f.Kind)
+		assert.Equal(t, "go:", f.Subject, "repo-root Go file's package dir is empty")
+		assert.Empty(t, f.Object, "raw parse-time fact: Object unresolved")
+		assert.Equal(t, ports.ProvDerived, f.Prov)
+		assert.Equal(t, "main.go", f.Source.File)
+		assert.NotZero(t, f.Source.Line)
+	}
+	assert.Contains(t, specs, "os")
+	assert.Contains(t, specs, "fmt")
+}
+
+// TestBuildIndexWithFactsAndSink_NilSinkMatchesLegacy verifies that passing a
+// nil sink produces byte-identical IndexResult/edges to BuildIndexWithFacts —
+// existing callers are not forced into the FactSink dependency (D25: FDN-4
+// switches consumers, not this task).
+func TestBuildIndexWithFactsAndSink_NilSinkMatchesLegacy(t *testing.T) {
+	tmpDir := t.TempDir()
+	parser := treesitter.NewParser()
+
+	require.NoError(t, os.WriteFile(
+		filepath.Join(tmpDir, "main.go"),
+		[]byte("package main\n\nimport \"os\"\n\nfunc Main() { _ = os.Args }\n"),
+		0644,
+	))
+
+	_, wantResult, wantEdges, err := BuildIndexWithFacts(tmpDir, parser, true)
+	require.NoError(t, err)
+
+	_, gotResult, gotEdges, err := BuildIndexWithFactsAndSink(tmpDir, parser, true, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, *wantResult, *gotResult)
+	assert.Equal(t, wantEdges, gotEdges)
+}
+
+// TestFactSubjectForFile verifies the D7 (§1.3) canonical-ID unit derivation
+// for each P1 language family.
+func TestFactSubjectForFile(t *testing.T) {
+	assert.Equal(t, "go:internal/app", factSubjectForFile("internal/app/indexer.go", "go"))
+	assert.Equal(t, "go:", factSubjectForFile("main.go", "go"))
+	assert.Equal(t, "py:graphify/extract", factSubjectForFile("graphify/extract.py", "py"))
+	assert.Equal(t, "ts:src/components/Button", factSubjectForFile("src/components/Button.tsx", "tsx"))
+	assert.Equal(t, "file:weird/thing.zig", factSubjectForFile("weird/thing.zig", "zig"))
 }
 
 // TestBuildIndex_NilParser_TokenizationOnly verifies that BuildIndex works

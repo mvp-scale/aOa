@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/corey/aoa/internal/domain/index"
 	"github.com/corey/aoa/internal/ports"
@@ -85,7 +86,7 @@ var defaultCodeExtensions = map[string]bool{
 // This is the backward-compatible entry point. For import-edge extraction,
 // use BuildIndexWithFacts (called by App when ArchEnabled=true).
 func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, error) {
-	idx, result, _, err := buildIndexCore(root, parser, false)
+	idx, result, _, err := buildIndexCore(root, parser, false, nil)
 	return idx, result, err
 }
 
@@ -96,11 +97,32 @@ func BuildIndex(root string, parser ports.Parser) (*ports.Index, *IndexResult, e
 // When archEnabled=false, the returned edge slice is always nil (C4 kill switch).
 // Used by App.WarmCaches and App.Reindex instead of BuildIndex.
 func BuildIndexWithFacts(root string, parser ports.Parser, archEnabled bool) (*ports.Index, *IndexResult, []ports.ImportEdge, error) {
-	return buildIndexCore(root, parser, archEnabled)
+	return buildIndexCore(root, parser, archEnabled, nil)
 }
 
-// buildIndexCore is the shared implementation for BuildIndex and BuildIndexWithFacts.
-func buildIndexCore(root string, parser ports.Parser, archEnabled bool) (*ports.Index, *IndexResult, []ports.ImportEdge, error) {
+// BuildIndexWithFactsAndSink is BuildIndexWithFacts plus dual-run Fact
+// emission (FDN-2, board #28): every import edge additionally becomes a raw
+// ports.Fact emitted through sink, ALONGSIDE (never instead of) the legacy
+// []ports.ImportEdge return value. sink may be nil, in which case this is
+// byte-identical to BuildIndexWithFacts (no caller is forced to adopt a
+// sink dependency). Existing BuildIndexWithFacts callers are untouched —
+// consumers switch to the Fact-based path in FDN-4 (D25).
+//
+// Facts emitted here are RAW (Object empty, Attrs["spec"] = the literal,
+// unresolved import specifier) per 01-facts-substrate.md §1.2 "Rules": the
+// parser only sees one file at a time, so resolving the import target to a
+// unit ID or "ext:" is the compactor's job (§2.4, FDN-3), not this pass's.
+// Subject IS computable here — it is pure path math on the importING file,
+// no cross-file knowledge required — so raw facts still carry a real,
+// derived Subject rather than a placeholder.
+func BuildIndexWithFactsAndSink(root string, parser ports.Parser, archEnabled bool, sink ports.FactSink) (*ports.Index, *IndexResult, []ports.ImportEdge, error) {
+	return buildIndexCore(root, parser, archEnabled, sink)
+}
+
+// buildIndexCore is the shared implementation for BuildIndex, BuildIndexWithFacts,
+// and BuildIndexWithFactsAndSink. sink is nil-safe: nil skips Fact emission
+// entirely (zero-cost dual-run opt-out).
+func buildIndexCore(root string, parser ports.Parser, archEnabled bool, sink ports.FactSink) (*ports.Index, *IndexResult, []ports.ImportEdge, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return nil, nil, nil, err
@@ -190,9 +212,16 @@ func buildIndexCore(root string, parser ports.Parser, archEnabled bool) (*ports.
 				// Emit edges with relative FromFile path (G7: provenance stamps).
 				// Decoupled from the metas gate: var/const-only files produce 0 metas
 				// but may still have import edges (e.g. Go files with only declarations).
+				var factSubject string
+				if sink != nil && len(edges) > 0 {
+					factSubject = factSubjectForFile(relPath, ext)
+				}
 				for _, e := range edges {
 					e.FromFile = relPath
 					allEdges = append(allEdges, e)
+					if sink != nil {
+						sink.Emit(importEdgeToFact(e, factSubject))
+					}
 				}
 				if len(metas) > 0 {
 					continue // symbols found; skip content tokenization fallback
@@ -246,6 +275,49 @@ func buildIndexCore(root string, parser ports.Parser, archEnabled bool) (*ports.
 	}
 
 	return idx, result, allEdges, nil
+}
+
+// factSubjectForFile computes the canonical unit ID (D7, §1.3 <ns>:<path>)
+// for the file that OWNS an import edge. This is pure path math on the
+// importing file's own relative path + detected extension — no file-set or
+// manifest lookup required, unlike resolving the import TARGET (§2.4, the
+// compactor's job in FDN-3/4). Namespaces mirror the doc's worked examples:
+// go (package dir), py (module file sans extension), ts (JS/TS/TSX module
+// file sans extension, shared family). Falls back to "file:" for any
+// language reaching here that isn't one of the three P1 import extractors
+// (should not currently happen — importExtractors only registers go/python/
+// javascript/typescript/tsx).
+func factSubjectForFile(relPath, ext string) string {
+	relPath = filepath.ToSlash(relPath)
+	switch strings.ToLower(ext) {
+	case "go":
+		dir := filepath.ToSlash(filepath.Dir(relPath))
+		if dir == "." {
+			dir = ""
+		}
+		return "go:" + dir
+	case "py", "pyw":
+		return "py:" + strings.TrimSuffix(relPath, filepath.Ext(relPath))
+	case "js", "jsx", "mjs", "cjs", "ts", "mts", "tsx":
+		return "ts:" + strings.TrimSuffix(relPath, filepath.Ext(relPath))
+	default:
+		return "file:" + relPath
+	}
+}
+
+// importEdgeToFact converts one raw ports.ImportEdge into a raw ports.Fact
+// (FactDep, ProvDerived — tree-sitter output is REAL, D2). Object is left
+// empty and the literal specifier is preserved in Attrs["spec"]: resolution
+// to a unit ID or "ext:" happens later, off the parse pass (§1.2 "Rules").
+func importEdgeToFact(e ports.ImportEdge, subject string) ports.Fact {
+	return ports.Fact{
+		Kind:    ports.FactDep,
+		Subject: subject,
+		Attrs:   map[string]string{"spec": e.ImportPath},
+		Source:  ports.FactSource{File: e.FromFile, Line: e.StartLine},
+		Prov:    ports.ProvDerived,
+		TS:      time.Now().Unix(),
+	}
 }
 
 // groupEdgesByFile maps a flat []ports.ImportEdge slice into a map from fileID

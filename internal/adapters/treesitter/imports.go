@@ -17,19 +17,14 @@ import (
 	"github.com/corey/aoa/internal/ports"
 )
 
-// extractImports dispatches to the language-specific import extractor.
+// extractImports dispatches to the language-specific import extractor via
+// the importExtractors registry (extractors.go, FDN-2 board #28).
 // Returns nil for languages without a P1 extractor.
 func extractImports(root *tree_sitter.Node, source []byte, filePath, lang string) []ports.ImportEdge {
-	switch lang {
-	case "go":
-		return extractImportsGo(root, source, filePath)
-	case "python":
-		return extractImportsPython(root, source, filePath)
-	case "javascript", "typescript", "tsx":
-		return extractImportsJS(root, source, filePath)
-	default:
-		return nil
+	if fn, ok := importExtractors[lang]; ok {
+		return fn(root, source, filePath)
 	}
+	return nil
 }
 
 // extractImportsGo extracts import edges from a Go source file.

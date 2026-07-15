@@ -273,18 +273,13 @@ func (p *Parser) detectLanguage(filePath string) string {
 	return ""
 }
 
-// extractSymbols dispatches to language-specific or generic extraction.
+// extractSymbols dispatches to language-specific or generic extraction via
+// the symbolExtractors registry (extractors.go, FDN-2 board #28).
 func extractSymbols(root *tree_sitter.Node, source []byte, lang string) []Symbol {
-	switch lang {
-	case "go":
-		return extractGo(root, source)
-	case "python":
-		return extractPython(root, source, "")
-	case "javascript", "typescript", "tsx":
-		return extractJavaScript(root, source, "")
-	default:
-		return extractGeneric(root, source, lang)
+	if fn, ok := symbolExtractors[lang]; ok {
+		return fn(root, source)
 	}
+	return extractGeneric(root, source, lang)
 }
 
 // extractGeneric uses the symbolRules table to extract symbols from any language.
