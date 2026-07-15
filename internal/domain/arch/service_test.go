@@ -62,13 +62,14 @@ func TestService_RenderAll_ViewsPresent(t *testing.T) {
 		assert.NotEmpty(t, v.Key, "manifest view %q must have key", v.ID)
 		assert.NotEmpty(t, v.Hash, "manifest view %q must have hash", v.ID)
 		assert.Len(t, v.Hash, 12, "content hash must be 12 chars")
-		if v.ID == "context" || v.ID == "capability" || v.ID == "sbom" || v.ID == "techportfolio" || v.ID == "glossary" {
+		if v.ID == "context" || v.ID == "capability" || v.ID == "sbom" || v.ID == "techportfolio" || v.ID == "glossary" || v.ID == "change" {
 			// VP-1/VP-2: context and capability views are contractually always
 			// MIXED — context's external naming and capability's footprint
 			// app-base seeding are both heuristic, never a raw derived fact
 			// (D2 honesty). VL-1: sbom/techportfolio/glossary are the same —
 			// manifest-derived specs + language/atlas-term heuristics, never
-			// claimed as fully derived.
+			// claimed as fully derived. VL-2: change is the same — bounded
+			// git-history read + unit-path join heuristics, never fully derived.
 			assert.Equal(t, "mixed", v.Prov, "view %q provenance must always be mixed (D2 honesty)", v.ID)
 			continue
 		}

@@ -247,6 +247,18 @@
       "hover": [],
       "pass": "a reader can answer 'are we exposed to X@version' from the table alone"
     },
+    "change": {
+      "question": "Where is churn combining with complexity to create risk?",
+      "reader_leaves_knowing": "which units are both frequently changing and structurally complex — the units most likely to regress next",
+      "vital": [
+        "unit",
+        "changed files",
+        "complexity",
+        "risk"
+      ],
+      "hover": [],
+      "pass": "a reader can name the single riskiest unit and explain why from the row alone"
+    },
     "dsm": {
       "question": "Where are the mutual dependencies?",
       "reader_leaves_knowing": "the dependency density and every cycle-forming (red) cell",

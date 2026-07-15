@@ -205,6 +205,13 @@ type RenderInput struct {
 	// the Glossary view (VL-1c). Always MIXED provenance (D2 — candidates,
 	// harvested from keyword groupings, not ratified prose).
 	GlossaryTerms []GlossaryEntry
+
+	// ChurnEntries carries per-unit git-churn × complexity rows for the
+	// Change Map view (VL-2, board #36). Nil/empty → the view renders its
+	// honest "0 units" empty state (never a phantom shard — "change" is a
+	// mandatory view). Populated by the app layer from a bounded git-log
+	// read joined with indexed symbol counts (complexity proxy).
+	ChurnEntries []ChurnEntry
 }
 
 // Component is one detected dependency/component entry from a manifest
@@ -234,6 +241,23 @@ type TechEntry struct {
 	Line     uint32
 }
 
+// ChurnEntry is one row in the Change Map (view id "change") view: a unit
+// (package/directory grain, same keyspace as UnitFact.ID) plus how much it
+// has recently changed (git churn, bounded commit-depth/time-window read)
+// and how complex it is (indexed symbol count — the complexity proxy).
+// Risk is the naive product of the two — the view's whole premise is that
+// frequently-changed AND structurally-complex code is the highest-risk
+// combination, not either signal alone.
+type ChurnEntry struct {
+	Path         string // unit path (repo-relative directory; UnitFact.Path)
+	ChangedFiles int    // distinct files changed within the bounded window
+	Commits      int    // commits touching this unit within the bounded window
+	Complexity   int    // indexed symbol count (REAL) — complexity proxy
+	Risk         int    // ChangedFiles * Complexity — churn×complexity score
+	File         string // G7 source pointer (unit's defining file)
+	Line         uint32 // G7 source pointer
+}
+
 // GlossaryEntry is one candidate term harvested from the atlas
 // (internal/domain/glossary.Entry, converted at the boundary). Always
 // surfaced with MIXED provenance — a real keyword grouping, not a ratified
@@ -255,6 +279,8 @@ type VLInputs struct {
 	Components    []Component
 	Technologies  []TechEntry
 	GlossaryTerms []GlossaryEntry
+	// ChurnEntries carries VL-2's git-churn × complexity rows (board #36).
+	ChurnEntries []ChurnEntry
 }
 
 // CodeSymbolIndex is a symbol data bundle for the code renderer (②b, L19.23).

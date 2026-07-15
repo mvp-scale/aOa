@@ -414,6 +414,11 @@ func (a *App) deriveArch() {
 	// FactStore (see vl1.go's package doc for why).
 	vlIn := buildVLInputs(a.ProjectRoot, idx, a.Enricher)
 
+	// 6d. Build VL-2 inputs (board #36): Change Map. Bounded git-log read
+	// joined with indexed complexity (see vl2.go's package doc for the
+	// commit-depth/time-window bound rationale).
+	vlIn.ChurnEntries = buildChurnEntries(a.ProjectRoot, units, idx)
+
 	// 7. RenderAll: pure domain computation — no I/O, no mu needed.
 	svc := &arch.Service{}
 	shards, manifest, findings, err := svc.RenderAll(archScope, units, deps, opts, refHits, symIndex, vlIn)

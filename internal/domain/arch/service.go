@@ -28,6 +28,7 @@ var mandatoryViewDefs = []viewDef{
 	{"sbom", RenderSBOM},
 	{"techportfolio", RenderTechStack},
 	{"glossary", RenderGlossary},
+	{"change", RenderChangeMap},
 }
 
 // MandatoryViewIDs returns the view IDs RenderAll always renders (excludes
@@ -116,6 +117,7 @@ func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts
 		in.Components = vlIn.Components
 		in.Technologies = vlIn.Technologies
 		in.GlossaryTerms = vlIn.GlossaryTerms
+		in.ChurnEntries = vlIn.ChurnEntries
 	}
 
 	// 4. Render each view.
