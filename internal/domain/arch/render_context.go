@@ -83,6 +83,7 @@ func RenderContext(in RenderInput) (*Shard, error) {
 	// 3. Budget: sort candidates by count desc then ID asc, cap, then re-sort
 	// alphabetically for the final byte-stable node order.
 	const maxNodes = 30
+	trueTotal := len(rels) // pre-cap truth (VP-1.p1: caption must never claim the display budget as fact)
 	extIDs := make([]string, 0, len(rels))
 	for id := range rels {
 		extIDs = append(extIDs, id)
@@ -150,7 +151,14 @@ func RenderContext(in RenderInput) (*Shard, error) {
 		Edges: edges,
 	}
 	_, shard.FindingsClause = DeriveCaption(shard, in.Findings)
-	shard.Count = fmt.Sprintf("%d external systems · %d relationships", len(extIDs), len(edges))
+	if trueTotal > len(extIDs) {
+		// Budget truncated the drawing (D22/D23 still enforced on the canvas) —
+		// the caption must say so honestly: true total + shown subset, calm
+		// phrasing, no alarm glyph (D17: Count clause stays calm).
+		shard.Count = fmt.Sprintf("%d external systems (showing %d) · %d relationships", trueTotal, len(extIDs), trueTotal)
+	} else {
+		shard.Count = fmt.Sprintf("%d external systems · %d relationships", len(extIDs), len(edges))
+	}
 	return shard, nil
 }
 

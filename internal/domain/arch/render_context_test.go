@@ -149,6 +149,15 @@ func TestRenderContext_NodeBudgetCapped(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.LessOrEqual(t, len(s.Nodes), 30, "simple_view_nodes_max budget must be enforced")
+
+	// VP-1.p1: the display budget must not be presented as the fact — the
+	// caption must state the true total plus the shown subset when the
+	// budget truncates, never the capped count alone (D17 calm split).
+	// True external units: 3 from the base fixture (postgres, redis, bbolt)
+	// + 40 synthetic = 43; the 30-node budget shows 29 of them.
+	assert.Equal(t, "43 external systems (showing 29) · 43 relationships", s.Count,
+		"caption must report the true total and the shown subset, not the capped count as truth")
+	assert.NotContains(t, s.Count, "⚠", "A3: calm caption must never carry a findings glyph")
 }
 
 func TestShardSchema_Context(t *testing.T) {
