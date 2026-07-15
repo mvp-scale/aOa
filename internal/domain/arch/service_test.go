@@ -18,9 +18,9 @@ func TestService_RenderAll_Determinism(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	r1, m1, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	r1, m1, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
-	r2, m2, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	r2, m2, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	// All shards must be byte-identical across two independent renders.
@@ -46,7 +46,7 @@ func TestService_RenderAll_ViewsPresent(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	shards, manifest, findings, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	shards, manifest, findings, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	// The three keystone views must be present.
@@ -62,11 +62,13 @@ func TestService_RenderAll_ViewsPresent(t *testing.T) {
 		assert.NotEmpty(t, v.Key, "manifest view %q must have key", v.ID)
 		assert.NotEmpty(t, v.Hash, "manifest view %q must have hash", v.ID)
 		assert.Len(t, v.Hash, 12, "content hash must be 12 chars")
-		if v.ID == "context" || v.ID == "capability" {
+		if v.ID == "context" || v.ID == "capability" || v.ID == "sbom" || v.ID == "techportfolio" || v.ID == "glossary" {
 			// VP-1/VP-2: context and capability views are contractually always
 			// MIXED — context's external naming and capability's footprint
 			// app-base seeding are both heuristic, never a raw derived fact
-			// (D2 honesty).
+			// (D2 honesty). VL-1: sbom/techportfolio/glossary are the same —
+			// manifest-derived specs + language/atlas-term heuristics, never
+			// claimed as fully derived.
 			assert.Equal(t, "mixed", v.Prov, "view %q provenance must always be mixed (D2 honesty)", v.ID)
 			continue
 		}
@@ -88,7 +90,7 @@ func TestService_RenderAll_HashMatchesKey(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	shards, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	shards, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	// Each manifest entry's hash must match the actual ContentHash of the shard bytes.
@@ -341,7 +343,7 @@ func TestT22_ByteStability_UnderPermutation(t *testing.T) {
 	in := makeFixture()
 
 	// Render with canonical order.
-	shards1, m1, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	shards1, m1, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	// Shuffle units and deps.
@@ -354,7 +356,7 @@ func TestT22_ByteStability_UnderPermutation(t *testing.T) {
 	shuffleDepsDeterministic(shuffledDeps)
 
 	// Render with shuffled order.
-	shards2, m2, _, err := svc.RenderAll(in.Scope, shuffledUnits, shuffledDeps, nil, nil, nil)
+	shards2, m2, _, err := svc.RenderAll(in.Scope, shuffledUnits, shuffledDeps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	// All shards must be byte-identical regardless of input order.
@@ -375,7 +377,7 @@ func TestT22_MemberMapsToRealUnit(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	shards, _, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	shards, _, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	unitSet := make(map[string]bool, len(in.Units))
@@ -407,7 +409,7 @@ func TestT22_DSMMatchesEdgeSet(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	shards, _, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	shards, _, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	dsmJSON := shards["dsm"]
@@ -434,7 +436,7 @@ func TestT22_CyclesSubsetOfSCCs(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	shards, _, findings, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	shards, _, findings, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	cyclesJSON := shards["cycles"]
@@ -478,7 +480,7 @@ func shuffleDepsDeterministic(deps []DepFact) {
 func TestManifestGolden(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
-	_, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	_, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	b, err := MarshalManifest(&manifest)
@@ -513,9 +515,9 @@ func TestService_RenderAll_StampsSchemaVersion(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	_, m1, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	_, m1, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
-	_, m2, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	_, m2, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, ArchSchemaVersion, m1.SchemaVersion, "RenderAll must stamp the current schema version")
@@ -532,7 +534,7 @@ func TestService_RenderAll_LeavesDerivedAtEmpty(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	_, m, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	_, m, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	assert.Empty(t, m.DerivedAt, "RenderAll must not stamp DerivedAt — that would make it non-deterministic (T4)")

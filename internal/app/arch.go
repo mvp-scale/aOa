@@ -409,9 +409,14 @@ func (a *App) deriveArch() {
 	// idx is already a Clone (snapshot-release, line 238); safe to read here.
 	symIndex := buildCodeSymbolIndex(idx)
 
+	// 6c. Build VL-1 inputs (board #35): SBOM/Tech Stack/Glossary. Reads
+	// go.mod/package.json directly + the atlas (a.Enricher); does not touch
+	// FactStore (see vl1.go's package doc for why).
+	vlIn := buildVLInputs(a.ProjectRoot, idx, a.Enricher)
+
 	// 7. RenderAll: pure domain computation — no I/O, no mu needed.
 	svc := &arch.Service{}
-	shards, manifest, findings, err := svc.RenderAll(archScope, units, deps, opts, refHits, symIndex)
+	shards, manifest, findings, err := svc.RenderAll(archScope, units, deps, opts, refHits, symIndex, vlIn)
 	if err != nil {
 		a.debugf("deriveArch: RenderAll: %v", err)
 		return

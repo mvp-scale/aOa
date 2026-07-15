@@ -149,7 +149,7 @@ func TestRenderCode_AbsentWhenNoSymbols(t *testing.T) {
 	svc := &Service{}
 	in := makeFixture()
 
-	shards, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil)
+	shards, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	_, hasCode := shards["code"]
@@ -169,7 +169,7 @@ func TestRenderCode_PresentWithSymbols(t *testing.T) {
 	svc := &Service{}
 	in := makeCodeFixture()
 
-	shards, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, in.CodeSymbols)
+	shards, manifest, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, in.CodeSymbols, nil)
 	require.NoError(t, err)
 
 	_, hasCode := shards["code"]
@@ -196,7 +196,7 @@ func TestT22_Code_ByteStability_UnderPermutation(t *testing.T) {
 	in := makeCodeFixture()
 
 	// Render with canonical order.
-	shards1, _, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, in.CodeSymbols)
+	shards1, _, _, err := svc.RenderAll(in.Scope, in.Units, in.Deps, nil, nil, in.CodeSymbols, nil)
 	require.NoError(t, err)
 
 	// Shuffle units and deps.
@@ -209,7 +209,7 @@ func TestT22_Code_ByteStability_UnderPermutation(t *testing.T) {
 	shuffleDepsDeterministic(shuffledDeps)
 
 	// Render with shuffled order.
-	shards2, _, _, err := svc.RenderAll(in.Scope, shuffledUnits, shuffledDeps, nil, nil, in.CodeSymbols)
+	shards2, _, _, err := svc.RenderAll(in.Scope, shuffledUnits, shuffledDeps, nil, nil, in.CodeSymbols, nil)
 	require.NoError(t, err)
 
 	code1, ok1 := shards1["code"]

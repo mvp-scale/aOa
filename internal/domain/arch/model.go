@@ -188,6 +188,73 @@ type RenderInput struct {
 	// The app layer populates this from a Clone of ports.Index (never aliased — race gate).
 	// Provenance split: REAL for symbol file:line; MIXED for subset selection heuristic.
 	CodeSymbols *CodeSymbolIndex
+
+	// Components carries lockfile-derived dependency rows for the SBOM view
+	// (VL-1a, board #35). Nil/empty → the view renders its honest "0
+	// components" empty state (never a phantom shard — sbom/techportfolio/
+	// glossary are mandatory views, unlike the conditional "code" view above).
+	// Populated by the app layer from internal/adapters/lockfile readers.
+	Components []Component
+
+	// Technologies carries language/framework usage rows for the Tech Stack
+	// (view id "techportfolio") view (VL-1b), joined from FileMeta.Language +
+	// Components by the app layer.
+	Technologies []TechEntry
+
+	// GlossaryTerms carries atlas-harvested candidate term definitions for
+	// the Glossary view (VL-1c). Always MIXED provenance (D2 — candidates,
+	// harvested from keyword groupings, not ratified prose).
+	GlossaryTerms []GlossaryEntry
+}
+
+// Component is one detected dependency/component entry from a manifest
+// reader (internal/adapters/lockfile — go.mod/go.sum, package.json). Mirrors
+// lockfile.Component field-for-field; the app layer converts between the two
+// at the boundary (D25 pattern), keeping this domain package import-free of
+// the adapters layer (G4).
+type Component struct {
+	Name     string
+	Version  string
+	Supplier string // "direct" | "indirect" | "replace" | "dev" | "optional" | "peer"
+	Language string // "go" | "js"
+	Unpinned bool
+	File     string
+	Line     uint32
+}
+
+// TechEntry is one row in the Tech Stack (view id "techportfolio") view: a
+// technology — a detected source language or a lockfile dependency — plus
+// where/how much it's used.
+type TechEntry struct {
+	Name     string
+	Kind     string // "language" | "dependency"
+	Count    int    // files (language rows) or manifest occurrences (dependency rows)
+	Unpinned bool   // dependency rows only; language rows always false
+	File     string
+	Line     uint32
+}
+
+// GlossaryEntry is one candidate term harvested from the atlas
+// (internal/domain/glossary.Entry, converted at the boundary). Always
+// surfaced with MIXED provenance — a real keyword grouping, not a ratified
+// human definition (D2).
+type GlossaryEntry struct {
+	Term       string
+	Domain     string
+	Definition string
+}
+
+// VLInputs bundles the view-library-specific data sources RenderAll
+// optionally threads into RenderInput (VL-1: Components/Technologies/
+// GlossaryTerms). Grouped into one struct — rather than three more
+// positional RenderAll parameters — so later view-library slices (VL-2/
+// VL-3, same GATE-V2 milestone) can extend this bundle without another
+// signature break. Nil is valid: every field defaults empty and each
+// corresponding view renders its honest empty state.
+type VLInputs struct {
+	Components    []Component
+	Technologies  []TechEntry
+	GlossaryTerms []GlossaryEntry
 }
 
 // CodeSymbolIndex is a symbol data bundle for the code renderer (②b, L19.23).

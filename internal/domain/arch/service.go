@@ -25,6 +25,9 @@ var mandatoryViewDefs = []viewDef{
 	{"context", RenderContext},
 	{"cycles", RenderCycles},
 	{"dsm", RenderDSM},
+	{"sbom", RenderSBOM},
+	{"techportfolio", RenderTechStack},
+	{"glossary", RenderGlossary},
 }
 
 // MandatoryViewIDs returns the view IDs RenderAll always renders (excludes
@@ -76,8 +79,14 @@ type Service struct{}
 //   - findings: combined detector + overlay-leash findings
 //   - error: any render/marshal error
 //
+// vlIn carries the VL-1 view-library inputs (Components/Technologies/
+// GlossaryTerms — SBOM/Tech Stack/Glossary, board #35). Nil is valid (same
+// contract as symbolIndex): every field defaults empty and each view renders
+// its honest empty state. Unlike "code", these three views are mandatory —
+// they always render, never a phantom shard.
+//
 // C1 context: this method does no writes; callers snapshot-release-write per C1.
-func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts *GroupOptions, refHits map[string]int, symbolIndex *CodeSymbolIndex) (
+func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts *GroupOptions, refHits map[string]int, symbolIndex *CodeSymbolIndex, vlIn *VLInputs) (
 	shards map[string][]byte,
 	manifest Manifest,
 	findings []Finding,
@@ -102,6 +111,11 @@ func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts
 		SCCs:        sccs,
 		Findings:    findings,
 		CodeSymbols: symbolIndex,
+	}
+	if vlIn != nil {
+		in.Components = vlIn.Components
+		in.Technologies = vlIn.Technologies
+		in.GlossaryTerms = vlIn.GlossaryTerms
 	}
 
 	// 4. Render each view.
