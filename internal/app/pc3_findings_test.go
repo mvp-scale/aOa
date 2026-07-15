@@ -101,6 +101,23 @@ func (s *capturingArchStore) LoadAllEdges(_ string) ([]ports.ImportEdge, error) 
 	return edges, nil
 }
 
+// FDN-4: deriveArch reads the FactStore query plane now — serve the same
+// pc3Index() edge set through FactsByKind(FactUnit)/Dependencies too, or the
+// "nothing to derive yet" guard fires and SaveFindings is never called.
+func (s *capturingArchStore) FactsByKind(_ string, kind ports.FactKind) ([]ports.Fact, error) {
+	if kind != ports.FactUnit {
+		return nil, nil
+	}
+	_, edges := pc3Index()
+	units, _ := factsFromResolvedEdges(edges)
+	return units, nil
+}
+func (s *capturingArchStore) Dependencies(_, unit string) ([]ports.DepEdge, error) {
+	_, edges := pc3Index()
+	_, adj := factsFromResolvedEdges(edges)
+	return adj.Fwd[unit], nil
+}
+
 func (s *capturingArchStore) SaveShards(_ string, _ map[string][]byte) error  { return nil }
 func (s *capturingArchStore) SaveManifest(_ string, _ string, _ []byte) error { return nil }
 func (s *capturingArchStore) LoadFindings(_ string, _ string) ([]ports.Finding, error) {

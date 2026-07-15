@@ -191,8 +191,20 @@ func countsToAdjacency(counts map[string]map[string]int) map[string][]ports.DepE
 // so the reverse import is not an option.
 // "ext:" targets pass through unchanged (already correctly prefixed by
 // resolve.go).
+//
+// resolved == "" is NOT "unresolved" here — every caller of this function
+// (Compact) only reaches it after resolveOne has already returned ok=true,
+// and for Go, resolveGo's own doc comment is explicit: "Go imports are
+// ALWAYS resolved ... no unresolved case". An empty resolved path means
+// "the importer's module ROOT directory" (mirrors factSubjectForFile's own
+// dir=="" -> "go:"+"" convention) — a real, distinct unit, not a phantom.
+// Returning bare "" here (pre-fix) made Compact's `obj == "" || obj == subj`
+// guard conflate "resolved to root" with "no target", silently dropping
+// every edge from a subpackage into its own module's root package (found
+// via a gin real-derive diff, FDN-4 gate follow-up: ginS/gins.go importing
+// "github.com/gin-gonic/gin" vanished from the adjacency entirely).
 func subjectFromResolvedPath(lang, resolved string) string {
-	if resolved == "" || strings.HasPrefix(resolved, "ext:") {
+	if strings.HasPrefix(resolved, "ext:") {
 		return resolved
 	}
 	switch lang {

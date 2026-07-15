@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -392,6 +393,22 @@ func (s *countingArchStore) LoadAllEdges(_ string) ([]ports.ImportEdge, error) {
 	return edgesForDeriveTest(), nil
 }
 
+// FDN-4: deriveArch now reads the FactStore query plane (FactsByKind(FactUnit)
+// + Dependencies) instead of LoadAllEdges. countingArchStore must serve the
+// SAME edge set through that plane too, or deriveArch's "nothing to derive
+// yet" guard fires and no SaveShards call is ever observed.
+func (s *countingArchStore) FactsByKind(_ string, kind ports.FactKind) ([]ports.Fact, error) {
+	if kind != ports.FactUnit {
+		return nil, nil
+	}
+	units, _ := factsFromResolvedEdges(edgesForDeriveTest())
+	return units, nil
+}
+func (s *countingArchStore) Dependencies(_, unit string) ([]ports.DepEdge, error) {
+	_, adj := factsFromResolvedEdges(edgesForDeriveTest())
+	return adj.Fwd[unit], nil
+}
+
 // edgesForDeriveTest returns a minimal resolved edge slice for deriveArch tests.
 func edgesForDeriveTest() []ports.ImportEdge {
 	return []ports.ImportEdge{
@@ -399,6 +416,68 @@ func edgesForDeriveTest() []ports.ImportEdge {
 		{FromFile: "internal/app/arch.go", ImportPath: "ext:std/fmt", StartLine: 2},
 		{FromFile: "internal/adapters/bbolt/store.go", ImportPath: "internal/ports", StartLine: 1},
 	}
+}
+
+// factsFromResolvedEdges builds synthetic FactStore-shaped fixtures (unit
+// facts + forward adjacency) from an already-RESOLVED edge set — the exact
+// shape aggregateEdges consumes (ImportPath is a directory or "ext:...", not
+// a raw unresolved spec). This lets test doubles drive deriveArch's new
+// FactStore-based path without standing up a real bbolt-backed compaction.
+// Mirrors factSubjectForFile's "go:" namespace (directory grain) since every
+// caller here seeds Go-only fixtures.
+func factsFromResolvedEdges(edges []ports.ImportEdge) ([]ports.Fact, *ports.DepAdjacency) {
+	toSubject := func(dir string) string {
+		if dir == "." {
+			dir = ""
+		}
+		return "go:" + dir
+	}
+
+	unitByID := make(map[string]ports.Fact)
+	order := make([]string, 0, len(edges))
+	fwdCount := make(map[string]map[string]int)
+
+	for _, e := range edges {
+		fromSubj := toSubject(filepath.Dir(e.FromFile))
+		if _, ok := unitByID[fromSubj]; !ok {
+			unitByID[fromSubj] = ports.Fact{
+				Kind: ports.FactUnit, Subject: fromSubj,
+				Source: ports.FactSource{File: e.FromFile, Line: e.StartLine},
+			}
+			order = append(order, fromSubj)
+		}
+
+		toSubj := e.ImportPath
+		if !strings.HasPrefix(toSubj, "ext:") {
+			toSubj = toSubject(e.ImportPath)
+			if _, ok := unitByID[toSubj]; !ok {
+				unitByID[toSubj] = ports.Fact{
+					Kind: ports.FactUnit, Subject: toSubj,
+					Source: ports.FactSource{File: e.FromFile},
+				}
+				order = append(order, toSubj)
+			}
+		}
+
+		if fwdCount[fromSubj] == nil {
+			fwdCount[fromSubj] = make(map[string]int)
+		}
+		fwdCount[fromSubj][toSubj]++
+	}
+
+	units := make([]ports.Fact, 0, len(order))
+	for _, id := range order {
+		units = append(units, unitByID[id])
+	}
+	fwd := make(map[string][]ports.DepEdge, len(fwdCount))
+	for subj, targets := range fwdCount {
+		edgeList := make([]ports.DepEdge, 0, len(targets))
+		for obj, cnt := range targets {
+			edgeList = append(edgeList, ports.DepEdge{Unit: obj, Count: uint16(cnt)})
+		}
+		fwd[subj] = edgeList
+	}
+	return units, &ports.DepAdjacency{Fwd: fwd}
 }
 
 // TestC4FlagOff_DeriveArch verifies the C4 gate: when ArchEnabled is false,

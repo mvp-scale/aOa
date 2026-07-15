@@ -167,6 +167,11 @@ func TestT45_OverlayLeash_AppLevel(t *testing.T) {
 
 	// Populate edges so deriveArch proceeds past the early-return guard.
 	require.NoError(t, store.SaveEdgesForFile("test", 1, edgesForDeriveTest()))
+	// FDN-4: deriveArch (below) is called directly, bypassing WarmCaches' own
+	// compaction step — seed the equivalent compacted facts directly so the
+	// FactStore query plane has something to derive from.
+	seedUnits, seedAdj := factsFromResolvedEdges(edgesForDeriveTest())
+	require.NoError(t, store.PutResolved("test", seedUnits, seedAdj))
 
 	// Write a real .aoa/arch/overlays/local.json with one invented unit ID.
 	// "u_invented_nonexistent" cannot map to any unit derived from edgesForDeriveTest.

@@ -54,6 +54,35 @@ func TestCompact_ResolvesGoIntraRepoEdge(t *testing.T) {
 	assert.Equal(t, "go:internal/app", findings[0].Subject)
 }
 
+// TestCompact_ResolvesGoIntraRepoEdgeToModuleRoot reproduces a real,
+// verified divergence found via a gin (github.com/gin-gonic/gin) real-derive
+// diff (FDN-4 gate follow-up): a subpackage importing its own module's ROOT
+// package by full import path (e.g. ginS/gins.go importing
+// "github.com/gin-gonic/gin") resolves to ImportPath == "" (§2.4 resolveGo,
+// "no unresolved case for Go" — bestDir/remainder both empty means "root",
+// never "unresolved"). subjectFromResolvedPath must map that to the "go:"
+// root subject (matching factSubjectForFile's own dir=="" -> "go:" + ""
+// convention), NOT return "" bare — the previous code returned "" for BOTH
+// "resolved to root" and would-be "unresolved" cases, so Compact's
+// `obj == "" || obj == subj` phantom/self-loop guard silently discarded a
+// real, distinct, non-self edge to the module root.
+func TestCompact_ResolvesGoIntraRepoEdgeToModuleRoot(t *testing.T) {
+	manifests := Manifests{GoModules: map[string]string{"github.com/gin-gonic/gin": ""}}
+	fileSet := map[string]bool{"ginS/gins.go": true}
+	raw := []ports.Fact{
+		depFact("go:ginS", "github.com/gin-gonic/gin", "ginS/gins.go", 12),
+	}
+
+	units, adj, _ := CompactWithManifests(raw, fileSet, manifests)
+
+	require.Len(t, units, 2, "importing unit (go:ginS) + resolved root unit (go:)")
+	ids := []string{units[0].Subject, units[1].Subject}
+	assert.ElementsMatch(t, []string{"go:ginS", "go:"}, ids)
+
+	require.Contains(t, adj.Fwd, "go:ginS", "the edge to the module root must not be dropped as a phantom/self-loop")
+	assert.Equal(t, []ports.DepEdge{{Unit: "go:", Count: 1}}, adj.Fwd["go:ginS"])
+}
+
 func TestCompact_ExternalEdgeNotSynthesizedAsUnit(t *testing.T) {
 	manifests := Manifests{GoModules: map[string]string{"github.com/corey/aoa": ""}}
 	fileSet := map[string]bool{"internal/app/app.go": true}

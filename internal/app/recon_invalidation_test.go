@@ -54,6 +54,11 @@ func Hello() { fmt.Println("hello") }
 
 	require.NoError(t, store.SaveIndex("test", a.Index.Clone()))
 	require.NoError(t, store.SaveEdgesForFile("test", 1, edgesForDeriveTest()))
+	// FDN-4: deriveArch (below) reads the FactStore query plane, not
+	// LoadAllEdges — seed the equivalent compacted facts directly (this test
+	// calls deriveArch() directly, bypassing WarmCaches' own compaction step).
+	seedUnits, seedAdj := factsFromResolvedEdges(edgesForDeriveTest())
+	require.NoError(t, store.PutResolved("test", seedUnits, seedAdj))
 
 	aDerive := newBurstTestApp(t, tmpDir, store)
 	aDerive.ArchEnabled = true

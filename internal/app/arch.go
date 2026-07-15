@@ -272,13 +272,26 @@ func (a *App) hasLocalArchManifest() bool {
 //
 // Pipeline:
 //  1. C4 gate — no-op when ArchEnabled is false.
-//  2. Load all edges from the store (read-only, C1 safe).
+//  2. Read the FactStore query plane (unit facts + resolved adjacency).
 //  3. Snapshot idx under mu, then release (snapshot-release pattern).
-//  4. Aggregate edges → UnitFact / DepFact slices.
+//  4. Bridge FactStore facts → UnitFact / DepFact slices.
 //  5. Load overlay spec (file I/O, all reads before RenderAll).
 //  6. Apply overlay leash validation (only after units are known).
 //  7. RenderAll: grouping + detectors + renderers (pure, no I/O).
 //  8. Persist shards + manifest + findings outside mu (C1 compliant).
+//
+// FDN-4 (board #30): reads a.Store.FactsByKind(FactUnit) + Dependencies
+// instead of LoadAllEdges+aggregateEdges. This function does NOT itself
+// trigger a facts-substrate compaction — it relies on the ordering
+// invariant every deriveArch caller already establishes: doFlushEdgeBatch
+// calls a.compactAndPersistFacts THEN a.deriveArch in the same background
+// goroutine (app.go doFlushEdgeBatch), and WarmCaches/Reindex synchronously
+// call PutResolved/PutFindings before any of their own deriveArch triggers
+// fire. A read here is therefore never stale-by-construction — the same
+// guarantee the pre-FDN-4 code relied on for LoadAllEdges. EdgeStore /
+// LoadAllEdges are untouched and still back archQuerier.Facts/Graph/Derive
+// (aoa grep confirms no other caller of aggregateEdges/LoadAllEdges was
+// removed — only this function's data source changed).
 func (a *App) deriveArch() {
 	if !a.ArchEnabled || a.Store == nil {
 		return // C4 gate
@@ -286,22 +299,38 @@ func (a *App) deriveArch() {
 
 	// Serialize whole derives: without this, a stale-generation goroutine could
 	// finish SaveManifest after a fresher one (torn manifest). Each serialized
-	// run loads edges fresh inside the critical section, so the last completed
+	// run reads facts fresh inside the critical section, so the last completed
 	// run always reflects the newest data.
 	a.archDeriveMu.Lock()
 	defer a.archDeriveMu.Unlock()
 
-	// 1. Load all edges (read-only — db.View; C1 does not apply to reads).
-	// BE-2 policy: _test.go imports ARE included in the fact substrate — they enter
-	// via LoadAllEdges without filtering, affecting fan-in counts, road directions, and DAG claims.
-	edges, err := a.Store.LoadAllEdges(a.ProjectID)
+	// 1. Read unit facts (read-only — db.View; C1 does not apply to reads).
+	// BE-2 policy: _test.go imports ARE included in the fact substrate — they
+	// enter via the same raw-edge extraction LoadAllEdges used to, affecting
+	// fan-in counts, road directions, and DAG claims.
+	unitFacts, err := a.Store.FactsByKind(a.ProjectID, ports.FactUnit)
 	if err != nil {
-		a.debugf("deriveArch: LoadAllEdges: %v", err)
+		a.debugf("deriveArch: FactsByKind(unit): %v", err)
 		return
 	}
-	if len(edges) == 0 {
+	if len(unitFacts) == 0 {
 		return // nothing to derive yet
 	}
+
+	// 1b. Read each unit's resolved outbound edges (O(1) bucket-get + posting-
+	// list decode per unit, ≤50µs warm — FactStore doc comment, facts.go).
+	fwd := make(map[string][]ports.DepEdge, len(unitFacts))
+	for _, u := range unitFacts {
+		depEdges, derr := a.Store.Dependencies(a.ProjectID, u.Subject)
+		if derr != nil {
+			a.debugf("deriveArch: Dependencies(%s): %v", u.Subject, derr)
+			continue
+		}
+		if len(depEdges) > 0 {
+			fwd[u.Subject] = depEdges
+		}
+	}
+	adj := &ports.DepAdjacency{Fwd: fwd}
 
 	// 2. Snapshot the index under mu, then release (snapshot-release pattern).
 	// MUST Clone: a.Index is live — Reindex/WarmCaches/Wipe write Index.Files
@@ -311,8 +340,8 @@ func (a *App) deriveArch() {
 	projectID := a.ProjectID
 	a.mu.Unlock()
 
-	// 3. Aggregate edges → unit facts + dep facts (pure, no I/O).
-	units, deps := aggregateEdges(edges, idx)
+	// 3. Bridge FactStore facts → unit facts + dep facts (pure, no I/O).
+	units, deps := unitFactsFromFactStore(unitFacts, adj, idx)
 	if len(units) == 0 {
 		return
 	}
