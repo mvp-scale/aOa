@@ -38,3 +38,25 @@ func TestStandards_NamedPalettesNeverUseReservedColors(t *testing.T) {
 		}
 	}
 }
+
+// SUR-2/R2: container/capability twin (D39) — the kickoff ruling (option B,
+// M6-completion/tasks.md:101) formalizes viewer.js:68's informal vid-merge
+// fallback (["capability","container"]) as an explicit alias recorded on the
+// standards schema, instead of re-keying the sim-estate JSONs (option A) that
+// still author their mockup views under the legacy "container" id.
+func TestStandards_CapabilityRecordsContainerAlias(t *testing.T) {
+	data, err := archStaticFS.ReadFile("static/arch/view-standards.json")
+	require.NoError(t, err, "view-standards.json must be embedded and readable")
+
+	var doc struct {
+		Views map[string]struct {
+			Alias string `json:"alias"`
+		} `json:"views"`
+	}
+	require.NoError(t, json.Unmarshal(data, &doc), "view-standards.json must be valid JSON")
+
+	cap, ok := doc.Views["capability"]
+	require.True(t, ok, "views.capability must be present")
+	require.Equal(t, "container", cap.Alias,
+		"views.capability.alias must record 'container' as its formal alias (R2/D39 ruling)")
+}

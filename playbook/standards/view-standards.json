@@ -88,6 +88,7 @@
       "pass": "a reader can list the runnable units and trace any request path between them"
     },
     "capability": {
+      "alias": "container",
       "question": "What capabilities live in this repo, and how do they talk?",
       "reader_leaves_knowing": "each capability, the units inside it, and every cross-capability edge — the live derivation of the C4 container diagram (ruling: capability map ≈ C4 Container)",
       "vital": [

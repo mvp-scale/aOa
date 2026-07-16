@@ -68,7 +68,7 @@ const STD_CATALOG=[
    {vid:["capability","container"],label:"Capability Map",aka:"C4 Container Diagram"},
    {vid:["component","domains"],label:"Component"},
    {vid:["domains"],label:"Domain map",aka:"Domain Decomposition"},
-   {vid:["deployment"],label:"Deployment"},
+   {vid:["deployment"],label:"Deployment",aka:"C4 Deployment Diagram"},
    {vid:["sequence"],label:"Dynamic (sequence)",note:"needs call-edge resolution"},
    {vid:["code"],label:"Code (L4)",note:"symbol table · not drawn by design — needs call-edge resolution"}]},
  {grp:"Interfaces & Change",items:[
@@ -79,11 +79,12 @@ const STD_CATALOG=[
    {vid:["trust"],label:"Trust Boundaries (STRIDE)",note:"DFD overlay · rule-pack"},
    {vid:["statemachine"],label:"State Machine",note:"needs state extraction"}]},
  {grp:"Data",items:[
-   {vid:["datamodel"],label:"Data Model / ER"},
+   {vid:["datamodel"],label:"Data Model",aka:"Entity-Relationship Diagram / ERD"},
    {vid:["glossary"],label:"Glossary",note:"atlas seed + writer"}]},
  {grp:"Technology & Ops",items:[
    {vid:["techportfolio"],label:"Tech Stack",aka:"Technology Portfolio",note:"config scan"},
-   {vid:["sbom"],label:"SBOM",aka:"Software Bill of Materials / CycloneDX",note:"document · manifests"}]},
+   {vid:["sbom"],label:"SBOM",aka:"Software Bill of Materials / CycloneDX",note:"document · manifests"},
+   {vid:["ownership"],label:"Ownership",aka:"CODEOWNERS map"}]},
  {grp:"Classical structure",items:[
    {vid:["component","domains"],label:"Layered Architecture",alias:true},
    {vid:["dsm"],label:"Dependency Matrix (DSM)",note:"matrix renderer"},
