@@ -138,6 +138,23 @@ func TestBuildDeploymentEntries_K8sFixtureRepo(t *testing.T) {
 	assert.Equal(t, "k8s-service", svc.Kind)
 }
 
+// TestBuildDeploymentEntries_RepoRootExcludesFixtures guards D2 honesty on
+// aOa's own repo: the committed COL-2 fixtures (test/fixtures/col2/*) live
+// inside aOa's own indexed tree and must never be counted as aOa's own
+// deploy surface just because they're reachable via idx.Files. aOa's repo
+// root carries no Dockerfile/compose/k8s manifest of its own, so the honest
+// answer is zero deployment entries — the fixture-repo tests above prove the
+// same reader still parses those exact fixtures correctly when pointed at
+// the fixture root directly (root grain, not path-filtered away).
+func TestBuildDeploymentEntries_RepoRootExcludesFixtures(t *testing.T) {
+	root := filepath.Join("..", "..")
+	idx, _, err := BuildIndex(root, nil)
+	require.NoError(t, err)
+
+	entries := buildDeploymentEntries(root, idx)
+	assert.Empty(t, entries, "aOa's own repo ships nothing; only test/fixtures manifests are indexed")
+}
+
 func TestBuildDeploymentEntries_SortedByKindThenID(t *testing.T) {
 	tmpDir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "Dockerfile"), []byte("FROM alpine:3.19\n"), 0644))

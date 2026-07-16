@@ -31,6 +31,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/corey/aoa/internal/adapters/deployfile"
 	"github.com/corey/aoa/internal/domain/arch"
@@ -73,6 +74,9 @@ func buildDeploymentEntries(root string, idx *ports.Index) []arch.DeploymentEntr
 		var composeFiles, k8sFiles []string
 		for _, fm := range idx.Files {
 			if fm == nil || fm.Language != "yaml" {
+				continue
+			}
+			if strings.Contains(fm.Path, "test/fixtures/") || strings.Contains(fm.Path, "testdata/") {
 				continue
 			}
 			if composeFileNames[filepath.Base(fm.Path)] {
