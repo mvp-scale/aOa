@@ -850,25 +850,29 @@ function rfEdge(e,laidById,col,nameOf){
 async function layoutSimple(view,dir,d,showFindings){
   const ent=view.kind==="entity";
   const sizes={};
-  view.nodes.forEach(n=>{
+  // M6-P1: missing/empty nodes|edges (Go omitempty drops empty slices) must lay out as a
+  // trivially-empty canvas, not throw — the empty-shard card upstream is the real UX for this
+  // case, but a bare-JSON caller (or a future kind that skips the isEmpty gate) must not crash.
+  const nodes=view.nodes||[],edges=view.edges||[];
+  nodes.forEach(n=>{
     if(ent){sizes[n.id]={w:Math.min(400,Math.max(264,snap((n.label||"").length*7.6+62))),h:34+n.fields.length*21+2};}
     else {const base=n.type==="sys"?248:208;
       // canvas carries identity only (sub moved to hover) — width follows the label, never ellipsis
       sizes[n.id]={w:Math.min(360,Math.max(base,snap((n.label||"").length*7.8+(n.drillTo?118:66)))),h:44};}});
   const g={id:"root",layoutOptions:EOPT(dir,d),
-    children:view.nodes.map(n=>({id:n.id,width:sizes[n.id].w,height:sizes[n.id].h})),
-    edges:view.edges.map(e=>({id:e.id,sources:[e.source],targets:[e.target],
+    children:nodes.map(n=>({id:n.id,width:sizes[n.id].w,height:sizes[n.id].h})),
+    edges:edges.map(e=>({id:e.id,sources:[e.source],targets:[e.target],
       labels:[{text:e.label||"",width:lblW(e.label||""),height:16}]}))};
   const r=await elk.layout(g);
   const pos={};r.children.forEach(c=>pos[c.id]={x:snap(c.x),y:snap(c.y)});
   const laidById={};(r.edges||[]).forEach(e=>laidById[e.id]=e);
-  const problems=[];const nById={};view.nodes.forEach(n=>nById[n.id]=n);
-  view.edges.forEach(e=>{if(e.tag){e._viol=true;
+  const problems=[];const nById={};nodes.forEach(n=>nById[n.id]=n);
+  edges.forEach(e=>{if(e.tag){e._viol=true;
     problems.push(e.tag+": "+((nById[e.source]||{}).label)+" → "+((nById[e.target]||{}).label));}});
-  return {nodes:view.nodes.map(n=>({id:n.id,type:ent?"entity":"box",position:pos[n.id],
+  return {nodes:nodes.map(n=>({id:n.id,type:ent?"entity":"box",position:pos[n.id],
       width:sizes[n.id].w,height:sizes[n.id].h,
       data:{...n,w:sizes[n.id].w,h:sizes[n.id].h}})).concat(labelSpacers(laidById)),
-    edges:view.edges.map(e=>{const r=rfEdge(e,laidById,()=>T.dim,id2=>(nById[id2]||{}).label||id2);
+    edges:edges.map(e=>{const r=rfEdge(e,laidById,()=>T.dim,id2=>(nById[id2]||{}).label||id2);
       // A3 calm default: violation is still DETECTED (e._viol, problems[] above) but the red/dashed
       // PAINT only shows when the Findings lens is on — a stranger sees a plain map, not alarms.
       if(e._viol&&showFindings){r.style={...r.style,stroke:T.red,strokeDasharray:"6 3"};
@@ -905,6 +909,7 @@ const layerColor=(view,l)=>viewLayerColors(view)[l]||LAYER_PIN[l]||CYCLE[lhash(l
 // mergeExternalBuckets: fold all g_ext_* buckets into ONE EXTERNALS capsule (R3).
 // Returns [internals[], externals_capsule_or_null].
 function mergeExternalBuckets(buckets){
+  buckets=buckets||[]; // M6-P1: Go omitempty drops an empty buckets slice from the shard JSON
   const internal=buckets.filter(b=>!b.id.startsWith("g_ext_"));
   const external=buckets.filter(b=>b.id.startsWith("g_ext_"));
   if(!external.length)return[buckets,null];
@@ -941,7 +946,7 @@ async function layoutBuckets(view,dir,d,ov,opts){
   const origBById={};(view.buckets||[]).forEach(b=>origBById[b.id]=b);
   const nameOfBucket=id=>(bById[id]||origBById[id]||{}).label||id;
   // Build remapped edges for degree + ELK (g_ext_* → g_EXTERNALS)
-  const remappedEdges=view.edges.map(e=>({...e,source:remapId(e.source),target:remapId(e.target)}));
+  const remappedEdges=(view.edges||[]).map(e=>({...e,source:remapId(e.source),target:remapId(e.target)}));
   // Deduplicate remapped edges by (source,target) so merged externals don't produce parallel ELK edges
   const edgeSeen=new Set();
   // Use let so first-paint edge restraint can reassign below.
@@ -1140,6 +1145,36 @@ function findingsClause(view,probs){
   const tag=(view.edges||[]).find(e=>e.tag);
   return tag?` · ⚠ ${tag.tag}: ${(tag.label||"").slice(0,48)}`
     :(probs&&probs.length?` · ⚠ ${probs.length} finding${probs.length>1?"s":""}`:"");}
+// M6-P1: a shard can honestly have zero content (e.g. no IaC in this repo at all — the first
+// empty "buckets" shard in the product's life; a "simple"/"entity" shard could go empty the
+// same way). shardIsEmpty is the single gate deciding whether to hand the loaded shard to its
+// normal renderer/layout or to the calm empty-state card below — table/matrix already render
+// their own zero-row/zero-item state gracefully (cycles' "no cycles" card lives inside
+// TableView, untouched here), so only buckets/simple/entity need this gate.
+const shardIsEmpty=view=>{
+  if(view.kind==="buckets")return!(view.buckets||[]).length;
+  if(view.kind==="simple"||view.kind==="entity")return!(view.nodes||[]).length;
+  return false;};
+// Per-view honest empty copy (deployment is the concrete case that surfaced this — "nothing
+// ships from this repo" answers the view's own question rather than a generic placeholder).
+// Any other buckets/simple/entity view that goes empty falls back to a generic-but-honest
+// message built from the view's own title + Go-derived count string (never fabricated).
+const EMPTY_SHARD_COPY={
+  deployment:{headline:"no deploy artifacts found — nothing ships from this repo",
+    sub:"0 deploy artifacts · no Dockerfile, compose.yaml, or Kubernetes manifest found in this codebase"}};
+function EmptyShardView({view,vid}){
+  const copy=EMPTY_SHARD_COPY[vid]||{
+    headline:`no ${(view.title||"content").toLowerCase()} found in this repo`,
+    sub:(view.count||"0 elements")+" · nothing collected from this codebase"};
+  return html`<div style=${{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style=${{textAlign:"center",maxWidth:480,padding:"40px 32px",background:T.card,
+      border:`1px solid ${T.border}`,borderRadius:12}}>
+      <div style=${{fontSize:28,marginBottom:12,color:T.dim}}>○</div>
+      <div style=${{fontSize:16,fontWeight:700,color:T.text,marginBottom:8}}>${copy.headline}</div>
+      <div style=${{fontSize:11.5,color:T.dim,lineHeight:1.6}}>${copy.sub}</div>
+      ${view.prov?html`<div style=${{marginTop:14,fontSize:10,color:T.mute}}>${view.prov.label}</div>`:null}
+    </div>
+  </div>`;}
 // Dock SELECTION empty-state text (calm default, THE FIX §"ambient cue"): canvas views
 // (buckets/simple) get the map's invitation; table (BEAU-1: rows are the only clickable
 // element, so name the row) and matrix (DSM: cells + row-header expand) keep their own
@@ -1742,6 +1777,12 @@ function Flow(){
         if(!r.ok)throw new Error("HTTP "+r.status+" loading shard "+view.shard.path);
         Object.assign(view,await r.json());view._loaded=true;
         validateView(estate+"/"+scope+"/"+level,view);}
+      if(shardIsEmpty(view)){
+        // M6-P1: honest empty shard (Go omitempty dropped the buckets/nodes array entirely) —
+        // never hand this to layoutBuckets/layoutSimple, render the calm empty-state card instead.
+        if(on){setEls({htmlView:true,isEmpty:true,problems:[]});setAutoDir(null);
+          setLast(l=>({...l,[estate+":"+scope+":"+level]:Date.now()}));}
+        return;}
       if(view.kind==="table"||view.kind==="matrix"){
         // tables/matrices surface their own concerns: ⚠ rows and mutual (cycle) pairs
         const probs=[];
@@ -2045,7 +2086,7 @@ function Flow(){
       ${((fc)=>html`<span style=${{minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}
         title=${view.count+fc+(view.prov?" · "+view.prov.label:"")}>
         ${view.count}${fc}${view.prov?html`<span style=${{color:T.mute}}> · ${view.prov.label}</span>`:null}
-      </span>`)(showFindings&&view.findingsClause||"")}
+      </span>`)((showFindings&&!(els&&els.isEmpty)&&view.findingsClause)||"")}
       <div style=${{marginLeft:"auto",display:"flex",gap:7,alignItems:"center",flexShrink:0}}>
         <button style=${rbtn(showFindings)} onClick=${toggleShowFindings}
           title="Findings lens — band violations, cycles, orphans, god components (off by default: calm map first)">Findings</button>
@@ -2105,7 +2146,8 @@ function Flow(){
         <div style=${{flex:1,position:"relative",minHeight:0}}>
           ${findingsOpen?html`<${FindingsDrawer} findings=${findings} open=${findingsOpen} setOpen=${setFindingsOpen}
             expandedId=${findingsExpandedId} setExpandedId=${setFindingsExpandedId}/>`:null}
-          ${els&&els.htmlView?html`<${view.kind==="table"?TableView:DSMView} view=${view} onSel=${select} selId=${selId} vid=${level} den=${den}/>`:null}
+          ${els&&els.isEmpty?html`<${EmptyShardView} view=${view} vid=${level}/>`:null}
+          ${els&&els.htmlView&&!els.isEmpty?html`<${view.kind==="table"?TableView:DSMView} view=${view} onSel=${select} selId=${selId} vid=${level} den=${den}/>`:null}
           ${els&&!els.htmlView?html`<${ReactFlow} key=${estate+"|"+scope+"|"+level+"|"+dir+"|"+den}
             nodes=${displayNodes||els.nodes} edges=${els.edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
             onNodeClick=${handleCanvasNodeClick} onEdgeClick=${onEdgeClick} onPaneClick=${onPaneClick}
