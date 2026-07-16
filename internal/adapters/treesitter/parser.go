@@ -186,6 +186,26 @@ func (p *Parser) ExtractRoutes(filePath string, source []byte) ([]ports.RouteEdg
 	return extractRoutes(tree.RootNode(), source, filePath, langName), nil
 }
 
+// ExtractSchemas extracts Go struct-entity declarations from a source file
+// (COL-1 — implements ports.SchemaExtractor). A dedicated parse pass,
+// deliberately separate from ParseFileToMetaAndFacts, mirroring
+// ExtractRoutes's documented rationale (see its comment and vl3.go's
+// package doc): entities are derived at arch-derive time (internal/app),
+// not on the main index-build hot path. Returns nil, nil for unsupported
+// languages or empty files — not an error.
+func (p *Parser) ExtractSchemas(filePath string, source []byte) ([]ports.SchemaEntity, error) {
+	tree, langName, err := p.ParseToTree(filePath, source)
+	if err != nil {
+		return nil, err
+	}
+	if tree == nil {
+		return nil, nil
+	}
+	defer tree.Close()
+
+	return extractSchemas(tree.RootNode(), source, filePath, langName), nil
+}
+
 // SupportsExtension returns true if the parser recognizes this file extension.
 func (p *Parser) SupportsExtension(ext string) bool {
 	_, ok := p.extToLang[strings.ToLower(ext)]

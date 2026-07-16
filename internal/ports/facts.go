@@ -34,6 +34,33 @@ type RouteEdge struct {
 	StartLine uint32 // 1-based line number of the call in FromFile (G7 provenance)
 }
 
+// SchemaEntity records one Go struct type declaration found in a source
+// file (COL-1 — schema-collector, the first `entity`-kind fact, D1).
+// Fields are the struct's field names in declaration order, read straight
+// off the AST field_declaration_list (REAL/derived, D2) — D31 grant:
+// type_declaration -> type_spec -> struct_type -> field_declaration_list,
+// a bounded descent sibling of the route grant (routes.go:75-104). Struct
+// tags are ignored (not a field name); embedded fields promote by their
+// own type name (Go's real field-name rule), same honesty tier as
+// RouteEdge: no type resolution, no FK/relationship detection (D29 ruling —
+// relationship verbs are MIXED/overlay-only, out of this extractor's scope).
+type SchemaEntity struct {
+	FromFile  string   // relative file path — never absolute (G7)
+	Name      string   // struct type name
+	Fields    []string // field names, declaration order (REAL), may be empty (zero-field struct)
+	StartLine uint32   // 1-based line number of the type_declaration in FromFile (G7 provenance)
+}
+
+// SchemaExtractor is an optional Parser capability (COL-1): extracts Go
+// struct-entity declarations from a source file. Implemented by
+// internal/adapters/treesitter.Parser (Go only for v1, mirrors
+// RouteExtractor). Callers MUST type-assert:
+// `if se, ok := parser.(ports.SchemaExtractor); ok { ... }`.
+// Returns nil, nil for unsupported languages/empty files — not an error.
+type SchemaExtractor interface {
+	ExtractSchemas(path string, source []byte) ([]SchemaEntity, error)
+}
+
 // RouteExtractor is an optional Parser capability (VL-3, board #37):
 // extracts HTTP route-registration calls from a source file. Implemented by
 // internal/adapters/treesitter.Parser (Go only for v1: net/http mux + gin

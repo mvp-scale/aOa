@@ -116,6 +116,14 @@ type Node struct {
 	Real    bool        `json:"real"`
 	DrillTo string      `json:"drillTo,omitempty"`
 	Sources []SourceRef `json:"sources,omitempty"` // G7: file:line evidence
+
+	// Fields and Tech are entity-kind-only (COL-1, schema-collector): a
+	// struct/table's column names and its source technology (e.g. "Go
+	// struct"). Additive omitempty (D40 — no ArchSchemaVersion bump):
+	// every non-entity Node leaves both zero-valued, so buckets/simple
+	// consumers see no shape change on the wire.
+	Fields []string `json:"fields,omitempty"`
+	Tech   string   `json:"tech,omitempty"`
 }
 
 // ShardEdge connects two elements in buckets/simple/entity views.
@@ -221,6 +229,14 @@ type RenderInput struct {
 	// extractor (net/http mux + gin idioms, Go only for v1).
 	Routes []RouteEntry
 
+	// Entities carries struct-entity rows for the Data Model / ER (view id
+	// "datamodel") view (COL-1 — the first `entity`-kind fact, D1).
+	// Nil/empty -> the view renders its honest "0 entities" empty state
+	// (never a phantom shard — "datamodel" is a mandatory view). Populated
+	// by the app layer from the treesitter schema extractor (Go structs
+	// only for v1).
+	Entities []EntityEntry
+
 	// FileDomains carries the atlas domain vote for each file that scored one
 	// (file path -> domain, DOM-1, board L22.23). Populated by the app layer
 	// from index.SearchEngine.DeriveFileDomains() — this is the file-grain
@@ -306,6 +322,19 @@ type RouteEntry struct {
 	Line      uint32 // G7 source pointer
 }
 
+// EntityEntry is one struct entity found by the treesitter schema extractor
+// (COL-1 — the first `entity`-kind fact, D1) for the Data Model / ER (view
+// id "datamodel") view. Fields are read straight off the AST (REAL/derived,
+// D2) — no FK/relationship detection (D29 ruling: relationship verbs are
+// MIXED/overlay-only, a later slice, not this one).
+type EntityEntry struct {
+	Name   string   // struct type name
+	Fields []string // field names, declaration order (REAL)
+	Tech   string   // source technology, e.g. "Go struct"
+	File   string   // G7 source pointer
+	Line   uint32   // G7 source pointer
+}
+
 // VLInputs bundles the view-library-specific data sources RenderAll
 // optionally threads into RenderInput (VL-1: Components/Technologies/
 // GlossaryTerms). Grouped into one struct — rather than three more
@@ -321,6 +350,8 @@ type VLInputs struct {
 	ChurnEntries []ChurnEntry
 	// Routes carries VL-3's HTTP route-registration rows (board #37).
 	Routes []RouteEntry
+	// Entities carries COL-1's struct-entity rows (schema-collector).
+	Entities []EntityEntry
 	// FileDomains carries DOM-1's file-grain atlas domain votes (board L22.23,
 	// see RenderInput.FileDomains's doc comment for the full contract).
 	FileDomains map[string]string

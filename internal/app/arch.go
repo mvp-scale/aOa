@@ -424,6 +424,11 @@ func (a *App) deriveArch() {
 	// why this doesn't ride the main index-build parse pass.
 	vlIn.Routes = buildRouteEntries(a.ProjectRoot, idx, a.Parser)
 
+	// 6e2. Build COL-1 inputs (schema-collector): Data Model / ER. Dedicated
+	// re-parse of Go files (struct fields) — see vl6.go's package doc for
+	// why this doesn't ride the main index-build parse pass (mirrors VL-3).
+	vlIn.Entities = buildEntityEntries(a.ProjectRoot, idx, a.Parser)
+
 	// 6f. Derive file-grain atlas domains (board L22.23, DOM-1) using the same
 	// deterministic token-scoring pass as Graph()'s "unit" grain (arch.go
 	// Graph(), commit d7f2aea). D35: this result reaches ONLY the domains

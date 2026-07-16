@@ -232,9 +232,13 @@ func TestT45_OverlayLeash_AppLevel(t *testing.T) {
 		// "mixed" already (sbom/glossary/change/techportfolio/context/
 		// capability) — api-contract is the first unconditionally
 		// "derived" view, which is what this exception documents.
-		if ve.ID == "api-contract" {
+		//
+		// datamodel (COL-1) is the same class as api-contract: its facts
+		// come straight from an AST struct-field scan, never from
+		// GroupWithOptions, so it is unconditionally "derived" too.
+		if ve.ID == "api-contract" || ve.ID == "datamodel" {
 			assert.Equal(t, "derived", ve.Prov,
-				"T45/overlay: api-contract prov is independent of the overlay leash")
+				"T45/overlay: "+ve.ID+" prov is independent of the overlay leash")
 			continue
 		}
 		assert.Equal(t, "mixed", ve.Prov,

@@ -35,6 +35,10 @@ type importExtractorFunc func(root *tree_sitter.Node, source []byte, filePath st
 // presents to extractRoutes (VL-3, board #37, routes.go).
 type routeExtractorFunc func(root *tree_sitter.Node, source []byte, filePath string) []ports.RouteEdge
 
+// schemaExtractorFunc is the uniform shape every registered schema extractor
+// presents to extractSchemas (COL-1, schemas.go).
+type schemaExtractorFunc func(root *tree_sitter.Node, source []byte, filePath string) []ports.SchemaEntity
+
 // symbolExtractors maps a detected language name to its symbol extractor.
 // Languages absent from this map fall back to extractGeneric (rule-table
 // driven) — unchanged behavior from the previous switch's default arm.
@@ -71,4 +75,11 @@ var importExtractors = map[string]importExtractorFunc{
 // idioms, both handled by extractRoutesGo's method-name classification).
 var routeExtractors = map[string]routeExtractorFunc{
 	"go": extractRoutesGo,
+}
+
+// schemaExtractors maps a detected language name to its schema extractor
+// (COL-1, schema-collector). Languages absent from this map produce no
+// entities. Go only for v1 ("Go stacks first" per the work order).
+var schemaExtractors = map[string]schemaExtractorFunc{
+	"go": extractSchemasGo,
 }
