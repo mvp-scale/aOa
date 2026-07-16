@@ -56,6 +56,7 @@ direct read-only bbolt access when the daemon is down. Requires AOA_ARCH=on
 	archCmd.AddCommand(archBlastCmd)
 	archCmd.AddCommand(archFactsCmd)
 	archCmd.AddCommand(archReconCmd)
+	archCmd.AddCommand(archDriftCmd)
 	// `arch pack` is L22.5's verb (evidence/compliance packaging). The adopted
 	// F2 surface is six MethodArch* + the reach/blast CLI aliases (ADR
 	// 2026-07-02); L22.5 re-adds pack when pulled from the pool. The stub is

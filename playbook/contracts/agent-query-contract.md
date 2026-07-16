@@ -73,6 +73,7 @@ measured on this repo.
 | `aoa arch derive A B` | does A reach B via imports (C13, C14 floor) | ~30 tok | locate → grep → peek last hop |
 | `aoa arch findings` | what's flagged (C22) | **~12k raw — jq-trim to ~100** | jq the sources of ONE finding |
 | `aoa arch findings --new` | CI gate: did my diff add drift (C22) | exit code | jq messages |
+| `aoa arch drift <target.aoa>` | does the real import graph match a declared target (GOV-1) | exit code (1=violation) | `--json` for file:line per VIOLATION |
 | `GET /api/peek?code=a,b` | batch bodies, ≤50 codes (C8) | ~500/code | — |
 | `GET /api/refs?token=t` | true reference totals, K=20 (C10) | ~800 tok | peek the `peek` fields |
 
@@ -218,6 +219,30 @@ findings exist; consume the exit code, jq the messages.
 `aoa locate <path>` → `aoa grep <symbol>` → `aoa peek <code>`.
 Do NOT use `aoa arch facts` — it is broken (returns empty for live finding subjects).
 
+**`aoa arch drift <target.aoa>` (GOV-1, board #40)** — the Angle of Attack: diffs a
+declared `.aoa` target file (`estate NAME` / `view KIND` / `allow FROM -> TO` lines,
+unit paths like `internal/app`) against the REAL import graph read from the fact
+substrate:
+
+```
+$ aoa arch drift .aoa/arch/target.aoa
+VECTOR real vs my-estate: 3 VIOLATION · 1 MISSING · 41 CONFORMANT
+  VIOLATION  internal/domain/arch -> internal/app  (internal/domain/arch/foo.go:12)
+  MISSING    internal/app -> internal/kglab
+```
+
+VIOLATION = a real import the target doesn't declare (actionable, carries file:line).
+MISSING = a declared import not yet built (no file:line — it doesn't exist). `--json`
+emits `{result, findings}`, converting VIOLATIONs into the same Finding shape
+`arch findings` uses. `--new`/`--baseline` gate on them exactly like
+`arch findings --new` (own baseline scope `drift:<estate-name>`, same
+`.aoa/arch/findings-baseline.json` file).
+
+**Direct-RO only, not daemon-first** (an intentional asymmetry from every other
+`arch` verb): the drift read path is not one of the 6 wired `MethodArch*` socket
+methods, so this verb always opens the DB read-only directly — it can fail with a
+lock timeout while a daemon holds the DB open for writing.
+
 ### 2.6 HTTP — `/api/peek` and `/api/refs` (port in `{root}/.aoa/run/http.port`, localhost-only)
 
 ```
@@ -281,6 +306,7 @@ to this table, refuse by name and offer the nearest honest redirect.
 | Type hierarchy / interface implementors / subclasses | "Inheritance edges are not in the substrate." | `aoa grep <TypeName>` name references; read the definitions via peek |
 | Which domain owns this file (`@domain` as filter) | "`@domain` is display metadata — `aoa grep @streaming` is a literal token match, not a domain query." (verified live) | egrep concept terms as **candidates**, no ownership claim |
 | Total impact of a change | "Import-grain blast floor only — not runtime impact." | `arch view dsm` + `derive`, labeled "imports only, lower bound" |
+| Does the code match the intended architecture (calls, ownership, layering rules) | "Drift is import-only — only the `import` concept is wired as a graph edge (1/16 ontology concepts); no call/data/ownership drift." | `aoa arch drift <target.aoa>` labeled "import-edge drift, lower bound" |
 | Peek an `ext:` target or a `--` symbol | "Package grain / too large — no peek body available." | `ext:` → say so and stop; `--` → Read the file at `[start-end]` |
 | Is X absent from the codebase | "Absence is unprovable — the index shows no strong match, not nonexistence." | report "0 hits" with the exact query used |
 
