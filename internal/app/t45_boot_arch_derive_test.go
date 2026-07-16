@@ -236,7 +236,12 @@ func TestT45_OverlayLeash_AppLevel(t *testing.T) {
 		// datamodel (COL-1) is the same class as api-contract: its facts
 		// come straight from an AST struct-field scan, never from
 		// GroupWithOptions, so it is unconditionally "derived" too.
-		if ve.ID == "api-contract" || ve.ID == "datamodel" {
+		//
+		// deployment (COL-2, board M6) is the same class again: its facts
+		// come straight from Dockerfile/compose.yaml/Kubernetes-manifest
+		// reads, never from GroupWithOptions, so it is unconditionally
+		// "derived" too.
+		if ve.ID == "api-contract" || ve.ID == "datamodel" || ve.ID == "deployment" {
 			assert.Equal(t, "derived", ve.Prov,
 				"T45/overlay: "+ve.ID+" prov is independent of the overlay leash")
 			continue

@@ -237,6 +237,14 @@ type RenderInput struct {
 	// only for v1).
 	Entities []EntityEntry
 
+	// Deployments carries deploy-artifact rows for the Deployment (view id
+	// "deployment") view (COL-2, board M6 — the first `deployment`-kind fact,
+	// D1). Nil/empty -> the view renders its honest "0 artifacts" empty state
+	// (never a phantom shard — "deployment" is a mandatory view). Populated
+	// by the app layer from internal/adapters/deployfile readers
+	// (Dockerfile/compose.yaml/Kubernetes manifests).
+	Deployments []DeploymentEntry
+
 	// FileDomains carries the atlas domain vote for each file that scored one
 	// (file path -> domain, DOM-1, board L22.23). Populated by the app layer
 	// from index.SearchEngine.DeriveFileDomains() — this is the file-grain
@@ -335,6 +343,23 @@ type EntityEntry struct {
 	Line   uint32   // G7 source pointer
 }
 
+// DeploymentEntry is one deploy artifact found by the deployfile readers
+// (COL-2 — the first `deployment`-kind fact, D1) for the Deployment (view id
+// "deployment") view: a Dockerfile's base image, one compose.yaml service, or
+// one Kubernetes workload/service manifest document. Fields are read straight
+// off the manifest (REAL/derived, D2) — no cross-manifest correlation (e.g.
+// matching a compose service to a k8s Deployment by name) is attempted; that
+// would be an invented edge, not a derived one.
+type DeploymentEntry struct {
+	ID        string   // service/resource/image name
+	Kind      string   // "dockerfile" | "compose-service" | "k8s-deployment" | "k8s-statefulset" | "k8s-daemonset" | "k8s-service" | "k8s-cronjob"
+	Image     string   // container image reference, when declared
+	Ports     []string // exported/published ports, when declared (REAL)
+	DependsOn []string // same-manifest dependency names (compose depends_on only, v1)
+	File      string   // G7 source pointer
+	Line      uint32   // G7 source pointer
+}
+
 // VLInputs bundles the view-library-specific data sources RenderAll
 // optionally threads into RenderInput (VL-1: Components/Technologies/
 // GlossaryTerms). Grouped into one struct — rather than three more
@@ -352,6 +377,9 @@ type VLInputs struct {
 	Routes []RouteEntry
 	// Entities carries COL-1's struct-entity rows (schema-collector).
 	Entities []EntityEntry
+	// Deployments carries COL-2's deploy-artifact rows (deployment-collector,
+	// board M6): Dockerfile/compose.yaml/Kubernetes-manifest facts.
+	Deployments []DeploymentEntry
 	// FileDomains carries DOM-1's file-grain atlas domain votes (board L22.23,
 	// see RenderInput.FileDomains's doc comment for the full contract).
 	FileDomains map[string]string

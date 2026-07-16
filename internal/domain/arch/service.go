@@ -32,6 +32,7 @@ var mandatoryViewDefs = []viewDef{
 	{"change", RenderChangeMap},
 	{"api-contract", RenderAPIContract},
 	{"datamodel", RenderDataModel},
+	{"deployment", RenderDeployment},
 }
 
 // MandatoryViewIDs returns the view IDs RenderAll always renders (excludes
@@ -123,6 +124,7 @@ func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts
 		in.ChurnEntries = vlIn.ChurnEntries
 		in.Routes = vlIn.Routes
 		in.Entities = vlIn.Entities
+		in.Deployments = vlIn.Deployments
 		in.FileDomains = vlIn.FileDomains
 	}
 
