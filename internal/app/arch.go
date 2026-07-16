@@ -424,6 +424,17 @@ func (a *App) deriveArch() {
 	// why this doesn't ride the main index-build parse pass.
 	vlIn.Routes = buildRouteEntries(a.ProjectRoot, idx, a.Parser)
 
+	// 6f. Derive file-grain atlas domains (board L22.23, DOM-1) using the same
+	// deterministic token-scoring pass as Graph()'s "unit" grain (arch.go
+	// Graph(), commit d7f2aea). D35: this result reaches ONLY the domains
+	// renderer via vlIn.FileDomains — it is NEVER written to idx.Files[].Domain
+	// or UnitFact.Domain, so rung-3 (grouping.go:189-194) stays dormant and
+	// component/dsm/cycles are never silently regrouped. Engine reads are
+	// safe concurrently outside a.mu (same contract as Graph()'s call).
+	if a.Engine != nil {
+		vlIn.FileDomains = a.Engine.DeriveFileDomains()
+	}
+
 	// 7. RenderAll: pure domain computation — no I/O, no mu needed.
 	svc := &arch.Service{}
 	shards, manifest, findings, err := svc.RenderAll(archScope, units, deps, opts, refHits, symIndex, vlIn)

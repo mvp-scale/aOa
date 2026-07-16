@@ -220,6 +220,19 @@ type RenderInput struct {
 	// view). Populated by the app layer from the treesitter route
 	// extractor (net/http mux + gin idioms, Go only for v1).
 	Routes []RouteEntry
+
+	// FileDomains carries the atlas domain vote for each file that scored one
+	// (file path -> domain, DOM-1, board L22.23). Populated by the app layer
+	// from index.SearchEngine.DeriveFileDomains() — this is the file-grain
+	// result and is consumed ONLY by RenderDomains, which aggregates it up to
+	// a proper unit-grain modal vote (per-directory, majority across every
+	// file in the unit, ties broken lexicographically). This is deliberately
+	// NOT the bridge's one-file shortcut (aggregateEdges/
+	// unitFactsFromFactStore, which credits a unit with whichever single file
+	// happened to define it first). Never written to UnitFact.Domain or
+	// idx.Files[].Domain — rung-3 (grouping.go:189-194) stays dormant so
+	// component/dsm/cycles are never silently regrouped (D35).
+	FileDomains map[string]string
 }
 
 // Component is one detected dependency/component entry from a manifest
@@ -308,6 +321,9 @@ type VLInputs struct {
 	ChurnEntries []ChurnEntry
 	// Routes carries VL-3's HTTP route-registration rows (board #37).
 	Routes []RouteEntry
+	// FileDomains carries DOM-1's file-grain atlas domain votes (board L22.23,
+	// see RenderInput.FileDomains's doc comment for the full contract).
+	FileDomains map[string]string
 }
 
 // CodeSymbolIndex is a symbol data bundle for the code renderer (②b, L19.23).

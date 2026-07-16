@@ -67,6 +67,7 @@ const STD_CATALOG=[
    {vid:["context"],label:"System Context",aka:"C4 L1 / Context Diagram"},
    {vid:["capability","container"],label:"Capability Map",aka:"C4 Container Diagram"},
    {vid:["component","domains"],label:"Component"},
+   {vid:["domains"],label:"Domain map",aka:"Domain Decomposition"},
    {vid:["deployment"],label:"Deployment"},
    {vid:["sequence"],label:"Dynamic (sequence)",note:"needs call-edge resolution"},
    {vid:["code"],label:"Code (L4)",note:"symbol table · not drawn by design — needs call-edge resolution"}]},

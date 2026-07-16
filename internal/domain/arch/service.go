@@ -25,6 +25,7 @@ var mandatoryViewDefs = []viewDef{
 	{"context", RenderContext},
 	{"cycles", RenderCycles},
 	{"dsm", RenderDSM},
+	{"domains", RenderDomains},
 	{"sbom", RenderSBOM},
 	{"techportfolio", RenderTechStack},
 	{"glossary", RenderGlossary},
@@ -120,6 +121,7 @@ func (s *Service) RenderAll(scope string, units []UnitFact, deps []DepFact, opts
 		in.GlossaryTerms = vlIn.GlossaryTerms
 		in.ChurnEntries = vlIn.ChurnEntries
 		in.Routes = vlIn.Routes
+		in.FileDomains = vlIn.FileDomains
 	}
 
 	// 4. Render each view.
