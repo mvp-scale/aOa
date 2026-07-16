@@ -361,7 +361,24 @@ function MemberNode({data}){const c=data.col;
       [data.concerns?"findings":"",data.concerns?data.concerns+" recon findings":""],
       [data.changed?"recent":"",data.changed?"touched in last 15 commits":""]])} hint="click to inspect"/>
   </div>`;}
-function TableView({view,onSel,selId,vid}){
+// Shared numeric-cell idiom (also used by DockTable below): a cell "looks numeric" if it
+// starts with a digit or one of the approx/mult/tilde glyphs the renderers already emit
+// (e.g. "≈40", "×3", "~12").
+const isNumCell=cell=>String(cell).match(/^[≈×~\d]/);
+// Quiet mono chip (provenance-chip styling, neutral color — NO per-value rainbow): used for
+// the api-contract method cell, glossary owning-domain, ownership owner(s), sbom unpinned.
+const quietChip=(label,mono)=>html`<span style=${{fontSize:9,fontWeight:600,letterSpacing:.3,
+  whiteSpace:"nowrap",color:T.dim,border:`1px solid ${T.border}`,borderRadius:5,padding:"1px 7px",
+  fontFamily:mono?"ui-monospace,monospace":"inherit"}}>${label}</span>`;
+// Inline proportional data-ink bar behind a risk/count numeral — column-max normalized,
+// single dim accent (R8/A3: never red/yellow, those are reserved for violations/warnings).
+const dataInkBar=(cell,max)=>{const v=parseFloat(cell)||0;const pct=max>0?Math.min(100,(v/max)*100):0;
+  return html`<span style=${{position:"relative",display:"block"}}>
+    <span style=${{position:"absolute",top:0,bottom:0,right:0,width:pct+"%",
+      background:T.dim+"26",borderRadius:2}}></span>
+    <span style=${{position:"relative"}}>${cell}</span>
+  </span>`;};
+function TableView({view,onSel,selId,vid,den}){
   // row click = select: the dock shows the full record (long prose cells live there untruncated)
   const pick=(r,ri)=>onSel&&onSel({label:String(r[0]),chip:"record",
     rows:(view.columns||[]).map((c,ci)=>[c,r[ci]]),relations:[]},"row:"+ri);
@@ -380,18 +397,55 @@ function TableView({view,onSel,selId,vid}){
         ${view.prov?html`<div style=${{marginTop:14,fontSize:10,color:T.mute}}>${view.prov.label}</div>`:null}
       </div>
     </div>`;}
+  const cols=view.columns||[],allRows=view.rows||[];
+  const rowPad=den==="comfort"?9:5;
+  // header click-sort: DEFAULTS to shard order (null) — shard order IS each view's answer
+  // (e.g. change is already risk-desc) — cycling a header asc -> desc -> back to shard order.
+  const[sortState,setSortState]=useState({col:null,dir:1});
+  useEffect(()=>{setSortState({col:null,dir:1});},[vid]);
+  const toggleSort=ci=>setSortState(s=>s.col!==ci?{col:ci,dir:1}:s.dir===1?{col:ci,dir:-1}:{col:null,dir:1});
+  const numCols=cols.map((_,ci)=>ci>0&&allRows.length>0&&allRows.every(r=>!r[ci]||isNumCell(r[ci])));
+  const rows=React.useMemo(()=>{
+    if(sortState.col==null)return allRows.map((r,ri)=>[r,ri]);
+    const ci=sortState.col,num=numCols[ci];
+    return allRows.map((r,ri)=>[r,ri]).sort((a,b)=>{
+      const cmp=num?(parseFloat(a[0][ci])||0)-(parseFloat(b[0][ci])||0)
+        :String(a[0][ci]).localeCompare(String(b[0][ci]));
+      return cmp*sortState.dir;});
+  },[allRows,sortState,numCols]);
+  // per-view treatments (BEAU-1 scope B): sbom 'unpinned' chip, api-contract method chip,
+  // glossary owning-domain chip + wrapped definition, ownership owner(s) chips, change/
+  // techportfolio inline data-ink bar on the risk/count numeral.
+  const barCol=vid==="change"?cols.length-1:vid==="techportfolio"?cols.indexOf("count"):-1;
+  let barMax=0;
+  if(barCol>=0)allRows.forEach(r=>{const v=parseFloat(r[barCol])||0;if(v>barMax)barMax=v;});
+  const renderCell=(cell,ci)=>{
+    if(vid==="sbom"&&cols[ci]==="unpinned")return cell==="true"?quietChip("unpinned",true):"";
+    if(vid==="api-contract"&&ci===0)return cell&&cell!=="—"?quietChip(cell,true):cell;
+    if(vid==="glossary"&&ci===2)return quietChip(cell,false);
+    if(vid==="ownership"&&cols[ci]==="Owner(s)"&&cell!=="—")
+      return html`<span style=${{display:"flex",gap:4,flexWrap:"wrap"}}>
+        ${String(cell).split(", ").map((o,oi)=>html`<span key=${oi}>${quietChip(o,false)}</span>`)}</span>`;
+    if(ci===barCol)return dataInkBar(cell,barMax);
+    return cell;};
+  const cellExtra=ci=>vid==="glossary"&&ci===1?{maxWidth:"60ch",whiteSpace:"normal",lineHeight:1.5}:null;
   return html`<div style=${{position:"absolute",inset:0,overflow:"auto",padding:"56px 40px 40px"}}>
     <table style=${{borderCollapse:"collapse",minWidth:560,fontSize:12.5,color:T.text}}>
-      <thead><tr>${(view.columns||[]).map((c,i)=>html`<th key=${i} style=${{textAlign:"left",
-        padding:"8px 16px",borderBottom:`2px solid ${T.border}`,color:T.dim,fontSize:10.5,
-        textTransform:"uppercase",letterSpacing:1}}>${c}</th>`)}</tr></thead>
-      <tbody>${(view.rows||[]).map((r,ri)=>html`<tr key=${ri} onClick=${()=>pick(r,ri)}
-        style=${{cursor:"pointer",background:selId==="row:"+ri?T.cardH:"transparent"}}>
-        ${r.map((cell,ci)=>html`<td key=${ci} style=${{padding:"7px 16px",
+      <thead><tr>${cols.map((c,i)=>html`<th key=${i} onClick=${()=>toggleSort(i)}
+        style=${{position:"sticky",top:0,zIndex:2,background:T.bg,cursor:"pointer",userSelect:"none",
+        textAlign:numCols[i]?"right":"left",
+        padding:`${rowPad}px 16px`,borderBottom:`2px solid ${T.border}`,color:T.dim,fontSize:10.5,
+        textTransform:"uppercase",letterSpacing:1}}>${c}${sortState.col===i
+          ?html`<span style=${{color:T.text,marginLeft:4}}>${sortState.dir===1?"▲":"▼"}</span>`
+          :html`<span style=${{color:T.mute,marginLeft:4}}>▾</span>`}</th>`)}</tr></thead>
+      <tbody>${rows.map(([r,ri])=>html`<tr key=${ri} class="table-row-hover" onClick=${()=>pick(r,ri)}
+        style=${{cursor:"pointer",...(selId==="row:"+ri?{background:T.cardH}:null)}}>
+        ${r.map((cell,ci)=>html`<td key=${ci} style=${{padding:`${rowPad}px 16px`,
           borderBottom:`1px solid ${T.border}55`,
           color:String(cell).startsWith("⚠")?T.red:ci===0?T.text:T.dim,
           fontWeight:ci===0?600:400,fontFamily:ci===0?"inherit":"ui-monospace,monospace",
-          fontSize:ci===0?12.5:11.5}}>${cell}</td>`)}</tr>`)}</tbody>
+          textAlign:numCols[ci]?"right":"left",fontVariantNumeric:"tabular-nums",
+          fontSize:ci===0?12.5:11.5,...cellExtra(ci)}}>${renderCell(cell,ci)}</td>`)}</tr>`)}</tbody>
     </table></div>`;}
 function DSMView({view,onSel,selId}){
   const items=view.items||[],M=view.matrix||[];
@@ -1036,14 +1090,13 @@ const DK={th:{fontSize:8.5,fontWeight:700,letterSpacing:.8,textTransform:"upperc
 // column (header + cells) — opt-in per caller so existing tables keep their prior layout; the
 // member table (A8 FIX 2b) is the first to use it for its fan-in weight column.
 function DockTable({cols,rows,rightCols}){
-  const isNum=cell=>String(cell).match(/^[≈×~\\d]/);
   const isRight=ci=>!!(rightCols&&rightCols[ci]);
   return html`<table style=${{borderCollapse:"collapse",width:"100%"}}>
     <thead><tr>${cols.map((c,i)=>html`<th key=${i} style=${{...DK.th,textAlign:isRight(i)?"right":"left"}}>${c}</th>`)}</tr></thead>
     <tbody>${rows.map((r,ri)=>html`<tr key=${ri} style=${r._hl?{background:T.cardH}:null}>${r.map((cell,ci)=>html`<td key=${ci}
       style=${{...DK.td,color:r._viol?T.red:ci===0?T.dim:T.text,
         textAlign:isRight(ci)?"right":"left",
-        fontFamily:ci>0&&isNum(cell)?"ui-monospace,monospace":"inherit"}}>${cell}</td>`)}</tr>`)}
+        fontFamily:ci>0&&isNumCell(cell)?"ui-monospace,monospace":"inherit"}}>${cell}</td>`)}</tr>`)}
   </tbody></table>`;}
 // The caption: the view ANSWERS its own question, derived at render time from data
 // already on screen — counts, heaviest edge, mutual pairs, flagged rows. A3 calm default:
@@ -1088,10 +1141,13 @@ function findingsClause(view,probs){
   return tag?` · ⚠ ${tag.tag}: ${(tag.label||"").slice(0,48)}`
     :(probs&&probs.length?` · ⚠ ${probs.length} finding${probs.length>1?"s":""}`:"");}
 // Dock SELECTION empty-state text (calm default, THE FIX §"ambient cue"): canvas views
-// (buckets/simple) get the map's invitation; table/matrix keep their cell/row-header text
-// since those views have no clickable canvas elements.
+// (buckets/simple) get the map's invitation; table (BEAU-1: rows are the only clickable
+// element, so name the row) and matrix (DSM: cells + row-header expand) keep their own
+// affordance text since neither has clickable canvas elements.
 const emptySelText=view=>(view.kind==="buckets"||view.kind==="simple")
   ?"click any element to inspect →"
+  :view.kind==="table"
+  ?"click a row to inspect"
   :"click a cell to inspect · click a row header to expand";
 // A5 SELECTION action row — ⧉ Copy: a compact plain-text record of the selection, pasteable
 // anywhere. Kept deliberately terse (label/role/members/relations) — this is a clipboard
@@ -2002,11 +2058,13 @@ function Flow(){
         <span style=${{width:6}}></span>
         <button style=${btn(den==="compact")} onClick=${()=>setDen("compact")}>Compact</button>
         <button style=${btn(den==="comfort")} onClick=${()=>setDen("comfort")}>Comfort</button>
+        ${!(els&&els.htmlView)?html`<${React.Fragment}>
         <span style=${{width:6}}></span>
         <button style=${btn(!dirOv)} onClick=${()=>setDirOv(null)}
           title="Pick the direction that best fits the viewport">Auto${!dirOv&&autoDir?(autoDir==="DOWN"?" ↓":" →"):""}</button>
         <button style=${btn(dirOv==="DOWN")} onClick=${()=>setDirOv("DOWN")} title="Top–Bottom">↓</button>
         <button style=${btn(dirOv==="RIGHT")} onClick=${()=>setDirOv("RIGHT")} title="Left–Right">→</button>
+        <//>`:null}
       </div>
     </div>
     ${showFindings&&topFinding?html`<div onClick=${()=>setFindingsOpen(true)}
@@ -2047,7 +2105,7 @@ function Flow(){
         <div style=${{flex:1,position:"relative",minHeight:0}}>
           ${findingsOpen?html`<${FindingsDrawer} findings=${findings} open=${findingsOpen} setOpen=${setFindingsOpen}
             expandedId=${findingsExpandedId} setExpandedId=${setFindingsExpandedId}/>`:null}
-          ${els&&els.htmlView?html`<${view.kind==="table"?TableView:DSMView} view=${view} onSel=${select} selId=${selId} vid=${level}/>`:null}
+          ${els&&els.htmlView?html`<${view.kind==="table"?TableView:DSMView} view=${view} onSel=${select} selId=${selId} vid=${level} den=${den}/>`:null}
           ${els&&!els.htmlView?html`<${ReactFlow} key=${estate+"|"+scope+"|"+level+"|"+dir+"|"+den}
             nodes=${displayNodes||els.nodes} edges=${els.edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
             onNodeClick=${handleCanvasNodeClick} onEdgeClick=${onEdgeClick} onPaneClick=${onPaneClick}
