@@ -62,7 +62,7 @@ func TestService_RenderAll_ViewsPresent(t *testing.T) {
 		assert.NotEmpty(t, v.Key, "manifest view %q must have key", v.ID)
 		assert.NotEmpty(t, v.Hash, "manifest view %q must have hash", v.ID)
 		assert.Len(t, v.Hash, 12, "content hash must be 12 chars")
-		if v.ID == "context" || v.ID == "capability" || v.ID == "sbom" || v.ID == "techportfolio" || v.ID == "glossary" || v.ID == "change" || v.ID == "domains" {
+		if v.ID == "context" || v.ID == "capability" || v.ID == "sbom" || v.ID == "techportfolio" || v.ID == "glossary" || v.ID == "change" || v.ID == "domains" || v.ID == "ownership" {
 			// VP-1/VP-2: context and capability views are contractually always
 			// MIXED — context's external naming and capability's footprint
 			// app-base seeding are both heuristic, never a raw derived fact
@@ -71,7 +71,14 @@ func TestService_RenderAll_ViewsPresent(t *testing.T) {
 			// claimed as fully derived. VL-2: change is the same — bounded
 			// git-history read + unit-path join heuristics, never fully derived.
 			// DOM-1: domains is the same — atlas token-scoring modal vote,
-			// never a declared/derived contract (D36).
+			// never a declared/derived contract (D36). COL-3: ownership is the
+			// same in the no-input-data fixture case — with no
+			// OwnershipEntries supplied, RenderOwnership's "no CODEOWNERS
+			// present" default is MIXED (bounded git-authorship join is the
+			// documented fallback tier, never claimed fully derived); a real
+			// derive pass with CODEOWNERS-only coverage can still render
+			// "derived" (see render_ownership_test.go), so this fixture
+			// assertion covers the common/fallback case, not every case.
 			assert.Equal(t, "mixed", v.Prov, "view %q provenance must always be mixed (D2 honesty)", v.ID)
 			continue
 		}

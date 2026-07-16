@@ -228,6 +228,19 @@
       ],
       "pass": "a reader can sketch the schema's spine from the diagram alone"
     },
+    "ownership": {
+      "question": "Who owns each part of this system, and where is ownership thin?",
+      "reader_leaves_knowing": "the declared owner(s) of each unit, via CODEOWNERS or git history, and where units have no clear owner",
+      "vital": [
+        "unit path",
+        "owner(s) — declared or derived"
+      ],
+      "hover": [
+        "ownership source (CODEOWNERS / git)",
+        "last-commit history (if git-derived)"
+      ],
+      "pass": "a reader can name an owner for every unit and spot any path with multiple conflicting owners"
+    },
     "glossary": {
       "question": "What do the words in this codebase mean?",
       "reader_leaves_knowing": "the canonical definition and owner of every term that has caused or could cause confusion",

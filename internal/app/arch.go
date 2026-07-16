@@ -436,6 +436,12 @@ func (a *App) deriveArch() {
 	// filesystem.
 	vlIn.Deployments = buildDeploymentEntries(a.ProjectRoot, idx)
 
+	// 6e4. Build COL-3 inputs (ownership-collector, board M6): Ownership view.
+	// CODEOWNERS disk read (declared) + bounded git-authorship fallback
+	// (derived), joined at unit grain — see vl8.go's package doc for the
+	// bounded-subprocess rationale (single call, not one per unit-dir).
+	vlIn.OwnershipEntries = buildOwnershipEntries(a.ProjectRoot, units)
+
 	// 6f. Derive file-grain atlas domains (board L22.23, DOM-1) using the same
 	// deterministic token-scoring pass as Graph()'s "unit" grain (arch.go
 	// Graph(), commit d7f2aea). D35: this result reaches ONLY the domains

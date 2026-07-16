@@ -245,6 +245,14 @@ type RenderInput struct {
 	// (Dockerfile/compose.yaml/Kubernetes manifests).
 	Deployments []DeploymentEntry
 
+	// OwnershipEntries carries COL-3's CODEOWNERS-parse + git-authorship rows
+	// (board M6) for the Ownership (view id "ownership") view. Nil/empty ->
+	// the view renders its honest "0 units with defined owners" empty state
+	// (never a phantom shard — "ownership" is a mandatory view). Populated by
+	// the app layer from internal/adapters/codeowners plus a bounded
+	// git-authorship fallback.
+	OwnershipEntries []OwnershipEntry
+
 	// FileDomains carries the atlas domain vote for each file that scored one
 	// (file path -> domain, DOM-1, board L22.23). Populated by the app layer
 	// from index.SearchEngine.DeriveFileDomains() — this is the file-grain
@@ -360,6 +368,28 @@ type DeploymentEntry struct {
 	Line      uint32   // G7 source pointer
 }
 
+// OwnershipEntry is one row in the Ownership (view id "ownership") view
+// (COL-3 — the owner-collector, board M6): a unit's owner(s), joined at
+// unit grain from two readers, tried in this order per unit:
+//  1. CODEOWNERS (internal/adapters/codeowners) — Provenance "declared":
+//     the pattern's owners are read straight off the repo's declared
+//     ownership file (D2, D30 extensionless disk read).
+//  2. Bounded git authorship (a single bounded `git log` subprocess, VL-2's
+//     churnSinceWindow/churnMaxCommits subprocess discipline) — Provenance
+//     "derived": the unit's top commit-author within the bounded window,
+//     same heuristic-join honesty tier as ChurnEntry.
+//
+// A unit with neither signal produces no row at all — never a fabricated
+// "unowned" placeholder; the view's own "N units with defined owners"
+// caption already states the coverage gap honestly.
+type OwnershipEntry struct {
+	Path       string   // unit path (repo-relative directory; UnitFact.Path grain)
+	Owners     []string // declared (CODEOWNERS) or derived (top git author) owner(s)
+	Provenance string   // "declared" (CODEOWNERS) | "derived" (git authorship)
+	File       string   // G7 source pointer: CODEOWNERS rule's line, or the unit's defining file
+	Line       uint32   // G7 source pointer
+}
+
 // VLInputs bundles the view-library-specific data sources RenderAll
 // optionally threads into RenderInput (VL-1: Components/Technologies/
 // GlossaryTerms). Grouped into one struct — rather than three more
@@ -380,6 +410,10 @@ type VLInputs struct {
 	// Deployments carries COL-2's deploy-artifact rows (deployment-collector,
 	// board M6): Dockerfile/compose.yaml/Kubernetes-manifest facts.
 	Deployments []DeploymentEntry
+	// OwnershipEntries carries COL-3's ownership rows (owner-collector,
+	// board M6): CODEOWNERS-parse (declared) + bounded git-authorship
+	// (derived) fallback, joined at unit grain.
+	OwnershipEntries []OwnershipEntry
 	// FileDomains carries DOM-1's file-grain atlas domain votes (board L22.23,
 	// see RenderInput.FileDomains's doc comment for the full contract).
 	FileDomains map[string]string
