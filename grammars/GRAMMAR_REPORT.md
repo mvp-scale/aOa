@@ -10,13 +10,13 @@ Special thanks to [**@alexaandru**](https://github.com/alexaandru) for creating 
 
 ---
 
-**Generated**: 2026-10-25 11:03 UTC | **Grammars**: 509 | **All platforms pass**: 507/509 | **Contributors**: 346 | **Source**: [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)
+**Generated**: 2026-11-01 12:56 UTC | **Grammars**: 509 | **All platforms pass**: 505/509 | **Contributors**: 346 | **Source**: [go-sitter-forest](https://github.com/alexaandru/go-sitter-forest)
 
 ## Platform Summary
 
 | Platform | Compiled | Failed | Skipped |
 |----------|----------|--------|--------|
-| linux-amd64 | 509 | 0 | 0 |
+| linux-amd64 | 507 | 2 | 0 |
 | linux-arm64 | 509 | 0 | 0 |
 | darwin-arm64 | 507 | 2 | 0 |
 | darwin-amd64 | 507 | 2 | 0 |
@@ -86,7 +86,7 @@ Each grammar is compiled from C source into a shared library (`.so` on Linux, `.
 | chatito | v1.9.1 | Y | Y | @ObserverOfTime | [tree-sitter-grammars/tree-sitter-chatito](https://github.com/tree-sitter-grammars/tree-sitter-chatito) |
 | circom | v1.9.1 | Y | Y | @Frodan | [Decurity/tree-sitter-circom](https://github.com/Decurity/tree-sitter-circom) |
 | clarity | v1.9.5 | Y | Y | @xlittlerag | [xlittlerag/tree-sitter-clarity](https://github.com/xlittlerag/tree-sitter-clarity) |
-| cleancopy | v1.9.0 | Y | Y | @Badg | [Taev-dev/tree-sitter-cleancopy](https://github.com/Taev-dev/tree-sitter-cleancopy) |
+| cleancopy | v1.9.0 | N | Y | @Badg | [Taev-dev/tree-sitter-cleancopy](https://github.com/Taev-dev/tree-sitter-cleancopy) |
 | clingo | v1.9.0 | Y | Y | @sthiele | [potassco/tree-sitter-clingo](https://github.com/potassco/tree-sitter-clingo) |
 | clojure | v1.9.1 | Y | Y | @NoahTheDuke | [sogaiu/tree-sitter-clojure](https://github.com/sogaiu/tree-sitter-clojure) |
 | cloudflare | v1.9.0 | Y | Y | @nfowl | [nfowl/tree-sitter-cloudflare](https://github.com/nfowl/tree-sitter-cloudflare) |
@@ -346,7 +346,7 @@ Each grammar is compiled from C source into a shared library (`.so` on Linux, `.
 | passwd | v1.9.0 | Y | Y | @amaanq | [ath3/tree-sitter-passwd](https://github.com/ath3/tree-sitter-passwd) |
 | pdxinfo | v1.9.0 | Y | Y | @notpeter | [notpeter/tree-sitter-pdxinfo](https://github.com/notpeter/tree-sitter-pdxinfo) |
 | pem | v1.9.0 | Y | Y | @ObserverOfTime | [tree-sitter-grammars/tree-sitter-pem](https://github.com/tree-sitter-grammars/tree-sitter-pem) |
-| perl | v1.9.9 | Y | Y | @RabbiVeesh, @LeoNerd | [tree-sitter-perl/tree-sitter-perl](https://github.com/tree-sitter-perl/tree-sitter-perl) |
+| perl | v1.9.9 | N | Y | @RabbiVeesh, @LeoNerd | [tree-sitter-perl/tree-sitter-perl](https://github.com/tree-sitter-perl/tree-sitter-perl) |
 | perm | v1.9.0 | Y | Y | @theoriginalstove | [theoriginalstove/tree-sitter-perm](https://github.com/theoriginalstove/tree-sitter-perm) |
 | pgn | v1.9.0 | Y | Y | @rolandwalker | [rolandwalker/tree-sitter-pgn](https://github.com/rolandwalker/tree-sitter-pgn) |
 | php | v1.9.5 | Y | Y | @tk-shirasaka, @calebdw | [tree-sitter/tree-sitter-php](https://github.com/tree-sitter/tree-sitter-php) |
@@ -539,7 +539,9 @@ Each grammar is compiled from C source into a shared library (`.so` on Linux, `.
 
 ## Failures
 
+- **cleancopy** on linux-amd64
 - **norg** on darwin-arm64
 - **norg** on darwin-amd64
+- **perl** on linux-amd64
 - **poweron** on darwin-arm64
 - **poweron** on darwin-amd64
